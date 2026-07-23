@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #a8f931;
+  --accent-ink: #4d7a0a;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: #f5f5f7;
+}

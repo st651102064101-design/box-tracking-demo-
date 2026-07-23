@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: boxtrace-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: boxtrace
+      POSTGRES_PASSWORD: boxtrace
+      POSTGRES_DB: boxtrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxtrace -d boxtrace"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: boxtrace-backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      USE_PGLITE: "false"
+      DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: 12h
+      CORS_ORIGIN: http://localhost:3000
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    # migrate + seed the admin, then start the API
+    command: sh -c "node dist/db/migrate.js && node dist/seed.js && node dist/index.js"
+
+  frontend:
+    build: ./frontend
+    container_name: boxtrace-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:4000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  db-data:
