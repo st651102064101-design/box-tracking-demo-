@@ -2184,15 +2184,48 @@ function sortByDir(list,dir,getVal){
 /* sorts a list of records by their .id field; 'desc' = newest (highest id) first */
 function idSort(list,dir){return sortByDir(list.slice(),dir,function(x){return x.id||'';});}
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
-function load(){try{var d=JSON.parse(localStorage.getItem(KEY));if(d){S=d;
-  S.boxes=S.boxes||{};S.customers=S.customers||{};S.boxtypes=S.boxtypes||{};S.warehouses=S.warehouses||{};
-  S.gates=S.gates||{};S.events=S.events||[];S.cfg=S.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
-  if(S.cfg.lostMode===undefined)S.cfg.lostMode='manual';S.seq=S.seq||{do:0};
-  S.inventory=S.inventory||{};S.auditLog=S.auditLog||[];
-  S.vehicles=S.vehicles||{};S.putaway=S.putaway||{};S.doRecords=S.doRecords||{};S.locations=S.locations||{};
-  S.employees=S.employees||{};if(S.seq.emp===undefined)S.seq.emp=0;
-  Object.values(S.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});}}catch(e){}}
+/* ===== persistence: Postgres via /api/state (previously localStorage) =====
+   The backend exposes GET/PUT /api/state as a drop-in bridge — same shape as
+   the `S` blob this UI has always kept in memory — so only the transport
+   changes here, not any call site. Auth reuses the JWT the Next.js login
+   flow already stores under 'boxtrace_jwt'. */
+function authHeaders(){
+  var t=null; try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
+  return t?{'Authorization':'Bearer '+t}:{};
+}
+function save(){
+  fetch('/api/state',{
+    method:'PUT',
+    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:JSON.stringify(S)
+  }).then(function(r){
+    if(r.status===401){window.location.href='/login';}
+  }).catch(function(e){console.warn('[BoxTrace] save to server failed',e);});
+}
+/* fills in any keys missing from an older/partial state blob (e.g. a backup
+   exported before a feature like locations existed) so restoring it never
+   silently wipes data that loadFromServer() would otherwise default in. */
+function normalizeState(d){
+  d.boxes=d.boxes||{};d.customers=d.customers||{};d.boxtypes=d.boxtypes||{};d.warehouses=d.warehouses||{};
+  d.gates=d.gates||{};d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
+  if(d.cfg.lostMode===undefined)d.cfg.lostMode='manual';d.seq=d.seq||{do:0};
+  d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
+  d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
+  d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
+  Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
+  return d;
+}
+/** Loads S from the DB at boot. Returns a promise so init can await it. */
+function loadFromServer(){
+  return fetch('/api/state',{headers:authHeaders()})
+    .then(function(r){
+      if(r.status===401){window.location.href='/login';return null;}
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.json();
+    })
+    .then(function(d){ if(d) S=normalizeState(d); })
+    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);});
+}
 
 /* ===== helpers ===== */
 function $(s,c){return (c||document).querySelector(s);}
@@ -2577,6 +2610,13 @@ $('#btnAddBtype').onclick=function(){
   if(!unit)return toast('กรอกหน่วยนับ','ต้องระบุหน่วยนับของประเภทกล่องนี้','err');
   if(!editingBtype&&S.boxtypes[id])return toast('มีรหัสประเภทนี้แล้ว',id,'err');
   if(editingBtype&&editingBtype!==id&&S.boxtypes[id])return toast('รหัสซ้ำ',id,'err');
+  /* #btId is readonly today so this can't fire via the UI yet, but the rename branch
+     below (delete old key, insert new) has no referential guard — if the field is
+     ever made editable, boxes still pointing at the old id would silently orphan. */
+  if(editingBtype&&editingBtype!==id){
+    var usedBt=Object.values(S.boxes).filter(function(b){return b.type===editingBtype;}).length;
+    if(usedBt)return toast('เปลี่ยนรหัสไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+usedBt+' ใบ','err');
+  }
   var before=editingBtype?Object.assign({},S.boxtypes[editingBtype]):null;
   if(editingBtype&&editingBtype!==id)delete S.boxtypes[editingBtype];
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:val('btDim')};
@@ -2650,6 +2690,14 @@ $('#btnAddWh').onclick=function(){
   if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ','ต้องมีรหัสและชื่อคลัง','err');
   if(!from||!to||to<from)return toast('ช่วงประตูไม่ถูกต้อง','ประตูสิ้นสุดต้อง ≥ ประตูเริ่ม','err');
   if(!editingWh&&S.warehouses[id])return toast('มีรหัสคลังนี้แล้ว',id,'err');
+  /* #whId is readonly today (this rename path can't fire via the UI yet), but it was
+     missing even the basic collision check other master tabs already have — if the
+     field is ever made editable, this would silently clobber another warehouse. */
+  if(editingWh&&editingWh!==id&&S.warehouses[id])return toast('รหัสซ้ำ',id,'err');
+  if(editingWh&&editingWh!==id){
+    var usedWh=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===editingWh)||b.outWh===editingWh;}).length;
+    if(usedWh)return toast('เปลี่ยนรหัสไม่ได้','มีกล่องผูกกับคลังนี้ '+usedWh+' ใบ','err');
+  }
   /* อนุญาตให้ช่วงประตูซ้ำ/ทับซ้อนระหว่างคลังได้ — ไม่ตรวจ clash แล้ว */
   var before=editingWh?Object.assign({},S.warehouses[editingWh]):null;
   if(editingWh&&editingWh!==id)delete S.warehouses[editingWh];
@@ -2670,8 +2718,16 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;setv('whId'
   setv('whGateType',w.gateType||'both');
   renderWhGateTypeList(w.gateTypes||{});
   $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
-function delWh(id){var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
+function delWh(id){
+  var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องผูกกับคลังนี้ '+used+' ใบ','err');
+  /* boxes were the only thing ever checked here — Location Master rows and employees
+     also carry a `wh` reference, so deleting a warehouse used to leave those orphaned
+     pointing at a warehouse id that no longer exists. */
+  var usedLocs=Object.values(S.locations||{}).filter(function(l){return l.wh===id;}).length;
+  if(usedLocs)return toast('ลบไม่ได้','มีตำแหน่งแร็ค (Location Master) ผูกกับคลังนี้อยู่ '+usedLocs+' ตำแหน่ง — ลบตำแหน่งเหล่านั้นก่อน','err');
+  var usedEmps=Object.values(S.employees||{}).filter(function(e){return e.wh===id;}).length;
+  if(usedEmps)return toast('ลบไม่ได้','มีพนักงานสังกัดคลังนี้อยู่ '+usedEmps+' คน — ย้ายพนักงานออกจากคลังนี้ก่อน','err');
   confirmA('ลบคลัง '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.warehouses[id]);delete S.warehouses[id];rebuildGates();auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editWh=editWh;window.delWh=delWh;
 
@@ -2682,6 +2738,12 @@ $('#btnAddCust').onclick=function(){
   var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
   if(!editingCust&&S.customers[id])return toast('มีรหัสลูกค้านี้แล้ว',id,'err');
   if(editingCust&&editingCust!==id&&S.customers[id])return toast('รหัสซ้ำ',id,'err');
+  /* #cId is readonly today so this can't fire via the UI yet — same defense-in-depth
+     as boxtypes/warehouses: mirror delCust()'s in-use guard onto the rename path too. */
+  if(editingCust&&editingCust!==id){
+    var usedCust=Object.values(S.boxes).filter(function(b){return b.status==='out'&&b.customer===editingCust;}).length;
+    if(usedCust)return toast('เปลี่ยนรหัสไม่ได้','มีกล่องอยู่กับลูกค้านี้ '+usedCust+' ใบ (ยังไม่คืน)','err');
+  }
   var before=editingCust?Object.assign({},S.customers[editingCust]):null;
   if(editingCust&&editingCust!==id)delete S.customers[editingCust];
   S.customers[id]={id:id,name:nm,addr:val('cAddr'),contact:val('cContact'),returnDays:rd};
@@ -5049,6 +5111,29 @@ function locAutoCode() {
 }
 window.locAutoCode = locAutoCode;
 
+/* ── heal Location Master rows that boxes reference but were never registered ──
+   The 3D warehouse view and box records themselves fall back to a box's own
+   `location` field, so a rack can look fully populated there while Location
+   Master (which only ever reads S.locations) shows 0 — e.g. seedDemo() used
+   to stamp boxes straight into random zone/rack/shelf/slot without ever
+   creating the matching master row. Called at boot (for data already in this
+   state) and from seedDemo() (so freshly-seeded data never regresses). */
+function backfillLocationsFromBoxes() {
+  var added = 0;
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'warehouse') return;
+    var l = b.location; if (!l || (!l.zone && !l.rack)) return;
+    var code = locBuildCode(l.zone, l.rack, l.shelf, l.slot); if (!code) return;
+    if (!S.locations[code]) {
+      S.locations[code] = { code: code, wh: l.wh||'', zone: l.zone||'', rack: l.rack||'',
+        shelf: String(l.shelf||''), slot: l.slot ? pad(Number(l.slot)||0,2) : '', type: '', note: '' };
+      added++;
+    }
+  });
+  return added;
+}
+window.backfillLocationsFromBoxes = backfillLocationsFromBoxes;
+
 /* ── occupancy: which location codes currently hold a box ──
    Built from live S.boxes rather than a stored field, so it can never go
    stale — a box's location is always the single source of truth. */
@@ -5147,6 +5232,7 @@ function renderLocRackMap(locs, occ) {
                       var count = occ[l.code]||0;
                       var badge = isOcc ? '<span class="locmap-slot-badge">'+count+'</span>' : '';
                       return '<div class="locmap-slot'+(isOcc?' occ':'')+'" data-loc-code="'+esc(l.code)+'" '
+                        + 'onclick="locSlotClick(this)" '
                         + 'title="'+esc(l.code)+' · '+(isOcc?('มีของ '+count+' กล่อง'):'ว่าง')+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
                         + '</div>';
                     }).join('')
@@ -5778,12 +5864,23 @@ window.clearLocFilters = clearLocFilters;
 $('#btnAddLoc').onclick = function() {
   var code = val('locCode').trim().toUpperCase();
   if (!code) return toast('ยังไม่มีรหัสตำแหน่ง — กรอกข้อมูลหรือกด "แก้เอง"', null, 'err');
-  if (!editingLoc && S.locations[code]) return toast('รหัสนี้มีอยู่แล้ว', code, 'err');
+  var renamingLoc = editingLoc && code !== editingLoc;
+  /* editing an existing row into a code that belongs to ANOTHER location used to silently
+     clobber that other row's data (only new-row creation was ever checked for collision). */
+  if ((!editingLoc || renamingLoc) && S.locations[code]) return toast('รหัสนี้มีอยู่แล้ว', code, 'err');
+  if (renamingLoc) {
+    /* changing a location's identity while a box still sits there used to leave that box
+       pointing at a code that no longer exists in Location Master (the same orphan class
+       backfillLocationsFromBoxes() heals at boot — better to just not allow it to happen). */
+    var occOld = locOccupancyMap()[editingLoc] || 0;
+    if (occOld) return toast('เปลี่ยนรหัสไม่ได้', 'มีกล่องอยู่ในตำแหน่ง '+editingLoc+' อยู่ '+occOld+' ใบ — ย้ายกล่องออกก่อนจึงจะเปลี่ยนรหัสได้', 'err');
+  }
   var wh = val('locWh'), locZone = val('locZone').trim(), locRack = val('locRack').trim();
   if (!locZone) return toast('ยังไม่ได้ระบุโซน', 'กรุณาเลือกหรือกรอกโซนก่อนบันทึก — ตำแหน่งต้องมีโซนเสมอ', 'err');
   var conflictZone = rackConflictZone(wh, locZone, locRack);
   if (conflictZone && !(editingLoc && S.locations[editingLoc] && (S.locations[editingLoc].zone||'')===locZone))
     return toast('ชื่อแร็คซ้ำ', 'แร็ค '+locRack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
+  if (renamingLoc) delete S.locations[editingLoc];
   S.locations[code] = { code: code, wh: wh, zone: locZone, rack: locRack,
     shelf: val('locShelf').trim(), slot: val('locSlot').trim(), type: val('locType'), note: val('locNote').trim() };
   save();
@@ -5823,6 +5920,11 @@ function editLocRow(code) {
 window.editLocRow = editLocRow;
 
 function delLoc(code) {
+  /* bulk-delete already skips occupied codes (see below) — single-row delete
+     used to have no such guard, so it could delete a location a box is
+     currently sitting in and leave that box pointing at nothing. */
+  var occ = locOccupancyMap()[code] || 0;
+  if (occ) return toast('ลบไม่ได้', 'มีกล่องอยู่ในตำแหน่งนี้ '+occ+' ใบ — ย้ายกล่องออกก่อนจึงจะลบได้', 'err');
   confirmA('ลบตำแหน่ง '+code+'?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
     if (!ok) return;
     delete S.locations[code]; save(); renderLocMaster();
@@ -6115,7 +6217,7 @@ $('#btnMenu').onclick=function(){
     +'<div class="mbody"><div class="menu-list">'
     +'<button onclick="doBackup()">ดาวน์โหลดข้อมูล (JSON)</button>'
     +'<button onclick="document.getElementById(\'fileR\').click()">นำเข้าข้อมูล (JSON)</button>'
-    +'<button onclick="seedDemo()">ใส่ข้อมูลตัวอย่าง</button>'
+    +'<button onclick="confirmSeedDemo()">ใส่ข้อมูลตัวอย่าง</button>'
     +'<button class="danger" onclick="resetAll()">ล้างข้อมูลทั้งหมด</button>'
     +'</div></div>');
 };
@@ -6179,8 +6281,17 @@ function doBackup(){var blob=new Blob([JSON.stringify(S,null,2)],{type:'applicat
 window.doBackup=doBackup;
 function resetAll(){confirmA('ล้างข้อมูลทั้งหมด?','ลบทุกอย่างถาวร','ล้าง',true).then(function(ok){if(!ok)return;
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
-  try{localStorage.setItem(KEY+'_init','1');}catch(e){}save();closeModal();toast('ล้างข้อมูลแล้ว');renderAll();});}
+  save();closeModal();toast('ล้างข้อมูลแล้ว');renderAll();});}
 window.resetAll=resetAll;
+/* the ⋯ menu button used to call seedDemo() directly with zero confirmation —
+   one accidental click silently mixes 15 demo boxes/locations into whatever
+   real data is already there. Route it through the same confirm pattern
+   resetAll() already uses. */
+function confirmSeedDemo(){
+  closeModal();
+  confirmA('ใส่ข้อมูลตัวอย่าง?','จะเพิ่มกล่อง/ลูกค้า/คลัง/ตำแหน่งแร็คตัวอย่าง 15 ใบเข้าไปในระบบนี้ ปนกับข้อมูลจริงที่มีอยู่ (ถ้ามี)','ใส่ข้อมูลตัวอย่าง',false).then(function(ok){if(ok)seedDemo();});
+}
+window.confirmSeedDemo=confirmSeedDemo;
 function seedDemo(){
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
   // 4 warehouses, gates 1-20 (5 each)
@@ -6332,6 +6443,7 @@ function seedDemo(){
   });
 
   S.events.sort(function(a,b){return new Date(a.ts)-new Date(b.ts);});
+  backfillLocationsFromBoxes();
   save();
   toast('ใส่ข้อมูลตัวอย่างแล้ว','15 กล่อง (3 ประเภท × 5) · 6 ในคลัง · 6 ออก · 3 สูญหาย · 8 สินค้าใน Inventory · 19 Audit Logs');
   renderAll();
@@ -6341,7 +6453,7 @@ window.seedDemo=seedDemo;
 /* file restore */
 (function(){var inp=document.createElement('input');inp.type='file';inp.id='fileR';inp.accept='.json';inp.style.display='none';
   inp.addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
-    r.onload=function(){try{S=JSON.parse(r.result);save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
+    r.onload=function(){try{S=normalizeState(JSON.parse(r.result));save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
   document.body.appendChild(inp);})();
 
 /* ============================================================================
@@ -7301,15 +7413,20 @@ window.seedDemo=seedDemo;
   else build();
 })();
 
-/* ===== INIT ===== */
-load();
-var firstVisit=false;try{firstVisit=!localStorage.getItem(KEY+'_init');}catch(e){}
-if(!Object.keys(S.boxes).length){try{localStorage.setItem(KEY+'_init','1');}catch(e){}seedDemo();}
-else{renderAll();}
-hydrateIcons(document);
-/* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
-if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
-setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
+/* ===== INIT =====
+   State now lives in Postgres, so boot has to wait on the network round-trip
+   to /api/state before anything reads S — renderAll() must never run against
+   the (empty) default S, or a render would flash empty before real data
+   arrives. An empty account stays empty — seedDemo() is opt-in only, via
+   "ใส่ข้อมูลตัวอย่าง" in the ⋯ menu, never automatic. */
+loadFromServer().then(function(){
+  if(backfillLocationsFromBoxes())save();
+  renderAll();
+  hydrateIcons(document);
+  /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
+  if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
+  setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
+});
 
 /* ===== INVENTORY CRUD ===== */
 S.inventory = S.inventory || {};
@@ -10080,6 +10197,7 @@ const GEO={
   unit:shared(new THREE.BoxGeometry(1,1,1)),
   wheel:shared(new THREE.CylinderGeometry(0.5,0.5,0.34,20).rotateX(Math.PI/2)),
   smallWheel:shared(new THREE.CylinderGeometry(0.27,0.27,0.24,16).rotateX(Math.PI/2)),
+  carWheel:shared(new THREE.CylinderGeometry(0.33,0.33,0.26,18).rotateX(Math.PI/2)),
   ring:shared(new THREE.RingGeometry(0.55,0.68,48).rotateX(-Math.PI/2)),
   byType:new Map()
 };
@@ -10180,7 +10298,7 @@ const FIL={status:'all',type:'',cust:''};
 let root=null, fxRoot=new THREE.Group(); scene.add(fxRoot);
 let boxRecs=[], tagIndex=new Map(), sensorMesh=null, cellData=[], padPick=[], slotEdge=null;
 let LY={}, HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
-let COUNTS={}, sel=null, anims=[], jobs=[], activeJob=null, forkliftG=null, forkDir=1;
+let COUNTS={}, sel=null, anims=[], jobs=[], activeJob=null, forkliftG=null, forkDir=1, cars=[], carTimer=0;
 const raycaster=new THREE.Raycaster(), ptr=new THREE.Vector2();
 
 function disposeTree(o){
@@ -10222,6 +10340,55 @@ function buildForklift(){
   [[0.5,0.55],[0.5,-0.55],[-0.5,0.55],[-0.5,-0.55]].forEach(p=>{const w=new THREE.Mesh(GEO.smallWheel,MAT.wheel);w.position.set(p[0],0.28,p[1]);g.add(w);});
   return g;
 }
+/* ---------- passing traffic (ambient cars on the road) ---------- */
+const CAR_COLORS=[0xe8eaed,0xbfc3c9,0x9297a0,0x5b6672,0x40454d,0x24272c];
+const CARMAT={
+  glass:mat(0x1f2229,{roughness:0.22,metalness:0.55}),
+  head:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xffefbe,emissiveIntensity:0.9,roughness:0.4}),
+  tail:new THREE.MeshStandardMaterial({color:0xff453a,emissive:0xd7261d,emissiveIntensity:0.75,roughness:0.4})
+};
+function buildCar(){
+  const g=new THREE.Group();
+  const body=mat(CAR_COLORS[(Math.random()*CAR_COLORS.length)|0],{roughness:0.45,metalness:0.42});
+  body.userData.own=true;
+  g.add(bx(3.5,0.52,1.5,body,0,0.6,0));
+  g.add(bx(1.9,0.58,1.36,CARMAT.glass,-0.1,1.05,0));
+  g.add(bx(1.7,0.14,1.46,body,-0.1,1.35,0,true));
+  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,0.5,true));
+  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,-0.5,true));
+  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,0.5,true));
+  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,-0.5,true));
+  g.userData.wheels=[];
+  [[1.05,0.77],[-1.05,0.77],[1.05,-0.77],[-1.05,-0.77]].forEach(p=>{
+    const w=new THREE.Mesh(GEO.carWheel,MAT.wheel);w.position.set(p[0],0.34,p[1]);w.castShadow=true;g.add(w);g.userData.wheels.push(w);
+  });
+  return g;
+}
+function spawnCar(){
+  const dir=Math.random()<0.5?1:-1;
+  const c=buildCar();
+  c.position.set(dir>0?LY.roadX0:LY.roadX1,0,LY.roadMid-dir*1.5);
+  c.rotation.y=dir>0?0:Math.PI;
+  fxRoot.add(c);
+  cars.push({g:c,dir,speed:7.5+Math.random()*4.5});
+}
+function updateTraffic(dt){
+  if(reduceMotion)return;
+  for(let i=cars.length-1;i>=0;i--){
+    const c=cars[i];
+    c.g.position.x+=c.dir*c.speed*dt;
+    const roll=c.dir*c.speed*dt/0.33;
+    c.g.userData.wheels.forEach(w=>w.rotation.z-=roll);
+    if((c.dir>0&&c.g.position.x>LY.roadX1)||(c.dir<0&&c.g.position.x<LY.roadX0)){
+      fxRoot.remove(c.g);disposeTree(c.g);cars.splice(i,1);
+    }
+  }
+  carTimer-=dt;
+  if(carTimer<=0&&cars.length<3){
+    spawnCar();
+    carTimer=cars.length<=1?(1.6+Math.random()*1.8):(3.6+Math.random()*3.4);
+  }
+}
 
 /* ---------- BUILD (full rebuild from live data) ---------- */
 const SLOT_W=1.16,RACK_D=1.15,SHELF_H=0.92,BASE_Y=0.16,AISLE=3.1,GAP=0.6,ROWMAX=30;
@@ -10231,7 +10398,7 @@ function build(){
   if(!curWh||!st.warehouses[curWh])curWh=whIds[0]||'';
   if(root){scene.remove(root);disposeTree(root);}
   scene.remove(fxRoot);disposeTree(fxRoot);fxRoot=new THREE.Group();scene.add(fxRoot);
-  activeJob=null;jobs=[];anims=[];sel=null;hideCard();
+  activeJob=null;jobs=[];anims=[];sel=null;cars=[];carTimer=0;hideCard();
   root=new THREE.Group();scene.add(root);
   boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];sensorMesh=null;
 
@@ -10276,7 +10443,7 @@ function build(){
   const dockZ=frontZ+7.2;
   const bMinX=X0-3,bMaxX=X0+contentW+3,bW=bMaxX-bMinX;
   const apron0=dockZ+0.25,apron1=dockZ+8,road0=apron1,road1=road0+6,roadMid=road0+3,yardZ=road1+4;
-  LY={dockZ,roadMid,bMinX,bMaxX,gateX:{},spawnX:bMinX-26,exitX:bMaxX+26,stagX0:X0,stagZ:frontZ+3.4};
+  LY={dockZ,roadMid,bMinX,bMaxX,gateX:{},spawnX:bMinX-26,exitX:bMaxX+26,stagX0:X0,stagZ:frontZ+3.4,roadX0:bMinX-58,roadX1:bMaxX+58};
 
   /* ----- ground & building shell ----- */
   const ground=bx(Math.max(bW,60)+120,0.1,(yardZ-backZ)+90,MAT.ground,(bMinX+bMaxX)/2,-0.16,(backZ+yardZ)/2,true);
@@ -10397,12 +10564,16 @@ function build(){
   const zoneRows=new Map();
   segs.forEach(sg=>{const k=sg.zone+'@'+sg.row;const e=zoneRows.get(k)||{zone:sg.zone,row:sg.row,x0:1e9,x1:-1e9,top:0};
     e.x0=Math.min(e.x0,X0+sg.x0);e.x1=Math.max(e.x1,X0+sg.x0+sg.len);e.top=Math.max(e.top,BASE_Y+sg.rk.shelves*SHELF_H);zoneRows.set(k,e);});
+  const zoneRacks=new Map();
+  segs.forEach(sg=>{let s=zoneRacks.get(sg.zone);if(!s){s=new Set();zoneRacks.set(sg.zone,s);}s.add(sg.rk.rack);});
   const zoneSeen=new Set();
   zoneRows.forEach(e=>{
     const z=rackZ(e.row);
     root.add(bx(e.x1-e.x0+1.0,0.02,RACK_D+1.1,MAT.zonePad,(e.x0+e.x1)/2,0.012,z,true));
     if(!zoneSeen.has(e.zone)){zoneSeen.add(e.zone);
-      const zl=makeLabel('โซน '+e.zone,null,{fs:38,h:0.66});zl.position.set(e.x0+0.4,e.top+0.85,z);root.add(zl);}
+      const rkNames=[...(zoneRacks.get(e.zone)||[])].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+      const rkSub=rkNames.length?'แร็ค '+rkNames.join(' · '):null;
+      const zl=makeLabel('โซน '+e.zone,rkSub,{fs:38,sfs:26,h:0.72});zl.position.set(e.x0+0.4,e.top+0.9,z);root.add(zl);}
   });
 
   /* ----- boxes: rack + staging ----- */
@@ -10820,6 +10991,7 @@ function tick(){
   }
   if(!activeJob&&jobs.length)activeJob=startJob(jobs.shift());
   if(activeJob&&!stepJob(activeJob,dt))activeJob=null;
+  updateTraffic(dt);
   if(forkliftG&&!reduceMotion){
     const rg=forkliftG.userData.range;
     forkliftG.position.x+=forkDir*dt*0.85;

@@ -21,7 +21,7 @@ export default function LoginPage() {
           ? await login(username.trim(), password)
           : await register(username.trim(), password, name.trim() || username.trim());
       setToken(res.token);
-      window.location.replace('/legacy.html');
+      window.location.replace('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'เข้าสู่ระบบไม่สำเร็จ');
       setBusy(false);

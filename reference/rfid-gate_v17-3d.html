@@ -2184,14 +2184,20 @@ function sortByDir(list,dir,getVal){
 function idSort(list,dir){return sortByDir(list.slice(),dir,function(x){return x.id||'';});}
 
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
-function load(){try{var d=JSON.parse(localStorage.getItem(KEY));if(d){S=d;
-  S.boxes=S.boxes||{};S.customers=S.customers||{};S.boxtypes=S.boxtypes||{};S.warehouses=S.warehouses||{};
-  S.gates=S.gates||{};S.events=S.events||[];S.cfg=S.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
-  if(S.cfg.lostMode===undefined)S.cfg.lostMode='manual';S.seq=S.seq||{do:0};
-  S.inventory=S.inventory||{};S.auditLog=S.auditLog||[];
-  S.vehicles=S.vehicles||{};S.putaway=S.putaway||{};S.doRecords=S.doRecords||{};S.locations=S.locations||{};
-  S.employees=S.employees||{};if(S.seq.emp===undefined)S.seq.emp=0;
-  Object.values(S.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});}}catch(e){}}
+/* fills in any keys missing from an older/partial state blob (e.g. a backup
+   exported before a feature like locations existed) so restoring it never
+   silently wipes data that load() would otherwise default in. */
+function normalizeState(d){
+  d.boxes=d.boxes||{};d.customers=d.customers||{};d.boxtypes=d.boxtypes||{};d.warehouses=d.warehouses||{};
+  d.gates=d.gates||{};d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
+  if(d.cfg.lostMode===undefined)d.cfg.lostMode='manual';d.seq=d.seq||{do:0};
+  d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
+  d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
+  d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
+  Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
+  return d;
+}
+function load(){try{var d=JSON.parse(localStorage.getItem(KEY));if(d){S=normalizeState(d);}}catch(e){}}
 
 /* ===== helpers ===== */
 function $(s,c){return (c||document).querySelector(s);}
@@ -5146,6 +5152,7 @@ function renderLocRackMap(locs, occ) {
                       var count = occ[l.code]||0;
                       var badge = isOcc ? '<span class="locmap-slot-badge">'+count+'</span>' : '';
                       return '<div class="locmap-slot'+(isOcc?' occ':'')+'" data-loc-code="'+esc(l.code)+'" '
+                        + 'onclick="locSlotClick(this)" '
                         + 'title="'+esc(l.code)+' · '+(isOcc?('มีของ '+count+' กล่อง'):'ว่าง')+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
                         + '</div>';
                     }).join('')
@@ -6340,7 +6347,7 @@ window.seedDemo=seedDemo;
 /* file restore */
 (function(){var inp=document.createElement('input');inp.type='file';inp.id='fileR';inp.accept='.json';inp.style.display='none';
   inp.addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
-    r.onload=function(){try{S=JSON.parse(r.result);save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
+    r.onload=function(){try{S=normalizeState(JSON.parse(r.result));save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
   document.body.appendChild(inp);})();
 
 /* ============================================================================
@@ -10079,6 +10086,7 @@ const GEO={
   unit:shared(new THREE.BoxGeometry(1,1,1)),
   wheel:shared(new THREE.CylinderGeometry(0.5,0.5,0.34,20).rotateX(Math.PI/2)),
   smallWheel:shared(new THREE.CylinderGeometry(0.27,0.27,0.24,16).rotateX(Math.PI/2)),
+  carWheel:shared(new THREE.CylinderGeometry(0.33,0.33,0.26,18).rotateX(Math.PI/2)),
   ring:shared(new THREE.RingGeometry(0.55,0.68,48).rotateX(-Math.PI/2)),
   byType:new Map()
 };
@@ -10179,7 +10187,7 @@ const FIL={status:'all',type:'',cust:''};
 let root=null, fxRoot=new THREE.Group(); scene.add(fxRoot);
 let boxRecs=[], tagIndex=new Map(), sensorMesh=null, cellData=[], padPick=[], slotEdge=null;
 let LY={}, HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
-let COUNTS={}, sel=null, anims=[], jobs=[], activeJob=null, forkliftG=null, forkDir=1;
+let COUNTS={}, sel=null, anims=[], jobs=[], activeJob=null, forkliftG=null, forkDir=1, cars=[], carTimer=0;
 const raycaster=new THREE.Raycaster(), ptr=new THREE.Vector2();
 
 function disposeTree(o){
@@ -10221,6 +10229,55 @@ function buildForklift(){
   [[0.5,0.55],[0.5,-0.55],[-0.5,0.55],[-0.5,-0.55]].forEach(p=>{const w=new THREE.Mesh(GEO.smallWheel,MAT.wheel);w.position.set(p[0],0.28,p[1]);g.add(w);});
   return g;
 }
+/* ---------- passing traffic (ambient cars on the road) ---------- */
+const CAR_COLORS=[0xe8eaed,0xbfc3c9,0x9297a0,0x5b6672,0x40454d,0x24272c];
+const CARMAT={
+  glass:mat(0x1f2229,{roughness:0.22,metalness:0.55}),
+  head:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xffefbe,emissiveIntensity:0.9,roughness:0.4}),
+  tail:new THREE.MeshStandardMaterial({color:0xff453a,emissive:0xd7261d,emissiveIntensity:0.75,roughness:0.4})
+};
+function buildCar(){
+  const g=new THREE.Group();
+  const body=mat(CAR_COLORS[(Math.random()*CAR_COLORS.length)|0],{roughness:0.45,metalness:0.42});
+  body.userData.own=true;
+  g.add(bx(3.5,0.52,1.5,body,0,0.6,0));
+  g.add(bx(1.9,0.58,1.36,CARMAT.glass,-0.1,1.05,0));
+  g.add(bx(1.7,0.14,1.46,body,-0.1,1.35,0,true));
+  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,0.5,true));
+  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,-0.5,true));
+  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,0.5,true));
+  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,-0.5,true));
+  g.userData.wheels=[];
+  [[1.05,0.77],[-1.05,0.77],[1.05,-0.77],[-1.05,-0.77]].forEach(p=>{
+    const w=new THREE.Mesh(GEO.carWheel,MAT.wheel);w.position.set(p[0],0.34,p[1]);w.castShadow=true;g.add(w);g.userData.wheels.push(w);
+  });
+  return g;
+}
+function spawnCar(){
+  const dir=Math.random()<0.5?1:-1;
+  const c=buildCar();
+  c.position.set(dir>0?LY.roadX0:LY.roadX1,0,LY.roadMid-dir*1.5);
+  c.rotation.y=dir>0?0:Math.PI;
+  fxRoot.add(c);
+  cars.push({g:c,dir,speed:7.5+Math.random()*4.5});
+}
+function updateTraffic(dt){
+  if(reduceMotion)return;
+  for(let i=cars.length-1;i>=0;i--){
+    const c=cars[i];
+    c.g.position.x+=c.dir*c.speed*dt;
+    const roll=c.dir*c.speed*dt/0.33;
+    c.g.userData.wheels.forEach(w=>w.rotation.z-=roll);
+    if((c.dir>0&&c.g.position.x>LY.roadX1)||(c.dir<0&&c.g.position.x<LY.roadX0)){
+      fxRoot.remove(c.g);disposeTree(c.g);cars.splice(i,1);
+    }
+  }
+  carTimer-=dt;
+  if(carTimer<=0&&cars.length<3){
+    spawnCar();
+    carTimer=cars.length<=1?(1.6+Math.random()*1.8):(3.6+Math.random()*3.4);
+  }
+}
 
 /* ---------- BUILD (full rebuild from live data) ---------- */
 const SLOT_W=1.16,RACK_D=1.15,SHELF_H=0.92,BASE_Y=0.16,AISLE=3.1,GAP=0.6,ROWMAX=30;
@@ -10230,7 +10287,7 @@ function build(){
   if(!curWh||!st.warehouses[curWh])curWh=whIds[0]||'';
   if(root){scene.remove(root);disposeTree(root);}
   scene.remove(fxRoot);disposeTree(fxRoot);fxRoot=new THREE.Group();scene.add(fxRoot);
-  activeJob=null;jobs=[];anims=[];sel=null;hideCard();
+  activeJob=null;jobs=[];anims=[];sel=null;cars=[];carTimer=0;hideCard();
   root=new THREE.Group();scene.add(root);
   boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];sensorMesh=null;
 
@@ -10275,7 +10332,7 @@ function build(){
   const dockZ=frontZ+7.2;
   const bMinX=X0-3,bMaxX=X0+contentW+3,bW=bMaxX-bMinX;
   const apron0=dockZ+0.25,apron1=dockZ+8,road0=apron1,road1=road0+6,roadMid=road0+3,yardZ=road1+4;
-  LY={dockZ,roadMid,bMinX,bMaxX,gateX:{},spawnX:bMinX-26,exitX:bMaxX+26,stagX0:X0,stagZ:frontZ+3.4};
+  LY={dockZ,roadMid,bMinX,bMaxX,gateX:{},spawnX:bMinX-26,exitX:bMaxX+26,stagX0:X0,stagZ:frontZ+3.4,roadX0:bMinX-58,roadX1:bMaxX+58};
 
   /* ----- ground & building shell ----- */
   const ground=bx(Math.max(bW,60)+120,0.1,(yardZ-backZ)+90,MAT.ground,(bMinX+bMaxX)/2,-0.16,(backZ+yardZ)/2,true);
@@ -10396,12 +10453,16 @@ function build(){
   const zoneRows=new Map();
   segs.forEach(sg=>{const k=sg.zone+'@'+sg.row;const e=zoneRows.get(k)||{zone:sg.zone,row:sg.row,x0:1e9,x1:-1e9,top:0};
     e.x0=Math.min(e.x0,X0+sg.x0);e.x1=Math.max(e.x1,X0+sg.x0+sg.len);e.top=Math.max(e.top,BASE_Y+sg.rk.shelves*SHELF_H);zoneRows.set(k,e);});
+  const zoneRacks=new Map();
+  segs.forEach(sg=>{let s=zoneRacks.get(sg.zone);if(!s){s=new Set();zoneRacks.set(sg.zone,s);}s.add(sg.rk.rack);});
   const zoneSeen=new Set();
   zoneRows.forEach(e=>{
     const z=rackZ(e.row);
     root.add(bx(e.x1-e.x0+1.0,0.02,RACK_D+1.1,MAT.zonePad,(e.x0+e.x1)/2,0.012,z,true));
     if(!zoneSeen.has(e.zone)){zoneSeen.add(e.zone);
-      const zl=makeLabel('โซน '+e.zone,null,{fs:38,h:0.66});zl.position.set(e.x0+0.4,e.top+0.85,z);root.add(zl);}
+      const rkNames=[...(zoneRacks.get(e.zone)||[])].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+      const rkSub=rkNames.length?'แร็ค '+rkNames.join(' · '):null;
+      const zl=makeLabel('โซน '+e.zone,rkSub,{fs:38,sfs:26,h:0.72});zl.position.set(e.x0+0.4,e.top+0.9,z);root.add(zl);}
   });
 
   /* ----- boxes: rack + staging ----- */
@@ -10819,6 +10880,7 @@ function tick(){
   }
   if(!activeJob&&jobs.length)activeJob=startJob(jobs.shift());
   if(activeJob&&!stepJob(activeJob,dt))activeJob=null;
+  updateTraffic(dt);
   if(forkliftG&&!reduceMotion){
     const rg=forkliftG.userData.range;
     forkliftG.position.x+=forkDir*dt*0.85;
