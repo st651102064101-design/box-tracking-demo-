@@ -5,20 +5,8 @@ import '../controllers/app_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _manual = TextEditingController();
-
-  @override
-  void dispose() {
-    _manual.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,21 +14,21 @@ class _LoginScreenState extends State<LoginScreen> {
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
 
-    final emps = c.employees;
-    final items = emps.isEmpty
-        ? [
-            {'name': 'demo (ผู้ทดสอบ)', 'sub': 'บัญชีเริ่มต้น', 'initials': 'd', 'pick': 'demo'}
-          ]
-        : emps
-            .map((e) => {
-                  'name': (e['name'] ?? '').toString(),
-                  'sub': '${e['role'] ?? 'พนักงาน'}${e['dept'] != null ? ' · ${e['dept']}' : ''}',
-                  'initials': (e['name'] ?? '?').toString().trim().isEmpty
-                      ? '?'
-                      : (e['name']).toString().trim().substring(0, 1),
-                  'pick': (e['name'] ?? '').toString(),
-                })
-            .toList();
+    final items = c.users.map((u) {
+      final name = (u['name'] ?? u['username'] ?? '').toString();
+      final role = (u['role'] ?? 'staff').toString();
+      // The backend uses "-" as its own placeholder for "unset" on several
+      // fields (see StateSnapshot.whName etc.) — treat it as empty here too,
+      // or every account with no real department shows a bare "· -".
+      final deptRaw = u['dept']?.toString().trim() ?? '';
+      final dept = deptRaw.isEmpty || deptRaw == '-' ? null : deptRaw;
+      return {
+        'name': name,
+        'username': (u['username'] ?? '').toString(),
+        'sub': '$role${dept != null ? ' · $dept' : ''}',
+        'initials': name.trim().isEmpty ? '?' : name.trim().substring(0, 1),
+      };
+    }).toList();
 
     return Column(
       children: [
@@ -48,9 +36,9 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: EdgeInsets.fromLTRB(22, top + 30, 22, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: const [
               Row(
-                children: const [
+                children: [
                   BrandMark(size: 42),
                   SizedBox(width: 11),
                   Column(
@@ -63,11 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 22),
-              const Text('เลือกพนักงาน\nผู้ปฏิบัติงาน',
+              SizedBox(height: 22),
+              Text('เลือกพนักงาน\nผู้ปฏิบัติงาน',
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
-              const SizedBox(height: 6),
-              const Text('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน',
+              SizedBox(height: 6),
+              Text('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน',
                   style: TextStyle(fontSize: 13.5, color: C.muted)),
             ],
           ),
@@ -87,90 +75,46 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Text(
                     c.connError == null
-                        ? 'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อใส่ข้อมูลตัวอย่าง หรือตั้งค่าการเชื่อมต่อ'
+                        ? 'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ'
                         : 'เชื่อมต่อไม่ได้: ${c.connError}',
                     style: const TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
                   ),
                   const SizedBox(height: 9),
-                  Wrap(
-                    spacing: 9,
-                    runSpacing: 9,
-                    children: [
-                      _smallSolid('ใส่ข้อมูลตัวอย่าง (เดโม)', c.busy ? null : c.doSeed),
-                      _smallOutline('ตั้งค่าการเชื่อมต่อ', () => c.go(Screen.settings)),
-                    ],
-                  ),
+                  _smallOutline('ตั้งค่าการเชื่อมต่อ', () => c.go(Screen.settings)),
                 ],
               ),
             ),
           ),
         Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(22, 18, 22, bottom + 20),
-            children: [
-              ...items.map((e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _EmployeeTile(
-                      name: e['name']!,
-                      sub: e['sub']!,
-                      initials: e['initials']!,
-                      onTap: () => c.pickEmp(e['pick']!),
+          child: items.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      c.connected ? 'ยังไม่มีบัญชีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13.5, color: C.faint),
                     ),
-                  )),
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.only(top: 16),
-                decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.border))),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('หรือพิมพ์ชื่อผู้ปฏิบัติงาน',
-                        style: TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _manual,
-                            onChanged: c.setManualName,
-                            onSubmitted: (_) => c.doManualLogin(),
-                            decoration: _inputDecoration('ชื่อ–สกุล'),
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        SizedBox(
-                          height: 48,
-                          child: FilledButton(
-                            onPressed: c.doManualLogin,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: C.ink,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                  ),
+                )
+              : ListView(
+                  padding: EdgeInsets.fromLTRB(22, 18, 22, bottom + 20),
+                  children: items
+                      .map((e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _EmployeeTile(
+                              name: e['name']!,
+                              sub: e['sub']!,
+                              initials: e['initials']!,
+                              onTap: () => _promptPassword(context, c, e['username']!, e['name']!),
                             ),
-                            child: const Text('เข้า', style: TextStyle(fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          ))
+                      .toList(),
                 ),
-              ),
-            ],
-          ),
         ),
       ],
     );
   }
-
-  Widget _smallSolid(String label, VoidCallback? onTap) => FilledButton(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: C.orange,
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-      );
 
   Widget _smallOutline(String label, VoidCallback onTap) => OutlinedButton(
         onPressed: onTap,
@@ -182,27 +126,170 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       );
+
+  Future<void> _promptPassword(
+    BuildContext context,
+    AppController c,
+    String username,
+    String name,
+  ) {
+    return showDialog(
+      context: context,
+      builder: (_) => _PasswordDialog(controller: c, username: username, name: name),
+    );
+  }
 }
 
-InputDecoration _inputDecoration(String hint) => InputDecoration(
-      hintText: hint,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      filled: true,
-      fillColor: C.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: C.border2, width: 1.5),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: C.border2, width: 1.5),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: C.ink, width: 1.5),
+/// Modal password gate shown after tapping an employee tile. Verifies against
+/// the real account via `POST /api/auth/login` — a wrong password just shows
+/// an inline error and stays open, it never falls back to a bypass.
+class _PasswordDialog extends StatefulWidget {
+  final AppController controller;
+  final String username;
+  final String name;
+  const _PasswordDialog({required this.controller, required this.username, required this.name});
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final _pass = TextEditingController();
+  final _focus = FocusNode();
+  String? _error;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _pass.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final pw = _pass.text;
+    if (pw.isEmpty || _submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    final err = await widget.controller.loginAsEmployee(widget.username, pw);
+    if (!mounted) return;
+    if (err == null) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _submitting = false;
+        _error = err;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 26),
+      child: ConstrainedBox(
+        // Without this the dialog just fills (window width - insetPadding) —
+        // fine on a phone, a wall of white on a wide desktop test window.
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Text(
+                    widget.name.trim().isEmpty ? '?' : widget.name.trim().substring(0, 1),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.ink2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(widget.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      const Text('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ', style: TextStyle(fontSize: 12, color: C.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _pass,
+              focusNode: _focus,
+              obscureText: true,
+              autofocus: true,
+              onSubmitted: (_) => _submit(),
+              decoration: pdaInput('รหัสผ่าน'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.ink2,
+                      side: const BorderSide(color: C.border2),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                    ),
+                    child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submitting ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: C.ink,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        ),
       ),
     );
+  }
+}
 
 class _EmployeeTile extends StatelessWidget {
   final String name, sub, initials;
@@ -221,7 +308,7 @@ class _EmployeeTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: C.border),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 2, offset: const Offset(0, 1))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))],
           ),
           child: Row(
             children: [

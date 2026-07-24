@@ -14,23 +14,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _url;
-  late final TextEditingController _user;
-  late final TextEditingController _pass;
 
   @override
   void initState() {
     super.initState();
     final c = context.read<AppController>();
     _url = TextEditingController(text: c.prefs.baseUrl);
-    _user = TextEditingController(text: c.prefs.username);
-    _pass = TextEditingController(text: c.prefs.password);
   }
 
   @override
   void dispose() {
     _url.dispose();
-    _user.dispose();
-    _pass.dispose();
     super.dispose();
   }
 
@@ -93,40 +87,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       autocorrect: false,
                       decoration: pdaInput('http://192.168.1.10:4000'),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const FieldLabel('ผู้ใช้'),
-                              TextField(controller: _user, autocorrect: false, decoration: pdaInput('admin')),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const FieldLabel('รหัสผ่าน'),
-                              TextField(controller: _pass, obscureText: true, decoration: pdaInput('••••••')),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 14),
                     PrimaryButton(
                       label: c.busy ? 'กำลังเชื่อมต่อ…' : 'บันทึก & เชื่อมต่อ',
-                      onTap: c.busy
-                          ? null
-                          : () => c.applyConnection(
-                                baseUrl: _url.text,
-                                username: _user.text,
-                                password: _pass.text,
-                              ),
+                      onTap: c.busy ? null : () => c.applyConnection(baseUrl: _url.text),
                     ),
                     const SizedBox(height: 8),
                     const Text(
@@ -189,13 +153,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'แก้ไขกะ / ประตู',
                 sub: '${c.selWhName} · ประตู ${c.gate}',
                 onTap: c.goSessionEdit,
-              ),
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.dataset_outlined,
-                title: 'โหลดข้อมูลตัวอย่าง (เดโม)',
-                sub: '15 กล่อง · 4 พนักงาน · 4 คลัง → เขียนลงฐานข้อมูล',
-                onTap: c.busy ? null : c.doSeed,
               ),
               const SizedBox(height: 10),
               _tile(

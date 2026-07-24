@@ -8,7 +8,6 @@ import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
 import '../services/prefs.dart';
 import '../services/rfid_service.dart';
-import 'demo_seed.dart';
 
 enum Screen { boot, login, session, home, scan, track, settings }
 
@@ -44,7 +43,11 @@ class AppController extends ChangeNotifier {
   String user = '';
   String wh = '';
   String gate = '';
-  String manualName = '';
+
+  /// Employee/operator accounts (an account IS a login — `users` table).
+  /// Fetched with the bootstrap device credentials so the login screen has
+  /// real names to show before any operator has authenticated as themselves.
+  List<Map<String, dynamic>> users = [];
 
   // ── scanning ────────────────────────────────────────────────────────────
   String mode = 'in'; // 'in' | 'out'
@@ -96,21 +99,31 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     });
 
-    // ensure we have a JWT, then pull state
-    await _ensureAuthAndState();
-
+    // Auth + state load runs alongside the splash so a slow or unreachable
+    // backend never holds the UI hostage — screens render, then fill in.
+    final loading = _ensureAuthAndState();
     await Future.delayed(const Duration(milliseconds: 420));
+
     if (sess != null && sess['user'] != null && sess['wh'] != null && sess['gate'] != null) {
       user = sess['user'].toString();
       wh = sess['wh'].toString();
       gate = sess['gate'].toString();
       screen = Screen.home;
+      _connectReader();
     } else {
       screen = Screen.login;
     }
     notifyListeners();
+
+    await loading; // never throws — errors land in connError
+    notifyListeners();
   }
 
+  /// Logs in with the device/service credentials from Settings (default
+  /// admin/admin123), then loads box state + the employee/user list. This is
+  /// the "bootstrap" identity — just enough access to populate the login
+  /// screen — separate from an operator's own login (see [loginAsEmployee]),
+  /// which replaces the active token once they authenticate as themselves.
   Future<void> _ensureAuthAndState() async {
     try {
       if (api.token == null || api.token!.isEmpty) {
@@ -118,6 +131,7 @@ class AppController extends ChangeNotifier {
         prefs.token = r['token'] as String?;
       }
       await refresh();
+      await _loadUsers();
       connError = null;
     } on ApiException catch (e) {
       // token may be stale → retry once with a fresh login
@@ -126,6 +140,7 @@ class AppController extends ChangeNotifier {
           final r = await api.login(prefs.username, prefs.password);
           prefs.token = r['token'] as String?;
           await refresh();
+          await _loadUsers();
           connError = null;
           return;
         } catch (e2) {
@@ -145,7 +160,20 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _msg(Object e) => e is ApiException ? e.message : e.toString().replaceFirst('Exception: ', '');
+  Future<void> _loadUsers() async {
+    users = await api.listUsers();
+    notifyListeners();
+  }
+
+  /// Human-readable message for an arbitrary error. Strips the leading
+  /// `SomethingException: ` that Dart prepends — matching only at the start so
+  /// `ClientException: Failed to fetch` doesn't get mangled into `ClientFailed`.
+  String _msg(Object e) {
+    if (e is ApiException) return e.message;
+    final s = e.toString();
+    final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
+    return m == null ? s : s.substring(m.end);
+  }
 
   @override
   void dispose() {
@@ -224,8 +252,14 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True once an operator has picked a warehouse + gate for this shift.
+  bool get hasShift => user.isNotEmpty && wh.isNotEmpty && gate.isNotEmpty;
+
+  /// Home is only a valid destination once a shift is running — Settings is
+  /// also reachable from the login screen, and backing out of it there must
+  /// return to login rather than dropping the operator on an empty Home.
   void backToHome() {
-    screen = Screen.home;
+    screen = hasShift ? Screen.home : Screen.login;
     lastResult = null;
     notifyListeners();
   }
@@ -233,34 +267,75 @@ class AppController extends ChangeNotifier {
   void _saveSession() =>
       prefs.session = {'user': user, 'wh': wh, 'gate': gate};
 
-  void pickEmp(String name) {
-    user = name;
-    screen = Screen.session;
+  /// Authenticates as the tapped employee with their own password via
+  /// `POST /api/auth/login`, swapping the active token to theirs on success —
+  /// every request after this point (gate in/out, state refresh) acts as
+  /// them, not the bootstrap device account. Returns an error message to show
+  /// inline in the password prompt, or null on success.
+  Future<String?> loginAsEmployee(String username, String password) async {
+    busy = true;
     notifyListeners();
+    try {
+      final r = await api.login(username, password);
+      prefs.token = r['token'] as String?;
+      final u = Map<String, dynamic>.from(r['user'] as Map);
+      user = (u['name'] ?? username).toString();
+
+      _autoSelectSingleOptions();
+      if (wh.isNotEmpty && gate.isNotEmpty && warehouseList.length == 1 && currentGates.length == 1) {
+        // Only one warehouse and it has only one gate — there is nothing to
+        // choose, so skip session setup entirely and start the shift.
+        startShift();
+      } else {
+        screen = Screen.session;
+      }
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (e) {
+      return _msg(e);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
-  void setManualName(String v) {
-    manualName = v;
-    notifyListeners();
-  }
-
-  void doManualLogin() {
-    final n = manualName.trim();
-    if (n.isNotEmpty) pickEmp(n);
-  }
-
-  void doLogout() {
+  /// Signs the operator out and re-authenticates as the bootstrap device
+  /// account so the login screen's employee list is ready for the next
+  /// operator to pick from.
+  Future<void> doLogout() async {
     prefs.session = null;
+    prefs.token = null;
+    api.token = null;
     user = '';
     wh = '';
     gate = '';
     screen = Screen.login;
     notifyListeners();
+    await _ensureAuthAndState();
+    notifyListeners();
+  }
+
+  /// When there's only one warehouse (or the selected warehouse has only one
+  /// gate), there's nothing to actually choose — fill it in automatically so
+  /// the operator isn't forced to tap a single, obvious option.
+  void _autoSelectSingleOptions() {
+    final whs = warehouseList;
+    if (wh.isEmpty && whs.length == 1) {
+      wh = (whs.first['id'] ?? '').toString();
+    }
+    if (wh.isNotEmpty && gate.isEmpty) {
+      final gates = currentGates;
+      if (gates.length == 1) gate = '${gates.first}';
+    }
   }
 
   void pickWh(String id) {
     wh = id;
     if (S?.gateWh(gate) != id) gate = '';
+    // Picking a warehouse with only one gate leaves nothing left to choose.
+    final gates = currentGates;
+    if (gate.isEmpty && gates.length == 1) gate = '${gates.first}';
     notifyListeners();
   }
 
@@ -602,10 +677,12 @@ class AppController extends ChangeNotifier {
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
 
   // ═══════════════════════ settings ════════════════════════════════════════
-  Future<void> applyConnection({required String baseUrl, required String username, required String password}) async {
+  /// The device/service credentials (Prefs.username/password) stay fixed —
+  /// they're an internal bootstrap detail for listing employees before anyone
+  /// has authenticated as themselves, not something an operator should need
+  /// to see or edit. Only the API's location is configurable here.
+  Future<void> applyConnection({required String baseUrl}) async {
     prefs.baseUrl = baseUrl.trim();
-    prefs.username = username.trim();
-    prefs.password = password;
     prefs.token = null;
     api
       ..baseUrl = prefs.baseUrl
@@ -621,23 +698,6 @@ class AppController extends ChangeNotifier {
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
     }
     notifyListeners();
-  }
-
-  Future<void> doSeed() async {
-    busy = true;
-    notifyListeners();
-    try {
-      await api.putState(buildDemoState());
-      await refresh();
-      toastMsg('ใส่ข้อมูลตัวอย่างแล้ว', '15 กล่อง · 4 พนักงาน · 4 คลัง', ResultKind.ok);
-    } on ApiException catch (e) {
-      toastMsg('ใส่ข้อมูลไม่สำเร็จ', e.message, ResultKind.err);
-    } catch (e) {
-      toastMsg('ใส่ข้อมูลไม่สำเร็จ', _msg(e), ResultKind.err);
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
@@ -689,11 +749,6 @@ class AppController extends ChangeNotifier {
   int get todayOut => (S?.events ?? [])
       .where((e) => e is Map && e['dir'] == 'out' && _sameDay(e['ts']?.toString()))
       .length;
-
-  List<Map<String, dynamic>> get employees {
-    final e = S?.employees.values ?? const [];
-    return e.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
-  }
 
   List<Map<String, dynamic>> get warehouseList {
     final w = S?.warehouses.values ?? const [];

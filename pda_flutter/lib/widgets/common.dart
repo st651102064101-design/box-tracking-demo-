@@ -201,7 +201,9 @@ class StickyHeader extends StatelessWidget {
   }
 }
 
-/// Online/offline chip.
+/// Online/offline chip. Green means "connected," gray means "not" — orange is
+/// reserved for warnings elsewhere in the app, so offline deliberately isn't
+/// that color even though it's a less-than-ideal state.
 class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
@@ -213,9 +215,9 @@ class OnlineChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
-          color: online ? C.surface : C.orangeBg,
+          color: online ? C.limeBg : C.neutralBg,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: online ? C.border2 : C.orangeBorder),
+          border: Border.all(color: online ? C.limeBorder : C.border2),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -223,12 +225,12 @@ class OnlineChip extends StatelessWidget {
             Container(
               width: 7,
               height: 7,
-              decoration: BoxDecoration(color: online ? C.ink2 : C.orange, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: online ? C.limeText : C.muted, shape: BoxShape.circle),
             ),
             const SizedBox(width: 6),
             Text(online ? 'ออนไลน์' : 'ออฟไลน์',
                 style: TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w600, color: online ? C.ink2 : C.orange)),
+                    fontSize: 11.5, fontWeight: FontWeight.w600, color: online ? C.limeText : C.muted)),
           ],
         ),
       ),
