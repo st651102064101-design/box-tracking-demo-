@@ -40,6 +40,11 @@ android {
         release {
             // Signed with debug keys so `flutter run --release` works out of the box.
             signingConfig = signingConfigs.debug
+            // Flutter's release build type shrinks/minifies by default, which
+            // makes R8 walk the whole class graph including rfidapi3lib's
+            // optional Qualcomm integration — proguard-rules.pro tells it
+            // those classes are legitimately absent, not a build error.
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }

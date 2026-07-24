@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persistent settings & session storage. Mirrors the localStorage keys the PDA
@@ -19,7 +20,19 @@ class Prefs {
   static const _kSession = 'boxtrace_pda_session';
   static const _kOutbox = 'boxtrace_pda_outbox';
 
-  String get baseUrl => _p.getString(_kBaseUrl) ?? 'http://10.0.2.2:4000';
+  String get baseUrl {
+    final saved = _p.getString(_kBaseUrl);
+    if (saved != null) return saved;
+    // 10.0.2.2 is the Android-emulator-only alias for the host machine — a
+    // real browser can never resolve it, so a fresh web visit with no saved
+    // setting would otherwise fail to connect before the operator ever gets
+    // a chance to open Settings. The page's own origin is always reachable
+    // from itself, so default to that on web instead; Android keeps the
+    // emulator-friendly default since kIsWeb is false there.
+    if (kIsWeb) return Uri.base.origin;
+    return 'http://10.0.2.2:4000';
+  }
+
   set baseUrl(String v) => _p.setString(_kBaseUrl, v);
 
   String get username => _p.getString(_kUsername) ?? 'admin';
