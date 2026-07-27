@@ -99,4 +99,15 @@ class StateSnapshot {
     }
     return const [];
   }
+
+  /// Raw `gateNo -> 'in'|'out'|'both'` map from `warehouses[id].gateTypes`.
+  /// A gate absent from the map simply isn't a key here — the UI layer is
+  /// what decides to treat that as 'both'.
+  Map<String, String> gateTypesOf(String whId) {
+    final w = warehouses[whId];
+    if (w is Map && w['gateTypes'] is Map) {
+      return (w['gateTypes'] as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
+    }
+    return const {};
+  }
 }

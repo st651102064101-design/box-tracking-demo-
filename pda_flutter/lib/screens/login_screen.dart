@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -11,6 +12,7 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
 
@@ -36,27 +38,30 @@ class LoginScreen extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(22, top + 30, 22, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Row(
                 children: [
-                  BrandMark(size: 42),
-                  SizedBox(width: 11),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Wordmark(),
-                      Text('เข้าสู่ระบบก่อนเริ่มกะ', style: TextStyle(fontSize: 12, color: C.muted)),
-                    ],
+                  const BrandMark(size: 42),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Wordmark(),
+                        Text(loc.t('เข้าสู่ระบบก่อนเริ่มกะ'), style: const TextStyle(fontSize: 12, color: C.muted)),
+                      ],
+                    ),
                   ),
+                  LangToggleButton(loc: loc),
                 ],
               ),
-              SizedBox(height: 22),
-              Text('เลือกพนักงาน\nผู้ปฏิบัติงาน',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
-              SizedBox(height: 6),
-              Text('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน',
-                  style: TextStyle(fontSize: 13.5, color: C.muted)),
+              const SizedBox(height: 22),
+              Text(loc.t('เลือกพนักงาน\nผู้ปฏิบัติงาน'),
+                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
+              const SizedBox(height: 6),
+              Text(loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน'),
+                  style: const TextStyle(fontSize: 13.5, color: C.muted)),
             ],
           ),
         ),
@@ -75,12 +80,12 @@ class LoginScreen extends StatelessWidget {
                 children: [
                   Text(
                     c.connError == null
-                        ? 'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ'
-                        : 'เชื่อมต่อไม่ได้: ${c.connError}',
+                        ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
+                        : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
                     style: const TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
                   ),
                   const SizedBox(height: 9),
-                  _smallOutline('ตั้งค่าการเชื่อมต่อ', () => c.go(Screen.settings)),
+                  _smallOutline(loc.t('ตั้งค่าการเชื่อมต่อ'), () => c.go(Screen.settings)),
                 ],
               ),
             ),
@@ -91,7 +96,7 @@ class LoginScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      c.connected ? 'ยังไม่มีบัญชีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน',
+                      loc.t(c.connected ? 'ยังไม่มีบัญชีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 13.5, color: C.faint),
                     ),
@@ -193,6 +198,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 26),
@@ -229,7 +235,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      const Text('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ', style: TextStyle(fontSize: 12, color: C.muted)),
+                      Text(loc.t('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ'), style: const TextStyle(fontSize: 12, color: C.muted)),
                     ],
                   ),
                 ),
@@ -242,11 +248,11 @@ class _PasswordDialogState extends State<_PasswordDialog> {
               obscureText: true,
               autofocus: true,
               onSubmitted: (_) => _submit(),
-              decoration: pdaInput('รหัสผ่าน'),
+              decoration: pdaInput(loc.t('รหัสผ่าน')),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
+              Text(loc.t(_error!), style: const TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 16),
             Row(
@@ -260,7 +266,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                     ),
-                    child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: Text(loc.t('ยกเลิก'), style: const TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -278,7 +284,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.w600)),
+                        : Text(loc.t('เข้าสู่ระบบ'), style: const TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],

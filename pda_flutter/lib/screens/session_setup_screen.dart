@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -11,6 +12,7 @@ class SessionSetupScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final canStart = c.wh.isNotEmpty && c.gate.isNotEmpty;
 
@@ -18,19 +20,22 @@ class SessionSetupScreen extends StatelessWidget {
       children: [
         StickyHeader(
           onBack: () => c.go(Screen.login),
-          title: const Text('ตั้งค่ากะทำงาน'),
-          subtitle: Text('ผู้ปฏิบัติงาน · ${c.user}'),
+          title: Text(loc.t('ตั้งค่ากะทำงาน')),
+          subtitle: Text('${loc.t('ผู้ปฏิบัติงาน')} · ${c.user}'),
+          actions: [LangToggleButton(loc: loc)],
         ),
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 18, 16, bottom + 96),
             children: [
-              const _StepLabel('1 · เลือกคลังสินค้า'),
+              _StepLabel(loc.t('1 · เลือกคลังสินค้า')),
               const SizedBox(height: 11),
               ...c.warehouseList.map((w) {
                 final id = (w['id'] ?? '').toString();
                 final gs = (w['gates'] is List) ? (w['gates'] as List) : const [];
-                final gText = gs.isEmpty ? 'ประตู —' : 'ประตู ${gs.first}–${gs.last}';
+                final gText = gs.isEmpty
+                    ? loc.gateRangeText(null, null)
+                    : loc.gateRangeText(int.tryParse('${gs.first}'), int.tryParse('${gs.last}'));
                 final sel = c.wh == id;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -44,14 +49,20 @@ class SessionSetupScreen extends StatelessWidget {
               }),
               if (c.wh.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _StepLabel('2 · เลือกประตู (Gate) — ${c.selWhName}'),
+                _StepLabel(loc.gateStepLabel(c.selWhName)),
                 const SizedBox(height: 11),
                 Wrap(
                   spacing: 9,
                   runSpacing: 9,
                   children: c.currentGates.map((g) {
                     final sel = c.gate == '$g';
-                    return _GateChip(label: '$g', selected: sel, onTap: () => c.pickGate(g));
+                    final dir = c.gateTypeOf(g);
+                    return _GateChip(
+                      label: '$g',
+                      dirLabel: _dirLabel(dir, loc),
+                      selected: sel,
+                      onTap: () => c.pickGate(g),
+                    );
                   }).toList(),
                 ),
               ],
@@ -69,7 +80,7 @@ class SessionSetupScreen extends StatelessWidget {
             ),
           ),
           child: PrimaryButton(
-            label: 'เริ่มกะทำงาน',
+            label: loc.t('เริ่มกะทำงาน'),
             icon: null,
             trailing: canStart
                 ? const Icon(Icons.arrow_forward, size: 19, color: C.limeDeep)
@@ -79,6 +90,17 @@ class SessionSetupScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static String _dirLabel(String dir, LocaleController loc) {
+    switch (dir) {
+      case 'in':
+        return loc.t('เข้า');
+      case 'out':
+        return loc.t('ออก');
+      default:
+        return loc.t('เข้า/ออก');
+    }
   }
 }
 
@@ -141,9 +163,10 @@ class _WarehouseTile extends StatelessWidget {
 
 class _GateChip extends StatelessWidget {
   final String label;
+  final String? dirLabel;
   final bool selected;
   final VoidCallback onTap;
-  const _GateChip({required this.label, required this.selected, required this.onTap});
+  const _GateChip({required this.label, this.dirLabel, required this.selected, required this.onTap});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -153,19 +176,31 @@ class _GateChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(13),
         onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minWidth: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          constraints: const BoxConstraints(minWidth: 64),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
             border: Border.all(color: selected ? C.ink : C.border2, width: selected ? 1.5 : 1),
           ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : C.ink,
-                  fontFeatures: const [FontFeature.tabularFigures()])),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? Colors.white : C.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+              if (dirLabel != null)
+                Text(dirLabel!,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                        color: selected ? Colors.white70 : C.muted)),
+            ],
+          ),
         ),
       ),
     );

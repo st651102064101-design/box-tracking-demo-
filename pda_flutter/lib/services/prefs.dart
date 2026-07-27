@@ -19,6 +19,10 @@ class Prefs {
   // shift session (operator + warehouse + gate)
   static const _kSession = 'boxtrace_pda_session';
   static const _kOutbox = 'boxtrace_pda_outbox';
+  static const _kLang = 'boxtrace_lang';
+
+  String get lang => _p.getString(_kLang) ?? 'th';
+  set lang(String v) => _p.setString(_kLang, v);
 
   /// Baked in at build time so a device build ships pointing at the right host
   /// without an operator having to type a URL on a handheld keypad:

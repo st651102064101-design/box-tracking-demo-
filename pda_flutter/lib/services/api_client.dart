@@ -39,10 +39,14 @@ class ApiClient {
       body = null;
     }
     if (r.statusCode >= 200 && r.statusCode < 300) return body;
-    final msg = (body is Map && body['error'] != null)
-        ? body['error'].toString()
-        : 'HTTP ${r.statusCode}';
-    final code = (body is Map) ? body['code']?.toString() : null;
+    // The Express error middleware sends `{ error: <code>, message: <Thai text> }`
+    // — `message` is what should be shown to the user, `error` is the machine code.
+    final msg = (body is Map && body['message'] != null)
+        ? body['message'].toString()
+        : (body is Map && body['error'] != null)
+            ? body['error'].toString()
+            : 'HTTP ${r.statusCode}';
+    final code = (body is Map) ? body['error']?.toString() : null;
     throw ApiException(r.statusCode, msg, code);
   }
 

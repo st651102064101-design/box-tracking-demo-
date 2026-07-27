@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'controllers/app_controller.dart';
 import 'services/api_client.dart';
+import 'services/i18n.dart';
 import 'services/prefs.dart';
 import 'services/rfid_service.dart';
 import 'theme.dart';
@@ -17,20 +18,25 @@ Future<void> main() async {
   final api = ApiClient(baseUrl: prefs.baseUrl, token: prefs.token);
   final rfid = RfidService();
   final controller = AppController(api: api, prefs: prefs, rfid: rfid);
+  final locale = LocaleController(prefs);
   // fire-and-forget bootstrap (auth + state fetch), UI shows the boot splash
   controller.init();
 
-  runApp(BoxTraceApp(controller: controller));
+  runApp(BoxTraceApp(controller: controller, locale: locale));
 }
 
 class BoxTraceApp extends StatelessWidget {
   final AppController controller;
-  const BoxTraceApp({super.key, required this.controller});
+  final LocaleController locale;
+  const BoxTraceApp({super.key, required this.controller, required this.locale});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: controller,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: controller),
+        ChangeNotifierProvider.value(value: locale),
+      ],
       child: MaterialApp(
         title: 'BoxTrace PDA',
         debugShowCheckedModeBanner: false,
