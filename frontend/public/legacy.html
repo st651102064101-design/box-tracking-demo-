@@ -1191,8 +1191,42 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="h-sub reveal d2">ออกไปกี่ใบ กลับมากี่ใบ เหลือในคลังเท่าไหร่ — เห็นทั้งวงจรในหน้าเดียว ตั้งแต่ผ่านประตูออก จนกลับเข้าชั้นวาง</p>
   </div>
 
-  <!-- 3D isometric warehouse hero — canvas-rendered, bins glow by live occupancy -->
-  <div class="hero-viz reveal d1" id="heroViz">
+  <!-- ===== คลังเสมือน — 2D และ 3D อยู่ div เดียวกัน สลับด้วยปุ่ม 2D/3D ===== -->
+  <style>
+  .viz-card{position:relative;background:var(--surface);border:.5px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:var(--shadow);overflow:hidden;margin:0 0 34px;}
+  .viz-tabs{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:.5px solid var(--line);flex-wrap:wrap;}
+  .viz-seg{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:color-mix(in srgb,var(--ink) 6%,transparent);}
+  .viz-seg button{display:inline-flex;align-items:center;gap:7px;padding:7px 15px;border-radius:999px;
+    font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--muted);transition:background .25s var(--ease),color .25s;}
+  .viz-seg button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .viz-seg button:hover{color:var(--ink2);}
+  .viz-seg button.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .viz-tabs .viz-note{font-size:12px;color:var(--muted);}
+  @media(max-width:640px){.viz-tabs .viz-note{display:none;}}
+  .viz-card .hero-viz{margin:0;border:none;border-radius:0;box-shadow:none;}
+  /* ชิปจุดรอ Putaway ในหน้า Location Master */
+  .stg-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 8px 7px 14px;border-radius:999px;
+    background:var(--accentSoft);color:var(--accentInk);border:.5px solid var(--line2);white-space:nowrap;
+    font-family:var(--mono);font-size:13px;font-weight:700;}
+  .stg-chip button{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--ink) 9%,transparent);color:var(--ink2);transition:background .2s;}
+  .stg-chip button:hover{background:color-mix(in srgb,var(--ink) 18%,transparent);}
+  .stg-chip button.del{background:var(--negSoft);color:var(--neg);}
+  .stg-chip button svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  #stgList{display:flex;flex-wrap:wrap;gap:9px;align-items:center;min-height:37px;}
+  </style>
+
+  <div class="viz-card reveal d1" id="vizCard" data-screen-label="Warehouse 2D/3D">
+    <div class="viz-tabs no-print">
+      <div class="viz-seg" id="vizSeg">
+        <button type="button" data-viz="2d" class="active" title="ผังรวม 2 มิติ — กระบวนการทั้งคลัง"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9"/></svg> 2D</button>
+        <button type="button" data-viz="3d" title="คลังเสมือน 3 มิติ — Digital Twin เชื่อมข้อมูลจริง"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg> 3D</button>
+      </div>
+      <span class="viz-note" id="vizNote">ผังกระบวนการ — สลับเป็น 3D เพื่อเข้าคลังเสมือนที่เชื่อมข้อมูลจริง</span>
+    </div>
+    <div class="viz-pane" id="vizPane2d">
+  <div class="hero-viz" id="heroViz">
     <div id="heroScene" class="hero-scene" aria-hidden="true"></div>
     <div class="hero-viz-overlay">
       <div class="hvo-help-wrap no-print">
@@ -1215,6 +1249,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
     </div>
   </div>
+    </div>
+    <div class="viz-pane" id="vizPane3d" style="display:none;">
 
   <style>
   /* ===== 3D Digital Twin (w3d) ===== */
@@ -1267,8 +1303,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   @media(max-width:760px){.w3d-stage{height:72vw;min-height:340px;}.w3d-detail{width:calc(100% - 26px);}}
   </style>
 
-  <div class="sectlabel reveal">คลังเสมือน 3 มิติ — Digital Twin เชื่อมข้อมูลจริง</div>
-  <div class="w3d-card reveal" id="w3dCard" data-screen-label="3D Digital Twin">
+  <div class="w3d-card" id="w3dCard" data-screen-label="3D Digital Twin" style="border:none;border-radius:0;box-shadow:none;margin:0;">
     <div class="w3d-bar no-print">
       <div class="seg-filter" id="w3dWhSeg"></div>
       <div class="w3d-search">
@@ -1294,6 +1329,30 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="w3d-empty" id="w3dEmpty" style="display:none;"></div>
     </div>
   </div>
+    </div>
+  </div>
+  <script>
+  /* สลับ 2D / 3D — อยู่ div เดียวกัน จำมุมที่เลือกล่าสุดไว้ */
+  (function(){
+    var seg=document.getElementById('vizSeg');if(!seg)return;
+    var p2=document.getElementById('vizPane2d'),p3=document.getElementById('vizPane3d'),note=document.getElementById('vizNote');
+    function set(v){
+      var is3=(v==='3d');
+      p2.style.display=is3?'none':'';
+      p3.style.display=is3?'':'none';
+      Array.prototype.forEach.call(seg.querySelectorAll('[data-viz]'),function(b){b.classList.toggle('active',b.getAttribute('data-viz')===v);});
+      if(note)note.textContent=is3?'ลากหมุน · ล้อซูม · คลิกกล่อง/ช่องดูรายละเอียด — 1 กล่องในฉาก = กล่องจริง 1 ใบ':'ผังกระบวนการ — สลับเป็น 3D เพื่อเข้าคลังเสมือนที่เชื่อมข้อมูลจริง';
+      try{localStorage.setItem('boxtrace_viz_mode',v);}catch(e){}
+      setTimeout(function(){window.dispatchEvent(new Event('resize'));},30);
+    }
+    seg.addEventListener('click',function(e){
+      var b=e.target.closest('[data-viz]');if(b)set(b.getAttribute('data-viz'));
+    });
+    var saved='2d';try{saved=localStorage.getItem('boxtrace_viz_mode')||'2d';}catch(e){}
+    set(saved==='3d'?'3d':'2d');
+    window.showViz=set;
+  })();
+  </script>
 
   <div class="loop">
     <div class="node warehouse reveal clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'กล่องในคลัง'});"><canvas class="node-particles" data-particle="cloud"></canvas><span class="badge"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span></span><div class="e"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M4 20V10l6 4V10l6 4V6l4 2v12"/><path d="M7 20v-3M11 20v-3M15 20v-3"/></svg></span></div><div class="t">เหลือในคลัง</div><div class="v mono" id="nWarehouse">0</div><div class="s">In warehouse</div></div>
@@ -1937,6 +1996,26 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
     </div>
+    <!-- ===== จุดรอ Putaway / รอจัดเก็บ (Staging) ต่อคลัง ===== -->
+    <div class="card hover" id="stgCard">
+      <h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v5H3zM3 15h18v5H3z"/><path d="M8 8V4h8v4"/></svg></span> จุดรอ Putaway / รอจัดเก็บ (Staging)</h3>
+      <p class="desc">พื้นที่พักกล่องหลังผ่าน Gate ขาเข้า ก่อนขึ้นชั้นวางจริง — กำหนดได้ว่าคลังนี้มีกี่จุด ค่าเริ่มต้น <b>STG-01 – STG-05</b> ตามคลังเสมือน 3D — เพิ่ม/แก้ไข/ลบได้ แล้วแร็คพักในผัง 3D จะสร้างตามจำนวนนี้</p>
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field"><label>คลัง <span class="req">*</span></label><select id="stgWh" onchange="renderStagingMaster()"></select></div>
+        <div class="field"><label>เพิ่มจุดพักใหม่</label>
+          <div class="auto-tag-row">
+            <input id="stgNewCode" placeholder="เช่น STG-06" autocomplete="off" style="font-family:var(--mono);text-transform:uppercase;">
+            <button type="button" class="btn ghost sm" onclick="addStagingBay()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มจุด</button>
+          </div>
+        </div>
+      </div>
+      <div id="stgList"></div>
+      <div class="row" style="margin-top:14px;align-items:center;">
+        <button class="btn ghost sm" onclick="resetStagingBays()"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> ตั้งค่าเริ่มต้น STG-01 – STG-05</button>
+        <div class="spacer"></div>
+        <span class="muted small" id="stgHint"></span>
+      </div>
+    </div>
     <div class="tablecard">
       <div class="tablehead" style="flex-wrap:wrap;gap:8px;">
         <h4>รายการตำแหน่งแร็ค</h4><span class="tag" id="cntLoc"></span>
@@ -2208,8 +2287,51 @@ function authHeaders(){
   var t=null; try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
   return t?{'Authorization':'Bearer '+t}:{};
 }
+/* ===== API root — backend จริงรันที่พอร์ต 4000 =====
+   ปกติหน้านี้ถูกเสิร์ฟจาก Next (พอร์ต 3000) แล้วเรียก /api/state บน origin เดียวกัน
+   แต่ถ้าเปิดจากพอร์ตอื่น (เช่น 5100) หรือเปิดไฟล์ตรงๆ origin นั้นไม่มี /api/state
+   → ตอบ 404/405 แล้วหน้าจอไม่มีข้อมูล (อาการ "HTTP 405 · พบ 0 กล่อง")
+   ตั้ง API root ได้ 3 ทาง เรียงตามลำดับความสำคัญ:
+     1) ?api=http://192.168.3.128:4000  (จำลง localStorage ให้เลย)
+     2) localStorage 'boxtrace_api_root'
+     3) auto — ถ้า origin ปัจจุบันเรียก /api ไม่ได้ สลับไป http://<host>:4000 เอง */
+var API_PORT='4000';
+var API_ROOT=(function(){
+  var q='';try{q=new URLSearchParams(location.search).get('api')||'';}catch(e){}
+  if(q){try{localStorage.setItem('boxtrace_api_root',q.replace(/\/+$/,''));}catch(e){}}
+  var saved='';try{saved=localStorage.getItem('boxtrace_api_root')||'';}catch(e){}
+  if(saved)return saved.replace(/\/+$/,'');
+  if(location.protocol==='file:')return 'http://localhost:'+API_PORT;
+  if(location.port&&location.port!=='3000'&&location.port!==API_PORT)
+    return location.protocol+'//'+location.hostname+':'+API_PORT;
+  return '';
+})();
+function setApiRoot(v){API_ROOT=String(v||'').replace(/\/+$/,'');try{localStorage.setItem('boxtrace_api_root',API_ROOT);}catch(e){}}
+function apiUrl(p){return API_ROOT+p;}
+function apiRoot(){return API_ROOT||location.origin;}
+var apiFellBack=false;
+function apiHostGuess(){return location.protocol+'//'+location.hostname+':'+API_PORT;}
+/* เรียก API แบบมี fallback: origin เดิมไม่มี /api (404/405) หรือเชื่อมไม่ได้ → ลอง <host>:4000 ครั้งเดียว */
+function apiFetch(path,opt){
+  return fetch(apiUrl(path),opt).then(function(r){
+    if((r.status===404||r.status===405||r.status===501)&&!apiFellBack&&apiRoot()!==apiHostGuess()){
+      apiFellBack=true;API_ROOT=apiHostGuess();   /* เฉพาะ session นี้ — ไม่ pin ลง localStorage กันค่าค้าง */
+      console.warn('[BoxTrace] origin นี้ไม่มี /api ('+r.status+') → ใช้ '+API_ROOT);
+      return fetch(apiUrl(path),opt);
+    }
+    return r;
+  }).catch(function(e){
+    if(!apiFellBack&&apiRoot()!==apiHostGuess()){
+      apiFellBack=true;API_ROOT=apiHostGuess();
+      console.warn('[BoxTrace] เชื่อม '+location.origin+' ไม่ได้ → ใช้ '+API_ROOT);
+      return fetch(apiUrl(path),opt);
+    }
+    throw e;
+  });
+}
+window.apiUrl=apiUrl;window.apiFetch=apiFetch;window.setApiRoot=setApiRoot;window.apiRoot=apiRoot;
 function save(){
-  fetch('/api/state',{
+  apiFetch('/api/state',{
     method:'PUT',
     headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
     body:JSON.stringify(S)
@@ -2232,7 +2354,7 @@ function normalizeState(d){
 }
 /** Loads S from the DB at boot. Returns a promise so init can await it. */
 function loadFromServer(){
-  return fetch('/api/state',{headers:authHeaders()})
+  return apiFetch('/api/state',{headers:authHeaders()})
     .then(function(r){
       if(r.status===401){window.location.href='/login';return null;}
       if(!r.ok)throw new Error('HTTP '+r.status);
@@ -2689,6 +2811,90 @@ function renderWhGateTypeList(preset){
 window.renderWhGateTypeList=renderWhGateTypeList;
 ['whGateFrom','whGateTo'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){renderWhGateTypeList();});});
 (function(){var s=$('#whGateType');if(s)s.addEventListener('change',function(){var v=s.value;$all('#whGateTypeList .wh-gt-sel').forEach(function(x){x.value=v;});});renderWhGateTypeList();})();
+/* ===== จุดรอ Putaway / รอจัดเก็บ (Staging bays) ต่อคลัง =====
+   ค่าเริ่มต้น STG-01 – STG-05 ให้ตรงกับแร็คพักในคลังเสมือน 3D — แก้/เพิ่ม/ลบได้ต่อคลัง
+   เก็บที่ S.warehouses[wh].stagingBays (ไม่ตั้งค่า = ใช้ค่าเริ่มต้น) */
+var DEFAULT_STAGING_BAYS=['STG-01','STG-02','STG-03','STG-04','STG-05'];
+function whStagingBays(whId){
+  var w=S.warehouses[whId]||{};
+  var a=Array.isArray(w.stagingBays)?w.stagingBays.filter(function(c){return !!String(c==null?'':c).trim();}):null;
+  return (a&&a.length)?a.slice():DEFAULT_STAGING_BAYS.slice();
+}
+function setWhStagingBays(whId,arr){
+  var w=S.warehouses[whId];if(!w)return;
+  var before=JSON.parse(JSON.stringify(w));
+  w.stagingBays=arr.slice();
+  auditEntry('UPDATE',USER,whId,'จุดรอ Putaway '+arr.length+' จุด',before,w);
+  save();renderStagingMaster();
+  if(window.W3D&&window.W3D.refresh)window.W3D.refresh();
+}
+function stgNextCode(bays){
+  var n=1,c;
+  do{c='STG-'+String(n).padStart(2,'0');n++;}while(bays.indexOf(c)>=0&&n<200);
+  return c;
+}
+function renderStagingMaster(){
+  var sel=$('#stgWh');if(!sel)return;
+  var whs=Object.values(S.warehouses);
+  var keep=sel.value;
+  sel.innerHTML=whs.length
+    ? whs.map(function(w){return '<option value="'+esc(w.id)+'">'+esc(w.name||w.id)+'</option>';}).join('')
+    : '<option value="">— ยังไม่มีคลัง —</option>';
+  if(keep&&S.warehouses[keep])sel.value=keep;
+  var wh=sel.value;
+  var bays=whStagingBays(wh);
+  var custom=!!(S.warehouses[wh]&&Array.isArray(S.warehouses[wh].stagingBays)&&S.warehouses[wh].stagingBays.length);
+  var box=$('#stgList');
+  if(box)box.innerHTML=bays.length?bays.map(function(c,i){
+    return '<span class="stg-chip">'+esc(c)
+      +'<button type="button" title="แก้ไขรหัส" onclick="renameStagingBay('+i+')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16Z"/></svg></span></button>'
+      +'<button type="button" class="del" title="ลบจุดนี้" onclick="delStagingBay('+i+')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button>'
+      +'</span>';
+  }).join(''):'<span class="muted small">ยังไม่มีจุดพัก — กด “ตั้งค่าเริ่มต้น” เพื่อสร้าง STG-01 – STG-05</span>';
+  var hint=$('#stgHint');
+  if(hint)hint.textContent=(custom?'บันทึกไว้เอง · ':'ค่าเริ่มต้นระบบ · ')+bays.length+' จุด — ผัง 3D จะสร้างแร็คพัก '+bays.length+' ช่อง';
+  var np=$('#stgNewCode');if(np)np.placeholder='เช่น '+stgNextCode(bays);
+}
+function addStagingBay(){
+  var sel=$('#stgWh'),inp=$('#stgNewCode');
+  var wh=sel&&sel.value;
+  if(!wh)return toast('เพิ่มไม่ได้','ยังไม่มีคลังในระบบ — เพิ่มคลังที่ "คลัง & ประตู" ก่อน','err');
+  var bays=whStagingBays(wh);
+  var code=String((inp&&inp.value)||'').trim().toUpperCase()||stgNextCode(bays);
+  if(bays.indexOf(code)>=0)return toast('รหัสซ้ำ','มีจุด '+code+' อยู่แล้วในคลังนี้','err');
+  bays.push(code);if(inp)inp.value='';
+  setWhStagingBays(wh,bays);
+  toast('เพิ่มจุดรอ Putaway',code+' · '+whName(wh),'ok');
+}
+function renameStagingBay(i){
+  var wh=($('#stgWh')||{}).value;if(!wh)return;
+  var bays=whStagingBays(wh);if(!bays[i])return;
+  var v=prompt('แก้ไขรหัสจุดรอ Putaway',bays[i]);
+  if(v==null)return;
+  v=String(v).trim().toUpperCase();
+  if(!v)return;
+  if(bays.indexOf(v)>=0&&bays.indexOf(v)!==i)return toast('รหัสซ้ำ','มีจุด '+v+' อยู่แล้ว','err');
+  bays[i]=v;setWhStagingBays(wh,bays);
+  toast('แก้ไขแล้ว',v,'ok');
+}
+function delStagingBay(i){
+  var wh=($('#stgWh')||{}).value;if(!wh)return;
+  var bays=whStagingBays(wh);if(!bays[i])return;
+  if(bays.length<=1)return toast('ลบไม่ได้','ต้องเหลือจุดพักอย่างน้อย 1 จุด','err');
+  if(!confirm('ลบจุดรอ Putaway '+bays[i]+' ?'))return;
+  var gone=bays.splice(i,1)[0];
+  setWhStagingBays(wh,bays);
+  toast('ลบแล้ว',gone,'ok');
+}
+function resetStagingBays(){
+  var wh=($('#stgWh')||{}).value;if(!wh)return toast('ทำไม่ได้','ยังไม่มีคลังในระบบ','err');
+  setWhStagingBays(wh,DEFAULT_STAGING_BAYS.slice());
+  toast('ตั้งค่าเริ่มต้นแล้ว','STG-01 – STG-05 · '+whName(wh),'ok');
+}
+window.whStagingBays=whStagingBays;window.renderStagingMaster=renderStagingMaster;
+window.addStagingBay=addStagingBay;window.renameStagingBay=renameStagingBay;
+window.delStagingBay=delStagingBay;window.resetStagingBays=resetStagingBays;
+
 /* Staging (awaiting-putaway) config per warehouse — falls back to system default if not set */
 var DEFAULT_STAGING={zone:'พื้นที่รับของขาเข้า',rack:'STG-01'};
 function whStaging(whId){var w=S.warehouses[whId]||{};
@@ -5715,6 +5921,7 @@ function renderLocMaster() {
     ? whs.map(function(w){ return '<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>'; }).join('')
     : '<option value="">— ยังไม่มีคลัง —</option>';
   ['locWh','bulkLocWh'].forEach(function(id){ var s=$('#'+id); if(s) s.innerHTML=whOpts; });
+  renderStagingMaster();
 
   /* build chip row from live data (also refreshes filter options) */
   buildLocChips();
@@ -10152,7 +10359,8 @@ let live=true;
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
 async function pullState(){
   try{
-    const r=await fetch(API,{headers:{Authorization:'Bearer '+token()},cache:'no-store'});
+    const opt={headers:{Authorization:'Bearer '+token()},cache:'no-store'};
+    const r=await (Wn.apiFetch?Wn.apiFetch(API,opt):fetch(API,opt));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const j=await r.json();
     const st=j.state||j;
@@ -10323,6 +10531,7 @@ function shared(g){g.userData.shared=true;return g;}
 const GEO={
   unit:shared(new THREE.BoxGeometry(1,1,1)),
   cyl:shared(new THREE.CylinderGeometry(0.5,0.5,1,20)),
+  torus:shared(new THREE.TorusGeometry(0.5,0.075,8,26)),
   wheel:shared(new THREE.CylinderGeometry(0.5,0.5,0.34,20).rotateX(Math.PI/2)),
   smallWheel:shared(new THREE.CylinderGeometry(0.27,0.27,0.24,16).rotateX(Math.PI/2)),
   tinyWheel:shared(new THREE.CylinderGeometry(0.19,0.19,0.2,14).rotateX(Math.PI/2)),
@@ -10476,8 +10685,19 @@ function buildForklift(role){
   const head=new THREE.Mesh(GEO.sphere,MAT.skin);head.scale.setScalar(0.20);head.position.y=0.56;op.add(head);
   op.position.set(-0.30,0.88,0);g.add(op);
   g.userData.operator=op;
-  /* พวงมาลัย */
-  const wheelR=new THREE.Mesh(GEO.ring,MAT.fork);wheelR.scale.setScalar(0.34);wheelR.position.set(0.04,1.14,0);wheelR.rotation.x=-1.1;g.add(wheelR);
+  /* คอนโซล + คอพวงมาลัย + พวงมาลัย — ยึดกับแป้นหน้าปัดจริง ไม่ลอยเดี่ยวกลางอากาศ */
+  g.add(bx(0.34,0.32,0.58,MAT.cage,0.26,0.94,0));                                    // แป้นหน้าปัด/คอนโซล
+  const stem=cy(0.045,0.36,MAT.fork,0.21,1.10,0);stem.rotation.z=0.42;g.add(stem);   // คอพวงมาลัย
+  const swTilt=new THREE.Group(),swFlat=new THREE.Group();
+  const swRim=new THREE.Mesh(GEO.torus,MAT.rubber);swRim.scale.setScalar(0.30);swRim.castShadow=true;swFlat.add(swRim);
+  const swHub=new THREE.Mesh(GEO.cyl,MAT.fork);swHub.scale.set(0.11,0.05,0.11);swHub.rotation.x=Math.PI/2;swFlat.add(swHub);
+  [0,2.094,4.189].forEach(a=>{
+    const sp=bx(0.032,0.26,0.032,MAT.fork,Math.cos(a)*0.14,Math.sin(a)*0.14,0,true);
+    sp.rotation.z=a-Math.PI/2;swFlat.add(sp);
+  });
+  swFlat.rotation.x=-Math.PI/2;                 // วางระนาบนอน (แกนชี้ขึ้น)
+  swTilt.add(swFlat);swTilt.rotation.z=0.42;    // เอียงเข้าหาคนขับ
+  swTilt.position.set(0.15,1.27,0);g.add(swTilt);
   /* เสา mast (คงที่) */
   g.add(bx(0.10,2.24,0.10,MAT.fork,0.56,1.12,0.30,true));
   g.add(bx(0.10,2.24,0.10,MAT.fork,0.56,1.12,-0.30,true));
@@ -10558,6 +10778,13 @@ const opsRoot=new THREE.Group();scene.add(opsRoot); // รถ/forklift ไม่
 let beaconT=0;
 const raycaster=new THREE.Raycaster(),ptr=new THREE.Vector2();
 
+/* จุดรอ Putaway (staging bays) ของคลังนี้ — ตั้งค่าจากหน้า Master → ตำแหน่งแร็ค
+   ไม่ตั้งค่า = STG-01 – STG-05 (ตรงกับค่าเริ่มต้นของหน้า Location Master) */
+function stagingCodes(wh){
+  const w=(St().warehouses||{})[wh]||{};
+  const a=Array.isArray(w.stagingBays)?w.stagingBays.filter(c=>!!String(c==null?'':c).trim()):null;
+  return (a&&a.length)?a.slice():['STG-01','STG-02','STG-03','STG-04','STG-05'];
+}
 function statusKey(b){
   if(b.status==='lost')return 'lost';
   if(b.status==='out')return isOverdue(b)?'overdue':'out';
@@ -10604,6 +10831,8 @@ function buildLowRack(o){
   g.add(bx(W,0.07,0.07,postM,0,STG_TOP,STG_D/2-0.05,true));
   g.position.set(o.x,0,o.z);
   root.add(g);
+  /* จองเนื้อที่ของแร็คนี้เป็นสิ่งกีดขวาง — forklift จะหาทางอ้อม ไม่วิ่งทะลุ */
+  if(LY.obstacles)LY.obstacles.push({x0:o.x-W/2-0.05,x1:o.x+W/2+0.05,z0:o.z-STG_D/2,z1:o.z+STG_D/2});
   const world=slots.map(s=>({x:o.x+s.x,y:s.y,z:o.z,bay:s.bay,lev:s.lev}));
   /* ป้ายช่อง STG-01… — แผ่นเดียวต่อแร็ค (1 draw call) */
   if(o.codePrefix){
@@ -10616,7 +10845,7 @@ function buildLowRack(o){
     for(let i=0;i<bays;i++){
       const cx=(i+0.5)*c.width/bays;
       g2.fillStyle=PAL.dark?'#e8e8ec':'#1d1d1f';
-      g2.fillText(o.codePrefix+'-'+String(i+1).padStart(2,'0'),cx,c.height/2+1);
+      g2.fillText((o.codes&&o.codes[i])?String(o.codes[i]):(o.codePrefix+'-'+String(i+1).padStart(2,'0')),cx,c.height/2+1);
       if(i){g2.beginPath();g2.moveTo(i*c.width/bays,7);g2.lineTo(i*c.width/bays,c.height-7);g2.stroke();}
     }
     const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;
@@ -10675,7 +10904,9 @@ function build(){
   }
   Object.values(st.locations||{}).forEach(l=>{if((l.wh||'')!==curWh)return;if(!(l.zone||l.rack))return;feed(l.zone||'—',l.rack||'R?',l.shelf,l.slot);});
   Object.values(st.boxes||{}).forEach(b=>{if(b.status!=='warehouse')return;const l=b.location||{};if((l.wh||'')!==curWh)return;if(!(l.zone||l.rack))return;feed(l.zone||'—',l.rack||'R?',l.shelf,l.slot);});
-  rackMap.forEach(r=>{r.shelves=Math.max(r.shelves,3);r.slots=Math.max(r.slots,4);});
+  /* จำนวนชั้น (shelf) และช่อง (slot) ต้องตรงกับที่ลงทะเบียนจริงใน Location Master
+     (เดิมบังคับขั้นต่ำ 3 ชั้น × 4 ช่อง ทุกแร็คจึงหน้าตาเท่ากันหมด ไม่ตรงแร็คจริง) */
+  rackMap.forEach(r=>{r.shelves=Math.max(1,r.shelves||0);r.slots=Math.max(1,r.slots||0);});
   const zones=[...new Set([...rackMap.values()].map(r=>r.zone))].sort();
 
   /* ── ผังแร็ค (คงอัลกอริทึมเดิมของแอป) + คำนวณ "ทางเดินรถ" ต่อแถว ── */
@@ -10717,7 +10948,7 @@ function build(){
   const apron0=dockZ+0.3,apron1=dockZ+11.5,road0=apron1,road1=road0+7.2,roadMid=road0+3.6,yardZ=road1+5.4;
   const leftLaneX=bMinX+2.4,rightLaneX=bMaxX-2.4;
   LY={dockZ,roadMid,bMinX,bMaxX,bW,X0,frontZ,backZ,contentW,mainAisleZ,zoneLaneZ,dockLaneZ,walkZ,
-      leftLaneX,rightLaneX,apron0,apron1,road0,road1,yardZ,gateX:{},gateDir:{},lanesV:[],lanesH:[mainAisleZ,zoneLaneZ,dockLaneZ]};
+      leftLaneX,rightLaneX,apron0,apron1,road0,road1,yardZ,gateX:{},gateDir:{},lanesV:[],lanesH:[mainAisleZ,zoneLaneZ,dockLaneZ],obstacles:[]};
 
   /* ── ทางเดินรถแนวตั้งต่อแถวแร็ค (forklift ไม่ทะลุแร็ค) ── */
   segs.forEach(sg=>{
@@ -10748,6 +10979,9 @@ function build(){
   root.add(bx(bW,WALL_H,0.22,MAT.wall,(bMinX+bMaxX)/2,WALL_H/2,backZ));
   root.add(bx(0.22,WALL_H,dockZ-backZ,MAT.wall,bMinX,WALL_H/2,(backZ+dockZ)/2));
   root.add(bx(0.22,WALL_H,dockZ-backZ,MAT.wall,bMaxX,WALL_H/2,(backZ+dockZ)/2));
+  LY.obstacles.push({x0:bMinX,x1:bMaxX,z0:backZ-0.2,z1:backZ+0.2},
+                    {x0:bMinX-0.2,x1:bMinX+0.2,z0:backZ,z1:dockZ},
+                    {x0:bMaxX-0.2,x1:bMaxX+0.2,z0:backZ,z1:dockZ});
   /* หลังคา: เปิดโปร่งให้เห็นภายใน — เหลือเชิงชาย + จันทันเหล็ก */
   const fasc=0.55;
   root.add(bx(bW+0.9,fasc,0.5,MAT.roof,(bMinX+bMaxX)/2,WALL_H+fasc/2,backZ-0.34,true));
@@ -10782,6 +11016,7 @@ function build(){
     LY.gateDir[g]=gdir;
     /* ผนังท่าเทียบระหว่างประตู */
     root.add(bx(Math.max(0.05,(gx-2.05)-prevEdge),WALL_H,0.24,MAT.dockwall,(prevEdge+gx-2.05)/2,WALL_H/2,dockZ));
+    LY.obstacles.push({x0:prevEdge,x1:gx-2.05,z0:dockZ-0.25,z1:dockZ+0.25});   // ผนังท่าเทียบ — เข้า-ออกได้เฉพาะช่องประตู
     prevEdge=gx+2.05;
     root.add(bx(4.1,WALL_H-4.3,0.24,MAT.dockwall,gx,4.3+(WALL_H-4.3)/2,dockZ));
     /* กรอบประตู */
@@ -10860,6 +11095,7 @@ function build(){
   });
   Object.keys(DOCK).forEach(k=>{if(gs.indexOf(+k)<0&&gs.indexOf(k)<0){const t=DOCK[k].truck;if(t){opsRoot.remove(t);disposeTree(t);}delete DOCK[k];}});
   root.add(bx(Math.max(0.05,bMaxX-prevEdge),WALL_H,0.24,MAT.dockwall,(prevEdge+bMaxX)/2,WALL_H/2,dockZ));
+  LY.obstacles.push({x0:prevEdge,x1:bMaxX,z0:dockZ-0.25,z1:dockZ+0.25});
 
   /* ── ตีเส้นพื้นในคลัง: ทางเดินรถ + ทางเดินคนสีเหลือง ── */
   root.add(paint(bW-1.2,0.14,MAT.paintY,(bMinX+bMaxX)/2,walkZ-0.62,0.022));
@@ -10876,6 +11112,7 @@ function build(){
   let totalCells=0;
   segs.forEach(sg=>{
     const xC=sg.xC,rk=sg.rk,topY=BASE_Y+rk.shelves*SHELF_H;
+    LY.obstacles.push({x0:xC-RACK_D/2,x1:xC+RACK_D/2,z0:frontZ-sg.z0-sg.len,z1:frontZ-sg.z0+0.6});
     for(let s=0;s<=rk.slots;s++){
       const pz=frontZ-sg.z0-s*SLOT_W;
       posts.push([xC-RACK_D/2+0.05,topY/2+0.08,pz,topY+0.16]);
@@ -11016,15 +11253,18 @@ function build(){
   const innerSpan=Math.max(STG_BAY*2,innerMaxX-innerMinX);
   const maxBays=Math.max(2,Math.floor(innerSpan/STG_BAY));
   /* หนีบจุดกึ่งกลางให้ขอบซ้าย/ขวาของแร็ค (x ± W/2) อยู่ในผนังทั้งคู่ */
-  const fitRackX=(cx,bays)=>{
+  /* หนีบจุดกึ่งกลางให้ขอบซ้าย/ขวาของแร็ค (x ± W/2) อยู่ในผนังทั้งคู่ — minX กำหนดขอบซ้ายเพิ่มเป็นรายกรณี (เช่น กันพื้นที่จุดชาร์จ) */
+  const fitRackX=(cx,bays,minX)=>{
     const half=bays*STG_BAY/2;
-    return Math.min(Math.max(cx,innerMinX+half),innerMaxX-half);
+    return Math.min(Math.max(cx,(minX!=null?minX:innerMinX)+half),innerMaxX-half);
   };
+  const CHARGE_X1=bMinX+3.2;      // แถบชิดผนังซ้าย = จุดชาร์จ forklift — ห้ามวางแร็คทับ
 
-  /* 1) รอจัดเก็บ (inbound staging) — แร็คเตี้ย + ป้าย STG-01… */
-  const stgBays=Math.min(maxBays,Math.max(5,Math.ceil(stagingOnly.length/2)));
-  const stgRack=buildLowRack({x:fitRackX(X0+Math.min(stgBays*STG_BAY,contentW*0.62)/2-0.3,stgBays),z:zoneLaneZ-STG_D/2-1.5,
-    bays:stgBays,levels:2,codePrefix:'STG',label:'รอจัดเก็บ '+stagingOnly.length+' ใบ',sub:'ผ่าน Gate เข้าแล้ว ยังไม่ขึ้นชั้น',beam:MAT.stageBeam,hang:'STAGING · รอจัดเก็บ'});
+  /* 1) รอจัดเก็บ (inbound staging) — แร็คเตี้ย จำนวนช่อง = จุดรอ Putaway ที่ตั้งไว้ใน Master */
+  const stgCodes=stagingCodes(curWh);
+  const stgBays=Math.max(1,Math.min(maxBays,stgCodes.length));
+  const stgRack=buildLowRack({x:fitRackX(X0+Math.min(stgBays*STG_BAY,contentW*0.62)/2-0.3,stgBays,CHARGE_X1),z:zoneLaneZ-STG_D/2-1.5,
+    bays:stgBays,levels:2,codePrefix:'STG',codes:stgCodes,label:'รอจัดเก็บ '+stagingOnly.length+' ใบ',sub:stgCodes.length+' จุดพัก · '+stgCodes[0]+(stgCodes.length>1?(' – '+stgCodes[stgCodes.length-1]):''),beam:MAT.stageBeam,hang:'STAGING · รอจัดเก็บ'});
   LY.zoneSlots.stg=stgRack.slots;
   stagingOnly.forEach((b,i)=>{
     const s=stgRack.slots[i%stgRack.slots.length];if(!s)return;
@@ -11053,6 +11293,7 @@ function build(){
   /* โต๊ะกว้าง 2.2 ม. → หนีบกึ่งกลางไว้ที่ innerMaxX-1.1 ไม่ให้เลยผนังขวา */
   const benchX=Math.min(rfidX+rfidRack.W/2+1.9,innerMaxX-1.1);
   bench.position.set(benchX,0,dockLaneZ-1.5);root.add(bench);
+  LY.obstacles.push({x0:benchX-1.15,x1:benchX+1.15,z0:dockLaneZ-1.98,z1:dockLaneZ-1.02});
   const bl=makeLabel('จุดติด RFID','พิมพ์ tag · ผูกกับกล่อง',{fs:26,h:0.5,fg:'#8b5cf6',subFg:'#8b5cf6'});
   bl.position.set(benchX,1.72,dockLaneZ-1.5);root.add(bl);
 
@@ -11095,8 +11336,8 @@ function build(){
     LY.zoneSlots.ret=rk.slots;
   }
 
-  /* 5) จุดชาร์จแบต forklift — ผนังซ้าย */
-  const chX=bMinX+2.6,chZ=mainAisleZ+2.6;
+  /* 5) จุดชาร์จแบต forklift — แถบชิดผนังซ้าย (อยู่ก่อนเส้นทางเดินรถ ไม่ชนแร็คพัก) */
+  const chX=bMinX+0.95,chZ=mainAisleZ+2.6;
   const ch=new THREE.Group();
   ch.add(bx(0.5,1.5,3.4,MAT.charger,0,0.75,0));
   [-1.1,0,1.1].forEach(dz=>{
@@ -11106,26 +11347,29 @@ function build(){
     led.scale.set(0.06,0.08,0.14);led.position.set(0.48,1.12,dz);ch.add(led);
   });
   ch.position.set(chX-0.4,0,chZ);root.add(ch);
-  root.add(paint(3.0,3.6,MAT.paintY,chX+1.5,chZ,0.018));
-  root.add(paint(2.9,3.5,MAT.stagePad,chX+1.5,chZ,0.021));
+  LY.obstacles.push({x0:chX-0.7,x1:chX-0.1,z0:chZ-1.75,z1:chZ+1.75});
+  root.add(paint(1.9,3.6,MAT.paintY,chX+1.05,chZ,0.018));
+  root.add(paint(1.8,3.5,MAT.stagePad,chX+1.05,chZ,0.021));
   const chL=makeLabel('จุดชาร์จแบต forklift','ที่พักรถเมื่อไม่มีงาน',{fs:26,h:0.5});
-  chL.position.set(chX+1.6,2.0,chZ);root.add(chL);
+  chL.position.set(chX+1.15,2.0,chZ);root.add(chL);
   LY.charge=[];
-  [-1.1,0,1.1].forEach((dz,i)=>LY.charge.push({x:chX+1.7,z:chZ+dz*1.05,approach:{x:leftLaneX,z:mainAisleZ}}));
+  [-1.1,0,1.1].forEach((dz,i)=>LY.charge.push({x:chX+1.05,z:chZ+dz*1.05,approach:{x:leftLaneX,z:mainAisleZ}}));
 
   /* 6) safety: ถังดับเพลิง + กระจกโค้งมุมอับ */
   const fireAt=[[bMinX+0.8,mainAisleZ-3.0],[bMinX+0.8,dockLaneZ],[bMaxX-0.8,mainAisleZ-3.0],[bMaxX-0.8,dockLaneZ]];
   instMesh(fireAt,MAT.cage,(p,v,s)=>{v.set(p[0],0.9,p[1]);s.set(0.26,0.5,0.26);},true);
   instMesh(fireAt,MAT.fireRed,(p,v,s)=>{v.set(p[0],1.36,p[1]);s.set(0.24,0.62,0.24);});
   instMesh(fireAt,MAT.paintR,(p,v,s)=>{v.set(p[0],0.02,p[1]);s.set(0.34,0.02,0.34);},true);
-  LY.lanesV.slice(0,4).forEach((vx,i)=>{
-    const m=new THREE.Mesh(GEO.sphere,MAT.mirror);
-    m.scale.set(0.46,0.46,0.2);m.position.set(vx,3.4,mainAisleZ-0.16);
-    m.rotation.x=0.55;root.add(m);
-    const rim=new THREE.Mesh(GEO.ring,MAT.cage);
-    rim.scale.setScalar(0.7);rim.position.set(vx,3.4,mainAisleZ-0.2);
-    rim.rotation.x=-1.02;root.add(rim);
-    root.add(bx(0.05,0.7,0.05,MAT.cage,vx,3.0,mainAisleZ-0.22,true));
+  /* กระจกโค้งมุมอับ — ยึดกับผนัง/เสาอาคาร มีแขนยึดจริง (ไม่ลอยกลางอากาศ และไม่กีดขวางทางวิ่งรถ) */
+  [[bMinX+0.55,1],[bMaxX-0.55,-1]].forEach(mm=>{
+    const wx=mm[0],sgn=mm[1];
+    [mainAisleZ,dockLaneZ].forEach(mz=>{
+      root.add(bx(0.62,0.08,0.08,MAT.cage,wx+sgn*0.31,3.16,mz,true));      // แขนยึดจากผนัง
+      root.add(bx(0.08,0.42,0.08,MAT.cage,wx+sgn*0.6,2.98,mz,true));       // ก้านห้อยกระจก
+      const m=new THREE.Mesh(GEO.sphere,MAT.mirror);
+      m.scale.set(0.52,0.52,0.17);m.position.set(wx+sgn*0.62,2.78,mz);
+      m.rotation.set(0.42,sgn*0.85,0);root.add(m);
+    });
   });
 
   /* ══ ลานนอก: ลูกค้า/สูญหาย + ป้อมยาม + ช่องจอดรถ ══ */
@@ -11241,6 +11485,7 @@ function build(){
   else emptyEl.style.display='none';
 
   /* ── งานจริงจาก DB → สร้าง forklift แบบ dynamic ── */
+  navBuild();
   TASKS=deriveTasks({stagingOnly,rfidBoxes,readyOut,gateReturn,freeCells});
   syncAgents();
   refreshUI();applyFilters();renderOps();
@@ -11261,6 +11506,89 @@ function deriveTasks(d){
   t.total=t.receive.length+t.putaway.length+t.load.length+t.tag.length;
   return t;
 }
+/* ══ กริดนำทาง (A*) — forklift วิ่งเฉพาะทางเดินจริง ห้ามทะลุแร็ค/ผนัง ══
+   เดิมต่อ waypoint แบบ x-ก่อน z-ทีหลัง บนเลนที่คำนวณไว้ล่วงหน้า — บางเส้นทางจึงลากข้ามแร็ค
+   ตอนนี้บล็อกช่องกริดที่มีสิ่งกีดขวาง (เผื่อครึ่งความกว้างรถ) แล้วค้นหาเส้นทางที่เลี้ยวน้อยสุด */
+const NAV={cs:0.5,pad:0.78};
+function navBuild(){
+  const cs=NAV.cs;
+  NAV.minX=LY.bMinX-4;NAV.minZ=LY.backZ-2;
+  const maxX=LY.bMaxX+4,maxZ=LY.dockZ+10;
+  NAV.nx=Math.max(4,Math.ceil((maxX-NAV.minX)/cs));
+  NAV.nz=Math.max(4,Math.ceil((maxZ-NAV.minZ)/cs));
+  NAV.blk=new Uint8Array(NAV.nx*NAV.nz);
+  (LY.obstacles||[]).forEach(o=>{
+    const i0=Math.max(0,Math.floor((Math.min(o.x0,o.x1)-NAV.pad-NAV.minX)/cs));
+    const i1=Math.min(NAV.nx-1,Math.ceil((Math.max(o.x0,o.x1)+NAV.pad-NAV.minX)/cs));
+    const j0=Math.max(0,Math.floor((Math.min(o.z0,o.z1)-NAV.pad-NAV.minZ)/cs));
+    const j1=Math.min(NAV.nz-1,Math.ceil((Math.max(o.z0,o.z1)+NAV.pad-NAV.minZ)/cs));
+    for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++)NAV.blk[j*NAV.nx+i]=1;
+  });
+}
+const navFree=(i,j)=>!!NAV.blk&&i>=0&&j>=0&&i<NAV.nx&&j<NAV.nz&&!NAV.blk[j*NAV.nx+i];
+const navCell=(x,z)=>[Math.round((x-NAV.minX)/NAV.cs),Math.round((z-NAV.minZ)/NAV.cs)];
+const navPos=(i,j)=>({x:NAV.minX+i*NAV.cs,z:NAV.minZ+j*NAV.cs});
+/* มองเห็นกันตรงๆ ไหม (ใช้รวบเส้นทางให้เหลือเฉพาะทางตรงยาวๆ รถจะไม่ต้องเลี้ยวทีละช่องกริด) */
+function navLOS(p,q){
+  const d=Math.hypot(q.x-p.x,q.z-p.z),n=Math.max(2,Math.ceil(d/0.25));
+  for(let i=0;i<=n;i++){
+    const c=navCell(p.x+(q.x-p.x)*i/n,p.z+(q.z-p.z)*i/n);
+    if(!navFree(c[0],c[1]))return false;
+  }
+  return true;
+}
+function navSnap(i,j){
+  if(navFree(i,j))return [i,j];
+  for(let r=1;r<=10;r++)for(let di=-r;di<=r;di++)for(let dj=-r;dj<=r;dj++){
+    if(Math.max(Math.abs(di),Math.abs(dj))!==r)continue;
+    if(navFree(i+di,j+dj))return [i+di,j+dj];
+  }
+  return null;
+}
+function navPath(a,b){
+  if(!NAV.blk)return null;
+  const sc=navCell(a.x,a.z),tc=navCell(b.x,b.z);
+  const s=navSnap(sc[0],sc[1]),t=navSnap(tc[0],tc[1]);
+  if(!s||!t)return null;
+  const nx=NAV.nx,N=nx*NAV.nz,si=s[1]*nx+s[0],ti=t[1]*nx+t[0];
+  if(si===ti)return [{x:a.x,z:a.z},{x:b.x,z:b.z}];
+  const g=new Float32Array(N).fill(1e9),f=new Float32Array(N).fill(1e9),from=new Int32Array(N).fill(-1),inOpen=new Uint8Array(N);
+  const open=[si];g[si]=0;f[si]=Math.abs(t[0]-s[0])+Math.abs(t[1]-s[1]);inOpen[si]=1;
+  const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+  let found=false,guard=0;
+  while(open.length&&guard++<40000){
+    let bi=0;for(let k=1;k<open.length;k++)if(f[open[k]]<f[open[bi]])bi=k;
+    const cur=open.splice(bi,1)[0];inOpen[cur]=0;
+    if(cur===ti){found=true;break;}
+    const ci=cur%nx,cj=(cur-ci)/nx,pv=from[cur];
+    for(let d=0;d<4;d++){
+      const ni=ci+DIRS[d][0],nj=cj+DIRS[d][1];
+      if(!navFree(ni,nj))continue;
+      const nid=nj*nx+ni;
+      let turn=0;
+      if(pv>=0){const pi=pv%nx,pj=(pv-pi)/nx;if((ci-pi)!==DIRS[d][0]||(cj-pj)!==DIRS[d][1])turn=1.1;}
+      const ng=g[cur]+1+turn;
+      if(ng<g[nid]){g[nid]=ng;from[nid]=cur;f[nid]=ng+Math.abs(t[0]-ni)+Math.abs(t[1]-nj);
+        if(!inOpen[nid]){open.push(nid);inOpen[nid]=1;}}
+    }
+  }
+  if(!found)return null;
+  const cells=[];for(let c=ti;c>=0;c=from[c])cells.push(c);
+  cells.reverse();
+  const pts=cells.map(c=>{const i=c%nx;return navPos(i,(c-i)/nx);});
+  /* string-pulling: ตัด waypoint ที่มองข้ามกันได้ออก — เหลือทางตรงยาวๆ รถวิ่งลื่นขึ้น */
+  const keep=[pts[0]];
+  let ci2=0;
+  while(ci2<pts.length-1){
+    let j=Math.min(pts.length-1,ci2+48);
+    for(;j>ci2+1;j--)if(navLOS(pts[ci2],pts[j]))break;
+    keep.push(pts[j]);ci2=j;
+  }
+  const out=[{x:a.x,z:a.z}];
+  keep.forEach(w=>out.push(w));
+  out.push({x:b.x,z:b.z});
+  return out;
+}
 function pt(x,z,approach){return {x,z,approach:approach||null};}
 function nearestV(x){
   let best=LY.lanesV[0],dd=1e9;
@@ -11279,16 +11607,22 @@ function route(a,b,off){
   const p=[{x:a.x,z:a.z}];
   if(a.approach)p.push({x:a.approach.x,z:a.approach.z});
   const from=p[p.length-1],to=b.approach||b;
-  laneRoute(from,to).forEach(w=>p.push(w));
-  p.push({x:to.x,z:to.z});
+  const nav=navPath(from,to);
+  if(nav)nav.slice(1).forEach(w=>p.push(w));
+  else{                                  /* สำรอง: เลนหลักแบบเดิม เมื่อกริดหาเส้นทางไม่เจอ */
+    laneRoute(from,to).forEach(w=>p.push(w));
+    p.push({x:to.x,z:to.z});
+  }
   if(b.approach)p.push({x:b.x,z:b.z});
   const out=[];
-  p.forEach(w=>{const l=out[out.length-1];if(!l||Math.abs(l.x-w.x)>0.05||Math.abs(l.z-w.z)>0.05)out.push(w);});
-  /* เยื้องเลนต่อคัน — รถหลายคันไม่วิ่งทับกัน */
+  p.forEach(w=>{const l=out[out.length-1];if(!l||Math.abs(l.x-w.x)>0.05||Math.abs(l.z-w.z)>0.05)out.push({x:w.x,z:w.z});});
+  /* เยื้องเลนต่อคัน — รถหลายคันไม่วิ่งทับกัน (เยื้องเฉพาะจุดที่เยื้องแล้วยังไม่ชนสิ่งกีดขวาง) */
   if(off)for(let i=1;i<out.length-1;i++){
-    const w=out[i];
-    if(LY.lanesH.some(z=>Math.abs(z-w.z)<0.35))w.z+=off;
-    if(LY.lanesV.some(x=>Math.abs(x-w.x)<0.35))w.x+=off;
+    const w=out[i],pr=out[i-1],nx2=out[i+1];
+    const horiz=Math.abs(pr.z-w.z)<0.25&&Math.abs(nx2.z-w.z)<0.25;
+    const cx=horiz?w.x:w.x+off, cz=horiz?w.z+off:w.z;
+    const c=navCell(cx,cz);
+    if(navFree(c[0],c[1])){w.x=cx;w.z=cz;}
   }
   return out;
 }
@@ -11918,6 +12252,12 @@ spinBtn.addEventListener('click',()=>{
   spinBtn.classList.toggle('active',controls.autoRotate);
   spinBtn.title=controls.autoRotate?'หยุดหมุน':'หมุนพรีเซนต์อัตโนมัติ';
 });
+/* เริ่มต้นให้หมุนโชว์เลย — ปุ่ม active ตั้งแต่เปิดหน้า */
+if(!reduceMotion){
+  controls.autoRotate=true;
+  spinBtn.classList.add('active');
+  spinBtn.title='หยุดหมุน';
+}
 document.getElementById('w3dReset').addEventListener('click',()=>{
   const fp=camera.position.clone(),ft=controls.target.clone();
   anims.push({t:0,dur:0.9,update(k){const e2=1-Math.pow(1-k,3);camera.position.lerpVectors(fp,HOME.pos,e2);controls.target.lerpVectors(ft,HOME.target,e2);}});
