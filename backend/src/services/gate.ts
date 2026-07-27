@@ -26,6 +26,9 @@ export interface GateOutInput {
   doNo?: string;
   po?: string;
   recorder?: string;
+  plate?: string;
+  driver?: string;
+  vehicleType?: string;
 }
 
 export async function gateOut(db: DB, input: GateOutInput) {
@@ -33,6 +36,9 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const recorder = input.recorder ?? 'api';
   const doNo = input.doNo ?? `DO-${Date.now()}`;
   const po = input.po ?? '';
+  const plate = input.plate ?? '';
+  const driver = input.driver ?? '';
+  const vehicleType = input.vehicleType ?? '';
 
   const [cust] = await db.select().from(customers).where(eq(customers.id, customer));
   if (!cust) throw httpError(404, 'ไม่พบลูกค้า', 'customer_not_found');
@@ -62,8 +68,25 @@ export async function gateOut(db: DB, input: GateOutInput) {
       b.dueAt = dueTs;
       b.returnDays = returnDays;
       b.lastSeenAt = outTs;
+      b.plate = plate;
+      b.driver = driver;
+      b.vehicleType = vehicleType;
       const history = Array.isArray(b.history) ? (b.history as unknown[]) : [];
-      history.push({ dir: 'out', ts: outTs, do: doNo, po, customer, gate, wh, recorder, dueAt: dueTs, returnDays });
+      history.push({
+        dir: 'out',
+        ts: outTs,
+        do: doNo,
+        po,
+        customer,
+        gate,
+        wh,
+        recorder,
+        dueAt: dueTs,
+        returnDays,
+        plate,
+        driver,
+        vehicleType,
+      });
       b.history = history;
 
       await tx
@@ -85,7 +108,22 @@ export async function gateOut(db: DB, input: GateOutInput) {
 
       await tx.insert(events).values({
         ts: new Date(outTs),
-        data: { ts: outTs, dir: 'out', tag, type: row.type, do: doNo, po, customer, customerName: cust.name, gate, wh, recorder },
+        data: {
+          ts: outTs,
+          dir: 'out',
+          tag,
+          type: row.type,
+          do: doNo,
+          po,
+          customer,
+          customerName: cust.name,
+          gate,
+          wh,
+          recorder,
+          plate,
+          driver,
+          vehicleType,
+        },
       });
       shipped.push(tag);
     }
@@ -103,11 +141,17 @@ export interface GateInInput {
   tags: string[];
   gate: number;
   recorder?: string;
+  plate?: string;
+  driver?: string;
+  vehicleType?: string;
 }
 
 export async function gateIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
   const recorder = input.recorder ?? 'api';
+  const plate = input.plate ?? '';
+  const driver = input.driver ?? '';
+  const vehicleType = input.vehicleType ?? '';
   const wh = await warehouseOfGate(db, gate);
   const inTs = iso();
   const rows = await db.select().from(boxes).where(inArray(boxes.tag, tags));
@@ -127,8 +171,11 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.status = 'warehouse';
       b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
       b.lastSeenAt = inTs;
+      b.plate = plate;
+      b.driver = driver;
+      b.vehicleType = vehicleType;
       const history = Array.isArray(b.history) ? (b.history as unknown[]) : [];
-      history.push({ dir: 'in', ts: inTs, gate, wh, recorder });
+      history.push({ dir: 'in', ts: inTs, gate, wh, recorder, plate, driver, vehicleType });
       b.history = history;
 
       await tx
@@ -144,7 +191,20 @@ export async function gateIn(db: DB, input: GateInInput) {
 
       await tx.insert(events).values({
         ts: new Date(inTs),
-        data: { ts: inTs, dir: wasOut ? 'in' : 'in-new', tag, type: row.type, do: b.do, customer: b.customer, gate, wh, recorder },
+        data: {
+          ts: inTs,
+          dir: wasOut ? 'in' : 'in-new',
+          tag,
+          type: row.type,
+          do: b.do,
+          customer: b.customer,
+          gate,
+          wh,
+          recorder,
+          plate,
+          driver,
+          vehicleType,
+        },
       });
       received.push(tag);
     }

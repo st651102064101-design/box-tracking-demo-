@@ -59,7 +59,15 @@ class AppController extends ChangeNotifier {
   String outCustomer = '';
   String outPlate = '';
   String outDriver = '';
+  String outVehicleType = '';
+  String outVehicleTypeOther = '';
   String inNote = '';
+
+  // in form (vehicle info)
+  String inPlate = '';
+  String inDriver = '';
+  String inVehicleType = '';
+  String inVehicleTypeOther = '';
 
   // ── connectivity / offline ──────────────────────────────────────────────
   bool online = true;
@@ -366,7 +374,17 @@ class AppController extends ChangeNotifier {
     outCustomer = '';
     outPlate = '';
     outDriver = '';
+    outVehicleType = '';
+    outVehicleTypeOther = '';
     inNote = '';
+    inPlate = '';
+    inDriver = '';
+    inVehicleType = '';
+    inVehicleTypeOther = '';
+    // only one destination customer on file — no real choice to make, so skip the picker
+    if (m == 'out' && customerList.length == 1) {
+      outCustomer = (customerList.first['id'] ?? '').toString();
+    }
     notifyListeners();
     _connectReader();
   }
@@ -550,13 +568,23 @@ class AppController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> _postTx(OutboxTx tx) {
     if (tx.type == 'in') {
-      return api.gateIn(tags: tx.tags, gate: tx.gate, recorder: tx.recorder);
+      return api.gateIn(
+        tags: tx.tags,
+        gate: tx.gate,
+        recorder: tx.recorder,
+        plate: tx.plate,
+        driver: tx.driver,
+        vehicleType: tx.vehicleType,
+      );
     }
     return api.gateOut(
       tags: tx.tags,
       customer: tx.customer ?? '',
       gate: tx.gate,
       recorder: tx.recorder,
+      plate: tx.plate,
+      driver: tx.driver,
+      vehicleType: tx.vehicleType,
     );
   }
 
@@ -575,9 +603,36 @@ class AppController extends ChangeNotifier {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
+    final plate = mode == 'in' ? inPlate : outPlate;
+    if (plate.trim().isEmpty) {
+      toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
+      return;
+    }
+    final vtypeOther = mode == 'in' ? inVehicleTypeOther : outVehicleTypeOther;
+    if ((mode == 'in' ? inVehicleType : outVehicleType) == 'อื่นๆ' && vtypeOther.trim().isEmpty) {
+      toastMsg('ระบุประเภทรถ', 'กรอกว่า "อื่นๆ" คือรถประเภทใด', ResultKind.warn);
+      return;
+    }
+    final effInVType = inVehicleType == 'อื่นๆ' && inVehicleTypeOther.trim().isNotEmpty
+        ? 'อื่นๆ: ${inVehicleTypeOther.trim()}'
+        : inVehicleType;
+    final effOutVType = outVehicleType == 'อื่นๆ' && outVehicleTypeOther.trim().isNotEmpty
+        ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
+        : outVehicleType;
 
     final tx = mode == 'in'
-        ? OutboxTx(type: 'in', tags: List.of(queue), gate: g, wh: whId, recorder: recorder, ts: ts, note: inNote)
+        ? OutboxTx(
+            type: 'in',
+            tags: List.of(queue),
+            gate: g,
+            wh: whId,
+            recorder: recorder,
+            ts: ts,
+            note: inNote,
+            plate: inPlate,
+            driver: inDriver,
+            vehicleType: effInVType,
+          )
         : OutboxTx(
             type: 'out',
             tags: List.of(queue),
@@ -588,6 +643,7 @@ class AppController extends ChangeNotifier {
             customer: outCustomer,
             plate: outPlate,
             driver: outDriver,
+            vehicleType: effOutVType,
           );
 
     // count new-vs-return locally before we mutate the server (for the toast)
@@ -612,9 +668,24 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     try {
       if (mode == 'in') {
-        await api.gateIn(tags: tx.tags, gate: g, recorder: recorder);
+        await api.gateIn(
+          tags: tx.tags,
+          gate: g,
+          recorder: recorder,
+          plate: inPlate,
+          driver: inDriver,
+          vehicleType: effInVType,
+        );
       } else {
-        await api.gateOut(tags: tx.tags, customer: outCustomer, gate: g, recorder: recorder);
+        await api.gateOut(
+          tags: tx.tags,
+          customer: outCustomer,
+          gate: g,
+          recorder: recorder,
+          plate: outPlate,
+          driver: outDriver,
+          vehicleType: effOutVType,
+        );
       }
       final custName = s?.custName(outCustomer) ?? outCustomer;
       final whNm = s?.whName(whId) ?? whId;
@@ -644,7 +715,16 @@ class AppController extends ChangeNotifier {
     outCustomer = '';
     outPlate = '';
     outDriver = '';
+    outVehicleType = '';
+    outVehicleTypeOther = '';
     inNote = '';
+    inPlate = '';
+    inDriver = '';
+    inVehicleType = '';
+    inVehicleTypeOther = '';
+    if (mode == 'out' && customerList.length == 1) {
+      outCustomer = (customerList.first['id'] ?? '').toString();
+    }
     notifyListeners();
   }
 
@@ -655,6 +735,22 @@ class AppController extends ChangeNotifier {
 
   void setOutPlate(String v) => outPlate = v;
   void setOutDriver(String v) => outDriver = v;
+  void setOutVehicleType(String v) {
+    outVehicleType = v;
+    if (v != 'อื่นๆ') outVehicleTypeOther = '';
+    notifyListeners();
+  }
+
+  void setOutVehicleTypeOther(String v) => outVehicleTypeOther = v;
+  void setInPlate(String v) => inPlate = v;
+  void setInDriver(String v) => inDriver = v;
+  void setInVehicleType(String v) {
+    inVehicleType = v;
+    if (v != 'อื่นๆ') inVehicleTypeOther = '';
+    notifyListeners();
+  }
+
+  void setInVehicleTypeOther(String v) => inVehicleTypeOther = v;
 
   // ═══════════════════════ track ═══════════════════════════════════════════
   void onTrackChanged(String v) {

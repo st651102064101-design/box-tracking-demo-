@@ -13,10 +13,16 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
+const _vehicleTypes = ['รถกระบะ', 'รถบรรทุก 6 ล้อ', 'รถบรรทุก 10 ล้อ', 'รถเทรลเลอร์', 'อื่นๆ'];
+
 class _ScanScreenState extends State<ScanScreen> {
   final _scanCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
   final _driverCtrl = TextEditingController();
+  final _outVtypeOtherCtrl = TextEditingController();
+  final _inPlateCtrl = TextEditingController();
+  final _inDriverCtrl = TextEditingController();
+  final _inVtypeOtherCtrl = TextEditingController();
   final _scanFocus = FocusNode();
 
   @override
@@ -24,6 +30,10 @@ class _ScanScreenState extends State<ScanScreen> {
     _scanCtrl.dispose();
     _plateCtrl.dispose();
     _driverCtrl.dispose();
+    _outVtypeOtherCtrl.dispose();
+    _inPlateCtrl.dispose();
+    _inDriverCtrl.dispose();
+    _inVtypeOtherCtrl.dispose();
     _scanFocus.dispose();
     super.dispose();
   }
@@ -41,7 +51,12 @@ class _ScanScreenState extends State<ScanScreen> {
     final c = context.watch<AppController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final isOut = c.mode == 'out';
-    final canCommit = c.queue.isNotEmpty && (!isOut || c.outCustomer.isNotEmpty);
+    final plateOk = (isOut ? c.outPlate : c.inPlate).trim().isNotEmpty;
+    final vtypeOk = isOut
+        ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
+        : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
+    final canCommit =
+        c.queue.isNotEmpty && (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
 
     return Column(
       children: [
@@ -62,8 +77,8 @@ class _ScanScreenState extends State<ScanScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
             children: [
-              if (isOut) _outForm(c),
-              if (isOut) const SizedBox(height: 13),
+              if (isOut) _outForm(c) else _inForm(c),
+              const SizedBox(height: 13),
               _scannerPanel(c),
               const SizedBox(height: 13),
               _queueHeader(c),
@@ -125,7 +140,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('ทะเบียนรถ'),
+                    const FieldLabel('ทะเบียนรถ *'),
                     TextField(controller: _plateCtrl, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
                   ],
                 ),
@@ -142,9 +157,84 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 11),
+          const FieldLabel('ประเภทรถ'),
+          DropdownButtonFormField<String>(
+            value: c.outVehicleType.isEmpty ? null : c.outVehicleType,
+            isExpanded: true,
+            decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
+            hint: const Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
+            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            onChanged: (v) => c.setOutVehicleType(v ?? ''),
+          ),
+          if (c.outVehicleType == 'อื่นๆ') ...[
+            const SizedBox(height: 9),
+            const FieldLabel('ระบุประเภทรถ *'),
+            TextField(
+                controller: _outVtypeOtherCtrl,
+                onChanged: c.setOutVehicleTypeOther,
+                decoration: pdaInput('เช่น รถตู้ / รถพ่วง', radius: 12)),
+          ],
           const SizedBox(height: 8),
           const Text('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก',
               style: TextStyle(fontSize: 11.5, color: C.muted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _inForm(AppController c) {
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const FieldLabel('ทะเบียนรถ *'),
+                    TextField(
+                        controller: _inPlateCtrl,
+                        onChanged: c.setInPlate,
+                        decoration: pdaInput('82-1234 กทม', radius: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const FieldLabel('คนขับ'),
+                    TextField(
+                        controller: _inDriverCtrl,
+                        onChanged: c.setInDriver,
+                        decoration: pdaInput('ชื่อคนขับ', radius: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          const FieldLabel('ประเภทรถ'),
+          DropdownButtonFormField<String>(
+            value: c.inVehicleType.isEmpty ? null : c.inVehicleType,
+            isExpanded: true,
+            decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
+            hint: const Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
+            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            onChanged: (v) => c.setInVehicleType(v ?? ''),
+          ),
+          if (c.inVehicleType == 'อื่นๆ') ...[
+            const SizedBox(height: 9),
+            const FieldLabel('ระบุประเภทรถ *'),
+            TextField(
+                controller: _inVtypeOtherCtrl,
+                onChanged: c.setInVehicleTypeOther,
+                decoration: pdaInput('เช่น รถตู้ / รถพ่วง', radius: 12)),
+          ],
         ],
       ),
     );

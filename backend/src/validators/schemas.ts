@@ -70,10 +70,16 @@ export const gateOutSchema = z.object({
   doNo: z.string().optional(),
   po: z.string().optional(),
   recorder: z.string().optional(),
+  plate: z.string().optional(),
+  driver: z.string().optional(),
+  vehicleType: z.string().optional(),
 });
 
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
   gate: z.number().int().positive(),
   recorder: z.string().optional(),
+  plate: z.string().optional(),
+  driver: z.string().optional(),
+  vehicleType: z.string().optional(),
 });

@@ -1168,7 +1168,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
-  <button class="iconbtn no-print" id="btnMenu" title="เมนู"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></button>
 </div></header>
 
 <div class="navwrap"><nav id="nav">
@@ -1219,7 +1218,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
   <style>
   /* ===== 3D Digital Twin (w3d) ===== */
-  .w3d-card{background:var(--surface);border:.5px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;}
+  .w3d-card{background:var(--surface);border:.5px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;margin-bottom:24px;}
   .w3d-bar{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:.5px solid var(--line);flex-wrap:wrap;}
   .w3d-search{display:flex;gap:8px;flex:1 1 240px;min-width:200px;max-width:430px;}
   .w3d-bar .btn{white-space:nowrap;flex:0 0 auto;}
@@ -1255,6 +1254,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .w3dd-list button:hover{background:var(--accentSoft);color:var(--accentInk);}
   .w3d-actions{display:flex;gap:8px;margin-top:12px;}
   .w3d-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:80%;color:var(--muted);font-size:14px;text-align:center;padding:14px 22px;z-index:4;pointer-events:none;}
+  .w3d-fabrow{position:absolute;right:13px;top:13px;z-index:7;display:flex;gap:8px;}
+  .w3d-fab{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--surface) 84%,transparent);border:.5px solid var(--line);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);color:var(--ink);flex:0 0 auto;}
+  .w3d-fab:hover{background:color-mix(in srgb,var(--ink) 8%,var(--surface));}
+  .w3d-fab.active{background:var(--accent);color:#0a0a0a;border-color:var(--accent);}
+  .w3d-fab svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .w3d-ops{position:absolute;left:13px;bottom:12px;z-index:5;display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:calc(100% - 26px);}
+  .w3d-oprow{display:flex;gap:8px;align-items:center;padding:7px 13px;border-radius:14px;background:color-mix(in srgb,var(--surface) 84%,transparent);border:.5px solid var(--line);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);font-size:11.5px;color:var(--ink2);}
+  .w3d-oprow b{font-family:var(--mono);font-weight:700;}
+  .w3d-oprow .src{color:var(--muted);}
+  @media(max-width:560px){.w3d-ops{display:none;}}
   @media(max-width:760px){.w3d-stage{height:72vw;min-height:340px;}.w3d-detail{width:calc(100% - 26px);}}
   </style>
 
@@ -1269,15 +1278,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <select class="w3d-sel" id="w3dType"><option value="">ทุกประเภทกล่อง</option></select>
       <select class="w3d-sel" id="w3dCust"><option value="">ทุกลูกค้า</option></select>
       <div style="flex:1;"></div>
-      <button class="btn ghost sm" id="w3dSpin" title="หมุนพรีเซนต์อัตโนมัติ">หมุนโชว์</button>
-      <button class="btn ghost sm" id="w3dReset" title="กลับมุมมองเริ่มต้น">รีเซ็ตมุม</button>
-      <button class="btn ghost sm" id="w3dFull" title="แสดงเต็มจอ">เต็มจอ</button>
     </div>
     <div class="w3d-stage" id="w3dStage">
       <canvas id="w3dCanvas"></canvas>
+      <div class="w3d-fabrow" id="w3dFabRow">
+        <button class="w3d-fab" id="w3dSpin" title="หมุนพรีเซนต์อัตโนมัติ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14.5-4.6M20 12a8 8 0 0 1-14.5 4.6"/><path d="M18.5 3v4.4H14M5.5 21v-4.4H10"/></svg></span></button>
+        <button class="w3d-fab" id="w3dReset" title="กลับมุมมองเริ่มต้น"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span></button>
+        <button class="w3d-fab" id="w3dFull" title="แสดงเต็มจอ"><span class="svgi svgi-expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg></span></button>
+        <button class="w3d-fab" id="w3dInfoToggle" title="ซ่อนรายละเอียด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-8.5 4-9.5 7 1 3 4.5 7 9.5 7s8.5-4 9.5-7c-1-3-4.5-7-9.5-7Z"/><circle cx="12" cy="12" r="2.6"/></svg></span></button>
+      </div>
       <div class="w3d-chips" id="w3dChips"></div>
       <div class="w3d-legendbar" id="w3dLegend"></div>
       <div class="w3d-detail" id="w3dDetail" style="display:none;"></div>
+      <div class="w3d-ops" id="w3dOps"></div>
       <div class="w3d-empty" id="w3dEmpty" style="display:none;"></div>
     </div>
   </div>
@@ -1444,7 +1457,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div id="inGateHint"></div>
     <div class="grid g3">
       <div class="field"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
-      <div class="field"><label>ทะเบียนรถ <span style="color:var(--warn);">*</span></label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
+      <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม (ถ้ามี)" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="inVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" list="dl-tel" placeholder="08x-xxx-xxxx" autocomplete="off"></div>
@@ -1623,6 +1636,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <button class="btn ghost sm stab" data-stab="emp">พนักงาน</button>
     <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค</button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> Audit Log</button>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" id="btnMenu" title="สำรอง/นำเข้าข้อมูล · ข้อมูลตัวอย่าง · ล้างข้อมูล"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16v.1"/></svg></span> จัดการข้อมูลระบบ</button>
   </div>
 
   <div class="ssec" id="ssec-box" style="display:none;">
@@ -1843,7 +1858,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"></div>
+      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" style="color:var(--neg);" onclick="if(typeof window.boxtraceLogout==='function')window.boxtraceLogout();" title="ออกจากบัญชีที่ล็อกอินอยู่ (กลับไปหน้า login)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17l5-5-5-5M20 12H9M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg></span> ออกจากระบบ</button></div>
       <div class="twrap"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
     </div>
@@ -2263,6 +2278,7 @@ function dethaify(text){
    recovers text that got mangled by an OS keyboard left in Thai input mode */
 function resolveTag(tag){
   if(!tag)return tag;
+  tag=String(tag).trim().replace(/^\*+|\*+$/g,'');
   if(S.boxes[tag])return tag;
   var up=tag.toUpperCase();
   if(S.boxes[up])return up;
@@ -2901,6 +2917,9 @@ function pickUser(){
     +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ใช้แสดงเป็น "ผู้บันทึก" ในทุกหน้าจนกว่าจะเปลี่ยน</p>'+opts
     +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'emp\')">'+IC('plus')+' เพิ่มพนักงาน</button>'
+    +'</div>'
+    +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
+    +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeModal();if(typeof window.boxtraceLogout===\'function\')window.boxtraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>'
     +'</div></div>');
 }
 window.pickUser=pickUser;
@@ -3877,6 +3896,9 @@ window.printAllLabels=printAllLabels;
    directly in the status column (not just the location column) with a bold,
    high-contrast pill so it can't be missed or mistaken for "ในคลัง". */
 function statusPill(s,ctx){
+  if(s==='warehouse'&&ctx&&ctx.labeled===false){
+    return '<span class="pill warn">รอติด Tag</span>';
+  }
   if(s==='warehouse'&&ctx&&isStagingLoc(ctx.location||ctx.loc||{})){
     return '<span class="pill ok">ในคลัง</span>';
   }
@@ -4418,13 +4440,14 @@ function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(
 window.scanIn=scanIn;
 function renderInResult(){
   $('#inCount').textContent=pendingIn.length?('เตรียมรับคืน '+pendingIn.length+' ใบ'):'';
-  if(!pendingIn.length){$('#resultIn').innerHTML='';return;}
+  if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();return;}
   $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · '+pendingIn.length+' ใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
     var isNew=(!b.cycles||b.cycles===0)&&!(b.history||[]).some(function(h){return h.dir==='out';});
     var badge=isNew?'<span class="c2-new" title="ระบบตรวจ: กล่องใหม่จาก Supplier (รับเข้าครั้งแรก)">ใหม่</span>':'<span class="c2-new" style="background:var(--accentSoft);color:var(--accent);" title="ระบบตรวจ: กล่องเคยออกไปแล้ว = รับคืนจากลูกค้า (รอบที่ '+((b.cycles||0)+1)+')">คืน · รอบ '+((b.cycles||0)+1)+'</span>';
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span><b onclick="unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
+  if(typeof schedule==='function')schedule();
 }
-function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});renderInResult();}
+function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});renderInResult();if(typeof schedule==='function')schedule();}
 window.unqueueIn=unqueueIn;
 $('#btnScanIn').onclick=function(){scanIn();};
 $('#scanIn').addEventListener('keydown',function(e){if(e.key==='Enter')scanIn();});
@@ -4444,7 +4467,6 @@ $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
-  if(!val('inPlate').trim()){toast('บังคับบันทึกป้ายทะเบียนรถ','กรอกป้ายทะเบียนรถก่อนยืนยันรับเข้า','err');return;}
   if(!val('inRecorder'))setv('inRecorder',USER);
   var recorder=val('inRecorder')||USER;
   var plate=val('inPlate'),driver=val('inDriver');
@@ -4488,7 +4510,7 @@ $('#btnCheckIn').onclick=function(){
   }else{
     toast('บันทึกสำเร็จ',newCount+' ใบใหม่ · '+returnCount+' ใบคืน → '+whName(wh),'ok');
   }
-  renderAll();$('#scanIn').focus();
+  renderAll();if(typeof schedule==='function')schedule();$('#scanIn').focus();
 };
 
 /* ล้างข้อมูลหน้า Gate ขาเข้า — เคลียร์คิวสแกนที่ยังไม่ยืนยัน + ข้อมูลรถ/คนขับ/หมายเหตุ
@@ -4498,6 +4520,7 @@ function clearGateIn(){
     pendingIn=[];
     ['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
     renderInResult();renderVehicleQuick();
+    if(typeof schedule==='function')schedule();
     toast('ล้างข้อมูลขาเข้าแล้ว','คิวสแกนและข้อมูลรถถูกล้าง — ประตูยังคงเดิม','info');
     var si=$('#scanIn');if(si)si.focus();
   }
@@ -9489,8 +9512,8 @@ function openColumnMapModal(opts){
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
-      +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--posInk);line-height:1;">'+okN+'</div>'
-      +'<div class="small" style="color:var(--posInk);margin-top:4px;">เติมเข้าคิวส่งออก</div></div>'
+      +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);line-height:1;">'+okN+'</div>'
+      +'<div class="small" style="color:var(--pos);margin-top:4px;">เติมเข้าคิวส่งออก</div></div>'
       +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;line-height:1;">'+skipN+'</div>'
       +'<div class="small muted" style="margin-top:4px;">ข้าม</div></div>'
@@ -9708,8 +9731,8 @@ function openColumnMapModal(opts){
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
-      +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--posInk);line-height:1;">'+okN+'</div>'
-      +'<div class="small" style="color:var(--posInk);margin-top:4px;">เติมเข้าคิวรับคืน</div></div>'
+      +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);line-height:1;">'+okN+'</div>'
+      +'<div class="small" style="color:var(--pos);margin-top:4px;">เติมเข้าคิวรับคืน</div></div>'
       +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;line-height:1;">'+skipN+'</div>'
       +'<div class="small muted" style="margin-top:4px;">ข้าม</div></div>'
@@ -10109,7 +10132,6 @@ function openColumnMapModal(opts){
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
 (function(){
 "use strict";
 const stage=document.getElementById('w3dStage'), canvas=document.getElementById('w3dCanvas');
@@ -10119,167 +10141,305 @@ const St=()=>Wn.S||{boxes:{},locations:{},warehouses:{},customers:{},boxtypes:{}
 const esc=Wn.esc||(s=>String(s==null?'':s));
 const reduceMotion=matchMedia('(prefers-reduced-motion:reduce)').matches;
 const FONTS='-apple-system,"Anuphan","IBM Plex Sans Thai","Leelawadee UI",sans-serif';
+const DAY=86400000;
 
-/* ---------- palette (follows app theme) ---------- */
+/* ══════════════════════════════════════════════════════════════
+   1 · DATA — ใช้ state S ของแอปเดิม (legacy-sync.js sync กับ PostgreSQL อยู่แล้ว)
+       + poll GET /api/state เพื่อรับความเปลี่ยนแปลงจากเครื่องอื่น / PDA
+   ══════════════════════════════════════════════════════════════ */
+const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
+let live=true;
+function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
+async function pullState(){
+  try{
+    const r=await fetch(API,{headers:{Authorization:'Bearer '+token()},cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const st=j.state||j;
+    if(!st||!st.boxes)throw new Error('bad payload');
+    live=true;return st;
+  }catch(e){live=false;return null;}
+}
+/* เซิร์ฟเวอร์เป็น source of truth — โหลดเข้าแอปด้วยกลไกเดิม (load + renderAll) */
+function adoptServerState(st){
+  try{localStorage.setItem(SKEY,JSON.stringify(st));}catch(_){}
+  try{
+    if(typeof Wn.load==='function')Wn.load();
+    if(typeof Wn.renderAll==='function')Wn.renderAll();
+  }catch(e){console.warn('w3d adopt',e);}
+  scheduleBuild();
+}
+/* helper ของแอป — ถ้ามีให้ใช้ของแอป ไม่มีค่อย fallback */
+const isOverdue=b=>!!(Wn.isOverdue?Wn.isOverdue(b):(b&&b.status==='out'&&b.dueAt&&+new Date(b.dueAt)<Date.now()));
+const boxDueDays=b=>Wn.boxDueDays?Wn.boxDueDays(b):(b&&b.dueAt?Math.round((+new Date(b.dueAt)-Date.now())/DAY):null);
+const whName=id=>Wn.whName?Wn.whName(id):(((St().warehouses||{})[id]||{}).name||id);
+const custName=id=>Wn.custName?Wn.custName(id):(((St().customers||{})[id]||{}).name||id);
+const typeName=id=>Wn.typeName?Wn.typeName(id):(((St().boxtypes||{})[id]||{}).name||id);
+const locCode=(z,r,sh,sl)=>Wn.locBuildCode?Wn.locBuildCode(z,r,sh,sl):String(z+'-'+r+'-'+sh+'-'+sl).toUpperCase();
+const qIn=()=>Array.isArray(Wn.pendingIn)?Wn.pendingIn:[];
+const qOut=()=>Array.isArray(Wn.pendingOut)?Wn.pendingOut:[];
+
+/* ══════════════════════════════════════════════════════════════
+   2 · PALETTE (ตามธีมแอป)
+   ══════════════════════════════════════════════════════════════ */
 const PAL={};
 function cssv(n,fb){const v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();return v||fb;}
 function isDark(){const t=document.documentElement.getAttribute('data-theme');if(t)return t==='dark';return matchMedia('(prefers-color-scheme:dark)').matches;}
 function palette(){
-  const d=isDark();
-  PAL.dark=d;
+  const d=isDark();PAL.dark=d;
   PAL.bg=cssv('--bg',d?'#000000':'#f5f5f7');
   PAL.surface=cssv('--surface',d?'#161618':'#ffffff');
   PAL.ink=cssv('--ink',d?'#f5f5f7':'#1d1d1f');
   PAL.muted=cssv('--muted','#86868b');
   PAL.line=cssv('--line',d?'#2a2a2c':'#e3e3e8');
   PAL.accent=cssv('--accent','#a8f931');
-  PAL.ground=d?0x121215:0xdfdfe5;
-  PAL.floor=d?0x1f1f23:0xececf1;
-  PAL.zonePad=d?0x2a2a2f:0xf9f9fb;
-  PAL.apron=d?0x1d1d20:0xcfcfd6;
-  PAL.road=d?0x232327:0xa9a9b1;
-  PAL.dash=d?0x8e8e93:0xffffff;
-  PAL.wall=d?0x212124:0xf3f3f5;
-  PAL.dockwall=d?0x28282c:0xe6e6ea;
-  PAL.door=d?0x38383d:0xc9c9cf;
-  PAL.doorIn=d?0x4c661d:0x9fc456;
-  PAL.doorOut=d?0x6e3134:0xd98a84;
-  PAL.doorGroove=d?0x2a2a2e:0xb4b4bb;
-  PAL.column=d?0x4c4c52:0xbfbfc6;
+  PAL.sky=d?0x0d0d12:0xdfe6ee;
+  PAL.asphalt=d?0x27272d:0x55555c;
+  PAL.concrete=d?0x33333a:0xb9b9c0;
+  PAL.floor=d?0x2e2e35:0xd8d8de;
+  PAL.metalWall=d?0x3d3d45:0xd4d6da;
+  PAL.metalRoof=d?0x32323a:0xb0b4ba;
+  PAL.dockwall=d?0x35353c:0xc4c6ca;
+  PAL.column=d?0x4c4c52:0x9a9aa1;
   PAL.post=d?0x8e8e93:0x4a4a4f;
   PAL.beam=0xa8f931;
   PAL.deck=d?0x3f3f44:0xc7c7cd;
   PAL.boxRack=d?0x7f7f85:0x9c9ca3;
-  PAL.boxStaging=0xa8f931;
-  PAL.boxOut=0xd99a2b;
-  PAL.boxOverdue=0xd70015;
-  PAL.boxLost=d?0x572026:0x7a2b31;
-  PAL.tape=d?0x5a5a5f:0x77777d;
-  PAL.wood=0xa8865a;
-  PAL.truckBody=d?0xd9d9de:0xf8f8fa;
-  PAL.truckCab=0x2e2e33;
-  PAL.wheel=0x17171a;
-  PAL.stagePadCol=d?0x1e2a08:0xeefccb;
-  PAL.yardPad=d?0x1c1c1f:0xffffff;
-  PAL.lostPad=d?0x2a1210:0xffe9ea;
-  PAL.lblInk=PAL.ink; PAL.lblMuted=PAL.muted; PAL.lblBg=PAL.surface; PAL.lblLine=PAL.line;
+  PAL.truckBody=d?0xd0d0d6:0xf3f3f6;
+  PAL.lblInk=PAL.ink;PAL.lblMuted=PAL.muted;PAL.lblBg=PAL.surface;PAL.lblLine=PAL.line;
 }
 const STATUS_META={
-  rack:{label:'บนชั้นวาง',css:()=> '#'+MAT.boxRack.color.getHexString(),pillBg:'var(--posSoft)',pillFg:'var(--pos)',full:'ในคลัง · บนชั้นวาง'},
-  staging:{label:'รอจัดเก็บ',css:()=>'#'+MAT.boxStaging.color.getHexString(),pillBg:'var(--accentSoft)',pillFg:'var(--accentInk)',full:'ในคลัง · รอจัดเก็บเข้าชั้น'},
-  out:{label:'รอคืน',css:()=>'#'+MAT.boxOut.color.getHexString(),pillBg:'var(--warnSoft)',pillFg:'var(--warn)',full:'อยู่ที่ลูกค้า · รอคืน'},
-  overdue:{label:'เกินกำหนด',css:()=>'#'+MAT.boxOverdue.color.getHexString(),pillBg:'var(--negSoft)',pillFg:'var(--neg)',full:'อยู่ที่ลูกค้า · เกินกำหนดคืน'},
-  lost:{label:'สูญหาย',css:()=>'#'+MAT.boxLost.color.getHexString(),pillBg:'var(--negSoft)',pillFg:'var(--neg)',full:'สูญหาย'}
+  rack:{label:'บนชั้นวาง',col:()=>'#'+MAT.boxRack.color.getHexString(),pillBg:'var(--posSoft)',pillFg:'var(--pos)',full:'ในคลัง · บนชั้นวาง'},
+  staging:{label:'รอจัดเก็บ',col:()=>'#a8f931',pillBg:'var(--accentSoft)',pillFg:'var(--accentInk)',full:'ในคลัง · รอจัดเก็บเข้าชั้น'},
+  out:{label:'รอคืน',col:()=>'#d99a2b',pillBg:'var(--warnSoft)',pillFg:'var(--warn)',full:'อยู่ที่ลูกค้า · รอคืน'},
+  overdue:{label:'เกินกำหนด',col:()=>'#d70015',pillBg:'var(--negSoft)',pillFg:'var(--neg)',full:'อยู่ที่ลูกค้า · เกินกำหนดคืน'},
+  lost:{label:'สูญหาย',col:()=>'#7a2b31',pillBg:'var(--negSoft)',pillFg:'var(--neg)',full:'สูญหาย'}
 };
 
-/* ---------- renderer / scene ---------- */
+/* ══════════════════════════════════════════════════════════════
+   3 · RENDERER · แสงแดดเฉียง + เงานุ่ม
+   ══════════════════════════════════════════════════════════════ */
 let renderer;
-try{
-  renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
-}catch(e){ stage.querySelector('#w3dEmpty').style.display='grid'; stage.querySelector('#w3dEmpty').textContent='เบราว์เซอร์นี้ไม่รองรับ WebGL'; return; }
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});}
+catch(e){document.getElementById('w3dEmpty').style.display='grid';document.getElementById('w3dEmpty').textContent='เบราว์เซอร์นี้ไม่รองรับ WebGL';throw e;}
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.02;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(43,1,0.1,4000);
 const controls=new OrbitControls(camera,canvas);
-controls.enableDamping=true; controls.dampingFactor=0.08;
-controls.maxPolarAngle=1.44; controls.minDistance=5; controls.maxDistance=320;
+controls.enableDamping=true;controls.dampingFactor=0.08;
+controls.maxPolarAngle=1.44;controls.minDistance=5;controls.maxDistance=320;
 controls.autoRotateSpeed=0.8;
-const hemi=new THREE.HemisphereLight(0xffffff,0x8a8a8e,0.95);
-const sun=new THREE.DirectionalLight(0xffffff,1.55);
-sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias=-0.0004;
-const fill=new THREE.DirectionalLight(0xffffff,0.35);
+const hemi=new THREE.HemisphereLight(0xdfeaff,0x6b6b70,0.72);
+const sun=new THREE.DirectionalLight(0xfff3dc,2.05);
+sun.castShadow=true;sun.shadow.mapSize.set(1536,1536);sun.shadow.bias=-0.0005;sun.shadow.radius=3.2;
+const fill=new THREE.DirectionalLight(0xcfe0ff,0.34);
+fill.position.set(-40,30,-30);
 scene.add(hemi,sun,fill,sun.target);
 
-/* ---------- shared geometry / materials ---------- */
+/* ══════════════════════════════════════════════════════════════
+   4 · TEXTURES (procedural, low overhead — สร้างครั้งเดียว)
+   ══════════════════════════════════════════════════════════════ */
+const TEX={};
+function ctex(w,h,draw,rx,ry){
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  draw(c.getContext('2d'),w,h);
+  const t=new THREE.CanvasTexture(c);
+  t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.repeat.set(rx||1,ry||1);t.anisotropy=4;t.userData.own=true;
+  return t;
+}
+function noiseFill(g,w,h,base,spread,count){
+  g.fillStyle=base;g.fillRect(0,0,w,h);
+  for(let i=0;i<count;i++){
+    const v=(Math.random()*2-1)*spread;
+    g.fillStyle='rgba('+(v>0?255:0)+','+(v>0?255:0)+','+(v>0?255:0)+','+(Math.abs(v)/255*0.5).toFixed(3)+')';
+    const s=1+Math.random()*2.4;
+    g.fillRect(Math.random()*w,Math.random()*h,s,s);
+  }
+}
+function buildTextures(){
+  Object.values(TEX).forEach(t=>t&&t.dispose&&t.dispose());
+  const d=PAL.dark;
+  TEX.asphalt=ctex(256,256,(g,w,h)=>{
+    noiseFill(g,w,h,d?'#28282e':'#56565d',150,2600);
+    for(let i=0;i<220;i++){g.fillStyle='rgba(255,255,255,'+(0.03+Math.random()*0.06).toFixed(3)+')';
+      g.beginPath();g.arc(Math.random()*w,Math.random()*h,0.6+Math.random()*1.5,0,7);g.fill();}
+  },26,26);
+  TEX.concrete=ctex(256,256,(g,w,h)=>{
+    noiseFill(g,w,h,d?'#32323a':'#b7b7be',54,1400);
+    g.strokeStyle=d?'rgba(0,0,0,.5)':'rgba(0,0,0,.16)';g.lineWidth=2;
+    g.beginPath();g.moveTo(0,0);g.lineTo(w,0);g.moveTo(0,0);g.lineTo(0,h);g.stroke();
+  },10,10);
+  TEX.floor=ctex(256,256,(g,w,h)=>{
+    noiseFill(g,w,h,d?'#2e2e36':'#d6d6dc',30,900);
+    g.strokeStyle=d?'rgba(0,0,0,.42)':'rgba(0,0,0,.1)';g.lineWidth=1.6;
+    g.beginPath();g.moveTo(0,0.5);g.lineTo(w,0.5);g.moveTo(0.5,0);g.lineTo(0.5,h);g.stroke();
+  },14,14);
+  /* แผ่นเมทัลชีตลอนตั้ง — ริบสว่าง/เงาสลับ + รอยต่อแผ่นแนวนอน */
+  TEX.metal=ctex(128,256,(g,w,h)=>{
+    const rib=8;
+    for(let x=0;x<w;x+=rib){
+      const gr=g.createLinearGradient(x,0,x+rib,0);
+      const a=d?'#4a4a54':'#e2e4e8', b=d?'#2f2f36':'#b9bcc2', c=d?'#3b3b43':'#cfd2d7';
+      gr.addColorStop(0,b);gr.addColorStop(.35,a);gr.addColorStop(.65,c);gr.addColorStop(1,b);
+      g.fillStyle=gr;g.fillRect(x,0,rib,h);
+    }
+    g.fillStyle=d?'rgba(0,0,0,.5)':'rgba(0,0,0,.14)';
+    for(let y=0;y<h;y+=64)g.fillRect(0,y,w,2);
+  },1,1);
+  TEX.roof=ctex(256,128,(g,w,h)=>{
+    const rib=9;
+    for(let y=0;y<h;y+=rib){
+      const gr=g.createLinearGradient(0,y,0,y+rib);
+      gr.addColorStop(0,d?'#2a2a31':'#a4a8ae');gr.addColorStop(.4,d?'#3a3a43':'#c2c6cc');gr.addColorStop(1,d?'#26262c':'#9a9ea4');
+      g.fillStyle=gr;g.fillRect(0,y,w,rib);
+    }
+  },10,6);
+  TEX.window=ctex(128,128,(g,w,h)=>{
+    g.fillStyle=d?'#0d1b26':'#25506b';g.fillRect(0,0,w,h);
+    const gr=g.createLinearGradient(0,0,w,h);
+    gr.addColorStop(0,'rgba(255,255,255,.34)');gr.addColorStop(.45,'rgba(255,255,255,.04)');gr.addColorStop(1,'rgba(255,255,255,.22)');
+    g.fillStyle=gr;g.fillRect(0,0,w,h);
+    g.strokeStyle=d?'#3a3a40':'#d6d8dc';g.lineWidth=7;g.strokeRect(3.5,3.5,w-7,h-7);
+    g.beginPath();g.moveTo(w/2,0);g.lineTo(w/2,h);g.stroke();
+  },1,1);
+  TEX.door=ctex(64,128,(g,w,h)=>{
+    for(let y=0;y<h;y+=16){
+      const gr=g.createLinearGradient(0,y,0,y+16);
+      gr.addColorStop(0,d?'#4c4c55':'#cfd2d7');gr.addColorStop(.5,d?'#5c5c66':'#e6e8ec');gr.addColorStop(1,d?'#3d3d45':'#b6b9be');
+      g.fillStyle=gr;g.fillRect(0,y,w,16);
+      g.fillStyle='rgba(0,0,0,.22)';g.fillRect(0,y+14,w,2);
+    }
+  },1,1);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5 · MATERIALS + PRIMITIVES
+   ══════════════════════════════════════════════════════════════ */
 function shared(g){g.userData.shared=true;return g;}
 const GEO={
   unit:shared(new THREE.BoxGeometry(1,1,1)),
+  cyl:shared(new THREE.CylinderGeometry(0.5,0.5,1,20)),
   wheel:shared(new THREE.CylinderGeometry(0.5,0.5,0.34,20).rotateX(Math.PI/2)),
   smallWheel:shared(new THREE.CylinderGeometry(0.27,0.27,0.24,16).rotateX(Math.PI/2)),
-  carWheel:shared(new THREE.CylinderGeometry(0.33,0.33,0.26,18).rotateX(Math.PI/2)),
+  tinyWheel:shared(new THREE.CylinderGeometry(0.19,0.19,0.2,14).rotateX(Math.PI/2)),
   ring:shared(new THREE.RingGeometry(0.55,0.68,48).rotateX(-Math.PI/2)),
+  plane:shared(new THREE.PlaneGeometry(1,1)),
+  sphere:shared(new THREE.SphereGeometry(0.5,18,12)),
+  cone:shared(new THREE.ConeGeometry(0.5,1,16)),
   byType:new Map()
 };
-function mat(hex,opt){const m=new THREE.MeshStandardMaterial(Object.assign({color:hex,roughness:0.82,metalness:0.05},opt||{}));return m;}
+const mat=(hex,o)=>new THREE.MeshStandardMaterial(Object.assign({color:hex,roughness:0.82,metalness:0.05},o||{}));
 const MAT={
-  ground:mat(0xffffff),floor:mat(0xffffff,{roughness:0.95}),zonePad:mat(0xffffff,{roughness:0.95}),
-  apron:mat(0xffffff,{roughness:0.97}),road:mat(0xffffff,{roughness:1}),dash:mat(0xffffff),
-  wall:mat(0xffffff),dockwall:mat(0xffffff),door:mat(0xffffff,{roughness:0.6,metalness:0.25}),
+  ground:mat(0xffffff,{roughness:0.98}),floor:mat(0xffffff,{roughness:0.94}),apron:mat(0xffffff,{roughness:0.96}),
+  paintW:mat(0xf2f4f6,{roughness:0.7}),paintY:mat(0xf5c518,{roughness:0.65}),paintR:mat(0xd70015,{roughness:0.7}),
+  wall:mat(0xffffff,{roughness:0.55,metalness:0.34}),roof:mat(0xffffff,{roughness:0.6,metalness:0.3}),
+  dockwall:mat(0xffffff,{roughness:0.7}),column:mat(0xffffff,{roughness:0.5,metalness:0.35}),
+  door:mat(0xffffff,{roughness:0.48,metalness:0.42}),
   doorIn:mat(0x9fc456,{roughness:0.6,metalness:0.15}),doorOut:mat(0xd98a84,{roughness:0.6,metalness:0.15}),
-  arrowIn:mat(0xa8f931,{roughness:0.45,emissive:0x5f9c12,emissiveIntensity:0.35}),
-  arrowOut:mat(0xd70015,{roughness:0.45,emissive:0x8c000e,emissiveIntensity:0.35}),
-  doorGroove:mat(0xffffff),column:mat(0xffffff,{roughness:0.5,metalness:0.35}),
+  doorBoth:mat(0x5ac8fa,{roughness:0.45,metalness:0.25}),
+  arrowIn:mat(0xa8f931,{roughness:0.45,emissive:0x5f9c12,emissiveIntensity:0.3}),
+  arrowOut:mat(0xd70015,{roughness:0.45,emissive:0x8c000e,emissiveIntensity:0.3}),
+  shelter:mat(0x2f3136,{roughness:0.75}),rubber:mat(0x17171a,{roughness:0.95}),
+  leveler:mat(0x6a6a72,{roughness:0.55,metalness:0.55}),
   post:mat(0xffffff,{roughness:0.5,metalness:0.45}),beam:mat(0xa8f931,{roughness:0.45,metalness:0.15}),
   deck:mat(0xffffff,{roughness:0.7,metalness:0.3}),
+  stagePost:mat(0x2f66c9,{roughness:0.5,metalness:0.2}),stageBeam:mat(0xf59e0b,{roughness:0.5}),
+  outPost:mat(0x2f66c9,{roughness:0.5,metalness:0.2}),outBeam:mat(0xd99a2b,{roughness:0.5}),
+  rfidBeam:mat(0x8b5cf6,{roughness:0.5}),
   boxRack:mat(0xffffff,{roughness:0.6}),boxStaging:mat(0xa8f931,{roughness:0.55}),
+  boxPending:mat(0xf59e0b,{roughness:0.55}),boxReturn:mat(0x60a5fa,{roughness:0.55}),
+  boxHold:mat(0x8b5cf6,{roughness:0.55}),boxDamage:mat(0xef4444,{roughness:0.6}),
   boxOut:mat(0xd99a2b,{roughness:0.6}),boxOverdue:mat(0xd70015,{roughness:0.6}),
   boxLost:mat(0x7a2b31,{roughness:0.7,transparent:true,opacity:0.5}),
-  tape:mat(0xffffff,{roughness:0.9}),wood:mat(0xa8865a,{roughness:0.9}),
-  truckBody:mat(0xffffff,{roughness:0.4,metalness:0.15}),truckCab:mat(0x2e2e33,{roughness:0.4,metalness:0.3}),
-  wheel:mat(0x17171a,{roughness:0.95}),glass:mat(0x9fb6c9,{roughness:0.15,metalness:0.6}),
-  fork:mat(0x3a3a3c,{roughness:0.4,metalness:0.5}),
-  stagePad:mat(0xffffff,{transparent:true,opacity:0.85,roughness:0.95}),
-  yardPad:mat(0xffffff,{transparent:true,opacity:0.9,roughness:0.95}),
-  lostPad:mat(0xffffff,{transparent:true,opacity:0.9,roughness:0.95}),
+  tape:mat(0x77777d,{roughness:0.9}),wood:mat(0xa8865a,{roughness:0.9}),
+  truckBody:mat(0xffffff,{roughness:0.36,metalness:0.2}),truckCab:mat(0x2e2e33,{roughness:0.38,metalness:0.3}),
+  truckTrim:mat(0x1b1b1f,{roughness:0.6}),wheel:mat(0x17171a,{roughness:0.95}),
+  glass:mat(0x9fb6c9,{roughness:0.12,metalness:0.65}),
+  fork:mat(0x3a3a3c,{roughness:0.4,metalness:0.55}),
+  forkBody:mat(0xf5b21b,{roughness:0.5,metalness:0.15}),
+  forkBody2:mat(0x2f66c9,{roughness:0.5,metalness:0.15}),
+  cage:mat(0x2b2b30,{roughness:0.6,metalness:0.3}),
+  vest:mat(0xd8ff4a,{roughness:0.75}),skin:mat(0xc99b74,{roughness:0.85}),
+  stagePad:mat(0xffffff,{transparent:true,opacity:0.8,roughness:0.95}),
+  yardPad:mat(0xffffff,{transparent:true,opacity:0.86,roughness:0.95}),
+  lostPad:mat(0xffe9ea,{transparent:true,opacity:0.9,roughness:0.95}),
   dim:mat(0x9a9a9e,{transparent:true,opacity:0.07,depthWrite:false}),
   sel:mat(0xa8f931,{emissive:0x89e01c,emissiveIntensity:0.55,roughness:0.4}),
   sensor:new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),
   ringM:new THREE.MeshBasicMaterial({color:0xa8f931,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}),
-  hop:mat(0xa8f931,{emissive:0x6fbb12,emissiveIntensity:0.4}),
-  hopIn:mat(0x8e8e93)
+  lampOn:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xfff0c0,emissiveIntensity:1.6,roughness:0.4}),
+  beacon:new THREE.MeshStandardMaterial({color:0xffb020,emissive:0xff8a00,emissiveIntensity:0.9,roughness:0.4}),
+  headlight:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xfff2c2,emissiveIntensity:0,roughness:0.35}),
+  taillight:new THREE.MeshStandardMaterial({color:0x7a0d14,emissive:0xd70015,emissiveIntensity:0,roughness:0.4}),
+  reverse:new THREE.MeshStandardMaterial({color:0xf2f2f4,emissive:0xffffff,emissiveIntensity:0,roughness:0.4}),
+  mirror:mat(0xc9d4dc,{roughness:0.1,metalness:0.75}),
+  fireRed:mat(0xc0161f,{roughness:0.5,metalness:0.2}),
+  charger:mat(0x2f3136,{roughness:0.6,metalness:0.25}),
+  guardWall:mat(0xffffff,{roughness:0.8}),barrier:mat(0xf5c518,{roughness:0.6})
 };
 function refreshMatColors(){
-  MAT.ground.color.set(PAL.ground);MAT.floor.color.set(PAL.floor);MAT.zonePad.color.set(PAL.zonePad);
-  MAT.apron.color.set(PAL.apron);MAT.road.color.set(PAL.road);MAT.dash.color.set(PAL.dash);
-  MAT.wall.color.set(PAL.wall);MAT.dockwall.color.set(PAL.dockwall);MAT.door.color.set(PAL.door);
-  MAT.doorGroove.color.set(PAL.doorGroove);MAT.column.color.set(PAL.column);
-  MAT.doorIn.color.set(PAL.doorIn);MAT.doorOut.color.set(PAL.doorOut);
+  MAT.ground.color.set(0xffffff);MAT.ground.map=TEX.asphalt;
+  MAT.apron.color.set(0xffffff);MAT.apron.map=TEX.concrete;
+  MAT.floor.color.set(0xffffff);MAT.floor.map=TEX.floor;
+  MAT.wall.map=TEX.metal;MAT.wall.color.set(PAL.metalWall);
+  MAT.roof.map=TEX.roof;MAT.roof.color.set(PAL.metalRoof);
+  MAT.door.map=TEX.door;MAT.door.color.set(0xffffff);
+  MAT.dockwall.color.set(PAL.dockwall);MAT.column.color.set(PAL.column);
   MAT.post.color.set(PAL.post);MAT.beam.color.set(PAL.beam);MAT.deck.color.set(PAL.deck);
-  MAT.boxRack.color.set(PAL.boxRack);MAT.boxStaging.color.set(PAL.boxStaging);
-  MAT.boxOut.color.set(PAL.boxOut);MAT.boxOverdue.color.set(PAL.boxOverdue);MAT.boxLost.color.set(PAL.boxLost);
-  MAT.tape.color.set(PAL.tape);MAT.wood.color.set(PAL.wood);
-  MAT.truckBody.color.set(PAL.truckBody);MAT.truckCab.color.set(PAL.truckCab);MAT.wheel.color.set(PAL.wheel);
-  MAT.stagePad.color.set(PAL.stagePadCol);MAT.yardPad.color.set(PAL.yardPad);MAT.lostPad.color.set(PAL.lostPad);
-  hemi.intensity=PAL.dark?0.8:0.95; sun.intensity=PAL.dark?1.35:1.55; fill.intensity=PAL.dark?0.3:0.35;
-  scene.background=new THREE.Color(PAL.bg);
+  MAT.boxRack.color.set(PAL.boxRack);MAT.truckBody.color.set(PAL.truckBody);
+  MAT.stagePad.color.set(PAL.dark?0x1e2a08:0xeefccb);
+  MAT.yardPad.color.set(PAL.dark?0x1c1c1f:0xffffff);
+  MAT.lostPad.color.set(PAL.dark?0x2a1210:0xffe9ea);
+  MAT.guardWall.color.set(PAL.dark?0x2a2a30:0xeeeef2);
+  [MAT.ground,MAT.apron,MAT.floor,MAT.wall,MAT.roof,MAT.door].forEach(m=>m.needsUpdate=true);
+  hemi.intensity=PAL.dark?0.82:0.72;sun.intensity=PAL.dark?1.8:2.05;fill.intensity=PAL.dark?0.42:0.34;
+  sun.color.set(PAL.dark?0xcdd8ff:0xfff3dc);
+  scene.background=new THREE.Color(PAL.sky);
 }
-
-/* ---------- label sprites ---------- */
+function bx(l,h,w,material,x,y,z,noShadow){
+  const m=new THREE.Mesh(GEO.unit,material);m.scale.set(l,h,w);m.position.set(x,y,z);
+  if(!noShadow){m.castShadow=true;m.receiveShadow=true;}
+  return m;
+}
+function cy(r,h,material,x,y,z,seg){
+  const m=new THREE.Mesh(GEO.cyl,material);m.scale.set(r*2,h,r*2);m.position.set(x,y,z);
+  m.castShadow=true;m.receiveShadow=true;return m;
+}
+function paint(l,w,material,x,z,y){
+  const m=new THREE.Mesh(GEO.unit,material);m.scale.set(l,0.02,w);m.position.set(x,y!=null?y:0.012,z);
+  m.receiveShadow=false;return m;
+}
 function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
 function makeLabel(txt,sub,o){
   o=o||{};const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
   const c=document.createElement('canvas'),g=c.getContext('2d');
-  g.font='600 '+fs+'px '+FONTS; let tw=g.measureText(txt).width;
-  if(sub){g.font='500 '+sfs+'px '+FONTS; tw=Math.max(tw,g.measureText(sub).width);}
-  const wpx=Math.ceil(tw+padd*2), hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
+  g.font='600 '+fs+'px '+FONTS;let tw=g.measureText(txt).width;
+  if(sub){g.font='500 '+sfs+'px '+FONTS;tw=Math.max(tw,g.measureText(sub).width);}
+  const wpx=Math.ceil(tw+padd*2),hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
   c.width=wpx*2;c.height=hpx*2;g.scale(2,2);
-  g.globalAlpha=o.alpha!=null?o.alpha:0.93; rr(g,1,1,wpx-2,hpx-2,Math.min(hpx*0.3,22));
-  g.fillStyle=o.bg||PAL.lblBg; g.fill();
-  g.globalAlpha=1; g.lineWidth=1.4; g.strokeStyle=o.border||PAL.lblLine; g.stroke();
-  g.fillStyle=o.fg||PAL.lblInk; g.font='600 '+fs+'px '+FONTS; g.textAlign='center'; g.textBaseline='middle';
+  g.globalAlpha=o.alpha!=null?o.alpha:0.93;rr(g,1,1,wpx-2,hpx-2,Math.min(hpx*0.3,22));
+  g.fillStyle=o.bg||PAL.lblBg;g.fill();
+  g.globalAlpha=1;g.lineWidth=1.4;g.strokeStyle=o.border||PAL.lblLine;g.stroke();
+  g.fillStyle=o.fg||PAL.lblInk;g.font='600 '+fs+'px '+FONTS;g.textAlign='center';g.textBaseline='middle';
   g.fillText(txt,wpx/2,sub?hpx*0.36:hpx*0.52);
   if(sub){g.fillStyle=o.subFg||PAL.lblMuted;g.font='500 '+sfs+'px '+FONTS;g.fillText(sub,wpx/2,hpx*0.74);}
-  const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4;
-  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});
-  m.userData.own=true;
-  const sp=new THREE.Sprite(m); const h=o.h||1.05;
-  sp.scale.set(h*wpx/hpx,h,1); sp.renderOrder=30;
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
+  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});m.userData.own=true;
+  const sp=new THREE.Sprite(m);const h=o.h||1.05;
+  sp.scale.set(h*wpx/hpx,h,1);sp.renderOrder=30;
   return sp;
 }
-
-/* ---------- helpers over app data ---------- */
-function statusKey(b){
-  if(b.status==='lost')return 'lost';
-  if(b.status==='out')return (Wn.isOverdue&&Wn.isOverdue(b))?'overdue':'out';
-  const l=b.location||{}; return (l.zone||l.rack)?'rack':'staging';
-}
-function whOf(b){
-  if(b.status==='warehouse')return (b.location&&b.location.wh)||curWh;
-  if(b.outWh)return b.outWh;
-  if(b.location&&b.location.wh)return b.location.wh;
-  const h=(b.history||[]);for(let i=h.length-1;i>=0;i--){if(h[i].wh)return h[i].wh;}
-  return curWh;
+function disposeTree(o){
+  o.traverse(n=>{
+    if(n.geometry&&!n.geometry.userData.shared)n.geometry.dispose();
+    const ms=Array.isArray(n.material)?n.material:(n.material?[n.material]:[]);
+    ms.forEach(m=>{if(m.userData&&m.userData.own){if(m.map)m.map.dispose();m.dispose();}});
+    if(n.isInstancedMesh&&n.dispose)n.dispose();
+  });
 }
 function boxDims(t){
   if(GEO.byType.has(t))return GEO.byType.get(t);
@@ -10290,124 +10450,226 @@ function boxDims(t){
     geo:shared(new THREE.BoxGeometry(Math.min(d[0],1.14),Math.min(d[2],1.1),Math.min(d[1],1.12)))};
   GEO.byType.set(t,rec);return rec;
 }
-function fmtBaht(n){return '฿'+Math.round(n||0).toLocaleString('th-TH');}
 
-/* ---------- state ---------- */
-let curWh='', lastBuiltWh=null, lastEvtTs=-1;
-const FIL={status:'all',type:'',cust:''};
-let root=null, fxRoot=new THREE.Group(); scene.add(fxRoot);
-let boxRecs=[], tagIndex=new Map(), sensorMesh=null, cellData=[], padPick=[], slotEdge=null;
-let LY={}, HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
-let COUNTS={}, sel=null, anims=[], jobs=[], activeJob=null, forkliftG=null, forkDir=1, cars=[], carTimer=0;
-const raycaster=new THREE.Raycaster(), ptr=new THREE.Vector2();
-
-function disposeTree(o){
-  o.traverse(n=>{
-    if(n.geometry&&!n.geometry.userData.shared)n.geometry.dispose();
-    const ms=Array.isArray(n.material)?n.material:(n.material?[n.material]:[]);
-    ms.forEach(m=>{if(m.userData&&m.userData.own){if(m.map)m.map.dispose();m.dispose();}});
-    if(n.isInstancedMesh&&n.dispose)n.dispose();
-  });
+/* ══════════════════════════════════════════════════════════════
+   6 · VEHICLES — forklift (งาช้างขึ้น-ลงจริง) + รถบรรทุกถอยเทียบท่า
+   ══════════════════════════════════════════════════════════════ */
+const FORK_LIVERY={receive:MAT.forkBody,putaway:MAT.forkBody2,load:MAT.forkBody,tag:MAT.forkBody2};
+function buildForklift(role){
+  const g=new THREE.Group();
+  const body=FORK_LIVERY[role]||MAT.forkBody;
+  /* ตัวถัง: ถ่วงน้ำหนักท้าย + ห้องขับ */
+  g.add(bx(1.42,0.60,1.06,body,-0.06,0.42,0));
+  g.add(bx(0.62,0.78,1.02,body,-0.70,0.62,0));           // counterweight
+  g.add(bx(0.66,0.30,0.98,body,-0.34,0.86,0));          // ฝาครอบเครื่อง
+  g.add(bx(0.68,0.06,0.9,MAT.fork,0.22,0.73,0,true));   // พื้นยืน
+  /* เสา overhead guard + ตะแกรงหลังคา (โปร่ง ไม่ทืบ) */
+  [[0.30,0.46],[0.30,-0.46],[-0.56,0.46],[-0.56,-0.46]].forEach(p=>g.add(bx(0.075,1.20,0.075,MAT.cage,p[0],1.36,p[1],true)));
+  [-0.44,0.06].forEach(dx=>g.add(bx(0.22,0.05,0.98,MAT.cage,dx,1.95,0,true)));
+  g.add(bx(0.94,0.05,0.10,MAT.cage,-0.13,1.95,0.44,true));
+  g.add(bx(0.94,0.05,0.10,MAT.cage,-0.13,1.95,-0.44,true));
+  /* เบาะ + คนขับ */
+  g.add(bx(0.34,0.10,0.46,MAT.truckCab,-0.36,0.82,0,true));
+  g.add(bx(0.10,0.36,0.44,MAT.truckCab,-0.54,1.02,0,true));
+  const op=new THREE.Group();
+  op.add(bx(0.26,0.44,0.36,MAT.vest,0,0.24,0,true));
+  const head=new THREE.Mesh(GEO.sphere,MAT.skin);head.scale.setScalar(0.20);head.position.y=0.56;op.add(head);
+  op.position.set(-0.30,0.88,0);g.add(op);
+  g.userData.operator=op;
+  /* พวงมาลัย */
+  const wheelR=new THREE.Mesh(GEO.ring,MAT.fork);wheelR.scale.setScalar(0.34);wheelR.position.set(0.04,1.14,0);wheelR.rotation.x=-1.1;g.add(wheelR);
+  /* เสา mast (คงที่) */
+  g.add(bx(0.10,2.24,0.10,MAT.fork,0.56,1.12,0.30,true));
+  g.add(bx(0.10,2.24,0.10,MAT.fork,0.56,1.12,-0.30,true));
+  g.add(bx(0.12,0.14,0.78,MAT.fork,0.56,2.20,0,true));
+  /* carriage — เลื่อนขึ้นลงจริง */
+  const car=new THREE.Group();
+  car.add(bx(0.10,0.52,0.80,MAT.fork,0.60,0.26,0,true));
+  car.add(bx(0.06,0.60,0.74,MAT.cage,0.66,0.42,0,true));       // backrest
+  car.add(bx(1.06,0.055,0.13,MAT.fork,1.16,0.035,0.27,true));  // งาซ้าย
+  car.add(bx(1.06,0.055,0.13,MAT.fork,1.16,0.035,-0.27,true)); // งาขวา
+  car.position.y=0.10;g.add(car);
+  g.userData.carriage=car;
+  g.userData.forkY=0.10;
+  /* ล้อ: หน้าใหญ่ (ขับ) หลังเล็ก (บังคับเลี้ยว) */
+  g.userData.wheels=[];
+  [[0.40,0.50],[0.40,-0.50]].forEach(p=>{const w=new THREE.Mesh(GEO.smallWheel,MAT.wheel);w.position.set(p[0],0.27,p[1]);w.castShadow=true;g.add(w);g.userData.wheels.push(w);});
+  [[-0.58,0.40],[-0.58,-0.40]].forEach(p=>{const w=new THREE.Mesh(GEO.tinyWheel,MAT.wheel);w.position.set(p[0],0.19,p[1]);g.add(w);g.userData.wheels.push(w);});
+  /* beacon สีเหลือง + แถบเตือน */
+  const bc=new THREE.Mesh(GEO.sphere,MAT.beacon.clone());bc.material.userData.own=true;
+  bc.scale.set(0.16,0.14,0.16);bc.position.set(-0.11,2.00,0);g.add(bc);
+  g.userData.beacon=bc;
+  g.scale.setScalar(1.12);
+  return g;
 }
-
-/* ---------- primitive builders ---------- */
-function bx(l,h,w,material,x,y,z,noShadow){
-  const m=new THREE.Mesh(GEO.unit,material);m.scale.set(l,h,w);m.position.set(x,y,z);
-  if(!noShadow){m.castShadow=true;m.receiveShadow=true;}
-  return m;
+function setForkY(f,y){
+  f.userData.forkY=y;f.userData.carriage.position.y=y;
+  if(f.userData.operator)f.userData.operator.rotation.y=0;
 }
 function buildTruck(){
   const g=new THREE.Group();
-  g.add(bx(7.0,0.26,1.05,MAT.truckCab,0,0.62,0));
-  const cargo=bx(5.15,2.5,2.38,MAT.truckBody,-1.05,2.02,0);g.add(cargo);
-  g.add(bx(5.17,0.5,2.4,MAT.truckCab,-1.05,0.95,0,true));
-  g.add(bx(1.72,1.8,2.24,MAT.truckCab,2.62,1.68,0));
+  g.add(bx(7.0,0.26,1.05,MAT.truckTrim,0,0.62,0));                 // chassis
+  g.add(bx(5.15,2.5,2.38,MAT.truckBody,-1.05,2.02,0));             // cargo body
+  const ribs=new THREE.Mesh(GEO.unit,new THREE.MeshStandardMaterial({color:0xffffff,map:TEX.metal,roughness:0.45,metalness:0.3}));
+  ribs.material.userData.own=true;ribs.scale.set(5.17,2.46,2.42);ribs.position.set(-1.05,2.02,0);g.add(ribs);
+  g.add(bx(5.17,0.5,2.4,MAT.truckTrim,-1.05,0.95,0,true));
+  g.add(bx(0.5,2.2,2.2,MAT.truckTrim,-3.30,2.02,0,true));          // ช่องว่างในตู้ (เห็นเมื่อเปิดท้าย)
+  const rear=new THREE.Group();
+  rear.add(bx(0.12,2.3,2.34,MAT.truckTrim,-3.62,2.02,0));           // ประตูท้าย
+  rear.add(bx(0.06,1.9,0.10,MAT.leveler,-3.70,2.02,0.55,true));
+  rear.add(bx(0.06,1.9,0.10,MAT.leveler,-3.70,2.02,-0.55,true));
+  g.add(rear);g.userData.rearDoor=rear;
+  g.add(bx(1.72,1.8,2.24,MAT.truckCab,2.62,1.68,0));               // cab
   g.add(bx(0.1,0.72,1.98,MAT.glass,3.5,2.1,0,true));
   g.add(bx(1.74,0.16,2.26,MAT.truckBody,2.62,2.64,0,true));
+  g.add(bx(0.4,0.5,2.2,MAT.truckTrim,3.42,0.72,0,true));           // กันชนหน้า
   const wp=[[2.62,1.02],[-0.5,1.02],[-2.1,1.02],[2.62,-1.02],[-0.5,-1.02],[-2.1,-1.02]];
   g.userData.wheels=[];
-  wp.forEach(p=>{const w=new THREE.Mesh(GEO.wheel,MAT.wheel);w.position.set(p[0],0.5,p[1]);w.castShadow=true;g.add(w);g.userData.wheels.push(w);});
-  return g;
-}
-function buildForklift(){
-  const g=new THREE.Group();
-  g.add(bx(1.45,0.52,1.02,MAT.boxStaging,0,0.55,0));
-  g.add(bx(0.72,0.5,0.94,MAT.truckCab,-0.35,1.05,0));
-  [[0.32,0.44],[0.32,-0.44],[-0.55,0.44],[-0.55,-0.44]].forEach(p=>{const c=[bx(0.1,1.05,0.1,MAT.fork,p[0],1.55,p[1])];g.add(c[0]);});
-  g.add(bx(1.0,0.07,1.0,MAT.fork,-0.1,2.1,0,true));
-  g.add(bx(0.09,2.15,0.09,MAT.fork,0.82,1.1,0.3));g.add(bx(0.09,2.15,0.09,MAT.fork,0.82,1.1,-0.3));
-  g.add(bx(0.95,0.06,0.14,MAT.fork,1.42,0.12,0.26));g.add(bx(0.95,0.06,0.14,MAT.fork,1.42,0.12,-0.26));
-  [[0.5,0.55],[0.5,-0.55],[-0.5,0.55],[-0.5,-0.55]].forEach(p=>{const w=new THREE.Mesh(GEO.smallWheel,MAT.wheel);w.position.set(p[0],0.28,p[1]);g.add(w);});
-  return g;
-}
-/* ---------- passing traffic (ambient cars on the road) ---------- */
-const CAR_COLORS=[0xe8eaed,0xbfc3c9,0x9297a0,0x5b6672,0x40454d,0x24272c];
-const CARMAT={
-  glass:mat(0x1f2229,{roughness:0.22,metalness:0.55}),
-  head:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xffefbe,emissiveIntensity:0.9,roughness:0.4}),
-  tail:new THREE.MeshStandardMaterial({color:0xff453a,emissive:0xd7261d,emissiveIntensity:0.75,roughness:0.4})
-};
-function buildCar(){
-  const g=new THREE.Group();
-  const body=mat(CAR_COLORS[(Math.random()*CAR_COLORS.length)|0],{roughness:0.45,metalness:0.42});
-  body.userData.own=true;
-  g.add(bx(3.5,0.52,1.5,body,0,0.6,0));
-  g.add(bx(1.9,0.58,1.36,CARMAT.glass,-0.1,1.05,0));
-  g.add(bx(1.7,0.14,1.46,body,-0.1,1.35,0,true));
-  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,0.5,true));
-  g.add(bx(0.09,0.16,0.32,CARMAT.head,1.75,0.66,-0.5,true));
-  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,0.5,true));
-  g.add(bx(0.09,0.18,0.34,CARMAT.tail,-1.75,0.66,-0.5,true));
-  g.userData.wheels=[];
-  [[1.05,0.77],[-1.05,0.77],[1.05,-0.77],[-1.05,-0.77]].forEach(p=>{
-    const w=new THREE.Mesh(GEO.carWheel,MAT.wheel);w.position.set(p[0],0.34,p[1]);w.castShadow=true;g.add(w);g.userData.wheels.push(w);
+  wp.forEach(p=>{const w=new THREE.Mesh(GEO.wheel,MAT.wheel);w.position.set(p[0],0.5,p[1]);g.add(w);g.userData.wheels.push(w);});
+  g.userData.headlights=[];g.userData.taillights=[];g.userData.reverse=[];
+  [0.62,-0.62].forEach(zz=>{
+    const hl=new THREE.Mesh(GEO.unit,MAT.headlight.clone());hl.material.userData.own=true;
+    hl.scale.set(0.12,0.22,0.3);hl.position.set(3.48,1.0,zz);g.add(hl);g.userData.headlights.push(hl);
+    const tl=new THREE.Mesh(GEO.unit,MAT.taillight.clone());tl.material.userData.own=true;
+    tl.scale.set(0.1,0.26,0.22);tl.position.set(-3.66,1.1,zz);g.add(tl);g.userData.taillights.push(tl);
+    const rv=new THREE.Mesh(GEO.unit,MAT.reverse.clone());rv.material.userData.own=true;
+    rv.scale.set(0.1,0.16,0.16);rv.position.set(-3.66,0.82,zz);g.add(rv);g.userData.reverse.push(rv);
   });
   return g;
 }
-function spawnCar(){
-  const dir=Math.random()<0.5?1:-1;
-  const c=buildCar();
-  c.position.set(dir>0?LY.roadX0:LY.roadX1,0,LY.roadMid-dir*1.5);
-  c.rotation.y=dir>0?0:Math.PI;
-  fxRoot.add(c);
-  cars.push({g:c,dir,speed:7.5+Math.random()*4.5});
+const setLights=(g,k,on,i)=>((g.userData[k]||[]).forEach(m=>{m.material.emissiveIntensity=on?(i||1.4):0;}));
+const setRearDoor=(g,open)=>{if(g&&g.userData.rearDoor)g.userData.rearDoor.visible=!open;};
+function setTruckVisible(g,v){g.visible=v;}
+
+/* ══════════════════════════════════════════════════════════════
+   7 · LAYOUT + BUILD
+   ══════════════════════════════════════════════════════════════ */
+const SLOT_W=1.16,RACK_D=1.15,SHELF_H=0.92,BASE_Y=0.16,AISLE=3.1,GAP=0.6;
+const STG_BAY=1.26,STG_D=1.2,STG_LEV_Y=[0.16,1.06],STG_TOP=1.96;
+let root=null,fxRoot=new THREE.Group();scene.add(fxRoot);
+let curWh='',lastBuiltWh=null,lastEvtTs=-1;
+const FIL={status:'all',type:'',cust:''};
+let boxRecs=[],tagIndex=new Map(),sensorMesh=null,cellData=[],padPick=[],truckPick=[],slotEdge=null;
+let LY={},HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
+let COUNTS={},sel=null,anims=[];
+let agents=[],gateDoors={},TASKS={},freeCells=[];
+const DOCK={};                                   // สถานะท่าเทียบ — คงอยู่ข้าม rebuild
+const opsRoot=new THREE.Group();scene.add(opsRoot); // รถ/forklift ไม่ถูกล้างเมื่อ rebuild
+let beaconT=0;
+const raycaster=new THREE.Raycaster(),ptr=new THREE.Vector2();
+
+function statusKey(b){
+  if(b.status==='lost')return 'lost';
+  if(b.status==='out')return isOverdue(b)?'overdue':'out';
+  const l=b.location||{};return (l.zone||l.rack)?'rack':'staging';
 }
-function updateTraffic(dt){
-  if(reduceMotion)return;
-  for(let i=cars.length-1;i>=0;i--){
-    const c=cars[i];
-    c.g.position.x+=c.dir*c.speed*dt;
-    const roll=c.dir*c.speed*dt/0.33;
-    c.g.userData.wheels.forEach(w=>w.rotation.z-=roll);
-    if((c.dir>0&&c.g.position.x>LY.roadX1)||(c.dir<0&&c.g.position.x<LY.roadX0)){
-      fxRoot.remove(c.g);disposeTree(c.g);cars.splice(i,1);
+function whOf(b){
+  if(b.status==='warehouse')return (b.location&&b.location.wh)||curWh;
+  if(b.outWh)return b.outWh;
+  if(b.location&&b.location.wh)return b.location.wh;
+  const h=b.history||[];for(let i=h.length-1;i>=0;i--)if(h[i].wh)return h[i].wh;
+  return curWh;
+}
+const wasEverOut=b=>!!(b&&((b.cycles>0)||b.status==='out'||(b.history||[]).some(h=>h.dir==='out')));
+function sceneBoxKind(b,area){
+  if(!b)return 'Rack';
+  if(b.status==='lost')return 'Lost';
+  if(b.status==='out')return isOverdue(b)?'Overdue':'Out';
+  if(b.status==='hold')return 'Hold';
+  if(b.status==='damage')return 'Damage';
+  if(b.status==='pending')return 'Pending';
+  return area==='staging'?'Staging':'Rack';
+}
+const fmtBaht=n=>'฿'+Math.round(n||0).toLocaleString('th-TH');
+
+/* ── แร็คเตี้ยสำหรับโซนพักงาน (staging / RFID / outbound) ───────── */
+function buildLowRack(o){
+  const g=new THREE.Group();
+  const bays=o.bays,lev=o.levels||2,W=bays*STG_BAY;
+  const postM=MAT.stagePost,beamM=o.beam||MAT.stageBeam;
+  for(let i=0;i<=bays;i++){
+    const x=-W/2+i*STG_BAY;
+    g.add(bx(0.08,STG_TOP,0.08,postM,x,STG_TOP/2,-STG_D/2+0.05));
+    g.add(bx(0.08,STG_TOP,0.08,postM,x,STG_TOP/2,STG_D/2-0.05));
+  }
+  const slots=[];
+  for(let l=0;l<lev;l++){
+    const y=STG_LEV_Y[l]!=null?STG_LEV_Y[l]:0.16+l*0.9;
+    g.add(bx(W,0.09,0.07,beamM,0,y,-STG_D/2+0.05));
+    g.add(bx(W,0.09,0.07,beamM,0,y,STG_D/2-0.05));
+    g.add(bx(W-0.1,0.035,STG_D-0.16,MAT.deck,0,y+0.06,0,true));
+    for(let b=0;b<bays;b++)slots.push({x:-W/2+STG_BAY*(b+0.5),y:y+0.08,bay:b,lev:l});
+  }
+  g.add(bx(W,0.07,0.07,postM,0,STG_TOP,-STG_D/2+0.05,true));
+  g.add(bx(W,0.07,0.07,postM,0,STG_TOP,STG_D/2-0.05,true));
+  g.position.set(o.x,0,o.z);
+  root.add(g);
+  const world=slots.map(s=>({x:o.x+s.x,y:s.y,z:o.z,bay:s.bay,lev:s.lev}));
+  /* ป้ายช่อง STG-01… — แผ่นเดียวต่อแร็ค (1 draw call) */
+  if(o.codePrefix){
+    const c=document.createElement('canvas');
+    c.width=Math.max(256,bays*140);c.height=64;
+    const g2=c.getContext('2d');
+    g2.fillStyle=PAL.dark?'rgba(28,28,32,.94)':'rgba(255,255,255,.94)';g2.fillRect(0,0,c.width,c.height);
+    g2.strokeStyle=PAL.dark?'#3a3a40':'#c9c9cf';g2.lineWidth=2;g2.strokeRect(1,1,c.width-2,c.height-2);
+    g2.font='600 32px '+FONTS;g2.textAlign='center';g2.textBaseline='middle';
+    for(let i=0;i<bays;i++){
+      const cx=(i+0.5)*c.width/bays;
+      g2.fillStyle=PAL.dark?'#e8e8ec':'#1d1d1f';
+      g2.fillText(o.codePrefix+'-'+String(i+1).padStart(2,'0'),cx,c.height/2+1);
+      if(i){g2.beginPath();g2.moveTo(i*c.width/bays,7);g2.lineTo(i*c.width/bays,c.height-7);g2.stroke();}
+    }
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;
+    const m=new THREE.MeshBasicMaterial({map:t,transparent:true});m.userData.own=true;
+    const plate=new THREE.Mesh(GEO.plane,m);
+    plate.scale.set(W,0.28,1);plate.position.set(o.x,0.16,o.z+STG_D/2+0.08);
+    plate.renderOrder=6;root.add(plate);
+  }
+  if(o.label){
+    const lb=makeLabel(o.label,o.sub,{fs:36,h:1.0,fg:o.fg,subFg:o.fg});
+    lb.position.set(o.x,STG_TOP+0.9,o.z);root.add(lb);
+    if(o.hang){  /* ป้ายชื่อโซนแขวนเพดาน (เฉพาะในอาคาร) */
+      root.add(bx(0.04,1.15,0.04,MAT.cage,o.x,5.32,o.z,true));
+      root.add(bx(1.9,0.34,0.06,o.beam||MAT.stageBeam,o.x,4.6,o.z,true));
+      const hang=makeLabel(o.hang,null,{fs:26,h:0.28,alpha:0.98});
+      hang.position.set(o.x,4.6,o.z-0.07);root.add(hang);
     }
   }
-  carTimer-=dt;
-  if(carTimer<=0&&cars.length<3){
-    spawnCar();
-    carTimer=cars.length<=1?(1.6+Math.random()*1.8):(3.6+Math.random()*3.4);
-  }
+  return {group:g,slots:world,W};
+}
+function instMesh(list,material,make,noShadow){
+  if(!list.length)return null;
+  const im=new THREE.InstancedMesh(GEO.unit,material,list.length);
+  const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),s=new THREE.Vector3();
+  list.forEach((it,i)=>{make(it,p,s);m4.compose(p,q,s);im.setMatrixAt(i,m4);});
+  if(!noShadow){im.castShadow=true;im.receiveShadow=true;}
+  im.instanceMatrix.needsUpdate=true;root.add(im);return im;
+}
+function addArrowPaint(x,z,into,material,scale){
+  const a=new THREE.Group(),zs=into?-1:1,s=scale||1;
+  a.add(paint(0.34*s,1.9*s,material,0,0,0));
+  const h1=paint(0.34*s,0.9*s,material,0.261*s,zs*0.584*s,0);h1.rotation.y=-zs*0.62;a.add(h1);
+  const h2=paint(0.34*s,0.9*s,material,-0.261*s,zs*0.584*s,0);h2.rotation.y=zs*0.62;a.add(h2);
+  a.position.set(x,0.028,z);root.add(a);
 }
 
-/* ---------- BUILD (full rebuild from live data) ---------- */
-const SLOT_W=1.16,RACK_D=1.15,SHELF_H=0.92,BASE_Y=0.16,AISLE=3.1,GAP=0.6,ROWMAX=30;
 function build(){
   const st=St();
   const whIds=Object.keys(st.warehouses||{}).sort();
   if(!curWh||!st.warehouses[curWh])curWh=whIds[0]||'';
   if(root){scene.remove(root);disposeTree(root);}
   scene.remove(fxRoot);disposeTree(fxRoot);fxRoot=new THREE.Group();scene.add(fxRoot);
-  activeJob=null;jobs=[];anims=[];sel=null;cars=[];carTimer=0;hideCard();
+  anims=[];sel=null;hideCard();
+  gateDoors={};
   root=new THREE.Group();scene.add(root);
-  boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];sensorMesh=null;
+  boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];truckPick=[];sensorMesh=null;freeCells=[];
 
-  /* ----- collect racks from Location Master + real box locations ----- */
+  /* ── แร็คจาก Location Master + ตำแหน่งกล่องจริง ── */
   const rackMap=new Map();
   function feed(zone,rack,shelf,slot){
     const key=zone+'\u0000'+rack;
     let r=rackMap.get(key);
-    if(!r){r={zone:zone,rack:rack,shelves:0,slots:0};rackMap.set(key,r);}
+    if(!r){r={zone,rack,shelves:0,slots:0};rackMap.set(key,r);}
     r.shelves=Math.max(r.shelves,Math.floor(Number(shelf))||0);
     r.slots=Math.max(r.slots,Math.floor(Number(slot))||0);
   }
@@ -10416,195 +10678,294 @@ function build(){
   rackMap.forEach(r=>{r.shelves=Math.max(r.shelves,3);r.slots=Math.max(r.slots,4);});
   const zones=[...new Set([...rackMap.values()].map(r=>r.zone))].sort();
 
-  /* ----- layout rows ----- */
-  const rows=[];let rowIdx=-1,cursorX=0;
+  /* ── ผังแร็ค (คงอัลกอริทึมเดิมของแอป) + คำนวณ "ทางเดินรถ" ต่อแถว ── */
   const segs=[];const cellPos=new Map();
+  let cursorXAll=0,maxLen=0;
+  const DOUBLE_ROW_GAP=0.16,RIGHT_RESERVE=7.2;
   zones.forEach(zone=>{
-    rowIdx++;cursorX=0;
     const rks=[...rackMap.values()].filter(r=>r.zone===zone).sort((a,b)=>a.rack<b.rack?-1:1);
-    rks.forEach(rk=>{
-      const len=rk.slots*SLOT_W;
-      if(cursorX>0&&cursorX+len>ROWMAX){rowIdx++;cursorX=0;}
-      segs.push({zone,rk,row:rowIdx,x0:cursorX,len});
-      cursorX+=len+GAP;
-      if(!rows[rowIdx])rows[rowIdx]={w:0,zone};rows[rowIdx].w=Math.max(rows[rowIdx].w,cursorX-GAP);
+    if(!rks.length)return;
+    const zi=zones.indexOf(zone);
+    if(zi>0)cursorXAll+=AISLE-GAP;
+    const faces=zi===1?[rks.slice(0,Math.ceil(rks.length/2)),rks.slice(Math.ceil(rks.length/2))]:[rks];
+    const zoneX=cursorXAll;
+    faces.forEach((face,fi)=>{
+      if(!face.length)return;
+      const faceX=zoneX+fi*(RACK_D+DOUBLE_ROW_GAP);
+      let cursorZAll=0;
+      face.forEach(rk=>{
+        const len=rk.slots*SLOT_W;
+        segs.push({zone,rk,x0:faceX,z0:cursorZAll,len,faceIdx:faces.length>1?fi:0});
+        cursorZAll+=len+GAP;
+        maxLen=Math.max(maxLen,cursorZAll-GAP);
+      });
     });
-    if(!rks.length)rowIdx--;
+    cursorXAll+=zi===1?(2*RACK_D+DOUBLE_ROW_GAP+RIGHT_RESERVE):RACK_D;
   });
-  const nRows=rows.length;
-  let contentW=Math.max(18,...rows.map(r=>r.w||0));
+  let contentW=Math.max(20,cursorXAll-GAP);
   const gs=(st.warehouses[curWh]||{}).gates||[];
-  contentW=Math.max(contentW,gs.length*4.6);
+  contentW=Math.max(contentW,gs.length*5.4);
   const X0=-contentW/2;
-  const pitch=RACK_D+AISLE;
-  const rackZ=i=>-(i*pitch);
-  const backZ=nRows?rackZ(nRows-1)-RACK_D/2-2.6:-8;
   const frontZ=RACK_D/2;
-  const dockZ=frontZ+7.2;
-  const bMinX=X0-3,bMaxX=X0+contentW+3,bW=bMaxX-bMinX;
-  const apron0=dockZ+0.25,apron1=dockZ+8,road0=apron1,road1=road0+6,roadMid=road0+3,yardZ=road1+4;
-  LY={dockZ,roadMid,bMinX,bMaxX,gateX:{},spawnX:bMinX-26,exitX:bMaxX+26,stagX0:X0,stagZ:frontZ+3.4,roadX0:bMinX-58,roadX1:bMaxX+58};
+  const backZ=maxLen?frontZ-maxLen-3.0:-8;
+  const dockZ=frontZ+15.0;                       // ลึกขึ้น: มีที่ให้โซนพักงาน + ทางเดิน
+  const mainAisleZ=frontZ+2.4;
+  const walkZ=mainAisleZ+1.55;
+  const zoneLaneZ=frontZ+8.1;
+  const dockLaneZ=dockZ-3.0;
+  const bMinX=X0-3.4,bMaxX=X0+contentW+3.4,bW=bMaxX-bMinX;
+  const apron0=dockZ+0.3,apron1=dockZ+11.5,road0=apron1,road1=road0+7.2,roadMid=road0+3.6,yardZ=road1+5.4;
+  const leftLaneX=bMinX+2.4,rightLaneX=bMaxX-2.4;
+  LY={dockZ,roadMid,bMinX,bMaxX,bW,X0,frontZ,backZ,contentW,mainAisleZ,zoneLaneZ,dockLaneZ,walkZ,
+      leftLaneX,rightLaneX,apron0,apron1,road0,road1,yardZ,gateX:{},gateDir:{},lanesV:[],lanesH:[mainAisleZ,zoneLaneZ,dockLaneZ]};
 
-  /* ----- ground & building shell ----- */
-  const ground=bx(Math.max(bW,60)+120,0.1,(yardZ-backZ)+90,MAT.ground,(bMinX+bMaxX)/2,-0.16,(backZ+yardZ)/2,true);
+  /* ── ทางเดินรถแนวตั้งต่อแถวแร็ค (forklift ไม่ทะลุแร็ค) ── */
+  segs.forEach(sg=>{
+    const faceLeftX=X0+sg.x0, faceRightX=X0+sg.x0+RACK_D;
+    sg.aisleX=sg.faceIdx===1?faceRightX+1.55:faceLeftX-1.55;
+    sg.xC=X0+sg.x0+RACK_D/2;
+  });
+  const vSet=new Set([leftLaneX,rightLaneX]);
+  segs.forEach(sg=>vSet.add(+sg.aisleX.toFixed(2)));
+  LY.lanesV=[...vSet].sort((a,b)=>a-b);
+
+  /* ── พื้น · ถนน · ลานยาง ── */
+  const ground=bx(Math.max(bW,60)+180,0.1,(yardZ-backZ)+140,MAT.ground,(bMinX+bMaxX)/2,-0.16,(backZ+yardZ)/2,true);
   ground.receiveShadow=true;root.add(ground);
-  const floor=bx(bW,0.12,dockZ-backZ,MAT.floor,(bMinX+bMaxX)/2,-0.06,(backZ+dockZ)/2,true);
-  floor.receiveShadow=true;root.add(floor);
-  root.add(bx(bW,1.1,0.14,MAT.wall,(bMinX+bMaxX)/2,0.55,backZ));
-  root.add(bx(0.14,1.1,dockZ-backZ,MAT.wall,bMinX,0.55,(backZ+dockZ)/2));
-  root.add(bx(0.14,1.1,dockZ-backZ,MAT.wall,bMaxX,0.55,(backZ+dockZ)/2));
-  for(let x=bMinX;x<=bMaxX+0.1;x+=Math.max(6,bW/Math.round(bW/7))){
-    root.add(bx(0.3,5.4,0.3,MAT.column,Math.min(x,bMaxX),2.7,backZ));
-    root.add(bx(0.3,5.4,0.3,MAT.column,Math.min(x,bMaxX),2.7,dockZ,true));
-  }
-  for(let z=backZ;z<dockZ-3;z+=7){
-    root.add(bx(0.3,5.4,0.3,MAT.column,bMinX,2.7,z));
-    root.add(bx(0.3,5.4,0.3,MAT.column,bMaxX,2.7,z));
-  }
-  root.add(bx(bW,0.22,0.26,MAT.column,(bMinX+bMaxX)/2,5.5,backZ,true));
-  root.add(bx(0.26,0.22,dockZ-backZ,MAT.column,bMinX,5.5,(backZ+dockZ)/2,true));
-  root.add(bx(0.26,0.22,dockZ-backZ,MAT.column,bMaxX,5.5,(backZ+dockZ)/2,true));
+  const apr=bx(bW+34,0.09,apron1-apron0,MAT.apron,(bMinX+bMaxX)/2,-0.055,(apron0+apron1)/2,true);apr.receiveShadow=true;root.add(apr);
+  const floor=bx(bW,0.14,dockZ-backZ,MAT.floor,(bMinX+bMaxX)/2,-0.07,(backZ+dockZ)/2,true);floor.receiveShadow=true;root.add(floor);
 
-  /* ----- dock wall + gates ----- */
-  const n=gs.length,gp=bW/(n||1);
-  /* ลูกศรบอกทิศทางบนพื้นหน้าประตู */
-  function addArrow(x,z,into,material){
-    const a=new THREE.Group();const zs=into?-1:1;
-    a.add(bx(0.34,0.035,1.9,material,0,0,0,true));
-    /* หัวลูกศรรูปตัว V — ปลายบาร์ทั้งสองบรรจบที่ปลายก้านพอดี */
-    const h1=bx(0.34,0.035,0.9,material,0.261,0,zs*0.584,true);h1.rotation.y=-zs*0.62;a.add(h1);
-    const h2=bx(0.34,0.035,0.9,material,-0.261,0,zs*0.584,true);h2.rotation.y=zs*0.62;a.add(h2);
-    a.position.set(x,0.03,z);root.add(a);
+  /* เส้นถนน: ขอบทึบ 2 เส้น + เส้นประกลาง + ลูกศรบอกทิศ */
+  root.add(paint(bW+160,0.22,MAT.paintW,(bMinX+bMaxX)/2,road0+0.5,0.02));
+  root.add(paint(bW+160,0.22,MAT.paintW,(bMinX+bMaxX)/2,road1-0.5,0.02));
+  const dashes=[];for(let x=bMinX-70;x<bMaxX+70;x+=4.6)dashes.push(x);
+  instMesh(dashes,MAT.paintW,(x,p,s)=>{p.set(x,0.02,roadMid);s.set(2.2,0.02,0.18);},true);
+  addArrowPaint(bMinX-14,roadMid-1.8,false,MAT.paintW,1.5);
+  addArrowPaint(bMaxX+14,roadMid+1.8,true,MAT.paintW,1.5);
+
+  /* ── โครงอาคาร: ผนังเมทัลชีต + หลังคา ── */
+  const WALL_H=6.4;
+  root.add(bx(bW,WALL_H,0.22,MAT.wall,(bMinX+bMaxX)/2,WALL_H/2,backZ));
+  root.add(bx(0.22,WALL_H,dockZ-backZ,MAT.wall,bMinX,WALL_H/2,(backZ+dockZ)/2));
+  root.add(bx(0.22,WALL_H,dockZ-backZ,MAT.wall,bMaxX,WALL_H/2,(backZ+dockZ)/2));
+  /* หลังคา: เปิดโปร่งให้เห็นภายใน — เหลือเชิงชาย + จันทันเหล็ก */
+  const fasc=0.55;
+  root.add(bx(bW+0.9,fasc,0.5,MAT.roof,(bMinX+bMaxX)/2,WALL_H+fasc/2,backZ-0.34,true));
+  root.add(bx(0.5,fasc,dockZ-backZ+0.9,MAT.roof,bMinX-0.34,WALL_H+fasc/2,(backZ+dockZ)/2,true));
+  root.add(bx(0.5,fasc,dockZ-backZ+0.9,MAT.roof,bMaxX+0.34,WALL_H+fasc/2,(backZ+dockZ)/2,true));
+  root.add(bx(bW+0.9,fasc,0.6,MAT.roof,(bMinX+bMaxX)/2,WALL_H+fasc/2,dockZ+0.4,true));
+  const truss=[];for(let z=backZ+4.6;z<dockZ-2.4;z+=8.4)truss.push(z);
+  instMesh(truss,MAT.roof,(z,p,s)=>{p.set((bMinX+bMaxX)/2,WALL_H+0.42,z);s.set(bW-0.4,0.14,0.18);},true);
+  const cols=[];
+  const colStep=Math.max(6,bW/Math.round(bW/7.5));
+  for(let x=bMinX;x<=bMaxX+0.1;x+=colStep)cols.push([Math.min(x,bMaxX),backZ+0.3]);
+  for(let z=backZ+1;z<dockZ-1;z+=7.4){cols.push([bMinX+0.3,z]);cols.push([bMaxX-0.3,z]);}
+  instMesh(cols,MAT.column,(it,p,s)=>{p.set(it[0],WALL_H/2,it[1]);s.set(0.34,WALL_H,0.34);});
+  /* คานหลังคา + ไฟ high-bay */
+  const lamps=[],lampGlow=[];
+  const beamsCeil=[];
+  for(let z=backZ+3;z<dockZ-2;z+=6.2){
+    beamsCeil.push(z);
+    for(let x=bMinX+5;x<bMaxX-3;x+=8.5)lamps.push([x,z]);
   }
+  instMesh(beamsCeil,MAT.column,(z,p,s)=>{p.set((bMinX+bMaxX)/2,WALL_H-0.5,z);s.set(bW-0.6,0.2,0.24);},true);
+  instMesh(lamps,MAT.cage,(it,p,s)=>{p.set(it[0],WALL_H-0.86,it[1]);s.set(0.66,0.14,0.44);},true);
+  instMesh(lamps,MAT.lampOn,(it,p,s)=>{p.set(it[0],WALL_H-0.96,it[1]);s.set(0.58,0.05,0.36);},true);
+
+  /* ── ประตูม้วน + dock shelter + dock leveler ── */
+  const n=gs.length,gp=bW/(n||1);
   let prevEdge=bMinX;
   gs.forEach((g,i)=>{
     const gx=bMinX+gp*(i+0.5);LY.gateX[g]=gx;
-    root.add(bx(Math.max(0.05,(gx-1.7)-prevEdge),4.6,0.25,MAT.dockwall,(prevEdge+gx-1.7)/2,2.3,dockZ));
-    prevEdge=gx+1.7;
-    root.add(bx(3.4,1.0,0.25,MAT.dockwall,gx,4.1,dockZ));
-    const gmR=st.warehouses[curWh]||{};const gmT=gmR.gateTypes||{};
+    const gmR=st.warehouses[curWh]||{},gmT=gmR.gateTypes||{};
     const gdir=gmT[g]!=null?gmT[g]:(gmT[String(g)]!=null?gmT[String(g)]:(gmR.gateType||'both'));
-    root.add(bx(3.26,3.5,0.1,gdir==='in'?MAT.doorIn:gdir==='out'?MAT.doorOut:MAT.door,gx,1.8,dockZ-0.04));
-    [1.0,1.9,2.8].forEach(y=>root.add(bx(3.26,0.06,0.12,MAT.doorGroove,gx,y,dockZ-0.05,true)));
-    /* แถบสีเหนือประตู + ลูกศรบนพื้น ตามทิศทางจริงจาก DB */
+    LY.gateDir[g]=gdir;
+    /* ผนังท่าเทียบระหว่างประตู */
+    root.add(bx(Math.max(0.05,(gx-2.05)-prevEdge),WALL_H,0.24,MAT.dockwall,(prevEdge+gx-2.05)/2,WALL_H/2,dockZ));
+    prevEdge=gx+2.05;
+    root.add(bx(4.1,WALL_H-4.3,0.24,MAT.dockwall,gx,4.3+(WALL_H-4.3)/2,dockZ));
+    /* กรอบประตู */
+    root.add(bx(0.24,4.3,0.34,MAT.column,gx-2.05,2.15,dockZ+0.06));
+    root.add(bx(0.24,4.3,0.34,MAT.column,gx+2.05,2.15,dockZ+0.06));
+    root.add(bx(4.34,0.26,0.34,MAT.column,gx,4.3,dockZ+0.06,true));
+    /* บานม้วน — เลื่อนขึ้นบน (สเกล Y จากขอบบน) */
+    const dh=4.06;
+    const door=bx(3.72,dh,0.09,MAT.door,gx,dh/2,dockZ-0.06);
+    door.userData.base={h:dh,y0:dh/2,topY:dh};
+    door.userData.openValue=0;door.userData.openTarget=0;
+    gateDoors[g]=door;root.add(door);
+    /* กล่องม้วนเก็บบานประตู */
+    root.add(bx(3.9,0.5,0.42,MAT.shelter,gx,dh+0.28,dockZ-0.06,true));
+    /* dock shelter (ผ้าใบกันฝุ่นรอบประตู) */
+    root.add(bx(0.42,dh+0.5,0.55,MAT.shelter,gx-2.16,(dh+0.5)/2,dockZ+0.42));
+    root.add(bx(0.42,dh+0.5,0.55,MAT.shelter,gx+2.16,(dh+0.5)/2,dockZ+0.42));
+    root.add(bx(4.74,0.46,0.55,MAT.shelter,gx,dh+0.52,dockZ+0.42,true));
+    /* dock leveler + กันชนยาง */
+    const lev=bx(3.3,0.12,1.5,MAT.leveler,gx,0.055,dockZ+0.82,true);
+    lev.userData.base={y:0.055};lev.rotation.x=0;root.add(lev);
+    root.add(bx(0.34,0.5,0.3,MAT.rubber,gx-1.72,0.4,dockZ+0.2,true));
+    root.add(bx(0.34,0.5,0.3,MAT.rubber,gx+1.72,0.4,dockZ+0.2,true));
+    /* แถบสี + ลูกศรพื้นตามทิศทางจริงจาก DB */
     if(gdir==='in'){
-      root.add(bx(3.26,0.3,0.14,MAT.arrowIn,gx,3.85,dockZ-0.03,true));
-      addArrow(gx,dockZ+1.7,true,MAT.arrowIn);
+      root.add(bx(3.9,0.3,0.16,MAT.arrowIn,gx,dh+0.62,dockZ-0.04,true));
+      addArrowPaint(gx,dockZ+3.1,true,MAT.arrowIn,1.25);
     }else if(gdir==='out'){
-      root.add(bx(3.26,0.3,0.14,MAT.arrowOut,gx,3.85,dockZ-0.03,true));
-      addArrow(gx,dockZ+1.7,false,MAT.arrowOut);
+      root.add(bx(3.9,0.3,0.16,MAT.arrowOut,gx,dh+0.62,dockZ-0.04,true));
+      addArrowPaint(gx,dockZ+3.1,false,MAT.arrowOut,1.25);
     }else{
-      root.add(bx(1.6,0.3,0.14,MAT.arrowIn,gx-0.82,3.85,dockZ-0.03,true));
-      root.add(bx(1.6,0.3,0.14,MAT.arrowOut,gx+0.82,3.85,dockZ-0.03,true));
-      addArrow(gx-0.62,dockZ+1.7,true,MAT.arrowIn);
-      addArrow(gx+0.62,dockZ+1.7,false,MAT.arrowOut);
+      root.add(bx(1.9,0.3,0.16,MAT.arrowIn,gx-1.0,dh+0.62,dockZ-0.04,true));
+      root.add(bx(1.9,0.3,0.16,MAT.arrowOut,gx+1.0,dh+0.62,dockZ-0.04,true));
+      addArrowPaint(gx-0.8,dockZ+3.1,true,MAT.arrowIn,1.25);
+      addArrowPaint(gx+0.8,dockZ+3.1,false,MAT.arrowOut,1.25);
     }
-    root.add(bx(0.2,0.4,0.24,MAT.wheel,gx-1.45,0.42,dockZ+0.22,true));
-    root.add(bx(0.2,0.4,0.24,MAT.wheel,gx+1.45,0.42,dockZ+0.22,true));
+    /* เสา RFID reader 2 ข้าง + ไฟสถานะ dock */
+    [-2.6,2.6].forEach(dx=>{
+      root.add(bx(0.14,2.6,0.14,MAT.post,gx+dx,1.3,dockZ+1.5));
+      root.add(bx(0.4,0.46,0.12,MAT.arrowIn,gx+dx,2.5,dockZ+1.5,true));
+    });
+    const sig=new THREE.Group();
+    sig.add(bx(0.34,0.86,0.22,MAT.cage,0,0,0,true));
+    const red=new THREE.Mesh(GEO.sphere,MAT.taillight.clone());red.material.userData.own=true;
+    red.scale.setScalar(0.2);red.position.y=0.22;sig.add(red);
+    const grn=new THREE.Mesh(GEO.sphere,MAT.beacon.clone());grn.material.userData.own=true;
+    grn.material.color.set(0x4ade80);grn.material.emissive.set(0x22c55e);grn.material.emissiveIntensity=0;
+    grn.scale.setScalar(0.2);grn.position.y=-0.2;sig.add(grn);
+    sig.position.set(gx+2.5,3.1,dockZ+0.2);root.add(sig);
+    /* เสากันชน bollard หน้าประตู */
+    [-2.5,2.5].forEach(dx=>root.add(cy(0.13,1.0,MAT.barrier,gx+dx,0.5,dockZ+2.5)));
+    /* ป้ายประตู */
     const gsub=gdir==='in'?'↓ ขาเข้าอย่างเดียว':gdir==='out'?'↑ ขาออกอย่างเดียว':'⇄ เข้า/ออก';
     const gl=makeLabel('G'+g,gsub,{fs:38,h:1.05,fg:gdir==='in'?'#7ab821':gdir==='out'?'#d70015':null,subFg:gdir==='in'?'#7ab821':gdir==='out'?'#d70015':null});
-    gl.position.set(gx,5.35,dockZ+0.3);root.add(gl);
+    gl.position.set(gx,WALL_H-0.6,dockZ+0.5);root.add(gl);
+    const dk=DOCK[g]||(DOCK[g]={gate:g,state:'empty',t:0,loadTrips:0,truck:null});
+    Object.assign(dk,{gate:g,gx,dir:gdir,signalRed:red,signalGreen:grn,leveler:lev});
+    if(!dk.init){   /* เปิดฉากมา — ประตูที่มีงานค้างมีรถเทียบท่าอยู่แล้ว */
+      dk.init=1;
+      if((gdir!=='in'&&qOut().length)||(gdir!=='out'&&qIn().length)){
+        const t0=buildTruck();t0.scale.setScalar(TRUCK_SCALE);t0.rotation.y=-Math.PI/2;
+        dk.dockPos={x:gx,z:truckDockZ()};
+        t0.position.set(gx,0,dk.dockPos.z);opsRoot.add(t0);
+        setLights(t0,'taillights',true,0.7);
+        dk.truck=t0;dk.state='docked';dk.t=0;setRearDoor(t0,true);
+      }
+    }
+    if(dk.truck){
+      if(dk.state==='docked'||dk.state==='sealing'){
+        dk.dockPos={x:gx,z:truckDockZ()};
+        dk.truck.position.set(gx,0,dk.dockPos.z);dk.truck.rotation.y=-Math.PI/2;
+        setDoor(g,true);lev.userData.drop=true;red.material.emissiveIntensity=1.3;
+      }
+      dk.truck.traverse(nn=>{if(nn.isMesh){nn.userData.gate=g;nn.userData.gateDir=gdir;truckPick.push(nn);}});
+    }
   });
-  root.add(bx(Math.max(0.05,bMaxX-prevEdge),4.6,0.25,MAT.dockwall,(prevEdge+bMaxX)/2,2.3,dockZ));
-  root.add(bx(bW,0.22,0.26,MAT.column,(bMinX+bMaxX)/2,4.72,dockZ,true));
+  Object.keys(DOCK).forEach(k=>{if(gs.indexOf(+k)<0&&gs.indexOf(k)<0){const t=DOCK[k].truck;if(t){opsRoot.remove(t);disposeTree(t);}delete DOCK[k];}});
+  root.add(bx(Math.max(0.05,bMaxX-prevEdge),WALL_H,0.24,MAT.dockwall,(prevEdge+bMaxX)/2,WALL_H/2,dockZ));
 
-  /* ----- apron / road ----- */
-  const apr=bx(bW+30,0.08,apron1-apron0,MAT.apron,(bMinX+bMaxX)/2,-0.05,(apron0+apron1)/2,true);apr.receiveShadow=true;root.add(apr);
-  const rd=bx(bW+120,0.06,road1-road0,MAT.road,(bMinX+bMaxX)/2,-0.06,roadMid,true);rd.receiveShadow=true;root.add(rd);
-  for(let x=bMinX-56;x<bMaxX+56;x+=4.2)root.add(bx(2.0,0.02,0.16,MAT.dash,x,-0.015,roadMid,true));
+  /* ── ตีเส้นพื้นในคลัง: ทางเดินรถ + ทางเดินคนสีเหลือง ── */
+  root.add(paint(bW-1.2,0.14,MAT.paintY,(bMinX+bMaxX)/2,walkZ-0.62,0.022));
+  root.add(paint(bW-1.2,0.14,MAT.paintY,(bMinX+bMaxX)/2,walkZ+0.62,0.022));
+  const zebra=[];for(let x=bMinX+1.2;x<bMaxX-1.2;x+=0.86)zebra.push(x);
+  instMesh(zebra,MAT.paintY,(x,p,s)=>{p.set(x,0.021,walkZ);s.set(0.42,0.02,1.1);},true);
+  root.add(paint(0.14,dockZ-walkZ-1.0,MAT.paintY,leftLaneX-1.5,(walkZ+dockZ)/2-0.5,0.022));
+  const guide=[];
+  LY.lanesH.forEach(z=>{guide.push(z-1.5);guide.push(z+1.5);});
+  instMesh(guide,MAT.paintW,(z,p,s)=>{p.set((bMinX+bMaxX)/2,0.02,z);s.set(bW-2.0,0.02,0.1);},true);
 
-  /* ----- racks (instanced posts/beams/decks) + slot sensors ----- */
+  /* ── ชั้นวางจริง (instanced) + sensor ต่อช่อง ── */
   const posts=[],beams=[],decks=[];
   let totalCells=0;
   segs.forEach(sg=>{
-    const z=rackZ(sg.row),x0=X0+sg.x0,rk=sg.rk;
-    const topY=BASE_Y+rk.shelves*SHELF_H;
+    const xC=sg.xC,rk=sg.rk,topY=BASE_Y+rk.shelves*SHELF_H;
     for(let s=0;s<=rk.slots;s++){
-      const px=x0+s*SLOT_W;
-      posts.push([px,topY/2+0.08,z-RACK_D/2+0.05,topY+0.16]);
-      posts.push([px,topY/2+0.08,z+RACK_D/2-0.05,topY+0.16]);
+      const pz=frontZ-sg.z0-s*SLOT_W;
+      posts.push([xC-RACK_D/2+0.05,topY/2+0.08,pz,topY+0.16]);
+      posts.push([xC+RACK_D/2-0.05,topY/2+0.08,pz,topY+0.16]);
     }
+    const zC=frontZ-(sg.z0+sg.len/2);
     for(let sh=1;sh<=rk.shelves;sh++){
       const y=BASE_Y+(sh-1)*SHELF_H;
-      beams.push([x0+sg.len/2,y+0.02,z-RACK_D/2+0.06,sg.len]);
-      beams.push([x0+sg.len/2,y+0.02,z+RACK_D/2-0.06,sg.len]);
-      decks.push([x0+sg.len/2,y+0.075,z,sg.len]);
+      beams.push([xC-RACK_D/2+0.06,y+0.02,zC,sg.len]);
+      beams.push([xC+RACK_D/2-0.06,y+0.02,zC,sg.len]);
+      decks.push([xC,y+0.075,zC,sg.len]);
     }
     totalCells+=rk.shelves*rk.slots;
+    /* กันชนปลายแร็ค */
+    root.add(cy(0.11,0.86,MAT.barrier,xC,0.43,frontZ-sg.z0+0.42));
   });
-  function inst(list,material,make){
-    if(!list.length)return null;
-    const im=new THREE.InstancedMesh(GEO.unit,material,list.length);
-    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),s=new THREE.Vector3();
-    list.forEach((it,i)=>{make(it,p,s);m4.compose(p,q,s);im.setMatrixAt(i,m4);});
-    im.castShadow=true;im.receiveShadow=true;im.instanceMatrix.needsUpdate=true;root.add(im);return im;
-  }
-  inst(posts,MAT.post,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(0.09,it[3],0.09);});
-  inst(beams,MAT.beam,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(it[3],0.11,0.09);});
-  inst(decks,MAT.deck,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(it[3]-0.06,0.035,RACK_D-0.16);});
+  instMesh(posts,MAT.post,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(0.09,it[3],0.09);});
+  instMesh(beams,MAT.beam,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(0.09,0.11,it[3]);});
+  instMesh(decks,MAT.deck,(it,p,s)=>{p.set(it[0],it[1],it[2]);s.set(RACK_D-0.16,0.035,it[3]-0.06);});
   if(totalCells){
     sensorMesh=new THREE.InstancedMesh(GEO.unit,MAT.sensor,totalCells);
-    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(SLOT_W-0.08,SHELF_H-0.12,RACK_D-0.06),p=new THREE.Vector3();
+    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(RACK_D-0.06,SHELF_H-0.12,SLOT_W-0.08),p=new THREE.Vector3();
     let ci=0;
     segs.forEach(sg=>{
-      const z=rackZ(sg.row),x0=X0+sg.x0,rk=sg.rk;
+      const xC=sg.xC,rk=sg.rk;
       for(let sh=1;sh<=rk.shelves;sh++)for(let sl=1;sl<=rk.slots;sl++){
-        const cx=x0+(sl-0.5)*SLOT_W,cy=BASE_Y+(sh-1)*SHELF_H+0.09+(SHELF_H-0.12)/2;
-        p.set(cx,cy,z);m4.compose(p,q,s);sensorMesh.setMatrixAt(ci,m4);
-        const code=Wn.locBuildCode?Wn.locBuildCode(sg.zone,rk.rack,String(sh),String(sl)):(sg.zone+'-'+rk.rack+'-'+sh+'-'+sl).toUpperCase();
+        const cz=frontZ-sg.z0-(sl-0.5)*SLOT_W,cy2=BASE_Y+(sh-1)*SHELF_H+0.09+(SHELF_H-0.12)/2;
+        p.set(xC,cy2,cz);m4.compose(p,q,sv);sensorMesh.setMatrixAt(ci,m4);
+        const code=locCode(sg.zone,rk.rack,String(sh),String(sl));
         const ck=sg.zone+'|'+rk.rack+'|'+sh+'|'+sl;
-        cellPos.set(ck,{x:cx,y:BASE_Y+(sh-1)*SHELF_H+0.095,z});
-        cellData[ci]={code,zone:sg.zone,rack:rk.rack,shelf:sh,slot:sl,x:cx,y:cy,z};
+        cellPos.set(ck,{x:xC,y:BASE_Y+(sh-1)*SHELF_H+0.095,z:cz,aisleX:sg.aisleX});
+        cellData[ci]={code,zone:sg.zone,rack:rk.rack,shelf:sh,slot:sl,x:xC,y:cy2,z:cz,aisleX:sg.aisleX,key:ck};
         ci++;
       }
     });
     sensorMesh.instanceMatrix.needsUpdate=true;root.add(sensorMesh);
   }
-  /* zone pads + labels */
-  const zoneRows=new Map();
-  segs.forEach(sg=>{const k=sg.zone+'@'+sg.row;const e=zoneRows.get(k)||{zone:sg.zone,row:sg.row,x0:1e9,x1:-1e9,top:0};
-    e.x0=Math.min(e.x0,X0+sg.x0);e.x1=Math.max(e.x1,X0+sg.x0+sg.len);e.top=Math.max(e.top,BASE_Y+sg.rk.shelves*SHELF_H);zoneRows.set(k,e);});
-  const zoneRacks=new Map();
-  segs.forEach(sg=>{let s=zoneRacks.get(sg.zone);if(!s){s=new Set();zoneRacks.set(sg.zone,s);}s.add(sg.rk.rack);});
-  const zoneSeen=new Set();
-  zoneRows.forEach(e=>{
-    const z=rackZ(e.row);
-    root.add(bx(e.x1-e.x0+1.0,0.02,RACK_D+1.1,MAT.zonePad,(e.x0+e.x1)/2,0.012,z,true));
-    if(!zoneSeen.has(e.zone)){zoneSeen.add(e.zone);
-      const rkNames=[...(zoneRacks.get(e.zone)||[])].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
-      const rkSub=rkNames.length?'แร็ค '+rkNames.join(' · '):null;
-      const zl=makeLabel('โซน '+e.zone,rkSub,{fs:38,sfs:26,h:0.72});zl.position.set(e.x0+0.4,e.top+0.9,z);root.add(zl);}
+  /* ป้ายโซน + ป้ายแร็คแขวนเพดาน */
+  const zoneBands=new Map();
+  segs.forEach(sg=>{
+    const z=zoneBands.get(sg.zone)||{items:[],x0:sg.x0,x1:sg.x0+RACK_D,z0:sg.z0,z1:sg.z0+sg.len};
+    z.items.push(sg);z.x0=Math.min(z.x0,sg.x0);z.x1=Math.max(z.x1,sg.x0+RACK_D);
+    z.z0=Math.min(z.z0,sg.z0);z.z1=Math.max(z.z1,sg.z0+sg.len);zoneBands.set(sg.zone,z);
+  });
+  zoneBands.forEach((zg,zone)=>{
+    const xC=X0+(zg.x0+zg.x1)/2,zC=frontZ-(zg.z0+zg.z1)/2;
+    const zl=makeLabel('โซน '+zone,zg.items.length+' แร็ค',{fs:40,h:0.78});
+    zl.position.set(xC,5.4,zC);root.add(zl);
+    root.add(bx(0.05,1.0,0.05,MAT.cage,xC,5.95,zC,true));
+  });
+  segs.forEach(sg=>{
+    const topY=BASE_Y+sg.rk.shelves*SHELF_H;
+    const rl=makeLabel(String(sg.rk.rack),sg.zone?('โซน '+sg.zone):null,{fs:32,h:0.6});
+    rl.position.set(sg.xC,topY+0.72,frontZ-sg.z0+0.55);root.add(rl);
   });
 
-  /* ----- boxes: rack + staging ----- */
+  /* ══ กล่องตามข้อมูลจริง ══ */
   const all=Object.values(st.boxes||{});
-  const rackBoxes=[],stagingBoxes=[],outBoxes=[],lostBoxes=[];
+  const queueTags=new Set(qIn().map(String));
+  const rackBoxes=[],stagingBoxes=[],outBoxes=[],lostBoxes=[],rfidBoxes=[];
+  const outQTags=new Set(qOut().map(String));
   all.forEach(b=>{
     const k=statusKey(b);
-    if(k==='rack'&&(b.location||{}).wh===curWh)rackBoxes.push(b);
+    const needTag=b.status==='pending'||(b.status==='warehouse'&&b.labeled===false&&whOf(b)===curWh);
+    if(needTag)rfidBoxes.push(b);
+    else if(k==='rack'&&(b.location||{}).wh===curWh)rackBoxes.push(b);
     else if(k==='staging'&&whOf(b)===curWh)stagingBoxes.push(b);
-    else if((k==='out'||k==='overdue')&&whOf(b)===curWh)outBoxes.push(b);
+    else if((k==='out'||k==='overdue')&&whOf(b)===curWh&&!queueTags.has(b.tag))outBoxes.push(b);
     else if(k==='lost'&&whOf(b)===curWh)lostBoxes.push(b);
   });
+  const gateReturn=qIn().map(t=>st.boxes[t]).filter(Boolean);
+  const readyOut=qOut().map(t=>st.boxes[t]).filter(Boolean);
+  const stagingOnly=stagingBoxes.filter(b=>!outQTags.has(b.tag));
+
   function addBox(b,x,y,z,kind,sc){
     sc=sc||1;
     const d=boxDims(b.type),g=new THREE.Group();
     const m=new THREE.Mesh(d.geo,MAT['box'+kind]||MAT.boxRack);
     m.castShadow=true;m.receiveShadow=true;m.position.y=d.h/2;m.userData.tag=b.tag;
     g.add(m);const meshes=[m];
-    if(d.l>=0.95){const pl=bx(Math.max(d.l,1.05),0.12,Math.max(d.w,1.05),MAT.wood,0,-0.06,0);pl.userData.tag=b.tag;g.add(pl);meshes.push(pl);}
+    if(d.l>=0.95){const pl=bx(Math.max(d.l,1.05),0.12,Math.max(d.w,1.05),MAT.wood,0,-0.06,0,true);pl.userData.tag=b.tag;g.add(pl);meshes.push(pl);}
     else{const tp=bx(d.l*0.96,0.014,0.16,MAT.tape,0,d.h+0.008,0,true);tp.userData.tag=b.tag;g.add(tp);meshes.push(tp);}
     const lift=(d.l>=0.95?0.12:0)*sc;
     if(sc!==1)g.scale.setScalar(sc);
-    g.position.set(x,y+lift,z);
-    root.add(g);
+    g.position.set(x,y+lift,z);root.add(g);
     const rec={tag:b.tag,b,group:g,meshes,baseMats:meshes.map(mm=>mm.material),kind,pos:new THREE.Vector3(x,y+(d.h*sc)/2+lift,z)};
-    boxRecs.push(rec);tagIndex.set(b.tag,rec);
-    return rec;
+    boxRecs.push(rec);tagIndex.set(b.tag,rec);return rec;
   }
-  const occCodes=new Set();
-  /* จัดกลุ่มกล่องตามช่อง — หลายกล่องในช่องเดียวจะถูกย่อขนาด+เรียงเป็นกริด x/y/z ให้พอดีในช่อง ไม่ล้นความสูงชั้น */
-  const cellGroups=new Map();
+  /* กล่องบนชั้นวางจริง */
+  const occCodes=new Set(),cellGroups=new Map();
   rackBoxes.forEach(b=>{
     const l=b.location||{};
     const rk=rackMap.get((l.zone||'—')+'\u0000'+(l.rack||'R?'));
@@ -10612,48 +10973,162 @@ function build(){
     if(rk){
       const sh=Math.min(Math.max(Math.floor(Number(l.shelf))||1,1),rk.shelves);
       const sl=Math.min(Math.max(Math.floor(Number(l.slot))||1,1),rk.slots);
-      ck=(l.zone||'—')+'|'+(l.rack||'R?')+'|'+sh+'|'+sl;
-      cp=cellPos.get(ck);
+      ck=(l.zone||'—')+'|'+(l.rack||'R?')+'|'+sh+'|'+sl;cp=cellPos.get(ck);
     }
-    if(cp){const a=cellGroups.get(ck)||{cp:cp,list:[]};a.list.push(b);cellGroups.set(ck,a);occCodes.add(ck);}
-    else stagingBoxes.push(b);
+    if(cp){const a=cellGroups.get(ck)||{cp,list:[]};a.list.push(b);cellGroups.set(ck,a);occCodes.add(ck);}
+    else stagingOnly.push(b);
   });
   cellGroups.forEach(a=>{
-    const n=a.list.length,cp=a.cp;
+    const nb=a.list.length,cp=a.cp;
     let bl=0,bw=0,bh=0;
     a.list.forEach(b=>{const d=boxDims(b.type);bl=Math.max(bl,d.l);bw=Math.max(bw,d.w);bh=Math.max(bh,d.h+(d.l>=0.95?0.12:0));});
-    const CW=SLOT_W-0.18,CD=RACK_D-0.16,CH=SHELF_H-0.2,gap=0.025;
-    let best={s:0,nx:1,nz:1,ny:n};
+    const CW=SLOT_W-0.18,CD=RACK_D-0.16,CH=SHELF_H-0.2,gap=0.09,vGap=0.09;
+    let best={s:0,nx:1,nz:1,ny:nb};
     for(let nx=1;nx<=6;nx++)for(let nz=1;nz<=4;nz++){
-      const ny=Math.ceil(n/(nx*nz));
-      if(nx*nz>n&&(nx>1||nz>1)&&nx*nz-n>=Math.max(nx,nz))continue;
-      const s=Math.min(1,(CW/nx-gap)/bl,(CD/nz-gap)/bw,(CH/ny-gap)/bh);
-      if(s>best.s)best={s:s,nx:nx,nz:nz,ny:ny};
+      const ny=Math.ceil(nb/(nx*nz));
+      if(nx*nz>nb&&(nx>1||nz>1)&&nx*nz-nb>=Math.max(nx,nz))continue;
+      const s=Math.min(1,(CW/nx-gap)/bl,(CD/nz-gap)/bw,(CH/ny-vGap)/bh);
+      if(s>best.s)best={s,nx,nz,ny};
     }
-    const s=Math.max(best.s,0.1);
-    const cellW=CW/best.nx,cellD=CD/best.nz;
+    const s=Math.max(best.s,0.1),cellW=CW/best.nx,cellD=CD/best.nz;
     a.list.forEach((b,i)=>{
-      const ix=i%best.nx, iz=Math.floor(i/best.nx)%best.nz, iy=Math.floor(i/(best.nx*best.nz));
-      const x=cp.x-CW/2+cellW*(ix+0.5);
-      const z=cp.z-CD/2+cellD*(iz+0.5);
-      const y=cp.y+iy*(bh*s+gap);
-      addBox(b,x,y,z,'Rack',s);
+      const ix=i%best.nx,iz=Math.floor(i/best.nx)%best.nz,iy=Math.floor(i/(best.nx*best.nz));
+      addBox(b,cp.x-CW/2+cellW*(ix+0.5),cp.y+iy*(bh*s+vGap),cp.z-CD/2+cellD*(iz+0.5),'Rack',s);
     });
   });
-  /* staging pad */
-  const stagW=Math.min(Math.max(stagingBoxes.length*0.8,7),bW*0.55),stagD=4.6;
-  const stagX=X0+stagW/2-0.5,stagZ=frontZ+3.2;
-  root.add(bx(stagW,0.025,stagD,MAT.stagePad,stagX,0.015,stagZ,true));
-  const scols=Math.max(4,Math.floor(stagW/1.3));
-  stagingBoxes.forEach((b,i)=>{
-    const col=i%scols,row2=Math.floor(i/scols)%3,lay=Math.floor(i/(scols*3));
-    const d=boxDims(b.type);
-    addBox(b,X0+0.4+col*1.3,lay*(d.h+0.03),stagZ-1.5+row2*1.5,'Staging');
-  });
-  const stagLbl=makeLabel('รอจัดเก็บ '+stagingBoxes.length+' ใบ','ผ่าน Gate เข้าแล้ว ยังไม่ขึ้นชั้น',{fs:42,h:1.15});
-  stagLbl.position.set(stagX,2.6,stagZ);root.add(stagLbl);
+  /* ช่องว่างสำหรับงาน putaway */
+  cellData.forEach(cd=>{if(!occCodes.has(cd.key))freeCells.push(cd);});
 
-  /* ----- yard: customers (out/overdue) + lost ----- */
+  /* ══ โซนพักงานตาม flow ระบบ — เป็นแร็คทั้งหมด ══ */
+  const inGate=gs.find(g=>LY.gateDir[g]==='in'),outGate=gs.find(g=>LY.gateDir[g]==='out');
+  const inGX=inGate!=null?LY.gateX[inGate]:bMinX+bW*0.3;
+  const outGX=outGate!=null?LY.gateX[outGate]:bMaxX-bW*0.3;
+  LY.zoneSlots={stg:[],rfid:[],out:[],ret:[]};
+
+  /* ── กันแร็คโซนพักงานทะลุผนัง ────────────────────────────────
+     buildLowRack วางแร็คโดยยึด o.x เป็น "จุดกึ่งกลาง" แล้วกว้าง bays×STG_BAY
+     ออกไปสองข้าง ถ้าปล่อยให้ bays โตตามจำนวนกล่องแบบไม่มีเพดาน แร็คจะยาว
+     เกินตัวอาคารและโผล่ทะลุผนังออกไป กล่องที่เกินความจุ bays จะถูก
+     slots[i % slots.length] วนกลับมาวางซ้อนชั้นบนอยู่แล้ว การตัด bays
+     จึงไม่ทำให้กล่องหาย แค่กองสูงขึ้นแทนที่จะยาวออกนอกคลัง */
+  const WALL_PAD=1.0;
+  const innerMinX=bMinX+WALL_PAD, innerMaxX=bMaxX-WALL_PAD;
+  const innerSpan=Math.max(STG_BAY*2,innerMaxX-innerMinX);
+  const maxBays=Math.max(2,Math.floor(innerSpan/STG_BAY));
+  /* หนีบจุดกึ่งกลางให้ขอบซ้าย/ขวาของแร็ค (x ± W/2) อยู่ในผนังทั้งคู่ */
+  const fitRackX=(cx,bays)=>{
+    const half=bays*STG_BAY/2;
+    return Math.min(Math.max(cx,innerMinX+half),innerMaxX-half);
+  };
+
+  /* 1) รอจัดเก็บ (inbound staging) — แร็คเตี้ย + ป้าย STG-01… */
+  const stgBays=Math.min(maxBays,Math.max(5,Math.ceil(stagingOnly.length/2)));
+  const stgRack=buildLowRack({x:fitRackX(X0+Math.min(stgBays*STG_BAY,contentW*0.62)/2-0.3,stgBays),z:zoneLaneZ-STG_D/2-1.5,
+    bays:stgBays,levels:2,codePrefix:'STG',label:'รอจัดเก็บ '+stagingOnly.length+' ใบ',sub:'ผ่าน Gate เข้าแล้ว ยังไม่ขึ้นชั้น',beam:MAT.stageBeam,hang:'STAGING · รอจัดเก็บ'});
+  LY.zoneSlots.stg=stgRack.slots;
+  stagingOnly.forEach((b,i)=>{
+    const s=stgRack.slots[i%stgRack.slots.length];if(!s)return;
+    const d=boxDims(b.type),lay=Math.floor(i/stgRack.slots.length);
+    addBox(b,s.x,s.y+lay*(d.h+0.06),s.z,sceneBoxKind(b,'staging'),0.9);
+  });
+  root.add(paint(Math.min(stgBays*STG_BAY+0.6,innerSpan),STG_D+2.2,MAT.stagePad,stgRack.group.position.x,zoneLaneZ-STG_D/2-1.5,0.016));
+
+  /* 2) รอติด RFID / ติดแท็ก — โต๊ะทำงาน + แร็ค 1 ชั้น ใกล้ประตูขาเข้า */
+  const rfidBays=Math.min(maxBays,Math.max(3,rfidBoxes.length));
+  const rfidX=fitRackX(Math.max(bMinX+4.4,inGX-6.4),rfidBays);
+  const rfidRack=buildLowRack({x:rfidX,z:dockLaneZ-STG_D/2-1.4,bays:rfidBays,levels:1,
+    codePrefix:'TAG',label:'รอติด RFID '+rfidBoxes.length+' ใบ',sub:'ยังไม่ผูก tag เข้าระบบ',beam:MAT.rfidBeam,fg:'#8b5cf6',hang:'RFID TAGGING'});
+  LY.zoneSlots.rfid=rfidRack.slots;
+  rfidBoxes.forEach((b,i)=>{
+    const s=rfidRack.slots[i%rfidRack.slots.length];if(!s)return;
+    const d=boxDims(b.type),lay=Math.floor(i/rfidRack.slots.length);
+    addBox(b,s.x,s.y+lay*(d.h+0.06),s.z,'Pending',0.9);
+  });
+  /* โต๊ะติดแท็ก + เครื่องพิมพ์ */
+  const bench=new THREE.Group();
+  bench.add(bx(2.2,0.08,0.9,MAT.deck,0,0.78,0));
+  [[-1.0,-0.36],[-1.0,0.36],[1.0,-0.36],[1.0,0.36]].forEach(p=>bench.add(bx(0.08,0.78,0.08,MAT.post,p[0],0.39,p[1])));
+  bench.add(bx(0.44,0.3,0.36,MAT.cage,0.6,0.97,0,true));
+  bench.add(bx(0.3,0.06,0.24,MAT.rfidBeam,0.6,1.15,0,true));
+  /* โต๊ะกว้าง 2.2 ม. → หนีบกึ่งกลางไว้ที่ innerMaxX-1.1 ไม่ให้เลยผนังขวา */
+  const benchX=Math.min(rfidX+rfidRack.W/2+1.9,innerMaxX-1.1);
+  bench.position.set(benchX,0,dockLaneZ-1.5);root.add(bench);
+  const bl=makeLabel('จุดติด RFID','พิมพ์ tag · ผูกกับกล่อง',{fs:26,h:0.5,fg:'#8b5cf6',subFg:'#8b5cf6'});
+  bl.position.set(benchX,1.72,dockLaneZ-1.5);root.add(bl);
+
+  /* 3) รอส่งออก (outbound staging) — แยกแร็คต่อ DO */
+  const byDO=new Map();
+  readyOut.forEach(b=>{const k=b.do||'ไม่ระบุ DO';if(!byDO.has(k))byDO.set(k,[]);byDO.get(k).push(b);});
+  const doKeys=[...byDO.keys()];
+  let outCursor=Math.min(outGX+1.2,bMaxX-6.0);
+  doKeys.slice(0,3).forEach((doNo,di)=>{
+    const list=byDO.get(doNo);
+    const bays=Math.min(maxBays,Math.max(3,Math.ceil(list.length/2)));
+    /* outCursor เดินไปทางซ้ายเรื่อยๆ ต่อ DO — หยุดเมื่อชนผนังซ้าย
+       ไม่งั้นแร็ค DO ที่ 2/3 จะไหลทะลุออกนอกอาคาร */
+    if(outCursor-bays*STG_BAY<innerMinX)return;
+    const rk=buildLowRack({x:fitRackX(outCursor-bays*STG_BAY/2,bays),z:dockLaneZ-STG_D/2-1.4-di*(STG_D+2.4),bays,levels:2,
+      codePrefix:'OUT'+(di+1),label:'รอส่งออก '+list.length+' ใบ',sub:doNo+' · '+(list[0].customer?custName(list[0].customer):'—'),hang:'OUTBOUND · '+doNo,
+      beam:MAT.outBeam,fg:'#d99a2b'});
+    list.forEach((b,i)=>{
+      const s=rk.slots[i%rk.slots.length];if(!s)return;
+      const d=boxDims(b.type),lay=Math.floor(i/rk.slots.length);
+      addBox(b,s.x,s.y+lay*(d.h+0.06),s.z,'Pending',0.9);
+    });
+    LY.zoneSlots.out.push({doNo,slots:rk.slots,x:rk.group.position.x,z:rk.group.position.z,list});
+    outCursor-=bays*STG_BAY+1.6;
+  });
+
+  /* 4) คืนจากลูกค้า รอผ่าน Gate — แร็คนอกอาคารหน้าประตูขาเข้า */
+  if(gateReturn.length){
+    /* แร็คนี้ตั้งใจให้อยู่นอกอาคาร (บนลานหน้าประตู) แต่ยังต้องคุมความกว้าง
+       ไม่ให้ยาวลามไปทั้งลาน — ใช้เพดาน bays เดียวกับแร็คในอาคาร */
+    const retBays=Math.min(maxBays,Math.max(3,Math.ceil(gateReturn.length/2)));
+    const rx=Math.min(inGX-5.6,bMinX+bW*0.22);
+    const rk=buildLowRack({x:rx,z:dockZ+4.6,bays:retBays,levels:2,
+      codePrefix:'RET',label:'คืนจากลูกค้า '+gateReturn.length+' ใบ',sub:'รอผ่าน Gate เข้าคลัง',beam:MAT.boxReturn,fg:'#60a5fa'});
+    gateReturn.forEach((b,i)=>{
+      const s=rk.slots[i%rk.slots.length];if(!s)return;
+      const d=boxDims(b.type),lay=Math.floor(i/rk.slots.length);
+      addBox(b,s.x,s.y+lay*(d.h+0.06),s.z,'Return',0.9);
+    });
+    LY.zoneSlots.ret=rk.slots;
+  }
+
+  /* 5) จุดชาร์จแบต forklift — ผนังซ้าย */
+  const chX=bMinX+2.6,chZ=mainAisleZ+2.6;
+  const ch=new THREE.Group();
+  ch.add(bx(0.5,1.5,3.4,MAT.charger,0,0.75,0));
+  [-1.1,0,1.1].forEach(dz=>{
+    ch.add(bx(0.22,0.5,0.4,MAT.cage,0.34,1.0,dz,true));
+    const led=new THREE.Mesh(GEO.unit,MAT.beacon.clone());led.material.userData.own=true;
+    led.material.color.set(0x4ade80);led.material.emissive.set(0x22c55e);led.material.emissiveIntensity=0.7;
+    led.scale.set(0.06,0.08,0.14);led.position.set(0.48,1.12,dz);ch.add(led);
+  });
+  ch.position.set(chX-0.4,0,chZ);root.add(ch);
+  root.add(paint(3.0,3.6,MAT.paintY,chX+1.5,chZ,0.018));
+  root.add(paint(2.9,3.5,MAT.stagePad,chX+1.5,chZ,0.021));
+  const chL=makeLabel('จุดชาร์จแบต forklift','ที่พักรถเมื่อไม่มีงาน',{fs:26,h:0.5});
+  chL.position.set(chX+1.6,2.0,chZ);root.add(chL);
+  LY.charge=[];
+  [-1.1,0,1.1].forEach((dz,i)=>LY.charge.push({x:chX+1.7,z:chZ+dz*1.05,approach:{x:leftLaneX,z:mainAisleZ}}));
+
+  /* 6) safety: ถังดับเพลิง + กระจกโค้งมุมอับ */
+  const fireAt=[[bMinX+0.8,mainAisleZ-3.0],[bMinX+0.8,dockLaneZ],[bMaxX-0.8,mainAisleZ-3.0],[bMaxX-0.8,dockLaneZ]];
+  instMesh(fireAt,MAT.cage,(p,v,s)=>{v.set(p[0],0.9,p[1]);s.set(0.26,0.5,0.26);},true);
+  instMesh(fireAt,MAT.fireRed,(p,v,s)=>{v.set(p[0],1.36,p[1]);s.set(0.24,0.62,0.24);});
+  instMesh(fireAt,MAT.paintR,(p,v,s)=>{v.set(p[0],0.02,p[1]);s.set(0.34,0.02,0.34);},true);
+  LY.lanesV.slice(0,4).forEach((vx,i)=>{
+    const m=new THREE.Mesh(GEO.sphere,MAT.mirror);
+    m.scale.set(0.46,0.46,0.2);m.position.set(vx,3.4,mainAisleZ-0.16);
+    m.rotation.x=0.55;root.add(m);
+    const rim=new THREE.Mesh(GEO.ring,MAT.cage);
+    rim.scale.setScalar(0.7);rim.position.set(vx,3.4,mainAisleZ-0.2);
+    rim.rotation.x=-1.02;root.add(rim);
+    root.add(bx(0.05,0.7,0.05,MAT.cage,vx,3.0,mainAisleZ-0.22,true));
+  });
+
+  /* ══ ลานนอก: ลูกค้า/สูญหาย + ป้อมยาม + ช่องจอดรถ ══ */
   const byCust=new Map();
   outBoxes.forEach(b=>{const c=b.customer||'—';if(!byCust.has(c))byCust.set(c,[]);byCust.get(c).push(b);});
   const custIds=[...byCust.keys()].sort();
@@ -10667,12 +11142,12 @@ function build(){
     pad.userData.cust=cid;padPick.push(pad);root.add(pad);
     list.forEach((b,i)=>{
       const col=i%3,row2=Math.floor(i/3)%2,lay=Math.floor(i/6);
-      const d=boxDims(b.type),od=Wn.isOverdue&&Wn.isOverdue(b);
+      const d=boxDims(b.type),od=isOverdue(b);
       if(od)overdueN++;outVal+=(b.value||0);
       addBox(b,px-1.3+col*1.3,lay*(d.h+0.03),yardZ+0.7+row2*1.6,od?'Overdue':'Out');
     });
-    const nm=(Wn.custName?Wn.custName(cid):cid)||cid;
-    const odn=list.filter(b=>Wn.isOverdue&&Wn.isOverdue(b)).length;
+    const nm=custName(cid);
+    const odn=list.filter(isOverdue).length;
     const cl=makeLabel(nm.length>20?nm.slice(0,19)+'…':nm,list.length+' ใบ'+(odn?' · เกิน '+odn:''),{fs:34,h:1.0,subFg:odn?'#d70015':null});
     cl.position.set(px,2.5,yardZ+1.6);root.add(cl);
     px+=padW+padGap;
@@ -10680,64 +11155,492 @@ function build(){
   if(lostBoxes.length){
     const pad=bx(padW,0.05,3.6,MAT.lostPad,px,-0.02,yardZ+1.6,true);root.add(pad);
     let lostVal=0;
-    lostBoxes.forEach((b,i)=>{const col=i%3,row2=Math.floor(i/3)%2,lay=Math.floor(i/6);const d=boxDims(b.type);lostVal+=(b.value||0);
+    lostBoxes.forEach((b,i)=>{const col=i%3,row2=Math.floor(i/3)%2,lay=Math.floor(i/6);
+      const d=boxDims(b.type);lostVal+=(b.value||0);
       addBox(b,px-1.3+col*1.3,lay*(d.h+0.03),yardZ+0.7+row2*1.6,'Lost');});
     const ll=makeLabel('สูญหาย '+lostBoxes.length+' ใบ','มูลค่า '+fmtBaht(lostVal),{fs:36,h:1.05,fg:'#d70015'});
     ll.position.set(px,2.5,yardZ+1.6);root.add(ll);
   }
+  /* ป้อมยามหน้าทางเข้า ติดถนน */
+  const guardX=bMinX-11,guardZ=road1+2.6;
+  const guard=new THREE.Group();
+  guard.add(bx(3.0,2.7,2.6,MAT.guardWall,0,1.35,0));
+  const winM=new THREE.MeshStandardMaterial({color:0xffffff,map:TEX.window,roughness:0.15,metalness:0.4});
+  winM.userData.own=true;
+  guard.add(bx(2.3,1.1,0.08,winM,0,1.75,1.32));
+  guard.add(bx(0.08,1.1,1.9,winM,1.52,1.75,0));
+  guard.add(bx(3.7,0.2,3.3,MAT.roof,0,2.82,0,true));
+  guard.add(bx(0.5,0.9,0.5,MAT.guardWall,0,0.45,1.8,true));
+  guard.position.set(guardX,0,guardZ);root.add(guard);
+  const arm=new THREE.Group();
+  arm.add(cy(0.14,1.1,MAT.charger,0,0.55,0));
+  const bar=bx(6.4,0.16,0.16,MAT.barrier,3.2,1.05,0);arm.add(bar);
+  for(let i=0;i<5;i++)arm.add(bx(0.6,0.17,0.17,MAT.paintR,0.9+i*1.3,1.05,0,true));
+  arm.position.set(guardX+2.6,0,road1+0.4);root.add(arm);
+  const gl2=makeLabel('ป้อมยาม · จุดตรวจรถเข้า-ออก',null,{fs:28,h:0.56});
+  gl2.position.set(guardX,3.6,guardZ);root.add(gl2);
+  /* ทางม้าลายหน้าป้อม + ช่องจอดรถบรรทุกในลาน */
+  const cross=[];for(let z=road0+0.6;z<road1-0.4;z+=0.8)cross.push(z);
+  instMesh(cross,MAT.paintW,(z,p,s)=>{p.set(guardX+7.6,0.021,z);s.set(0.5,0.02,0.56);},true);
+  const bays=[];for(let i=0;i<4;i++)bays.push(bMaxX+8+i*4.2);
+  bays.forEach(x=>{
+    root.add(paint(0.14,9.0,MAT.paintY,x,yardZ+2.0,0.02));
+  });
+  root.add(paint(bays[bays.length-1]-bays[0]+0.14,0.14,MAT.paintY,(bays[0]+bays[bays.length-1])/2,yardZ-2.4,0.02));
+  const pl=makeLabel('ลานจอดรถบรรทุก','รอเรียกเข้า dock',{fs:28,h:0.58});
+  pl.position.set((bays[0]+bays[bays.length-1])/2,2.6,yardZ-2.4);root.add(pl);
+  /* รถรอคิวในลาน 2 คัน */
+  [0,2].forEach((bi,k)=>{
+    const t=buildTruck();t.scale.setScalar(0.75);t.rotation.y=-Math.PI/2;
+    t.position.set(bays[bi]+2.1,0,yardZ+2.0);root.add(t);
+    t.traverse(nn=>{if(nn.isMesh){nn.userData.yard=true;}});
+  });
 
-  /* ----- KPI labels ----- */
+  /* ── KPI + ชื่อคลัง ── */
   const rackTop=Math.max(...segs.map(sg=>BASE_Y+sg.rk.shelves*SHELF_H),3);
   const occPct=totalCells?Math.round(occCodes.size/totalCells*100):0;
   if(segs.length){
     const kl=makeLabel('บนชั้นวาง '+rackBoxes.length+' ใบ','ครองพื้นที่ '+occCodes.size+'/'+totalCells+' ช่อง ('+occPct+'%)',{fs:46,h:1.3});
-    kl.position.set(0,rackTop+2.6,rackZ(Math.floor((nRows-1)/2)));root.add(kl);
+    kl.position.set(0,rackTop+2.7,frontZ-maxLen/2);root.add(kl);
   }
   if(custIds.length){
     const yl=makeLabel('ค้างอยู่ที่ลูกค้า '+outBoxes.length+' ใบ',(overdueN?'เกินกำหนด '+overdueN+' ใบ · ':'')+'มูลค่ารวม '+fmtBaht(outVal),{fs:44,h:1.25,subFg:overdueN?'#d70015':null});
     yl.position.set(0,5.2,yardZ+1.6);root.add(yl);
   }
-  const whLbl=makeLabel(Wn.whName?Wn.whName(curWh):curWh,'Gate '+(gs.length?gs[0]+'–'+gs[gs.length-1]:'—')+' · '+zones.length+' โซน · Digital Twin สด',{fs:58,h:1.7});
-  whLbl.position.set(0,7.4,backZ+0.5);root.add(whLbl);
+  const whLbl=makeLabel(whName(curWh),'Gate '+(gs.length?gs[0]+'–'+gs[gs.length-1]:'—')+' · '+zones.length+' โซน · Digital Twin สด',{fs:58,h:1.7});
+  whLbl.position.set(0,WALL_H+1.9,backZ+0.5);root.add(whLbl);
 
-  /* ----- trucks docked + forklift ----- */
-  const dockedAt=gs.filter((g,i,a)=>g!=null&&a.indexOf(g)===i);
-  dockedAt.forEach(g=>{
-    const t=buildTruck();t.scale.setScalar(0.75);t.rotation.y=-Math.PI/2;t.position.set(LY.gateX[g],0,dockZ+6.05);root.add(t);
-  });
-  forkliftG=buildForklift();
-  forkliftG.position.set(stagX,0,stagZ+2.6);forkliftG.userData.range=[X0+1,X0+Math.max(stagW,8)];
-  root.add(forkliftG);
-
-  /* ----- slot selection helper ----- */
+  /* ── slot highlight ── */
   slotEdge=new THREE.LineSegments(new THREE.EdgesGeometry(GEO.unit),new THREE.LineBasicMaterial({color:PAL.accent}));
-  slotEdge.geometry.userData.shared=false;slotEdge.visible=false;slotEdge.scale.set(SLOT_W-0.06,SHELF_H-0.1,RACK_D-0.02);
-  root.add(slotEdge);
+  slotEdge.geometry.userData.shared=false;slotEdge.visible=false;
+  slotEdge.scale.set(RACK_D-0.02,SHELF_H-0.1,SLOT_W-0.06);root.add(slotEdge);
 
-  /* ----- light / camera framing ----- */
-  const spanX=Math.max(bW,yardTotalW||0)+10,spanZ=yardZ-backZ+10;
+  /* ── กล้อง + แสงแดดเฉียง ── */
+  const spanX=Math.max(contentW+24,yardTotalW||0)+12,spanZ=yardZ-backZ+12;
   const R=Math.max(spanX,spanZ)/2;
   const C=new THREE.Vector3(0,0,(backZ+yardZ)/2-2);
-  sun.position.set(C.x+R*0.75,R*1.35,C.z+R*0.6);sun.target.position.copy(C);
-  const sc=sun.shadow.camera;sc.left=-R*1.3;sc.right=R*1.3;sc.top=R*1.3;sc.bottom=-R*1.3;sc.far=R*5;sc.updateProjectionMatrix();
-  scene.fog=new THREE.Fog(new THREE.Color(PAL.bg),R*3.2,R*9);
+  sun.position.set(C.x+R*0.55,R*0.95,C.z+R*0.85);sun.target.position.copy(C);
+  const sc=sun.shadow.camera;sc.left=-R*1.35;sc.right=R*1.35;sc.top=R*1.35;sc.bottom=-R*1.35;sc.far=R*5;sc.updateProjectionMatrix();
+  scene.fog=new THREE.Fog(new THREE.Color(PAL.sky),R*3.4,R*9.5);
   controls.maxDistance=R*4.5;
-  HOME={pos:new THREE.Vector3(C.x+R*0.62,R*1.02,C.z+R*1.5),target:new THREE.Vector3(C.x,0,C.z+3)};
+  const Rb=Math.max(bW,dockZ-backZ)/2;
+  const Cb=new THREE.Vector3(0,1.6,(backZ+dockZ)/2+2.5);
+  const halfW=bW/2+5,halfD=(dockZ-backZ)/2+10;
+  const radius=Math.hypot(halfW,halfD);
+  const dist=radius/Math.tan((camera.fov*Math.PI/180)/2)*0.74;
+  const dirV=new THREE.Vector3(0.44,0.68,0.59).normalize();
+  HOME={pos:Cb.clone().add(dirV.multiplyScalar(dist)),target:Cb.clone()};
   if(lastBuiltWh!==curWh){camera.position.copy(HOME.pos);controls.target.copy(HOME.target);lastBuiltWh=curWh;}
 
-  /* ----- counts / UI ----- */
+  /* ── counts / UI ── */
   COUNTS={all:rackBoxes.length+stagingBoxes.length+outBoxes.length+lostBoxes.length,
-    rack:rackBoxes.length,staging:stagingBoxes.length,
-    out:outBoxes.filter(b=>!(Wn.isOverdue&&Wn.isOverdue(b))).length,
-    overdue:overdueN,lost:lostBoxes.length};
+    rack:rackBoxes.length,staging:stagingOnly.length,readyOut:readyOut.length,rfid:rfidBoxes.length,ret:gateReturn.length,
+    out:outBoxes.filter(b=>!isOverdue(b)).length,overdue:overdueN,lost:lostBoxes.length};
   const emptyEl=document.getElementById('w3dEmpty');
   if(!segs.length&&!COUNTS.all){emptyEl.style.display='grid';emptyEl.innerHTML='คลังนี้ยังไม่มีตำแหน่งชั้นวางและไม่มีกล่อง<br>เพิ่มได้ที่ ตั้งค่า → Location Master หรือยิงกล่องเข้า Gate';}
   else emptyEl.style.display='none';
-  refreshUI();applyFilters();
+
+  /* ── งานจริงจาก DB → สร้าง forklift แบบ dynamic ── */
+  TASKS=deriveTasks({stagingOnly,rfidBoxes,readyOut,gateReturn,freeCells});
+  syncAgents();
+  refreshUI();applyFilters();renderOps();
   detectNewEvents(st);
 }
 
-/* ---------- filters ---------- */
+/* ══════════════════════════════════════════════════════════════
+   8 · WMS TASKS → AGENTS (จำนวนรถ = จำนวนงานค้างใน DB)
+   ══════════════════════════════════════════════════════════════ */
+const CHUNK=6, MAX_AGENTS=4;   /* 1 task = 1 forklift · CHUNK = กล่องต่อ 1 task */
+function chunk(list,n){const out=[];for(let i=0;i<list.length;i+=n)out.push(list.slice(i,i+n));return out;}
+function deriveTasks(d){
+  const t={receive:[],putaway:[],load:[],tag:[],total:0};
+  chunk(d.gateReturn,CHUNK).forEach((g,i)=>t.receive.push({role:'receive',n:g.length,idx:i}));
+  chunk(d.stagingOnly,CHUNK).forEach((g,i)=>t.putaway.push({role:'putaway',n:g.length,idx:i}));
+  (LY.zoneSlots.out||[]).forEach((o,i)=>t.load.push({role:'load',n:o.list.length,idx:i,doNo:o.doNo}));
+  chunk(d.rfidBoxes,CHUNK).forEach((g,i)=>t.tag.push({role:'tag',n:g.length,idx:i}));
+  t.total=t.receive.length+t.putaway.length+t.load.length+t.tag.length;
+  return t;
+}
+function pt(x,z,approach){return {x,z,approach:approach||null};}
+function nearestV(x){
+  let best=LY.lanesV[0],dd=1e9;
+  LY.lanesV.forEach(v=>{const k=Math.abs(v-x);if(k<dd){dd=k;best=v;}});
+  return best;
+}
+function laneRoute(p,q){
+  const out=[];
+  if(Math.abs(p.z-q.z)<0.4)return out;
+  const vx=nearestV(p.x);
+  if(Math.abs(p.x-vx)>0.4)out.push({x:vx,z:p.z});
+  out.push({x:vx,z:q.z});
+  return out;
+}
+function route(a,b,off){
+  const p=[{x:a.x,z:a.z}];
+  if(a.approach)p.push({x:a.approach.x,z:a.approach.z});
+  const from=p[p.length-1],to=b.approach||b;
+  laneRoute(from,to).forEach(w=>p.push(w));
+  p.push({x:to.x,z:to.z});
+  if(b.approach)p.push({x:b.x,z:b.z});
+  const out=[];
+  p.forEach(w=>{const l=out[out.length-1];if(!l||Math.abs(l.x-w.x)>0.05||Math.abs(l.z-w.z)>0.05)out.push(w);});
+  /* เยื้องเลนต่อคัน — รถหลายคันไม่วิ่งทับกัน */
+  if(off)for(let i=1;i<out.length-1;i++){
+    const w=out[i];
+    if(LY.lanesH.some(z=>Math.abs(z-w.z)<0.35))w.z+=off;
+    if(LY.lanesV.some(x=>Math.abs(x-w.x)<0.35))w.x+=off;
+  }
+  return out;
+}
+const cur=a=>({x:a.g.position.x,z:a.g.position.z});
+function zoneSlotPoint(kind,i){
+  const arr=kind==='out'?((LY.zoneSlots.out[0]||{}).slots||[]):LY.zoneSlots[kind]||[];
+  const s=arr[i%Math.max(arr.length,1)];
+  if(!s)return null;
+  const laneZ=kind==='stg'?LY.zoneLaneZ:LY.dockLaneZ;
+  return {x:s.x,z:s.z+STG_D/2+0.95,y:s.y,approach:{x:s.x,z:laneZ}};
+}
+function cellPoint(cd){
+  if(!cd)return null;
+  return {x:cd.aisleX,z:cd.z,y:cd.y,approach:{x:cd.aisleX,z:LY.mainAisleZ},reach:cd.x};
+}
+/* จุดส่ง-รับของที่ประตู: ถ้ารถเทียบท่าแล้ว forklift วิ่งข้าม dock leveler เข้าไปในตู้รถ */
+function gatePoint(gate){
+  const gx=LY.gateX[gate];if(gx==null)return null;
+  const d=DOCK[gate];
+  const docked=d&&(d.state==='docked');
+  return docked
+    ? {x:gx,z:LY.dockZ+0.85,y:1.06,approach:{x:gx,z:LY.dockLaneZ}}
+    : {x:gx,z:LY.dockZ-2.0,y:0.3,approach:{x:gx,z:LY.dockLaneZ}};
+}
+function homePoint(i){
+  const c=(LY.charge||[])[i%Math.max((LY.charge||[]).length,1)];
+  return c?{x:c.x,z:c.z,approach:c.approach}:{x:LY.leftLaneX,z:LY.mainAisleZ};
+}
+function makeAgent(task,slotIdx){
+  const g=buildForklift(task.role);
+  const home=homePoint(slotIdx);
+  g.position.set(home.x,0,home.z);
+  opsRoot.add(g);
+  const a={id:task.role+'#'+task.idx,role:task.role,task,g,home,slotIdx,
+    state:'idle',path:null,leg:0,t:0,speed:2.1+Math.random()*0.5,dir:1,cargo:null,
+    trips:task.n||1,tripDone:0,wait:0.4+slotIdx*0.9,off:((slotIdx%3)-1)*0.62};
+  return a;
+}
+function agentSrcDst(a){
+  const i=a.tripDone;
+  if(a.role==='receive')  return [zoneSlotPoint('ret',i)||gatePoint(gateOf('in')), zoneSlotPoint('stg',i)];
+  if(a.role==='putaway')  return [zoneSlotPoint('stg',a.task.idx*CHUNK+i), cellPoint(freeCells[(a.task.idx*CHUNK+i)%Math.max(freeCells.length,1)])];
+  if(a.role==='load')     return [zoneSlotPoint('out',i), gatePoint(gateOf('out'))];
+  if(a.role==='tag')      return [zoneSlotPoint('rfid',i), zoneSlotPoint('stg',i+8)];
+  return [null,null];
+}
+function gateOf(dir){
+  const gs=Object.keys(LY.gateX);
+  const hit=gs.find(g=>LY.gateDir[g]===dir);
+  return hit!=null?hit:gs[0];
+}
+function planAgent(a){
+  const [src,dst]=agentSrcDst(a);
+  if(!src||!dst){a.state='park';a.path=route(cur(a),a.home,a.off);a.leg=0;return;}
+  a.src=src;a.dst=dst;
+  a.path=route(cur(a),src,a.off);
+  a.leg=0;a.state='toSrc';
+}
+function dropCargo(a){
+  a.forkFrom=null;
+  if(a.cargo){a.g.userData.carriage.remove(a.cargo);disposeTree(a.cargo);a.cargo=null;}
+}
+/* จำนวนรถ = จำนวนงานค้างจริงใน DB — งานเข้าก็สปอวนเพิ่ม งานหมดก็กลับจุดชาร์จ */
+function syncAgents(){
+  const want=[];
+  ['receive','putaway','load','tag'].forEach(r=>(TASKS[r]||[]).forEach(t=>want.push(t)));
+  const capped=want.slice(0,MAX_AGENTS);
+  const keys=new Set(capped.map(t=>t.role+'#'+t.idx));
+  agents.forEach(a=>{
+    if(keys.has(a.id)||a.state==='despawn'||a.state==='gone')return;
+    dropCargo(a);a.task=null;a.state='despawn';
+  });
+  capped.forEach((t,i)=>{
+    const ex=agents.find(a=>a.id===(t.role+'#'+t.idx));
+    if(ex){ex.task=t;ex.trips=t.n||1;ex.slotIdx=i;}
+    else agents.push(makeAgent(t,i));
+  });
+  rebindAgents();
+}
+function rebindAgents(){
+  agents.forEach(a=>{
+    a.home=homePoint(a.slotIdx);
+    if(a.state==='despawn'){a.path=route(cur(a),a.home,a.off);a.leg=0;return;}
+    if(a.state==='idle')return;
+    const [src,dst]=agentSrcDst(a);
+    if(!src||!dst){dropCargo(a);setForkY(a.g,0.10);a.state='park';a.path=route(cur(a),a.home,a.off);a.leg=0;return;}
+    a.src=src;a.dst=dst;
+    if(a.state==='toSrc')     {a.path=route(cur(a),src,a.off);a.leg=0;}
+    else if(a.state==='toDst'){a.path=route(cur(a),dst,a.off);a.leg=0;}
+    else if(a.state==='toHome'||a.state==='park'){a.path=route(cur(a),a.home,a.off);a.leg=0;}
+  });
+}
+/* ── ยกกล่องหลอกขึ้นงา (ตัวแทนพาเลท) ── */
+function makeCargo(role){
+  const m=role==='load'?MAT.boxPending:role==='receive'?MAT.boxReturn:MAT.boxStaging;
+  const g=new THREE.Group();
+  const pallet=bx(1.06,0.1,0.94,MAT.wood,0,0.05,0,true);g.add(pallet);
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++)
+    g.add(bx(0.46,0.34,0.4,m,-0.24+i*0.48,0.27,-0.22+j*0.44,true));
+  g.traverse(nn=>{if(nn.material)nn.userData.own=false;});
+  return g;
+}
+const LIFT_Y={carry:0.62};
+function stepAgent(a,dt){
+  const g=a.g;
+  const arriveTurn=(tx,tz)=>{
+    const dx=tx-g.position.x,dz=tz-g.position.z;
+    const want=Math.atan2(dx,dz)-Math.PI/2;
+    let d=want-g.rotation.y;
+    d=((d+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+    g.rotation.y+=Math.max(-dt*3.4,Math.min(dt*3.4,d));
+    return Math.abs(d);
+  };
+  const drive=(pathDone)=>{
+    if(!a.path||a.leg>=a.path.length){pathDone();return;}
+    const w=a.path[a.leg];
+    const dx=w.x-g.position.x,dz=w.z-g.position.z;
+    const dist=Math.hypot(dx,dz);
+    if(dist<0.12){a.leg++;if(a.leg>=a.path.length)pathDone();return;}
+    const off=arriveTurn(w.x,w.z);
+    const sp=a.speed*(off>0.7?0.35:1);
+    const stepD=Math.min(dist,sp*dt);
+    g.position.x+=dx/dist*stepD;g.position.z+=dz/dist*stepD;
+    g.userData.wheels.forEach(wh=>wh.rotation.z-=stepD/0.3);
+  };
+  switch(a.state){
+    case 'idle':
+      a.wait-=dt;if(a.wait<=0&&a.task)planAgent(a);
+      break;
+    case 'toSrc':
+      drive(()=>{a.state='forkIn';a.t=0;});
+      break;
+    case 'forkIn': {
+      a.t+=dt;
+      const from=a.forkFrom!=null?a.forkFrom:(a.forkFrom=g.userData.forkY);
+      const to=a.src.y!=null?a.src.y:0.16;
+      setForkY(g,from+(to-from)*Math.min(1,a.t/0.55));
+      if(a.t>=0.62){
+        a.forkFrom=null;
+        a.cargo=makeCargo(a.role);
+        g.userData.carriage.add(a.cargo);
+        a.cargo.position.set(1.18,0.06,0);
+        a.state='lift';a.t=0;
+      }
+      break;
+    }
+    case 'lift': {
+      a.t+=dt;
+      const from=a.src.y!=null?a.src.y:0.16;
+      const y=from+(LIFT_Y.carry-from)*Math.min(1,a.t/0.75);
+      setForkY(g,Math.max(0.12,y));
+      if(a.t>=0.85){a.path=route({x:g.position.x,z:g.position.z,approach:a.src.approach},a.dst,a.off);a.leg=0;a.state='toDst';}
+      break;
+    }
+    case 'toDst':
+      drive(()=>{a.state='place';a.t=0;});
+      break;
+    case 'place': {
+      a.t+=dt;
+      const target=a.dst.y!=null?a.dst.y:0.30;
+      const y=LIFT_Y.carry+(target-LIFT_Y.carry)*Math.min(1,a.t/0.9);
+      setForkY(g,Math.max(0.1,y));
+      if(a.t>=1.05){
+        if(a.cargo){g.userData.carriage.remove(a.cargo);disposeTree(a.cargo);a.cargo=null;}
+        if(a.dst===a.dstGateRef){}
+        a.state='forkOut';a.t=0;
+        if(a.role==='load'){const d=DOCK[gateOf('out')];if(d)d.loadTrips++;}
+      }
+      break;
+    }
+    case 'forkOut': {
+      /* ลดงากลับระดับเคลื่อนที่ 0.10 ม. ก่อนออกรถ — ห้ามวิ่งทั้งงายก */
+      a.t+=dt;
+      const TRAVEL=0.10;
+      const y=Math.max(TRAVEL,g.userData.forkY-dt*1.6);
+      setForkY(g,y);
+      if(y<=TRAVEL+0.01&&a.t>=0.35){
+        a.forkFrom=null;
+        a.tripDone++;
+        if(!a.task||a.tripDone>=Math.max(1,Math.ceil(a.trips/2))){a.state='toHome';a.path=route(cur(a),a.home,a.off);a.leg=0;}
+        else{const [src,dst]=agentSrcDst(a);if(!src||!dst){a.state='toHome';a.path=route(cur(a),a.home,a.off);a.leg=0;}
+             else{a.src=src;a.dst=dst;a.path=route(cur(a),src,a.off);a.leg=0;a.state='toSrc';}}
+      }
+      break;
+    }
+    case 'toHome':
+      drive(()=>{a.state='idle';a.wait=2.5+Math.random()*3.5;setForkY(g,0.10);});
+      break;
+    case 'park':
+      drive(()=>{a.state='idle';a.wait=4+Math.random()*4;setForkY(g,0.10);});
+      break;
+    case 'despawn':
+      drive(()=>{a.state='gone';});
+      if(a.state==='gone'){opsRoot.remove(g);disposeTree(g);}
+      break;
+  }
+  /* beacon กระพริบเมื่อรถทำงาน */
+  const working=a.state!=='idle'&&a.state!=='gone';
+  if(g.userData.beacon)g.userData.beacon.material.emissiveIntensity=working?(0.5+Math.abs(Math.sin(beaconT*5))*1.1):0.12;
+  /* กันทุกกรณี: เมื่อวิ่งเปล่างา งาต้องอยู่ระดับเคลื่อนที่เสมอ */
+  if(!a.cargo&&g.userData.forkY>0.11&&(a.state==='toSrc'||a.state==='toHome'||a.state==='park'||a.state==='despawn'||a.state==='idle'))
+    setForkY(g,Math.max(0.10,g.userData.forkY-dt*1.6));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9 · ประตูม้วน + วงจรรถบรรทุกเทียบท่า
+   ══════════════════════════════════════════════════════════════ */
+function setDoor(gate,open){const d=gateDoors[gate];if(d)d.userData.openTarget=open?1:0;}
+function updateDoors(dt){
+  Object.values(gateDoors).forEach(door=>{
+    if(!door||!door.userData.base)return;
+    const b=door.userData.base;
+    let cur=door.userData.openValue||0;
+    cur+=((door.userData.openTarget||0)-cur)*Math.min(1,dt*3.4);
+    door.userData.openValue=cur;
+    const h=Math.max(0.06,b.h*(1-cur*0.94));
+    door.scale.y=h;
+    door.position.y=b.topY-h/2;           // ม้วนขึ้นเก็บด้านบน
+  });
+}
+const DOCK_REAR=0.30, TRUCK_SCALE=0.75;
+function truckDockZ(){return LY.dockZ+DOCK_REAR+3.72*TRUCK_SCALE;}
+function bez(p0,p1,p2,k){
+  const m=1-k;
+  return {x:m*m*p0.x+2*m*k*p1.x+k*k*p2.x, z:m*m*p0.z+2*m*k*p1.z+k*k*p2.z};
+}
+function dockRequest(d,forced){
+  const st=St();
+  if(d.state!=='empty')return;
+  const needOut=d.dir!=='in'&&qOut().length>0;
+  const needIn=d.dir!=='out'&&qIn().length>0;
+  if(!forced&&!needOut&&!needIn)return;
+  const t=buildTruck();t.scale.setScalar(TRUCK_SCALE);
+  t.rotation.y=0;
+  t.position.set(LY.bMinX-34,0,LY.roadMid-1.6);
+  opsRoot.add(t);
+  setLights(t,'headlights',true,1.2);
+  t.traverse(nn=>{if(nn.isMesh){nn.userData.gate=d.gate;nn.userData.gateDir=d.dir;truckPick.push(nn);}});
+  d.truck=t;d.state='approach';d.t=0;d.loadTrips=0;d.forced=!!forced;
+  d.align={x:d.gx+9.5,z:LY.roadMid-1.6};
+  d.dockPos={x:d.gx,z:truckDockZ()};
+}
+function updateDocks(dt){
+  Object.values(DOCK).forEach(d=>{
+    const t=d.truck;
+    if(!d.gx&&d.gx!==0)return;
+    d.t+=dt;
+    switch(d.state){
+      case 'empty':
+        if(d.t>3.5){d.t=0;dockRequest(d);}
+        break;
+      case 'approach': {
+        const spd=11*dt;
+        t.position.x=Math.min(d.align.x,t.position.x+spd);
+        t.userData.wheels.forEach(w=>w.rotation.z-=spd/0.33);
+        if(t.position.x>=d.align.x-0.05){d.state='hold';d.t=0;setLights(t,'taillights',true,1.0);}
+        break;
+      }
+      case 'hold':
+        if(d.t>0.8){d.state='reverse';d.t=0;setLights(t,'reverse',true,1.6);}
+        break;
+      case 'reverse': {
+        const K=Math.min(1,d.t/5.6);
+        const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
+        const p=bez(d.align,{x:d.align.x,z:(LY.dockZ+LY.apron1)/2},d.dockPos,e);
+        t.position.set(p.x,0,p.z);
+        t.rotation.y=-Math.PI/2*e;
+        t.userData.wheels.forEach(w=>w.rotation.z+=dt*4.2);
+        if(K>=1){
+          t.position.set(d.dockPos.x,0,d.dockPos.z);t.rotation.y=-Math.PI/2;
+          setLights(t,'reverse',false);setLights(t,'headlights',false);setLights(t,'taillights',true,0.7);
+          d.state='docked';d.t=0;setDoor(d.gate,true);setRearDoor(t,true);
+          if(d.leveler)d.leveler.userData.drop=true;
+          d.signalRed.material.emissiveIntensity=1.3;
+          d.signalGreen.material.emissiveIntensity=0;
+          spawnRing(d.gx,LY.dockZ+1.0);
+        }
+        break;
+      }
+      case 'docked':
+        /* ประตูเปิดค้างระหว่างขน — ปกติรอ event ยืนยัน Gate จากระบบ
+           แต่รถที่ถูกเรียกมาแบบ forced (เทียบท่าแทนของจริงที่มาจาก
+           อุปกรณ์อื่น) ไม่มีใครจะกด confirm ซ้ำอีกครั้ง จึงปล่อยให้
+           ขนของ/ปิดประตูเองหลังหยุดพักสั้นๆ */
+        if(d.forced&&d.t>2.2){d.state='sealing';d.t=0;}
+        break;
+      case 'sealing':
+        if(d.t>1.4){
+          setDoor(d.gate,false);setRearDoor(t,false);
+          if(d.leveler)d.leveler.userData.drop=false;
+          d.signalRed.material.emissiveIntensity=0;
+          d.signalGreen.material.emissiveIntensity=1.3;
+          d.state='depart';d.t=0;
+          setLights(t,'headlights',true,1.4);
+        }
+        break;
+      case 'depart': {
+        const K=Math.min(1,d.t/4.4);
+        const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
+        const p=bez(d.dockPos,{x:d.dockPos.x,z:(LY.dockZ+LY.apron1)/2},{x:d.gx+11,z:LY.roadMid+1.7},e);
+        t.position.set(p.x,0,p.z);
+        t.rotation.y=-Math.PI/2*(1-e);
+        t.userData.wheels.forEach(w=>w.rotation.z-=dt*5.5);
+        if(K>=1){d.state='run';d.t=0;}
+        break;
+      }
+      case 'run': {
+        const spd=13*dt;
+        t.position.x+=spd;
+        t.userData.wheels.forEach(w=>w.rotation.z-=spd/0.33);
+        if(t.position.x>LY.bMaxX+40){
+          opsRoot.remove(t);disposeTree(t);
+          truckPick=truckPick.filter(m=>m.userData.gate!==d.gate||m.userData.yard);
+          d.truck=null;d.state='empty';d.t=0;d.forced=false;
+          d.signalGreen.material.emissiveIntensity=0;
+        }
+        break;
+      }
+    }
+    /* dock leveler ทำงาน */
+    if(d.leveler){
+      const want=d.leveler.userData.drop?-0.055:0.055;
+      d.leveler.position.y+=(want-d.leveler.position.y)*Math.min(1,dt*3);
+      const rot=d.leveler.userData.drop?-0.06:0;
+      d.leveler.rotation.x+=(rot-d.leveler.rotation.x)*Math.min(1,dt*3);
+    }
+  });
+}
+/* ยืนยัน Gate ในระบบ → ปิดประตู → รถออก */
+function confirmGate(gate,dir){
+  const d=DOCK[gate];
+  if(!d)return;
+  spawnRing(d.gx,LY.dockZ+1.0,dir==='out'?'#d99a2b':'#a8f931');
+  if(d.state==='docked'){d.state='sealing';d.t=0;}
+  else if(d.state==='empty'){
+    /* เหตุการณ์นี้มาจากอุปกรณ์อื่น (เช่น มือถือสแกน Gate In) — ทาง 3D
+       ยังไม่เคยเรียกรถมาเทียบท่าเพราะไม่มีคิว pendingIn/pendingOut ในแท็บนี้
+       (ตัวแปรคิวเป็น local ต่อแท็บ ไม่ sync ข้ามอุปกรณ์) จึงเรียกรถ
+       เข้ามาเทียบท่าแทนของจริงที่เพิ่งเกิดขึ้น */
+    dockRequest(d,true);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10 · FX · filters · cards · picking
+   ══════════════════════════════════════════════════════════════ */
+function spawnRing(x,z,col){
+  const r=new THREE.Mesh(GEO.ring,MAT.ringM.clone());r.material.userData.own=true;
+  if(col)r.material.color.set(col);
+  r.position.set(x,0.05,z);fxRoot.add(r);
+  anims.push({t:0,dur:1.0,loop:3,update(k){r.scale.setScalar(0.8+k*2.6);r.material.opacity=0.85*(1-k);},done(){fxRoot.remove(r);r.material.dispose();}});
+}
 function matchFilter(b){
   const k=statusKey(b);
   if(FIL.status!=='all'&&k!==FIL.status)return false;
@@ -10745,7 +11648,6 @@ function matchFilter(b){
   if(FIL.cust&&b.customer!==FIL.cust)return false;
   return true;
 }
-function matFor(kind){return MAT['box'+kind]||MAT.boxRack;}
 function applyFilters(){
   boxRecs.forEach(rec=>{
     const on=matchFilter(rec.b);
@@ -10753,25 +11655,25 @@ function applyFilters(){
     rec.meshes.forEach((m,i)=>{m.material=selHere?MAT.sel:(on?rec.baseMats[i]:MAT.dim);});
   });
 }
-
-/* ---------- UI (chips / seg / selects / legend) ---------- */
 function refreshUI(){
   const st=St();
   const seg=document.getElementById('w3dWhSeg');
   seg.innerHTML=Object.keys(st.warehouses||{}).sort().map(id=>
-    '<button type="button" class="sf-btn'+(id===curWh?' active':'')+'" data-wh="'+esc(id)+'" title="'+esc(Wn.whName?Wn.whName(id):id)+'">'+esc(id)+'</button>').join('');
+    '<button type="button" class="sf-btn'+(id===curWh?' active':'')+'" data-wh="'+esc(id)+'" title="'+esc(whName(id))+'">'+esc(id)+'</button>').join('');
   const chips=document.getElementById('w3dChips');
   const chip=(key,label,nn,dot)=>'<button type="button" class="w3d-chip'+(FIL.status===key?' active':'')+'" data-st="'+key+'">'+(dot?'<span class="dot" style="background:'+dot+'"></span>':'')+label+' <span class="n">'+nn+'</span></button>';
   chips.innerHTML=chip('all','ทั้งหมด',COUNTS.all,null)
-    +chip('rack',STATUS_META.rack.label,COUNTS.rack,STATUS_META.rack.css())
-    +chip('staging',STATUS_META.staging.label,COUNTS.staging,STATUS_META.staging.css())
-    +chip('out',STATUS_META.out.label,COUNTS.out,STATUS_META.out.css())
-    +chip('overdue',STATUS_META.overdue.label,COUNTS.overdue,STATUS_META.overdue.css())
-    +chip('lost',STATUS_META.lost.label,COUNTS.lost,STATUS_META.lost.css());
-  const lg=document.getElementById('w3dLegend');
-  lg.innerHTML='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:0;"></span><b>Live</b> — 1 กล่องในฉาก = กล่องจริง 1 ใบ อัปเดตอัตโนมัติ</span>'
+    +chip('rack',STATUS_META.rack.label,COUNTS.rack,STATUS_META.rack.col())
+    +chip('staging',STATUS_META.staging.label,COUNTS.staging,STATUS_META.staging.col())
+    +chip('out',STATUS_META.out.label,COUNTS.out,STATUS_META.out.col())
+    +chip('overdue',STATUS_META.overdue.label,COUNTS.overdue,STATUS_META.overdue.col())
+    +chip('lost',STATUS_META.lost.label,COUNTS.lost,STATUS_META.lost.col());
+  document.getElementById('w3dLegend').innerHTML=
+     '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px;"></span><b>'
+     +'Live'+'</b> — 1 กล่องในฉาก = กล่องจริง 1 ใบ อัปเดตอัตโนมัติ</span>'
     +'<span><i style="background:#a8f931;"></i>คานแร็ค = ตำแหน่งจริงจาก Location Master</span>'
-    +'<span><i style="background:#7ab821;"></i>ประตูขาเข้า · <i style="background:#d70015;"></i>ประตูขาออก · <i style="background:'+(PAL.dark?'#38383d':'#c9c9cf')+';"></i>เข้า-ออกร่วม</span>'
+    +'<span><i style="background:#f59e0b;"></i>รอจัดเก็บ · <i style="background:#8b5cf6;"></i>รอติด RFID · <i style="background:#d99a2b;"></i>รอส่งออก</span>'
+    +'<span><i style="background:#7ab821;"></i>ประตูขาเข้า · <i style="background:#d70015;"></i>ประตูขาออก</span>'
     +'<span class="no-print">ลากหมุน · ล้อซูม · คลิกกล่อง/ช่อง/ลานลูกค้าดูรายละเอียด</span>';
   const typeSel=document.getElementById('w3dType'),custSel=document.getElementById('w3dCust');
   const tv=typeSel.value,cv=custSel.value;
@@ -10780,25 +11682,34 @@ function refreshUI(){
   typeSel.value=tv;custSel.value=cv;
   document.getElementById('w3dTags').innerHTML=Object.keys(st.boxes||{}).slice(0,800).map(t=>'<option value="'+esc(t)+'"></option>').join('');
 }
-
-/* ---------- detail card ---------- */
+function renderOps(){
+  const busy=agents.filter(a=>a.state!=='idle'&&a.state!=='gone').length;
+  const dockTxt=Object.values(DOCK).map(d=>'G'+d.gate+' '+({empty:'ว่าง',approach:'รถเข้ามา',hold:'เตรียมถอย',reverse:'ถอยเทียบท่า',docked:'เทียบแล้ว · ขนของ',sealing:'ปิดประตู',depart:'ออกจากท่า',run:'ออกถนน'}[d.state]||d.state)).join(' · ');
+  const el=document.getElementById('w3dOps');
+  el.innerHTML=
+     '<div class="w3d-oprow"><span class="src">'+(live?'DB สด · poll 4 วิ':'ออฟไลน์ · ใช้ state ในเครื่อง')+'</span> · งานค้าง <b>'+(TASKS.total||0)+'</b> · forklift <b>'+agents.length+'</b> (วิ่ง '+busy+')</div>'
+    +'<div class="w3d-oprow">'+esc(dockTxt||'—')+'</div>';
+  /* วางแถวสถานะไว้เหนือแถบ legend เสมอ — ไม่ทับกันทุกความกว้าง */
+  const lg=document.getElementById('w3dLegend');
+  el.style.bottom=((lg?lg.offsetHeight:26)+20)+'px';
+}
 const cardEl=document.getElementById('w3dDetail');
 function hideCard(){cardEl.style.display='none';}
-function row(k,v){return v?'<div class="w3dd-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>':'';}
-function pill(k){const m=STATUS_META[k];return '<span class="w3dd-pill" style="background:'+m.pillBg+';color:'+m.pillFg+';">'+m.full+'</span>';}
+const row=(k,v)=>v?'<div class="w3dd-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>':'';
+const pill=k=>{const m=STATUS_META[k];return '<span class="w3dd-pill" style="background:'+m.pillBg+';color:'+m.pillFg+';">'+m.full+'</span>';};
 function showBoxCard(tag){
   const b=St().boxes[tag];if(!b)return;
   const k=statusKey(b),l=b.location||{};
-  const dd=Wn.boxDueDays?Wn.boxDueDays(b):null;
+  const dd=boxDueDays(b);
   let dueTxt='';
   if(b.status==='out'&&dd!=null)dueTxt=dd>=0?('อีก '+dd+' วัน'):('<span style="color:var(--neg);font-weight:700;">เกินมา '+(-dd)+' วัน</span>');
   const locTxt=(k==='rack')?esc([l.zone&&('โซน '+l.zone),l.rack,l.shelf&&('ชั้น '+l.shelf),l.slot&&('ช่อง '+l.slot)].filter(Boolean).join(' · ')):'';
   cardEl.innerHTML='<div class="w3dd-head"><span class="w3dd-tag">'+esc(tag)+'</span>'+pill(k)
     +'<button class="w3dd-x" onclick="W3D.closeCard()">✕</button></div>'
-    +row('ประเภท',esc(Wn.typeName?Wn.typeName(b.type):b.type))
-    +row('คลัง',esc(Wn.whName?Wn.whName(whOf(b)):whOf(b)))
+    +row('ประเภท',esc(typeName(b.type)))
+    +row('คลัง',esc(whName(whOf(b))))
     +row('ตำแหน่ง',locTxt)
-    +row('ลูกค้า',(b.status!=='warehouse'&&b.customer)?esc(Wn.custName?Wn.custName(b.customer):b.customer):'')
+    +row('ลูกค้า',(b.status!=='warehouse'&&b.customer)?esc(custName(b.customer)):'')
     +row('DO / PO',(b.do||b.po)?esc([b.do,b.po].filter(Boolean).join(' / ')):'')
     +row('กำหนดคืน',dueTxt)
     +row('เห็นล่าสุด',b.lastSeenAt?esc(Wn.fmtTs?Wn.fmtTs(b.lastSeenAt):b.lastSeenAt):'')
@@ -10812,54 +11723,59 @@ function showSlotCard(cd){
   const tags=Object.values(st.boxes||{}).filter(b=>{
     if(b.status!=='warehouse')return false;const l=b.location||{};
     if((l.wh||'')!==curWh)return false;
-    const code=Wn.locBuildCode?Wn.locBuildCode(l.zone,l.rack,l.shelf,l.slot):'';
-    return code===cd.code;
+    return locCode(l.zone,l.rack,l.shelf,l.slot)===cd.code;
   }).map(b=>b.tag);
   cardEl.innerHTML='<div class="w3dd-head"><span class="w3dd-tag">'+esc(cd.code)+'</span>'
     +'<span class="w3dd-pill" style="background:'+(tags.length?'var(--accentSoft)':'color-mix(in srgb,var(--ink) 7%,transparent)')+';color:'+(tags.length?'var(--accentInk)':'var(--muted)')+';">'+(tags.length?('มีของ '+tags.length+' ใบ'):'ช่องว่าง')+'</span>'
     +'<button class="w3dd-x" onclick="W3D.closeCard()">✕</button></div>'
-    +row('คลัง',esc(Wn.whName?Wn.whName(curWh):curWh))
+    +row('คลัง',esc(whName(curWh)))
     +row('ตำแหน่ง','โซน '+esc(cd.zone)+' · '+esc(cd.rack)+' · ชั้น '+cd.shelf+' · ช่อง '+cd.slot)
     +(tags.length?'<div class="w3dd-list">'+tags.map(t=>'<button onclick="W3D.selectTag(\''+esc(t)+'\')">'+esc(t)+'</button>').join('')+'</div>':'<div style="font-size:12.5px;color:var(--muted);margin-top:8px;">ยังไม่มีกล่องเก็บที่ช่องนี้</div>');
   cardEl.style.display='block';
 }
 function showCustCard(cid){
   const st=St();
-  const list=Object.values(st.boxes||{}).filter(b=>statusKey(b).match(/out|overdue/)&&b.customer===cid&&whOf(b)===curWh);
-  const od=list.filter(b=>Wn.isOverdue&&Wn.isOverdue(b));
+  const list=Object.values(st.boxes||{}).filter(b=>/out|overdue/.test(statusKey(b))&&b.customer===cid&&whOf(b)===curWh);
+  const od=list.filter(isOverdue);
   const val=list.reduce((s,b)=>s+(b.value||0),0);
   const c=st.customers[cid]||{};
-  cardEl.innerHTML='<div class="w3dd-head"><span class="w3dd-tag" style="font-size:15px;">'+esc(Wn.custName?Wn.custName(cid):cid)+'</span>'
+  cardEl.innerHTML='<div class="w3dd-head"><span class="w3dd-tag" style="font-size:15px;">'+esc(custName(cid))+'</span>'
     +'<button class="w3dd-x" onclick="W3D.closeCard()">✕</button></div>'
     +row('ค้างอยู่',list.length+' ใบ')
     +row('เกินกำหนด',od.length?'<span style="color:var(--neg);font-weight:700;">'+od.length+' ใบ</span>':'0 ใบ')
     +row('มูลค่าค้าง',fmtBaht(val))
     +row('เงื่อนไขคืน',c.returnDays?('ภายใน '+c.returnDays+' วัน'):'')
-    +'<div class="w3dd-list">'+list.map(b=>'<button onclick="W3D.selectTag(\''+esc(b.tag)+'\')" '+(Wn.isOverdue&&Wn.isOverdue(b)?'style="color:var(--neg);"':'')+'>'+esc(b.tag)+'</button>').join('')+'</div>';
+    +'<div class="w3dd-list">'+list.map(b=>'<button onclick="W3D.selectTag(\''+esc(b.tag)+'\')" '+(isOverdue(b)?'style="color:var(--neg);"':'')+'>'+esc(b.tag)+'</button>').join('')+'</div>';
   cardEl.style.display='block';
 }
-
-/* ---------- selection / fly ---------- */
-function spawnRing(x,z,col){
-  const r=new THREE.Mesh(GEO.ring,MAT.ringM.clone());r.material.userData.own=true;
-  if(col)r.material.color.set(col);
-  r.position.set(x,0.03,z);fxRoot.add(r);
-  anims.push({t:0,dur:1.0,loop:3,update(k){r.scale.setScalar(0.8+k*2.4);r.material.opacity=0.85*(1-k);},done(){fxRoot.remove(r);r.material.dispose();}});
+function showTruckCard(gate,gdir){
+  const st=St();
+  const d=DOCK[gate]||{};
+  const evs=(st.events||[]).filter(e=>String(e.gate)===String(gate)&&e.wh===curWh).sort((a,b)=>+new Date(b.ts||0)-+new Date(a.ts||0));
+  const last=evs[0];
+  const stTxt={empty:'ไม่มีรถ',approach:'รถกำลังเข้ามา',hold:'หยุดเตรียมถอย',reverse:'ถอยเข้าเทียบท่า',docked:'เทียบท่าแล้ว · กำลังขนของ',sealing:'ปิดประตู · เตรียมออก',depart:'ออกจากท่า',run:'วิ่งออกถนน'}[d.state]||'—';
+  cardEl.innerHTML='<div class="w3dd-head"><span class="w3dd-tag">รถที่ประตู G'+esc(gate)+'</span>'
+    +'<button class="w3dd-x" onclick="W3D.closeCard()">✕</button></div>'
+    +row('คลัง',esc(whName(curWh)))
+    +row('ทิศทางประตู',gdir==='in'?'ขาเข้าอย่างเดียว':gdir==='out'?'ขาออกอย่างเดียว':'เข้า/ออก')
+    +row('สถานะท่า',stTxt)
+    +row('รอบขนของ',(d.loadTrips||0)+' เที่ยว')
+    +row('ผ่านล่าสุด',last?(esc(last.tag||'-')+' · '+(last.dir==='in'?'เข้า':'ออก')):'ยังไม่มีข้อมูล')
+    +row('รวมวันนี้',evs.length+' รายการ');
+  cardEl.style.display='block';
 }
-function selectBox(tag,fromSlot){
-  sel={type:'box',tag};slotEdge.visible=false;
-  applyFilters();
+function selectBox(tag){
+  sel={type:'box',tag};slotEdge.visible=false;applyFilters();
   const rec=tagIndex.get(tag);
   if(rec){spawnRing(rec.pos.x,rec.pos.z);showBoxCard(tag);}
 }
-function clearSel(){sel=null;slotEdge.visible=false;applyFilters();hideCard();}
+function clearSel(){sel=null;if(slotEdge)slotEdge.visible=false;applyFilters();hideCard();}
 function flyTo(p,dist){
   const dir=camera.position.clone().sub(controls.target).normalize();
   const d=Math.max(dist||7,4);
   const np=p.clone().add(dir.multiplyScalar(d));np.y=Math.max(np.y,p.y+2.2);
   const fp=camera.position.clone(),ft=controls.target.clone();
-  anims.push({t:0,dur:1.15,update(k){const e=1-Math.pow(1-k,3);
-    camera.position.lerpVectors(fp,np,e);controls.target.lerpVectors(ft,p,e);}});
+  anims.push({t:0,dur:1.15,update(k){const e=1-Math.pow(1-k,3);camera.position.lerpVectors(fp,np,e);controls.target.lerpVectors(ft,p,e);}});
 }
 function focusTag(tag){
   const rec=tagIndex.get(tag);
@@ -10868,16 +11784,14 @@ function focusTag(tag){
 }
 function doSearch(){
   const inp=document.getElementById('w3dSearch');
-  let raw=inp.value.trim();if(!raw)return;
+  const raw=inp.value.trim();if(!raw)return;
   const tag=Wn.resolveTag?Wn.resolveTag(raw):raw;
-  const b=St().boxes[tag];
+  const b=St().boxes[tag]||St().boxes[raw]||St().boxes[raw.toUpperCase()];
   if(!b){if(Wn.toast)Wn.toast('ไม่พบกล่อง',raw,'err');return;}
   const bw=whOf(b);
   if(bw&&bw!==curWh){curWh=bw;build();}
-  requestAnimationFrame(()=>focusTag(tag));
+  requestAnimationFrame(()=>focusTag(b.tag));
 }
-
-/* ---------- picking ---------- */
 let downXY=null;
 canvas.addEventListener('pointerdown',e=>{downXY=[e.clientX,e.clientY];});
 canvas.addEventListener('pointerup',e=>{
@@ -10892,13 +11806,14 @@ canvas.addEventListener('pointerup',e=>{
   if(hit&&hit.object.userData.tag){selectBox(hit.object.userData.tag);return;}
   hit=raycaster.intersectObjects(padPick,false)[0];
   if(hit&&hit.object.userData.cust){sel=null;applyFilters();slotEdge.visible=false;showCustCard(hit.object.userData.cust);return;}
+  hit=raycaster.intersectObjects(truckPick.filter(m=>m.parent),false)[0];
+  if(hit&&hit.object.userData.gate!=null){sel=null;applyFilters();slotEdge.visible=false;showTruckCard(hit.object.userData.gate,hit.object.userData.gateDir);return;}
   if(sensorMesh){
     hit=raycaster.intersectObject(sensorMesh)[0];
     if(hit&&hit.instanceId!=null){
       const cd=cellData[hit.instanceId];
       if(cd){sel={type:'slot'};applyFilters();
-        slotEdge.position.set(cd.x,cd.y,cd.z);slotEdge.visible=true;
-        showSlotCard(cd);return;}
+        slotEdge.position.set(cd.x,cd.y,cd.z);slotEdge.visible=true;showSlotCard(cd);return;}
     }
   }
   clearSel();
@@ -10914,64 +11829,30 @@ canvas.addEventListener('pointermove',e=>{
   canvas.style.cursor=h?'pointer':'grab';
 });
 
-/* ---------- gate event animations ---------- */
+/* ── event ใหม่จาก DB → ยืนยัน Gate → ประตู/รถทำงาน ── */
 function detectNewEvents(st){
   const evs=st.events||[];
-  let maxTs=lastEvtTs;
-  const news=[];
+  let maxTs=lastEvtTs;const news=[];
   evs.forEach(e=>{
     const t=+new Date(e.ts||0);if(!(t>0))return;
     if(t>lastEvtTs){maxTs=Math.max(maxTs,t);
       if(lastEvtTs>=0&&(e.dir==='out'||e.dir==='in'||e.dir==='in-new')){
-        const gw=e.wh||(Wn.gateWh?Wn.gateWh(e.gate):'');
-        if(gw===curWh&&e.gate!=null)news.push(e);
+        if((e.wh||curWh)===curWh&&e.gate!=null)news.push(e);
       }}
   });
   lastEvtTs=maxTs<0?0:maxTs;
-  if(!news.length||reduceMotion)return;
-  const groups=new Map();
-  news.forEach(e=>{const k=e.gate+'|'+(e.dir==='out'?'out':'in');
-    const g=groups.get(k)||{gate:e.gate,dir:(e.dir==='out'?'out':'in'),count:0};g.count++;groups.set(k,g);});
-  groups.forEach(g=>jobs.push(g));
-}
-function startJob(j){
-  if(LY.gateX[j.gate]==null)return null;
-  const t=buildTruck();fxRoot.add(t);
-  const lbl=makeLabel('Gate '+j.gate+' · '+(j.dir==='out'?'ขาออก':'ขาเข้า')+' '+j.count+' ใบ',null,{fs:34,h:0.85,fg:j.dir==='out'?null:PAL.lblInk});
-  lbl.position.y=4.3;t.add(lbl);
-  const cnt=Math.min(j.count,12);
-  return {j,t,gx:LY.gateX[j.gate],time:0,hopT:0.65+cnt*0.24,cnt,hops:[],phase:0};
-}
-function stepJob(job,dt){
-  job.time+=dt;const tm=job.time,gx=job.gx;
-  const D1=2.4,D2=0.95,PH=0.35,HOP=job.hopT,D4=0.9,D5=2.4;
-  const ez=k=>1-Math.pow(1-Math.min(Math.max(k,0),1),3);
-  const spin=v=>job.t.userData.wheels.forEach(w=>w.rotation.z-=v);
-  if(tm<D1){const k=ez(tm/D1);job.t.position.set(LY.spawnX+(gx-LY.spawnX)*k,0,LY.roadMid);job.t.rotation.y=0;spin(dt*8);}
-  else if(tm<D1+D2){const k=ez((tm-D1)/D2);job.t.position.set(gx,0,LY.roadMid+(LY.dockZ+5.7-LY.roadMid)*k);job.t.rotation.y=-Math.PI/2*Math.min(k*1.6,1);spin(dt*4);}
-  else if(tm<D1+D2+PH){if(!job.rang){job.rang=1;spawnRing(gx,LY.dockZ+1.0);}}
-  else if(tm<D1+D2+PH+HOP){
-    const ht=tm-(D1+D2+PH);
-    const idx=Math.floor(ht/0.24);
-    if(idx<job.cnt&&!job.hops[idx]){
-      job.hops[idx]=1;
-      const hop=bx(0.36,0.36,0.36,job.j.dir==='out'?MAT.hop:MAT.hopIn,0,0,0,true);
-      fxRoot.add(hop);
-      const a=new THREE.Vector3(gx,1.1,LY.dockZ-0.4),b=new THREE.Vector3(gx,2.7,LY.dockZ+5.1);
-      const from=job.j.dir==='out'?a:b,to=job.j.dir==='out'?b:a;
-      anims.push({t:0,dur:0.55,update(k){
-        const p=from.clone().lerp(to,k);p.y+=Math.sin(k*Math.PI)*1.15;hop.position.copy(p);hop.rotation.y=k*2;
-      },done(){fxRoot.remove(hop);}});
-      if(idx%3===0)spawnRing(gx,LY.dockZ+1.0);
-    }
-  }
-  else if(tm<D1+D2+PH+HOP+D4){const k=ez((tm-(D1+D2+PH+HOP))/D4);job.t.position.set(gx,0,(LY.dockZ+5.7)+(LY.roadMid-(LY.dockZ+5.7))*k);job.t.rotation.y=-Math.PI/2*(1-k);}
-  else if(tm<D1+D2+PH+HOP+D4+D5){const k=ez((tm-(D1+D2+PH+HOP+D4))/D5);job.t.position.set(gx+(LY.exitX-gx)*k,0,LY.roadMid);job.t.rotation.y=0;spin(dt*8);}
-  else{fxRoot.remove(job.t);disposeTree(job.t);return false;}
-  return true;
+  if(reduceMotion)return;
+  const seen=new Set();
+  news.forEach(e=>{
+    const k=e.gate+'|'+(e.dir==='out'?'out':'in');
+    if(seen.has(k))return;seen.add(k);
+    confirmGate(e.gate,e.dir==='out'?'out':'in');
+  });
 }
 
-/* ---------- loop ---------- */
+/* ══════════════════════════════════════════════════════════════
+   12 · LOOP · SIZING · POLL
+   ══════════════════════════════════════════════════════════════ */
 function isVisible(){
   if(document.hidden)return false;
   const tab=document.getElementById('tab-overview');
@@ -10984,26 +11865,23 @@ function tick(){
   const nw=performance.now();let dt=(nw-lastT)/1000;lastT=nw;
   if(dt>0.06)dt=0.06;
   if(!isVisible())return;
+  beaconT+=dt;
   for(let i=anims.length-1;i>=0;i--){
     const a=anims[i];a.t+=dt;let k=a.t/a.dur;
     if(k>=1){if(a.loop&&a.loop>1){a.loop--;a.t=0;k=0;}else{a.update&&a.update(1);a.done&&a.done();anims.splice(i,1);continue;}}
     a.update&&a.update(k);
   }
-  if(!activeJob&&jobs.length)activeJob=startJob(jobs.shift());
-  if(activeJob&&!stepJob(activeJob,dt))activeJob=null;
-  updateTraffic(dt);
-  if(forkliftG&&!reduceMotion){
-    const rg=forkliftG.userData.range;
-    forkliftG.position.x+=forkDir*dt*0.85;
-    if(forkliftG.position.x>rg[1]){forkDir=-1;}
-    if(forkliftG.position.x<rg[0]){forkDir=1;}
-    forkliftG.rotation.y=forkDir>0?0:Math.PI;
+  if(!reduceMotion){
+    agents.forEach(a=>{if(a.state!=='gone')stepAgent(a,dt);});
+    agents=agents.filter(a=>a.state!=='gone');
+    updateDocks(dt);
   }
+  updateDoors(dt);
   controls.update();
   renderer.render(scene,camera);
+  if(nw-opsT>800){opsT=nw;renderOps();}
 }
-
-/* ---------- sizing ---------- */
+let opsT=0;
 function resize(){
   const w=stage.clientWidth,h=stage.clientHeight;
   if(!w||!h)return;
@@ -11014,18 +11892,15 @@ function resize(){
 new ResizeObserver(resize).observe(stage);
 document.addEventListener('fullscreenchange',()=>setTimeout(resize,60));
 
-/* ---------- live data hooks ---------- */
-let schedT=null;
-function schedule(){clearTimeout(schedT);schedT=setTimeout(()=>{try{build();}catch(e){console.error('w3d rebuild',e);}},280);}
-if(typeof Wn.save==='function'&&!Wn.save.__w3d){
-  const o=Wn.save;const f=function(){const r=o.apply(this,arguments);schedule();return r;};f.__w3d=1;Wn.save=f;
+function stateSig(st){
+  if(!st)return '';
+  const b=Object.values(st.boxes||{}).map(x=>x.tag+':'+x.status+':'+((x.location||{}).zone||'')+((x.location||{}).rack||'')+((x.location||{}).shelf||'')+((x.location||{}).slot||'')+(x.labeled===false?'!':''));
+  return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')+'#'+Object.keys(st.locations||{}).length;
 }
-window.addEventListener('storage',e=>{
-  if(e.key==='boxtrace_p1'){try{if(typeof Wn.load==='function'){Wn.load();if(typeof Wn.renderAll==='function')Wn.renderAll();}}catch(_){ }schedule();}
-});
-new MutationObserver(()=>{palette();refreshMatColors();schedule();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+let buildT=null;
+function scheduleBuild(){clearTimeout(buildT);buildT=setTimeout(()=>{try{build();}catch(e){console.error('twin rebuild',e);}},220);}
 
-/* ---------- static UI wiring ---------- */
+/* UI wiring */
 document.getElementById('w3dWhSeg').addEventListener('click',e=>{
   const b=e.target.closest('[data-wh]');if(!b)return;
   if(b.dataset.wh!==curWh){curWh=b.dataset.wh;build();}
@@ -11038,32 +11913,85 @@ document.getElementById('w3dType').addEventListener('change',e=>{FIL.type=e.targ
 document.getElementById('w3dCust').addEventListener('change',e=>{FIL.cust=e.target.value;applyFilters();});
 document.getElementById('w3dSearch').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
 const spinBtn=document.getElementById('w3dSpin');
-spinBtn.addEventListener('click',()=>{controls.autoRotate=!controls.autoRotate;spinBtn.textContent=controls.autoRotate?'หยุดหมุน':'หมุนโชว์';});
+spinBtn.addEventListener('click',()=>{
+  controls.autoRotate=!controls.autoRotate;
+  spinBtn.classList.toggle('active',controls.autoRotate);
+  spinBtn.title=controls.autoRotate?'หยุดหมุน':'หมุนพรีเซนต์อัตโนมัติ';
+});
 document.getElementById('w3dReset').addEventListener('click',()=>{
   const fp=camera.position.clone(),ft=controls.target.clone();
   anims.push({t:0,dur:0.9,update(k){const e2=1-Math.pow(1-k,3);camera.position.lerpVectors(fp,HOME.pos,e2);controls.target.lerpVectors(ft,HOME.target,e2);}});
 });
-document.getElementById('w3dFull').addEventListener('click',()=>{
+const fullBtn=document.getElementById('w3dFull');
+fullBtn.addEventListener('click',()=>{
   if(document.fullscreenElement)document.exitFullscreen();
   else stage.requestFullscreen&&stage.requestFullscreen();
 });
+document.addEventListener('fullscreenchange',()=>{
+  const on=!!document.fullscreenElement;
+  fullBtn.title=on?'ออกจากเต็มจอ':'แสดงเต็มจอ';
+  fullBtn.querySelector('.svgi').innerHTML=on
+    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/></svg>'
+    :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>';
+});
+/* toggle: legend bar + live-debug ops row are extra detail overlays — let the user hide them to declutter the view */
+const infoBtn=document.getElementById('w3dInfoToggle');
+const legendEl=document.getElementById('w3dLegend'),opsEl=document.getElementById('w3dOps');
+let infoVisible=true;
+function applyInfoVisible(){
+  legendEl.style.display=infoVisible?'':'none';
+  opsEl.style.display=infoVisible?'':'none';
+  infoBtn.classList.toggle('active',!infoVisible);
+  infoBtn.title=infoVisible?'ซ่อนรายละเอียด':'แสดงรายละเอียด';
+  infoBtn.querySelector('.svgi').innerHTML=infoVisible
+    ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-8.5 4-9.5 7 1 3 4.5 7 9.5 7s8.5-4 9.5-7c-1-3-4.5-7-9.5-7Z"/><circle cx="12" cy="12" r="2.6"/></svg>'
+    :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2.6 2.6 0 0 0 3.7 3.6M7.4 7.2C4.9 8.6 3.2 10.8 2.5 12c1 3 4.5 7 9.5 7 1.6 0 3-.4 4.3-1.1M16.9 16.8C19 15.4 20.5 13.4 21.5 12c-1-3-4.5-7-9.5-7-.9 0-1.8.13-2.6.38"/></svg>';
+}
+infoBtn.addEventListener('click',()=>{infoVisible=!infoVisible;applyInfoVisible();});
+applyInfoVisible();
+Wn.W3D={closeCard(){clearSel();},selectTag(t){focusTag(t);},refresh(){scheduleBuild();},
+  openTrack(t){if(document.fullscreenElement)document.exitFullscreen();if(Wn.trackBox)Wn.trackBox(t);if(Wn.switchTab)Wn.switchTab('track');},
+  gateOut(g){confirmGate(g,'out');},gateIn(g){confirmGate(g,'in');},state(){return S;},
+  layout(){return LY;},agents(){return agents.map(a=>({id:a.id,state:a.state,x:+a.g.position.x.toFixed(2),z:+a.g.position.z.toFixed(2),fork:+a.g.userData.forkY.toFixed(2)}));},
+  docks(){return Object.values(DOCK).map(d=>({gate:d.gate,state:d.state,trips:d.loadTrips}));},
+  perf(){return {calls:renderer.info.render.calls,tris:renderer.info.render.triangles,geo:renderer.info.memory.geometries,tex:renderer.info.memory.textures};},
+  cam(p,t){camera.position.set(p[0],p[1],p[2]);controls.target.set(t[0],t[1],t[2]);controls.update();},
+  view(n){
+    const g=Object.keys(LY.gateX)[0],gx=LY.gateX[g]||0;
+    if(n==='dock')this.cam([gx+4,7.5,LY.dockZ+20],[gx,2.2,LY.dockZ+1]);
+    else if(n==='inside')this.cam([LY.bMinX+3,9,LY.dockLaneZ+3],[LY.X0+6,1.4,LY.zoneLaneZ-3]);
+    else if(n==='fork'){const a=agents[0];if(a)this.cam([a.g.position.x+4.5,3.4,a.g.position.z+5],[a.g.position.x,1.2,a.g.position.z]);}
+    else{camera.position.copy(HOME.pos);controls.target.copy(HOME.target);controls.update();}
+  }};
 
-/* public api for card buttons */
-Wn.W3D={
-  closeCard(){clearSel();},
-  selectTag(t){focusTag(t);},
-  openTrack(t){if(document.fullscreenElement)document.exitFullscreen();if(Wn.trackBox){Wn.trackBox(t);}if(Wn.switchTab)Wn.switchTab('track');},
-  refresh(){schedule();}
-};
+/* ---------- live data hooks (คงพฤติกรรมเดิมของแอป) ---------- */
+if(typeof Wn.save==='function'&&!Wn.save.__w3d){
+  const o=Wn.save;const f=function(){const r=o.apply(this,arguments);scheduleBuild();return r;};f.__w3d=1;Wn.save=f;
+}
+window.addEventListener('storage',e=>{
+  if(e.key===SKEY){try{if(typeof Wn.load==='function'){Wn.load();if(typeof Wn.renderAll==='function')Wn.renderAll();}}catch(_){}scheduleBuild();}
+});
+new MutationObserver(()=>{palette();buildTextures();refreshMatColors();scheduleBuild();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
 /* ---------- init ---------- */
-palette();refreshMatColors();
+palette();buildTextures();refreshMatColors();
 camera.position.copy(HOME.pos);controls.target.copy(HOME.target);
 resize();
 try{build();}catch(e){console.error('w3d build',e);}
-if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>schedule());
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>scheduleBuild());
 tick();
+
+/* ---------- poll DB: รับงานที่เครื่องอื่น/PDA ยิงเข้ามา ---------- */
+let srvSig=stateSig(St());
+setInterval(async()=>{
+  const st=await pullState();
+  if(!st){renderOps();return;}
+  const ns=stateSig(st);
+  if(ns===srvSig)return;
+  srvSig=ns;adoptServerState(st);
+},POLL_MS);
 })();
+
 </script>
 </body>
 </html>

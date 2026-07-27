@@ -68,6 +68,13 @@ class ApiClient {
     return body;
   }
 
+  /// GET /api/auth/users -> list of employee accounts (for the login picker)
+  Future<List<Map<String, dynamic>>> listUsers() async {
+    final r = await http.get(_u('/api/auth/users'), headers: _headers).timeout(_timeout);
+    final body = await _decode(r) as Map<String, dynamic>;
+    return (body['users'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   /// GET /api/state -> full S snapshot
   Future<Map<String, dynamic>> getState() async {
     final r = await http.get(_u('/api/state'), headers: _headers).timeout(_timeout);
@@ -82,21 +89,31 @@ class ApiClient {
     await _decode(r);
   }
 
-  /// POST /api/gate/in { tags, gate, recorder }
+  /// POST /api/gate/in { tags, gate, recorder, plate?, driver?, vehicleType? }
   Future<Map<String, dynamic>> gateIn({
     required List<String> tags,
     required int gate,
     String? recorder,
+    String? plate,
+    String? driver,
+    String? vehicleType,
   }) async {
     final r = await http
         .post(_u('/api/gate/in'),
             headers: _headers,
-            body: jsonEncode({'tags': tags, 'gate': gate, if (recorder != null) 'recorder': recorder}))
+            body: jsonEncode({
+              'tags': tags,
+              'gate': gate,
+              if (recorder != null) 'recorder': recorder,
+              if (plate != null && plate.isNotEmpty) 'plate': plate,
+              if (driver != null && driver.isNotEmpty) 'driver': driver,
+              if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
+            }))
         .timeout(_timeout);
     return await _decode(r) as Map<String, dynamic>;
   }
 
-  /// POST /api/gate/out { tags, customer, gate, doNo?, po?, recorder }
+  /// POST /api/gate/out { tags, customer, gate, doNo?, po?, recorder, plate?, driver?, vehicleType? }
   Future<Map<String, dynamic>> gateOut({
     required List<String> tags,
     required String customer,
@@ -104,6 +121,9 @@ class ApiClient {
     String? doNo,
     String? po,
     String? recorder,
+    String? plate,
+    String? driver,
+    String? vehicleType,
   }) async {
     final r = await http
         .post(_u('/api/gate/out'),
@@ -115,6 +135,9 @@ class ApiClient {
               if (doNo != null) 'doNo': doNo,
               if (po != null) 'po': po,
               if (recorder != null) 'recorder': recorder,
+              if (plate != null && plate.isNotEmpty) 'plate': plate,
+              if (driver != null && driver.isNotEmpty) 'driver': driver,
+              if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
             }))
         .timeout(_timeout);
     return await _decode(r) as Map<String, dynamic>;

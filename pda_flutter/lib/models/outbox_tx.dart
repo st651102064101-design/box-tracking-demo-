@@ -10,8 +10,11 @@ class OutboxTx {
 
   // out-only
   final String? customer;
+
+  // vehicle info, captured on both directions
   final String? plate;
   final String? driver;
+  final String? vehicleType;
 
   // in-only
   final String? note;
@@ -26,6 +29,7 @@ class OutboxTx {
     this.customer,
     this.plate,
     this.driver,
+    this.vehicleType,
     this.note,
   });
 
@@ -39,6 +43,7 @@ class OutboxTx {
         if (customer != null) 'customer': customer,
         if (plate != null) 'plate': plate,
         if (driver != null) 'driver': driver,
+        if (vehicleType != null) 'vehicleType': vehicleType,
         if (note != null) 'note': note,
       };
 
@@ -52,6 +57,7 @@ class OutboxTx {
         customer: j['customer']?.toString(),
         plate: j['plate']?.toString(),
         driver: j['driver']?.toString(),
+        vehicleType: j['vehicleType']?.toString(),
         note: j['note']?.toString(),
       );
 }

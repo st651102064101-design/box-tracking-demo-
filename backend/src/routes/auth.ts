@@ -54,6 +54,17 @@ authRouter.get(
   }),
 );
 
+/** GET /api/auth/users — list employee accounts (for the PDA login picker). */
+authRouter.get(
+  '/users',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const rows = await db.select().from(users);
+    res.json({ users: rows.map(publicUser) });
+  }),
+);
+
 function publicUser(row: typeof users.$inferSelect) {
   return { id: row.id, username: row.username, name: row.name, role: row.role };
 }

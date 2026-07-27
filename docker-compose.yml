@@ -28,7 +28,7 @@ services:
       DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_EXPIRES_IN: 12h
-      CORS_ORIGIN: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000,http://localhost:5100
       SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
     depends_on:
@@ -52,6 +52,15 @@ services:
       - backend
     ports:
       - "3000:3000"
+
+  pda:
+    build: ./pda_flutter
+    container_name: boxtrace-pda
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5100:80"
 
 volumes:
   db-data:

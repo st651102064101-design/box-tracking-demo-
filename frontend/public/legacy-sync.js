@@ -29,6 +29,45 @@
     try { (window.top || window).location.href = '/login'; } catch (e) { location.href = '/login'; }
   }
 
+  /* ── identity: derive the app's "current recorder" name from the JWT,
+     not from a per-device localStorage default ─────────────────────────────
+     The app's own `USER` variable (legacy.html) falls back to whatever
+     'boxtrace_user' happens to be in *this browser's* localStorage, which
+     defaults to 'demo' on a device that's never called pickUser() before.
+     Two devices logged into the exact same account (same username+password →
+     same JWT `name` claim) would then show as different recorders — e.g. PC
+     stays "demo" while a phone that once picked "ทดสอบ" keeps showing
+     "ทดสอบ" forever, even after logging in as the same account elsewhere.
+     Fix: decode the JWT's `name` claim and seed 'boxtrace_user' with it
+     BEFORE the app's own inline script reads that key. This script tag is
+     synchronous and sits in <head>, so it always runs first. */
+  function decodeJwtPayload(t) {
+    try {
+      var seg = t.split('.')[1];
+      if (!seg) return null;
+      seg = seg.replace(/-/g, '+').replace(/_/g, '/');
+      while (seg.length % 4) seg += '=';
+      var json = decodeURIComponent(
+        atob(seg)
+          .split('')
+          .map(function (c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); })
+          .join('')
+      );
+      return JSON.parse(json);
+    } catch (e) { return null; }
+  }
+  (function syncIdentityFromToken() {
+    var t = token();
+    if (!t) return;
+    var payload = decodeJwtPayload(t);
+    if (!payload || !payload.name) return;
+    try {
+      if (localStorage.getItem('boxtrace_user') !== payload.name) {
+        localStorage.setItem('boxtrace_user', payload.name);
+      }
+    } catch (e) {}
+  })();
+
   // Hide the page until server state is primed, to avoid a flash of local/demo
   // data. Revealed again in finishPriming(). (Pure load behaviour — the final
   // rendered UI is unchanged.)
@@ -118,23 +157,21 @@
     if (pendingValue != null && pendingValue !== lastSynced) scheduleSync(pendingValue);
   }
 
-  /* ── logout: reuse the app's existing account chip (no new visible UI) ────*/
-  function wireLogout() {
-    var who = document.querySelector('.who');
-    if (!who || who.getAttribute('data-logout-wired')) return;
-    who.setAttribute('data-logout-wired', '1');
-    who.style.cursor = 'pointer';
-    who.title = 'คลิกเพื่อออกจากระบบ';
-    who.addEventListener('click', function () {
-      if (window.confirm('ออกจากระบบ?')) {
-        try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
-        gotoLogin();
-      }
-    });
-  }
+  /* ── logout: exposed as a function, not a hidden click-hijack on the
+     account chip — that chip already opens the app's own user-picker
+     (pickUser()) on click, and stacking a native confirm() on top of it
+     surprised people with a browser alert on the main screen. The picker
+     modal (and the employee/user-management panel) now carries an explicit
+     "ออกจากระบบ" button that calls this instead. ──────────────────────────*/
+  window.boxtraceLogout = function () {
+    if (window.confirm('ออกจากระบบ?')) {
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+      gotoLogin();
+    }
+  };
 
   // Kick off priming once the DOM (and the app's boot) has run.
-  function boot() { setTimeout(function () { prime(); wireLogout(); }, 0); }
+  function boot() { setTimeout(function () { prime(); }, 0); }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {

@@ -81,7 +81,8 @@ class RfidReaderController(private val context: Context) :
         exec.execute {
             try {
                 if (readers == null) readers = Readers(context, ENUM_TRANSPORT.SERVICE_SERIAL)
-                readers?.attach(this)
+                // attach/deattach are static on Readers, not instance methods
+                Readers.attach(this)
 
                 var list = safeList()
                 // MC3390R = SERVICE_SERIAL; fall back to sled / USB like the sample.

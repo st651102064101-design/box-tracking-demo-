@@ -16,7 +16,7 @@ def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "
 
 android {
     namespace = "com.abss.boxtrace_pda"
-    compileSdk = 34
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -29,8 +29,10 @@ android {
 
     defaultConfig {
         applicationId = "com.abss.boxtrace_pda"
-        // Zebra RFIDAPI3 needs a recent Android; MC3390R ships Android 10/11.
-        minSdk = 24
+        // rfidapi3lib's own manifest declares minSdk 29, so the merger rejects
+        // anything lower. MC3390R ships Android 10/11 (API 29/30), so this
+        // costs us no supported device.
+        minSdk = 29
         targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName

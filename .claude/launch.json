@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "-p", "3100"],
+      "port": 3100
+    },
+    {
+      "name": "pda-web",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-kriangkrai-box-tracking-demo-/4a3759a6-4c26-4782-8177-85c2a3b29564/scratchpad/serve_pda_8090.py"],
+      "port": 8090
+    }
+  ]
+}

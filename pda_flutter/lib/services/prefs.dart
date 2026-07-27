@@ -20,16 +20,33 @@ class Prefs {
   static const _kSession = 'boxtrace_pda_session';
   static const _kOutbox = 'boxtrace_pda_outbox';
 
+  /// Baked in at build time so a device build ships pointing at the right host
+  /// without an operator having to type a URL on a handheld keypad:
+  ///   flutter build apk --dart-define=BOXTRACE_API_BASE=http://192.168.3.128:4000
+  /// Empty (the default) falls through to the per-platform guesses below.
+  static const _compiledBaseUrl =
+      String.fromEnvironment('BOXTRACE_API_BASE', defaultValue: '');
+
   String get baseUrl {
     final saved = _p.getString(_kBaseUrl);
     if (saved != null) return saved;
+    if (_compiledBaseUrl.isNotEmpty) return _compiledBaseUrl;
     // 10.0.2.2 is the Android-emulator-only alias for the host machine — a
     // real browser can never resolve it, so a fresh web visit with no saved
     // setting would otherwise fail to connect before the operator ever gets
-    // a chance to open Settings. The page's own origin is always reachable
-    // from itself, so default to that on web instead; Android keeps the
-    // emulator-friendly default since kIsWeb is false there.
-    if (kIsWeb) return Uri.base.origin;
+    // a chance to open Settings. Android keeps the emulator-friendly default
+    // since kIsWeb is false there.
+    if (kIsWeb) {
+      final b = Uri.base;
+      // Served from the backend itself (same origin, default or API port) —
+      // the origin already answers /api, so keep it. Anything else (notably
+      // `flutter run`'s dev server on its own port) has to be pointed at the
+      // backend's port explicitly or every request 404s on the dev server.
+      if (b.port == 4000 || !b.hasPort || b.port == 80 || b.port == 443) {
+        return b.origin;
+      }
+      return '${b.scheme}://${b.host}:4000';
+    }
     return 'http://10.0.2.2:4000';
   }
 
