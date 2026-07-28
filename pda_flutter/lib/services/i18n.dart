@@ -57,7 +57,7 @@ class LocaleController extends ChangeNotifier {
     '2 · เครื่องนี้ประจำคลังไหน': '2 · Which warehouse is this device stationed at',
     'เชื่อมต่อระบบหลักก่อน จึงจะเลือกคลังได้': 'Connect to the main system first to pick a warehouse',
     '3 · ประจำประตูไหน': '3 · Which gate',
-    '4 · ล็อกหน้าจอเมื่อไม่มีการใช้งาน': '4 · Lock the screen when idle',
+    'ล็อกหน้าจอเมื่อไม่มีการใช้งาน': 'Lock the screen when idle',
     'ไม่ล็อก': 'Never',
     'นาที': 'min',
     'ยิงบัตรอีกครั้งเพื่อปลดล็อก · จะไม่ล็อกขณะมีกล่องค้างอยู่ในคิว':

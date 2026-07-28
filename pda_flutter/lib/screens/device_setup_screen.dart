@@ -191,7 +191,10 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 ),
               ],
               const SizedBox(height: 20),
-              _StepLabel(loc.t('4 · ล็อกหน้าจอเมื่อไม่มีการใช้งาน')),
+              // Unnumbered: the numbered steps are the "where does this device
+              // live" flow, and step 3 only appears once a warehouse is picked —
+              // numbering this one too would show a 1 · 2 · 4 gap until then.
+              _StepLabel(loc.t('ล็อกหน้าจอเมื่อไม่มีการใช้งาน')),
               const SizedBox(height: 11),
               _IdleLockPicker(
                 minutes: c.prefs.idleLockMinutes,

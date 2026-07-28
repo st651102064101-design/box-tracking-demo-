@@ -67,10 +67,19 @@ class Employee {
   /// connection — the only things on the PDA worth gating.
   bool get isSupervisor => access == 'supervisor' || access == 'admin';
 
+  /// What is actually printed on this person's badge. The WMS fills `scanCode`
+  /// in with the employee id when it is left blank, but records created before
+  /// that never got one — so fall back to the id here too, or everyone already
+  /// on file would be unable to badge in until someone re-saved them.
+  String get badgeCode => scanCode.isNotEmpty ? scanCode : id;
+
   /// Badge codes are matched case-insensitively: a printed QR read by the
   /// imager and the same value typed into the WMS shouldn't disagree over case.
-  bool matchesCode(String code) =>
-      scanCode.isNotEmpty && scanCode.toUpperCase() == code.trim().toUpperCase();
+  bool matchesCode(String code) {
+    final c = code.trim().toUpperCase();
+    final badge = badgeCode.toUpperCase();
+    return c.isNotEmpty && badge.isNotEmpty && badge == c;
+  }
 
   String get initials => name.trim().isEmpty ? '?' : name.trim().substring(0, 1);
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
@@ -28,53 +28,82 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _focus = FocusNode();
 
-  /// Characters accumulated from the imager since the last submit. DataWedge
-  /// in keyboard-wedge mode delivers a scan as a burst of key events, so this
-  /// screen listens for raw keys rather than focusing a text field — that way
-  /// the soft keyboard never appears on a device with no text to type.
-  final StringBuffer _buf = StringBuffer();
+  /// The scan lands here. A barcode imager in keyboard-wedge mode types the
+  /// code like a keyboard would, so the capture surface is a real (invisible)
+  /// text field rather than a raw key listener: a field is what actually holds
+  /// input focus on every platform — on web, raw key events never reach the
+  /// app at all unless something focusable owns them — and `TextInputType.none`
+  /// keeps the on-screen keyboard away on the handheld, where there is nothing
+  /// to type by hand.
+  final _badge = TextEditingController();
   Timer? _flush;
 
   @override
   void initState() {
     super.initState();
+    // A stray tap on the background is enough to drop focus, after which the
+    // reader would look dead with nothing on screen to say why. Take it back
+    // whenever it is lost, so the badge screen is always listening.
+    _focus.addListener(_keepFocus);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  void _keepFocus() {
+    if (!mounted || _focus.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_focus.hasFocus) _focus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _flush?.cancel();
+    _focus.removeListener(_keepFocus);
     _focus.dispose();
+    _badge.dispose();
     super.dispose();
   }
 
-  void _submitBuffer() {
+  void _submitBadge() {
     _flush?.cancel();
-    final code = _buf.toString();
-    _buf.clear();
+    final code = _badge.text;
+    _badge.clear();
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
   }
 
-  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
-    if (e is! KeyDownEvent) return KeyEventResult.ignored;
-
-    if (e.logicalKey == LogicalKeyboardKey.enter ||
-        e.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        e.logicalKey == LogicalKeyboardKey.tab) {
-      _submitBuffer();
-      return KeyEventResult.handled;
-    }
-
-    final ch = e.character;
-    if (ch == null || ch.isEmpty || ch.codeUnitAt(0) < 0x20) return KeyEventResult.ignored;
-    _buf.write(ch);
+  void _onBadgeChanged(String v) {
+    _flush?.cancel();
+    if (v.trim().isEmpty) return;
     // Not every DataWedge profile appends an Enter suffix. Nothing else types
     // on this screen, so a short pause is a safe end-of-scan signal.
-    _flush?.cancel();
-    _flush = Timer(const Duration(milliseconds: 250), _submitBuffer);
-    return KeyEventResult.handled;
+    _flush = Timer(const Duration(milliseconds: 250), _submitBadge);
   }
+
+  /// Invisible, but present and focused — see [_badge].
+  Widget _captureField() => SizedBox(
+        width: 1,
+        height: 1,
+        child: Opacity(
+          opacity: 0,
+          child: TextField(
+            controller: _badge,
+            focusNode: _focus,
+            autofocus: true,
+            // On the handheld there is nothing to type by hand, so suppress the
+            // on-screen keyboard — but web treats TextInputType.none as "no text
+            // connection at all" and then never delivers a single character, so
+            // there it has to be an ordinary text field.
+            keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
+            showCursor: false,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+            onChanged: _onBadgeChanged,
+            onSubmitted: (_) => _submitBadge(),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -85,11 +114,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Column(
+    return Stack(
+      children: [
+        Positioned(left: 0, top: 0, child: _captureField()),
+        Column(
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
@@ -170,7 +198,8 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
         ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -186,7 +186,8 @@ Future<AppController> makeController(FakeApi api) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await Prefs.load();
   final c = AppController(api: api, prefs: prefs, rfid: RfidService());
-  api.state = fixtureState();
+  // Only seed the default fixture when the test hasn't supplied its own.
+  if (api.state.isEmpty) api.state = fixtureState();
   await c.refresh();
   c.wh = 'WH-1';
   c.gate = '2';
@@ -514,6 +515,20 @@ void main() {
           reason: 'visiting staff work the gate, they just get a note');
     });
 
+    test('an employee whose scanCode was never set badges in with their id', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      (state['employees'] as Map)['EMP-0005'] = {
+        'id': 'EMP-0005', 'name': 'อารีย์ ไร้บัตร', 'wh': 'WH-1', 'access': 'operator', 'status': 'active',
+      };
+      api.state = state;
+      final c = await makeController(api);
+      c.lock();
+
+      expect(c.identifyByScanCode('EMP-0005'), isNull);
+      expect(c.emp!.name, 'อารีย์ ไร้บัตร');
+    });
+
     test('lock() ends the session but leaves the device stationed and signed in', () async {
       final c = await makeController(FakeApi());
       c.lock();
@@ -577,8 +592,9 @@ void main() {
 
       await c.init();
       expect(c.screen, Screen.deviceSetup);
+      expect(c.wh, 'WH-1',
+          reason: 'the only warehouse on file is not a choice worth asking about');
 
-      c.pickWh('WH-1');
       c.pickGate(3);
       c.saveDevicePost();
       expect(c.prefs.deviceWh, 'WH-1');
@@ -770,6 +786,14 @@ void main() {
     test('an employee with no badge never matches an empty scan', () {
       final e = Employee.fromJson({'id': 'EMP-9', 'name': 'ทดสอบ'});
       expect(e.matchesCode(''), isFalse);
+    });
+
+    test('an employee with no scanCode still badges in with their id', () {
+      // Records created before the WMS started defaulting scanCode — they must
+      // keep working, otherwise every existing employee is locked out.
+      final e = Employee.fromJson({'id': 'EMP-9', 'name': 'ทดสอบ'});
+      expect(e.badgeCode, 'EMP-9');
+      expect(e.matchesCode('emp-9'), isTrue);
     });
   });
 }

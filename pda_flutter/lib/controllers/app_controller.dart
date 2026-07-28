@@ -135,11 +135,18 @@ class AppController extends ChangeNotifier {
     // No operator is ever restored: a shift always starts with a badge scan,
     // which takes a second and can't mis-attribute the next person's work.
     screen = deviceConfigured ? Screen.login : Screen.deviceSetup;
-    if (deviceConfigured) _connectReader();
+    if (deviceConfigured) {
+      _connectReader();
+    } else {
+      _autoSelectSinglePost();
+    }
     _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
+    // Only now, on a device with no cached snapshot, is the warehouse list
+    // known — so a fresh terminal gets its single option filled in too.
+    if (screen == Screen.deviceSetup) _autoSelectSinglePost();
     notifyListeners();
   }
 
@@ -437,7 +444,19 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void goDeviceSetup() => go(Screen.deviceSetup);
+  void goDeviceSetup() {
+    _autoSelectSinglePost();
+    go(Screen.deviceSetup);
+  }
+
+  /// A site with one warehouse — or a warehouse with one gate — offers no real
+  /// choice, so fill it in rather than making whoever provisions the device tap
+  /// the only option there is. [pickWh] handles the single-gate half.
+  void _autoSelectSinglePost() {
+    if (wh.isNotEmpty) return;
+    final whs = warehouseList;
+    if (whs.length == 1) pickWh((whs.first['id'] ?? '').toString());
+  }
 
   // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {
