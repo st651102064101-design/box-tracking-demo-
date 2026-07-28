@@ -80,29 +80,55 @@ class _LoginScreenState extends State<LoginScreen> {
     _flush = Timer(const Duration(milliseconds: 250), _submitBadge);
   }
 
-  /// Invisible, but present and focused — see [_badge].
-  Widget _captureField() => SizedBox(
-        width: 1,
-        height: 1,
-        child: Opacity(
-          opacity: 0,
-          child: TextField(
-            controller: _badge,
-            focusNode: _focus,
-            autofocus: true,
-            // On the handheld there is nothing to type by hand, so suppress the
-            // on-screen keyboard — but web treats TextInputType.none as "no text
-            // connection at all" and then never delivers a single character, so
-            // there it has to be an ordinary text field.
-            keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
-            showCursor: false,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-            onChanged: _onBadgeChanged,
-            onSubmitted: (_) => _submitBadge(),
+  /// The capture field, shown rather than hidden.
+  ///
+  /// A zero-sized invisible field turned out never to establish a text input
+  /// connection at all on web — no DOM input is created, so not one character
+  /// ever arrives. Showing it fixes that, and is the better design anyway: the
+  /// caret is the operator's proof that the terminal is armed and waiting for a
+  /// badge, and a damaged badge can be keyed in by hand instead of stranding
+  /// someone at the gate.
+  Widget _captureField(LocaleController loc) => TextField(
+        controller: _badge,
+        focusNode: _focus,
+        autofocus: true,
+        // On the handheld the scanner does the typing, so keep the on-screen
+        // keyboard away; web has a real keyboard and treats TextInputType.none
+        // as "no text connection", which delivers nothing at all.
+        keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
+        textAlign: TextAlign.center,
+        autocorrect: false,
+        enableSuggestions: false,
+        textCapitalization: TextCapitalization.characters,
+        style: const TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: Colors.white),
+        cursorColor: C.lime,
+        decoration: InputDecoration(
+          hintText: loc.t('ยิงบัตร หรือพิมพ์รหัสพนักงาน'),
+          hintStyle: TextStyle(
+              fontSize: 13.5,
+              letterSpacing: 0,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.42)),
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.08),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: C.lime, width: 1.5),
           ),
         ),
+        onChanged: _onBadgeChanged,
+        onSubmitted: (_) => _submitBadge(),
       );
 
   @override
@@ -114,10 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    return Stack(
-      children: [
-        Positioned(left: 0, top: 0, child: _captureField()),
-        Column(
+    return Column(
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
@@ -159,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onAction: c.goDeviceSetup,
               ),
             ),
-          const _BadgePrompt(),
+          _BadgePrompt(field: _captureField(loc)),
           if (people.isEmpty)
             Expanded(
               child: Center(
@@ -198,15 +221,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
         ],
-        ),
-      ],
     );
   }
 }
 
-/// The "scan your badge" hero — the only instruction on the screen.
+/// The "scan your badge" hero, wrapping the capture field so the instruction
+/// and the thing that actually receives the scan are one object on screen.
 class _BadgePrompt extends StatelessWidget {
-  const _BadgePrompt();
+  final Widget field;
+  const _BadgePrompt({required this.field});
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +266,8 @@ class _BadgePrompt extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.62), height: 1.4),
             ),
+            const SizedBox(height: 16),
+            field,
           ],
         ),
       ),

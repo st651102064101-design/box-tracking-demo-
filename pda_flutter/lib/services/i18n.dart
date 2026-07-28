@@ -27,6 +27,7 @@ class LocaleController extends ChangeNotifier {
   static const Map<String, String> _dict = {
     // badge screen
     'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
+    'ยิงบัตร หรือพิมพ์รหัสพนักงาน': 'Scan a badge, or type an employee id',
     'ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร':
         'Every in/out scan is logged under the badge that was scanned',
     'หรือแตะชื่อของคุณ': 'or tap your name',
