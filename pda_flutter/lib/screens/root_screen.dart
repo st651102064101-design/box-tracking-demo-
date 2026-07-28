@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
-import '../theme.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
 import 'session_setup_screen.dart';
@@ -20,8 +19,11 @@ class RootScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    // Scaffold reads scaffoldBackgroundColor from the Theme (set in buildTheme())
+    // rather than hardcoding C.bg here — Theme propagates via its own
+    // InheritedWidget mechanism, so this repaints on a dark/light toggle even
+    // though RootScreen itself never watches ThemeController directly.
     return Scaffold(
-      backgroundColor: C.bg,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),

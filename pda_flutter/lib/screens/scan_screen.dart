@@ -89,7 +89,7 @@ class _ScanScreenState extends State<ScanScreen> {
         ),
         Container(
           padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
@@ -106,7 +106,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     decoration: BoxDecoration(
                         color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
                     child: Text('${c.queue.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
                   ),
             onTap: (canCommit && !c.busy) ? c.doCommit : null,
@@ -126,7 +126,7 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.outCustomer.isEmpty ? null : c.outCustomer,
             isExpanded: true,
             decoration: pdaInput('— เลือกลูกค้า —', radius: 12),
-            hint: const Text('— เลือกลูกค้า —', style: TextStyle(color: C.faint)),
+            hint: Text('— เลือกลูกค้า —', style: TextStyle(color: C.faint)),
             items: c.customerList.map((cust) {
               final id = (cust['id'] ?? '').toString();
               return DropdownMenuItem(value: id, child: Text('$id · ${cust['name'] ?? ''}', overflow: TextOverflow.ellipsis));
@@ -163,7 +163,7 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.outVehicleType.isEmpty ? null : c.outVehicleType,
             isExpanded: true,
             decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
-            hint: const Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
+            hint: Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
             items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
             onChanged: (v) => c.setOutVehicleType(v ?? ''),
           ),
@@ -176,7 +176,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 decoration: pdaInput('เช่น รถตู้ / รถพ่วง', radius: 12)),
           ],
           const SizedBox(height: 8),
-          const Text('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก',
+          Text('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก',
               style: TextStyle(fontSize: 11.5, color: C.muted)),
         ],
       ),
@@ -223,7 +223,7 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.inVehicleType.isEmpty ? null : c.inVehicleType,
             isExpanded: true,
             decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
-            hint: const Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
+            hint: Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
             items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
             onChanged: (v) => c.setInVehicleType(v ?? ''),
           ),
@@ -264,7 +264,7 @@ class _ScanScreenState extends State<ScanScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('GATE · ${c.mode == 'in' ? 'INBOUND' : 'OUTBOUND'}',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: C.muted)),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: C.muted)),
               Row(
                 children: [
                   Container(
@@ -277,7 +277,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(readyText, style: const TextStyle(fontSize: 11, color: C.muted)),
+                  Text(readyText, style: TextStyle(fontSize: 11, color: C.muted)),
                 ],
               ),
             ],
@@ -299,22 +299,22 @@ class _ScanScreenState extends State<ScanScreen> {
                       fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
                   decoration: InputDecoration(
                     hintText: 'ยิงบาร์โค้ด / RFID หรือพิมพ์รหัส',
-                    hintStyle: const TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
                     filled: true,
                     fillColor: C.surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: C.fieldBorder, width: 1.5),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: C.fieldBorder, width: 1.5),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: C.ink, width: 1.5),
+                      borderSide: BorderSide(color: C.ink, width: 1.5),
                     ),
                   ),
                 ),
@@ -419,11 +419,11 @@ class _ScanScreenState extends State<ScanScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text('คิวสแกน · ${c.queue.length} ใบ',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
           if (c.queue.isNotEmpty)
             GestureDetector(
               onTap: c.clearQueue,
-              child: const Text('ล้างคิว', style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w500)),
+              child: Text('ล้างคิว', style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w500)),
             ),
         ],
       ),
@@ -432,7 +432,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   List<Widget> _queueList(AppController c) {
     if (c.queue.isEmpty) {
-      return const [
+      return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 26, horizontal: 16),
           child: Center(
@@ -478,7 +478,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(9)),
-                child: const Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+                child: Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -492,7 +492,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     Text(S?.typeName(b?.type) ?? '-',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: C.muted)),
+                        style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
               ),
@@ -500,7 +500,7 @@ class _ScanScreenState extends State<ScanScreen> {
               const SizedBox(width: 6),
               GestureDetector(
                 onTap: () => c.removeFromQueue(t),
-                child: const SizedBox(
+                child: SizedBox(
                     width: 28, height: 28, child: Icon(Icons.close, size: 17, color: C.chevron)),
               ),
             ],

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/i18n.dart';
+import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -13,6 +14,7 @@ class SessionSetupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
+    final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final canStart = c.wh.isNotEmpty && c.gate.isNotEmpty;
 
@@ -22,7 +24,7 @@ class SessionSetupScreen extends StatelessWidget {
           onBack: () => c.go(Screen.login),
           title: Text(loc.t('ตั้งค่ากะทำงาน')),
           subtitle: Text('${loc.t('ผู้ปฏิบัติงาน')} · ${c.user}'),
-          actions: [LangToggleButton(loc: loc)],
+          actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
         ),
         Expanded(
           child: ListView(
@@ -71,7 +73,7 @@ class SessionSetupScreen extends StatelessWidget {
         ),
         Container(
           padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
@@ -83,8 +85,8 @@ class SessionSetupScreen extends StatelessWidget {
             label: loc.t('เริ่มกะทำงาน'),
             icon: null,
             trailing: canStart
-                ? const Icon(Icons.arrow_forward, size: 19, color: C.limeDeep)
-                : const Icon(Icons.arrow_forward, size: 19, color: C.faint),
+                ? Icon(Icons.arrow_forward, size: 19, color: C.limeDeep)
+                : Icon(Icons.arrow_forward, size: 19, color: C.faint),
             onTap: canStart ? c.startShift : null,
           ),
         ),
@@ -109,7 +111,7 @@ class _StepLabel extends StatelessWidget {
   const _StepLabel(this.text);
   @override
   Widget build(BuildContext context) =>
-      Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink));
+      Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink));
 }
 
 class _WarehouseTile extends StatelessWidget {
@@ -142,7 +144,7 @@ class _WarehouseTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
-                    Text(gateText, style: const TextStyle(fontSize: 12, color: C.muted)),
+                    Text(gateText, style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
               ),
@@ -150,8 +152,8 @@ class _WarehouseTile extends StatelessWidget {
                 Container(
                   width: 24,
                   height: 24,
-                  decoration: const BoxDecoration(color: C.lime, shape: BoxShape.circle),
-                  child: const Icon(Icons.check, size: 15, color: C.limeDeep),
+                  decoration: BoxDecoration(color: C.lime, shape: BoxShape.circle),
+                  child: Icon(Icons.check, size: 15, color: C.limeDeep),
                 ),
             ],
           ),

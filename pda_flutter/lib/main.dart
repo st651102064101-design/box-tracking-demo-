@@ -7,6 +7,7 @@ import 'services/api_client.dart';
 import 'services/i18n.dart';
 import 'services/prefs.dart';
 import 'services/rfid_service.dart';
+import 'services/theme_controller.dart';
 import 'theme.dart';
 import 'screens/root_screen.dart';
 
@@ -19,16 +20,18 @@ Future<void> main() async {
   final rfid = RfidService();
   final controller = AppController(api: api, prefs: prefs, rfid: rfid);
   final locale = LocaleController(prefs);
+  final themeCtrl = ThemeController(prefs);
   // fire-and-forget bootstrap (auth + state fetch), UI shows the boot splash
   controller.init();
 
-  runApp(BoxTraceApp(controller: controller, locale: locale));
+  runApp(BoxTraceApp(controller: controller, locale: locale, themeCtrl: themeCtrl));
 }
 
 class BoxTraceApp extends StatelessWidget {
   final AppController controller;
   final LocaleController locale;
-  const BoxTraceApp({super.key, required this.controller, required this.locale});
+  final ThemeController themeCtrl;
+  const BoxTraceApp({super.key, required this.controller, required this.locale, required this.themeCtrl});
 
   @override
   Widget build(BuildContext context) {
@@ -36,12 +39,20 @@ class BoxTraceApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: controller),
         ChangeNotifierProvider.value(value: locale),
+        ChangeNotifierProvider.value(value: themeCtrl),
       ],
-      child: MaterialApp(
-        title: 'BoxTrace PDA',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        home: const RootScreen(),
+      child: Builder(
+        // Needs its own context (below MultiProvider) so watching ThemeController
+        // rebuilds MaterialApp — and re-invokes buildTheme() — on every toggle.
+        builder: (context) {
+          context.watch<ThemeController>();
+          return MaterialApp(
+            title: 'BoxTrace PDA',
+            debugShowCheckedModeBanner: false,
+            theme: buildTheme(),
+            home: const RootScreen(),
+          );
+        },
       ),
     );
   }

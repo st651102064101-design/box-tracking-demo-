@@ -32,10 +32,10 @@ class HomeScreen extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-                    Text('${c.selWhName} · ประตู ${c.gate}',
+                    Text('${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: C.muted)),
+                        style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
               ),
@@ -59,7 +59,7 @@ class HomeScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: C.orangeBorder),
                     ),
-                    child: const Text(
+                    child: Text(
                       'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง',
                       style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
                     ),
@@ -78,25 +78,31 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 16),
               const Caption('งานหลัก'),
               const SizedBox(height: 10),
-              _ActionCard(
-                dark: true,
-                icon: Icons.south,
-                iconColor: C.lime,
-                iconBg: Colors.white.withOpacity(0.12),
-                title: 'รับเข้า / รับคืน',
-                sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
-                onTap: c.goScanIn,
-              ),
-              const SizedBox(height: 12),
-              _ActionCard(
-                icon: Icons.north,
-                iconColor: C.orange,
-                iconBg: C.orangeBg,
-                title: 'ส่งออก',
-                sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
-                onTap: c.goScanOut,
-              ),
-              const SizedBox(height: 12),
+              // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
+              // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
+              if (c.currentGateType != 'out') ...[
+                _ActionCard(
+                  dark: true,
+                  icon: Icons.south,
+                  iconColor: C.lime,
+                  iconBg: Colors.white.withOpacity(0.12),
+                  title: 'รับเข้า / รับคืน',
+                  sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
+                  onTap: c.goScanIn,
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (c.currentGateType != 'in') ...[
+                _ActionCard(
+                  icon: Icons.north,
+                  iconColor: C.orange,
+                  iconBg: C.orangeBg,
+                  title: 'ส่งออก',
+                  sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
+                  onTap: c.goScanOut,
+                ),
+                const SizedBox(height: 12),
+              ],
               _ActionCard(
                 small: true,
                 icon: Icons.search,
@@ -115,6 +121,17 @@ class HomeScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+String _gateDirSuffix(String dir) {
+  switch (dir) {
+    case 'in':
+      return ' (เข้า)';
+    case 'out':
+      return ' (ออก)';
+    default:
+      return '';
   }
 }
 
@@ -137,7 +154,7 @@ class _Stat extends StatelessWidget {
                   letterSpacing: -0.6,
                   color: valueColor ?? C.ink,
                   fontFeatures: const [FontFeature.tabularFigures()])),
-          Text(label, style: const TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -156,8 +173,8 @@ class _TodayStat extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 5),
-          const Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
-          Text('↓$inN · ↑$outN', style: const TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
+          Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
+          Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -268,7 +285,7 @@ class _OutboxBanner extends StatelessWidget {
                     fontFeatures: [FontFeature.tabularFigures()])),
           ),
           const SizedBox(width: 11),
-          const Expanded(
+          Expanded(
             child: Text('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์',
                 style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
           ),

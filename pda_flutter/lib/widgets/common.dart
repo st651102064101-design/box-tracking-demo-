@@ -30,7 +30,7 @@ class Wordmark extends StatelessWidget {
     return Text.rich(
       TextSpan(
         style: TextStyle(fontSize: size, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: C.ink),
-        children: const [
+        children: [
           TextSpan(text: 'BoxTrace '),
           TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),
         ],
@@ -128,7 +128,7 @@ class RoundIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: C.surface,
-      shape: CircleBorder(side: const BorderSide(color: C.border)),
+      shape: CircleBorder(side: BorderSide(color: C.border)),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
@@ -167,7 +167,7 @@ class StickyHeader extends StatelessWidget {
     final top = MediaQuery.of(context).padding.top;
     return Container(
       padding: EdgeInsets.fromLTRB(16, top + 12, 16, 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xDBF5F5F7),
         border: Border(bottom: BorderSide(color: C.border, width: 0.5)),
       ),
@@ -183,12 +183,12 @@ class StickyHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DefaultTextStyle(
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: C.ink),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: C.ink),
                   child: title,
                 ),
                 if (subtitle != null)
                   DefaultTextStyle(
-                    style: const TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w400),
+                    style: TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w400),
                     child: subtitle!,
                   ),
               ],
@@ -245,7 +245,7 @@ class FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
+        child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
       );
 }
 
@@ -256,18 +256,18 @@ InputDecoration pdaInput(String hint, {double radius = 13}) => InputDecoration(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
       fillColor: C.surface,
-      hintStyle: const TextStyle(color: C.faint),
+      hintStyle: TextStyle(color: C.faint),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radius),
-        borderSide: const BorderSide(color: C.border2, width: 1.5),
+        borderSide: BorderSide(color: C.border2, width: 1.5),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radius),
-        borderSide: const BorderSide(color: C.border2, width: 1.5),
+        borderSide: BorderSide(color: C.border2, width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radius),
-        borderSide: const BorderSide(color: C.ink, width: 1.5),
+        borderSide: BorderSide(color: C.ink, width: 1.5),
       ),
     );
 
@@ -278,7 +278,7 @@ class Caption extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 12, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.5),
       );
 }

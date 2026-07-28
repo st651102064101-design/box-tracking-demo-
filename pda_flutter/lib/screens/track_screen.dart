@@ -68,8 +68,8 @@ class _TrackScreenState extends State<TrackScreen> {
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: 'รหัสกล่อง เช่น CRT-01',
-                  hintStyle: const TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                  prefixIcon: const Icon(Icons.search, color: C.muted),
+                  hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                  prefixIcon: Icon(Icons.search, color: C.muted),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.arrow_forward, color: Colors.white),
                     style: IconButton.styleFrom(
@@ -81,15 +81,15 @@ class _TrackScreenState extends State<TrackScreen> {
                   fillColor: C.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: C.fieldBorder, width: 1.5),
+                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: C.fieldBorder, width: 1.5),
+                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: C.ink, width: 1.5),
+                    borderSide: BorderSide(color: C.ink, width: 1.5),
                   ),
                 ),
               ),
@@ -99,7 +99,7 @@ class _TrackScreenState extends State<TrackScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
                     child: Text('ไม่พบกล่อง "${c.trackVal}" ในระบบ',
-                        style: const TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
+                        style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
               if (box != null) _card(c, box),
@@ -160,7 +160,7 @@ class _TrackScreenState extends State<TrackScreen> {
           // header
           Container(
             padding: const EdgeInsets.all(18),
-            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: C.neutralBg2))),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: C.neutralBg2))),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -168,7 +168,7 @@ class _TrackScreenState extends State<TrackScreen> {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(15)),
-                  child: const Icon(Icons.inventory_2_outlined, size: 28, color: C.ink2),
+                  child: Icon(Icons.inventory_2_outlined, size: 28, color: C.ink2),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -179,7 +179,7 @@ class _TrackScreenState extends State<TrackScreen> {
                       Text(b.tag,
                           style: const TextStyle(
                               fontSize: 21, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.4)),
-                      Text(S.typeName(b.type), style: const TextStyle(fontSize: 13, color: C.muted)),
+                      Text(S.typeName(b.type), style: TextStyle(fontSize: 13, color: C.muted)),
                     ],
                   ),
                 ),
@@ -250,7 +250,7 @@ class _TrackScreenState extends State<TrackScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13.5, color: C.muted)),
+        Text(label, style: TextStyle(fontSize: 13.5, color: C.muted)),
         const Spacer(),
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
@@ -288,7 +288,7 @@ class _TrackScreenState extends State<TrackScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.3)),
-                  Text(meta, style: const TextStyle(fontSize: 12, color: C.muted)),
+                  Text(meta, style: TextStyle(fontSize: 12, color: C.muted)),
                 ],
               ),
             ),

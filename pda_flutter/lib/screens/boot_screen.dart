@@ -17,10 +17,10 @@ class BootScreen extends StatelessWidget {
             height: 78,
             decoration: BoxDecoration(color: C.ink, borderRadius: BorderRadius.circular(20)),
             alignment: Alignment.center,
-            child: const Text('◈', style: TextStyle(color: C.lime, fontSize: 38, fontWeight: FontWeight.w800)),
+            child: Text('◈', style: TextStyle(color: C.lime, fontSize: 38, fontWeight: FontWeight.w800)),
           ),
           const SizedBox(height: 18),
-          const Text.rich(
+          Text.rich(
             TextSpan(
               style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: C.ink),
               children: [
@@ -30,10 +30,10 @@ class BootScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          const Text('Zebra MC3390R · Handheld Terminal',
+          Text('Zebra MC3390R · Handheld Terminal',
               style: TextStyle(fontSize: 13, color: C.muted)),
           const SizedBox(height: 18),
-          const SizedBox(
+          SizedBox(
             width: 22,
             height: 22,
             child: CircularProgressIndicator(strokeWidth: 2.5, color: C.ink),

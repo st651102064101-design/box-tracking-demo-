@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/i18n.dart';
+import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -13,6 +14,7 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
+    final themeCtrl = context.watch<ThemeController>();
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
 
@@ -49,11 +51,13 @@ class LoginScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Wordmark(),
-                        Text(loc.t('เข้าสู่ระบบก่อนเริ่มกะ'), style: const TextStyle(fontSize: 12, color: C.muted)),
+                        Text(loc.t('เข้าสู่ระบบก่อนเริ่มกะ'), style: TextStyle(fontSize: 12, color: C.muted)),
                       ],
                     ),
                   ),
                   LangToggleButton(loc: loc),
+                  const SizedBox(width: 8),
+                  ThemeToggleButton(ctrl: themeCtrl),
                 ],
               ),
               const SizedBox(height: 22),
@@ -61,7 +65,7 @@ class LoginScreen extends StatelessWidget {
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
               const SizedBox(height: 6),
               Text(loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน'),
-                  style: const TextStyle(fontSize: 13.5, color: C.muted)),
+                  style: TextStyle(fontSize: 13.5, color: C.muted)),
             ],
           ),
         ),
@@ -82,7 +86,7 @@ class LoginScreen extends StatelessWidget {
                     c.connError == null
                         ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
                         : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
-                    style: const TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
+                    style: TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
                   ),
                   const SizedBox(height: 9),
                   _smallOutline(loc.t('ตั้งค่าการเชื่อมต่อ'), () => c.go(Screen.settings)),
@@ -98,7 +102,7 @@ class LoginScreen extends StatelessWidget {
                     child: Text(
                       loc.t(c.connected ? 'ยังไม่มีบัญชีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 13.5, color: C.faint),
+                      style: TextStyle(fontSize: 13.5, color: C.faint),
                     ),
                   ),
                 )
@@ -125,7 +129,7 @@ class LoginScreen extends StatelessWidget {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           foregroundColor: C.orange,
-          side: const BorderSide(color: C.orangeBorder),
+          side: BorderSide(color: C.orangeBorder),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
         ),
@@ -218,11 +222,11 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: const BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
                   alignment: Alignment.center,
                   child: Text(
                     widget.name.trim().isEmpty ? '?' : widget.name.trim().substring(0, 1),
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.ink2),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.ink2),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -235,7 +239,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      Text(loc.t('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ'), style: const TextStyle(fontSize: 12, color: C.muted)),
+                      Text(loc.t('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ'), style: TextStyle(fontSize: 12, color: C.muted)),
                     ],
                   ),
                 ),
@@ -252,7 +256,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(loc.t(_error!), style: const TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
+              Text(loc.t(_error!), style: TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 16),
             Row(
@@ -262,7 +266,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                     onPressed: _submitting ? null : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: C.ink2,
-                      side: const BorderSide(color: C.border2),
+                      side: BorderSide(color: C.border2),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                     ),
@@ -321,10 +325,10 @@ class _EmployeeTile extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: const BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Text(initials,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink2)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink2)),
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -335,15 +339,15 @@ class _EmployeeTile extends StatelessWidget {
                     Text(name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
                     Text(sub,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12.5, color: C.muted)),
+                        style: TextStyle(fontSize: 12.5, color: C.muted)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: C.chevron, size: 20),
+              Icon(Icons.chevron_right, color: C.chevron, size: 20),
             ],
           ),
         ),

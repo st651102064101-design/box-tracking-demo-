@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme.dart';
 import 'prefs.dart';
 
 /// TH/EN toggle for the PDA app, mirroring the language switch already used
@@ -74,7 +75,7 @@ class LangToggleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isEn = loc.lang == 'en';
     return Material(
-      color: const Color(0xFFEDEDF0),
+      color: C.neutralBg,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -88,16 +89,16 @@ class LangToggleButton extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: isEn ? FontWeight.w500 : FontWeight.w800,
-                      color: isEn ? Colors.black38 : Colors.black)),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text('|', style: TextStyle(fontSize: 12, color: Colors.black26)),
+                      color: isEn ? C.faint : C.ink)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('|', style: TextStyle(fontSize: 12, color: C.chevron)),
               ),
               Text('EN',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: isEn ? FontWeight.w800 : FontWeight.w500,
-                      color: isEn ? Colors.black : Colors.black38)),
+                      color: isEn ? C.ink : C.faint)),
             ],
           ),
         ),

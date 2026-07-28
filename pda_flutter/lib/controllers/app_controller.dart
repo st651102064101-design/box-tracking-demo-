@@ -857,6 +857,10 @@ class AppController extends ChangeNotifier {
   /// a gate the warehouse doesn't classify defaults to 'both' here.
   String gateTypeOf(int gate) => S?.gateTypesOf(wh)['$gate'] ?? 'both';
 
+  /// 'in' | 'out' | 'both' for the gate the operator is currently working —
+  /// used to hide the Gate In/Out action that doesn't apply to this gate.
+  String get currentGateType => gateTypeOf(int.tryParse(gate) ?? 0);
+
   List<Map<String, dynamic>> get customerList {
     final c = S?.customers.values ?? const [];
     return c.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();

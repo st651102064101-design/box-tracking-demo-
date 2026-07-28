@@ -73,7 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                               ),
                               Text('พบ ${c.boxCount} กล่องในฐานข้อมูล',
-                                  style: const TextStyle(fontSize: 12, color: C.muted)),
+                                  style: TextStyle(fontSize: 12, color: C.muted)),
                             ],
                           ),
                         ),
@@ -93,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: c.busy ? null : () => c.applyConnection(baseUrl: _url.text),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Emulator ใช้ 10.0.2.2 · เครื่องจริงใช้ IP ของเครื่องที่รัน backend (พอร์ต 4000)',
                       style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
                     ),
@@ -131,7 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onPressed: () => c.rfid.connect(),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: C.ink,
-                            side: const BorderSide(color: C.border2),
+                            side: BorderSide(color: C.border2),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                           ),
                           child: const Text('เชื่อมต่อใหม่'),
@@ -141,7 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (c.rfidStatus.message.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Text(c.rfidStatus.message, style: const TextStyle(fontSize: 12, color: C.muted)),
+                        child: Text(c.rfidStatus.message, style: TextStyle(fontSize: 12, color: C.muted)),
                       ),
                   ],
                 ),
@@ -163,7 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: c.doLogout,
               ),
               const SizedBox(height: 18),
-              const Center(
+              Center(
                 child: Text(
                   'BoxTrace PDA · v1.0\nFlutter + Zebra RFIDAPI3 · เชื่อมกับ BoxTrace backend',
                   textAlign: TextAlign.center,
@@ -245,11 +245,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(sub,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12.5, color: C.muted)),
+                        style: TextStyle(fontSize: 12.5, color: C.muted)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: C.chevron, size: 20),
+              Icon(Icons.chevron_right, color: C.chevron, size: 20),
             ],
           ),
         ),
