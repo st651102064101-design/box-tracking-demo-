@@ -11240,29 +11240,32 @@ function addArrowPaint(x,z,into,material,scale){
    ══════════════════════════════════════════════════════════════ */
 const _dummy=new THREE.Object3D(),_col=new THREE.Color();
 const SEL_COL=0xa8f931;
+/* เกินจำนวนนี้ = คลังใหญ่ระดับหลักหมื่นชิ้น ให้ตัดเงาของตัวสินค้าเพื่อรักษาเฟรมเรต */
+const SHADOW_INSTANCE_LIMIT=8000;
 /* ตำแหน่ง/ขนาดของทั้ง 3 ชิ้นย่อยของกล่องหนึ่งใบ — ต้องตรงกับที่ addBox เคยวาง
    ผ่าน Group (กล่องกลางสูง h/2, พาเลทใต้ -0.06, เทปบนฝา h+0.008) */
-function boxParts(r){
+/* รูปทรงของชิ้นย่อยทั้งหมดของกล่องหนึ่งใบ — ตำแหน่ง/ขนาดต้องตรงกับที่ addBox
+   เคยวางผ่าน Group (ตัวกล่องกลางสูง h/2, พาเลทใต้ -0.06, เทปบนฝา h+0.008) */
+function boxPartSpecs(r){
   const d=r.d,sc=r.sc,out=[];
-  out.push({i:r.bi,part:'body',py:r.y+r.lift+(d.h*sc)/2,sx:d.l*sc,sy:d.h*sc,sz:d.w*sc});
-  if(r.pi>=0)out.push({i:r.pi,part:'pallet',py:r.y+r.lift-0.06*sc,sx:Math.max(d.l,1.05)*sc,sy:0.12*sc,sz:Math.max(d.w,1.05)*sc});
-  if(r.ti>=0)out.push({i:r.ti,part:'tape',py:r.y+r.lift+(d.h+0.008)*sc,sx:d.l*0.96*sc,sy:0.014*sc,sz:0.16*sc});
+  out.push({part:'body',py:r.y+r.lift+(d.h*sc)/2,sx:d.l*sc,sy:d.h*sc,sz:d.w*sc});
+  if(r.hasPallet)out.push({part:'pallet',py:r.y+r.lift-0.06*sc,sx:Math.max(d.l,1.05)*sc,sy:0.12*sc,sz:Math.max(d.w,1.05)*sc});
+  else out.push({part:'tape',py:r.y+r.lift+(d.h+0.008)*sc,sx:d.l*0.96*sc,sy:0.014*sc,sz:0.16*sc});
   return out;
 }
-/* เขียนทั้ง matrix และสีของกล่องหนึ่งใบลง instance — เรียกซ้ำได้ตลอดเวลา
-   (ตัวกรองเปลี่ยน / เลือกกล่อง / สายพานเลื่อน) โดยไม่แตะ geometry หรือ material */
-function writeBoxInstances(r){
-  if(!BOXI.solid||!BOXI.ghost||r.bi<0)return;
-  const on=matchFilter(r.b)&&passLayer(r.b);
+/* เขียน matrix + สีของกล่องใบเดียวลง instance ที่ repackInstances จองไว้ให้แล้ว
+   ใช้ตอนที่มีแค่ไม่กี่ใบขยับ (สายพาน) โดยไม่ต้องจัดสรรใหม่ทั้งคลัง */
+function writeBoxAt(r){
+  const m=r.mesh;if(!m||!r.idx)return;
+  const on=(m===BOXI.solid);
   const selHere=sel&&sel.type==='box'&&sel.tag===r.tag;
   const vc=on?vizColor(r):null;
-  const tgt=on?BOXI.solid:BOXI.ghost,other=on?BOXI.ghost:BOXI.solid;
-  boxParts(r).forEach(p=>{
+  boxPartSpecs(r).forEach((p,k)=>{
+    const idx=r.idx[k];if(idx==null)return;
     _dummy.rotation.set(0,0,0);
     _dummy.position.set(r.x,p.py,r.z);
     _dummy.scale.set(p.sx,p.sy,p.sz);
-    _dummy.updateMatrix();tgt.setMatrixAt(p.i,_dummy.matrix);
-    _dummy.scale.set(0,0,0);_dummy.updateMatrix();other.setMatrixAt(p.i,_dummy.matrix);
+    _dummy.updateMatrix();m.setMatrixAt(idx,_dummy.matrix);
     if(!on)_col.copy(MAT.dim.color);
     else if(selHere)_col.set(SEL_COL);
     else if(p.part==='pallet')_col.copy(MAT.wood.color);
@@ -11271,7 +11274,7 @@ function writeBoxInstances(r){
     else _col.copy((MAT['box'+r.kind]||MAT.boxRack).color);
     /* จำสีฐานของตัวกล่องไว้ให้ animateAlerts ผสม pulse ทับได้โดยไม่ต้องคำนวณใหม่ทุกเฟรม */
     if(p.part==='body'){if(!r.bodyCol)r.bodyCol=new THREE.Color();r.bodyCol.copy(_col);}
-    tgt.setColorAt(p.i,_col);
+    m.setColorAt(idx,_col);
   });
 }
 function markBoxInstancesDirty(){
@@ -11281,27 +11284,44 @@ function markBoxInstancesDirty(){
     if(m.instanceColor)m.instanceColor.needsUpdate=true;
   });
 }
+/* จัดสรร instance ใหม่ทั้งชุด: ของที่มองเห็นไปกองไว้ต้นก้อนทึบ ที่ถูกกรองไปก้อนจาง
+   แล้วหด .count ให้เท่าที่ใช้จริง — GPU จึงไม่ต้องประมวลผล instance เปล่าที่ถูกย่อ
+   เป็นศูนย์ทิ้งไว้ (ซึ่งยังกิน vertex shader อยู่ดี แม้จะไม่เห็นบนจอ) */
+function repackInstances(){
+  if(!BOXI.solid||!BOXI.ghost)return;
+  let si=0,gi=0;
+  BOXI.byBody=new Map();
+  boxRecs.forEach(r=>{
+    const on=matchFilter(r.b)&&passLayer(r.b);
+    r.mesh=on?BOXI.solid:BOXI.ghost;
+    r.idx=boxPartSpecs(r).map(()=>on?si++:gi++);
+    if(on)r.idx.forEach(i=>BOXI.byBody.set(i,r));
+    writeBoxAt(r);
+  });
+  BOXI.solid.count=si;BOXI.ghost.count=gi;
+  markBoxInstancesDirty();
+  rebuildAlerts();
+}
 function commitBoxInstances(){
   if(!boxRecs.length)return;
-  /* จองช่องให้ทุกชิ้นย่อยก่อน แล้วค่อยสร้าง mesh ตามจำนวนที่ได้จริง */
-  let n=0;
-  boxRecs.forEach(r=>{
-    r.bi=n++;
-    if(r.hasPallet)r.pi=n++;else r.ti=n++;
-    BOXI.byBody.set(r.bi,r);
-  });
+  /* ความจุสูงสุด = ทุกชิ้นย่อยของทุกใบ (กรณีที่ทุกใบไปกองอยู่ก้อนเดียว) */
+  const n=boxRecs.reduce((s,r)=>s+boxPartSpecs(r).length,0);
   BOXI.slots=n;
+  /* กล่องที่ทอดเงาต้องถูกวาดซ้ำอีกรอบใน shadow pass — พอของเต็มคลังหลักหมื่นใบ
+     ค่านี้กลายเป็นต้นทุนหลักของเฟรม ทั้งที่เงาของกล่องใบเล็กๆ ในชั้นวางแทบไม่มีผล
+     ต่อการอ่านภาพ จึงตัดเงาของ "ตัวสินค้า" ทิ้งเมื่อของเยอะ (โครงแร็ค/อาคาร/รถ
+     ยังทอดเงาตามปกติ ภาพรวมจึงยังมีมิติเหมือนเดิม) */
+  const heavy=n>SHADOW_INSTANCE_LIMIT;
   const mk=matl=>{
     const im=new THREE.InstancedMesh(GEO.unit,matl,n);
-    im.castShadow=true;im.receiveShadow=true;
+    im.castShadow=!heavy;im.receiveShadow=!heavy;
     im.frustumCulled=false;      /* ก้อนเดียวกินทั้งคลัง — cull รวมทีเดียวไม่ได้ */
     root.add(im);return im;
   };
   BOXI.solid=mk(MAT.boxInst);
   BOXI.ghost=mk(MAT.boxGhost);
   BOXI.ghost.castShadow=false;   /* เงาของกล่องที่จางอยู่แล้วรบกวนสายตาเปล่าๆ */
-  boxRecs.forEach(writeBoxInstances);
-  markBoxInstancesDirty();
+  repackInstances();
 }
 /* คืน record ของกล่องจาก instanceId ที่ raycaster ชี้โดน — instance ที่เป็นพาเลท
    หรือเทปให้ถือว่าเป็นกล่องใบเดียวกัน จะได้คลิกโดนทั้งใบ */
@@ -11313,7 +11333,7 @@ function recFromInstanceId(id){
 
 /* ══════════════════════════════════════════════════════════════
    6.6 · SPATIAL ALERTS — กล่องที่ต้องรีบจัดการจะกะพริบเรียกสายตา
-   สีฐานของกล่องถูกจำไว้ตอน writeBoxInstances แล้ว pulse แค่ผสมทับทุกเฟรม
+   สีฐานของกล่องถูกจำไว้ตอน writeBoxAt แล้ว pulse แค่ผสมทับทุกเฟรม
    เมื่อสถานะถูกแก้ (คืนของ/เปลี่ยนวันหมดอายุ) build รอบถัดไปจะไม่เข้าลิสต์อีก
    ไฟจึงดับเองทันที ไม่ต้องสั่งดับแยก
    ══════════════════════════════════════════════════════════════ */
@@ -11335,7 +11355,7 @@ function alertKindOf(b){
 /* เฉพาะกล่องที่ "มองเห็นอยู่จริง" เท่านั้นที่กะพริบ — ที่ถูกกรองจนจางหรือถูกเลือกอยู่
    ไม่ต้องกะพริบซ้อน เพราะสีของมันถูกกำหนดไว้ด้วยเหตุผลอื่นแล้ว */
 function rebuildAlerts(){
-  ALERTS=boxRecs.filter(r=>r.bi>=0&&r.alert&&matchFilter(r.b)&&passLayer(r.b)
+  ALERTS=boxRecs.filter(r=>r.alert&&r.mesh===BOXI.solid&&r.idx
     &&!(sel&&sel.type==='box'&&sel.tag===r.tag));
 }
 function animateAlerts(dt){
@@ -11347,7 +11367,7 @@ function animateAlerts(dt){
   ALERTS.forEach(r=>{
     const over=r.alert==='overdue';
     _col.copy(r.bodyCol||MAT.boxRack.color).lerp(over?ALERT_OVERDUE:ALERT_EXPIRY,over?pOver:pExp*0.85);
-    BOXI.solid.setColorAt(r.bi,_col);
+    BOXI.solid.setColorAt(r.idx[0],_col);
   });
   if(BOXI.solid.instanceColor)BOXI.solid.instanceColor.needsUpdate=true;
 }
@@ -11710,7 +11730,7 @@ function build(){
     const hasPallet=d.l>=0.95;
     const lift=(hasPallet?0.12:0)*sc;
     const rec={tag:b.tag,b,kind,sc,d,hasPallet,x,y,z,lift,
-      bi:-1,pi:-1,ti:-1,aisleX:null,alert:alertKindOf(b),bodyCol:null,
+      mesh:null,idx:null,aisleX:null,alert:alertKindOf(b),bodyCol:null,
       pos:new THREE.Vector3(x,y+(d.h*sc)/2+lift,z)};
     boxRecs.push(rec);tagIndex.set(b.tag,rec);return rec;
   }
@@ -12575,12 +12595,7 @@ function passLayer(b){
 
 /* ตัวกรอง / การเลือก / โหมดวิเคราะห์ ทั้งหมดลงเอยที่สีของ instance เดิม จึงเหลือ
    แค่เขียนสี+matrix ใหม่รอบเดียว ไม่ต้องไล่สลับ material รายกล่องอีกต่อไป */
-function applyFilters(){
-  if(!BOXI.solid)return;
-  boxRecs.forEach(writeBoxInstances);
-  markBoxInstancesDirty();
-  rebuildAlerts();
-}
+function applyFilters(){repackInstances();}
 
 function renderVizLegend(){
   const el=document.getElementById('w3dVizLegend');
@@ -12861,7 +12876,7 @@ function tick(){
         const lx=((it.localX+cv.phase)%cv.width+cv.width)%cv.width;
         const x=cv.left+lx;
         it.rec.x=x;it.rec.pos.x=x;
-        writeBoxInstances(it.rec);beltMoved=true;
+        writeBoxAt(it.rec);beltMoved=true;
       });
     });
     if(beltMoved)markBoxInstancesDirty();
