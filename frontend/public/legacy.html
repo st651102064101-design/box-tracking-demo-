@@ -10897,6 +10897,11 @@ const MAT={
   yardPad:mat(0xffffff,{transparent:true,opacity:0.86,roughness:0.95}),
   lostPad:mat(0xffe9ea,{transparent:true,opacity:0.9,roughness:0.95}),
   dim:mat(0x9a9a9e,{transparent:true,opacity:0.07,depthWrite:false}),
+  /* กล่อง/พาเลท/เทป ทุกชิ้นเรนเดอร์ผ่าน InstancedMesh 2 ก้อนนี้เท่านั้น (ทึบ + จาง)
+     สีขาวล้วนเพื่อให้ instanceColor คูณออกมาเป็นสีจริง — เปลี่ยนสีรายชิ้นด้วย
+     setColorAt() ไม่ต้องสลับ material หรือสร้าง Mesh ใหม่ */
+  boxInst:mat(0xffffff,{roughness:0.62,metalness:0.04}),
+  boxGhost:mat(0xffffff,{roughness:0.7,transparent:true,opacity:0.07,depthWrite:false}),
   sel:mat(0xa8f931,{emissive:0x89e01c,emissiveIntensity:0.55,roughness:0.4}),
   sensor:new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),
   ringM:new THREE.MeshBasicMaterial({color:0xa8f931,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}),
@@ -11091,6 +11096,10 @@ let root=null,fxRoot=new THREE.Group();scene.add(fxRoot);
 let curWh='',lastBuiltWh=null,lastEvtTs=-1;
 const FIL={status:'all',type:'',cust:'',viz:'status',layer:0};
 let boxRecs=[],tagIndex=new Map(),sensorMesh=null,cellData=[],padPick=[],truckPick=[],slotEdge=null;
+/* กล่องทุกใบ + พาเลท + เทป อยู่ใน InstancedMesh สองก้อน (ทึบ/จาง) — ทั้งฉากจึงใช้
+   draw call คงที่ 2 ครั้งสำหรับสินค้าทั้งคลัง แทนที่จะโตตามจำนวนกล่อง
+   ชิ้นที่ไม่ได้ใช้ในก้อนหนึ่งถูกย่อ scale เป็น 0 จึงไม่มีทั้งภาพและ raycast */
+const BOXI={solid:null,ghost:null,slots:0,byBody:new Map()};
 let LY={},HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
 let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
@@ -11213,6 +11222,83 @@ function addArrowPaint(x,z,into,material,scale){
   a.position.set(x,0.028,z);root.add(a);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   6.5 · GPU INSTANCING ของกล่องทั้งคลัง
+   ทุกชิ้น (ตัวกล่อง / พาเลท / เทป) เป็นกล่องหน่วยที่ต่างกันแค่ scale+สี จึงยัดรวม
+   ไว้ใน InstancedMesh ก้อนเดียวได้ ก้อน "ทึบ" กับ "จาง" ใช้คู่กันเพื่อคงลุคเดิม
+   ที่กล่องนอกตัวกรองจะจางลงแทนที่จะหายไป — ชิ้นที่ไม่ได้ใช้ในก้อนไหนย่อ scale = 0
+   ══════════════════════════════════════════════════════════════ */
+const _dummy=new THREE.Object3D(),_col=new THREE.Color();
+const SEL_COL=0xa8f931;
+/* ตำแหน่ง/ขนาดของทั้ง 3 ชิ้นย่อยของกล่องหนึ่งใบ — ต้องตรงกับที่ addBox เคยวาง
+   ผ่าน Group (กล่องกลางสูง h/2, พาเลทใต้ -0.06, เทปบนฝา h+0.008) */
+function boxParts(r){
+  const d=r.d,sc=r.sc,out=[];
+  out.push({i:r.bi,part:'body',py:r.y+r.lift+(d.h*sc)/2,sx:d.l*sc,sy:d.h*sc,sz:d.w*sc});
+  if(r.pi>=0)out.push({i:r.pi,part:'pallet',py:r.y+r.lift-0.06*sc,sx:Math.max(d.l,1.05)*sc,sy:0.12*sc,sz:Math.max(d.w,1.05)*sc});
+  if(r.ti>=0)out.push({i:r.ti,part:'tape',py:r.y+r.lift+(d.h+0.008)*sc,sx:d.l*0.96*sc,sy:0.014*sc,sz:0.16*sc});
+  return out;
+}
+/* เขียนทั้ง matrix และสีของกล่องหนึ่งใบลง instance — เรียกซ้ำได้ตลอดเวลา
+   (ตัวกรองเปลี่ยน / เลือกกล่อง / สายพานเลื่อน) โดยไม่แตะ geometry หรือ material */
+function writeBoxInstances(r){
+  if(!BOXI.solid||!BOXI.ghost||r.bi<0)return;
+  const on=matchFilter(r.b)&&passLayer(r.b);
+  const selHere=sel&&sel.type==='box'&&sel.tag===r.tag;
+  const vc=on?vizColor(r):null;
+  const tgt=on?BOXI.solid:BOXI.ghost,other=on?BOXI.ghost:BOXI.solid;
+  boxParts(r).forEach(p=>{
+    _dummy.rotation.set(0,0,0);
+    _dummy.position.set(r.x,p.py,r.z);
+    _dummy.scale.set(p.sx,p.sy,p.sz);
+    _dummy.updateMatrix();tgt.setMatrixAt(p.i,_dummy.matrix);
+    _dummy.scale.set(0,0,0);_dummy.updateMatrix();other.setMatrixAt(p.i,_dummy.matrix);
+    if(!on)_col.copy(MAT.dim.color);
+    else if(selHere)_col.set(SEL_COL);
+    else if(p.part==='pallet')_col.copy(MAT.wood.color);
+    else if(p.part==='tape')_col.copy(MAT.tape.color);
+    else if(vc!==null&&vc!==undefined)_col.set(vc);
+    else _col.copy((MAT['box'+r.kind]||MAT.boxRack).color);
+    tgt.setColorAt(p.i,_col);
+  });
+}
+function markBoxInstancesDirty(){
+  [BOXI.solid,BOXI.ghost].forEach(m=>{
+    if(!m)return;
+    m.instanceMatrix.needsUpdate=true;
+    if(m.instanceColor)m.instanceColor.needsUpdate=true;
+  });
+}
+function commitBoxInstances(){
+  if(!boxRecs.length)return;
+  /* จองช่องให้ทุกชิ้นย่อยก่อน แล้วค่อยสร้าง mesh ตามจำนวนที่ได้จริง */
+  let n=0;
+  boxRecs.forEach(r=>{
+    r.bi=n++;
+    if(r.hasPallet)r.pi=n++;else r.ti=n++;
+    BOXI.byBody.set(r.bi,r);
+  });
+  BOXI.slots=n;
+  const mk=matl=>{
+    const im=new THREE.InstancedMesh(GEO.unit,matl,n);
+    im.castShadow=true;im.receiveShadow=true;
+    im.frustumCulled=false;      /* ก้อนเดียวกินทั้งคลัง — cull รวมทีเดียวไม่ได้ */
+    root.add(im);return im;
+  };
+  BOXI.solid=mk(MAT.boxInst);
+  BOXI.ghost=mk(MAT.boxGhost);
+  BOXI.ghost.castShadow=false;   /* เงาของกล่องที่จางอยู่แล้วรบกวนสายตาเปล่าๆ */
+  boxRecs.forEach(writeBoxInstances);
+  markBoxInstancesDirty();
+}
+/* คืน record ของกล่องจาก instanceId ที่ raycaster ชี้โดน — instance ที่เป็นพาเลท
+   หรือเทปให้ถือว่าเป็นกล่องใบเดียวกัน จะได้คลิกโดนทั้งใบ */
+function recFromInstanceId(id){
+  if(BOXI.byBody.has(id))return BOXI.byBody.get(id);
+  for(let i=0;i<boxRecs.length;i++){const r=boxRecs[i];if(r.pi===id||r.ti===id)return r;}
+  return null;
+}
+
 function build(){
   const st=St();
   const whIds=Object.keys(st.warehouses||{}).sort();
@@ -11223,6 +11309,7 @@ function build(){
   gateDoors={};
   root=new THREE.Group();scene.add(root);
   boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];truckPick=[];sensorMesh=null;freeCells=[];CONVEYORS=[];
+  BOXI.solid=null;BOXI.ghost=null;BOXI.slots=0;BOXI.byBody=new Map();
 
   /* ── แร็คจาก Location Master + ตำแหน่งกล่องจริง ── */
   const rackMap=new Map();
@@ -11518,18 +11605,16 @@ function build(){
   const readyOut=qOut().map(t=>st.boxes[t]).filter(Boolean);
   const stagingOnly=stagingBoxes.filter(b=>!outQTags.has(b.tag));
 
+  /* เก็บเป็น "ใบสั่งวาด" ไว้ก่อน แล้วยิงเป็น InstancedMesh ทีเดียวใน commitBoxInstances()
+     — InstancedMesh ต้องรู้จำนวนตอนสร้าง ซึ่งยังไม่ครบจนกว่าจะวางกล่องจบทุกโซน */
   function addBox(b,x,y,z,kind,sc){
     sc=sc||1;
-    const d=boxDims(b.type),g=new THREE.Group();
-    const m=new THREE.Mesh(d.geo,MAT['box'+kind]||MAT.boxRack);
-    m.castShadow=true;m.receiveShadow=true;m.position.y=d.h/2;m.userData.tag=b.tag;
-    g.add(m);const meshes=[m];
-    if(d.l>=0.95){const pl=bx(Math.max(d.l,1.05),0.12,Math.max(d.w,1.05),MAT.wood,0,-0.06,0,true);pl.userData.tag=b.tag;g.add(pl);meshes.push(pl);}
-    else{const tp=bx(d.l*0.96,0.014,0.16,MAT.tape,0,d.h+0.008,0,true);tp.userData.tag=b.tag;g.add(tp);meshes.push(tp);}
-    const lift=(d.l>=0.95?0.12:0)*sc;
-    if(sc!==1)g.scale.setScalar(sc);
-    g.position.set(x,y+lift,z);root.add(g);
-    const rec={tag:b.tag,b,group:g,meshes,baseMats:meshes.map(mm=>mm.material),kind,pos:new THREE.Vector3(x,y+(d.h*sc)/2+lift,z)};
+    const d=boxDims(b.type);
+    const hasPallet=d.l>=0.95;
+    const lift=(hasPallet?0.12:0)*sc;
+    const rec={tag:b.tag,b,kind,sc,d,hasPallet,x,y,z,lift,
+      bi:-1,pi:-1,ti:-1,
+      pos:new THREE.Vector3(x,y+(d.h*sc)/2+lift,z)};
     boxRecs.push(rec);tagIndex.set(b.tag,rec);return rec;
   }
   /* กล่องบนชั้นวางจริง */
@@ -11827,6 +11912,7 @@ function build(){
   navBuild();
   TASKS=deriveTasks({stagingOnly,rfidBoxes,readyOut,gateReturn,freeCells});
   syncAgents();
+  commitBoxInstances();
   refreshUI();applyFilters();renderOps();
   detectNewEvents(st);
 }
@@ -12326,8 +12412,6 @@ function matchFilter(b){
    ABC ตามความถี่หมุนเวียน — ทั้งหมดทำโดยสลับ material ของกล่องใน
    applyFilters() ไม่ต้อง rebuild ฉาก จึงสลับได้ทันทีไม่มีสะดุด
    พาเลทกับเทปยังใช้วัสดุเดิม ระบายสีเฉพาะตัวกล่อง (meshes[0]) */
-const VIZ_MATS=new Map();
-const vizMat=hex=>{let m=VIZ_MATS.get(hex);if(!m){m=mat(hex,{roughness:0.6});VIZ_MATS.set(hex,m);}return m;};
 const hex6=n=>'#'+n.toString(16).padStart(6,'0');
 
 /* ระดับความหนาแน่น — ใช้ค่า t เป็นขอบบน (ไม่รวม) ของแต่ละช่วง */
@@ -12391,18 +12475,12 @@ function passLayer(b){
   return String((b.location||{}).shelf||'')===String(FIL.layer);
 }
 
+/* ตัวกรอง / การเลือก / โหมดวิเคราะห์ ทั้งหมดลงเอยที่สีของ instance เดิม จึงเหลือ
+   แค่เขียนสี+matrix ใหม่รอบเดียว ไม่ต้องไล่สลับ material รายกล่องอีกต่อไป */
 function applyFilters(){
-  boxRecs.forEach(rec=>{
-    const on=matchFilter(rec.b)&&passLayer(rec.b);
-    const selHere=sel&&sel.type==='box'&&sel.tag===rec.tag;
-    const vc=on?vizColor(rec):null;
-    rec.meshes.forEach((m,i)=>{
-      m.material=selHere?MAT.sel
-        :!on?MAT.dim
-        :(vc!==null&&i===0)?vizMat(vc)
-        :rec.baseMats[i];
-    });
-  });
+  if(!BOXI.solid)return;
+  boxRecs.forEach(writeBoxInstances);
+  markBoxInstancesDirty();
 }
 
 function renderVizLegend(){
@@ -12585,9 +12663,13 @@ canvas.addEventListener('pointerup',e=>{
   const r=canvas.getBoundingClientRect();
   ptr.x=((e.clientX-r.left)/r.width)*2-1;ptr.y=-((e.clientY-r.top)/r.height)*2+1;
   raycaster.setFromCamera(ptr,camera);
-  const boxMeshes=[];boxRecs.forEach(rc=>boxMeshes.push(...rc.meshes));
-  let hit=raycaster.intersectObjects(boxMeshes,false)[0];
-  if(hit&&hit.object.userData.tag){selectBox(hit.object.userData.tag);return;}
+  /* กล่องอยู่ใน InstancedMesh แล้ว จึงชี้ด้วย instanceId แทน userData ของ Mesh ราย
+     ใบ — ยิงเฉพาะก้อนทึบ กล่องที่ถูกกรองจนจางจะคลิกไม่โดน ซึ่งตรงกับที่เห็น */
+  let hit=BOXI.solid?raycaster.intersectObject(BOXI.solid,false)[0]:null;
+  if(hit&&hit.instanceId!=null){
+    const rc=recFromInstanceId(hit.instanceId);
+    if(rc){selectBox(rc.tag);return;}
+  }
   hit=raycaster.intersectObjects(padPick,false)[0];
   if(hit&&hit.object.userData.cust){sel=null;applyFilters();slotEdge.visible=false;showCustCard(hit.object.userData.cust);return;}
   hit=raycaster.intersectObjects(truckPick.filter(m=>m.parent),false)[0];
@@ -12597,7 +12679,10 @@ canvas.addEventListener('pointerup',e=>{
     if(hit&&hit.instanceId!=null){
       const cd=cellData[hit.instanceId];
       if(cd){sel={type:'slot'};applyFilters();
-        slotEdge.position.set(cd.x,cd.y,cd.z);slotEdge.visible=true;showSlotCard(cd);return;}
+        slotEdge.position.set(cd.x,cd.y,cd.z);
+        /* คืนขนาดกรอบเป็นขนาด "ช่องวาง" — hover กล่องเมื่อกี้ย่อมันไว้เท่าตัวกล่อง */
+        slotEdge.scale.set(RACK_D-0.02,SHELF_H-0.1,SLOT_W-0.06);
+        slotEdge.visible=true;showSlotCard(cd);return;}
     }
   }
   clearSel();
@@ -12608,9 +12693,19 @@ canvas.addEventListener('pointermove',e=>{
   const r=canvas.getBoundingClientRect();
   ptr.x=((e.clientX-r.left)/r.width)*2-1;ptr.y=-((e.clientY-r.top)/r.height)*2+1;
   raycaster.setFromCamera(ptr,camera);
-  const boxMeshes=[];boxRecs.forEach(rc=>boxMeshes.push(...rc.meshes));
-  const h=raycaster.intersectObjects(boxMeshes,false)[0]||raycaster.intersectObjects(padPick,false)[0];
+  const hb=BOXI.solid?raycaster.intersectObject(BOXI.solid,false)[0]:null;
+  const h=hb||raycaster.intersectObjects(padPick,false)[0];
   canvas.style.cursor=h?'pointer':'grab';
+  /* กรอบไฮไลต์ตามกล่องที่เมาส์ชี้อยู่ ใช้ slotEdge ตัวเดิมเมื่อไม่ได้เลือกช่องอยู่ */
+  if(slotEdge&&!(sel&&sel.type==='slot')){
+    const rc=hb&&hb.instanceId!=null?recFromInstanceId(hb.instanceId):null;
+    if(rc){
+      const d=rc.d,sc=rc.sc;
+      slotEdge.position.set(rc.x,rc.y+rc.lift+(d.h*sc)/2,rc.z);
+      slotEdge.scale.set(d.l*sc+0.05,d.h*sc+0.05,d.w*sc+0.05);
+      slotEdge.visible=true;
+    }else slotEdge.visible=false;
+  }
 });
 
 /* ── event ใหม่จาก DB → ยืนยัน Gate → ประตู/รถทำงาน ── */
@@ -12660,14 +12755,17 @@ function tick(){
     agents=agents.filter(a=>a.state!=='gone');
     updateDocks(dt);
     if(MAT.conveyor.map)MAT.conveyor.map.offset.x=(MAT.conveyor.map.offset.x-dt*0.6)%1;
+    let beltMoved=false;
     CONVEYORS.forEach(cv=>{
       cv.phase+=dt*cv.speed;
       cv.items.forEach(it=>{
         const lx=((it.localX+cv.phase)%cv.width+cv.width)%cv.width;
         const x=cv.left+lx;
-        it.rec.group.position.x=x;it.rec.pos.x=x;
+        it.rec.x=x;it.rec.pos.x=x;
+        writeBoxInstances(it.rec);beltMoved=true;
       });
     });
+    if(beltMoved)markBoxInstancesDirty();
   }
   updateDoors(dt);
   controls.update();
