@@ -10838,6 +10838,13 @@ function buildTextures(){
     g.fillRect(0,0,9,h);
     g.fillStyle='rgba(0,0,0,.32)';g.fillRect(9,0,4,h);
   },1,1);
+  /* ลายวิ่งของเส้นนำทาง — ไล่ offset.x ทุกเฟรมแล้วมองเห็นเป็นลูกศรไหลไปตามเส้นทาง
+     (LineDashedMaterial ไม่มี dashOffset จึงใช้ texture เลื่อนบน tube แทน) */
+  TEX.route=ctex(64,8,(g,w,h)=>{
+    g.fillStyle='#20430c';g.fillRect(0,0,w,h);
+    g.fillStyle='#a8f931';g.fillRect(0,0,34,h);
+    g.fillStyle='rgba(255,255,255,.5)';g.fillRect(0,0,10,h);
+  },1,1);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -10901,6 +10908,8 @@ const MAT={
      สีขาวล้วนเพื่อให้ instanceColor คูณออกมาเป็นสีจริง — เปลี่ยนสีรายชิ้นด้วย
      setColorAt() ไม่ต้องสลับ material หรือสร้าง Mesh ใหม่ */
   boxInst:mat(0xffffff,{roughness:0.62,metalness:0.04}),
+  /* เส้นนำทางเรืองแสงตัวเอง ไม่รับแสงฉาก — ต้องอ่านออกแม้ลากผ่านใต้เงาแร็ค */
+  routeFlow:new THREE.MeshBasicMaterial({color:0xffffff,toneMapped:false}),
   boxGhost:mat(0xffffff,{roughness:0.7,transparent:true,opacity:0.07,depthWrite:false}),
   sel:mat(0xa8f931,{emissive:0x89e01c,emissiveIntensity:0.55,roughness:0.4}),
   sensor:new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),
@@ -10930,6 +10939,7 @@ function refreshMatColors(){
   MAT.lostPad.color.set(PAL.dark?0x2a1210:0xffe9ea);
   MAT.guardWall.color.set(PAL.dark?0x2a2a30:0xeeeef2);
   MAT.conveyor.map=TEX.conveyor;
+  MAT.routeFlow.map=TEX.route;MAT.routeFlow.needsUpdate=true;
   [MAT.ground,MAT.apron,MAT.floor,MAT.wall,MAT.roof,MAT.door,MAT.conveyor].forEach(m=>m.needsUpdate=true);
   hemi.intensity=PAL.dark?0.82:0.72;sun.intensity=PAL.dark?1.8:2.05;fill.intensity=PAL.dark?0.42:0.34;
   sun.color.set(PAL.dark?0xcdd8ff:0xfff3dc);
@@ -11259,6 +11269,8 @@ function writeBoxInstances(r){
     else if(p.part==='tape')_col.copy(MAT.tape.color);
     else if(vc!==null&&vc!==undefined)_col.set(vc);
     else _col.copy((MAT['box'+r.kind]||MAT.boxRack).color);
+    /* จำสีฐานของตัวกล่องไว้ให้ animateAlerts ผสม pulse ทับได้โดยไม่ต้องคำนวณใหม่ทุกเฟรม */
+    if(p.part==='body'){if(!r.bodyCol)r.bodyCol=new THREE.Color();r.bodyCol.copy(_col);}
     tgt.setColorAt(p.i,_col);
   });
 }
@@ -11299,6 +11311,90 @@ function recFromInstanceId(id){
   return null;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   6.6 · SPATIAL ALERTS — กล่องที่ต้องรีบจัดการจะกะพริบเรียกสายตา
+   สีฐานของกล่องถูกจำไว้ตอน writeBoxInstances แล้ว pulse แค่ผสมทับทุกเฟรม
+   เมื่อสถานะถูกแก้ (คืนของ/เปลี่ยนวันหมดอายุ) build รอบถัดไปจะไม่เข้าลิสต์อีก
+   ไฟจึงดับเองทันที ไม่ต้องสั่งดับแยก
+   ══════════════════════════════════════════════════════════════ */
+const EXPIRY_WARN_DAYS=14;
+const ALERT_OVERDUE=new THREE.Color(0xff2d1a),ALERT_EXPIRY=new THREE.Color(0xffb020);
+let ALERTS=[],alertT=0;
+const daysToExpiry=b=>{
+  if(Wn.daysToExpiry)return Wn.daysToExpiry(b);
+  if(!b||!b.expiry)return null;
+  return Math.ceil((new Date(b.expiry+'T23:59:59')-Date.now())/DAY);
+};
+function alertKindOf(b){
+  if(!b)return null;
+  if(isOverdue(b))return 'overdue';         /* เกินกำหนดคืน — เร่งด่วนกว่าใกล้หมดอายุ */
+  const d=daysToExpiry(b);
+  if(d!=null&&d<=EXPIRY_WARN_DAYS)return 'expiry';   /* FEFO: ใกล้/เลยวันหมดอายุ */
+  return null;
+}
+/* เฉพาะกล่องที่ "มองเห็นอยู่จริง" เท่านั้นที่กะพริบ — ที่ถูกกรองจนจางหรือถูกเลือกอยู่
+   ไม่ต้องกะพริบซ้อน เพราะสีของมันถูกกำหนดไว้ด้วยเหตุผลอื่นแล้ว */
+function rebuildAlerts(){
+  ALERTS=boxRecs.filter(r=>r.bi>=0&&r.alert&&matchFilter(r.b)&&passLayer(r.b)
+    &&!(sel&&sel.type==='box'&&sel.tag===r.tag));
+}
+function animateAlerts(dt){
+  if(!BOXI.solid||!ALERTS.length)return;
+  alertT+=dt;
+  /* เกินกำหนด 1.5Hz ตามสเปก · ใกล้หมดอายุช้ากว่าเล็กน้อยเพื่อให้แยกออกจากกันด้วยจังหวะ */
+  const pOver=0.5-0.5*Math.cos(alertT*Math.PI*2*1.5);
+  const pExp =0.5-0.5*Math.cos(alertT*Math.PI*2*0.9);
+  ALERTS.forEach(r=>{
+    const over=r.alert==='overdue';
+    _col.copy(r.bodyCol||MAT.boxRack.color).lerp(over?ALERT_OVERDUE:ALERT_EXPIRY,over?pOver:pExp*0.85);
+    BOXI.solid.setColorAt(r.bi,_col);
+  });
+  if(BOXI.solid.instanceColor)BOXI.solid.instanceColor.needsUpdate=true;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6.7 · VISUAL PATHFINDING — เส้นทางจากประตูถึงช่องเป้าหมาย
+   ใช้ A* เดียวกับที่ forklift เดินจริง (route/navPath) เส้นจึงเลี่ยงแร็คและผนัง
+   เหมือนที่คนเดินจริง ไม่ใช่เส้นตรงทะลุชั้นวาง
+   ══════════════════════════════════════════════════════════════ */
+const ROUTE={mesh:null,len:0};
+function clearRoute(){
+  if(!ROUTE.mesh)return;
+  fxRoot.remove(ROUTE.mesh);
+  ROUTE.mesh.geometry.dispose();
+  ROUTE.mesh=null;ROUTE.len=0;
+}
+/* ประตูต้นทางตามทิศของงาน: กล่องที่อยู่กับลูกค้าเดินออกทางประตูขาออก ที่เหลือเข้าทางขาเข้า */
+function routeGateFor(b){
+  const gates=Object.keys(LY.gateX||{});
+  if(!gates.length)return null;
+  const want=(b&&(b.status==='out'||isOverdue(b)))?'out':'in';
+  return gates.find(g=>LY.gateDir[g]===want)
+    ||gates.find(g=>LY.gateDir[g]==='both')
+    ||gates[0];
+}
+function showRoute(rec){
+  clearRoute();
+  if(!rec||reduceMotion)return;
+  const g=routeGateFor(rec.b);
+  const gp=g!=null?gatePoint(g):null;
+  if(!gp)return;
+  const target={x:rec.x,z:rec.z,approach:rec.aisleX!=null?{x:rec.aisleX,z:rec.z}:null};
+  let way;
+  try{way=route(gp,target);}catch(e){way=null;}
+  if(!way||way.length<2)return;
+  const Y=0.45;
+  const pts=way.map(w=>new THREE.Vector3(w.x,Y,w.z));
+  pts.push(new THREE.Vector3(rec.x,Math.max(rec.pos.y,Y),rec.z));   /* ไต่ขึ้นหาชั้นที่กล่องอยู่ */
+  const curve=new THREE.CatmullRomCurve3(pts,false,'catmullrom',0.04);
+  ROUTE.len=curve.getLength();
+  const geo=new THREE.TubeGeometry(curve,Math.max(24,Math.round(ROUTE.len*3)),0.055,8,false);
+  const m=new THREE.Mesh(geo,MAT.routeFlow);
+  m.renderOrder=20;m.frustumCulled=false;
+  fxRoot.add(m);ROUTE.mesh=m;
+  if(MAT.routeFlow.map)MAT.routeFlow.map.repeat.set(Math.max(4,ROUTE.len*0.7),1);
+}
+
 function build(){
   const st=St();
   const whIds=Object.keys(st.warehouses||{}).sort();
@@ -11310,6 +11406,7 @@ function build(){
   root=new THREE.Group();scene.add(root);
   boxRecs=[];tagIndex=new Map();cellData=[];padPick=[];truckPick=[];sensorMesh=null;freeCells=[];CONVEYORS=[];
   BOXI.solid=null;BOXI.ghost=null;BOXI.slots=0;BOXI.byBody=new Map();
+  ALERTS=[];clearRoute();   /* fxRoot ถูกล้างทั้งก้อนตอน rebuild — ทิ้ง handle เส้นเก่าด้วย */
 
   /* ── แร็คจาก Location Master + ตำแหน่งกล่องจริง ── */
   const rackMap=new Map();
@@ -11613,7 +11710,7 @@ function build(){
     const hasPallet=d.l>=0.95;
     const lift=(hasPallet?0.12:0)*sc;
     const rec={tag:b.tag,b,kind,sc,d,hasPallet,x,y,z,lift,
-      bi:-1,pi:-1,ti:-1,
+      bi:-1,pi:-1,ti:-1,aisleX:null,alert:alertKindOf(b),bodyCol:null,
       pos:new THREE.Vector3(x,y+(d.h*sc)/2+lift,z)};
     boxRecs.push(rec);tagIndex.set(b.tag,rec);return rec;
   }
@@ -11646,7 +11743,8 @@ function build(){
     const s=Math.max(best.s,0.1),cellW=CW/best.nx,cellD=CD/best.nz;
     a.list.forEach((b,i)=>{
       const ix=i%best.nx,iz=Math.floor(i/best.nx)%best.nz,iy=Math.floor(i/(best.nx*best.nz));
-      addBox(b,cp.x-CW/2+cellW*(ix+0.5),cp.y+iy*(bh*s+vGap),cp.z-CD/2+cellD*(iz+0.5),'Rack',s);
+      /* จำเลนทางเดินของช่องนี้ไว้ ให้เส้นนำทางเข้าหากล่องจากทางเดินจริง ไม่ลากทะลุแร็ค */
+      addBox(b,cp.x-CW/2+cellW*(ix+0.5),cp.y+iy*(bh*s+vGap),cp.z-CD/2+cellD*(iz+0.5),'Rack',s).aisleX=cp.aisleX;
     });
   });
   /* ป้ายสีบอกว่าช่องนี้ "มีของแล้ว" — โครงแร็ค (เสา/คาน) เป็นสีเขียวเหมือนกันทุกช่องไม่ว่าจะมีของ
@@ -12481,6 +12579,7 @@ function applyFilters(){
   if(!BOXI.solid)return;
   boxRecs.forEach(writeBoxInstances);
   markBoxInstancesDirty();
+  rebuildAlerts();
 }
 
 function renderVizLegend(){
@@ -12629,9 +12728,9 @@ function showTruckCard(gate,gdir){
 function selectBox(tag){
   sel={type:'box',tag};slotEdge.visible=false;applyFilters();
   const rec=tagIndex.get(tag);
-  if(rec){spawnRing(rec.pos.x,rec.pos.z);showBoxCard(tag);}
+  if(rec){spawnRing(rec.pos.x,rec.pos.z);showBoxCard(tag);showRoute(rec);}
 }
-function clearSel(){sel=null;if(slotEdge)slotEdge.visible=false;applyFilters();hideCard();}
+function clearSel(){sel=null;if(slotEdge)slotEdge.visible=false;applyFilters();hideCard();clearRoute();}
 function flyTo(p,dist){
   const dir=camera.position.clone().sub(controls.target).normalize();
   const d=Math.max(dist||7,4);
@@ -12766,6 +12865,9 @@ function tick(){
       });
     });
     if(beltMoved)markBoxInstancesDirty();
+    animateAlerts(dt);
+    /* ลายบนเส้นนำทางไหลจากประตูไปหากล่อง (offset ติดลบ = ไหลไปข้างหน้า) */
+    if(ROUTE.mesh&&MAT.routeFlow.map)MAT.routeFlow.map.offset.x=(MAT.routeFlow.map.offset.x-dt*0.55)%1;
   }
   updateDoors(dt);
   controls.update();
@@ -12901,6 +13003,10 @@ Wn.W3D={closeCard(){clearSel();},selectTag(t){focusTag(t);},refresh(){scheduleBu
   layout(){return LY;},agents(){return agents.map(a=>({id:a.id,state:a.state,x:+a.g.position.x.toFixed(2),z:+a.g.position.z.toFixed(2),fork:+a.g.userData.forkY.toFixed(2)}));},
   docks(){return Object.values(DOCK).map(d=>({gate:d.gate,state:d.state,trips:d.loadTrips}));},
   perf(){return {calls:renderer.info.render.calls,tris:renderer.info.render.triangles,geo:renderer.info.memory.geometries,tex:renderer.info.memory.textures};},
+  /* introspection: กล่องที่กำลังกะพริบเตือน · เส้นนำทางที่กำลังแสดง · จำนวน instance ที่ใช้จริง */
+  alerts(){return ALERTS.map(r=>({tag:r.tag,kind:r.alert}));},
+  routeInfo(){return ROUTE.mesh?{len:+ROUTE.len.toFixed(2)}:null;},
+  instancing(){return {slots:BOXI.slots,boxes:boxRecs.length,meshes:(BOXI.solid?1:0)+(BOXI.ghost?1:0)};},
   cam(p,t){camera.position.set(p[0],p[1],p[2]);controls.target.set(t[0],t[1],t[2]);controls.update();},
   view(n){
     const g=Object.keys(LY.gateX)[0],gx=LY.gateX[g]||0;
