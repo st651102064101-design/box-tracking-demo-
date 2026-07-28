@@ -1803,7 +1803,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <h3>ประเภทกล่อง (Box Type Master)</h3>
       <p class="desc">สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป</p>
       <div class="grid g4">
-        <div class="field"><label>รหัสประเภท (สร้างอัตโนมัติ — แก้ไขเองได้)</label><input id="btId" autocomplete="off" style="font-family:var(--mono);"></div>
+        <div class="field"><label>รหัสประเภท (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="btId" readonly>
+            <button type="button" class="iconbtn" id="btnRegenBtId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyBtId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideBtId">แก้เอง</button>
+          </div>
+        </div>
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
@@ -1830,7 +1837,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <h3>คลัง &amp; ประตู (Warehouse / Gate Map)</h3>
       <p class="desc">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="grid g4">
-        <div class="field"><label>รหัสคลัง (สร้างอัตโนมัติ — แก้ไขเองได้)</label><input id="whId" autocomplete="off" style="font-family:var(--mono);"></div>
+        <div class="field"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="whId" readonly>
+            <button type="button" class="iconbtn" id="btnRegenWhId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyWhId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideWhId">แก้เอง</button>
+          </div>
+        </div>
         <div class="field"><label>ชื่อคลัง <span class="req">*</span></label><input id="whName" placeholder="คลัง 1 — บางปู"></div>
         <div class="field"><label>ประตูเริ่ม <span class="req">*</span></label><input id="whGateFrom" type="number" min="1" placeholder="1"></div>
         <div class="field"><label>ประตูสิ้นสุด <span class="req">*</span></label><input id="whGateTo" type="number" min="1" placeholder="5"></div>
@@ -1866,7 +1880,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="card hover">
       <h3>ลูกค้า / ปลายทาง</h3>
       <div class="grid g4">
-        <div class="field"><label>รหัสลูกค้า (สร้างอัตโนมัติ)</label><input id="cId" readonly></div>
+        <div class="field"><label>รหัสลูกค้า (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="cId" readonly>
+            <button type="button" class="iconbtn" id="btnRegenCId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyCId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideCId">แก้เอง</button>
+          </div>
+        </div>
         <div class="field"><label>ชื่อลูกค้า / บริษัท <span class="req">*</span></label><input id="cName" placeholder="บจก. ปลายทาง"></div>
         <div class="field"><label>กำหนดคืนภายใน (วัน) <span class="req">*</span></label><input id="cReturnDays" type="number" min="1" placeholder="15"></div>
         <div class="field"><label>ติดต่อ (โทร/อีเมล)</label><input id="cContact" placeholder="02-xxx-xxxx"></div>
@@ -1893,7 +1914,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <h3>พนักงาน</h3>
       <p class="desc">รายชื่อผู้ปฏิบัติงานที่เลือกเป็น "ผู้บันทึก" ได้จากปุ่มมุมขวาบน — ไม่กระทบประวัติเดิมเมื่อแก้ไข/ลบ</p>
       <div class="grid g3">
-        <div class="field"><label>รหัสพนักงาน (สร้างอัตโนมัติ — แก้ไขเองได้)</label><input id="eId" autocomplete="off" style="font-family:var(--mono);"></div>
+        <div class="field"><label>รหัสพนักงาน (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="eId" readonly>
+            <button type="button" class="iconbtn" id="btnRegenEId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyEId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideEId">แก้เอง</button>
+          </div>
+        </div>
         <div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="eName" placeholder="เช่น สมศรี ใจดี"></div>
         <div class="field"><label>ตำแหน่ง</label><input id="eRole" placeholder="เช่น พนักงานคลัง"></div>
       </div>
@@ -1983,6 +2011,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <div class="field"><label>รหัสตำแหน่ง / บาร์โค้ดป้าย <span class="req">*</span></label>
             <div class="auto-tag-row">
               <input id="locCode" readonly style="font-family:var(--mono);" placeholder="สร้างอัตโนมัติ">
+              <button type="button" class="iconbtn" id="btnRegenLocCode" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+              <button type="button" class="iconbtn" id="btnCopyLocCode" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
               <button type="button" class="btn ghost sm" id="btnOverrideLocCode">แก้เอง</button>
             </div>
           </div>
@@ -2636,6 +2666,48 @@ function nextSeqId(prefix,existingIds){
   });
   return prefix+pad(max+1,3);
 }
+/* ===== reusable auto-generated PK field: readonly input + regenerate/copy/
+   override buttons, same auto-tag-row pattern already used for #bTag =====
+   computeAutoFn() returns the next suggested id; the field starts readonly
+   showing that suggestion, "แก้เอง" unlocks manual typing (rename), and
+   "สร้างรหัสใหม่" always snaps back to a fresh auto id regardless of any
+   override in progress. */
+function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, computeAutoFn) {
+  var t = $('#'+inputId), ob = $('#'+overrideBtnId);
+  function refresh(){ if (t && !t._override) t.value = computeAutoFn(); }
+  function resetToAuto(){
+    if (!t) return;
+    t._override=false; t.readOnly=true; t.style.opacity='';
+    if (ob) ob.textContent='แก้เอง';
+    refresh();
+  }
+  var rb=$('#'+regenBtnId);
+  if (rb) rb.addEventListener('click', function(){ resetToAuto(); toast('สร้างรหัสใหม่แล้ว', t.value, 'info'); });
+  var cb=$('#'+copyBtnId);
+  if (cb) cb.addEventListener('click', function(){
+    var v=t?t.value:''; if(!v) return;
+    navigator.clipboard.writeText(v).catch(function(){});
+    toast('คัดลอกแล้ว', v, 'info');
+  });
+  if (ob) ob.addEventListener('click', function(){
+    if (!t) return;
+    if (t.readOnly) { t.readOnly=false; t._override=true; t.style.opacity='1'; t.focus(); t.select(); ob.textContent='ใช้ Auto'; }
+    else resetToAuto();
+  });
+  /* editing an existing record: show its real id, unlocked for renaming (the
+     save handlers already guard renames against collisions/in-use records) */
+  function editExisting(v){
+    if (!t) return;
+    t._override=true; t.readOnly=false; t.style.opacity='1'; t.value=v;
+    if (ob) ob.textContent='ใช้ Auto';
+  }
+  refresh();
+  return {refresh:refresh, reset:resetToAuto, edit:editExisting};
+}
+var btIdAuto = wireAutoCodeField('btId','btnRegenBtId','btnCopyBtId','btnOverrideBtId', function(){return nextSeqId('BT-',Object.keys(S.boxtypes));});
+var whIdAuto = wireAutoCodeField('whId','btnRegenWhId','btnCopyWhId','btnOverrideWhId', function(){return nextSeqId('WH-',Object.keys(S.warehouses));});
+var cIdAuto  = wireAutoCodeField('cId','btnRegenCId','btnCopyCId','btnOverrideCId', function(){return nextSeqId('CUST-',Object.keys(S.customers));});
+var eIdAuto  = wireAutoCodeField('eId','btnRegenEId','btnCopyEId','btnOverrideEId', function(){return nextSeqId('EMP-',Object.keys(S.employees));});
 /* Fallback tag when no box type is selected yet — used only until a type is picked. */
 function genTagId(){var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';var d=new Date();var ds=d.getFullYear()+''+pad(d.getMonth()+1,2)+pad(d.getDate(),2);
   var attempts=0,tag;do{var r='';for(var i=0;i<5;i++)r+=chars[Math.floor(Math.random()*chars.length)];tag='BTX-'+ds+'-'+r;attempts++;}while(S.boxes[tag]&&attempts<100);return tag;}
@@ -2806,11 +2878,11 @@ $('#btnAddBtype').onclick=function(){
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:val('btDim')};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});setv('btId',nextSeqId('BT-',Object.keys(S.boxtypes)));
+  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();
   toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});setv('btId',nextSeqId('BT-',Object.keys(S.boxtypes)));};
-function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;setv('btId',t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);setv('btDim',t.dim||'');
+  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);setv('btDim',t.dim||'');
   $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
@@ -2980,12 +3052,12 @@ $('#btnAddWh').onclick=function(){
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whId',nextSeqId('WH-',Object.keys(S.warehouses)));
+  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');whIdAuto.reset();
   renderWhGateTypeList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whId',nextSeqId('WH-',Object.keys(S.warehouses)));renderWhGateTypeList();};
-function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;setv('whId',w.id);setv('whName',w.name);
+  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');whIdAuto.reset();renderWhGateTypeList();};
+function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
   setv('whGateType',w.gateType||'both');
   renderWhGateTypeList(w.gateTypes||{});
@@ -3022,11 +3094,11 @@ $('#btnAddCust').onclick=function(){
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cId',nextSeqId('CUST-',Object.keys(S.customers)));
+  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});cIdAuto.reset();
   toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · คืนใน '+rd+' วัน');renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cId',nextSeqId('CUST-',Object.keys(S.customers)));};
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;setv('cId',c.id);setv('cName',c.name);setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
+  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});cIdAuto.reset();};
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
   $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
@@ -3125,12 +3197,12 @@ $('#btnAddEmp').onclick=function(){
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  setv('eId','');setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  setv('eId','');setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
@@ -3139,7 +3211,7 @@ function editEmp(id){
   var self=currentEmp()&&currentEmp().id===id;
   if(!isAdmin()&&!self)return toast('ไม่มีสิทธิ์','แก้ไขได้เฉพาะข้อมูลของตัวเอง (เบอร์โทร/อีเมล) — ติดต่อผู้ดูแลระบบเพื่อแก้ไขข้อมูลอื่น','err');
   editingEmp=id;
-  setv('eId',e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
+  eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
   setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnCancelEmp').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});
@@ -5216,10 +5288,7 @@ function renderSetup(){
   if(noTypeHint)noTypeHint.style.display='none';
 
   // auto-generated ids
-  if(!editingBtype&&!val('btId'))setv('btId',nextSeqId('BT-',Object.keys(S.boxtypes)));
-  if(!editingWh&&!val('whId'))setv('whId',nextSeqId('WH-',Object.keys(S.warehouses)));
-  if(!val('cId'))setv('cId',nextSeqId('CUST-',Object.keys(S.customers)));
-  if(!editingEmp&&!val('eId'))setv('eId',nextSeqId('EMP-',Object.keys(S.employees)));
+  btIdAuto.refresh(); whIdAuto.refresh(); cIdAuto.refresh(); eIdAuto.refresh();
   var eWhSel=$('#eWh');if(eWhSel){var curWh=eWhSel.value;eWhSel.innerHTML=invWhOptions(curWh);eWhSel.value=curWh;}
 
   // gate dropdowns
@@ -5598,6 +5667,22 @@ window.suggestBulkStarts = suggestBulkStarts;
       btn.textContent = 'แก้เอง';
       locAutoCode();
     }
+  });
+})();
+(function(){
+  var rb = $('#btnRegenLocCode');
+  if (rb) rb.addEventListener('click', function(){
+    var inp = $('#locCode'); if (!inp) return;
+    locCodeOverride = false; inp.readOnly = true; inp.style.opacity = '';
+    var ob = $('#btnOverrideLocCode'); if (ob) ob.textContent = 'แก้เอง';
+    locAutoCode();
+    toast('สร้างรหัสใหม่แล้ว', val('locCode'), 'info');
+  });
+  var cb = $('#btnCopyLocCode');
+  if (cb) cb.addEventListener('click', function(){
+    var v = val('locCode'); if (!v) return;
+    navigator.clipboard.writeText(v).catch(function(){});
+    toast('คัดลอกแล้ว', v, 'info');
   });
 })();
 
@@ -10166,7 +10251,7 @@ function openColumnMapModal(opts){
     "กะบ่าย (14:00–22:00)":"Afternoon (14:00-22:00)","กะดึก (22:00–06:00)":"Night (22:00-06:00)","ทั่วไป / ยืดหยุ่น":"General / Flexible",
     "พนักงานปฏิบัติการ (ยิง Gate)":"Operator (scan gate)","หัวหน้างาน":"Supervisor","ผู้ดูแลระบบ (Master)":"Administrator (Master)",
     "ผู้ชมอย่างเดียว":"Viewer only","ปฏิบัติงาน":"Active","ลา / พักงานชั่วคราว":"On leave / Suspended","พ้นสภาพ":"Terminated",
-    "รหัสพนักงาน (สร้างอัตโนมัติ — แก้ไขเองได้)":"Employee code (auto-generated — editable)","ชื่อ–นามสกุล":"Full name","ตำแหน่ง":"Position",
+    "รหัสพนักงาน (สร้างอัตโนมัติ)":"Employee code (auto-generated)","ชื่อ–นามสกุล":"Full name","ตำแหน่ง":"Position",
     "แผนก / หน่วยงาน":"Department / Unit","คลังที่สังกัด":"Assigned warehouse","กะการทำงาน":"Work shift","— ไม่ระบุ —":"- none -",
     "เบอร์โทรศัพท์":"Phone number","อีเมล":"Email","วันเริ่มงาน":"Start date","สิทธิ์การใช้งาน":"Access level",
     "บันทึกพนักงาน":"Save employee","รายชื่อพนักงาน":"Employee list","แผนก":"Department","คลัง":"Warehouse","กะ":"Shift",
@@ -10175,10 +10260,10 @@ function openColumnMapModal(opts){
     "รหัสลูกค้า (สร้างอัตโนมัติ)":"Customer code (auto-generated)","ชื่อลูกค้า":"Customer name","ชื่อลูกค้า / บริษัท":"Customer / Company name","ติดต่อ (โทร/อีเมล)":"Contact (phone/email)",
     "ที่อยู่/สาขา":"Address/Branch","บันทึกลูกค้า":"Save customer","รายการลูกค้า":"Customer list","คืนภายใน":"Return within",
     "ติดต่อ":"Contact","ถืออยู่":"Holding",
-    "รหัสประเภท (สร้างอัตโนมัติ — แก้ไขเองได้)":"Type code (auto-generated — editable)","ชื่อประเภท":"Type name","หน่วยนับ":"Unit",
+    "รหัสประเภท (สร้างอัตโนมัติ)":"Type code (auto-generated)","ชื่อประเภท":"Type name","หน่วยนับ":"Unit",
     "มูลค่าต่อใบ (บาท)":"Value per unit (THB)","ขนาด (มม.)":"Size (mm)","บันทึกประเภท":"Save type",
     "รายการประเภทกล่อง":"Box type list","รหัส":"Code","หน่วย":"Unit","ขนาด":"Size","กล่องที่ใช้":"Boxes using",
-    "รหัสคลัง (สร้างอัตโนมัติ — แก้ไขเองได้)":"Warehouse code (auto-generated — editable)","ชื่อคลัง":"Warehouse name","ประตูเริ่ม":"Gate from",
+    "รหัสคลัง (สร้างอัตโนมัติ)":"Warehouse code (auto-generated)","ชื่อคลัง":"Warehouse name","ประตูเริ่ม":"Gate from",
     "ประตูสิ้นสุด":"Gate to","บันทึกคลัง":"Save warehouse",
     "เพิ่มทีละใบ":"Add one by one","⧉ สร้างเป็นชุด":"Create batch","บาร์โค้ด (สร้างอัตโนมัติ)":"บาร์โค้ด (auto-generated)",
     "คัดลอก":"Copy","เริ่มเลขที่":"Start number","จำนวน":"Quantity","บันทึกรับเข้า":"Save inbound",
