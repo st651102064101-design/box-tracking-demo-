@@ -8,7 +8,7 @@
  */
 import { eq, inArray } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
-import { boxes, customers, config, gates, events, doRecords } from '../db/schema.js';
+import { boxes, customers, config, gates, events, doRecords, employees } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
 
 const DAY = 86_400_000;
@@ -19,21 +19,65 @@ async function warehouseOfGate(db: DB, gate: number): Promise<string> {
   return row?.warehouseId ?? '';
 }
 
+/** Who performed a scan, as recorded on every box's history and event row. */
+interface Operator {
+  employeeId: string;
+  recorder: string;
+}
+
+/**
+ * Resolves the operator against the employee master.
+ *
+ * Handheld clients identify people by badge and send the employee id, so the
+ * name written into history is looked up here rather than trusted from the
+ * request — and an employee who is on leave or off the payroll is refused,
+ * which makes the WMS "สถานะ" field an actual off-switch for the gate.
+ *
+ * `employeeId` stays optional so server-side integrations and the legacy web
+ * UI, which only ever had a free-text recorder, keep working unchanged.
+ */
+async function resolveOperator(
+  db: DB,
+  employeeId: string | undefined,
+  recorder: string | undefined,
+): Promise<Operator> {
+  if (!employeeId) return { employeeId: '', recorder: recorder ?? 'api' };
+
+  const [row] = await db.select().from(employees).where(eq(employees.id, employeeId));
+  if (!row) throw httpError(404, `ไม่พบพนักงานรหัส ${employeeId}`, 'employee_not_found');
+
+  const data = (row.data ?? {}) as Record<string, unknown>;
+  const status = typeof data.status === 'string' ? data.status : 'active';
+  if (status !== 'active') {
+    throw httpError(
+      403,
+      `${row.name ?? employeeId} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน`,
+      'employee_inactive',
+    );
+  }
+  return { employeeId: row.id, recorder: row.name ?? recorder ?? employeeId };
+}
+
 export interface GateOutInput {
   tags: string[];
   customer: string;
   gate: number;
   doNo?: string;
   po?: string;
+  employeeId?: string;
   recorder?: string;
   plate?: string;
   driver?: string;
   vehicleType?: string;
+  /** Service account of the terminal that sent this, taken from the JWT. */
+  device?: string;
 }
 
 export async function gateOut(db: DB, input: GateOutInput) {
   const { tags, customer, gate } = input;
-  const recorder = input.recorder ?? 'api';
+  const operator = await resolveOperator(db, input.employeeId, input.recorder);
+  const { employeeId, recorder } = operator;
+  const device = input.device ?? '';
   const doNo = input.doNo ?? `DO-${Date.now()}`;
   const po = input.po ?? '';
   const plate = input.plate ?? '';
@@ -81,6 +125,8 @@ export async function gateOut(db: DB, input: GateOutInput) {
         gate,
         wh,
         recorder,
+        employeeId,
+        device,
         dueAt: dueTs,
         returnDays,
         plate,
@@ -120,6 +166,8 @@ export async function gateOut(db: DB, input: GateOutInput) {
           gate,
           wh,
           recorder,
+          employeeId,
+          device,
           plate,
           driver,
           vehicleType,
@@ -140,15 +188,19 @@ export async function gateOut(db: DB, input: GateOutInput) {
 export interface GateInInput {
   tags: string[];
   gate: number;
+  employeeId?: string;
   recorder?: string;
   plate?: string;
   driver?: string;
   vehicleType?: string;
+  /** Service account of the terminal that sent this, taken from the JWT. */
+  device?: string;
 }
 
 export async function gateIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
-  const recorder = input.recorder ?? 'api';
+  const { employeeId, recorder } = await resolveOperator(db, input.employeeId, input.recorder);
+  const device = input.device ?? '';
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
   const vehicleType = input.vehicleType ?? '';
@@ -175,7 +227,18 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.driver = driver;
       b.vehicleType = vehicleType;
       const history = Array.isArray(b.history) ? (b.history as unknown[]) : [];
-      history.push({ dir: 'in', ts: inTs, gate, wh, recorder, plate, driver, vehicleType });
+      history.push({
+        dir: 'in',
+        ts: inTs,
+        gate,
+        wh,
+        recorder,
+        employeeId,
+        device,
+        plate,
+        driver,
+        vehicleType,
+      });
       b.history = history;
 
       await tx
@@ -201,6 +264,8 @@ export async function gateIn(db: DB, input: GateInInput) {
           gate,
           wh,
           recorder,
+          employeeId,
+          device,
           plate,
           driver,
           vehicleType,

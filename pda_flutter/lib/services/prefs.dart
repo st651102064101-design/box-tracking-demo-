@@ -2,22 +2,32 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persistent settings & session storage. Mirrors the localStorage keys the PDA
-/// mockup used, so the two stay conceptually aligned.
+/// Persistent settings & session storage.
+///
+/// Everything here belongs to the *device*, not to a person: the service
+/// account it authenticates with, the gate it is stationed at, and a cached
+/// copy of the last known warehouse state. Operators identify themselves by
+/// badge at the start of every session and are deliberately never persisted —
+/// re-badging takes a second, whereas a stale "who is logged in" survives a
+/// crash and silently mis-attributes the next person's scans.
 class Prefs {
   final SharedPreferences _p;
   Prefs(this._p);
 
   static Future<Prefs> load() async => Prefs(await SharedPreferences.getInstance());
 
-  // connection / auth
+  // connection / device account
   static const _kBaseUrl = 'boxtrace_base_url';
   static const _kUsername = 'boxtrace_username';
   static const _kPassword = 'boxtrace_password';
   static const _kToken = 'boxtrace_token';
 
-  // shift session (operator + warehouse + gate)
-  static const _kSession = 'boxtrace_pda_session';
+  // this device's fixed post (warehouse + gate) and behaviour
+  static const _kDeviceWh = 'boxtrace_device_wh';
+  static const _kDeviceGate = 'boxtrace_device_gate';
+  static const _kIdleLock = 'boxtrace_idle_lock_minutes';
+
+  static const _kStateCache = 'boxtrace_state_cache';
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
@@ -60,6 +70,8 @@ class Prefs {
 
   set baseUrl(String v) => _p.setString(_kBaseUrl, v);
 
+  /// The device's own service account. Typed once by whoever hands out the
+  /// terminal — never by an operator, who signs in with a badge instead.
   String get username => _p.getString(_kUsername) ?? 'admin';
   set username(String v) => _p.setString(_kUsername, v);
 
@@ -69,8 +81,23 @@ class Prefs {
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
 
-  Map<String, dynamic>? get session {
-    final s = _p.getString(_kSession);
+  /// The warehouse + gate this terminal is stationed at. A non-empty gate is
+  /// what marks the device as provisioned (see AppController.deviceConfigured).
+  String get deviceWh => _p.getString(_kDeviceWh) ?? '';
+  set deviceWh(String v) => _p.setString(_kDeviceWh, v);
+
+  String get deviceGate => _p.getString(_kDeviceGate) ?? '';
+  set deviceGate(String v) => _p.setString(_kDeviceGate, v);
+
+  /// Minutes of inactivity before the operator is signed out. 0 disables it.
+  int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
+  set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
+
+  /// Last known `S` snapshot. Restored before the network call on boot so the
+  /// badge screen has employee names — and the scanner has box data — even
+  /// when the backend is unreachable at start-up.
+  Map<String, dynamic>? get stateCache {
+    final s = _p.getString(_kStateCache);
     if (s == null) return null;
     try {
       return Map<String, dynamic>.from(jsonDecode(s));
@@ -79,8 +106,8 @@ class Prefs {
     }
   }
 
-  set session(Map<String, dynamic>? v) =>
-      v == null ? _p.remove(_kSession) : _p.setString(_kSession, jsonEncode(v));
+  set stateCache(Map<String, dynamic>? v) =>
+      v == null ? _p.remove(_kStateCache) : _p.setString(_kStateCache, jsonEncode(v));
 
   List<dynamic> get outbox {
     final s = _p.getString(_kOutbox);

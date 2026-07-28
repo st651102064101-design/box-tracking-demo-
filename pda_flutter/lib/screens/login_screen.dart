@@ -1,172 +1,39 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/employee.dart';
 import '../services/i18n.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-class LoginScreen extends StatelessWidget {
+/// The badge screen — where every shift starts and where the device sits
+/// whenever nobody is working it.
+///
+/// There is no password here by design. The terminal is already authenticated
+/// as itself, and who is holding it is answered by a badge: a printed QR read
+/// by the imager, an RFID employee card, or a tap on a name. All three end up
+/// in [AppController.badgeScanned] / [AppController.identifyAs].
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.watch<AppController>();
-    final loc = context.watch<LocaleController>();
-    final themeCtrl = context.watch<ThemeController>();
-    final top = MediaQuery.of(context).padding.top;
-    final bottom = MediaQuery.of(context).padding.bottom;
-
-    final items = c.users.map((u) {
-      final name = (u['name'] ?? u['username'] ?? '').toString();
-      final role = (u['role'] ?? 'staff').toString();
-      // The backend uses "-" as its own placeholder for "unset" on several
-      // fields (see StateSnapshot.whName etc.) — treat it as empty here too,
-      // or every account with no real department shows a bare "· -".
-      final deptRaw = u['dept']?.toString().trim() ?? '';
-      final dept = deptRaw.isEmpty || deptRaw == '-' ? null : deptRaw;
-      return {
-        'name': name,
-        'username': (u['username'] ?? '').toString(),
-        'sub': '$role${dept != null ? ' · $dept' : ''}',
-        'initials': name.trim().isEmpty ? '?' : name.trim().substring(0, 1),
-      };
-    }).toList();
-
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(22, top + 30, 22, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const BrandMark(size: 42),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Wordmark(),
-                        Text(loc.t('เข้าสู่ระบบก่อนเริ่มกะ'), style: TextStyle(fontSize: 12, color: C.muted)),
-                      ],
-                    ),
-                  ),
-                  LangToggleButton(loc: loc),
-                  const SizedBox(width: 8),
-                  ThemeToggleButton(ctrl: themeCtrl),
-                ],
-              ),
-              const SizedBox(height: 22),
-              Text(loc.t('เลือกพนักงาน\nผู้ปฏิบัติงาน'),
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.15)),
-              const SizedBox(height: 6),
-              Text(loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน'),
-                  style: TextStyle(fontSize: 13.5, color: C.muted)),
-            ],
-          ),
-        ),
-        if (!c.connected)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-              decoration: BoxDecoration(
-                color: C.orangeBg,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: C.orangeBorder),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    c.connError == null
-                        ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
-                        : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
-                    style: TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
-                  ),
-                  const SizedBox(height: 9),
-                  _smallOutline(loc.t('ตั้งค่าการเชื่อมต่อ'), () => c.go(Screen.settings)),
-                ],
-              ),
-            ),
-          ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      loc.t(c.connected ? 'ยังไม่มีบัญชีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13.5, color: C.faint),
-                    ),
-                  ),
-                )
-              : ListView(
-                  padding: EdgeInsets.fromLTRB(22, 18, 22, bottom + 20),
-                  children: items
-                      .map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _EmployeeTile(
-                              name: e['name']!,
-                              sub: e['sub']!,
-                              initials: e['initials']!,
-                              onTap: () => _promptPassword(context, c, e['username']!, e['name']!),
-                            ),
-                          ))
-                      .toList(),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _smallOutline(String label, VoidCallback onTap) => OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: C.orange,
-          side: BorderSide(color: C.orangeBorder),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-      );
-
-  Future<void> _promptPassword(
-    BuildContext context,
-    AppController c,
-    String username,
-    String name,
-  ) {
-    return showDialog(
-      context: context,
-      builder: (_) => _PasswordDialog(controller: c, username: username, name: name),
-    );
-  }
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-/// Modal password gate shown after tapping an employee tile. Verifies against
-/// the real account via `POST /api/auth/login` — a wrong password just shows
-/// an inline error and stays open, it never falls back to a bypass.
-class _PasswordDialog extends StatefulWidget {
-  final AppController controller;
-  final String username;
-  final String name;
-  const _PasswordDialog({required this.controller, required this.username, required this.name});
-
-  @override
-  State<_PasswordDialog> createState() => _PasswordDialogState();
-}
-
-class _PasswordDialogState extends State<_PasswordDialog> {
-  final _pass = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> {
   final _focus = FocusNode();
-  String? _error;
-  bool _submitting = false;
+
+  /// Characters accumulated from the imager since the last submit. DataWedge
+  /// in keyboard-wedge mode delivers a scan as a burst of key events, so this
+  /// screen listens for raw keys rather than focusing a text field — that way
+  /// the soft keyboard never appears on a device with no text to type.
+  final StringBuffer _buf = StringBuffer();
+  Timer? _flush;
 
   @override
   void initState() {
@@ -176,137 +43,230 @@ class _PasswordDialogState extends State<_PasswordDialog> {
 
   @override
   void dispose() {
-    _pass.dispose();
+    _flush?.cancel();
     _focus.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final pw = _pass.text;
-    if (pw.isEmpty || _submitting) return;
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
-    final err = await widget.controller.loginAsEmployee(widget.username, pw);
-    if (!mounted) return;
-    if (err == null) {
-      Navigator.of(context).pop();
-    } else {
-      setState(() {
-        _submitting = false;
-        _error = err;
-      });
+  void _submitBuffer() {
+    _flush?.cancel();
+    final code = _buf.toString();
+    _buf.clear();
+    if (code.trim().isEmpty) return;
+    context.read<AppController>().badgeScanned(code);
+  }
+
+  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+
+    if (e.logicalKey == LogicalKeyboardKey.enter ||
+        e.logicalKey == LogicalKeyboardKey.numpadEnter ||
+        e.logicalKey == LogicalKeyboardKey.tab) {
+      _submitBuffer();
+      return KeyEventResult.handled;
     }
+
+    final ch = e.character;
+    if (ch == null || ch.isEmpty || ch.codeUnitAt(0) < 0x20) return KeyEventResult.ignored;
+    _buf.write(ch);
+    // Not every DataWedge profile appends an Enter suffix. Nothing else types
+    // on this screen, so a short pause is a safe end-of-scan signal.
+    _flush?.cancel();
+    _flush = Timer(const Duration(milliseconds: 250), _submitBuffer);
+    return KeyEventResult.handled;
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 26),
-      child: ConstrainedBox(
-        // Without this the dialog just fills (window width - insetPadding) —
-        // fine on a phone, a wall of white on a wide desktop test window.
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    final themeCtrl = context.watch<ThemeController>();
+    final top = MediaQuery.of(context).padding.top;
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final people = c.employees;
+
+    return Focus(
+      focusNode: _focus,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
+            child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: Text(
-                    widget.name.trim().isEmpty ? '?' : widget.name.trim().substring(0, 1),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.ink2),
-                  ),
-                ),
-                const SizedBox(width: 12),
+                const BrandMark(size: 40),
+                const SizedBox(width: 11),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(widget.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      Text(loc.t('ใส่รหัสผ่านเพื่อเข้าสู่ระบบ'), style: TextStyle(fontSize: 12, color: C.muted)),
+                      const Wordmark(),
+                      Text(
+                        c.deviceConfigured
+                            ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+                            : loc.t('ยังไม่ได้ตั้งค่าเครื่อง'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: C.muted),
+                      ),
                     ],
                   ),
                 ),
+                LangToggleButton(loc: loc),
+                const SizedBox(width: 8),
+                ThemeToggleButton(ctrl: themeCtrl),
               ],
             ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _pass,
-              focusNode: _focus,
-              obscureText: true,
-              autofocus: true,
-              onSubmitted: (_) => _submit(),
-              decoration: pdaInput(loc.t('รหัสผ่าน')),
+          ),
+          if (!c.connected)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+              child: _Notice(
+                text: c.connError == null
+                    ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
+                    : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
+                actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
+                onAction: c.goDeviceSetup,
+              ),
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(loc.t(_error!), style: TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
-            ],
+          const _BadgePrompt(),
+          if (people.isEmpty)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13.5, color: C.faint),
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(22, 4, 22, bottom + 20),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                        style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                  ),
+                  ...people.map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _EmployeeTile(
+                          emp: e,
+                          visiting: c.isVisiting(e),
+                          onTap: () {
+                            final err = c.identifyAs(e);
+                            if (err != null) c.toastMsg(err, '', ResultKind.err);
+                          },
+                        ),
+                      )),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "scan your badge" hero — the only instruction on the screen.
+class _BadgePrompt extends StatelessWidget {
+  const _BadgePrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
+        decoration: BoxDecoration(
+          color: C.ink,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.qr_code_2, size: 44, color: C.lime),
+            ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _submitting ? null : () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: C.ink2,
-                      side: BorderSide(color: C.border2),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                    ),
-                    child: Text(loc.t('ยกเลิก'), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _submitting ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: C.ink,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                    ),
-                    child: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(loc.t('เข้าสู่ระบบ'), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
+            Text(
+              loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.3),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.62), height: 1.4),
             ),
           ],
-        ),
         ),
       ),
     );
   }
 }
 
-class _EmployeeTile extends StatelessWidget {
-  final String name, sub, initials;
-  final VoidCallback onTap;
-  const _EmployeeTile({required this.name, required this.sub, required this.initials, required this.onTap});
+class _Notice extends StatelessWidget {
+  final String text;
+  final String actionLabel;
+  final VoidCallback onAction;
+  const _Notice({required this.text, required this.actionLabel, required this.onAction});
+
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+      decoration: BoxDecoration(
+        color: C.orangeBg,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: C.orangeBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(text,
+              style: TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45)),
+          const SizedBox(height: 9),
+          OutlinedButton(
+            onPressed: onAction,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: C.orange,
+              side: BorderSide(color: C.orangeBorder),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+            ),
+            child: Text(actionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeTile extends StatelessWidget {
+  final Employee emp;
+  final bool visiting;
+  final VoidCallback onTap;
+  const _EmployeeTile({required this.emp, required this.visiting, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = emp.subtitle;
     return Material(
       color: C.surface,
       borderRadius: BorderRadius.circular(16),
@@ -318,7 +278,9 @@ class _EmployeeTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: C.border),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))],
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
+            ],
           ),
           child: Row(
             children: [
@@ -327,7 +289,7 @@ class _EmployeeTile extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
                 alignment: Alignment.center,
-                child: Text(initials,
+                child: Text(emp.initials,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink2)),
               ),
               const SizedBox(width: 13),
@@ -336,17 +298,22 @@ class _EmployeeTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(name,
+                    Text(emp.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
-                    Text(sub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: C.muted)),
+                    if (sub.isNotEmpty)
+                      Text(sub,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12.5, color: C.muted)),
                   ],
                 ),
               ),
+              if (visiting) ...[
+                Pill('ต่างคลัง', color: C.orange, bg: C.orangeBg),
+                const SizedBox(width: 6),
+              ],
               Icon(Icons.chevron_right, color: C.chevron, size: 20),
             ],
           ),

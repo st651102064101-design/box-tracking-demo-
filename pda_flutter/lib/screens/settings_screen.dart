@@ -6,27 +6,12 @@ import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-class SettingsScreen extends StatefulWidget {
+/// In-shift settings: what the operator can see and do without leaving their
+/// session. Anything that changes what this terminal *is* — its address, its
+/// service account, the gate it serves — lives in device setup instead, behind
+/// [AppController.canConfigureDevice].
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _url;
-
-  @override
-  void initState() {
-    super.initState();
-    final c = context.read<AppController>();
-    _url = TextEditingController(text: c.prefs.baseUrl);
-  }
-
-  @override
-  void dispose() {
-    _url.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,12 +20,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Column(
       children: [
-        StickyHeader(onBack: c.backToHome, title: const Text('ตั้งค่า / การเชื่อมต่อ')),
+        StickyHeader(onBack: c.backToHome, title: const Text('ตั้งค่า')),
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
             children: [
-              // connection panel
               Panel(
                 padding: const EdgeInsets.all(16),
                 radius: 18,
@@ -79,24 +63,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    const FieldLabel('API Base URL'),
-                    TextField(
-                      controller: _url,
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      decoration: pdaInput('http://192.168.1.10:4000'),
-                    ),
-                    const SizedBox(height: 14),
-                    PrimaryButton(
-                      label: c.busy ? 'กำลังเชื่อมต่อ…' : 'บันทึก & เชื่อมต่อ',
-                      onTap: c.busy ? null : () => c.applyConnection(baseUrl: _url.text),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Emulator ใช้ 10.0.2.2 · เครื่องจริงใช้ IP ของเครื่องที่รัน backend (พอร์ต 4000)',
-                      style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
-                    ),
+                    const SizedBox(height: 10),
+                    Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
                   ],
                 ),
               ),
@@ -147,25 +115,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // actions
-              _tile(
-                icon: Icons.badge_outlined,
-                title: 'แก้ไขกะ / ประตู',
-                sub: '${c.selWhName} · ประตู ${c.gate}',
-                onTap: c.goSessionEdit,
-              ),
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.logout,
-                title: 'ออกจากระบบ (เปลี่ยนผู้ปฏิบัติงาน)',
-                sub: 'กลับไปหน้าเลือกพนักงาน',
-                danger: true,
-                onTap: c.doLogout,
-              ),
+              if (c.canConfigureDevice)
+                _tile(
+                  icon: Icons.router_outlined,
+                  title: 'ตั้งค่าเครื่อง',
+                  sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
+                  onTap: c.goDeviceSetup,
+                )
+              else
+                _tile(
+                  icon: Icons.lock_outline,
+                  title: 'ตั้งค่าเครื่อง',
+                  sub: 'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ ${c.selWhName} ประตู ${c.gate}',
+                  onTap: null,
+                ),
+              if (c.emp != null) ...[
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.swap_horiz,
+                  title: 'เปลี่ยนคน / จบงาน',
+                  sub: 'กลับไปหน้ายิงบัตร',
+                  danger: true,
+                  onTap: () => c.lock(),
+                ),
+              ],
               const SizedBox(height: 18),
               Center(
                 child: Text(
-                  'BoxTrace PDA · v1.0\nFlutter + Zebra RFIDAPI3 · เชื่อมกับ BoxTrace backend',
+                  'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · เชื่อมกับ BoxTrace backend',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),
                 ),
@@ -213,6 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     VoidCallback? onTap,
     bool danger = false,
   }) {
+    final enabled = onTap != null;
     return Material(
       color: C.surface,
       borderRadius: BorderRadius.circular(16),
@@ -231,7 +209,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: danger ? C.redBg : C.neutralBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, size: 21, color: danger ? C.red : C.ink2),
+                child: Icon(icon,
+                    size: 21,
+                    color: !enabled
+                        ? C.faint
+                        : danger
+                            ? C.red
+                            : C.ink2),
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -241,15 +225,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(title,
                         style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600, color: danger ? C.red : C.ink)),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: !enabled
+                                ? C.faint
+                                : danger
+                                    ? C.red
+                                    : C.ink)),
                     Text(sub,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12.5, color: C.muted)),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: C.chevron, size: 20),
+              if (enabled) Icon(Icons.chevron_right, color: C.chevron, size: 20),
             ],
           ),
         ),

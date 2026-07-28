@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
-import 'session_setup_screen.dart';
+import 'device_setup_screen.dart';
 import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'track_screen.dart';
@@ -24,19 +24,27 @@ class RootScreen extends StatelessWidget {
     // InheritedWidget mechanism, so this repaints on a dark/light toggle even
     // though RootScreen itself never watches ThemeController directly.
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _body(c),
+      body: Listener(
+        // Any touch anywhere counts as the device being in use, which keeps the
+        // idle auto-lock from firing on someone who is reading the screen
+        // rather than tapping through it. Listener (not GestureDetector) so it
+        // observes without ever competing for a gesture.
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => c.touch(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: _body(c),
+                  ),
                 ),
-              ),
-              const ToastOverlay(),
-            ],
+                const ToastOverlay(),
+              ],
+            ),
           ),
         ),
       ),
@@ -47,10 +55,10 @@ class RootScreen extends StatelessWidget {
     switch (c.screen) {
       case Screen.boot:
         return const BootScreen(key: ValueKey('boot'));
+      case Screen.deviceSetup:
+        return const DeviceSetupScreen(key: ValueKey('deviceSetup'));
       case Screen.login:
         return const LoginScreen(key: ValueKey('login'));
-      case Screen.session:
-        return const SessionSetupScreen(key: ValueKey('session'));
       case Screen.home:
         return const HomeScreen(key: ValueKey('home'));
       case Screen.scan:

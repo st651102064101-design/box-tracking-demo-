@@ -88,9 +88,14 @@ class RfidService {
     _statusCtrl.add(const RfidStatus(RfidState.connecting, 'กำลังเชื่อมต่อเครื่องอ่าน…'));
     try {
       await _method.invokeMethod('connect');
-    } on PlatformException catch (e) {
+    } catch (e) {
+      // Not just PlatformException: an Android build without the Zebra
+      // libraries — or any host running the app off-device — answers with
+      // MissingPluginException, and an unhandled async throw there would take
+      // down a screen that works perfectly well with manual entry.
       _state = RfidState.error;
-      _statusCtrl.add(RfidStatus(RfidState.error, e.message ?? 'เชื่อมต่อไม่สำเร็จ'));
+      final msg = e is PlatformException ? (e.message ?? '') : '';
+      _statusCtrl.add(RfidStatus(RfidState.error, msg.isEmpty ? 'ไม่พบเครื่องอ่านบนอุปกรณ์นี้' : msg));
     }
   }
 

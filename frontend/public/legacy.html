@@ -1282,6 +1282,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .w3d-search input:focus{border-color:var(--accent);}
   .w3d-sel{padding:8px 12px;border-radius:12px;border:.5px solid var(--line2);background:var(--surface2);color:var(--ink);font-size:13px;width:100%;outline:none;}
   .w3d-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .w3d-sb-lbl{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--muted);margin-top:4px;}
+  .w3d-viz-legend{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--muted);}
+  .w3d-viz-legend .vl{display:flex;align-items:center;gap:7px;}
+  .w3d-viz-legend i{width:11px;height:11px;border-radius:3px;flex:0 0 auto;}
   .w3d-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--surface2);border:.5px solid var(--line);cursor:pointer;transition:border-color .2s,background .2s;}
   .w3d-chip:hover{border-color:var(--line2);}
   .w3d-chip.active{background:var(--ink);color:var(--bg);border-color:var(--ink);}
@@ -1342,6 +1346,15 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <select class="w3d-sel" id="w3dType"><option value="">ทุกประเภทกล่อง</option></select>
         <select class="w3d-sel" id="w3dCust"><option value="">ทุกลูกค้า</option></select>
         <div class="w3d-chips" id="w3dChips"></div>
+        <div class="w3d-sb-lbl">โหมดวิเคราะห์พื้นที่ (Spatial Analytics)</div>
+        <select class="w3d-sel" id="w3dVizMode">
+          <option value="status">สถานะกล่อง (Default)</option>
+          <option value="occupancy">ความหนาแน่น (Occupancy Heatmap)</option>
+          <option value="abc">ABC / ความถี่หมุนเวียน</option>
+        </select>
+        <div class="w3d-sb-lbl">ผ่าดูชั้นวาง (Layer Cutaway)</div>
+        <select class="w3d-sel" id="w3dLayer"><option value="0">ทุกชั้น (All Layers)</option></select>
+        <div class="w3d-viz-legend" id="w3dVizLegend"></div>
       </div>
       <div class="w3d-legendbar" id="w3dLegend"></div>
       <div class="w3d-detail" id="w3dDetail" style="display:none;"></div>
@@ -1943,7 +1956,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>วันเริ่มงาน</label><input id="eStart" type="date"></div>
       </div>
       <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>รหัสสแกน / PIN (สำหรับยืนยันตัวที่ Gate)</label><input id="eScan" placeholder="สแกนบัตร หรือพิมพ์รหัส" autocomplete="off"></div>
+        <div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
         <div class="field"><label>สิทธิ์การใช้งาน</label>
           <select id="eAccess">
             <option value="operator">พนักงานปฏิบัติการ (ยิง Gate)</option>
@@ -3186,6 +3199,13 @@ $('#btnAddEmp').onclick=function(){
   var firstEver=isNew&&Object.keys(S.employees).length===0;
   var before=editingEmp?Object.assign({},S.employees[editingEmp]):null;
   var rec=empFields();rec.id=id;
+  /* The scan code is what the PDA matches a badge against, so every employee needs one —
+     default it to their own id rather than leaving people unable to sign in at the gate.
+     It must also be unique, or a badge scan would resolve to two different people. */
+  rec.scanCode=(rec.scanCode||'').trim()||id;
+  var dupe=Object.values(S.employees).filter(function(x){
+    return x.id!==id&&x.id!==editingEmp&&(x.scanCode||'').toUpperCase()===rec.scanCode.toUpperCase();})[0];
+  if(dupe)return toast('รหัสสแกนซ้ำ','รหัส '+rec.scanCode+' ถูกใช้กับ '+(dupe.name||dupe.id)+' ('+dupe.id+') แล้ว','err');
   S.employees[id]=rec;
   /* Self-registration: the very first employee registers themselves while still on the
      default account — attribute the audit to that person (they are the one logged in),
@@ -3220,6 +3240,84 @@ function delEmp(id){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
+
+/* ===== EMPLOYEE BADGE (Code 39) =====
+   The PDA signs an operator in by reading their badge, so the badge has to be
+   printable from here — that is the whole reason warehouse staff need no
+   accounts and no passwords.
+
+   Code 39 rather than a QR: it encodes exactly the charset employee ids use
+   (0-9 A-Z and "-"), the Zebra imager reads it out of the box, and the whole
+   symbology is a 44-entry lookup table — no library, no CDN, nothing to break
+   when the warehouse PC is offline. */
+var C39={'0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw',
+'5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn',
+'A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn',
+'F':'nnwnwwnnn','G':'nnnnnwwnw','H':'wnnnnwwnn','I':'nnwnnwwnn','J':'nnnnwwwnn',
+'K':'wnnnnnnww','L':'nnwnnnnww','M':'wnwnnnnwn','N':'nnnnwnnww','O':'wnnnwnnwn',
+'P':'nnwnwnnwn','Q':'nnnnnnwww','R':'wnnnnnwwn','S':'nnwnnnwwn','T':'nnnnwnwwn',
+'U':'wwnnnnnnw','V':'nwwnnnnnw','W':'wwwnnnnnn','X':'nwnnwnnnw','Y':'wwnnwnnnn',
+'Z':'nwwnwnnnn','-':'nwnnnnwnw','.':'wwnnnnwnn',' ':'nwwnnnwnn','$':'nwnwnwnnn',
+'/':'nwnwnnnwn','+':'nwnnnwnwn','%':'nnnwnwnwn','*':'nwnnwnwnn'};
+
+/* One unit = 0.165mm, so a narrow bar prints at 0.33mm — comfortably above the
+   minimum an imager can resolve, with the 3:1 wide/narrow ratio Code 39 needs. */
+function code39Svg(text){
+  var chars=('*'+String(text||'').toUpperCase().replace(/[^0-9A-Z\-. $\/+%]/g,'')+'*').split('');
+  var N=2,W=6,H=110,U=0.165,x=0,rects='';
+  chars.forEach(function(ch){
+    var pat=C39[ch];if(!pat)return;
+    for(var i=0;i<9;i++){
+      var w=pat.charAt(i)==='w'?W:N;
+      if(i%2===0)rects+='<rect x="'+x+'" y="0" width="'+w+'" height="'+H+'"/>';
+      x+=w;
+    }
+    x+=N; /* inter-character gap */
+  });
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+x+' '+H+'" '
+    +'width="'+(x*U).toFixed(2)+'mm" height="'+(H*U).toFixed(2)+'mm" '
+    +'shape-rendering="crispEdges" fill="#000">'+rects+'</svg>';
+}
+
+/* Opens a print view sized to a CR80 card (86×54mm) so badges can be printed
+   on card stock, cut out, and laminated. */
+function printEmpBadge(id){
+  var e=S.employees[id];if(!e)return;
+  var code=(e.scanCode||e.id).toUpperCase();
+  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
+  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
+  var w=window.open('','_blank','width=560,height=460');
+  if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
+  w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
+    +'<title>บัตรพนักงาน '+esc(e.id)+'</title><style>'
+    +'@page{size:86mm 54mm;margin:0;}'
+    +'*{box-sizing:border-box;}'
+    +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
+    +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
+    +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
+    +'justify-content:space-between;}'
+    +'.top{display:flex;align-items:baseline;justify-content:space-between;gap:4mm;}'
+    +'.nm{font-size:14pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;}'
+    +'.mt{font-size:8pt;color:#666;margin-top:.6mm;}'
+    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;}'
+    +'.bc{text-align:center;}'
+    +'.bc svg{display:block;margin:0 auto;}'
+    +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
+    +'margin-top:1mm;text-align:center;}'
+    +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
+    +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
+    +'</style></head><body><div class="card">'
+    +'<div class="top"><div><div class="nm">'+esc(e.name||e.id)+'</div>'
+    +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
+    +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
+    +'</div><div class="brand">◈ BoxTrace</div></div>'
+    +'<div class="bc">'+code39Svg(code)+'<div class="code">'+esc(code)+'</div></div>'
+    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</body></html>');
+  w.document.close();
+  w.focus();
+}
+window.printEmpBadge=printEmpBadge;
 function setCurrentUser(name){
   USER=name;try{localStorage.setItem('boxtrace_user',USER);}catch(e){}
   setv('outRecorder',USER);setv('inRecorder',USER);renderAll();}
@@ -3283,7 +3381,7 @@ function openFirstRegisterModal(){
   $('#btnFirstReg').onclick=function(){
     var nm=val('frName');if(!nm)return toast('กรอกชื่อ-นามสกุล',null,'err');
     var id=nextSeqId('EMP-',Object.keys(S.employees));
-    var rec={id:id,name:nm,role:val('frRole')||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:val('frPhone'),email:val('frEmail'),startDate:'',scanCode:'',access:'admin',status:'active'};
+    var rec={id:id,name:nm,role:val('frRole')||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:val('frPhone'),email:val('frEmail'),startDate:'',scanCode:id,access:'admin',status:'active'};
     S.employees[id]=rec;
     auditEntry('CREATE',nm,id,nm,null,rec);
     save();
@@ -5416,6 +5514,7 @@ function renderSetup(){
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c"><div class="row-actions">'
+      +'<button class="btn sm ghost" title="พิมพ์บัตรสำหรับยิงเข้าระบบที่ PDA" onclick="printEmpBadge(\''+esc(e.id)+'\')">บัตร</button>'
       +(canEdit?'<button class="btn sm ghost" onclick="editEmp(\''+esc(e.id)+'\')">แก้ไข</button>':'')
       +(empAdmin?'<button class="btn sm red" onclick="delEmp(\''+esc(e.id)+'\')">ลบ</button>':'')
       +'</div></td></tr>';
@@ -10990,7 +11089,7 @@ const SLOT_W=1.16,RACK_D=1.15,SHELF_H=0.92,BASE_Y=0.16,AISLE=3.1,GAP=0.6;
 const STG_BAY=1.26,STG_D=1.2,STG_LEV_Y=[0.16,1.06],STG_TOP=1.96;
 let root=null,fxRoot=new THREE.Group();scene.add(fxRoot);
 let curWh='',lastBuiltWh=null,lastEvtTs=-1;
-const FIL={status:'all',type:'',cust:''};
+const FIL={status:'all',type:'',cust:'',viz:'status',layer:0};
 let boxRecs=[],tagIndex=new Map(),sensorMesh=null,cellData=[],padPick=[],truckPick=[],slotEdge=null;
 let LY={},HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
 let COUNTS={},sel=null,anims=[];
@@ -12222,12 +12321,120 @@ function matchFilter(b){
   if(FIL.cust&&b.customer!==FIL.cust)return false;
   return true;
 }
+/* ══ Spatial Analytics ══════════════════════════════════════════
+   สามมุมมองบนฉากเดียวกัน: สถานะกล่อง (ค่าเริ่มต้น) · ความหนาแน่นของแร็ค ·
+   ABC ตามความถี่หมุนเวียน — ทั้งหมดทำโดยสลับ material ของกล่องใน
+   applyFilters() ไม่ต้อง rebuild ฉาก จึงสลับได้ทันทีไม่มีสะดุด
+   พาเลทกับเทปยังใช้วัสดุเดิม ระบายสีเฉพาะตัวกล่อง (meshes[0]) */
+const VIZ_MATS=new Map();
+const vizMat=hex=>{let m=VIZ_MATS.get(hex);if(!m){m=mat(hex,{roughness:0.6});VIZ_MATS.set(hex,m);}return m;};
+const hex6=n=>'#'+n.toString(16).padStart(6,'0');
+
+/* ระดับความหนาแน่น — ใช้ค่า t เป็นขอบบน (ไม่รวม) ของแต่ละช่วง */
+const OCC_SCALE=[
+  {t:0.35,c:0x8fd14f,l:'ยังว่างมาก (ต่ำกว่า 35%)'},
+  {t:0.70,c:0xf5c518,l:'ปานกลาง (35–70%)'},
+  {t:0.90,c:0xf59e0b,l:'เริ่มแน่น (70–90%)'},
+  {t:Infinity,c:0xd70015,l:'เต็ม (90% ขึ้นไป)'}
+];
+const ABC_SCALE=[
+  {c:0xd70015,l:'A — หมุนเวียนถี่ที่สุด (20% แรก)'},
+  {c:0xf59e0b,l:'B — ปานกลาง (30% ถัดมา)'},
+  {c:0x5ac8fa,l:'C — หมุนเวียนน้อย / ยังไม่เคยออก'}
+];
+let VIZ={occ:new Map(),aCut:0,bCut:0,maxCyc:0};
+
+const rackKeyOf=l=>(l.zone||'—')+'\u0000'+(l.rack||'R?');
+
+/* คำนวณตัวเลขที่สองโหมดนี้ใช้ ทำตอน build/refresh ครั้งเดียว ไม่ใช่ทุกเฟรม */
+function computeViz(){
+  /* ความหนาแน่น = ช่องที่มีของ ÷ ช่องทั้งหมดของแร็คนั้น (จาก Location Master) */
+  const total=new Map(),used=new Map();
+  cellData.forEach(cd=>{const k=rackKeyOf(cd);total.set(k,(total.get(k)||0)+1);});
+  boxRecs.forEach(rec=>{
+    const k=rackKeyOf(rec.b.location||{});
+    if(total.has(k))used.set(k,(used.get(k)||0)+1);
+  });
+  const occ=new Map();
+  total.forEach((n,k)=>occ.set(k,n?(used.get(k)||0)/n:0));
+
+  /* ABC จากจำนวนรอบหมุนเวียนจริง (cycles) แบ่งด้วยเปอร์เซ็นไทล์ของกล่อง
+     ในคลังนี้ ไม่ใช่เกณฑ์ตายตัว — คลังที่เพิ่งเริ่มใช้จะเป็น C ทั้งหมด
+     ซึ่งเป็นคำตอบที่ถูก ไม่ใช่การแบ่งกลุ่มมั่ว */
+  const cyc=boxRecs.map(r=>Number(r.b.cycles)||0).sort((a,b)=>b-a);
+  const at=p=>cyc.length?cyc[Math.min(cyc.length-1,Math.floor(cyc.length*p))]:0;
+  VIZ={occ,aCut:at(0.2),bCut:at(0.5),maxCyc:cyc[0]||0};
+}
+
+/* สีของกล่องในโหมดปัจจุบัน — null = ใช้สีสถานะเดิม */
+function vizColor(rec){
+  if(FIL.viz==='occupancy'){
+    const k=rackKeyOf(rec.b.location||{});
+    if(!VIZ.occ.has(k))return null;   /* ไม่ได้อยู่บนแร็ค (รอจัดเก็บ/อยู่ที่ลูกค้า) — คงสีสถานะไว้ */
+    const v=VIZ.occ.get(k);
+    return (OCC_SCALE.find(s=>v<s.t)||OCC_SCALE[OCC_SCALE.length-1]).c;
+  }
+  if(FIL.viz==='abc'){
+    const c=Number(rec.b.cycles)||0;
+    if(!c||!VIZ.maxCyc)return ABC_SCALE[2].c;
+    if(c>=VIZ.aCut)return ABC_SCALE[0].c;
+    if(c>=VIZ.bCut)return ABC_SCALE[1].c;
+    return ABC_SCALE[2].c;
+  }
+  return null;
+}
+
+/* ผ่าดูชั้นวาง — เลือกชั้นแล้วเห็นเฉพาะกล่องบนชั้นนั้น กล่องที่ไม่ได้อยู่บนแร็ค
+   (จึงไม่มีเลขชั้น) จะถูกหรี่ไปด้วย เพราะไม่ได้อยู่ในชั้นที่กำลังผ่าดู */
+function passLayer(b){
+  if(!FIL.layer)return true;
+  return String((b.location||{}).shelf||'')===String(FIL.layer);
+}
+
 function applyFilters(){
   boxRecs.forEach(rec=>{
-    const on=matchFilter(rec.b);
+    const on=matchFilter(rec.b)&&passLayer(rec.b);
     const selHere=sel&&sel.type==='box'&&sel.tag===rec.tag;
-    rec.meshes.forEach((m,i)=>{m.material=selHere?MAT.sel:(on?rec.baseMats[i]:MAT.dim);});
+    const vc=on?vizColor(rec):null;
+    rec.meshes.forEach((m,i)=>{
+      m.material=selHere?MAT.sel
+        :!on?MAT.dim
+        :(vc!==null&&i===0)?vizMat(vc)
+        :rec.baseMats[i];
+    });
   });
+}
+
+function renderVizLegend(){
+  const el=document.getElementById('w3dVizLegend');
+  if(!el)return;
+  const row=(c,l)=>'<div class="vl"><i style="background:'+hex6(c)+'"></i>'+esc(l)+'</div>';
+  const note=t=>'<div class="vl" style="opacity:.72;line-height:1.45;">'+esc(t)+'</div>';
+  if(FIL.viz==='occupancy'){
+    el.innerHTML=OCC_SCALE.map(s=>row(s.c,s.l)).join('')
+      +note('คิดจากช่องที่มีของ ÷ ช่องทั้งหมดของแต่ละแร็ค — กล่องที่ยังไม่เข้าชั้นคงสีสถานะเดิม');
+  }else if(FIL.viz==='abc'){
+    el.innerHTML=ABC_SCALE.map(s=>row(s.c,s.l)).join('')
+      +note(VIZ.maxCyc?('แบ่งจากจำนวนรอบหมุนเวียนของกล่องในคลังนี้ · สูงสุด '+VIZ.maxCyc+' รอบ')
+                      :'ยังไม่มีกล่องที่เคยหมุนเวียน จึงเป็นกลุ่ม C ทั้งหมด');
+  }else{
+    el.innerHTML=note('ใช้สีตามสถานะกล่องในแถบด้านล่าง');
+  }
+}
+
+/* ชั้นที่เลือกได้มาจากแร็คจริงของคลังนี้ ไม่ใช่รายการตายตัว */
+function renderLayerOptions(){
+  const el=document.getElementById('w3dLayer');
+  if(!el)return;
+  const levels=[...new Set(cellData.map(cd=>cd.shelf))]
+    .filter(v=>v!==null&&v!==undefined&&String(v)!=='')
+    .sort((a,b)=>Number(a)-Number(b));
+  el.innerHTML='<option value="0">ทุกชั้น (All Layers)</option>'
+    +levels.map(v=>'<option value="'+esc(String(v))+'">ชั้นที่ '+esc(String(v))+'</option>').join('');
+  /* คลังที่เพิ่งสลับมาอาจไม่มีชั้นเดิม — ถอยกลับเป็น "ทุกชั้น" แทนที่จะค้างว่างเปล่า */
+  const keep=levels.map(String).indexOf(String(FIL.layer))>=0;
+  el.value=keep?String(FIL.layer):'0';
+  if(!keep)FIL.layer=0;
 }
 function refreshUI(){
   const st=St();
@@ -12255,6 +12462,9 @@ function refreshUI(){
   custSel.innerHTML='<option value="">ทุกลูกค้า</option>'+Object.values(st.customers||{}).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name||c.id)+'</option>').join('');
   typeSel.value=tv;custSel.value=cv;
   document.getElementById('w3dTags').innerHTML=Object.keys(st.boxes||{}).slice(0,800).map(t=>'<option value="'+esc(t)+'"></option>').join('');
+  /* วิ่งหลัง build() เสมอ (ดูท้าย build) — boxRecs/cellData จึงพร้อมแล้วตอนคำนวณ */
+  computeViz();renderLayerOptions();renderVizLegend();
+  document.getElementById('w3dVizMode').value=FIL.viz;
 }
 function renderOps(){
   const busy=agents.filter(a=>a.state!=='idle'&&a.state!=='gone').length;
@@ -12494,6 +12704,10 @@ document.getElementById('w3dChips').addEventListener('click',e=>{
 });
 document.getElementById('w3dType').addEventListener('change',e=>{FIL.type=e.target.value;applyFilters();});
 document.getElementById('w3dCust').addEventListener('change',e=>{FIL.cust=e.target.value;applyFilters();});
+document.getElementById('w3dVizMode').addEventListener('change',e=>{
+  FIL.viz=e.target.value;computeViz();renderVizLegend();applyFilters();});
+document.getElementById('w3dLayer').addEventListener('change',e=>{
+  FIL.layer=e.target.value==='0'?0:e.target.value;applyFilters();});
 document.getElementById('w3dSearch').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
 const spinBtn=document.getElementById('w3dSpin');
 spinBtn.addEventListener('click',()=>{

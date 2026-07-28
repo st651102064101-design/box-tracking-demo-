@@ -25,39 +25,50 @@ class LocaleController extends ChangeNotifier {
   String t(String th) => lang == 'en' ? (_dict[th] ?? th) : th;
 
   static const Map<String, String> _dict = {
-    // login screen
-    'เข้าสู่ระบบก่อนเริ่มกะ': 'Sign in before starting a shift',
-    'เลือกพนักงาน\nผู้ปฏิบัติงาน': 'Select operator\nemployee',
-    'ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ล็อกอิน': 'Every in/out scan is logged under the signed-in name',
+    // badge screen
+    'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
+    'ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร':
+        'Every in/out scan is logged under the badge that was scanned',
+    'หรือแตะชื่อของคุณ': 'or tap your name',
+    'ยังไม่ได้ตั้งค่าเครื่อง': 'Device not set up yet',
     'ตั้งค่าการเชื่อมต่อ': 'Connection settings',
-    'ยังไม่มีบัญชีพนักงานในระบบ': 'No employee accounts yet',
+    'ยังไม่มีพนักงานในระบบ': 'No employees on file yet',
     'รอเชื่อมต่อกับระบบหลักก่อน': 'Waiting to connect to the main system',
     'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
         'No data from the BoxTrace main system yet — tap below to set up the connection',
     'เชื่อมต่อไม่ได้': 'Could not connect',
-    'ใส่รหัสผ่านเพื่อเข้าสู่ระบบ': 'Enter your password to sign in',
-    'รหัสผ่าน': 'Password',
-    'ยกเลิก': 'Cancel',
-    'เข้าสู่ระบบ': 'Sign in',
     'ผู้ดูแลระบบ': 'Administrator',
-    'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง': 'Incorrect username or password',
 
-    // session setup screen
-    'ตั้งค่ากะทำงาน': 'Shift setup',
-    'ผู้ปฏิบัติงาน': 'Operator',
-    '1 · เลือกคลังสินค้า': '1 · Select warehouse',
+    // device setup screen
+    'ตั้งค่าเครื่อง': 'Device setup',
+    'ตั้งครั้งเดียว — พนักงานไม่ต้องเลือกอีก': 'Set once — operators never pick this again',
+    '1 · การเชื่อมต่อระบบหลัก': '1 · Connection to the main system',
+    'เชื่อมต่อแล้ว': 'Connected',
+    'กล่อง': 'boxes',
+    'ยังไม่พบข้อมูล': 'No data yet',
+    'ที่อยู่เซิร์ฟเวอร์': 'Server address',
+    'บัญชีประจำเครื่อง': 'Device account',
+    'ชื่อบัญชีเครื่อง เช่น pda-01': 'Device account name, e.g. pda-01',
+    'รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)': 'Password (blank = unchanged)',
+    'บัญชีนี้เป็นของเครื่อง ไม่ใช่ของพนักงาน — ตั้งครั้งเดียวตอนแจกเครื่อง':
+        'This account belongs to the terminal, not to a person — set once when the device is issued',
+    'กำลังเชื่อมต่อ…': 'Connecting…',
+    'บันทึก & เชื่อมต่อ': 'Save & connect',
+    '2 · เครื่องนี้ประจำคลังไหน': '2 · Which warehouse is this device stationed at',
+    'เชื่อมต่อระบบหลักก่อน จึงจะเลือกคลังได้': 'Connect to the main system first to pick a warehouse',
+    '3 · ประจำประตูไหน': '3 · Which gate',
+    '4 · ล็อกหน้าจอเมื่อไม่มีการใช้งาน': '4 · Lock the screen when idle',
+    'ไม่ล็อก': 'Never',
+    'นาที': 'min',
+    'ยิงบัตรอีกครั้งเพื่อปลดล็อก · จะไม่ล็อกขณะมีกล่องค้างอยู่ในคิว':
+        'Scan a badge to unlock · never locks while boxes are queued',
+    'บันทึกและเริ่มใช้งาน': 'Save and start',
     'เลือกคลังและประตูก่อน': 'Select a warehouse and gate first',
-    'เริ่มกะทำงาน': 'Start shift',
     'เข้า': 'IN',
     'ออก': 'OUT',
     'เข้า/ออก': 'IN/OUT',
     'ประตู': 'Gate',
   };
-
-  /// '2 · เลือกประตู (Gate) — {whName}' has an interpolated warehouse name, so
-  /// it can't be a flat dictionary lookup — build it from parts instead.
-  String gateStepLabel(String whName) =>
-      lang == 'en' ? '2 · Select gate — $whName' : '2 · เลือกประตู (Gate) — $whName';
 
   String gateRangeText(int? first, int? last) {
     if (first == null || last == null) return lang == 'en' ? 'Gate —' : 'ประตู —';

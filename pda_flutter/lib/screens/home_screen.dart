@@ -23,20 +23,39 @@ class HomeScreen extends StatelessWidget {
             children: [
               const BrandMark(size: 40),
               const SizedBox(width: 12),
+              // The operator's name is the most important thing on this screen:
+              // if the wrong person is signed in, it has to be noticeable
+              // before a scan is committed — and fixable in one tap.
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(c.user,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-                    Text('${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: C.muted)),
-                  ],
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _openHandover(context, c),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(c.user,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.expand_more, size: 17, color: C.chevron),
+                          ],
+                        ),
+                        Text('${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: C.muted)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               OnlineChip(online: c.online, onTap: c.toggleOnline),
@@ -75,12 +94,23 @@ class HomeScreen extends StatelessWidget {
                   Expanded(child: _TodayStat(inN: c.todayIn, outN: c.todayOut)),
                 ],
               ),
+              if (c.emp != null && c.isVisiting(c.emp!))
+                Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: _Note('คุณประจำ ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
+                      '— รายการที่ยิงจะบันทึกที่ ${c.selWhName} ประตู ${c.gate}'),
+                ),
+              if (!c.canScan)
+                Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
+                ),
               const SizedBox(height: 16),
               const Caption('งานหลัก'),
               const SizedBox(height: 10),
               // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
               // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
-              if (c.currentGateType != 'out') ...[
+              if (c.canScan && c.currentGateType != 'out') ...[
                 _ActionCard(
                   dark: true,
                   icon: Icons.south,
@@ -92,7 +122,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
-              if (c.currentGateType != 'in') ...[
+              if (c.canScan && c.currentGateType != 'in') ...[
                 _ActionCard(
                   icon: Icons.north,
                   iconColor: C.orange,
@@ -122,6 +152,111 @@ class HomeScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Handover sheet: end this person's session, or hand the device to the next
+/// one. Both do the same thing — return to the badge screen — because a
+/// handover *is* the sign-out. The device itself stays signed in and stationed
+/// where it is, so the next operator is one badge scan away from working.
+void _openHandover(BuildContext context, AppController c) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          Text(
+            [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
+                .where((s) => s.isNotEmpty)
+                .join(' · '),
+            style: TextStyle(fontSize: 12.5, color: C.muted),
+          ),
+          const SizedBox(height: 16),
+          _SheetAction(
+            icon: Icons.swap_horiz,
+            label: 'เปลี่ยนคน / จบงาน',
+            sub: 'กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม',
+            onTap: () {
+              Navigator.of(sheetCtx).pop();
+              c.lock();
+            },
+          ),
+          if (c.canConfigureDevice) ...[
+            const SizedBox(height: 10),
+            _SheetAction(
+              icon: Icons.settings_outlined,
+              label: 'ตั้งค่าเครื่อง',
+              sub: 'เปลี่ยนคลัง/ประตูที่เครื่องนี้ประจำ',
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                c.goDeviceSetup();
+              },
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _SheetAction extends StatelessWidget {
+  final IconData icon;
+  final String label, sub;
+  final VoidCallback onTap;
+  const _SheetAction({required this.icon, required this.label, required this.sub, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: C.neutralBg,
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
+            children: [
+              Icon(icon, size: 21, color: C.ink2),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Neutral inline note — context the operator should see but not act on.
+class _Note extends StatelessWidget {
+  final String text;
+  const _Note(this.text);
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: C.neutralBg,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: C.border),
+        ),
+        child: Text(text, style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4)),
+      );
 }
 
 String _gateDirSuffix(String dir) {

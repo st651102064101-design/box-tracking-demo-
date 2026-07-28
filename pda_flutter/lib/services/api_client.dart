@@ -15,9 +15,20 @@ class ApiException implements Exception {
 /// Thin REST wrapper around the BoxTrace Express backend.
 ///
 /// All endpoints except `/auth` and `/health` require `Authorization: Bearer`.
+///
+/// Tokens are short-lived (12h by default, see `backend/src/env.ts`), which is
+/// shorter than a device stays powered on at a gate. Rather than surfacing a
+/// mid-shift expiry as "บันทึกไม่สำเร็จ", every authenticated request runs
+/// through [_send], which re-authenticates once via [reauthenticate] on a 401
+/// and replays the request with the fresh token.
 class ApiClient {
   String baseUrl;
   String? token;
+
+  /// Re-authenticates with the device's own service credentials and stores the
+  /// new token on this client. Returns true when a usable token was obtained.
+  /// Wired up by AppController; left null in tests that don't need it.
+  Future<bool> Function()? reauthenticate;
 
   ApiClient({required this.baseUrl, this.token});
 
@@ -31,7 +42,7 @@ class ApiClient {
         if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
-  Future<dynamic> _decode(http.Response r) async {
+  dynamic _decode(http.Response r) {
     dynamic body;
     try {
       body = r.body.isEmpty ? null : jsonDecode(r.body);
@@ -52,6 +63,30 @@ class ApiClient {
 
   static const _timeout = Duration(seconds: 20);
 
+  /// True while a [reauthenticate] round-trip is in flight, so the login call
+  /// it makes can't recurse back into another refresh attempt.
+  bool _refreshing = false;
+
+  /// Runs [send] with the current headers; on a 401 refreshes the token once
+  /// and runs it again. [send] is a closure rather than a prepared request so
+  /// the retry picks up the *new* token instead of replaying the stale one.
+  Future<dynamic> _send(Future<http.Response> Function() send) async {
+    final r = await send().timeout(_timeout);
+    if (r.statusCode != 401 || _refreshing || reauthenticate == null) return _decode(r);
+
+    _refreshing = true;
+    bool refreshed;
+    try {
+      refreshed = await reauthenticate!();
+    } catch (_) {
+      refreshed = false;
+    } finally {
+      _refreshing = false;
+    }
+    if (!refreshed) return _decode(r); // throws the original 401
+    return _decode(await send().timeout(_timeout));
+  }
+
   Future<bool> health() async {
     try {
       final r = await http.get(_u('/api/health')).timeout(_timeout);
@@ -62,95 +97,84 @@ class ApiClient {
   }
 
   /// POST /api/auth/login -> { token, user }
+  ///
+  /// Deliberately outside [_send]: a 401 here means the credentials are wrong,
+  /// and retrying them would just fail identically.
   Future<Map<String, dynamic>> login(String username, String password) async {
     final r = await http
         .post(_u('/api/auth/login'),
             headers: _headers, body: jsonEncode({'username': username, 'password': password}))
         .timeout(_timeout);
-    final body = await _decode(r) as Map<String, dynamic>;
+    final body = _decode(r) as Map<String, dynamic>;
     token = body['token'] as String?;
     return body;
   }
 
-  /// GET /api/auth/users -> list of employee accounts (for the login picker)
-  Future<List<Map<String, dynamic>>> listUsers() async {
-    final r = await http.get(_u('/api/auth/users'), headers: _headers).timeout(_timeout);
-    final body = await _decode(r) as Map<String, dynamic>;
-    return (body['users'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-  }
-
   /// GET /api/state -> full S snapshot
-  Future<Map<String, dynamic>> getState() async {
-    final r = await http.get(_u('/api/state'), headers: _headers).timeout(_timeout);
-    return await _decode(r) as Map<String, dynamic>;
-  }
+  Future<Map<String, dynamic>> getState() async =>
+      await _send(() => http.get(_u('/api/state'), headers: _headers)) as Map<String, dynamic>;
 
   /// PUT /api/state -> replace whole state (used by the demo seed)
   Future<void> putState(Map<String, dynamic> state) async {
-    final r = await http
-        .put(_u('/api/state'), headers: _headers, body: jsonEncode(state))
-        .timeout(const Duration(seconds: 40));
-    await _decode(r);
+    await _send(() => http.put(_u('/api/state'), headers: _headers, body: jsonEncode(state)));
   }
 
-  /// POST /api/gate/in { tags, gate, recorder, plate?, driver?, vehicleType? }
+  /// POST /api/gate/in { tags, gate, employeeId, recorder, plate?, driver?, vehicleType? }
   Future<Map<String, dynamic>> gateIn({
     required List<String> tags,
     required int gate,
+    String? employeeId,
     String? recorder,
     String? plate,
     String? driver,
     String? vehicleType,
   }) async {
-    final r = await http
-        .post(_u('/api/gate/in'),
-            headers: _headers,
-            body: jsonEncode({
-              'tags': tags,
-              'gate': gate,
-              if (recorder != null) 'recorder': recorder,
-              if (plate != null && plate.isNotEmpty) 'plate': plate,
-              if (driver != null && driver.isNotEmpty) 'driver': driver,
-              if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
-            }))
-        .timeout(_timeout);
-    return await _decode(r) as Map<String, dynamic>;
+    return await _send(() => http.post(_u('/api/gate/in'),
+        headers: _headers,
+        body: jsonEncode({
+          'tags': tags,
+          'gate': gate,
+          if (employeeId != null && employeeId.isNotEmpty) 'employeeId': employeeId,
+          if (recorder != null) 'recorder': recorder,
+          if (plate != null && plate.isNotEmpty) 'plate': plate,
+          if (driver != null && driver.isNotEmpty) 'driver': driver,
+          if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
+        }))) as Map<String, dynamic>;
   }
 
-  /// POST /api/gate/out { tags, customer, gate, doNo?, po?, recorder, plate?, driver?, vehicleType? }
+  /// POST /api/gate/out { tags, customer, gate, doNo?, po?, employeeId, recorder, … }
   Future<Map<String, dynamic>> gateOut({
     required List<String> tags,
     required String customer,
     required int gate,
     String? doNo,
     String? po,
+    String? employeeId,
     String? recorder,
     String? plate,
     String? driver,
     String? vehicleType,
   }) async {
-    final r = await http
-        .post(_u('/api/gate/out'),
-            headers: _headers,
-            body: jsonEncode({
-              'tags': tags,
-              'customer': customer,
-              'gate': gate,
-              if (doNo != null) 'doNo': doNo,
-              if (po != null) 'po': po,
-              if (recorder != null) 'recorder': recorder,
-              if (plate != null && plate.isNotEmpty) 'plate': plate,
-              if (driver != null && driver.isNotEmpty) 'driver': driver,
-              if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
-            }))
-        .timeout(_timeout);
-    return await _decode(r) as Map<String, dynamic>;
+    return await _send(() => http.post(_u('/api/gate/out'),
+        headers: _headers,
+        body: jsonEncode({
+          'tags': tags,
+          'customer': customer,
+          'gate': gate,
+          if (doNo != null) 'doNo': doNo,
+          if (po != null) 'po': po,
+          if (employeeId != null && employeeId.isNotEmpty) 'employeeId': employeeId,
+          if (recorder != null) 'recorder': recorder,
+          if (plate != null && plate.isNotEmpty) 'plate': plate,
+          if (driver != null && driver.isNotEmpty) 'driver': driver,
+          if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
+        }))) as Map<String, dynamic>;
   }
 
   /// GET /api/boxes/:tag
   Future<Map<String, dynamic>?> getBox(String tag) async {
     final r = await http.get(_u('/api/boxes/$tag'), headers: _headers).timeout(_timeout);
     if (r.statusCode == 404) return null;
-    return await _decode(r) as Map<String, dynamic>;
+    return _decode(r) as Map<String, dynamic>;
   }
 }

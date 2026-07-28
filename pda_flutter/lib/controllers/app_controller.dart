@@ -3,13 +3,14 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../models/box.dart';
+import '../models/employee.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
 import '../services/prefs.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, login, session, home, scan, track, settings }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -29,6 +30,15 @@ class Toast {
 
 /// The single orchestrator for the whole PDA app — a Dart port of the mockup's
 /// `Component`, backed by the real BoxTrace REST API and the Zebra reader.
+///
+/// Identity is split in two on purpose:
+///
+///  * The **device** authenticates, once, with a service account stored in
+///    [Prefs] and stays signed in for good. It is also what fixes the warehouse
+///    and gate — a terminal lives at one door, so nobody re-picks that daily.
+///  * The **operator** is a row of the WMS employee master ([Employee]) chosen
+///    by scanning their badge. There is no account and no password behind it,
+///    so people are managed entirely from the web app's "พนักงาน" page.
 class AppController extends ChangeNotifier {
   final ApiClient api;
   final Prefs prefs;
@@ -40,14 +50,15 @@ class AppController extends ChangeNotifier {
   Screen screen = Screen.boot;
   StateSnapshot? S;
 
-  String user = '';
+  /// The operator currently holding the device — null whenever it is locked.
+  Employee? emp;
+
+  /// Display name of [emp]; kept as a plain string because it is what gets
+  /// written to `recorder` and shown in every header.
+  String get user => emp?.name ?? '';
+
   String wh = '';
   String gate = '';
-
-  /// Employee/operator accounts (an account IS a login — `users` table).
-  /// Fetched with the bootstrap device credentials so the login screen has
-  /// real names to show before any operator has authenticated as themselves.
-  List<Map<String, dynamic>> users = [];
 
   // ── scanning ────────────────────────────────────────────────────────────
   String mode = 'in'; // 'in' | 'out'
@@ -92,12 +103,21 @@ class AppController extends ChangeNotifier {
   Future<void> init() async {
     api.baseUrl = prefs.baseUrl;
     api.token = prefs.token;
+    api.reauthenticate = _deviceLogin;
 
-    // restore offline queue + shift session
+    // Restore the last known warehouse state *before* touching the network:
+    // a terminal that boots with the backend unreachable still needs employee
+    // names on the badge screen and box data for the scanner. Without this the
+    // whole app is dead until connectivity returns.
+    final cached = prefs.stateCache;
+    if (cached != null) S = StateSnapshot.fromJson(cached);
+
     outbox
       ..clear()
       ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
-    final sess = prefs.session;
+
+    wh = prefs.deviceWh;
+    gate = prefs.deviceGate;
 
     // wire the Zebra reader
     _tagSub = rfid.tags.listen(_onReaderTag);
@@ -112,43 +132,40 @@ class AppController extends ChangeNotifier {
     final loading = _ensureAuthAndState();
     await Future.delayed(const Duration(milliseconds: 420));
 
-    if (sess != null && sess['user'] != null && sess['wh'] != null && sess['gate'] != null) {
-      user = sess['user'].toString();
-      wh = sess['wh'].toString();
-      gate = sess['gate'].toString();
-      screen = Screen.home;
-      _connectReader();
-    } else {
-      screen = Screen.login;
-    }
+    // No operator is ever restored: a shift always starts with a badge scan,
+    // which takes a second and can't mis-attribute the next person's work.
+    screen = deviceConfigured ? Screen.login : Screen.deviceSetup;
+    if (deviceConfigured) _connectReader();
+    _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
     notifyListeners();
   }
 
-  /// Logs in with the device/service credentials from Settings (default
-  /// admin/admin123), then loads box state + the employee/user list. This is
-  /// the "bootstrap" identity — just enough access to populate the login
-  /// screen — separate from an operator's own login (see [loginAsEmployee]),
-  /// which replaces the active token once they authenticate as themselves.
+  /// Signs in with the terminal's own service credentials. Also used as
+  /// [ApiClient.reauthenticate], so an expired token mid-shift is renewed
+  /// transparently instead of failing an operator's commit.
+  Future<bool> _deviceLogin() async {
+    final r = await api.login(prefs.username, prefs.password);
+    final token = r['token'] as String?;
+    prefs.token = token;
+    return token != null && token.isNotEmpty;
+  }
+
+  /// Ensures the device is authenticated and the state snapshot is current.
   Future<void> _ensureAuthAndState() async {
     try {
-      if (api.token == null || api.token!.isEmpty) {
-        final r = await api.login(prefs.username, prefs.password);
-        prefs.token = r['token'] as String?;
-      }
+      if (api.token == null || api.token!.isEmpty) await _deviceLogin();
       await refresh();
-      await _loadUsers();
       connError = null;
     } on ApiException catch (e) {
-      // token may be stale → retry once with a fresh login
+      // A stale token normally self-heals inside ApiClient; this covers the
+      // case where the *stored* token was rejected before any retry could run.
       if (e.status == 401) {
         try {
-          final r = await api.login(prefs.username, prefs.password);
-          prefs.token = r['token'] as String?;
+          await _deviceLogin();
           await refresh();
-          await _loadUsers();
           connError = null;
           return;
         } catch (e2) {
@@ -165,11 +182,7 @@ class AppController extends ChangeNotifier {
   Future<void> refresh() async {
     final json = await api.getState();
     S = StateSnapshot.fromJson(json);
-    notifyListeners();
-  }
-
-  Future<void> _loadUsers() async {
-    users = await api.listUsers();
+    prefs.stateCache = json;
     notifyListeners();
   }
 
@@ -186,6 +199,7 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _toastTimer?.cancel();
+    _idleTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
@@ -256,87 +270,138 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
   void go(Screen s) {
+    touch();
     screen = s;
     notifyListeners();
   }
 
-  /// True once an operator has picked a warehouse + gate for this shift.
-  bool get hasShift => user.isNotEmpty && wh.isNotEmpty && gate.isNotEmpty;
+  /// True once an operator has badged in on a provisioned device.
+  bool get hasShift => emp != null && wh.isNotEmpty && gate.isNotEmpty;
 
-  /// Home is only a valid destination once a shift is running — Settings is
-  /// also reachable from the login screen, and backing out of it there must
-  /// return to login rather than dropping the operator on an empty Home.
+  /// Where "back" lands: Home during a session, otherwise the badge screen —
+  /// or device setup on a terminal that was never provisioned.
   void backToHome() {
-    screen = hasShift ? Screen.home : Screen.login;
+    touch();
+    screen = emp != null
+        ? Screen.home
+        : deviceConfigured
+            ? Screen.login
+            : Screen.deviceSetup;
     lastResult = null;
     notifyListeners();
   }
 
-  void _saveSession() =>
-      prefs.session = {'user': user, 'wh': wh, 'gate': gate};
-
-  /// Authenticates as the tapped employee with their own password via
-  /// `POST /api/auth/login`, swapping the active token to theirs on success —
-  /// every request after this point (gate in/out, state refresh) acts as
-  /// them, not the bootstrap device account. Returns an error message to show
-  /// inline in the password prompt, or null on success.
-  Future<String?> loginAsEmployee(String username, String password) async {
-    busy = true;
-    notifyListeners();
-    try {
-      final r = await api.login(username, password);
-      prefs.token = r['token'] as String?;
-      final u = Map<String, dynamic>.from(r['user'] as Map);
-      user = (u['name'] ?? username).toString();
-
-      _autoSelectSingleOptions();
-      if (wh.isNotEmpty && gate.isNotEmpty && warehouseList.length == 1 && currentGates.length == 1) {
-        // Only one warehouse and it has only one gate — there is nothing to
-        // choose, so skip session setup entirely and start the shift.
-        startShift();
-      } else {
-        screen = Screen.session;
-      }
-      return null;
-    } on ApiException catch (e) {
-      return e.message;
-    } catch (e) {
-      return _msg(e);
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
+  // ═══════════════════════ operator identity ═══════════════════════════════
+  /// Everyone on the employee master who is fit to work, with the crew
+  /// stationed at this device's warehouse listed first. People assigned
+  /// elsewhere are still shown — staff get moved between warehouses for a day
+  /// and refusing them would just generate a phone call.
+  List<Employee> get employees {
+    final raw = S?.employees.values ?? const [];
+    final list = raw
+        .whereType<Map>()
+        .map((m) => Employee.fromJson(Map<String, dynamic>.from(m)))
+        .where((e) => e.active && e.name.isNotEmpty)
+        .toList();
+    list.sort((a, b) {
+      final rank = _homeRank(a) - _homeRank(b);
+      return rank != 0 ? rank : a.name.compareTo(b.name);
+    });
+    return list;
   }
 
-  /// Signs the operator out and re-authenticates as the bootstrap device
-  /// account so the login screen's employee list is ready for the next
-  /// operator to pick from.
-  Future<void> doLogout() async {
-    prefs.session = null;
-    prefs.token = null;
-    api.token = null;
-    user = '';
-    wh = '';
-    gate = '';
+  int _homeRank(Employee e) => (e.wh.isEmpty || e.wh == wh) ? 0 : 1;
+
+  /// True when this employee belongs to a different warehouse than the one
+  /// this terminal serves — surfaced as a note on screen, never a block.
+  bool isVisiting(Employee e) => e.wh.isNotEmpty && wh.isNotEmpty && e.wh != wh;
+
+  /// Starts a session for [e]. Returns an error message to show, or null.
+  String? identifyAs(Employee e) {
+    if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
+    emp = e;
+    touch();
+    screen = Screen.home;
+    notifyListeners();
+    _connectReader();
+    return null;
+  }
+
+  /// Resolves a badge value — a QR/barcode from the imager or an EPC from an
+  /// RFID card, both arrive here — to an employee. Anything that matches
+  /// nobody is ignored rather than explained, so a stray box tag read on the
+  /// badge screen is a no-op instead of an error the operator has to dismiss.
+  String? identifyByScanCode(String raw) {
+    final code = raw.trim();
+    if (code.isEmpty) return null;
+    final matches = employees.where((e) => e.matchesCode(code)).toList();
+    if (matches.isEmpty) return 'ไม่พบบัตรนี้ในระบบ';
+    if (matches.length > 1) {
+      return 'บัตรนี้ผูกกับพนักงานมากกว่า 1 คน — แตะเลือกชื่อแทน';
+    }
+    return identifyAs(matches.first);
+  }
+
+  /// Badge read from the UI or the reader: identifies, or explains why not.
+  void badgeScanned(String code) {
+    final err = identifyByScanCode(code);
+    if (err != null) toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
+  }
+
+  /// Ends the current operator's session and returns to the badge screen. The
+  /// device stays signed in and stationed where it is — this is a handover
+  /// between people, not a sign-out of the terminal.
+  void lock({bool auto = false}) {
+    emp = null;
+    queue.clear();
+    lastResult = null;
+    _clearForms();
     screen = Screen.login;
-    notifyListeners();
-    await _ensureAuthAndState();
+    if (auto) {
+      toastMsg('ล็อกหน้าจออัตโนมัติ', 'ยิงบัตรเพื่อทำงานต่อ', ResultKind.info);
+    }
     notifyListeners();
   }
 
-  /// When there's only one warehouse (or the selected warehouse has only one
-  /// gate), there's nothing to actually choose — fill it in automatically so
-  /// the operator isn't forced to tap a single, obvious option.
-  void _autoSelectSingleOptions() {
-    final whs = warehouseList;
-    if (wh.isEmpty && whs.length == 1) {
-      wh = (whs.first['id'] ?? '').toString();
-    }
-    if (wh.isNotEmpty && gate.isEmpty) {
-      final gates = currentGates;
-      if (gates.length == 1) gate = '${gates.first}';
-    }
+  // ═══════════════════════ idle auto-lock ══════════════════════════════════
+  DateTime _lastTouch = DateTime.now();
+  Timer? _idleTimer;
+
+  /// Marks the device as in use. Called from every navigation and scan, plus
+  /// any pointer event (see RootScreen), so the idle clock tracks real work.
+  void touch() => _lastTouch = DateTime.now();
+
+  void _startIdleWatch() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer.periodic(const Duration(seconds: 30), (_) => checkIdle());
   }
+
+  /// Locks the device if it has sat untouched past the configured limit.
+  /// [now] is injectable so the rule can be tested without waiting ten minutes.
+  @visibleForTesting
+  void checkIdle([DateTime? now]) {
+    final limit = prefs.idleLockMinutes;
+    if (limit <= 0 || emp == null || busy) return;
+    // Never lock with scans pending: those boxes are physically on a truck and
+    // dropping them to protect an audit trail would be the worse trade.
+    if (queue.isNotEmpty) return;
+    if ((now ?? DateTime.now()).difference(_lastTouch).inMinutes >= limit) lock(auto: true);
+  }
+
+  // ═══════════════════════ device provisioning ═════════════════════════════
+  /// A terminal is provisioned once it has been told which gate it serves.
+  bool get deviceConfigured => prefs.deviceGate.isNotEmpty;
+
+  /// Who may re-point the device or edit its connection: a supervisor, or
+  /// anyone standing at a locked terminal. The threat this guards against is
+  /// an operator changing the gate mid-shift and mis-filing their own scans —
+  /// not physical access, which already beats any in-app check, and locking
+  /// the badge screen out of Settings would strand a device that can't reach
+  /// the server with no way to fix the address.
+  bool get canConfigureDevice => emp == null || emp!.isSupervisor;
+
+  /// Viewers can look boxes up but never record a movement.
+  bool get canScan => emp?.canScan ?? false;
 
   void pickWh(String id) {
     wh = id;
@@ -352,35 +417,41 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void startShift() {
+  /// Persists this terminal's post. From here on every operator who badges in
+  /// works this gate without being asked.
+  void saveDevicePost() {
     if (wh.isEmpty || gate.isEmpty) {
       toastMsg('เลือกคลังและประตูก่อน', '', ResultKind.warn);
       return;
     }
-    _saveSession();
-    screen = Screen.home;
+    prefs.deviceWh = wh;
+    prefs.deviceGate = gate;
+    screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
+    toastMsg('ตั้งค่าเครื่องแล้ว', '$selWhName · ประตู $gate', ResultKind.ok);
     _connectReader();
   }
 
-  void goSessionEdit() => go(Screen.session);
+  void setIdleLockMinutes(int m) {
+    prefs.idleLockMinutes = m;
+    notifyListeners();
+  }
 
+  void goDeviceSetup() => go(Screen.deviceSetup);
+
+  // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {
+    if (!canScan) {
+      toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว', ResultKind.warn);
+      return;
+    }
+    touch();
     mode = m;
     screen = Screen.scan;
     queue.clear();
     scanVal = '';
     lastResult = null;
-    outCustomer = '';
-    outPlate = '';
-    outDriver = '';
-    outVehicleType = '';
-    outVehicleTypeOther = '';
-    inNote = '';
-    inPlate = '';
-    inDriver = '';
-    inVehicleType = '';
-    inVehicleTypeOther = '';
+    _clearForms();
     // only one destination customer on file — no real choice to make, so skip the picker
     if (m == 'out' && customerList.length == 1) {
       outCustomer = (customerList.first['id'] ?? '').toString();
@@ -393,6 +464,7 @@ class AppController extends ChangeNotifier {
   void goScanOut() => setMode('out');
 
   void goTrack() {
+    touch();
     screen = Screen.track;
     trackVal = '';
     trackTag = '';
@@ -401,7 +473,6 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
-  // ═══════════════════════ scanning ════════════════════════════════════════
   void onScanChanged(String v) {
     scanVal = v;
     notifyListeners();
@@ -414,6 +485,7 @@ class AppController extends ChangeNotifier {
   void addScan(String raw) {
     raw = raw.trim();
     if (raw.isEmpty) return;
+    touch();
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
@@ -481,11 +553,13 @@ class AppController extends ChangeNotifier {
   }
 
   void removeFromQueue(String tag) {
+    touch();
     queue.remove(tag);
     notifyListeners();
   }
 
   void clearQueue() {
+    touch();
     queue.clear();
     lastResult = null;
     notifyListeners();
@@ -523,6 +597,7 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ connectivity / commit ═══════════════════════════
   void toggleOnline() {
+    touch();
     online = !online;
     notifyListeners();
     if (online) {
@@ -571,6 +646,7 @@ class AppController extends ChangeNotifier {
       return api.gateIn(
         tags: tx.tags,
         gate: tx.gate,
+        employeeId: tx.employeeId,
         recorder: tx.recorder,
         plate: tx.plate,
         driver: tx.driver,
@@ -581,6 +657,7 @@ class AppController extends ChangeNotifier {
       tags: tx.tags,
       customer: tx.customer ?? '',
       gate: tx.gate,
+      employeeId: tx.employeeId,
       recorder: tx.recorder,
       plate: tx.plate,
       driver: tx.driver,
@@ -589,6 +666,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> doCommit() async {
+    touch();
     if (queue.isEmpty) {
       toastMsg('ยังไม่ได้ยิงกล่อง', '', ResultKind.warn);
       return;
@@ -597,6 +675,7 @@ class AppController extends ChangeNotifier {
     final g = int.tryParse(gate) ?? 0;
     final whId = (s?.gateWh(gate).isNotEmpty ?? false) ? s!.gateWh(gate) : wh;
     final recorder = user.isEmpty ? 'PDA' : user;
+    final employeeId = emp?.id ?? '';
     final ts = DateTime.now().toUtc().toIso8601String();
 
     if (mode == 'out' && outCustomer.isEmpty) {
@@ -627,6 +706,7 @@ class AppController extends ChangeNotifier {
             gate: g,
             wh: whId,
             recorder: recorder,
+            employeeId: employeeId,
             ts: ts,
             note: inNote,
             plate: inPlate,
@@ -639,6 +719,7 @@ class AppController extends ChangeNotifier {
             gate: g,
             wh: whId,
             recorder: recorder,
+            employeeId: employeeId,
             ts: ts,
             customer: outCustomer,
             plate: outPlate,
@@ -671,6 +752,7 @@ class AppController extends ChangeNotifier {
         await api.gateIn(
           tags: tx.tags,
           gate: g,
+          employeeId: employeeId,
           recorder: recorder,
           plate: inPlate,
           driver: inDriver,
@@ -681,6 +763,7 @@ class AppController extends ChangeNotifier {
           tags: tx.tags,
           customer: outCustomer,
           gate: g,
+          employeeId: employeeId,
           recorder: recorder,
           plate: outPlate,
           driver: outDriver,
@@ -709,9 +792,7 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void _resetAfterCommit() {
-    queue.clear();
-    lastResult = null;
+  void _clearForms() {
     outCustomer = '';
     outPlate = '';
     outDriver = '';
@@ -722,6 +803,12 @@ class AppController extends ChangeNotifier {
     inDriver = '';
     inVehicleType = '';
     inVehicleTypeOther = '';
+  }
+
+  void _resetAfterCommit() {
+    queue.clear();
+    lastResult = null;
+    _clearForms();
     if (mode == 'out' && customerList.length == 1) {
       outCustomer = (customerList.first['id'] ?? '').toString();
     }
@@ -758,6 +845,7 @@ class AppController extends ChangeNotifier {
   }
 
   void doTrack() {
+    touch();
     final raw = trackVal.trim();
     if (raw.isEmpty) {
       trackTag = '';
@@ -773,12 +861,17 @@ class AppController extends ChangeNotifier {
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
 
   // ═══════════════════════ settings ════════════════════════════════════════
-  /// The device/service credentials (Prefs.username/password) stay fixed —
-  /// they're an internal bootstrap detail for listing employees before anyone
-  /// has authenticated as themselves, not something an operator should need
-  /// to see or edit. Only the API's location is configurable here.
-  Future<void> applyConnection({required String baseUrl}) async {
+  /// Applies the terminal's connection details and re-authenticates. The
+  /// service credentials are the device's own — an operator never sees them,
+  /// which is the whole point of badging in instead of signing in.
+  Future<void> applyConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+  }) async {
     prefs.baseUrl = baseUrl.trim();
+    if (username != null && username.trim().isNotEmpty) prefs.username = username.trim();
+    if (password != null && password.isNotEmpty) prefs.password = password;
     prefs.token = null;
     api
       ..baseUrl = prefs.baseUrl
@@ -806,16 +899,26 @@ class AppController extends ChangeNotifier {
   }
 
   void _onReaderTag(String epc) {
-    if (screen == Screen.scan) {
-      addScan(epc);
-    } else if (screen == Screen.track) {
-      trackVal = epc;
-      doTrack();
+    switch (screen) {
+      case Screen.scan:
+        addScan(epc);
+        break;
+      case Screen.track:
+        trackVal = epc;
+        doTrack();
+        break;
+      case Screen.login:
+        // An RFID employee card and a printed badge land in the same place.
+        // Box tags swept up along with it match nobody and fall through.
+        if (identifyByScanCode(epc) == null) return;
+        break;
+      default:
+        break;
     }
   }
 
   void _onReaderTrigger(bool pressed) {
-    if (screen != Screen.scan && screen != Screen.track) return;
+    if (screen != Screen.scan && screen != Screen.track && screen != Screen.login) return;
     if (pressed) {
       rfid.startInventory();
     } else {

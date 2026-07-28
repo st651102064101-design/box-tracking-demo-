@@ -6,6 +6,12 @@ class OutboxTx {
   final int gate;
   final String wh;
   final String recorder;
+
+  /// Employee master id of whoever scanned this batch. Captured at scan time
+  /// rather than at flush time — a queued batch belongs to the person who was
+  /// holding the device then, not to whoever happens to be on shift when the
+  /// network comes back.
+  final String employeeId;
   final String ts;
 
   // out-only
@@ -25,6 +31,7 @@ class OutboxTx {
     required this.gate,
     required this.wh,
     required this.recorder,
+    this.employeeId = '',
     required this.ts,
     this.customer,
     this.plate,
@@ -39,6 +46,7 @@ class OutboxTx {
         'gate': gate,
         'wh': wh,
         'recorder': recorder,
+        if (employeeId.isNotEmpty) 'employeeId': employeeId,
         'ts': ts,
         if (customer != null) 'customer': customer,
         if (plate != null) 'plate': plate,
@@ -53,6 +61,7 @@ class OutboxTx {
         gate: (j['gate'] as num).toInt(),
         wh: (j['wh'] ?? '').toString(),
         recorder: (j['recorder'] ?? '').toString(),
+        employeeId: (j['employeeId'] ?? '').toString(),
         ts: (j['ts'] ?? '').toString(),
         customer: j['customer']?.toString(),
         plate: j['plate']?.toString(),

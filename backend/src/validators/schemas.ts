@@ -69,6 +69,8 @@ export const gateOutSchema = z.object({
   gate: z.number().int().positive(),
   doNo: z.string().optional(),
   po: z.string().optional(),
+  /** Employee master id (EMP-xxxx) of the operator who scanned this batch. */
+  employeeId: z.string().optional(),
   recorder: z.string().optional(),
   plate: z.string().optional(),
   driver: z.string().optional(),
@@ -78,6 +80,8 @@ export const gateOutSchema = z.object({
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
   gate: z.number().int().positive(),
+  /** Employee master id (EMP-xxxx) of the operator who scanned this batch. */
+  employeeId: z.string().optional(),
   recorder: z.string().optional(),
   plate: z.string().optional(),
   driver: z.string().optional(),
