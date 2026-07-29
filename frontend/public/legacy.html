@@ -9636,6 +9636,160 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    "หลังคาโปร่ง — กดเพื่อดูหลังคาจริง + แผงโซลาร์เซลล์":"Translucent roof - tap for the real roof + solar panels",
+    "หลังคาจริง + แผงโซลาร์เซลล์ — กดเพื่อซ่อนหลังคาทั้งหมด":"Real roof + solar panels - tap to hide the roof entirely",
+    "ซ่อนหลังคาทั้งหมด — กดเพื่อกลับเป็นหลังคาโปร่ง":"Roof hidden - tap to go back to the translucent roof",
+    "ยังไม่มีคลัง —":"No warehouses yet -",
+    "กล่อง ·":"boxes -",
+    /* ---- รอบเก็บตกที่ 3: ข้อความที่ถูกแบ่งด้วย tag ย่อย และแถบคำอธิบายฉาก 3D ---- */
+    "ลากหมุน · ล้อซูม · คลิกกล่อง/ช่องดูรายละเอียด":"Drag to rotate - scroll to zoom - click a box or slot for details",
+    "ลากหมุน · ล้อซูม · คลิกกล่อง/ช่อง/ลานลูกค้าดูรายละเอียด":"Drag to rotate - scroll to zoom - click a box, slot or customer yard for details",
+    "— 1 กล่องในฉาก = กล่องจริง 1 ใบ อัปเดตอัตโนมัติ":"- one box on screen is one real box, updated automatically",
+    "รอจัดเก็บ ·":"Awaiting putaway -",
+    "รอติด RFID ·":"Awaiting RFID tag -",
+    "รอส่งออก":"Awaiting dispatch",
+    "ประตูขาเข้า ·":"Inbound gate -",
+    "ประตูขาออก":"Outbound gate",
+    "· งานค้าง":"- pending",
+    "ดูประวัติเต็ม":"View full history",
+    "ยังไม่มีกล่องเก็บที่ช่องนี้":"No boxes stored in this slot",
+    "รับเข้าใหม่ + รับคืน":"New inbound + returns",
+    "จ่ายออกให้ลูกค้า":"Shipped to customers",
+    "ความหนาแน่นพื้นที่":"Space utilisation",
+    "กำลังอ่านข้อมูลจากฐานข้อมูล…":"Reading from the database...",
+    "แยกตามลูกค้า":"By customer",
+    "แตะเพื่อดูกล่อง →":"Tap to see the boxes ->",
+    "ส่งออก":"Shipped out",
+    "คืนแล้ว (PO นี้)":"Returned (this PO)",
+    "ค้าง":"Outstanding",
+    "ยังไม่มีประวัติ":"No history yet",
+    "ตอนนี้อยู่ที่":"Currently at",
+    "หมุนเวียนแล้ว":"Cycles completed",
+    "เห็นล่าสุด":"Last seen",
+    "กำลังติดตาม":"Tracking",
+    "→ ปลายทาง":"-> Destination",
+    "→ รถ / คนขับ":"-> Vehicle / driver",
+    "← รถที่ขนกลับ":"<- Returning vehicle",
+    "ยังไม่มีกล่องในระบบ":"No boxes in the system yet",
+    "กล่องที่ออกไปแล้วเกินระยะเวลาที่กำหนด — ควรติดตามทันที":"Boxes out beyond their due date - chase these now",
+    "วันที่ออก":"Date out",
+    "เกินมา":"Overdue by",
+    "ลูกค้าสุดท้าย":"Last customer",
+    "วันที่ตีหาย":"Date marked lost",
+    "โหมด":"Mode",
+    "ใหม่":"New",
+    "สร้างเป็นชุด — Prefix":"Batch create - prefix",
+    "ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ \"ประเภทกล่อง\" ก่อน":"No box types yet - add one on the \"Box type\" tab first",
+    "มี \"วันหมดอายุ\" ระบบจะจ่ายออกแบบ":"With an expiry date, the system ships",
+    "(หมดอายุก่อน–ออกก่อน) อัตโนมัติ":"(first expired, first out) automatically",
+    "เลือกที่นี่ = ตั้งให้ทุกประตูในช่วง แล้วปรับแยกรายประตูด้านล่างได้":"Choosing here sets every gate in the range - adjust individual gates below",
+    "มุมมองสต็อกกล่องตามฐานข้อมูล Master — รับเข้าด้วยการสแกนบาร์โค้ด ระบบดึงประเภท·หน่วย·พิกัดให้อัตโนมัติ · เลือกหลายใบเพื่อย้ายพิกัด/แจ้งกล่องหายพร้อมกัน · ทุกการเปลี่ยนแปลงบันทึก Audit Log":"Box stock from the master database - receive by scanning a barcode and the type, unit and location are filled in automatically. Select several to relocate or report lost together, and every change is written to the audit log",
+    "รหัสบาร์โค้ด":"Barcode",
+    "⊘ แจ้งกล่องหาย":"⊘ Report lost",
+    "เบอร์โทร":"Phone",
+    "สิทธิ์":"Access",
+    "มูลค่า (฿)":"Value (THB)",
+    "บาร์โค้ด":"Barcode",
+    "ยิงบาร์โค้ด หรือบาร์โค้ด":"Scan a barcode",
+    "ปัจจุบัน":"Current",
+    "ออกครั้งล่าสุด":"Last shipped",
+    "คืนครั้งล่าสุด":"Last returned",
+    "กำหนดคืน":"Due back",
+    "รวม":"Total",
+    "ไม่มีข้อมูล":"No data",
+    "เปลี่ยน":"Change",
+    "ล้าง filter":"Clear filters",
+    "เปิดใน Inventory":"Open in Inventory",
+    "คันรถ (ยังไม่คืนกลับคลัง)":"vehicles (not yet back at the warehouse)",
+    "จำนวนชั้น":"Shelves",
+    "จำนวนช่อง/ชั้น":"Slots per shelf",
+    "ตั้งแร็ค":"Set up rack",
+    "พิมพ์ป้าย":"Print labels",
+    "รหัส / บาร์โค้ด":"Code / barcode",
+    "ป้าย":"labels",
+    "ว่าง":"Empty",
+    "ว่าง ·":"Empty -",
+    "ยืนยันจัดเก็บ":"Confirm putaway",
+    "สแกนกล่องที่จะนำเข้าเก็บ":"Scan the box to put away",
+    "ยืนยันรับเข้า & เก็บเข้าคลัง":"Confirm receipt & store",
+    "ตำแหน่งแร็คปลายทาง":"Destination rack location",
+    "ตามคลังเสมือน 3D — แต่ละช่องเลือกได้ว่าใช้เป็นตำแหน่งจริงในผัง 3D (ใส่แร็ค) หรือกรองอย่างเดียว (ไม่มีตำแหน่งจริง)":"matching the 3D virtual warehouse - each bay can be a real position in the 3D layout (with a rack) or filter-only (no physical position)",
+    "พิมพ์รหัสตำแหน่ง เช่น":"Type a location code, e.g.",
+    "หรือ":"or",
+    "แล้วสร้างป้ายไปแปะที่ชั้นวาง — สแกนยืนยันตำแหน่งจริงได้":"then print a label to stick on the shelf - so the real position can be scanned to confirm",
+    "สร้างป้าย":"Create label",
+    "ยังไม่มีข้อมูลผังชั้นวาง (Location Master) —":"No shelf layout on file (Location Master) -",
+    "เพิ่มผังชั้นวาง":"Add a shelf layout",
+    "ต้องการลบตำแหน่งใน":"Delete locations in",
+    "มี":"There are",
+    "ตำแหน่งที่ยังมีกล่องอยู่ — ระบบจะ":"locations that still hold boxes - the system will",
+    "ข้ามไม่ลบ":"skip",
+    "ตำแหน่งเหล่านี้ ต้องย้ายกล่องออกก่อนจึงจะลบได้":"those - move the boxes out first to delete them",
+    "ชื่อแร็ค":"Rack name",
+    "ถูกใช้แล้วในโซน":"is already used in zone",
+    "ของคลังนี้ — กรุณาตั้งชื่อแร็คอื่นที่ยังไม่ซ้ำ":"of this warehouse - please choose a name that is not taken",
+    "จะสร้าง":"Will create",
+    "— รหัส":"- codes",
+    "ถึง":"to",
+    "เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน —":"Pick a type and a quantity and the system orders which boxes to take first -",
+    "ใช้วันหมดอายุ,":"by expiry date,",
+    "ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ \"ในคลัง\")":"by order of arrival (boxes with status \"in warehouse\" only)",
+    "หมดอายุ":"Expiry",
+    "เข้าคลังเมื่อ":"Received",
+    "ไม่มีกล่องสถานะ \"ในคลัง\" ตามเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
+    "สต็อกเปลี่ยนระหว่างทาง — บางรายการได้ไม่ครบ:":"Stock changed in the meantime - some lines are short:",
+    "🟩 พิกัดชั้นวาง":"🟩 Shelf location",
+    "📦 ชนิดกล่อง":"📦 Box type",
+    "🔢 จำนวน":"🔢 Quantity",
+    "🎯 ผลการหยิบ":"🎯 Pick result",
+    "หยิบครบแล้ว":"Fully picked",
+    "ยังไม่ได้เลือกประตู":"No gate chosen yet",
+    "ยังไม่ได้ตั้งค่า — กด \"เปลี่ยนประตู\"":"Not set up yet - press \"Change gate\"",
+    "พบใบส่งของเดิม":"Found an existing delivery order",
+    "— ดึงลูกค้า/รถ/กำหนดคืนมาให้แล้ว":"- customer, vehicle and due date have been filled in",
+    "ซ่อน":"Hide",
+    "ยังไม่มีตำแหน่งเริ่มต้นสำหรับ":"No default location yet for",
+    "— กรอกครั้งนี้ ระบบจะจดจำไว้ใช้เป็นค่าเริ่มต้นครั้งหน้า":"- fill it in now and it becomes the default next time",
+    "เติมตำแหน่งให้อัตโนมัติแล้วตามค่าเริ่มต้นของ":"Location filled in automatically from the default for",
+    "ปลายทาง:":"Destination:",
+    "ลูกค้าปลายทาง":"Destination customer",
+    "อัปเดตทั้งหมด":"Update all",
+    "ของกล่องนี้ซ้ำเพื่อยืนยัน — ป้องกันกรณีลบออกจากระบบทั้งที่ยังไม่ได้ถอด Tag ออกจากกล่องจริง (กล่องจะกลายเป็น \"ผี\" อ่านติดที่ Gate ต่อไปเรื่อยๆ ทั้งที่ไม่มีข้อมูลในระบบแล้ว)":"of this box again to confirm - this stops it being deleted while the tag is still on the physical box, which would leave a \"ghost\" that keeps reading at the gate with no record behind it",
+    "ยืนยันลบ (ถอด Tag แล้ว)":"Confirm delete (tag removed)",
+    "ของกล่องแต่ละใบให้ครบก่อนลบ — ป้องกันลบข้อมูลออกจากระบบทั้งที่ยังไม่ได้ถอด Tag ออกจากกล่องจริง":"of every box before deleting - this stops records being removed while tags are still on the physical boxes",
+    "ยืนยันลบทั้งหมด":"Confirm delete all",
+    "รหัสสินค้า / บาร์โค้ด (สร้างอัตโนมัติ)":"Item code / barcode (auto-generated)",
+    "เลือกประเภทเพื่อรับรหัสอัตโนมัติ · กด \"แก้เอง\" หากต้องการระบุ/สแกนรหัสเอง":"Pick a type to get a code automatically - press \"Manual\" to enter or scan one yourself",
+    "ชื่อสินค้า":"Item name",
+    "ลบสินค้า":"Delete item",
+    "บันทึก":"Save",
+    "ยังไม่มี Audit Log":"No audit log yet",
+    "คอลัมน์นี้ไม่มีข้อมูล":"This column has no data",
+    "ยืนยันนำเข้า":"Confirm import",
+    "ข้อมูลใบส่งของจากไฟล์":"Delivery order data from the file",
+    "ส่งออกไม่ได้":"Cannot ship",
+    "ข้อมูลจากไฟล์":"Data from the file",
+    "รับคืนไม่ได้":"Cannot receive",
+    "ไฟล์:":"File:",
+    "ข้าม":"Skipped",
+    "ค่าต่างกันในไฟล์":"Values differ in the file",
+    "เติมให้แล้ว":"Filled in",
+    "ไม่พบในระบบ":"Not found in the system",
+    "มีในไฟล์":"Present in the file",
+    "เข้าใจแล้ว":"Got it",
+    "มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า":"Already have the boxes in a file? Import",
+    "ยิงกล่องที่คืนด้วย":"Scanned the returned boxes with a",
+    "PDA/เครื่องอ่านพกพา":"PDA or handheld reader",
+    "แล้ว export เป็นไฟล์ไว้แล้ว? นำเข้า":"and exported a file? Import",
+    "ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์":"No employees yet - register yourself before starting. You will be given",
+    "ผู้ดูแลระบบ (Admin)":"administrator rights",
+    "โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้":"automatically, and will be the only one who can add or edit other employees afterwards",
+    "ลงทะเบียนและเริ่มใช้งาน":"Register and start",
+    "BoxTrace — ประตูสแกน · Returnable Asset Tracking":"BoxTrace - Scan Gate - Returnable Asset Tracking",
+    "&#10005; ล้าง":"&#10005; Clear",
+    "กด":"Press",
+    "ต้อง":"must",
+    "ใบ":"units",
     "Bulk Generate (ซื้อแร็คใหม่)":"Bulk Generate (buying a new rack)",
     "Generate ตำแหน่งทั้งหมด":"Generate every location",
     "จุดรอ Putaway / รอจัดเก็บ (Staging)":"Putaway staging area",
@@ -10402,6 +10556,10 @@ function buildTextures(){
       g.fillStyle=gr;g.fillRect(0,y,w,rib);
     }
   },10,6);
+  /* แผ่นเดียวกับ TEX.roof แต่ tile คนละอัตราสำหรับผิวโค้งของโดม ซึ่งกาง UV
+     ตามความยาวส่วนโค้ง ไม่ใช่ตามด้านกว้างของกล่องแบน */
+  TEX.roofVault=TEX.roof.clone();TEX.roofVault.repeat.set(3,16);
+  TEX.roofVault.needsUpdate=true;TEX.roofVault.userData.own=true;
   TEX.window=ctex(128,128,(g,w,h)=>{
     g.fillStyle=d?'#0d1b26':'#25506b';g.fillRect(0,0,w,h);
     const gr=g.createLinearGradient(0,0,w,h);
@@ -10456,6 +10614,9 @@ const MAT={
   ground:mat(0xffffff,{roughness:0.98}),floor:mat(0xffffff,{roughness:0.94}),apron:mat(0xffffff,{roughness:0.96}),
   paintW:mat(0xf2f4f6,{roughness:0.7}),paintY:mat(0xf5c518,{roughness:0.65}),paintR:mat(0xd70015,{roughness:0.7}),
   wall:mat(0xffffff,{roughness:0.55,metalness:0.34}),roof:mat(0xffffff,{roughness:0.6,metalness:0.3}),
+  /* หลังคาทึบของโดม + แผงโซลาร์เซลล์ที่วางบนนั้น (โหมด "หลังคาจริง") */
+  roofSolid:mat(0xffffff,{roughness:0.58,metalness:0.34}),
+  solar:mat(0x161d33,{roughness:0.22,metalness:0.62}),
   dockwall:mat(0xffffff,{roughness:0.7}),column:mat(0xffffff,{roughness:0.5,metalness:0.35}),
   door:mat(0xffffff,{roughness:0.48,metalness:0.42}),
   doorIn:mat(0x9fc456,{roughness:0.6,metalness:0.15}),doorOut:mat(0xd98a84,{roughness:0.6,metalness:0.15}),
@@ -10527,6 +10688,7 @@ function refreshMatColors(){
   MAT.floor.color.set(0xffffff);MAT.floor.map=TEX.floor;
   MAT.wall.map=TEX.metal;MAT.wall.color.set(PAL.metalWall);
   MAT.roof.map=TEX.roof;MAT.roof.color.set(PAL.metalRoof);
+  MAT.roofSolid.map=TEX.roofVault;MAT.roofSolid.color.set(PAL.metalRoof);
   MAT.door.map=TEX.door;MAT.door.color.set(0xffffff);
   MAT.dockwall.color.set(PAL.dockwall);MAT.column.color.set(PAL.column);
   MAT.post.color.set(PAL.post);MAT.beam.color.set(PAL.beam);MAT.deck.color.set(PAL.deck);
@@ -10537,7 +10699,7 @@ function refreshMatColors(){
   MAT.guardWall.color.set(PAL.dark?0x2a2a30:0xeeeef2);
   MAT.conveyor.map=TEX.conveyor;
   MAT.routeFlow.map=TEX.route;MAT.routeFlow.needsUpdate=true;
-  [MAT.ground,MAT.apron,MAT.floor,MAT.wall,MAT.roof,MAT.door,MAT.conveyor].forEach(m=>m.needsUpdate=true);
+  [MAT.ground,MAT.apron,MAT.floor,MAT.wall,MAT.roof,MAT.roofSolid,MAT.door,MAT.conveyor].forEach(m=>m.needsUpdate=true);
   hemi.intensity=PAL.dark?0.82:0.72;sun.intensity=PAL.dark?1.8:2.05;fill.intensity=PAL.dark?0.42:0.34;
   sun.color.set(PAL.dark?0xcdd8ff:0xfff3dc);
   scene.background=new THREE.Color(PAL.sky);
@@ -10562,15 +10724,20 @@ function makeLabel(txt,sub,o){
   const widthOf=(s,w,px)=>{g.font=w+' '+px+'px '+FONTS;return g.measureText(s).width;};
   let tw=widthOf(txt,600,fs);
   if(sub)tw=Math.max(tw,widthOf(sub,500,sfs));
-  const wpx=Math.ceil(tw+padd*2),hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
+  let wpx=Math.ceil(tw+padd*2);const hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
   c.width=wpx*2;c.height=hpx*2;g.scale(2,2);
-  /* ย่อฟอนต์ให้พอดีผ้าใบก่อนวาด — ความกว้างถูกวัดไว้ก่อนกำหนด canvas.width ซึ่ง
-     รีเซ็ต state ของ context ทิ้ง ถ้าเว็บฟอนต์ไทย (Anuphan) โหลดเสร็จคาบเกี่ยว
-     ช่วงนั้น ข้อความจะกว้างกว่าที่วัดไว้แล้วล้นออกไปทางขวาจนถูกตัดหาย ย่อให้พอดี
-     จึงอ่านครบเสมอไม่ว่าฟอนต์จะมาถึงตอนไหน */
-  const inner=wpx-padd*1.2;
-  const fit=(s,w,px)=>{let n=px;while(n>px*0.55&&widthOf(s,w,n)>inner)n-=1;return n;};
-  const fsF=fit(txt,600,fs),sfsF=sub?fit(sub,500,sfs):sfs;
+  /* กำหนด canvas.width แล้ว state ของ context ถูกล้างทิ้ง — วัดซ้ำด้วยฟอนต์ตัวที่
+     จะใช้วาดจริง ถ้าเว็บฟอนต์ไทย (Anuphan) โหลดเสร็จคาบเกี่ยวช่วงนี้พอดี ข้อความ
+     จะกว้างกว่าที่จองผ้าใบไว้ ให้ "ขยายกล่อง" ตามความกว้างจริง
+     เดิมแก้ด้วยการย่อฟอนต์ลงแทน แต่ย่อได้ต่ำสุดแค่ 55% ถ้าฟอนต์จริงกว้างกว่านั้น
+     ข้อความก็ยังล้นออกนอกกล่องแล้วถูกตัดหายอยู่ดี — ขยายกล่องพอดีเสมอ */
+  let tw2=widthOf(txt,600,fs);
+  if(sub)tw2=Math.max(tw2,widthOf(sub,500,sfs));
+  if(tw2>tw+0.5){
+    wpx=Math.ceil(tw2+padd*2);
+    c.width=wpx*2;c.height=hpx*2;g.setTransform(1,0,0,1,0,0);g.scale(2,2);
+  }
+  const fsF=fs,sfsF=sfs;
   g.globalAlpha=o.alpha!=null?o.alpha:0.93;rr(g,1,1,wpx-2,hpx-2,Math.min(hpx*0.3,22));
   g.fillStyle=o.bg||PAL.lblBg;g.fill();
   g.globalAlpha=1;g.lineWidth=1.4;g.strokeStyle=o.border||PAL.lblLine;g.stroke();
@@ -10731,7 +10898,20 @@ let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
 const DOCK={};                                   // สถานะท่าเทียบ — คงอยู่ข้าม rebuild
-const ROOF={on:true,mesh:null};                  // เปิด/ปิดหลังคา — ต้องจำข้าม rebuild ไม่งั้นกดซ่อนแล้วเด้งกลับ
+/* หลังคา 3 โหมด วนด้วยปุ่มเดียว — ต้องจำข้าม rebuild ไม่งั้นกดแล้วเด้งกลับ
+     glass  โปร่งแสง มองทะลุลงไปเห็นของข้างในได้ทันที (ค่าเริ่มต้น)
+     solid  แผ่นเมทัลชีตทึบจริง + แผงโซลาร์เซลล์เต็มผืนหลังคา
+     off    ซ่อนทั้งหลังคา รวมซี่โครง จั่ว และชายคา เหลือแต่ตัวอาคาร
+   grp คลุมทุกชิ้นที่เป็น "หลังคา" โหมด off จึงปิดทั้งชุดได้ด้วยการซ่อน grp
+   skin = แผ่นโค้ง, gable = หน้าจั่วหัวท้าย (คนละวัสดุกันตอนเป็นหลังคาทึบ) */
+const ROOF={mode:'glass',grp:null,skin:[],gable:[],solar:null};
+function applyRoof(){
+  const solid=ROOF.mode==='solid';
+  if(ROOF.grp)ROOF.grp.visible=ROOF.mode!=='off';
+  ROOF.skin.forEach(m=>{m.material=solid?MAT.roofSolid:MAT.roofGlass;});
+  ROOF.gable.forEach(m=>{m.material=solid?MAT.wall:MAT.roofGlass;});
+  if(ROOF.solar)ROOF.solar.visible=solid;
+}
 /* ไฟในคลัง — ปิดไว้เป็นค่าเริ่มต้น เปิดเมื่อกดปุ่มเท่านั้น
    ต้องจำข้าม rebuild เหมือนหลังคา ไม่งั้นพอข้อมูลเปลี่ยนแล้วฉากถูกสร้างใหม่
    ไฟที่ผู้ใช้เพิ่งเปิดจะดับเอง (fx = กรวยแสง + วงแสงบนพื้น, lamp = หน้าโคม) */
@@ -11157,14 +11337,15 @@ function build(){
   const dmPhi=Math.asin(Math.min(1,dmA/dmR));
   const dmCX=(bMinX+bMaxX)/2,dmCZ=(backZ+dockZ)/2,dmLen=dockZ-backZ+dmOver*2;
   const dmSag=dmR*Math.cos(dmPhi);                     // ระยะจากจุดศูนย์กลางวงกลมขึ้นมาถึงหัวเสา
-  ROOF.mesh=new THREE.Group();ROOF.mesh.visible=ROOF.on;root.add(ROOF.mesh);
+  ROOF.grp=new THREE.Group();root.add(ROOF.grp);
+  ROOF.skin=[];ROOF.gable=[];ROOF.solar=null;
   {
     /* ทรงกระบอกตัดส่วน: หมุนให้แกนไปตามแนว Z แล้วเลื่อนลงให้ปลายโค้งอยู่ที่ y=0 */
     const g=new THREE.CylinderGeometry(dmR,dmR,dmLen,72,1,true,Math.PI-dmPhi,dmPhi*2);
     g.rotateX(Math.PI/2);g.translate(0,-dmSag,0);
     const shell=new THREE.Mesh(g,MAT.roofGlass);
     shell.position.set(dmCX,WALL_H,dmCZ);shell.renderOrder=1;
-    ROOF.mesh.add(shell);
+    ROOF.skin.push(shell);ROOF.grp.add(shell);
     /* หน้าจั่วหัว-ท้าย: ปิดช่องใต้ส่วนโค้ง ไม่งั้นจะมองทะลุออกไปเห็นนอกอาคาร */
     const sp=new THREE.Shape();
     sp.moveTo(-dmA,0);sp.lineTo(dmA,0);
@@ -11172,8 +11353,32 @@ function build(){
     const gable=new THREE.ShapeGeometry(sp,72);
     [dmCZ-dmLen/2,dmCZ+dmLen/2].forEach(z=>{
       const m=new THREE.Mesh(gable,MAT.roofGlass);
-      m.position.set(dmCX,WALL_H,z);m.renderOrder=1;ROOF.mesh.add(m);
+      m.position.set(dmCX,WALL_H,z);m.renderOrder=1;ROOF.gable.push(m);ROOF.grp.add(m);
     });
+  }
+  /* แผงโซลาร์เซลล์ — วางราบบนผิวโค้ง โดยหมุนแต่ละแผงรอบแกน Z ให้หน้าแผงตั้งฉาก
+     กับรัศมี ณ มุมนั้น (หมุน -t ทำให้แกน +Y ของกล่องชี้ออกตามแนวรัศมีพอดี)
+     ทั้งผืนเป็น InstancedMesh ก้อนเดียว หลังคาใหญ่แค่ไหนก็ draw call เดียว */
+  {
+    const pw=2.3,pl=1.35,gapA=0.22,gapZ=0.26,pr=dmR+0.06;
+    const stepA=(pw+gapA)/dmR,stepZ=pl+gapZ;
+    const nA=Math.max(1,Math.floor(dmPhi*2*0.9/stepA));
+    const nZ=Math.max(1,Math.floor((dmLen-2.2)/stepZ));
+    const a0=-(nA-1)*stepA/2,z0=dmCZ-(nZ-1)*stepZ/2;
+    const pv=new THREE.InstancedMesh(GEO.unit,MAT.solar,nA*nZ);
+    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),eu=new THREE.Euler(),
+          pp=new THREE.Vector3(),ss=new THREE.Vector3();
+    let pi=0;
+    for(let ai=0;ai<nA;ai++){
+      const t=a0+ai*stepA;
+      for(let zi=0;zi<nZ;zi++){
+        pp.set(dmCX+pr*Math.sin(t),WALL_H-dmSag+pr*Math.cos(t),z0+zi*stepZ);
+        eu.set(0,0,-t);q.setFromEuler(eu);ss.set(pw,0.07,pl);
+        m4.compose(pp,q,ss);pv.setMatrixAt(pi++,m4);
+      }
+    }
+    pv.instanceMatrix.needsUpdate=true;
+    ROOF.solar=pv;ROOF.grp.add(pv);
   }
   /* ซี่โครงโดม — ส่วนโค้งเดียวกับแผ่นหลังคา วาดผ่าน InstancedMesh ก้อนเดียว
      ทั้งชุดจึงเป็น draw call เดียวไม่ว่าคลังจะยาวแค่ไหน */
@@ -11186,11 +11391,13 @@ function build(){
     const rib=new THREE.InstancedMesh(rg,MAT.roof,ribZ.length);
     const rm=new THREE.Matrix4();
     ribZ.forEach((z,i)=>{rm.makeTranslation(dmCX,WALL_H,z);rib.setMatrixAt(i,rm);});
-    rib.instanceMatrix.needsUpdate=true;root.add(rib);
+    rib.instanceMatrix.needsUpdate=true;ROOF.grp.add(rib);
   }
-  /* ชายคาสองข้าง: เส้นคมตรงรอยต่อผนังกับโดม ทำให้ขอบอาคารยังอ่านออกจากมุมสูง */
-  root.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX-dmA,WALL_H,dmCZ,true));
-  root.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX+dmA,WALL_H,dmCZ,true));
+  /* ชายคาสองข้าง: เส้นคมตรงรอยต่อผนังกับโดม ทำให้ขอบอาคารยังอ่านออกจากมุมสูง
+     อยู่ใน grp ด้วย โหมด off จึงเอา "หลังคาทั้งชุด" ออกจริงตามที่ปุ่มบอก */
+  ROOF.grp.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX-dmA,WALL_H,dmCZ,true));
+  ROOF.grp.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX+dmA,WALL_H,dmCZ,true));
+  applyRoof();   // ฉากเพิ่งถูกสร้างใหม่ — บังคับให้ตรงกับโหมดที่ผู้ใช้เลือกไว้
   const cols=[];
   const colStep=Math.max(6,bW/Math.round(bW/7.5));
   for(let x=bMinX;x<=bMaxX+0.1;x+=colStep)cols.push([Math.min(x,bMaxX),backZ+0.3]);
@@ -12645,17 +12852,29 @@ sidebarBackdrop.addEventListener('click',()=>setSidebarOpen(false));
 document.getElementById('w3dSidebarClose').addEventListener('click',()=>setSidebarOpen(false));
 setSidebarOpen(false);
 
-/* หลังคาโปร่งอยู่แล้วจึงมองทะลุลงไปเห็นของข้างในได้ทันทีโดยไม่ต้องกดอะไร ปุ่มนี้
-   ไว้ซ่อนทั้งแผ่นเมื่ออยากเห็นเต็มๆ — สลับสองสถานะเท่านั้น ไม่มีเมนูให้ต้องเรียนรู้
+/* ปุ่มหลังคาวน 3 โหมด: โปร่ง → หลังคาจริง+โซลาร์เซลล์ → ซ่อนทั้งหมด
+   ใช้ปุ่มเดียววนแทนเมนู เพราะแถวปุ่มนี้อยู่บนภาพ 3D ที่พื้นที่จำกัด และ 3 ตัวเลือก
+   น้อยพอที่จะกดวนหาได้เร็วกว่าการเปิดเมนู ไอคอนกับ title บอกว่ากดต่อไปจะได้อะไร
    สถานะถูกจำไว้ใน ROOF จึงไม่เด้งกลับเมื่อฉากถูก rebuild (เช่นสลับคลัง) */
 const roofBtn=document.getElementById('w3dRoof');
+const ROOF_SEQ=['glass','solid','off'];
+const ROOF_UI={
+  glass:{t:'หลังคาโปร่ง — กดเพื่อดูหลังคาจริง + แผงโซลาร์เซลล์',
+    d:'<path d="M3 11 12 4l9 7"/><path d="M5 10v9h14v-9"/>'},
+  solid:{t:'หลังคาจริง + แผงโซลาร์เซลล์ — กดเพื่อซ่อนหลังคาทั้งหมด',
+    d:'<path d="M3 11 12 4l9 7"/><path d="M5 10v9h14v-9"/><path d="M8 13h8M8 16.5h8M12 13v3.5"/>'},
+  off:{t:'ซ่อนหลังคาทั้งหมด — กดเพื่อกลับเป็นหลังคาโปร่ง',
+    d:'<path d="M3 11 12 4l9 7"/><path d="M5 10v9h14v-9"/><path d="M3 3l18 18"/>'}
+};
 function setRoofUI(){
-  roofBtn.classList.toggle('active',!ROOF.on);
-  roofBtn.title=ROOF.on?'ซ่อนหลังคา (เห็นภายในเต็มที่)':'แสดงหลังคา';
+  const u=ROOF_UI[ROOF.mode]||ROOF_UI.glass;
+  roofBtn.classList.toggle('active',ROOF.mode!=='glass');
+  roofBtn.title=u.t;
+  roofBtn.querySelector('.svgi').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+u.d+'</svg>';
 }
 roofBtn.addEventListener('click',()=>{
-  ROOF.on=!ROOF.on;
-  if(ROOF.mesh)ROOF.mesh.visible=ROOF.on;
+  ROOF.mode=ROOF_SEQ[(ROOF_SEQ.indexOf(ROOF.mode)+1)%ROOF_SEQ.length];
+  applyRoof();
   setRoofUI();
 });
 setRoofUI();
