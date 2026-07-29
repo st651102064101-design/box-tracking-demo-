@@ -11032,7 +11032,7 @@ function makeLabel(txt,sub,o){
   const m=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,depthTest:false});
   m.userData.own=true;
   const sp=new THREE.Mesh(GEO.plane,m);const h=o.h||1.05;
-  sp.scale.set(h*wpx/hpx,h,1);sp.quaternion.copy(LABEL_QUAT);sp.renderOrder=30;
+  sp.scale.set(h*wpx/hpx,h,1);sp.renderOrder=30;   /* ไม่หมุน = ขนานกับผนังหน้าคลัง */
   return sp;
 }
 function disposeTree(o){
@@ -11182,10 +11182,12 @@ let LY={},HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
 /* ทิศกล้องตั้งต้น ใช้ทั้งวาง HOME และหันหน้าป้ายทุกใบ — เก็บไว้ที่เดียวกัน
    จะได้ไม่หลุดจากกันเวลาแก้มุมกล้องทีหลัง */
 const VIEW_DIR=new THREE.Vector3(0.44,0.68,0.59).normalize();
-/* ป้ายทุกใบหันไปทางเดียวกันหมด = หันเข้าหากล้องตั้งต้นเต็มหน้า
-   หันแค่รอบแกน Y (yaw) ไม่พอ เพราะกล้องตั้งต้นก้มลงมาราว 43° ป้ายที่ตั้งฉากกับพื้น
-   จะถูกมองจากด้านบนจนแบนเป็นขีดอ่านไม่ออก — เอียงตามทิศกล้องด้วยจึงเห็นเต็มหน้า */
-const LABEL_QUAT=(function(){const o=new THREE.Object3D();o.lookAt(VIEW_DIR);return o.quaternion.clone();})();
+/* ป้ายทุกใบหันไปทางเดียวกันหมด และหันไปทางเดียวกับตัวคลัง คือขนานกับผนังหน้า
+   (ด้านท่าเทียบ) ตั้งตรงฉาก ไม่เอียงไม่หมุน — PlaneGeometry หันไป +Z อยู่แล้ว
+   ซึ่งคือด้านหน้าคลังพอดี จึงไม่ต้องหมุนเลย
+   เคยลองเอียงให้หันเข้าหากล้องตั้งต้นเต็มหน้า อ่านง่ายก็จริงตอนอยู่มุมเริ่มต้น
+   แต่พอขยับกล้องไปมุมอื่น ป้ายทุกใบจะดูเอียงเฉียงไม่เข้ากับอาคาร เหมือนป้ายลอย
+   ไม่ใช่ป้ายที่ติดอยู่กับคลัง */
 let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
