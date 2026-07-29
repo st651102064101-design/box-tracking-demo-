@@ -10793,14 +10793,55 @@ function build(){
   LY.obstacles.push({x0:bMinX,x1:bMaxX,z0:backZ-0.2,z1:backZ+0.2},
                     {x0:bMinX-0.2,x1:bMinX+0.2,z0:backZ,z1:dockZ},
                     {x0:bMaxX-0.2,x1:bMaxX+0.2,z0:backZ,z1:dockZ});
-  /* หลังคา: เปิดโปร่งให้เห็นภายใน — เหลือเชิงชาย + จันทันเหล็ก */
-  const fasc=0.55;
-  root.add(bx(bW+0.9,fasc,0.5,MAT.roof,(bMinX+bMaxX)/2,WALL_H+fasc/2,backZ-0.34,true));
-  root.add(bx(0.5,fasc,dockZ-backZ+0.9,MAT.roof,bMinX-0.34,WALL_H+fasc/2,(backZ+dockZ)/2,true));
-  root.add(bx(0.5,fasc,dockZ-backZ+0.9,MAT.roof,bMaxX+0.34,WALL_H+fasc/2,(backZ+dockZ)/2,true));
-  root.add(bx(bW+0.9,fasc,0.6,MAT.roof,(bMinX+bMaxX)/2,WALL_H+fasc/2,dockZ+0.4,true));
-  const truss=[];for(let z=backZ+4.6;z<dockZ-2.4;z+=8.4)truss.push(z);
-  instMesh(truss,MAT.roof,(z,p,s)=>{p.set((bMinX+bMaxX)/2,WALL_H+0.42,z);s.set(bW-0.4,0.14,0.18);},true);
+  /* หลังคาโดม: ส่วนโค้งของวงกลม (segmental arch) พาดตามความยาวอาคาร — ทรงเดียว
+     กับโกดัง/โรงงานหลังคาโดมที่ใช้กันจริง ผนังตั้งตรงขึ้นไปถึง WALL_H แล้วค่อย
+     โค้งไปรวมกันที่สันกลาง
+     รัศมีคิดจากครึ่งช่วงกว้าง a กับความสูงสัน h ด้วย R=(a²+h²)/2h ปลายส่วนโค้ง
+     จึงมาจรดหัวเสาพอดีเสมอ ไม่ว่าคลังจะกว้างเท่าไร — ไม่ต้องมีเลขวิเศษต่อคลัง
+     แผ่นหลังคายังโปร่งเท่าเดิมเพื่อให้มองทะลุลงไปเห็นของข้างในได้ทันทีโดยไม่ต้อง
+     กดอะไรก่อน (depthWrite:false กันไม่ให้แผ่นโปร่งบังของใต้มันตอนเรียงลำดับวาด)
+     ปุ่มมุมขวายังซ่อนเฉพาะ "แผ่น" ส่วนซี่โครงยังอยู่ให้เห็นรูปทรงอาคาร */
+  const dmOver=0.45;                                   // ชายคาที่ยื่นพ้นผนังออกมา
+  const dmA=(bW+dmOver*2)/2;
+  const dmRise=Math.min(dmA*0.38,WALL_H*0.95);         // สันโดมสูงจากหัวเสา
+  const dmR=(dmA*dmA+dmRise*dmRise)/(2*dmRise);
+  const dmPhi=Math.asin(Math.min(1,dmA/dmR));
+  const dmCX=(bMinX+bMaxX)/2,dmCZ=(backZ+dockZ)/2,dmLen=dockZ-backZ+dmOver*2;
+  const dmSag=dmR*Math.cos(dmPhi);                     // ระยะจากจุดศูนย์กลางวงกลมขึ้นมาถึงหัวเสา
+  ROOF.mesh=new THREE.Group();ROOF.mesh.visible=ROOF.on;root.add(ROOF.mesh);
+  {
+    /* ทรงกระบอกตัดส่วน: หมุนให้แกนไปตามแนว Z แล้วเลื่อนลงให้ปลายโค้งอยู่ที่ y=0 */
+    const g=new THREE.CylinderGeometry(dmR,dmR,dmLen,72,1,true,Math.PI-dmPhi,dmPhi*2);
+    g.rotateX(Math.PI/2);g.translate(0,-dmSag,0);
+    const shell=new THREE.Mesh(g,MAT.roofGlass);
+    shell.position.set(dmCX,WALL_H,dmCZ);shell.renderOrder=1;
+    ROOF.mesh.add(shell);
+    /* หน้าจั่วหัว-ท้าย: ปิดช่องใต้ส่วนโค้ง ไม่งั้นจะมองทะลุออกไปเห็นนอกอาคาร */
+    const sp=new THREE.Shape();
+    sp.moveTo(-dmA,0);sp.lineTo(dmA,0);
+    sp.absarc(0,-dmSag,dmR,Math.PI/2-dmPhi,Math.PI/2+dmPhi,false);
+    const gable=new THREE.ShapeGeometry(sp,72);
+    [dmCZ-dmLen/2,dmCZ+dmLen/2].forEach(z=>{
+      const m=new THREE.Mesh(gable,MAT.roofGlass);
+      m.position.set(dmCX,WALL_H,z);m.renderOrder=1;ROOF.mesh.add(m);
+    });
+  }
+  /* ซี่โครงโดม — ส่วนโค้งเดียวกับแผ่นหลังคา วาดผ่าน InstancedMesh ก้อนเดียว
+     ทั้งชุดจึงเป็น draw call เดียวไม่ว่าคลังจะยาวแค่ไหน */
+  {
+    const ribZ=[backZ-dmOver];
+    for(let z=backZ+4.6;z<dockZ-2.4;z+=8.4)ribZ.push(z);
+    ribZ.push(dockZ+dmOver);
+    const rg=new THREE.TorusGeometry(dmR,0.085,6,80,dmPhi*2);
+    rg.rotateZ(Math.PI/2-dmPhi);rg.translate(0,-dmSag,0);
+    const rib=new THREE.InstancedMesh(rg,MAT.roof,ribZ.length);
+    const rm=new THREE.Matrix4();
+    ribZ.forEach((z,i)=>{rm.makeTranslation(dmCX,WALL_H,z);rib.setMatrixAt(i,rm);});
+    rib.instanceMatrix.needsUpdate=true;root.add(rib);
+  }
+  /* ชายคาสองข้าง: เส้นคมตรงรอยต่อผนังกับโดม ทำให้ขอบอาคารยังอ่านออกจากมุมสูง */
+  root.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX-dmA,WALL_H,dmCZ,true));
+  root.add(bx(0.44,0.44,dmLen,MAT.roof,dmCX+dmA,WALL_H,dmCZ,true));
   const cols=[];
   const colStep=Math.max(6,bW/Math.round(bW/7.5));
   for(let x=bMinX;x<=bMaxX+0.1;x+=colStep)cols.push([Math.min(x,bMaxX),backZ+0.3]);
