@@ -221,9 +221,6 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .kpi.clickable::after{content:"→";position:absolute;bottom:14px;right:18px;font-size:13px;font-weight:600;
   color:var(--faint);opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease);transform:translateX(-4px);}
 .kpi.clickable:hover::after{opacity:1;transform:translateX(0);}
-.loop .node.clickable{cursor:pointer;}
-.loop .node.clickable .badge{transition:transform .25s var(--ease);}
-.loop .node.clickable:hover .badge{transform:translateX(4px);}
 .kpi .ic{font-size:17px;margin-bottom:14px;display:inline-grid;place-items:center;width:40px;height:40px;
   border-radius:11px;background:color-mix(in srgb,var(--ink) 6%,transparent);}
 .kpi .n{font-size:clamp(34px,3.4vw,44px);font-weight:700;letter-spacing:-.04em;line-height:1;}
@@ -236,7 +233,6 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .kpi.teal .ic{background:color-mix(in srgb,var(--ink) 6%,transparent);} .kpi.teal .n{color:var(--ink);}
 
 /* ============================================================ FLOW LOOP ============================================================ */
-.loop{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:14px;}
 
 /* ===== 3D isometric warehouse hero visualization =====
    A canvas-drawn iso warehouse whose storage bins light up by live occupancy —
@@ -311,23 +307,9 @@ button.fb-kpi{cursor:pointer;} button.fb-kpi:hover{border-color:var(--line2);bac
 }
 
 /* per-KPI-card particle canvases (cloud / ring / stream) sitting behind the number */
-.loop .node .node-particles{position:absolute;inset:0;width:100%;height:100%;
   z-index:0;pointer-events:none;opacity:.9;}
-.loop .node > :not(.node-particles){position:relative;z-index:1;}
 
-.loop .node{position:relative;background:var(--surface);border:.5px solid var(--line);border-radius:var(--r);
   padding:28px 22px;box-shadow:var(--shadow);transition:transform .35s var(--ease);overflow:hidden;}
-.loop .node::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line2);}
-.loop .node:hover{transform:translateY(-3px);}
-.loop .node .e{font-size:22px;}
-.loop .node .t{font-size:13px;font-weight:500;color:var(--muted);margin-top:12px;}
-.loop .node .v{font-size:clamp(36px,4vw,48px);font-weight:700;margin-top:4px;letter-spacing:-.04em;line-height:1;}
-.loop .node .s{font-size:12px;color:var(--faint);margin-top:6px;}
-.loop .node.warehouse::after{background:var(--ink);} .loop .node.warehouse .v{color:var(--ink);}
-.loop .node.gate::after{background:var(--accent);} .loop .node.gate .v{color:var(--accent);}
-.loop .node.transit::after{background:#c3ff6e;} .loop .node.transit .v{color:#c3ff6e;}
-.loop .node .badge{position:absolute;top:18px;right:20px;font-size:16px;color:var(--faint);}
-.loophint{color:var(--muted);font-size:13.5px;margin:6px 2px 0;letter-spacing:-.01em;display:none;}
 @media(max-width:760px){.loop{grid-template-columns:1fr;}}
 
 /* ===== Cycle diagram — same 5-step flow as .loophint, drawn as a circular
@@ -335,46 +317,26 @@ button.fb-kpi{cursor:pointer;} button.fb-kpi:hover{border-color:var(--line2);bac
    (CSS offset-path) to make the "it's a cycle, not a line" idea legible at a
    glance. Falls back to the plain text hint on narrow screens, where a
    5-node circle has no room to stay readable. ===== */
-.cycle-wrap{display:flex;justify-content:center;margin:56px 0 6px;}
-.cycle-ring{position:relative;width:340px;height:340px;flex:0 0 auto;margin-top:20px;}
-.cycle-track{position:absolute;inset:7%;border-radius:50%;border:1.5px dashed var(--line2);}
-.cycle-dotmove{position:absolute;top:0;left:0;width:9px;height:9px;margin:-4.5px;border-radius:50%;
   background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 22%,transparent);
   offset-path:circle(43% at 50% 50%);offset-rotate:0deg;
   animation:cycleDotMove 10s linear infinite;}
 @keyframes cycleDotMove{from{offset-distance:0%;}to{offset-distance:100%;}}
-.cycle-node{position:absolute;width:108px;transform:translate(-50%,-50%);
   display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
-.cycle-node .cycle-dot{position:relative;width:48px;height:48px;border-radius:50%;background:var(--surface);
   border:1.5px solid var(--line2);display:grid;place-items:center;box-shadow:var(--shadow);
   font-size:18px;color:var(--ink2);transition:transform .2s var(--ease),border-color .2s,color .2s;}
-.cycle-node.clickable{cursor:pointer;}
-.cycle-node.clickable:hover .cycle-dot{transform:scale(1.08);border-color:var(--accent);color:var(--accentInk);}
-.cycle-node.clickable:hover .cycle-lbl{color:var(--accentInk);}
-.cycle-node.clickable:active .cycle-dot{transform:scale(.96);}
-.cycle-node .cycle-step{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;
   background:var(--ink);color:var(--bg);font-size:10px;font-weight:800;display:grid;place-items:center;
   font-family:var(--mono);}
-.cycle-lbl{font-size:12.5px;font-weight:600;color:var(--ink2);line-height:1.3;white-space:nowrap;}
 /* "วันนี้" caption on Gate ขาออก/ขาเข้า — those two badges count today's activity
    (throughput), not a current on-hand quantity like the other three nodes, so
    they need an explicit label to avoid reading as the same kind of number. */
-.cycle-sub{display:block;font-size:10px;font-weight:500;color:var(--faint);margin-top:1px;}
 /* positions match the .cycle-track radius (inset:7% → r=43%) exactly, so each
    dot's center sits precisely on the dashed circle instead of floating off it */
-.cycle-node.n1{left:50%;top:7%;}
-.cycle-node.n2{left:90.9%;top:36.7%;}
-.cycle-node.n3{left:75.3%;top:84.8%;}
-.cycle-node.n4{left:24.7%;top:84.8%;}
-.cycle-node.n5{left:9.1%;top:36.7%;}
 /* node glow intensity is driven continuously from JS as an inline style (see the
    cycle-ring glow loop near the end of the script), proportional to the moving dot's
    real on-screen distance from each node — a hard on/off class snapped to full
    brightness before the dot actually arrived, so this fades smoothly with proximity
    instead and always peaks exactly when the dot is touching the node. */
 @media(max-width:720px){
-  .cycle-wrap{display:none;}
-  .loophint{display:block;}
 }
 
 /* ============================================================ GATE (signature dark panel) ============================================================ */
@@ -1359,31 +1321,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   })();
   </script>
 
-  <div class="loop">
-    <div class="node warehouse reveal clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'กล่องในคลัง'});"><canvas class="node-particles" data-particle="cloud"></canvas><span class="badge"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span></span><div class="e"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M4 20V10l6 4V10l6 4V6l4 2v12"/><path d="M7 20v-3M11 20v-3M15 20v-3"/></svg></span></div><div class="t">เหลือในคลัง</div><div class="v mono" id="nWarehouse">0</div><div class="s">In warehouse</div></div>
-    <div class="node gate reveal d1 clickable" title="ไป Gate ขาออก" onclick="goInventory({status:'outToday',label:'กล่องที่ออกวันนี้'});"><canvas class="node-particles" data-particle="ring"></canvas><span class="badge"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span></span><div class="e"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></div><div class="t">ออกวันนี้</div><div class="v mono" id="nOutToday">0</div><div class="s">Out today</div></div>
-    <div class="node transit reveal d2 clickable" title="ดูกล่องที่ส่งลูกค้า" onclick="goInventory({status:'out',label:'กล่องที่ออกไปยังไม่คืน'});"><canvas class="node-particles" data-particle="stream"></canvas><span class="badge"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></span><div class="e"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4M8 8l4-4 4 4M12 4v10"/></svg></span></div><div class="t">ออกไปแล้ว</div><div class="v mono" id="nOut">0</div><div class="s">ยังไม่กลับเข้าคลัง</div></div>
-  </div>
-  <div class="cycle-wrap reveal d3">
-    <div class="cycle-ring">
-      <div class="cycle-track"></div>
-      <div class="cycle-dotmove"></div>
-      <div class="cycle-node n1 clickable" title="ดูรายชื่อกล่องที่ออก Gate วันนี้" onclick="showGateTodayList('out')"><div class="cycle-dot"><span class="cycle-step" id="cycleStep1">0</span><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></div><div class="cycle-lbl">Gate ขาออก<span class="cycle-sub">วันนี้</span></div></div>
-      <div class="cycle-node n2 clickable" title="ดูว่ากล่องแต่ละชิ้นออกไปกับรถคันไหน" onclick="showTruckManifest();"><div class="cycle-dot"><span class="cycle-step" id="cycleStep2">0</span><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h10v9H3ZM13 9h4l3 3v3h-7Z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg></span></div><div class="cycle-lbl">ออกไปกับรถ<span class="cycle-sub">ยอดรวมปัจจุบัน</span></div></div>
-      <div class="cycle-node n3 clickable" title="ดูกล่องที่รอคืน (ยังไม่เกินกำหนด)" onclick="goInventory({status:'awaiting',label:'กล่องที่รอคืน (ยังไม่เกินกำหนด)'});"><div class="cycle-dot"><span class="cycle-step" id="cycleStep3">0</span><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></div><div class="cycle-lbl">รอคืน<span class="cycle-sub">ยอดรวมปัจจุบัน</span></div></div>
-      <div class="cycle-node n4 clickable" title="ดูรายชื่อกล่องที่เข้า Gate วันนี้" onclick="showGateTodayList('in')"><div class="cycle-dot"><span class="cycle-step" id="cycleStep4">0</span><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="cycle-lbl">Gate ขาเข้า<span class="cycle-sub">วันนี้</span></div></div>
-      <div class="cycle-node n5 clickable" title="ดูกล่องที่อยู่ในคลัง พร้อมใช้งาน" onclick="goInventory({status:'warehouse',label:'กล่องในคลัง (พร้อมใช้งาน)'});"><div class="cycle-dot"><span class="cycle-step" id="cycleStep5">0</span><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M4 20V10l6 4V10l6 4V6l4 2v12"/><path d="M7 20v-3M11 20v-3M15 20v-3"/></svg></span></div><div class="cycle-lbl">เหลือในคลัง<span class="cycle-sub">พร้อมใช้งาน</span></div></div>
-    </div>
-  </div>
-  <p class="loophint reveal d3"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> Gate ขาออก → ออกไปกับรถ → รอคืน → Gate ขาเข้า → เก็บเข้าชั้นวาง</p>
 
   <div class="sectlabel reveal">ตัวเลขสำคัญ</div>
   <div class="kpis">
     <div class="kpi teal reveal clickable" title="ดูกล่องทั้งหมด" onclick="goInventory({label:'กล่องทั้งหมดในระบบ'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></div><div class="n mono" id="kTotal">0</div><div class="l">กล่องทั้งหมดในระบบ</div></div>
-    <div class="kpi green reveal d1 clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'กล่องในคลัง'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M4 20V10l6 4V10l6 4V6l4 2v12"/><path d="M7 20v-3M11 20v-3M15 20v-3"/></svg></span></div><div class="n mono" id="kOnHand">0</div><div class="l">เหลือในคลัง</div></div>
-    <div class="kpi reveal d2 clickable" title="ดูกล่องที่ส่งลูกค้า" onclick="goInventory({status:'out',label:'กล่องที่ออกไปยังไม่คืน'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4M8 8l4-4 4 4M12 4v10"/></svg></span></div><div class="n mono" id="kOutTotal">0</div><div class="l">ออกไปแล้ว (ยังไม่คืน)</div></div>
     <div class="kpi purple reveal d3 clickable" title="ไป Gate ขาเข้า" onclick="goInventory({status:'returned',label:'กล่องที่รับคืนสะสม (cycles ≥ 1)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kReturned">0</div><div class="l">รับคืนสะสม (ครั้ง)</div></div>
-    <div class="kpi orange reveal d4 clickable" title="ดูกล่องเกินกำหนดคืน" onclick="goInventory({status:'overdue',label:'กล่องที่เกินกำหนดคืน'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></div><div class="n mono" id="kAging">0</div><div class="l">เกินกำหนดคืน</div></div>
   </div>
 
   <div class="sectlabel reveal">อัตราการคืน &amp; การสูญหาย</div>
@@ -5097,22 +5039,6 @@ function renderOverview(){
   var putawayCount=all.filter(function(b){return b.status==='warehouse'&&isAtStaging(b);}).length;
   var inEv=S.events.filter(function(e){return e.dir==='in';}).length;
   var outEv=S.events.filter(function(e){return e.dir==='out';}).length;
-  $('#nWarehouse').textContent=nf(wh);
-  $('#nOutToday').textContent=nf(outToday);
-  $('#nOut').textContent=nf(out);
-  /* push live counts into the hero 3D warehouse + KPI particle systems */
-  if(typeof updateHeroViz==='function'){
-    var heroGates=allGateNums().map(function(g){
-      var w=S.warehouses[gateWh(g)]; return {num:g, dir:(typeof gateDirOf==='function')?gateDirOf(g):(w?w.gateType||'both':'both')};
-    });
-    var heroWh=Object.keys(S.warehouses)[0];
-    updateHeroViz({
-      warehouse:wh, out:out, outToday:outToday, inToday:inToday,
-      staging:putawayCount, total:all.length,
-      occ:(typeof locOccupancyMap==='function'?Object.keys(locOccupancyMap()).length:wh),
-      gates:heroGates, stagingInfo:whStaging(heroWh)
-    });
-  }
   /* feed the live isometric hero scene with real occupancy + traffic */
   if(typeof updateHeroScene==='function'){
     var _occMap=(typeof locOccupancyMap==='function')?locOccupancyMap():{};
@@ -5124,21 +5050,13 @@ function renderOverview(){
     });
   }
   $('#kTotal').textContent=nf(all.length);
-  $('#kOnHand').textContent=nf(wh);
-  $('#kOutTotal').textContent=nf(out);
   $('#kReturned').textContent=nf(inEv);
-  $('#kAging').textContent=nf(overdueCount);
   /* keep the cycle-diagram step badges honest — they show the LIVE count each
      node's click will filter to, instead of a static "step order" number that
      users kept mistaking for a quantity (e.g. seeing "5" then clicking through
      to an empty/1-row list). Gate Out/In (n1/n4) aren't inventory filters, so
      they show today's outbound/inbound volume instead — the closest live
      number to "what happens if I go there right now". */
-  $('#cycleStep1').textContent=nf(outToday);
-  $('#cycleStep2').textContent=nf(out);
-  $('#cycleStep3').textContent=nf(awaitingCount);
-  $('#cycleStep4').textContent=nf(inToday);
-  $('#cycleStep5').textContent=nf(wh);
   $('#rReturn').textContent=(outEv?Math.round(inEv/outEv*100):0)+'%';
   $('#rCycles').textContent=nf(all.reduce(function(s,b){return s+(b.cycles||0);},0));
   $('#rLossPct').textContent=(all.length?(lost/all.length*100):0).toFixed(1)+'%';
@@ -6970,492 +6888,6 @@ window.seedDemo=seedDemo;
     r.onload=function(){try{S=normalizeState(JSON.parse(r.result));save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
   document.body.appendChild(inp);})();
 
-/* ============================================================================
-   HERO VISUALS — 3D isometric warehouse + KPI particle systems
-   ----------------------------------------------------------------------------
-   All canvas-drawn (no external assets, keeps this a single-file app). The
-   warehouse renders a grid of storage bins in isometric projection; a share of
-   them light up proportional to live occupancy, so the hero reflects real data.
-   Respects prefers-reduced-motion (renders a single static frame instead of
-   animating) and pauses its RAF loop whenever the Overview tab isn't visible.
-   ============================================================================ */
-(function(){
-  "use strict";
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  var state = { warehouse:0, out:0, outToday:0, total:0, occ:0 };
-  var raf = null, running = false;
-
-  function accent(){ try{ return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#a8f931'; }catch(e){ return '#a8f931'; } }
-  function hexToRgb(h){ h=h.replace('#',''); if(h.length===3)h=h.split('').map(function(c){return c+c;}).join(''); var n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
-
-  function fitCanvas(cv){
-    var dpr = Math.min(window.devicePixelRatio||1, 2);
-    var r = cv.getBoundingClientRect();
-    if(!r.width||!r.height) return null;
-    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
-    var ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
-    return { ctx:ctx, w:r.width, h:r.height };
-  }
-
-  /* ---------- 3D isometric warehouse SCENE (data-driven) ----------
-     Redesigned to look like a real warehouse floor (see reference infographic):
-       • Left block  = INVENTORY racks — one lit carton per box in stock (status 'warehouse')
-       • Right block = OUTBOUND STAGING "Location 1..4" — cartons for boxes shipping/out
-       • Inbound truck (bottom-left)  appears only if there were inbound events today
-       • Delivery truck (bottom-right) appears only if there were outbound events today
-       • AMR robot rolls across only when there's movement (in/out) today
-     Everything is derived from `sceneData` which renderOverview feeds via updateHeroViz.
-     If a data source is empty, that element is simply not drawn. */
-  var whCanvas;
-  var sceneData = {
-    inv: 0,        // boxes in warehouse
-    invCap: 0,     // rack capacity (total boxes ever, for context)
-    staging: 0,    // boxes at outbound staging / going out
-    out: 0,        // boxes currently out with customers
-    inToday: 0,    // inbound events today
-    outToday: 0,   // outbound events today
-    locations: [], // up to 4 staging location fill levels [0..1]
-    gates: [],     // configured RFID gates [{num,dir}], dir: 'in'|'out'|'both'
-    stagingInfo: null // {zone, rack} — real staging area label
-  };
-
-  // isometric projection: world (x,y,z) -> screen. x=right-depth, y=left-depth, z=up
-  function iso(x,y,z,ox,oy,tile){ return { x: ox + (x - y)*tile, y: oy + (x + y)*tile*0.5 - z }; }
-
-  // draw a cuboid of footprint (tile) and height (zh) at ground point p (its top-center-ish anchor)
-  function cuboid(ctx, p, tw, td, zh, cols){
-    // p is the screen pos of the ground center. tw = half-width in screen px, td derived.
-    var topY = p.y - zh;
-    // top face
-    ctx.beginPath();
-    ctx.moveTo(p.x, topY - td);
-    ctx.lineTo(p.x + tw, topY - td + td);
-    ctx.lineTo(p.x, topY - td + td*2);
-    ctx.lineTo(p.x - tw, topY - td + td);
-    ctx.closePath(); ctx.fillStyle=cols.top; ctx.fill();
-    // left face
-    ctx.beginPath();
-    ctx.moveTo(p.x - tw, topY - td + td);
-    ctx.lineTo(p.x, topY - td + td*2);
-    ctx.lineTo(p.x, p.y + td);
-    ctx.lineTo(p.x - tw, p.y - td + td);
-    ctx.closePath(); ctx.fillStyle=cols.left; ctx.fill();
-    // right face
-    ctx.beginPath();
-    ctx.moveTo(p.x + tw, topY - td + td);
-    ctx.lineTo(p.x, topY - td + td*2);
-    ctx.lineTo(p.x, p.y + td);
-    ctx.lineTo(p.x + tw, p.y - td + td);
-    ctx.closePath(); ctx.fillStyle=cols.right; ctx.fill();
-  }
-
-  // a carton (cardboard box) drawn iso at grid cell
-  function carton(ctx, cx, cy, cz, ox, oy, tile, lit, acc, t, phase){
-    var p = iso(cx, cy, cz, ox, oy, tile);
-    var tw = tile*0.82, td = tile*0.42, zh = tile*0.66;
-    if(lit){
-      var breathe = reduceMotion ? 1 : (0.9 + 0.1*Math.sin(t*0.002 + (phase||0)));
-      var top='rgba('+acc[0]+','+acc[1]+','+acc[2]+','+(0.9*breathe+0.1)+')';
-      var left='rgba('+Math.round(acc[0]*0.42)+','+Math.round(acc[1]*0.5)+','+Math.round(acc[2]*0.24)+',0.92)';
-      var right='rgba('+Math.round(acc[0]*0.66)+','+Math.round(acc[1]*0.74)+','+Math.round(acc[2]*0.36)+',0.95)';
-      ctx.shadowColor='rgba('+acc[0]+','+acc[1]+','+acc[2]+',0.4)'; ctx.shadowBlur=10*breathe;
-      cuboid(ctx,p,tw,td,zh,{top:top,left:left,right:right});
-      ctx.shadowBlur=0;
-    } else {
-      // empty slot: faint wireframe
-      cuboid(ctx,p,tw,td,zh,{top:'#1a1c26',left:'#101119',right:'#15161f'});
-    }
-  }
-
-  // cardboard-colored carton (for trucks / staging, not accent-lit)
-  function kraft(ctx, cx, cy, cz, ox, oy, tile, t, phase, scale){
-    var p = iso(cx, cy, cz, ox, oy, tile);
-    var s = scale||1;
-    var tw = tile*0.82*s, td = tile*0.42*s, zh = tile*0.7*s;
-    cuboid(ctx,p,tw,td,zh,{top:'#c8955a',left:'#8a5f31',right:'#a9773f'});
-    // tape line on top
-    ctx.strokeStyle='rgba(60,40,20,.35)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(p.x, p.y-zh-td); ctx.lineTo(p.x, p.y-zh+td*2 - td); ctx.stroke();
-  }
-
-  // draw a rack frame (upright steel posts + shelves) spanning cells along one axis
-  function rackFrame(ctx, x0, y0, cells, levels, ox, oy, tile, along){
-    ctx.strokeStyle='rgba(150,165,200,.22)'; ctx.lineWidth=1.4;
-    for(var lv=0; lv<=levels; lv++){
-      var z = lv*tile*0.9;
-      var a,b;
-      if(along==='x'){ a=iso(x0,y0,z,ox,oy,tile); b=iso(x0+cells,y0,z,ox,oy,tile); }
-      else { a=iso(x0,y0,z,ox,oy,tile); b=iso(x0,y0+cells,z,ox,oy,tile); }
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    }
-    // uprights
-    for(var cc=0; cc<=cells; cc++){
-      var gx = along==='x'? x0+cc : x0;
-      var gy = along==='x'? y0    : y0+cc;
-      var lo=iso(gx,gy,0,ox,oy,tile), hi=iso(gx,gy,levels*tile*0.9,ox,oy,tile);
-      ctx.beginPath(); ctx.moveTo(lo.x,lo.y); ctx.lineTo(hi.x,hi.y); ctx.stroke();
-    }
-  }
-
-  // simple iso truck (cab + box body). color 'orange' cab, dark body.
-  function truck(ctx, gx, gy, ox, oy, tile, dir, label, incoming){
-    // dir: +1 faces right, -1 faces left. Draw box body then cab.
-    var bodyLen = 3.0, bodyW = 1.5, bodyH = tile*1.7;
-    var base = iso(gx, gy, 0, ox, oy, tile);
-    // shadow
-    ctx.fillStyle='rgba(0,0,0,.28)';
-    ctx.beginPath();
-    var s0=iso(gx-0.2,gy-0.2,0,ox,oy,tile), s1=iso(gx+bodyLen*dir+0.6*dir,gy-0.2,0,ox,oy,tile),
-        s2=iso(gx+bodyLen*dir+0.6*dir,gy+bodyW+0.2,0,ox,oy,tile), s3=iso(gx-0.2,gy+bodyW+0.2,0,ox,oy,tile);
-    ctx.moveTo(s0.x,s0.y);ctx.lineTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.lineTo(s3.x,s3.y);ctx.closePath();ctx.fill();
-    // box body (cargo)
-    var bp = iso(gx + (dir>0? bodyLen*0.5 : bodyLen*0.5), gy + bodyW*0.5, 0, ox, oy, tile);
-    cuboid(ctx, bp, tile*bodyLen*0.55, tile*bodyW*0.42, bodyH, {top:'#3a3f4c',left:'#23262f',right:'#2e323d'});
-    // cab (orange), sits at the front (direction of travel)
-    var cabX = dir>0 ? gx+bodyLen : gx-0.9;
-    var cp = iso(cabX + (dir>0?0.45:0.45), gy + bodyW*0.5, 0, ox, oy, tile);
-    cuboid(ctx, cp, tile*0.9*0.55, tile*bodyW*0.42, bodyH*0.7, {top:'#ff8a2a',left:'#c85f10',right:'#e5741c'});
-    // windshield glint on the cab's leading face
-    ctx.save();
-    ctx.fillStyle='rgba(180,225,255,.55)';
-    var wsFace = dir>0 ? {x:cp.x+tile*0.9*0.55*0.55, y:cp.y-bodyH*0.7*0.62} : {x:cp.x-tile*0.9*0.55*0.55, y:cp.y-bodyH*0.7*0.62};
-    ctx.beginPath(); ctx.ellipse(wsFace.x, wsFace.y, tile*0.16, tile*0.11, 0, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-    // wheels — dark circles at each corner, grounded under body+cab
-    ctx.save();
-    ctx.fillStyle='#14151b';
-    var wheelR = tile*0.16;
-    var wheelPts = [
-      iso(gx+0.35, gy-0.05, 0, ox, oy, tile),
-      iso(gx+bodyLen-0.35, gy-0.05, 0, ox, oy, tile),
-      iso(gx+0.35, gy+bodyW+0.05, 0, ox, oy, tile),
-      iso(gx+bodyLen-0.35, gy+bodyW+0.05, 0, ox, oy, tile),
-      iso(cabX+0.45, gy-0.05, 0, ox, oy, tile),
-      iso(cabX+0.45, gy+bodyW+0.05, 0, ox, oy, tile)
-    ];
-    wheelPts.forEach(function(wp){ ctx.beginPath(); ctx.arc(wp.x, wp.y+wheelR*0.3, wheelR, 0, Math.PI*2); ctx.fill(); });
-    ctx.restore();
-    // headlights facing the direction of travel
-    ctx.save();
-    ctx.fillStyle='rgba(255,244,200,.9)';
-    var hlX = dir>0 ? cabX+0.95 : cabX-0.05;
-    var hl = iso(hlX, gy+bodyW*0.5, bodyH*0.28, ox, oy, tile);
-    ctx.beginPath(); ctx.arc(hl.x, hl.y, tile*0.09, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-    // label on the body
-    if(label){
-      ctx.save();
-      ctx.fillStyle='rgba(255,255,255,.82)';
-      ctx.font='700 '+Math.round(tile*0.62)+'px system-ui,sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      var lp=iso(gx+bodyLen*0.5, gy+bodyW*0.5, bodyH*0.55, ox, oy, tile);
-      ctx.fillText(label, lp.x, lp.y);
-      ctx.restore();
-    }
-  }
-
-  // little AMR robot carrying a box
-  function robot(ctx, gx, gy, ox, oy, tile, acc){
-    var p = iso(gx, gy, 0, ox, oy, tile);
-    cuboid(ctx, p, tile*0.55, tile*0.32, tile*0.4, {top:'#2b3040',left:'#171a24',right:'#20242f'});
-    // box on top
-    kraft(ctx, gx, gy, tile*0.4, ox, oy, tile, 0, 0, 0.7);
-    // accent status light
-    var lp = iso(gx, gy, tile*0.42, ox, oy, tile);
-    ctx.fillStyle='rgba('+acc[0]+','+acc[1]+','+acc[2]+',.9)';
-    ctx.beginPath(); ctx.arc(lp.x, lp.y-tile*0.2, 2.2, 0, Math.PI*2); ctx.fill();
-  }
-
-  function assignLit(){ /* retained no-op for backward calls; scene reads sceneData directly */ }
-
-  function renderWarehouse(t){
-    if(!whCanvas) return;
-    var f = fitCanvas(whCanvas); if(!f) return;
-    var ctx=f.ctx, W=f.w, H=f.h;
-    ctx.clearRect(0,0,W,H);
-    var acc = hexToRgb(accent());
-
-    // ---- scene layout constants (in iso grid units) ----
-    var tile = Math.max(10, Math.min(W/26, 24));
-    var ox = W*0.52;
-    var oy = H*0.30;
-
-    // soft floor
-    (function(){
-      var c0=iso(-2,-2,0,ox,oy,tile), c1=iso(20,-2,0,ox,oy,tile),
-          c2=iso(20,14,0,ox,oy,tile), c3=iso(-2,14,0,ox,oy,tile);
-      var g=ctx.createLinearGradient(0,oy-40,0,H);
-      g.addColorStop(0,'rgba(30,34,46,.35)'); g.addColorStop(1,'rgba(12,14,20,.05)');
-      ctx.fillStyle=g;
-      ctx.beginPath();ctx.moveTo(c0.x,c0.y);ctx.lineTo(c1.x,c1.y);ctx.lineTo(c2.x,c2.y);ctx.lineTo(c3.x,c3.y);ctx.closePath();ctx.fill();
-      // faint floor grid
-      ctx.strokeStyle='rgba(120,150,255,.05)'; ctx.lineWidth=1;
-      for(var gr=-2; gr<=14; gr+=2){ var a=iso(-2,gr,0,ox,oy,tile), b=iso(20,gr,0,ox,oy,tile); ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke(); }
-      for(var gc=-2; gc<=20; gc+=2){ var a2=iso(gc,-2,0,ox,oy,tile), b2=iso(gc,14,0,ox,oy,tile); ctx.beginPath();ctx.moveTo(a2.x,a2.y);ctx.lineTo(b2.x,b2.y);ctx.stroke(); }
-    })();
-
-    // ============ INVENTORY RACKS (left/back block) ============
-    // grid of shelf cells: cols along x (depth-right), rows(levels) up.
-    // We light one carton per box in stock, filling front-to-back, bottom-up.
-    var invCols = 5, invLevels = 3, invRows = 2; // 5*3*2 = 30 slots
-    var invSlots = invCols*invLevels*invRows;
-    var invLit = Math.max(0, Math.min(invSlots, sceneData.inv));
-    // rack frames (two parallel rows at y=0 and y=2)
-    rackFrame(ctx, 0, 0, invCols, invLevels, ox, oy, tile, 'x');
-    rackFrame(ctx, 0, 2, invCols, invLevels, ox, oy, tile, 'x');
-    // cartons — order back(row1)→front(row0), bottom→top, left→right
-    var invCells=[];
-    for(var rr=invRows-1; rr>=0; rr--) for(var lv=0; lv<invLevels; lv++) for(var cc=0; cc<invCols; cc++){
-      invCells.push({x:cc+0.5, y:rr*2+0.5, z:lv*tile*0.9 + tile*0.33});
-    }
-    // painter order: far first (higher x+y drawn later). Sort by (x+y) asc, then z asc.
-    invCells.sort(function(a,b){ return (a.x+a.y)-(b.x+b.y) || a.z-b.z; });
-    var invDrawn=0;
-    invCells.forEach(function(cell,i){
-      // fill: lowest (x+y) & lowest z first => tidy fill
-      var lit = i < invLit;
-      carton(ctx, cell.x, cell.y, cell.z, ox, oy, tile, lit, acc, t, i*0.3);
-      if(lit) invDrawn++;
-    });
-    // INVENTORY label
-    ctx.save();
-    ctx.fillStyle='rgba(200,210,235,.5)';
-    ctx.font='700 '+Math.round(tile*0.7)+'px system-ui,sans-serif';
-    ctx.textAlign='center';
-    var invLbl=iso(2.5,-1.2,invLevels*tile*0.9+tile*0.6,ox,oy,tile);
-    ctx.fillText('INVENTORY', invLbl.x, invLbl.y);
-    ctx.restore();
-
-    // ============ OUTBOUND STAGING (right/front block) ============
-    // 4 pads, one per configured RFID gate (falls back to generic "Location N" if
-    // no gates are set up yet). Each pad shows a small stack sized by its fill level.
-    var padBaseX = 9, padY = 6, padGap = 2.4;
-    var locFill = sceneData.locations.length? sceneData.locations : [0,0,0,0];
-    var outGates = (sceneData.gates||[]).filter(function(g){ return g.dir==='out'||g.dir==='both'; });
-    for(var L=0; L<4; L++){
-      var lx = padBaseX + L*padGap;
-      // pad outline
-      var q0=iso(lx-0.9,padY-0.9,0,ox,oy,tile), q1=iso(lx+0.9,padY-0.9,0,ox,oy,tile),
-          q2=iso(lx+0.9,padY+0.9,0,ox,oy,tile), q3=iso(lx-0.9,padY+0.9,0,ox,oy,tile);
-      ctx.strokeStyle='rgba(255,138,42,.35)'; ctx.lineWidth=1.2;
-      ctx.beginPath();ctx.moveTo(q0.x,q0.y);ctx.lineTo(q1.x,q1.y);ctx.lineTo(q2.x,q2.y);ctx.lineTo(q3.x,q3.y);ctx.closePath();ctx.stroke();
-      // stacked kraft boxes by fill
-      var n = Math.round(locFill[L]*4); // 0..4 boxes
-      for(var k=0;k<n;k++){
-        var kz = k*tile*0.72;
-        kraft(ctx, lx, padY, kz + tile*0.36, ox, oy, tile, t, L+k, 0.9);
-      }
-      // pad label — real RFID gate number when configured, else a generic slot name
-      ctx.save();
-      ctx.fillStyle='rgba(255,138,42,.7)';
-      ctx.font='600 '+Math.round(tile*0.5)+'px system-ui,sans-serif';
-      ctx.textAlign='center';
-      var ll=iso(lx,padY+1.5,tile*0.2,ox,oy,tile);
-      var padLabel = outGates[L] ? ('Gate '+outGates[L].num) : ('Location '+(L+1));
-      ctx.fillText(padLabel, ll.x, ll.y);
-      ctx.restore();
-    }
-    // OUTBOUND STAGING label
-    ctx.save();
-    ctx.fillStyle='rgba(255,160,80,.55)';
-    ctx.font='700 '+Math.round(tile*0.62)+'px system-ui,sans-serif';
-    ctx.textAlign='center';
-    var osl=iso(12.5,8.4,tile*0.4,ox,oy,tile);
-    ctx.fillText('OUTBOUND STAGING', osl.x, osl.y);
-    ctx.restore();
-
-    // ============ INBOUND TRUCK + STAGING-AREA MARKER (only if inbound today) ============
-    if(sceneData.inToday>0){
-      truck(ctx, -1.5, 8.5, ox, oy, tile, +1, null, true);
-      ctx.save();
-      ctx.fillStyle='rgba(200,210,235,.5)';
-      ctx.font='700 '+Math.round(tile*0.5)+'px system-ui,sans-serif';
-      ctx.textAlign='center';
-      var il=iso(0.5,10.6,0,ox,oy,tile);
-      ctx.fillText('INBOUND', il.x, il.y);
-      ctx.restore();
-      // real "put-away" waypoint the inbound gate drops boxes at, e.g. STG-01
-      var inGate = (sceneData.gates||[]).filter(function(g){ return g.dir==='in'||g.dir==='both'; })[0];
-      var stg = sceneData.stagingInfo;
-      if(stg){
-        var sp0=iso(2.2,9.7,0,ox,oy,tile), sp1=iso(3.6,9.7,0,ox,oy,tile),
-            sp2=iso(3.6,11.1,0,ox,oy,tile), sp3=iso(2.2,11.1,0,ox,oy,tile);
-        ctx.save();
-        ctx.setLineDash([3,3]);
-        ctx.strokeStyle='rgba(200,210,235,.35)'; ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(sp0.x,sp0.y);ctx.lineTo(sp1.x,sp1.y);ctx.lineTo(sp2.x,sp2.y);ctx.lineTo(sp3.x,sp3.y);ctx.closePath();ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle='rgba(200,210,235,.65)';
-        ctx.font='600 '+Math.round(tile*0.42)+'px system-ui,sans-serif';
-        ctx.textAlign='center';
-        var sl=iso(2.9,11.6,0,ox,oy,tile);
-        ctx.fillText(stg.rack+(inGate?' · Gate '+inGate.num:''), sl.x, sl.y);
-        ctx.restore();
-      }
-    }
-
-    // ============ DELIVERY TRUCK (only if outbound today) ============
-    if(sceneData.outToday>0){
-      truck(ctx, 14.5, 10.5, ox, oy, tile, -1, 'DELIVERY', false);
-    }
-
-    // ============ AMR ROBOT (only if movement today) ============
-    var moves = sceneData.inToday + sceneData.outToday;
-    if(moves>0 && !reduceMotion){
-      var prog = (t*0.00012)%1;           // 0..1 loop
-      var rx = 6.5 - prog*3.5;             // travels from staging toward inventory
-      var ry = 7.5;
-      robot(ctx, rx, ry, ox, oy, tile, acc);
-    } else if(moves>0){
-      robot(ctx, 5, 7.5, ox, oy, tile, acc);
-    }
-
-    // ============ EMPTY-STATE HINT ============
-    if(sceneData.inv===0 && sceneData.staging===0 && sceneData.out===0){
-      ctx.save();
-      ctx.fillStyle='rgba(180,190,215,.4)';
-      ctx.font='500 '+Math.round(tile*0.62)+'px system-ui,sans-serif';
-      ctx.textAlign='center';
-      ctx.fillText('คลังว่าง — ยังไม่มีกล่องในระบบ', W*0.5, H*0.9);
-      ctx.restore();
-    }
-
-    // subtle scan sweep
-    if(!reduceMotion){
-      var sweep = ((t*0.00016)%1);
-      var sx = -W*0.2 + sweep*W*1.4;
-      var grad = ctx.createLinearGradient(sx-70,0,sx+70,0);
-      grad.addColorStop(0,'rgba('+acc[0]+','+acc[1]+','+acc[2]+',0)');
-      grad.addColorStop(0.5,'rgba('+acc[0]+','+acc[1]+','+acc[2]+',0.05)');
-      grad.addColorStop(1,'rgba('+acc[0]+','+acc[1]+','+acc[2]+',0)');
-      ctx.fillStyle=grad; ctx.fillRect(sx-70,0,140,H);
-    }
-  }
-
-  /* ---------- KPI particle systems ---------- */
-  var kpiCanvases=[]; // {cv, kind, parts, count}
-  function seedParticles(o){
-    var f = o.cv.getBoundingClientRect(); var W=f.width||300, H=f.height||150;
-    var n = o.kind==='ring'? 90 : 120;
-    o.parts=[];
-    for(var i=0;i<n;i++){
-      if(o.kind==='cloud'){
-        // point cloud loosely forming a rotating box/blob
-        var a=Math.random()*Math.PI*2, r=Math.pow(Math.random(),0.5)*Math.min(W,H)*0.32;
-        o.parts.push({ a:a, r:r, y:(Math.random()-0.5)*H*0.5, sp:0.2+Math.random()*0.5, tw:Math.random()*Math.PI*2 });
-      } else if(o.kind==='ring'){
-        o.parts.push({ a:Math.random()*Math.PI*2, sp:0.006+Math.random()*0.01, rr:0.7+Math.random()*0.3, tw:Math.random()*Math.PI*2 });
-      } else { // stream
-        o.parts.push({ x:Math.random()*W, y:Math.random()*H, sp:0.4+Math.random()*1.2, size:0.6+Math.random()*1.4, tw:Math.random()*Math.PI*2 });
-      }
-    }
-  }
-  function renderKpi(o,t){
-    var f=fitCanvas(o.cv); if(!f) return; var ctx=f.ctx, W=f.w, H=f.h;
-    ctx.clearRect(0,0,W,H);
-    var acc=hexToRgb(accent());
-    var intensity = Math.max(0.15, Math.min(1, (o.value||0)/(o.scale||40)));
-    if(o.kind==='cloud'){
-      var cx=W*0.5, cy=H*0.52, rot=reduceMotion?0:t*0.0006;
-      o.parts.forEach(function(p){
-        var a=p.a + (reduceMotion?0:rot*p.sp);
-        var x=cx + Math.cos(a)*p.r*(0.7+0.3*Math.cos(t*0.001+p.tw));
-        var y=cy + p.y*0.5 + Math.sin(a)*p.r*0.28;
-        var tw=reduceMotion?0.6:(0.4+0.6*Math.abs(Math.sin(t*0.002+p.tw)));
-        ctx.fillStyle='rgba('+acc[0]+','+acc[1]+','+acc[2]+','+(0.5*tw*intensity)+')';
-        ctx.fillRect(x,y,1.6,1.6);
-      });
-    } else if(o.kind==='ring'){
-      var rx=W*0.5, ry=H*0.52, rad=Math.min(W,H)*0.3;
-      o.parts.forEach(function(p){
-        var a=p.a + (reduceMotion?0:t*p.sp);
-        var x=rx+Math.cos(a)*rad*p.rr, y=ry+Math.sin(a)*rad*0.5*p.rr;
-        var tw=reduceMotion?0.7:(0.45+0.55*Math.abs(Math.sin(t*0.003+p.tw)));
-        ctx.fillStyle='rgba(255,'+Math.round(70+60*tw)+','+Math.round(60+40*tw)+','+(0.55*tw)+')';
-        ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill();
-      });
-    } else { // stream — drifting particles left→right (goods leaving)
-      o.parts.forEach(function(p){
-        if(!reduceMotion){ p.x += p.sp*(0.6+intensity); if(p.x>W+4){p.x=-4;p.y=Math.random()*H;} }
-        var tw=reduceMotion?0.7:(0.4+0.6*Math.abs(Math.sin(t*0.002+p.tw)));
-        ctx.fillStyle='rgba('+Math.round(acc[0]*0.9+40)+','+Math.round(acc[1]*0.8)+',80,'+(0.5*tw*intensity)+')';
-        ctx.fillRect(p.x,p.y,p.size*1.3,p.size*1.3);
-      });
-    }
-  }
-
-  function loop(t){
-    if(!running) return;
-    renderWarehouse(t);
-    kpiCanvases.forEach(function(o){ renderKpi(o,t); });
-    raf = requestAnimationFrame(loop);
-  }
-  function start(){ if(running) return; running=true; raf=requestAnimationFrame(loop); }
-  function stop(){ running=false; if(raf)cancelAnimationFrame(raf); raf=null; }
-
-  function overviewVisible(){
-    var tab=document.getElementById('tab-overview');
-    return tab && tab.classList.contains('active');
-  }
-
-  function init(){
-    whCanvas = document.getElementById('heroWarehouse');
-    kpiCanvases = [];
-    Array.prototype.forEach.call(document.querySelectorAll('.node-particles'), function(cv){
-      var o={ cv:cv, kind:cv.getAttribute('data-particle'), value:0, scale:40 };
-      seedParticles(o); kpiCanvases.push(o);
-    });
-    if(reduceMotion){
-      // one static frame, no loop
-      renderWarehouse(0); kpiCanvases.forEach(function(o){ renderKpi(o,0); });
-    } else if(overviewVisible()){
-      start();
-    }
-  }
-
-  // public hook, called from renderOverview with live numbers
-  window.updateHeroViz = function(nums){
-    // populate the data-driven scene
-    sceneData.inv      = nums.warehouse||0;
-    sceneData.staging  = nums.staging||0;
-    sceneData.out      = nums.out||0;
-    sceneData.inToday  = nums.inToday||0;
-    sceneData.outToday = nums.outToday||0;
-    sceneData.invCap   = nums.total||0;
-    sceneData.gates    = nums.gates||[];
-    sceneData.stagingInfo = nums.stagingInfo||null;
-    // distribute outbound-staging + outbound boxes across up to 4 "Location" pads
-    var stageTotal = (nums.staging||0) + (nums.out||0) + (nums.outToday||0);
-    var per = stageTotal/4;
-    var cap = Math.max(4, per>0 ? Math.ceil(per) : 4); // per-pad capacity for a 0..1 fill
-    sceneData.locations = [0,1,2,3].map(function(i){
-      var share = Math.max(0, Math.min(1, (stageTotal - i*cap)/cap ));
-      return share;
-    });
-    // keep KPI particle systems reacting to the same live numbers
-    var map={ cloud:nums.warehouse||0, ring:nums.outToday||0, stream:nums.out||0 };
-    var scaleBase = Math.max(20, nums.total||40);
-    kpiCanvases.forEach(function(o){ o.value=map[o.kind]||0; o.scale=scaleBase; });
-    if(reduceMotion){ renderWarehouse(0); kpiCanvases.forEach(function(o){ renderKpi(o,0); }); }
-  };
-
-  // pause/resume with tab visibility (saves battery, avoids offscreen work)
-  var origSwitch = window.switchTab;
-  window.switchTab = function(name){
-    if(typeof origSwitch==='function') origSwitch(name);
-    if(reduceMotion) return;
-    if(name==='overview'){ setTimeout(function(){ resizeAll(); start(); },50); } else { stop(); }
-  };
-  document.addEventListener('visibilitychange', function(){
-    if(reduceMotion) return;
-    if(document.hidden) stop(); else if(overviewVisible()) start();
-  });
-  function resizeAll(){ kpiCanvases.forEach(function(o){ seedParticles(o); }); }
-  var rz; window.addEventListener('resize', function(){ clearTimeout(rz); rz=setTimeout(function(){ resizeAll(); if(reduceMotion){renderWarehouse(0);kpiCanvases.forEach(function(o){renderKpi(o,0);});} },160); });
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
 
 /* ============================================================================
    LIVE FLOW BOARD (2D pane)
