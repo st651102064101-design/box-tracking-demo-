@@ -10994,20 +10994,37 @@ function makeLabel(txt,sub,o){
   if(Wn.btI18n&&Wn.btI18n.t){txt=Wn.btI18n.t(txt);if(sub)sub=Wn.btI18n.t(sub);}
   const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
   const c=document.createElement('canvas'),g=c.getContext('2d');
-  const widthOf=(s,w,px)=>{g.font=w+' '+px+'px '+FONTS;return g.measureText(s).width;};
-  let tw=widthOf(txt,600,fs);
-  if(sub)tw=Math.max(tw,widthOf(sub,500,sfs));
-  let wpx=Math.ceil(tw+padd*2);const hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
+  /* วัดจาก "ขอบหมึกจริง" ไม่ใช่ระยะ advance ของ measureText().width
+     .width คือระยะที่เคอร์เซอร์ขยับ ไม่ใช่ระยะที่หมึกกินจริง สองค่านี้ต่างกันได้:
+       · ฟอนต์ที่ไม่มีน้ำหนักหนาจริง (เช่น Anuphan ที่ไม่มี 600) เบราว์เซอร์จะ
+         ปลอมตัวหนาให้ตอนวาด ตัวอักษรอ้วนขึ้นกว่าที่วัดไว้
+       · สระบน/ล่างและวรรณยุกต์ไทยยื่นพ้นตัวอักษรทางข้างได้
+     ทั้งสองกรณีทำให้ตัวหนังสือกว้างกว่ากล่องที่จองจาก .width แล้วโดนขอบผ้าใบตัด
+     วัดเป็น "ครึ่งกว้างจากจุดกึ่งกลาง" เพราะ fillText วาดโดยอ้างจุดกึ่งกลาง
+     (textAlign='center') — actualBoundingBox* ก็อ้างจุดเดียวกัน จองกล่องเท่ากับ
+     ครึ่งกว้างสองข้าง + padding ตัวหนังสือจึงชนขอบไม่ได้ไม่ว่าฟอนต์จะทำอะไร */
+  const halfOf=(str,weight,px)=>{
+    g.font=weight+' '+px+'px '+FONTS;
+    const m=g.measureText(str);
+    const l=(typeof m.actualBoundingBoxLeft==='number')?Math.abs(m.actualBoundingBoxLeft):m.width/2;
+    const r=(typeof m.actualBoundingBoxRight==='number')?Math.abs(m.actualBoundingBoxRight):m.width/2;
+    /* เผื่ออีกนิดต่อข้าง: ตัวหนาปลอมเกิดตอน "วาด" ไม่ใช่ตอน "วัด" บางเอนจินจึงไม่
+       นับรวมมาให้แม้แต่ใน actualBoundingBox* — 6% ของขนาดฟอนต์กินขอบหนาปลอม
+       ได้สบาย และกว้างขึ้นเท่านี้มองไม่ออกด้วยตาเปล่า */
+    return Math.max(l,r,m.width/2)+px*0.06;
+  };
+  /* ต้องตั้ง textAlign ก่อนวัดทุกครั้ง — actualBoundingBox* อ้างอิงจุด anchor ตาม
+     textAlign ปัจจุบัน และการตั้ง canvas.width ด้านล่างจะล้างค่านี้ทิ้ง */
+  const halfMax=()=>{g.textAlign='center';
+    let h=halfOf(txt,600,fs);if(sub)h=Math.max(h,halfOf(sub,500,sfs));return h;};
+  let half=halfMax();
+  let wpx=Math.ceil(half*2+padd*2);const hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
   c.width=wpx*2;c.height=hpx*2;g.scale(2,2);
-  /* กำหนด canvas.width แล้ว state ของ context ถูกล้างทิ้ง — วัดซ้ำด้วยฟอนต์ตัวที่
-     จะใช้วาดจริง ถ้าเว็บฟอนต์ไทย (Anuphan) โหลดเสร็จคาบเกี่ยวช่วงนี้พอดี ข้อความ
-     จะกว้างกว่าที่จองผ้าใบไว้ ให้ "ขยายกล่อง" ตามความกว้างจริง
-     เดิมแก้ด้วยการย่อฟอนต์ลงแทน แต่ย่อได้ต่ำสุดแค่ 55% ถ้าฟอนต์จริงกว้างกว่านั้น
-     ข้อความก็ยังล้นออกนอกกล่องแล้วถูกตัดหายอยู่ดี — ขยายกล่องพอดีเสมอ */
-  let tw2=widthOf(txt,600,fs);
-  if(sub)tw2=Math.max(tw2,widthOf(sub,500,sfs));
-  if(tw2>tw+0.5){
-    wpx=Math.ceil(tw2+padd*2);
+  /* ผ้าใบเพิ่งถูกตั้งขนาดใหม่ ซึ่งล้าง state ของ context — วัดซ้ำด้วยฟอนต์ตัวที่จะใช้
+     วาดจริง ถ้าเว็บฟอนต์โหลดเสร็จคาบเกี่ยวช่วงนี้พอดีแล้วกว้างขึ้น ให้ขยายกล่องตาม */
+  const half2=halfMax();
+  if(half2>half+0.5){
+    half=half2;wpx=Math.ceil(half*2+padd*2);
     c.width=wpx*2;c.height=hpx*2;g.setTransform(1,0,0,1,0,0);g.scale(2,2);
   }
   const fsF=fs,sfsF=sfs;
