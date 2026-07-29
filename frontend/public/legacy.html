@@ -1429,6 +1429,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="outVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
+      <div class="field"><label>สภาพกล่องตอนจ่ายออก <span class="req">*</span></label><select id="outCondition">
+        <option value="good">สมบูรณ์ พร้อมใช้งาน</option>
+        <option value="minor">มีตำหนิเล็กน้อย (ยังใช้ได้)</option>
+        <option value="damaged">ชำรุด (ต้องซ่อม/เปลี่ยน)</option>
+      </select><div class="hint">บันทึกไว้เป็นหลักฐานว่ากล่องออกไปในสภาพใด — ใช้เทียบตอนรับคืน</div></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" list="dl-tel" placeholder="08x-xxx-xxxx" autocomplete="off"></div>
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
@@ -1724,6 +1729,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
       <!-- Lot / Batch + Expiry (optional — enables FEFO allocation) -->
       <div class="grid g3" style="margin-top:14px;">
+        <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select>
+          <div class="hint">ผังงานเริ่มที่ "Supplier ส่งกล่องมาใหม่" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร</div></div>
         <div class="field"><label>Lot / Batch (ถ้ามี)</label><input id="bLot" placeholder="เช่น L2026-07" autocomplete="off"></div>
         <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date"></div>
         <div class="field" style="align-self:end;"><div class="tag" style="margin:0;">มี "วันหมดอายุ" ระบบจะจ่ายออกแบบ <b>FEFO</b> (หมดอายุก่อน–ออกก่อน) อัตโนมัติ</div></div>
@@ -2792,11 +2799,11 @@ $('#btnAddBox').onclick = function() {
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
     if (S.boxes[tag]) return toast('มี Tag นี้แล้ว', tag, 'err');
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
-    var lot = val('bLot'); var expiry = val('bExpiry');
+    var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-      lot:lot,expiry:expiry,regAt:iso(),regBy:USER,
+      lot:lot,expiry:expiry,supplier:sup,regAt:iso(),regBy:USER,
       location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]};
-    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry});
+    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
     toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติด Tag'); renderAll();
   } else {
@@ -2805,12 +2812,12 @@ $('#btnAddBox').onclick = function() {
     if (qty <= 0) return toast('ระบุจำนวน', null, 'err');
     if (qty > 2000) return toast('จำนวนมากเกินไป', 'สูงสุด 2000', 'err');
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
-    var blot = val('bLot'); var bexp = val('bExpiry');
+    var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + pad(n, 2);
       if (!S.boxes[tag]) { S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-        lot:blot,expiry:bexp,regAt:iso(),regBy:USER,
+        lot:blot,expiry:bexp,supplier:bsup,regAt:iso(),regBy:USER,
         location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]}; added++; addedTags.push(tag); } }
-    if (added) auditEntry('CREATE', USER, pre+pad(start,2)+'…'+pre+pad(start+qty-1,2), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,tags:addedTags});
+    if (added) auditEntry('CREATE', USER, pre+pad(start,2)+'…'+pre+pad(start+qty-1,2), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติด Tag'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
@@ -3496,6 +3503,75 @@ function openBoxActionModal(tag){
   );
 }
 window.openBoxActionModal=openBoxActionModal;
+
+/* ===== CONTACT LOG — ปิด loop "ติดต่อลูกค้า" ในผังงาน =====
+   ผังงานมีเส้นวนจาก "รายงาน Overdue" กลับไป "ติดต่อลูกค้า" แต่ระบบเดิมบอกได้แค่ว่า
+   กล่องเกินกำหนด ไม่ได้บอกว่าตามไปแล้วหรือยัง ใครตาม ผลเป็นยังไง — คนตามจึงโทรซ้ำ
+   หรือปล่อยค้างโดยไม่มีใครรู้ เก็บไว้บนตัวกล่องเพื่อให้ประวัติเดินทางไปกับกล่องเสมอ */
+var CONTACT_METHOD={phone:'โทรศัพท์',email:'อีเมล',line:'LINE / แชท',visit:'เข้าพบ',other:'อื่นๆ'};
+var CONTACT_RESULT={promised:{t:'รับปากว่าจะคืน',c:'ok'},unreachable:{t:'ติดต่อไม่ได้',c:'warn'},
+  refused:{t:'ปฏิเสธ / ยังไม่คืน',c:'bad'},scheduled:{t:'นัดวันคืนแล้ว',c:'ok'},lost:{t:'แจ้งว่าหาย',c:'bad'}};
+function contactLogOf(b){return (b&&Array.isArray(b.contactLog))?b.contactLog:[];}
+function lastContact(b){var l=contactLogOf(b);return l.length?l[l.length-1]:null;}
+function lastContactCell(b){var c=lastContact(b);
+  if(!c)return '<span class="muted">ยังไม่ได้ติดต่อ</span>';
+  var m=CONTACT_RESULT[c.result]||CONTACT_RESULT.promised;
+  return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span><div class="tag">'+esc(fmtTs(c.ts))+'</div>';}
+window.lastContactCell=lastContactCell;
+
+function openContactModal(tag){
+  var b=S.boxes[tag];if(!b)return;
+  var log=contactLogOf(b);
+  var hist=log.length?log.slice().reverse().map(function(c){
+      var m=CONTACT_RESULT[c.result]||CONTACT_RESULT.promised;
+      return '<div style="border-top:.5px solid var(--line);padding:10px 0;">'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+        +'<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>'
+        +'<span class="muted small">'+esc(CONTACT_METHOD[c.method]||c.method||'-')+'</span>'
+        +'<span class="muted small">· '+esc(fmtTs(c.ts))+'</span>'
+        +'<span class="muted small">· '+esc(c.by||'-')+'</span>'
+        +(c.promiseDate?'<span class="tag">นัดคืน '+esc(c.promiseDate)+'</span>':'')
+        +'</div>'
+        +(c.note?'<div class="small" style="margin-top:5px;">'+esc(c.note)+'</div>':'')
+        +'</div>';}).join('')
+    :'<div class="muted small" style="padding:10px 0;">ยังไม่มีบันทึกการติดต่อ</div>';
+  var opt=function(o,sel){return Object.keys(o).map(function(k){
+      var t=typeof o[k]==='string'?o[k]:o[k].t;
+      return '<option value="'+k+'"'+(sel===k?' selected':'')+'>'+esc(t)+'</option>';}).join('');};
+  openModal(
+    '<div class="mhead"><h3>บันทึกการติดต่อ · '+esc(tag)+'</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody">'
+      +'<p class="muted small" style="margin:0 0 14px;">ลูกค้า '+esc(custName(b.customer))+' · เกินกำหนด '+Math.abs(boxDueDays(b)||0)+' วัน</p>'
+      +'<div class="grid g2" style="margin-bottom:12px;">'
+        +'<div class="field"><label>ช่องทางที่ติดต่อ</label><select id="ctMethod">'+opt(CONTACT_METHOD,'phone')+'</select></div>'
+        +'<div class="field"><label>ผลการติดต่อ</label><select id="ctResult">'+opt(CONTACT_RESULT,'promised')+'</select></div>'
+      +'</div>'
+      +'<div class="field" style="margin-bottom:12px;"><label>วันที่ลูกค้านัดคืน (ถ้ามี)</label><input id="ctPromise" type="date"></div>'
+      +'<div class="field"><label>บันทึกเพิ่มเติม</label><input id="ctNote" placeholder="เช่น คุยกับฝ่ายจัดซื้อ ขอเลื่อนอีก 3 วัน"></div>'
+      +'<div style="margin-top:16px;"><div class="geyebrow">ประวัติการติดต่อ</div>'+hist+'</div>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
+      +'<button class="btn accent" onclick="saveContact(&quot;'+esc(tag)+'&quot;)">บันทึกการติดต่อ</button></div>'
+  );
+}
+window.openContactModal=openContactModal;
+
+function saveContact(tag){
+  var b=S.boxes[tag];if(!b)return;
+  b.contactLog=contactLogOf(b).slice();
+  var entry={ts:iso(),by:USER,method:val('ctMethod')||'phone',result:val('ctResult')||'promised',
+    promiseDate:val('ctPromise')||'',note:val('ctNote')||''};
+  b.contactLog.push(entry);
+  auditEntry('UPDATE',USER,tag,'ติดต่อลูกค้าเรื่องกล่องเกินกำหนด',null,
+    {result:(CONTACT_RESULT[entry.result]||{}).t||entry.result,
+     method:CONTACT_METHOD[entry.method]||entry.method,
+     promiseDate:entry.promiseDate,note:entry.note});
+  save();closeModal();
+  toast('บันทึกการติดต่อแล้ว',tag+' · '+((CONTACT_RESULT[entry.result]||{}).t||''));
+  renderAll();
+}
+window.saveContact=saveContact;
+
 
 /* ===== shared row action modal for master tables (box type / warehouse / customer) ===== */
 function openMasterRowActions(kind,id,title,canDelete){
@@ -4811,6 +4887,9 @@ function saveOutbound(){
   if(requireCustomerSetup())return;
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
+  /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
+     history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว */
+  var cond=val('outCondition')||'good';
   var gate=val('outGate');if(!gate)return toast('เลือกประตูขาออก',null,'err');
   var recorder=val('outRecorder');if(!recorder)return toast('กรอกชื่อผู้บันทึก',null,'err');
   var doNoInput=$('#doNo');var doNo=val('doNo');
@@ -4825,9 +4904,9 @@ function saveOutbound(){
   var outTs=iso();var dueTs=new Date(Date.now()+rd*86400000).toISOString();
   var dueDateStr=ddmmyyyy(new Date(dueTs)); // Actual Due Date in DD/MM/YYYY — same value shown live in #doDueDatePreview
   pendingOut.forEach(function(t){var b=S.boxes[t];
-    b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=outTs;
-    b.history.push({dir:'out',ts:outTs,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
-    S.events.push({ts:outTs,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,recorder:recorder});});
+    b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=outTs;b.outCondition=cond;
+    b.history.push({dir:'out',ts:outTs,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
+    S.events.push({ts:outTs,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder});});
   var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];
   rememberVehicle(plate,driver,val('outVehicle'),tel);
   S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:rd};
@@ -5280,7 +5359,7 @@ function renderOverview(){
     lostHtml+='<div class="overdue-card">'
       +'<div class="lost-alert-header"><div class="la-ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></div><div><div class="la-title">เกินกำหนดคืน '+overdueBoxes.length+' ใบ</div><div class="la-sub">กล่องที่ออกไปแล้วเกินระยะเวลาที่กำหนด — ควรติดตามทันที</div></div></div>'
       +'<table class="alert-table"><thead><tr>'
-      +'<th>Box ID</th><th>ประเภท</th><th>ลูกค้า</th><th>DO</th><th class="r">วันที่ออก</th><th class="r">กำหนดคืน</th><th class="r">เกินมา</th><th class="r">มูลค่า (฿)</th><th class="c">จัดการ</th>'
+      +'<th>Box ID</th><th>ประเภท</th><th>ลูกค้า</th><th>DO</th><th class="r">วันที่ออก</th><th class="r">กำหนดคืน</th><th class="r">เกินมา</th><th>ติดต่อล่าสุด</th><th class="r">มูลค่า (฿)</th><th class="c">จัดการ</th>'
       +'</tr></thead><tbody>';
     overdueBoxes.sort(function(a,b){return boxDueDays(a)-boxDueDays(b);}).forEach(function(b){
       var d=Math.abs(boxDueDays(b)||0);
@@ -5292,6 +5371,7 @@ function renderOverview(){
         +'<td class="r mono">'+(b.outAt?dstr(new Date(b.outAt)):'-')+'</td>'
         +'<td class="r mono">'+(b.dueAt?dstr(new Date(b.dueAt)):'-')+'</td>'
         +'<td class="r"><span class="days-badge over">'+d+' วัน</span></td>'
+        +'<td onclick="event.stopPropagation();openContactModal(&quot;'+esc(b.tag)+'&quot;)" style="cursor:pointer;" title="บันทึก / ดูประวัติการติดต่อลูกค้า">'+lastContactCell(b)+'</td>'
         +'<td class="r mono">'+money(b.value)+'</td>'
         +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
       +'</tr>';
@@ -5406,6 +5486,10 @@ function renderSetup(){
   /* เจ้าของรถขาเข้า: ซัพพลายเออร์ (ส่งกล่องใหม่) และลูกค้า (คืนกล่อง) อยู่ในรายการ
      เดียวกัน แต่ติดป้ายกำกับให้เห็นว่าใครเป็นอะไร — ค่าที่เลือกไว้ถูกคงไว้ เพราะ
      renderAll() ถูกเรียกซ้ำได้ระหว่างที่ผู้ใช้ยังกรอกฟอร์มไม่เสร็จ */
+  /* ซัพพลายเออร์สำหรับหน้าลงทะเบียนกล่อง — ไม่บังคับ เพราะกล่องที่มีอยู่เดิม
+     ก่อนเริ่มใช้ระบบก็ไม่มีใครจำได้แล้วว่าซื้อมาจากไหน */
+  var bSupSel=$('#bSupplier');
+  if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=supplierOptions(keepS);if(keepS)bSupSel.value=keepS;}
   var inPartnerSel=$('#inPartner');
   if(inPartnerSel){
     var keepP=inPartnerSel.value;
@@ -9706,6 +9790,38 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    "สภาพกล่องตอนจ่ายออก":"Box condition at dispatch",
+    "สมบูรณ์ พร้อมใช้งาน":"Good - ready to use",
+    "มีตำหนิเล็กน้อย (ยังใช้ได้)":"Minor damage (still usable)",
+    "ชำรุด (ต้องซ่อม/เปลี่ยน)":"Damaged (needs repair or replacement)",
+    "บันทึกไว้เป็นหลักฐานว่ากล่องออกไปในสภาพใด — ใช้เทียบตอนรับคืน":"Recorded as evidence of the condition it left in - compared against the state it comes back in",
+    "ซัพพลายเออร์ที่ส่งกล่องมา":"Supplier that delivered the boxes",
+    "ผังงานเริ่มที่ \"Supplier ส่งกล่องมาใหม่\" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร":"The process starts with a supplier delivering new boxes - recording it means a batch can be traced back to where it was bought",
+    "ติดต่อล่าสุด":"Last contact",
+    "ยังไม่ได้ติดต่อ":"Not contacted yet",
+    "บันทึก / ดูประวัติการติดต่อลูกค้า":"Log or review customer contact history",
+    "ช่องทางที่ติดต่อ":"Contact method",
+    "ผลการติดต่อ":"Outcome",
+    "วันที่ลูกค้านัดคืน (ถ้ามี)":"Date the customer promised to return (optional)",
+    "บันทึกเพิ่มเติม":"Additional notes",
+    "ประวัติการติดต่อ":"Contact history",
+    "ยังไม่มีบันทึกการติดต่อ":"No contact logged yet",
+    "บันทึกการติดต่อ":"Log contact",
+    "โทรศัพท์":"Phone",
+    "LINE / แชท":"LINE / chat",
+    "เข้าพบ":"Visit in person",
+    "อื่นๆ":"Other",
+    "รับปากว่าจะคืน":"Promised to return",
+    "ติดต่อไม่ได้":"Could not reach",
+    "ปฏิเสธ / ยังไม่คืน":"Refused / not returning yet",
+    "นัดวันคืนแล้ว":"Return date agreed",
+    "แจ้งว่าหาย":"Reported lost",
+    "เช่น คุยกับฝ่ายจัดซื้อ ขอเลื่อนอีก 3 วัน":"e.g. spoke to purchasing, asked for 3 more days",
+    "บันทึกการติดต่อแล้ว":"Contact logged",
+    "ติดต่อลูกค้าเรื่องกล่องเกินกำหนด":"Contacted customer about an overdue box",
+    "จำเป็นสำหรับ Gate ขาเข้า":"Required for Gate In",
+    "เลือกคู่ค้าเจ้าของรถ":"Select the vehicle owner",
+    "รถขาเข้าต้องเป็นของซัพพลายเออร์หรือลูกค้า":"An inbound vehicle must belong to a supplier or a customer",
     "รถของคู่ค้า":"Vehicle owner (partner)",
     "รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ":"A vehicle at the gate always belongs to a supplier (delivering new boxes) or a customer (returning them)",
     "— เลือกคู่ค้าเจ้าของรถ —":"- Select the vehicle owner -",
@@ -10902,9 +11018,16 @@ function makeLabel(txt,sub,o){
   g.fillText(txt,wpx/2,sub?hpx*0.36:hpx*0.52);
   if(sub){g.fillStyle=o.subFg||PAL.lblMuted;g.font='500 '+sfsF+'px '+FONTS;g.fillText(sub,wpx/2,hpx*0.74);}
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
-  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});m.userData.own=true;
-  const sp=new THREE.Sprite(m);const h=o.h||1.05;
-  sp.scale.set(h*wpx/hpx,h,1);sp.renderOrder=30;
+  /* แผ่นระนาบที่หันคงที่ ไม่ใช่ Sprite — Sprite หันตามกล้องตลอดเวลา พอหมุนดูรอบ ๆ
+     ป้ายทุกใบก็หันตามจนบังกันเองและบังของในฉาก อ่านยากกว่าเดิม
+     ป้ายจริงในคลังก็ติดตายอยู่กับที่ ป้ายในนี้จึงหันไปทางเดียวกันหมด (ทางกล้องตั้งต้น)
+     หมุนรอบแกน Y อย่างเดียว ป้ายจึงตั้งตรงเสมอไม่เอียงตามมุมก้ม/เงย */
+  /* หน้าเดียว (ไม่ใช้ DoubleSide) — ป้ายติดตายแล้ว ถ้าเปิดสองหน้าเวลาหมุนไปอีกฝั่ง
+     จะเห็นตัวหนังสือกลับด้าน ซึ่งอ่านไม่ได้อยู่ดีและสับสนกว่าป้ายที่หายไปเฉย ๆ */
+  const m=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false});
+  m.userData.own=true;
+  const sp=new THREE.Mesh(GEO.plane,m);const h=o.h||1.05;
+  sp.scale.set(h*wpx/hpx,h,1);sp.quaternion.copy(LABEL_QUAT);sp.renderOrder=30;
   return sp;
 }
 function disposeTree(o){
@@ -11051,6 +11174,13 @@ let boxRecs=[],tagIndex=new Map(),sensorMesh=null,cellData=[],padPick=[],truckPi
    ชิ้นที่ไม่ได้ใช้ในก้อนหนึ่งถูกย่อ scale เป็น 0 จึงไม่มีทั้งภาพและ raycast */
 const BOXI={solid:null,ghost:null,slots:0,byBody:new Map()};
 let LY={},HOME={pos:new THREE.Vector3(30,26,38),target:new THREE.Vector3()};
+/* ทิศกล้องตั้งต้น ใช้ทั้งวาง HOME และหันหน้าป้ายทุกใบ — เก็บไว้ที่เดียวกัน
+   จะได้ไม่หลุดจากกันเวลาแก้มุมกล้องทีหลัง */
+const VIEW_DIR=new THREE.Vector3(0.44,0.68,0.59).normalize();
+/* ป้ายทุกใบหันไปทางเดียวกันหมด = หันเข้าหากล้องตั้งต้นเต็มหน้า
+   หันแค่รอบแกน Y (yaw) ไม่พอ เพราะกล้องตั้งต้นก้มลงมาราว 43° ป้ายที่ตั้งฉากกับพื้น
+   จะถูกมองจากด้านบนจนแบนเป็นขีดอ่านไม่ออก — เอียงตามทิศกล้องด้วยจึงเห็นเต็มหน้า */
+const LABEL_QUAT=(function(){const o=new THREE.Object3D();o.lookAt(VIEW_DIR);return o.quaternion.clone();})();
 let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
@@ -12063,7 +12193,7 @@ function build(){
   const halfW=bW/2+5,halfD=(dockZ-backZ)/2+10;
   const radius=Math.hypot(halfW,halfD);
   const dist=radius/Math.tan((camera.fov*Math.PI/180)/2)*0.74;
-  const dirV=new THREE.Vector3(0.44,0.68,0.59).normalize();
+  const dirV=VIEW_DIR.clone();
   HOME={pos:Cb.clone().add(dirV.multiplyScalar(dist)),target:Cb.clone()};
   if(lastBuiltWh!==curWh){camera.position.copy(HOME.pos);controls.target.copy(HOME.target);lastBuiltWh=curWh;}
 
