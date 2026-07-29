@@ -40,7 +40,12 @@ class _Toast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Every toast background inverts with the theme — ink goes near-white in
+    // dark mode, and red/orange go from deep to bright — so the text on top has
+    // to invert with them. C.onInk is exactly that flip, which is why it suits
+    // the coloured toasts as well as the ink ones.
     late Color bg, dot;
+    final fg = C.onInk;
     switch (toast.kind) {
       case ResultKind.ok:
         bg = C.ink;
@@ -48,11 +53,11 @@ class _Toast extends StatelessWidget {
         break;
       case ResultKind.err:
         bg = C.red;
-        dot = Colors.white;
+        dot = fg;
         break;
       case ResultKind.warn:
         bg = C.orange;
-        dot = Colors.white;
+        dot = fg;
         break;
       case ResultKind.info:
         bg = C.ink2;
@@ -80,10 +85,10 @@ class _Toast extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(toast.title,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white, height: 1.25)),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg, height: 1.25)),
                     if (toast.sub.isNotEmpty)
                       Text(toast.sub,
-                          style: TextStyle(fontSize: 12.5, color: Colors.white.withOpacity(0.75))),
+                          style: TextStyle(fontSize: 12.5, color: fg.withValues(alpha: 0.75))),
                   ],
                 ),
               ),

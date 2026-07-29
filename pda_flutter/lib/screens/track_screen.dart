@@ -71,7 +71,7 @@ class _TrackScreenState extends State<TrackScreen> {
                   hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                   prefixIcon: Icon(Icons.search, color: C.muted),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.arrow_forward, color: Colors.white),
+                    icon: Icon(Icons.arrow_forward, color: C.onInk),
                     style: IconButton.styleFrom(
                         backgroundColor: C.ink, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     onPressed: () => _search(c),

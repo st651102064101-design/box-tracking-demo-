@@ -359,7 +359,7 @@ class _GateChip extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: selected ? Colors.white : C.ink,
+                      color: selected ? C.onInk : C.ink,
                       fontFeatures: const [FontFeature.tabularFigures()])),
               if (dirLabel != null)
                 Text(dirLabel!,
@@ -367,7 +367,7 @@ class _GateChip extends StatelessWidget {
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.3,
-                        color: selected ? Colors.white70 : C.muted)),
+                        color: selected ? C.onInk.withValues(alpha: 0.7) : C.muted)),
             ],
           ),
         ),

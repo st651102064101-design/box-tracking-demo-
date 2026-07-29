@@ -100,8 +100,8 @@ class _LoginScreenState extends State<LoginScreen> {
         autocorrect: false,
         enableSuggestions: false,
         textCapitalization: TextCapitalization.characters,
-        style: const TextStyle(
-            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: Colors.white),
+        style: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: C.onInk),
         cursorColor: C.lime,
         decoration: InputDecoration(
           hintText: loc.t('ยิงบัตร หรือพิมพ์รหัสพนักงาน'),
@@ -109,18 +109,18 @@ class _LoginScreenState extends State<LoginScreen> {
               fontSize: 13.5,
               letterSpacing: 0,
               fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.42)),
+              color: C.onInk.withValues(alpha: 0.42)),
           isDense: true,
           filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.08),
+          fillColor: C.onInk.withValues(alpha: 0.08),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+            borderSide: BorderSide(color: C.onInk.withValues(alpha: 0.16)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+            borderSide: BorderSide(color: C.onInk.withValues(alpha: 0.16)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -248,7 +248,7 @@ class _BadgePrompt extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
+                color: C.onInk.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.qr_code_2, size: 44, color: C.lime),
@@ -257,14 +257,14 @@ class _BadgePrompt extends StatelessWidget {
             Text(
               loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.3),
+              style: TextStyle(
+                  fontSize: 19, fontWeight: FontWeight.w700, color: C.onInk, letterSpacing: -0.3),
             ),
             const SizedBox(height: 6),
             Text(
               loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.62), height: 1.4),
+              style: TextStyle(fontSize: 12.5, color: C.onInk.withValues(alpha: 0.62), height: 1.4),
             ),
             const SizedBox(height: 16),
             field,

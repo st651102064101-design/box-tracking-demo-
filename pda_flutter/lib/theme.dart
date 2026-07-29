@@ -17,6 +17,15 @@ class C {
   static Color ink2 = const Color(0xFF3A3A3C);
   static Color ink3 = const Color(0xFF424245);
 
+  /// Foreground for anything painted *on* [ink] or [ink2] — the badge prompt,
+  /// a filled action card, a selected chip.
+  ///
+  /// Those tokens invert between themes (near-black in light, near-white in
+  /// dark), so a hardcoded white on top of them vanishes the moment dark mode
+  /// is on. This inverts with them, which is why every such surface should
+  /// reach for it instead of [Colors.white].
+  static Color onInk = const Color(0xFFFFFFFF);
+
   // text / muted
   static Color muted = const Color(0xFF86868B);
   static Color faint = const Color(0xFFAEAEB2);
@@ -56,6 +65,7 @@ class C {
     ink = dark ? const Color(0xFFF5F5F7) : const Color(0xFF1D1D1F);
     ink2 = dark ? const Color(0xFFD1D1D6) : const Color(0xFF3A3A3C);
     ink3 = dark ? const Color(0xFFC7C7CC) : const Color(0xFF424245);
+    onInk = dark ? const Color(0xFF1D1D1F) : const Color(0xFFFFFFFF);
 
     muted = dark ? const Color(0xFF98989D) : const Color(0xFF86868B);
     faint = dark ? const Color(0xFF6E6E73) : const Color(0xFFAEAEB2);
