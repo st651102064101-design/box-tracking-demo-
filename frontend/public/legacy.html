@@ -8521,15 +8521,20 @@ function renderAuditLog() {
       + '<td><b>' + esc(e.recorder || '-') + '</b></td>'
       + '<td>' + (actionLabel[e.action] || '<span class="pill gray">' + esc(e.action) + '</span>') + '</td>'
       + '<td class="mono">' + esc(e.itemId || '-') + '</td>'
-      /* ชื่อประเภทกล่องภาษาไทยยาวและไม่มีช่องว่างให้ตัดบรรทัด ตารางจึงยกความกว้าง
-         ให้คอลัมน์นี้จนคอลัมน์ Before/After ถูกบีบเหลือเท่าตัวอักษรเดียว — จำกัด
-         ความกว้างและอนุญาตให้ตัดคำได้ ตัวมันเองจึงไม่ไปเบียดคนอื่น */
-      + '<td class="small" style="max-width:280px;overflow-wrap:anywhere;">' + esc(e.itemName || '-') + '</td>'
-      /* min-width กันไม่ให้ถูกบีบจนอ่านไม่ออก (ตารางเลื่อนแนวนอนได้อยู่แล้ว) และใช้
-         overflow-wrap:anywhere แทน word-break:break-all ซึ่งตัดกลางคำทุกตัวอักษร
+      /* ทั้งสามคอลัมน์นี้ห่อเนื้อหาไว้ใน <div> เพราะกฎรวมของตารางคือ
+         th,td{white-space:nowrap} — ตราบใดที่ยังไม่ตัดบรรทัด overflow-wrap ไม่มีผล
+         เลย ชื่อประเภทกล่องภาษาไทยยาวๆ จึงยืดเป็นบรรทัดเดียวล้นไปทับคอลัมน์ Before
+         และ max-width บน <td> เองก็ถูกละเลยใน table-layout:auto — ใส่บน block
+         ข้างในถึงจะมีผลจริง */
+      + '<td class="small"><div style="max-width:300px;white-space:normal;overflow-wrap:anywhere;">'
+        + esc(e.itemName || '-') + '</div></td>'
+      /* min-width กันไม่ให้ถูกบีบจนอ่านไม่ออก (ตารางเลื่อนแนวนอนได้อยู่แล้ว) ส่วน
+         overflow-wrap:anywhere ใช้แทน word-break:break-all ซึ่งตัดกลางคำทุกตัวอักษร
          จนคำว่า "gate: 1" กลายเป็น "gat / e: 1" */
-      + '<td class="small" style="color:var(--muted);min-width:210px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(before.substring(0, 160)) + '</td>'
-      + '<td class="small" style="min-width:210px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(after.substring(0, 160)) + '</td>'
+      + '<td class="small" style="color:var(--muted);"><div style="min-width:200px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">'
+        + esc(before.substring(0, 160)) + '</div></td>'
+      + '<td class="small"><div style="min-width:200px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">'
+        + esc(after.substring(0, 160)) + '</div></td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="7"><div class="empty"><div class="e-ic">∅</div>ยังไม่มี Audit Log</div></td></tr>';
 }
