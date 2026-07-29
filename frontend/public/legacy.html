@@ -9661,6 +9661,18 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    /* ---- รอบเก็บตก: ประโยคอธิบายยาว ๆ ที่ FRAG เคยแปลครึ่งเดียวจนอ่านไม่รู้เรื่อง ----
+       พวกนี้ต้องเป็น EXACT เพราะ FRAG แทนที่คำเดี่ยวกลางประโยค (เช่น "คิวส่งออก",
+       "บาร์โค้ด", "แร็ค") แล้วเหลือไทยรอบ ๆ ปนอังกฤษ ซึ่งอ่านยากกว่าไม่แปลเลย */
+    "เพื่อเติมคิวส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา":"Fill the ship queue with many boxes at once instead of scanning them one at a time - pick a file and map the columns yourself, no fixed template required. Every row is checked by the same rules as a scan, then summarised into which boxes can be queued and which have problems",
+    "เพื่อเติมคิวรับคืนทีเดียวหลายใบ แทนการยิงทีละกล่องที่ประตู — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา":"Fill the return queue with many boxes at once instead of scanning them one at a time at the gate - pick a file and map the columns yourself, no fixed template required. Every row is checked by the same rules as a scan, then summarised into which boxes can be queued and which have problems",
+    "ยิงหรือพิมพ์เลขกล่อง/แร็ค เพื่อดูกล่องเดียว — หรือใส่ PO (ใบสั่งซื้อลูกค้า), DO หรือทะเบียนรถ เพื่อดึงทุกกล่องในชุดนั้นขึ้นมาพร้อมกัน รู้ทันทีว่าตอนนี้อยู่ไหน พร้อมประวัติทั้งหมดเรียงใหม่ไปเก่า":"Scan or type a box number or rack to look up one box - or enter a PO (customer purchase order), DO or vehicle plate to pull up every box in that set at once, see where each one is right now, with the full history newest first",
+    "คุณไม่ใช่ผู้ดูแลระบบ — แก้ไขได้เฉพาะเบอร์โทรศัพท์และอีเมลของตัวเอง ฟิลด์อื่นต้องให้ผู้ดูแลระบบแก้ไข":"You are not an administrator - you can only edit your own phone number and email. Other fields must be changed by an administrator",
+    "ระบุข้อมูลแร็ค 1 ชุด ระบบจะสร้างตำแหน่งทุก ชั้น × ช่อง ให้อัตโนมัติ":"Enter one rack definition and the system creates every shelf x slot location automatically",
+    "พื้นที่พักกล่องหลังผ่าน Gate ขาเข้า ก่อนขึ้นชั้นวางจริง — คลังนี้มีแร็คพักเดียว กำหนดได้ว่ามีกี่ช่อง ค่าเริ่มต้น":"Staging area for boxes after the inbound gate, before they go up on the real racks - this warehouse has a single staging rack; set how many slots it has. Default",
+    "ลูกค้า / ตำแหน่ง":"Customers / locations",
+    "ติดแท็ก RFID":"RFID tagging",
+    "บาร์โค้ด (สร้างอัตโนมัติ)":"Barcode (auto-generated)",
     /* ---- รอบเก็บตก: ผังกระบวนการ 2D + ป้ายในฉาก 3D + แถบสถานะฉาก ---- */
     "คานแร็ค = ตำแหน่งจริงจาก Location Master":"Rack beams = real locations from Location Master",
     "DB สด · poll 4 วิ":"DB live - polling every 4s",
@@ -9682,7 +9694,6 @@ function openColumnMapModal(opts){
     "พิมพ์ tag · ผูกกับกล่อง":"Print tag - bind to box",
     "จุดชาร์จแบต forklift":"Forklift charging point",
     "ที่พักรถเมื่อไม่มีงาน":"Parked when idle",
-    "ยังไม่ผูก tag เข้าระบบ":"Not yet bound to a tag",
     "รอผ่าน Gate เข้าคลัง":"Waiting to pass the gate into the warehouse",
     "STAGING · รอจัดเก็บ":"STAGING - awaiting putaway",
     "⇄ เข้า/ออก":"<-> in / out",
@@ -10107,7 +10118,7 @@ function openColumnMapModal(opts){
     "รายการประเภทกล่อง":"Box type list","รหัส":"Code","หน่วย":"Unit","ขนาด":"Size","กล่องที่ใช้":"Boxes using",
     "รหัสคลัง (สร้างอัตโนมัติ)":"Warehouse code (auto-generated)","ชื่อคลัง":"Warehouse name","ประตูเริ่ม":"Gate from",
     "ประตูสิ้นสุด":"Gate to","บันทึกคลัง":"Save warehouse",
-    "เพิ่มทีละใบ":"Add one by one","⧉ สร้างเป็นชุด":"Create batch","บาร์โค้ด (สร้างอัตโนมัติ)":"บาร์โค้ด (auto-generated)",
+    "เพิ่มทีละใบ":"Add one by one","⧉ สร้างเป็นชุด":"Create batch","บาร์โค้ด (สร้างอัตโนมัติ)":"Barcode (auto-generated)",
     "คัดลอก":"Copy","เริ่มเลขที่":"Start number","จำนวน":"Quantity","บันทึกรับเข้า":"Save inbound",
     "กล่องที่ลงทะเบียน":"Registered boxes","พิมพ์ฉลากทั้งหมด":"Print all labels","ประเภท":"Type","มูลค่า":"Value","มูลค่า (บาท)":"Value (THB)",
     "ตำแหน่ง / ลูกค้า":"Location / Customer","รอบ":"Cycles","พิมพ์ฉลาก":"Print label","ลบที่เลือก":"Delete selected","ยกเลิกแก้ไข":"Cancel edit",
@@ -10241,7 +10252,7 @@ function openColumnMapModal(opts){
     "เลขที่ PO (สร้างอัตโนมัติ)":"PO No. (auto-generated)","— เลือกลูกค้า —":"— Select customer —","ตามลูกค้า":"Per customer",
     "รถกระบะ / รถบรรทุก":"Pickup truck / Truck","รถล่าสุด:":"Recent vehicles:",
     "ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ":
-      "Scan or type the box's บาร์โค้ด code, then press Enter — the system automatically matches it to the DO/gate above",
+      "Scan or type the box barcode, then press Enter — the system automatically matches it to the DO/gate above",
     "แตะแล้วยิงบาร์โค้ด เช่น CRT-04":"Tap here and scan RFID, e.g. CRT-04","รายการหยิบตามพิกัด (Pick List)":"Pick suggestion by location (Pick List)",
     "รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบพักกล่องไว้ที่":"Vehicle brings boxes back — pick the inbound gate, scan RFID — the system holds the boxes at",
     "จุดพักสินค้า (Staging)":"the staging area (Staging)",
@@ -10254,7 +10265,7 @@ function openColumnMapModal(opts){
       "Choose \"Barcode\" when the RFID gate isn't working — the system still receives the box into the warehouse as normal (counted as having passed the gate), but flags it for the team to re-verify the RFID tag next time it passes a gate",
     "รับเข้าครั้งแรก (Initial Inbound จาก Supplier)":"First-time inbound (Initial Inbound from Supplier)",
     "ยิงหรือพิมพ์รหัส บาร์โค้ด กล่องที่คืนกลับ — ระบบเช็คอินเข้าคลังตามประตูทันที":
-      "Scan or type the บาร์โค้ด code of the returned box — the system checks it into the warehouse via this gate immediately",
+      "Scan or type the barcode of the returned box — the system checks it into the warehouse via this gate immediately",
     "แตะแล้วยิงบาร์โค้ด กล่องที่คืน":"Tap here and scan RFID of the returned box",
     "(↓ ขาเข้า)":"(↓ Inbound)","(↑ ขาออก)":"(↑ Outbound)","(⇄ เข้า/ออก)":"(⇄ In/Out)","เดโมยิงเร็ว:":"Quick demo scan:"
   };
@@ -10304,7 +10315,13 @@ function openColumnMapModal(opts){
     "เทียบแล้ว · ขนของ":"docked - loading","ถอยเทียบท่า":"reversing to dock",
     "เตรียมถอย":"ready to reverse","รถเข้ามา":"truck approaching",
     "ออกจากท่า":"leaving the dock","ออกถนน":"on the road","ปิดประตู":"closing the door",
-    " ว่าง":" empty","(วิ่ง ":"(running "
+    " ว่าง":" empty","(วิ่ง ":"(running ",
+    /* ---- รอบเก็บตก: ป้ายสั้นที่ประกอบจากตัวเลข ---- */
+    "สร้างเป็นชุด · ":"Batch create - ","ในคลัง ":"In warehouse ","หมดอายุอีก ":"Expires in ",
+    "↓ เข้า ":"↓ In ","↑ ออก ":"↑ Out ","ค่าเริ่มต้นระบบ · ":"System default - ",
+    "มีกล่องรอจัดเก็บอยู่ในแร็คนี้ ":"boxes awaiting putaway in this rack ",
+    "ประเภทช่องรอ Putaway ":"Putaway slot type ","จุดรอ Putaway ":"Putaway staging ",
+    "→ ใส่แร็ค":"→ into rack","→ กรองอย่างเดียว":"→ filter only"
   };
   /* ---- กฎที่ต้องดูบริบท (ทำก่อน FRAG) ----
      ลักษณนามไทยเป็นคำสั้นที่ไปโผล่กลางคำอื่นได้ FRAG ซึ่งแทนที่แบบตรงตัวล้วนๆ
@@ -10319,7 +10336,11 @@ function openColumnMapModal(opts){
     [new RegExp("(\\d[\\d,]*)\\s*ประเภท(?![" + TH + "])", "g"),  "$1 types"],
     [new RegExp("(\\d[\\d,]*)\\s*คลัง(?![" + TH + "])", "g"),    "$1 warehouses"],
     [new RegExp("(\\d[\\d,]*)\\s*ประตู(?![" + TH + "])", "g"),   "$1 gates"],
-    [new RegExp("(\\d[\\d,]*)\\s*จุดพัก(?![" + TH + "])", "g"),  "$1 staging bays"]
+    [new RegExp("(\\d[\\d,]*)\\s*จุดพัก(?![" + TH + "])", "g"),  "$1 staging bays"],
+    [new RegExp("(\\d[\\d,]*)\\s*ช่อง(?![" + TH + "])", "g"),     "$1 slots"],
+    [new RegExp("(\\d[\\d,]*)\\s*จุด(?![" + TH + "])", "g"),      "$1 points"],
+    /* ป้ายชั้นวางในผังตำแหน่ง ("ช1".."ช4") — ผูกทั้งค่าเพื่อไม่ให้ไปโดน "ช" กลางคำอื่น */
+    [/^ช(\d+)$/, "S$1"]
   ];
 
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
