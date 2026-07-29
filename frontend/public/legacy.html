@@ -126,6 +126,18 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 .who{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2);font-weight:500;padding:6px 10px;border-radius:999px;transition:background .18s;}
 .who:hover{background:color-mix(in srgb,var(--ink) 6%,transparent);}
 .who .dot{width:7px;height:7px;border-radius:50%;background:var(--pos);box-shadow:0 0 0 3px var(--posSoft);}
+/* เมนูผู้บันทึก — dropdown ห้อยจากชิปบัญชีแทน modal เต็มจอ: การเปลี่ยนคนบันทึก
+   เป็นงานเล็กที่ทำบ่อย การเปิดม่านดำทับทั้งหน้าจึงหนักเกินความจำเป็นและทำให้
+   หลุดบริบทของหน้าที่กำลังดูอยู่ */
+.who-wrap{position:relative;}
+.who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:270px;max-width:340px;
+  background:var(--panel);border:.5px solid var(--line);border-radius:14px;padding:10px;
+  box-shadow:0 18px 44px rgba(0,0,0,.22);}
+.who-menu[hidden]{display:none;}
+.who-menu .wm-head{font-size:11px;color:var(--muted);padding:2px 4px 8px;line-height:1.45;}
+.who-menu .wm-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.who-menu .wm-sep{border-top:.5px solid var(--line);margin:8px 0 8px;}
+@media(max-width:560px){.who-menu{position:fixed;left:12px;right:12px;top:64px;min-width:0;max-width:none;}}
 .iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
@@ -1118,7 +1130,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div><div class="nm">BoxTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
   </div>
   <div class="spacer"></div>
-  <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
+  <div class="who-wrap">
+    <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
+    <div class="who-menu" id="whoMenu" hidden></div>
+  </div>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
@@ -1263,6 +1278,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="w3d-fab" id="w3dPanelToggle" title="แสดงตัวกรอง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="15" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="2" fill="currentColor" stroke="none"/></svg></span></button>
         <button class="w3d-fab" id="w3dSpin" title="หมุนพรีเซนต์อัตโนมัติ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14.5-4.6M20 12a8 8 0 0 1-14.5 4.6"/><path d="M18.5 3v4.4H14M5.5 21v-4.4H10"/></svg></span></button>
         <button class="w3d-fab" id="w3dReset" title="กลับมุมมองเริ่มต้น"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span></button>
+        <button class="w3d-fab" id="w3dRoof" title="ซ่อน/แสดงหลังคา"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v9h14v-9"/></svg></span></button>
         <button class="w3d-fab" id="w3dFull" title="แสดงเต็มจอ"><span class="svgi svgi-expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg></span></button>
         <button class="w3d-fab" id="w3dInfoToggle" title="ซ่อนรายละเอียด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-8.5 4-9.5 7 1 3 4.5 7 9.5 7s8.5-4 9.5-7c-1-3-4.5-7-9.5-7Z"/><circle cx="12" cy="12" r="2.6"/></svg></span></button>
       </div>
@@ -1618,6 +1634,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="pad">
       <input id="scanTrack" placeholder="เช่น CRT-01, PO-2026-012 หรือ DO-0001" autocomplete="off">
       <button class="scanbtn" id="btnScanTrack">ค้นหา</button>
+      <button class="btn ghost" id="btnClearTrack" type="button" title="ล้างผลค้นหาทั้งหมด แล้วเริ่มยิงชุดใหม่">ล้างข้อมูล</button>
     </div>
     <div class="quick" id="quickTrack"></div>
   </div>
@@ -3263,33 +3280,49 @@ function setCurrentUser(name){
   USER=name;try{localStorage.setItem('boxtrace_user',USER);}catch(e){}
   setv('outRecorder',USER);setv('inRecorder',USER);renderAll();}
 window.setCurrentUser=setCurrentUser;
+/* เมนูเลือกผู้บันทึก — dropdown ห้อยจากชิปบัญชี ไม่ใช่ modal เต็มจอ
+   เปลี่ยนคนบันทึกเป็นงานเล็กที่ทำบ่อยระหว่างวัน การเปิดม่านทับทั้งหน้าจึงหนัก
+   เกินเหตุและทำให้หลุดบริบทของหน้าที่กำลังดูอยู่ */
+function closeWhoMenu(){var m=document.getElementById('whoMenu');if(m)m.hidden=true;}
+window.closeWhoMenu=closeWhoMenu;
 function pickUser(){
+  var menu=document.getElementById('whoMenu');
+  if(!menu)return;
+  if(!menu.hidden){closeWhoMenu();return;}          /* กดชิปซ้ำ = ปิด */
   var emps=Object.values(S.employees);
+  var h;
   if(!emps.length){
-    openModal('<div class="mhead"><h3>ยังไม่มีพนักงานในระบบ</h3><button class="x" data-close>'+IC('close')+'</button></div>'
-      +'<div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">เพิ่มรายชื่อพนักงานก่อน จึงจะเลือกเป็นผู้บันทึกได้</p>'
-      +'<button class="btn accent" onclick="closeModal();goSetup(\'emp\')">'+IC('plus')+' ไปเพิ่มพนักงาน</button></div>');
-    return;
+    h='<div class="wm-head">ยังไม่มีพนักงานในระบบ — เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้</div>'
+     +'<button class="btn accent sm" style="width:100%;justify-content:center;gap:8px;" onclick="closeWhoMenu();goSetup(\'emp\')">'+IC('plus')+' ไปเพิ่มพนักงาน</button>';
+  }else{
+    var opts=emps.map(function(e){
+      var meta=[e.role,e.dept].filter(Boolean).join(' · ');
+      var canEdit=isAdmin()||(currentEmp()&&currentEmp().id===e.id);
+      return '<div class="wm-row">'
+      +'<button class="btn ghost sm" style="flex:1;justify-content:flex-start;gap:10px;min-width:0;" onclick="setCurrentUser(\''+esc(e.name).replace(/'/g,"\\'")+'\');closeWhoMenu();">'
+      +'<b>'+esc(e.name)+'</b>'
+      +(meta?'<span class="muted">'+esc(meta)+'</span>':'')
+      +(USER===e.name?' <span class="pill ok" style="margin-left:auto;">'+IC('check','tick')+' ปัจจุบัน</span>':'')+'</button>'
+      +(canEdit?'<button class="btn ghost sm" title="แก้ไขข้อมูลพนักงาน" onclick="closeWhoMenu();pickUserEditEmp(\''+esc(e.id)+'\');">แก้ไข</button>':'')
+      +'</div>';}).join('');
+    h='<div class="wm-head">ใช้แสดงเป็น "ผู้บันทึก" ในทุกหน้าจนกว่าจะเปลี่ยน</div>'+opts
+     +'<div class="wm-sep"></div>'
+     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeWhoMenu();goSetup(\'emp\')">'+IC('plus')+' เพิ่มพนักงาน</button>'
+     +'<div class="wm-sep"></div>'
+     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeWhoMenu();if(typeof window.boxtraceLogout===\'function\')window.boxtraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>';
   }
-  var opts=emps.map(function(e){var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-    var canEdit=isAdmin()||(currentEmp()&&currentEmp().id===e.id);
-    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
-    +'<button class="btn ghost sm" style="flex:1;justify-content:flex-start;gap:10px;min-width:0;" onclick="setCurrentUser(\''+esc(e.name).replace(/'/g,"\\'")+'\');closeModal();">'
-    +'<b>'+esc(e.name)+'</b>'
-    +(meta?'<span class="muted">'+esc(meta)+'</span>':'')
-    +(USER===e.name?' <span class="pill ok" style="margin-left:auto;">'+IC('check','tick')+' ปัจจุบัน</span>':'')+'</button>'
-    +(canEdit?'<button class="btn ghost sm" title="แก้ไขข้อมูลพนักงาน" onclick="closeModal();pickUserEditEmp(\''+esc(e.id)+'\');">แก้ไข</button>':'')
-    +'</div>';}).join('');
-  openModal('<div class="mhead"><h3>เลือกผู้บันทึกปัจจุบัน</h3><button class="x" data-close>'+IC('close')+'</button></div>'
-    +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ใช้แสดงเป็น "ผู้บันทึก" ในทุกหน้าจนกว่าจะเปลี่ยน</p>'+opts
-    +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
-    +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'emp\')">'+IC('plus')+' เพิ่มพนักงาน</button>'
-    +'</div>'
-    +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
-    +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeModal();if(typeof window.boxtraceLogout===\'function\')window.boxtraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>'
-    +'</div></div>');
+  menu.innerHTML=h;menu.hidden=false;
 }
 window.pickUser=pickUser;
+/* ปิดเมื่อคลิกที่อื่นหรือกด Esc — dropdown ไม่มีม่านทึบให้กดปิดเหมือน modal
+   จึงต้องมีทางออกที่ผู้ใช้คาดหวังทั้งสองทาง */
+document.addEventListener('click',function(ev){
+  var m=document.getElementById('whoMenu');
+  if(!m||m.hidden)return;
+  if(ev.target.closest('.who-wrap'))return;
+  closeWhoMenu();
+},true);
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape')closeWhoMenu();});
 /* "แก้ไข" from the recorder picker: switch to Setup > พนักงาน first, then open the
    edit form once that sub-tab is actually visible (goSetup's own tab-switch is async) */
 function pickUserEditEmp(id){
@@ -4959,6 +4992,15 @@ function trackBox(tag){
 }
 window.trackBox=trackBox;
 $('#btnScanTrack').onclick=function(){trackBox();};
+/* ผลค้นหาสะสมไปเรื่อยๆ ทุกครั้งที่ยิง — พอขึ้นชุดใหม่จึงต้องมีวิธีล้างของเดิมทิ้ง
+   ก่อน ไม่งั้นกล่องของสองชุดจะปนกันจนอ่านไม่ออกว่าอันไหนเป็นของรอบนี้ */
+$('#btnClearTrack').onclick=function(){
+  if(!trackTags.length&&!val('scanTrack')){setv('scanTrack','');$('#scanTrack').focus();return;}
+  var n=trackTags.length;
+  trackTags.length=0;setv('scanTrack','');renderTrack();
+  toast('ล้างข้อมูลแล้ว',n?('เอาออก '+n+' รายการ'):null);
+  $('#scanTrack').focus();
+};
 $('#scanTrack').addEventListener('keydown',function(e){if(e.key==='Enter')trackBox();});
 autoScanBind($('#scanTrack'),trackBox);
 function renderTrack(){
@@ -8433,9 +8475,20 @@ function renderAuditLog() {
     if (!raw) return '-';
     try {
       var o = JSON.parse(raw);
-      return Object.entries(o).map(function(kv) {
+      /* แสดงเฉพาะฟิลด์ที่มีค่าจริง — คอลัมน์นี้แคบและถูกตัดที่ 160 ตัวอักษร
+         การไล่พิมพ์ "do: -" "po: -" "lot: -" จึงกินที่จนค่าที่เปลี่ยนจริง
+         ถูกดันตกไปนอกช่อง กลายเป็นว่าคอลัมน์ที่มีไว้ดูการเปลี่ยนแปลง
+         ไม่ได้แสดงการเปลี่ยนแปลงเลย */
+      var rows = Object.entries(o).filter(function(kv) {
+        var v = kv[1];
+        if (v == null || v === '') return false;
+        if (Array.isArray(v) && !v.length) return false;
+        if (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) return false;
+        return auditValText(v) !== '-';
+      }).map(function(kv) {
         return kv[0] + ': ' + auditValText(kv[1]);
-      }).join('\n');
+      });
+      return rows.length ? rows.join('\n') : '-';
     } catch (x) {
       return auditValText(raw);
     }
@@ -8465,9 +8518,15 @@ function renderAuditLog() {
       + '<td><b>' + esc(e.recorder || '-') + '</b></td>'
       + '<td>' + (actionLabel[e.action] || '<span class="pill gray">' + esc(e.action) + '</span>') + '</td>'
       + '<td class="mono">' + esc(e.itemId || '-') + '</td>'
-      + '<td class="small">' + esc(e.itemName || '-') + '</td>'
-      + '<td class="small" style="color:var(--muted);max-width:200px;white-space:pre-wrap;word-break:break-all;">' + esc(before.substring(0, 160)) + '</td>'
-      + '<td class="small" style="max-width:200px;white-space:pre-wrap;word-break:break-all;">' + esc(after.substring(0, 160)) + '</td>'
+      /* ชื่อประเภทกล่องภาษาไทยยาวและไม่มีช่องว่างให้ตัดบรรทัด ตารางจึงยกความกว้าง
+         ให้คอลัมน์นี้จนคอลัมน์ Before/After ถูกบีบเหลือเท่าตัวอักษรเดียว — จำกัด
+         ความกว้างและอนุญาตให้ตัดคำได้ ตัวมันเองจึงไม่ไปเบียดคนอื่น */
+      + '<td class="small" style="max-width:280px;overflow-wrap:anywhere;">' + esc(e.itemName || '-') + '</td>'
+      /* min-width กันไม่ให้ถูกบีบจนอ่านไม่ออก (ตารางเลื่อนแนวนอนได้อยู่แล้ว) และใช้
+         overflow-wrap:anywhere แทน word-break:break-all ซึ่งตัดกลางคำทุกตัวอักษร
+         จนคำว่า "gate: 1" กลายเป็น "gat / e: 1" */
+      + '<td class="small" style="color:var(--muted);min-width:210px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(before.substring(0, 160)) + '</td>'
+      + '<td class="small" style="min-width:210px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(after.substring(0, 160)) + '</td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="7"><div class="empty"><div class="e-ic">∅</div>ยังไม่มี Audit Log</div></td></tr>';
 }
@@ -9569,6 +9628,52 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    /* ---- ที่เพิ่มรอบนี้: คำที่ยังโผล่เป็นไทยตอนสลับ EN ---- */
+    /* ปุ่ม/ฟิลด์ที่เพิ่มเข้ามาทีหลังแล้วลืมลงพจนานุกรม */
+    "ล้างข้อมูล":"Clear",
+    "ล้างผลค้นหาทั้งหมด แล้วเริ่มยิงชุดใหม่":"Clear all results and start a new batch",
+    "รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)":"Badge code (for signing in on the PDA)",
+    "เว้นว่าง = ใช้รหัสพนักงาน":"Leave blank = use the employee code",
+    "บัตร":"Badge",
+    "พิมพ์บัตรสำหรับยิงเข้าระบบที่ PDA":"Print a badge for signing in on the PDA",
+    "ซ่อน/แสดงหลังคา":"Hide / show roof",
+    "ซ่อนหลังคา (เห็นภายในเต็มที่)":"Hide roof (see inside fully)",
+    "แสดงหลังคา":"Show roof",
+    /* แผงตัวกรองของฉาก 3D */
+    "ตัวกรอง & มุมมอง":"Filters & view",
+    "โหมดวิเคราะห์พื้นที่ (Spatial Analytics)":"Spatial analytics",
+    "สถานะกล่อง (Default)":"Box status (default)",
+    "ความหนาแน่น (Occupancy Heatmap)":"Density (occupancy heatmap)",
+    "ABC / ความถี่หมุนเวียน":"ABC / turnover frequency",
+    "ผ่าดูชั้นวาง (Layer Cutaway)":"Layer cutaway",
+    "ทุกชั้น (All Layers)":"All layers",
+    "ใช้สีตามสถานะกล่องในแถบด้านล่าง":"Coloured by box status - see the legend below",
+    "บนชั้นวาง":"On shelf",
+    "รอจัดเก็บ":"Awaiting putaway",
+    "รอติด RFID":"Awaiting RFID tag",
+    "ยังไม่ผูก tag เข้าระบบ":"Not yet linked to a tag",
+    /* เมนูผู้บันทึก (dropdown) — "เลือกผู้บันทึกปัจจุบัน" มีอยู่แล้วด้านล่าง ไม่ใส่ซ้ำ */
+    "ใช้แสดงเป็น \"ผู้บันทึก\" ในทุกหน้าจนกว่าจะเปลี่ยน":"Shown as the recorder on every page until changed",
+    "เพิ่มพนักงาน":"Add employee",
+    "ไปเพิ่มพนักงาน":"Go add an employee",
+    "ออกจากระบบ (เปลี่ยนบัญชี)":"Sign out (switch account)",
+    "แก้ไขข้อมูลพนักงาน":"Edit employee details",
+    "ยังไม่มีพนักงานในระบบ — เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้":
+      "No employees on file yet - add one before you can pick a recorder",
+    /* นำเข้าไฟล์ */
+    "นำเข้ารายการจากไฟล์ Excel":"Import a list from Excel",
+    "นำเข้ารายการรับคืนจากไฟล์ (PDA / Excel)":"Import returns from a file (PDA / Excel)",
+    "นำเข้าไฟล์ .xlsx":"Import .xlsx",
+    "ยืนยันรับเข้าคลัง":"Confirm inbound",
+    /* Master */
+    "ประเภทGate (ตั้งทุกประตูพร้อมกัน)":"Gate type (set every gate at once)",
+    "ทิศทางรายGate — แยกตั้งได้ทุกประตู":"Direction per gate - set each one separately",
+    "เพิ่มทีละตำแหน่ง":"Add one location",
+    "จำนวนช่องพัก (bays)":"Staging bays",
+    "บันทึกจำนวน":"Save count",
+    "ตั้งค่าเริ่มต้น STG-01 – STG-05":"Reset to default STG-01 - STG-05",
+    "เดโม:":"Demo:",
+    "ล่าสุด":"Newest","เก่าสุด":"Oldest",
     "Gate ขาออก → ออกไปกับรถ → รอคืน → Gate ขาเข้า → เก็บเข้าชั้นวาง":"Outbound gate -> Out with vehicle -> Awaiting return -> Inbound gate -> Put away on shelf",
     "กล่องทุกใบ":"Every box","รู้อยู่ที่ไหน":"tracked live",
     "ออกไปกี่ใบ กลับมากี่ใบ เหลือในคลังเท่าไหร่ — เห็นทั้งวงจรในหน้าเดียว ตั้งแต่ผ่านประตูออก จนกลับเข้าชั้นวาง":"How many went out, how many came back, how many remain - see the whole cycle on one page, from gate-out to back on the shelf.",
@@ -9761,7 +9866,7 @@ function openColumnMapModal(opts){
   };
   var FRAG = {
     "รายการที่เลือก":"selected"," รายการ":" records","เกินกำหนดคืน":"Overdue","เกินกำหนด":"overdue",
-    "เกิน ":"Overdue ","เหลือ ":"In "," วัน":" days"," ใบ":" units",
+    "เกิน ":"Overdue ","เหลือ ":"In "," วัน":" days",
     "ลบประเภท ":"Delete type ","ลบคลัง ":"Delete warehouse ","ลบลูกค้า ":"Delete customer ","ลบพนักงาน ":"Delete employee ",
     "ลบตำแหน่ง ":"Delete location ","ลบสินค้า ":"Delete item ","ลบ ":"Delete ","ตีกล่อง ":"Mark box "," เป็นสูญหาย?":" as lost?",
     "ยกเลิกสูญหาย ":"Cancel lost status for ","พักการใช้งาน ":"Put on hold ","ตีชำรุด ":"Mark damaged ",
@@ -9778,6 +9883,22 @@ function openColumnMapModal(opts){
     "คิวส่งออก":"Ship queue","คิวรับเข้า":"Receive queue",
     "ส่งออกสำเร็จ":"Shipped out","บันทึกสำเร็จ":"Saved","ลบแล้ว":"Deleted","ใส่ข้อมูลตัวอย่างแล้ว":"Sample data loaded"
   };
+  /* ---- กฎที่ต้องดูบริบท (ทำก่อน FRAG) ----
+     ลักษณนามไทยเป็นคำสั้นที่ไปโผล่กลางคำอื่นได้ FRAG ซึ่งแทนที่แบบตรงตัวล้วนๆ
+     จึงเคยเปลี่ยน "ใบไหนติดปัญหา" เป็น "unitsไหนติดปัญหา" — แปลผิดแบบนี้อ่าน
+     ยากกว่าปล่อยเป็นไทยไว้เฉยๆ ผูกกับตัวเลขข้างหน้าและกันไม่ให้ตามด้วยอักษรไทย
+     ตัวถัดไป จึงแปลเฉพาะตอนที่มันเป็นลักษณนามจริงๆ */
+  var TH = "฀-๿";
+  var RE = [
+    [new RegExp("(\\d[\\d,]*)\\s*ใบ(?![" + TH + "])", "g"),      "$1 units"],
+    [new RegExp("(\\d[\\d,]*)\\s*ราย(?![" + TH + "])", "g"),     "$1 records"],
+    [new RegExp("(\\d[\\d,]*)\\s*คน(?![" + TH + "])", "g"),      "$1 people"],
+    [new RegExp("(\\d[\\d,]*)\\s*ประเภท(?![" + TH + "])", "g"),  "$1 types"],
+    [new RegExp("(\\d[\\d,]*)\\s*คลัง(?![" + TH + "])", "g"),    "$1 warehouses"],
+    [new RegExp("(\\d[\\d,]*)\\s*ประตู(?![" + TH + "])", "g"),   "$1 gates"],
+    [new RegExp("(\\d[\\d,]*)\\s*จุดพัก(?![" + TH + "])", "g"),  "$1 staging bays"]
+  ];
+
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
   var FRAG_KEYS  = Object.keys(FRAG).sort(function(a,b){return b.length-a.length;});
 
@@ -9794,6 +9915,11 @@ function openColumnMapModal(opts){
     if(!t) return s;
     if(EXACT.hasOwnProperty(t)) return s.replace(t, EXACT[t]);
     var out = s, hit = false;
+    for(var r=0;r<RE.length;r++){
+      var prev = out;
+      out = out.replace(RE[r][0], RE[r][1]);
+      if(out !== prev) hit = true;
+    }
     for(var i=0;i<FRAG_KEYS.length;i++){
       var k = FRAG_KEYS[i];
       if(out.indexOf(k) >= 0){ out = out.split(k).join(FRAG[k]); hit = true; }
@@ -10171,7 +10297,15 @@ const MAT={
   sel:mat(0xa8f931,{emissive:0x89e01c,emissiveIntensity:0.55,roughness:0.4}),
   sensor:new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),
   ringM:new THREE.MeshBasicMaterial({color:0xa8f931,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}),
-  lampOn:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xfff0c0,emissiveIntensity:1.6,roughness:0.4}),
+  lampOn:new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:2.4,roughness:0.35}),
+  /* ลำแสงและวงแสงบนพื้นของโคม high-bay — additive จึงบวกความสว่างให้พื้นผิวข้างใต้
+     แทนที่จะทาสีขาวทับ ทำให้อ่านเป็น "แสง" ไม่ใช่ "แผ่นพลาสติกขุ่น" */
+  lightBeam:new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.06,
+    blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}),
+  lightPool:new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.11,
+    blending:THREE.AdditiveBlending,depthWrite:false}),
+  roofGlass:new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:0.17,
+    roughness:0.5,metalness:0.25,depthWrite:false,side:THREE.DoubleSide}),
   beacon:new THREE.MeshStandardMaterial({color:0xffb020,emissive:0xff8a00,emissiveIntensity:0.9,roughness:0.4}),
   headlight:new THREE.MeshStandardMaterial({color:0xfff6df,emissive:0xfff2c2,emissiveIntensity:0,roughness:0.35}),
   taillight:new THREE.MeshStandardMaterial({color:0x7a0d14,emissive:0xd70015,emissiveIntensity:0,roughness:0.4}),
@@ -10391,6 +10525,7 @@ let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
 const DOCK={};                                   // สถานะท่าเทียบ — คงอยู่ข้าม rebuild
+const ROOF={on:true,mesh:null};                  // เปิด/ปิดหลังคา — ต้องจำข้าม rebuild ไม่งั้นกดซ่อนแล้วเด้งกลับ
 const opsRoot=new THREE.Group();scene.add(opsRoot); // รถ/forklift ไม่ถูกล้างเมื่อ rebuild
 let beaconT=0;
 const raycaster=new THREE.Raycaster(),ptr=new THREE.Vector2();
@@ -10857,6 +10992,21 @@ function build(){
   instMesh(beamsCeil,MAT.column,(z,p,s)=>{p.set((bMinX+bMaxX)/2,WALL_H-0.5,z);s.set(bW-0.6,0.2,0.24);},true);
   instMesh(lamps,MAT.cage,(it,p,s)=>{p.set(it[0],WALL_H-0.86,it[1]);s.set(0.66,0.14,0.44);},true);
   instMesh(lamps,MAT.lampOn,(it,p,s)=>{p.set(it[0],WALL_H-0.96,it[1]);s.set(0.58,0.05,0.36);},true);
+  /* แสงที่ส่องลงมาจากโคมทุกดวง — PointLight ต่อดวงชนเพดานจำนวนไฟของ WebGL
+     ตั้งแต่โคมหลักสิบดวง จึงวาดเป็นกรวยแสงโปร่ง + วงแสงบนพื้นแทน ได้ภาพเดียวกัน
+     โดยไม่เพิ่มภาระต่อเฟรม (ConeGeometry ปลายแหลมชี้ขึ้นอยู่แล้ว — วางจุดยอด
+     ไว้ที่โคมแล้วฐานแผ่ลงถึงพื้นได้เลย ไม่ต้องหมุน) */
+  if(lamps.length){
+    const lampY=WALL_H-0.99,beamH=lampY-0.02;
+    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),s=new THREE.Vector3();
+    const beams=new THREE.InstancedMesh(GEO.cone,MAT.lightBeam,lamps.length);
+    const pools=new THREE.InstancedMesh(GEO.cyl,MAT.lightPool,lamps.length);
+    lamps.forEach((it,i)=>{
+      p.set(it[0],beamH/2+0.02,it[1]);s.set(3.6,beamH,3.6);m4.compose(p,q,s);beams.setMatrixAt(i,m4);
+      p.set(it[0],0.03,it[1]);s.set(3.9,0.02,3.9);m4.compose(p,q,s);pools.setMatrixAt(i,m4);
+    });
+    [beams,pools].forEach(m=>{m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.renderOrder=2;root.add(m);});
+  }
 
   /* ── ประตูม้วน + dock shelter + dock leveler ── */
   const n=gs.length,gp=bW/(n||1);
@@ -11310,8 +11460,10 @@ function build(){
     const yl=makeLabel('ค้างอยู่ที่ลูกค้า '+outBoxes.length+' ใบ',(overdueN?'เกินกำหนด '+overdueN+' ใบ · ':'')+'มูลค่ารวม '+fmtBaht(outVal),{fs:44,h:1.25,subFg:overdueN?'#d70015':null});
     yl.position.set(0,5.2,yardZ+1.6);root.add(yl);
   }
-  const whLbl=makeLabel(whName(curWh),'Gate '+(gs.length?gs[0]+'–'+gs[gs.length-1]:'—')+' · '+zones.length+' โซน · Digital Twin สด',{fs:58,h:1.7});
-  whLbl.position.set(0,WALL_H+1.9,backZ+0.5);root.add(whLbl);
+  /* ชื่อคลังคือป้ายที่ใหญ่ที่สุดในฉาก และอยู่หน้าอาคารฝั่งท่าเทียบ ซึ่งเป็นด้าน
+     ที่กล้องเริ่มมองเข้ามา — เดิมไปอยู่หลังอาคารจึงถูกตัวอาคารบังจนต้องหมุนหา */
+  const whLbl=makeLabel(whName(curWh),'Gate '+(gs.length?gs[0]+'–'+gs[gs.length-1]:'—')+' · '+zones.length+' โซน · Digital Twin สด',{fs:92,h:2.7});
+  whLbl.position.set(0,WALL_H+3.1,dockZ+2.2);root.add(whLbl);
 
   /* ── slot highlight ── */
   slotEdge=new THREE.LineSegments(new THREE.EdgesGeometry(GEO.unit),new THREE.LineBasicMaterial({color:PAL.accent}));
@@ -12276,6 +12428,21 @@ panelBtn.addEventListener('click',()=>setSidebarOpen(!sidebarEl.classList.contai
 sidebarBackdrop.addEventListener('click',()=>setSidebarOpen(false));
 document.getElementById('w3dSidebarClose').addEventListener('click',()=>setSidebarOpen(false));
 setSidebarOpen(false);
+
+/* หลังคาโปร่งอยู่แล้วจึงมองทะลุลงไปเห็นของข้างในได้ทันทีโดยไม่ต้องกดอะไร ปุ่มนี้
+   ไว้ซ่อนทั้งแผ่นเมื่ออยากเห็นเต็มๆ — สลับสองสถานะเท่านั้น ไม่มีเมนูให้ต้องเรียนรู้
+   สถานะถูกจำไว้ใน ROOF จึงไม่เด้งกลับเมื่อฉากถูก rebuild (เช่นสลับคลัง) */
+const roofBtn=document.getElementById('w3dRoof');
+function setRoofUI(){
+  roofBtn.classList.toggle('active',!ROOF.on);
+  roofBtn.title=ROOF.on?'ซ่อนหลังคา (เห็นภายในเต็มที่)':'แสดงหลังคา';
+}
+roofBtn.addEventListener('click',()=>{
+  ROOF.on=!ROOF.on;
+  if(ROOF.mesh)ROOF.mesh.visible=ROOF.on;
+  setRoofUI();
+});
+setRoofUI();
 
 const fullBtn=document.getElementById('w3dFull');
 const FULL_ICON_ENTER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>';
