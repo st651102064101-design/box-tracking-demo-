@@ -138,6 +138,22 @@ class RfidService {
     }
   }
 
+  /// Everything the native side knows about the reader right now — model,
+  /// firmware, region, transmit power, tags seen, last error. Empty when there
+  /// is no reader to ask (desktop/web, or a phone with no Zebra hardware).
+  ///
+  /// This is what turns "I don't know whether RFID works on this device" into a
+  /// screen of facts the first time a terminal is switched on.
+  Future<Map<String, dynamic>> diagnostics() async {
+    if (!supported) return const {};
+    try {
+      final r = await _method.invokeMapMethod<String, dynamic>('diagnostics');
+      return r ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   void dispose() {
     _sub?.cancel();
     _tagCtrl.close();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -69,51 +71,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              // RFID reader panel
-              Panel(
-                padding: const EdgeInsets.all(16),
-                radius: 18,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Caption('เครื่องอ่าน RFID (Zebra)'),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: _rfidColor(c.rfidStatus.state),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Text(
-                            _rfidLabel(c),
-                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        OutlinedButton(
-                          onPressed: () => c.rfid.connect(),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: C.ink,
-                            side: BorderSide(color: C.border2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                          ),
-                          child: const Text('เชื่อมต่อใหม่'),
-                        ),
-                      ],
-                    ),
-                    if (c.rfidStatus.message.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(c.rfidStatus.message, style: TextStyle(fontSize: 12, color: C.muted)),
-                      ),
-                  ],
-                ),
-              ),
+              const _RfidPanel(),
               const SizedBox(height: 16),
               if (c.canConfigureDevice)
                 _tile(
@@ -152,35 +110,6 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Color _rfidColor(RfidState s) {
-    switch (s) {
-      case RfidState.connected:
-        return C.lime;
-      case RfidState.connecting:
-        return C.orange;
-      case RfidState.error:
-        return C.red;
-      default:
-        return C.border2;
-    }
-  }
-
-  String _rfidLabel(AppController c) {
-    if (!c.rfid.supported) return 'ไม่รองรับบนแพลตฟอร์มนี้ (ใช้โหมดจำลอง)';
-    switch (c.rfidStatus.state) {
-      case RfidState.connected:
-        return 'เชื่อมต่อเครื่องอ่านแล้ว';
-      case RfidState.connecting:
-        return 'กำลังเชื่อมต่อ…';
-      case RfidState.error:
-        return 'เชื่อมต่อไม่สำเร็จ';
-      case RfidState.disconnected:
-        return 'ตัดการเชื่อมต่อ';
-      case RfidState.idle:
-        return 'ยังไม่ได้เชื่อมต่อ';
-    }
   }
 
   Widget _tile({
@@ -243,6 +172,194 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Reader diagnostics.
+///
+/// A coloured dot is no use the first time a terminal is unboxed at a gate: if
+/// nothing reads, the operator needs to know whether the reader was even found,
+/// over which transport, at what power, in which region — and what the last
+/// failure actually said. This panel answers all of that, and keeps a running
+/// tag count so a five-second trigger pull is a conclusive test.
+class _RfidPanel extends StatefulWidget {
+  const _RfidPanel();
+
+  @override
+  State<_RfidPanel> createState() => _RfidPanelState();
+}
+
+class _RfidPanelState extends State<_RfidPanel> {
+  Map<String, dynamic> _d = const {};
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    // The tag counter is only useful if it moves while the trigger is held.
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final d = await context.read<AppController>().rfid.diagnostics();
+    if (mounted) setState(() => _d = d);
+  }
+
+  static Color _colorFor(RfidState s) {
+    switch (s) {
+      case RfidState.connected:
+        return C.lime;
+      case RfidState.connecting:
+        return C.orange;
+      case RfidState.error:
+        return C.red;
+      default:
+        return C.border2;
+    }
+  }
+
+  String _label(AppController c) {
+    if (!c.rfid.supported) return 'ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra';
+    switch (c.rfidStatus.state) {
+      case RfidState.connected:
+        return 'เชื่อมต่อเครื่องอ่านแล้ว';
+      case RfidState.connecting:
+        return 'กำลังเชื่อมต่อ…';
+      case RfidState.error:
+        return 'เชื่อมต่อไม่สำเร็จ';
+      case RfidState.disconnected:
+        return 'ตัดการเชื่อมต่อ';
+      case RfidState.idle:
+        return 'ยังไม่ได้เชื่อมต่อ';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<AppController>();
+    final power = _d['powerIndex'] == null
+        ? null
+        : '${_d['powerIndex']} / ${_d['powerMaxIndex'] ?? '-'}'
+            '${_d['powerRaw'] != null ? '  (${_d['powerRaw']})' : ''}';
+
+    return Panel(
+      padding: const EdgeInsets.all(16),
+      radius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Caption('เครื่องอ่าน RFID (Zebra)'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(color: _colorFor(c.rfidStatus.state), shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(_label(c),
+                    style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
+              ),
+              OutlinedButton(
+                onPressed: () async {
+                  await c.rfid.connect();
+                  await _refresh();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: C.ink,
+                  side: BorderSide(color: C.border2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                ),
+                child: const Text('เชื่อมต่อใหม่'),
+              ),
+            ],
+          ),
+          if (c.rfidStatus.message.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(c.rfidStatus.message, style: TextStyle(fontSize: 12, color: C.muted)),
+            ),
+          if (!c.rfid.supported)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                'บนเบราว์เซอร์/เดสก์ท็อปจะไม่มีเครื่องอ่าน — ใช้ช่องพิมพ์รหัสแทนได้ '
+                'รายละเอียดด้านล่างจะขึ้นเมื่อรันบนเครื่องจริง',
+                style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.45),
+              ),
+            ),
+          if (_d.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            _row('รุ่นเครื่องอ่าน', _d['model']),
+            _row('ชื่ออุปกรณ์', _d['host']),
+            _row('หมายเลขเครื่อง', _d['serial']),
+            _row('เฟิร์มแวร์', _d['firmware']),
+            _row('ภูมิภาค (Region)', _d['region']),
+            _row('ช่องทางเชื่อมต่อ', _d['transport']),
+            _row('กำลังส่ง (index)', power),
+            const SizedBox(height: 10),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            _row('แท็กที่อ่านได้สะสม', '${_d['tagCount'] ?? 0}'),
+            _row('EPC ล่าสุด', _d['lastEpc']),
+            _row('RSSI ล่าสุด', _d['lastRssi']?.toString()),
+            if (_d['lastError'] != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: C.redBg,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Text('ข้อผิดพลาดล่าสุด: ${_d['lastError']}',
+                    style: TextStyle(fontSize: 12, color: C.red, height: 1.4)),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text(
+              'ทดสอบ: เหนี่ยวไกค้างไว้ 5 วินาทีใกล้กล่องที่ติดแท็ก — ถ้าตัวเลข '
+              '"แท็กที่อ่านได้สะสม" เดินขึ้น แปลว่าเครื่องอ่านทำงานครบวงจรแล้ว',
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.45),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String k, Object? v) {
+    final text = (v == null || v.toString().isEmpty) ? '—' : v.toString();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(k, style: TextStyle(fontSize: 12.5, color: C.muted)),
+          ),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: text == '—' ? C.faint : C.ink)),
+          ),
+        ],
       ),
     );
   }

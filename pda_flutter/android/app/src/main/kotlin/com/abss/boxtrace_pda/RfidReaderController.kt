@@ -40,6 +40,15 @@ class RfidReaderController(private val context: Context) :
     private var sink: EventChannel.EventSink? = null
     private var maxPower = 270
 
+    // Diagnostics state — kept so the Settings screen can answer "is the reader
+    // actually working?" with facts (what connected, over which transport, how
+    // many tags it has seen, what the last failure said) instead of a dot.
+    private var lastError: String? = null
+    private var lastTransport: String? = null
+    private var tagCount = 0L
+    private var lastEpc: String? = null
+    private var lastRssi: Int? = null
+
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
@@ -53,8 +62,10 @@ class RfidReaderController(private val context: Context) :
         main.post { sink?.success(map) }
     }
 
-    private fun status(state: String, message: String) =
+    private fun status(state: String, message: String) {
+        if (state == "error") lastError = message
         emit(mapOf("type" to "status", "state" to state, "message" to message))
+    }
 
     // ── MethodChannel.MethodCallHandler ───────────────────────────────────
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -65,11 +76,54 @@ class RfidReaderController(private val context: Context) :
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
             "isConnected" -> result.success(isConnected())
+            "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
         }
     }
 
     private fun isConnected(): Boolean = reader?.isConnected == true
+
+    /**
+     * One call that answers "is this reader actually working?" — model, firmware,
+     * region, transmit power, how many tags have come through and what the last
+     * failure said. Without it the only signal on screen is a coloured dot, which
+     * is no help at all the first time a terminal is unboxed at a gate.
+     *
+     * Every field is read defensively: a reader that is connected but only
+     * partially responsive should still report what it can rather than throwing
+     * the whole panel away.
+     */
+    private fun diagnostics(): Map<String, Any?> {
+        val m = HashMap<String, Any?>()
+        m["connected"] = isConnected()
+        m["transport"] = lastTransport
+        m["tagCount"] = tagCount
+        m["lastEpc"] = lastEpc
+        m["lastRssi"] = lastRssi
+        m["lastError"] = lastError
+
+        val rd = reader
+        if (rd != null && rd.isConnected) {
+            val caps = rd.ReaderCapabilities
+            m["host"] = str { rd.getHostName() }
+            m["model"] = str { caps.getModelName() }
+            m["serial"] = str { caps.getSerialNumber() }
+            // Zebra's own spelling — the SDK really does call it "Firware".
+            m["firmware"] = str { caps.getFirwareVersion() }
+            m["region"] = str { rd.Config.getRegulatoryConfig().getRegion() }
+            m["powerMaxIndex"] = maxPower
+            m["powerIndex"] = num { rd.Config.Antennas.getAntennaRfConfig(1).getTransmitPowerIndex() }
+            m["powerRaw"] = num {
+                val values = caps.getTransmitPowerLevelValues()
+                val idx = rd.Config.Antennas.getAntennaRfConfig(1).getTransmitPowerIndex()
+                values[idx]
+            }
+        }
+        return m
+    }
+
+    private inline fun str(f: () -> Any?): String? = try { f()?.toString() } catch (e: Exception) { null }
+    private inline fun num(f: () -> Int): Int? = try { f() } catch (e: Exception) { null }
 
     // ── connect / configure ───────────────────────────────────────────────
     fun connect() {
@@ -85,10 +139,16 @@ class RfidReaderController(private val context: Context) :
                 Readers.attach(this)
 
                 var list = safeList()
+                lastTransport = "SERVICE_SERIAL"
                 // MC3390R = SERVICE_SERIAL; fall back to sled / USB like the sample.
-                if (list.isEmpty()) { readers?.setTransport(ENUM_TRANSPORT.BLUETOOTH); list = safeList() }
-                if (list.isEmpty()) { readers?.setTransport(ENUM_TRANSPORT.SERVICE_USB); list = safeList() }
                 if (list.isEmpty()) {
+                    readers?.setTransport(ENUM_TRANSPORT.BLUETOOTH); list = safeList(); lastTransport = "BLUETOOTH"
+                }
+                if (list.isEmpty()) {
+                    readers?.setTransport(ENUM_TRANSPORT.SERVICE_USB); list = safeList(); lastTransport = "SERVICE_USB"
+                }
+                if (list.isEmpty()) {
+                    lastTransport = null
                     status("error", "ไม่พบเครื่องอ่าน RFID")
                     return@execute
                 }
@@ -109,6 +169,7 @@ class RfidReaderController(private val context: Context) :
 
                 if (rd.isConnected) {
                     configureReader(rd)
+                    lastError = null
                     status("connected", "เชื่อมต่อ ${rd.getHostName()}")
                 } else {
                     status("error", "เชื่อมต่อไม่สำเร็จ")
@@ -252,6 +313,9 @@ class RfidReaderController(private val context: Context) :
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
             if (tags != null) {
                 for (t in tags) {
+                    tagCount++
+                    lastEpc = t.getTagID()
+                    lastRssi = t.getPeakRSSI().toInt()
                     emit(
                         mapOf(
                             "type" to "tag",
