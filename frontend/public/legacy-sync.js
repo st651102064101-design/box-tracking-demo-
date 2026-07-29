@@ -115,6 +115,21 @@
       .catch(function () { /* offline: keep localStorage; retry on next save */ });
   }
 
+  /* ── adopting a snapshot the server already has ──────────────────────────
+     The live-update path (legacy.html) mirrors each snapshot it pulls into
+     localStorage so a reload starts from it. Going through the intercepted
+     setItem above would schedule a PUT of data that came *from* the server,
+     and because a PUT replaces the whole snapshot, a tab echoing a slightly
+     stale copy silently overwrites a change another tab had just made.
+     Writing it raw — and recording it as already-synced — keeps adopting a
+     read. */
+  window.boxtraceAdoptServerJson = function (json) {
+    try { realSetItem.call(localStorage, KEY, json); } catch (e) {}
+    lastSynced = json;
+    pendingValue = json;
+    if (putTimer) { clearTimeout(putTimer); putTimer = null; }
+  };
+
   /* ── persistence IN: prime from server on boot ───────────────────────────*/
   function prime() {
     if (!token()) { gotoLogin(); return; }

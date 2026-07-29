@@ -4,6 +4,7 @@ import { gateOut, gateIn } from '../services/gate.js';
 import { gateOutSchema, gateInSchema } from '../validators/schemas.js';
 import { asyncHandler } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
+import { bump } from '../lib/bus.js';
 
 /** Server-side gate operations for physical readers / integrations. */
 export const gateRouter = Router();
@@ -22,6 +23,9 @@ gateRouter.post(
   asyncHandler(async (req, res) => {
     const input = gateOutSchema.parse(req.body);
     const result = await gateOut(getDb(), { ...input, device: deviceOf(req) });
+    /* A handheld scan has to reach the dashboards too, and it never goes
+       through PUT /api/state — so the notification belongs here as well. */
+    bump(req.get('X-Client-Id'));
     res.json(result);
   }),
 );
@@ -31,6 +35,9 @@ gateRouter.post(
   asyncHandler(async (req, res) => {
     const input = gateInSchema.parse(req.body);
     const result = await gateIn(getDb(), { ...input, device: deviceOf(req) });
+    /* A handheld scan has to reach the dashboards too, and it never goes
+       through PUT /api/state — so the notification belongs here as well. */
+    bump(req.get('X-Client-Id'));
     res.json(result);
   }),
 );

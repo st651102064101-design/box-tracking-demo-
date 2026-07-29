@@ -8,6 +8,8 @@ import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
 import { boxesRouter } from './routes/boxes.js';
 import { mastersRouter } from './routes/masters.js';
+import { streamRouter } from './routes/stream.js';
+import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
  * Operators reach this API from tablets/scanners on the same warehouse LAN,
@@ -36,15 +38,30 @@ export function createApp() {
     }),
   );
   app.use(express.json({ limit: '25mb' })); // full-state snapshots can be large
-  if (env.nodeEnv !== 'test') app.use(morgan('dev'));
+  /* The SSE URL carries the auth token as a query parameter, because
+     EventSource cannot send headers. Access logs are the one place that
+     must not end up written down, and one line per long-lived connection
+     is worth little anyway. */
+  if (env.nodeEnv !== 'test')
+    app.use(morgan('dev', { skip: (req) => req.path.startsWith('/api/stream') }));
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'boxtrace-api', ts: new Date().toISOString() }));
+  /* `streams` and `version` make it possible to tell "nothing changed" apart
+     from "the realtime pipe is down" without opening a browser. */
+  app.get('/api/health', (_req, res) =>
+    res.json({
+      ok: true,
+      service: 'boxtrace-api',
+      ts: new Date().toISOString(),
+      version: currentVersion(),
+      streams: subscriberCount(),
+    }));
 
   app.use('/api/auth', authRouter);
   app.use('/api/state', stateRouter);
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
   app.use('/api/masters', mastersRouter);
+  app.use('/api/stream', streamRouter);
 
   app.use(notFound);
   app.use(errorHandler);

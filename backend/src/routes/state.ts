@@ -4,6 +4,7 @@ import { composeState, replaceState } from '../services/state.js';
 import { stateSchema } from '../validators/schemas.js';
 import { asyncHandler } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
+import { bump } from '../lib/bus.js';
 
 /**
  * The persistence bridge used by the legacy single-page UI.
@@ -29,7 +30,10 @@ stateRouter.put(
     const payload = stateSchema.parse(req.body);
     const db = getDb();
     await replaceState(db, payload);
-    res.json({ ok: true });
+    /* Tell every open stream. The writer's own id rides along so its browser
+       can skip re-fetching the snapshot it just uploaded. */
+    const version = bump(req.get('X-Client-Id'));
+    res.json({ ok: true, version });
   }),
 );
 
