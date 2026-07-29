@@ -10986,6 +10986,43 @@ function paint(l,w,material,x,z,y){
   m.receiveShadow=false;return m;
 }
 function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+/* ผ้าใบสำหรับ "วาดแล้ววัด" ใบเดียวใช้ซ้ำทุกป้าย + cache ผลไว้ตามข้อความ/น้ำหนัก/ขนาด
+   คีย์ผูก fonts.status ไว้ด้วย พอเว็บฟอนต์โหลดเสร็จค่าจะถูกวัดใหม่เองโดยไม่ต้องล้าง */
+const INK_C=document.createElement('canvas');
+const INK_G=INK_C.getContext('2d',{willReadFrequently:true});
+const INK_CACHE=new Map();
+function inkHalf(str,weight,px){
+  if(!str)return 0;
+  const key=(document.fonts?document.fonts.status:'x')+'|'+weight+'|'+px+'|'+str;
+  const hit=INK_CACHE.get(key);if(hit!=null)return hit;
+  INK_G.font=weight+' '+px+'px '+FONTS;
+  const adv=INK_G.measureText(str).width;
+  /* เผื่อขอบกว้าง ๆ รอบข้อความ เพื่อให้หมึกที่ล้นเกิน advance ยังตกอยู่ในผ้าใบที่สแกน */
+  const W=Math.ceil(adv+px*2),H=Math.ceil(px*2.2);
+  if(INK_C.width<W)INK_C.width=W;
+  if(INK_C.height<H)INK_C.height=H;
+  const cw=INK_C.width;
+  INK_G.clearRect(0,0,cw,INK_C.height);
+  INK_G.font=weight+' '+px+'px '+FONTS;      /* ตั้งขนาดผ้าใบล้าง state ทิ้ง ต้องตั้งใหม่ */
+  INK_G.textAlign='center';INK_G.textBaseline='middle';INK_G.fillStyle='#000';
+  const cx=cw/2;
+  INK_G.fillText(str,cx,H/2);
+  const d=INK_G.getImageData(0,0,cw,H).data;
+  let minX=-1,maxX=-1;
+  for(let x=0;x<cw;x++){
+    for(let y=0;y<H;y+=3){                    /* ตัวอักษรสูงกว่า 3 px มาก สแกนถี่กว่านี้ไม่ได้อะไรเพิ่ม */
+      if(d[(y*cw+x)*4+3]>8){if(minX<0)minX=x;maxX=x;break;}
+    }
+  }
+  /* เอาค่ามากสุดระหว่าง "หมึกที่วาดจริง" กับ "ระยะ advance" — ปกติหมึกจะแคบกว่า
+     advance เล็กน้อย (side bearing) ถ้าใช้หมึกอย่างเดียวกล่องจะแคบลงกว่าเดิม
+     ซึ่งสวนทางกับที่ต้องการ กติกานี้ทำให้กล่อง "โตขึ้นได้อย่างเดียว ไม่มีทางแคบลง"
+     แล้วเผื่ออีก 6% ของขนาดฟอนต์ต่อข้างเป็นระยะปลอดภัย */
+  const painted=(minX<0)?0:Math.max(cx-minX,maxX-cx);
+  const half=Math.max(painted,adv/2)+px*0.06;
+  INK_CACHE.set(key,half);
+  return half;
+}
 function makeLabel(txt,sub,o){
   o=o||{};
   /* ป้ายพวกนี้เป็นภาพที่วาดลงบน canvas ไม่ใช่ DOM ตัวสลับภาษาซึ่งไล่แปล DOM
@@ -10994,39 +11031,14 @@ function makeLabel(txt,sub,o){
   if(Wn.btI18n&&Wn.btI18n.t){txt=Wn.btI18n.t(txt);if(sub)sub=Wn.btI18n.t(sub);}
   const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
   const c=document.createElement('canvas'),g=c.getContext('2d');
-  /* วัดจาก "ขอบหมึกจริง" ไม่ใช่ระยะ advance ของ measureText().width
-     .width คือระยะที่เคอร์เซอร์ขยับ ไม่ใช่ระยะที่หมึกกินจริง สองค่านี้ต่างกันได้:
-       · ฟอนต์ที่ไม่มีน้ำหนักหนาจริง (เช่น Anuphan ที่ไม่มี 600) เบราว์เซอร์จะ
-         ปลอมตัวหนาให้ตอนวาด ตัวอักษรอ้วนขึ้นกว่าที่วัดไว้
-       · สระบน/ล่างและวรรณยุกต์ไทยยื่นพ้นตัวอักษรทางข้างได้
-     ทั้งสองกรณีทำให้ตัวหนังสือกว้างกว่ากล่องที่จองจาก .width แล้วโดนขอบผ้าใบตัด
-     วัดเป็น "ครึ่งกว้างจากจุดกึ่งกลาง" เพราะ fillText วาดโดยอ้างจุดกึ่งกลาง
-     (textAlign='center') — actualBoundingBox* ก็อ้างจุดเดียวกัน จองกล่องเท่ากับ
-     ครึ่งกว้างสองข้าง + padding ตัวหนังสือจึงชนขอบไม่ได้ไม่ว่าฟอนต์จะทำอะไร */
-  const halfOf=(str,weight,px)=>{
-    g.font=weight+' '+px+'px '+FONTS;
-    const m=g.measureText(str);
-    const l=(typeof m.actualBoundingBoxLeft==='number')?Math.abs(m.actualBoundingBoxLeft):m.width/2;
-    const r=(typeof m.actualBoundingBoxRight==='number')?Math.abs(m.actualBoundingBoxRight):m.width/2;
-    /* เผื่ออีกนิดต่อข้าง: ตัวหนาปลอมเกิดตอน "วาด" ไม่ใช่ตอน "วัด" บางเอนจินจึงไม่
-       นับรวมมาให้แม้แต่ใน actualBoundingBox* — 6% ของขนาดฟอนต์กินขอบหนาปลอม
-       ได้สบาย และกว้างขึ้นเท่านี้มองไม่ออกด้วยตาเปล่า */
-    return Math.max(l,r,m.width/2)+px*0.06;
-  };
-  /* ต้องตั้ง textAlign ก่อนวัดทุกครั้ง — actualBoundingBox* อ้างอิงจุด anchor ตาม
-     textAlign ปัจจุบัน และการตั้ง canvas.width ด้านล่างจะล้างค่านี้ทิ้ง */
-  const halfMax=()=>{g.textAlign='center';
-    let h=halfOf(txt,600,fs);if(sub)h=Math.max(h,halfOf(sub,500,sfs));return h;};
-  let half=halfMax();
+  /* วัดขอบหมึกจาก "ภาพที่วาดออกมาแล้ว" ไม่เชื่อ API วัดขนาดตัวไหนอีก
+     measureText().width คือระยะที่เคอร์เซอร์ขยับ ไม่ใช่ระยะที่หมึกกินจริง และ
+     actualBoundingBox* ก็ยังพลาดได้กับตัวหนาปลอม (ฟอนต์ที่ไม่มีน้ำหนักนั้นจริง
+     เบราว์เซอร์ทำให้หนาตอนวาด ไม่ใช่ตอนวัด) วิธีเดียวที่หลอกไม่ได้คือวาดจริง
+     ลงผ้าใบเปล่าแล้วไล่หาคอลัมน์ซ้ายสุด/ขวาสุดที่มีหมึก */
+  let half=Math.max(inkHalf(txt,600,fs),sub?inkHalf(sub,500,sfs):0);
   let wpx=Math.ceil(half*2+padd*2);const hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
   c.width=wpx*2;c.height=hpx*2;g.scale(2,2);
-  /* ผ้าใบเพิ่งถูกตั้งขนาดใหม่ ซึ่งล้าง state ของ context — วัดซ้ำด้วยฟอนต์ตัวที่จะใช้
-     วาดจริง ถ้าเว็บฟอนต์โหลดเสร็จคาบเกี่ยวช่วงนี้พอดีแล้วกว้างขึ้น ให้ขยายกล่องตาม */
-  const half2=halfMax();
-  if(half2>half+0.5){
-    half=half2;wpx=Math.ceil(half*2+padd*2);
-    c.width=wpx*2;c.height=hpx*2;g.setTransform(1,0,0,1,0,0);g.scale(2,2);
-  }
   const fsF=fs,sfsF=sfs;
   g.globalAlpha=o.alpha!=null?o.alpha:0.93;rr(g,1,1,wpx-2,hpx-2,Math.min(hpx*0.3,22));
   g.fillStyle=o.bg||PAL.lblBg;g.fill();
