@@ -9,6 +9,7 @@ pubspec.lock
 # Android
 android/local.properties
 android/.gradle/
+android/.kotlin/
 android/app/debug/
 android/app/profile/
 android/app/release/
