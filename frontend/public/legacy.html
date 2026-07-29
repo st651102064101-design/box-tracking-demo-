@@ -1494,7 +1494,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div id="inGateHint"></div>
     <div class="grid g3">
       <div class="field"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
-      <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม (ถ้ามี)" autocomplete="off"></div>
+      <div class="field"><label>รถของคู่ค้า <span class="req">*</span></label><select id="inPartner"></select>
+        <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
+      <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="inVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" list="dl-tel" placeholder="08x-xxx-xxxx" autocomplete="off"></div>
@@ -1849,6 +1851,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
         </div>
         <div class="field"><label>ชื่อลูกค้า / บริษัท <span class="req">*</span></label><input id="cName" placeholder="บจก. ปลายทาง"></div>
+        <div class="field"><label>ประเภทคู่ค้า <span class="req">*</span></label><select id="cKind">
+          <option value="customer">ลูกค้า (รับกล่องออกไป)</option>
+          <option value="supplier">ซัพพลายเออร์ (ส่งกล่องเข้ามา)</option>
+          <option value="both">ทั้งลูกค้าและซัพพลายเออร์</option>
+        </select></div>
         <div class="field"><label>กำหนดคืนภายใน (วัน) <span class="req">*</span></label><input id="cReturnDays" type="number" min="1" placeholder="15"></div>
         <div class="field"><label>ติดต่อ (โทร/อีเมล)</label><input id="cContact" placeholder="02-xxx-xxxx"></div>
         <div class="field"><label>ที่อยู่/สาขา</label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
@@ -1859,7 +1866,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="tablecard">
       <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       <button class="btn ghost sm" onclick="exportCustPDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div>
       <div class="bulkbar" id="bulkCust" style="display:none;">
         <span class="bcnt" id="bulkCustCnt"></span>
@@ -2550,7 +2557,16 @@ function custName(id){
   var logged=(S.auditLog||[]).find(function(a){return a.itemId===id&&a.itemName;});
   return logged?logged.itemName:id;
 }
-function custOptions(){return Object.values(S.customers).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');}
+/* ปลายทางขาออกต้องเป็นลูกค้าเท่านั้น — คู่ค้าที่ตั้งไว้เป็นซัพพลายเออร์ล้วนคือ
+   ต้นทางที่ส่งกล่องเข้ามา ไม่ใช่ที่ที่เราจ่ายกล่องออกไป จึงไม่ควรโผล่ให้เลือกผิด
+   (kind ว่าง = ระเบียนเก่าก่อนมีฟิลด์นี้ ถือเป็นลูกค้าตามความหมายเดิม) */
+function isCustomerKind(c){return (c.kind||'customer')!=='supplier';}
+function isSupplierKind(c){var k=c.kind||'customer';return k==='supplier'||k==='both';}
+function custOptions(){return Object.values(S.customers).filter(isCustomerKind).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');}
+function supplierOptions(sel){var ss=Object.values(S.customers).filter(isSupplierKind);
+  if(!ss.length)return '<option value="">(ยังไม่มีซัพพลายเออร์ — เพิ่มที่ตั้งค่า)</option>';
+  return '<option value="">— ไม่ระบุ —</option>'+ss.map(function(c){return '<option value="'+esc(c.id)+'"'+(String(sel)===String(c.id)?' selected':'')+'>'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');}
+window.supplierOptions=supplierOptions;
 function whName(id){return (S.warehouses[id]||{}).name||id||'-';}
 function gateWh(g){return S.gates[g]||'';}
 function allGateNums(){return Object.keys(S.gates).map(Number).sort(function(a,b){return a-b;});}
@@ -3077,15 +3093,24 @@ $('#btnAddCust').onclick=function(){
   }
   var before=editingCust?Object.assign({},S.customers[editingCust]):null;
   if(editingCust&&editingCust!==id)delete S.customers[editingCust];
-  S.customers[id]={id:id,name:nm,addr:val('cAddr'),contact:val('cContact'),returnDays:rd};
+  /* kind แยกคู่ค้าเป็นลูกค้า/ซัพพลายเออร์ ตามที่ผังงานกำหนดไว้ว่า Contact Master
+     ต้องมีประเภท — ระเบียนเก่าที่ยังไม่มีค่านี้ถือเป็น 'customer' เพราะก่อนหน้านี้
+     ทะเบียนนี้ใช้เก็บปลายทางขาออกอย่างเดียว */
+  S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:val('cAddr'),contact:val('cContact'),returnDays:rd};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});cIdAuto.reset();
+  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();
   toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · คืนใน '+rd+' วัน');renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});cIdAuto.reset();};
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
+  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();};
+/* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
+   ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
+var CUST_KIND={customer:{t:'ลูกค้า',c:'ok'},supplier:{t:'ซัพพลายเออร์',c:'purple'},both:{t:'ลูกค้า + ซัพพลายเออร์',c:'gray'}};
+function CUST_KIND_LABEL(k){var m=CUST_KIND[k]||CUST_KIND.customer;
+  return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
+window.CUST_KIND_LABEL=CUST_KIND_LABEL;
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
   $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
@@ -4886,9 +4911,14 @@ $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
+  /* ผังงานกำหนดว่ารถที่เข้าประตูต้องเป็นของคู่ค้าเสมอ และป้ายทะเบียนขาเข้าเป็นข้อบังคับ
+     — ไม่มีสองอย่างนี้ก็สาวกลับไม่ได้ว่ากล่องล็อตนี้มาจากใครและมากับรถคันไหน */
+  var partner=val('inPartner');
+  if(!partner)return toast('เลือกคู่ค้าเจ้าของรถ','รถขาเข้าต้องเป็นของซัพพลายเออร์หรือลูกค้า','err');
   if(!val('inRecorder'))setv('inRecorder',USER);
   var recorder=val('inRecorder')||USER;
   var plate=val('inPlate'),driver=val('inDriver');
+  if(!plate)return toast('กรอกทะเบียนรถ','จำเป็นสำหรับ Gate ขาเข้า','err');
   var wh=gateWh(gate);
   var loc={wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:Number(gate),ts:iso()};
   var vehicle=val('inVehicle'),tel=val('inDriverTel'),note=val('inNote');
@@ -4900,15 +4930,15 @@ $('#btnCheckIn').onclick=function(){
     // First successful inbound scan confirms the box's barcode label is attached and readable.
     b.labeled=true;
     if(isNewBox){
-      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จาก Supplier) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน'});
-      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
+      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จาก Supplier) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน'});
+      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
       b.status='warehouse';b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       newCount++;
     }else{
       // CASE B: box was previously dispatched → this is a genuine return from customer
-      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,recorder:recorder,note:(note||'')});
-      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
+      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||'')});
+      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
       b.status='warehouse';b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       returnCount++;
@@ -5373,6 +5403,21 @@ function renderSetup(){
   var hasCust=Object.keys(S.customers).length>0;
   var doCustSel=$('#doCustomer'),doCustHint=$('#doCustomerHint');
   if(doCustSel){doCustSel.innerHTML=hasCust?'<option value="">— เลือกลูกค้า —</option>'+custOptions():'';doCustSel.style.display=hasCust?'':'none';}
+  /* เจ้าของรถขาเข้า: ซัพพลายเออร์ (ส่งกล่องใหม่) และลูกค้า (คืนกล่อง) อยู่ในรายการ
+     เดียวกัน แต่ติดป้ายกำกับให้เห็นว่าใครเป็นอะไร — ค่าที่เลือกไว้ถูกคงไว้ เพราะ
+     renderAll() ถูกเรียกซ้ำได้ระหว่างที่ผู้ใช้ยังกรอกฟอร์มไม่เสร็จ */
+  var inPartnerSel=$('#inPartner');
+  if(inPartnerSel){
+    var keepP=inPartnerSel.value;
+    var partners=Object.values(S.customers);
+    inPartnerSel.innerHTML=partners.length
+      ? '<option value="">\u2014 เลือกคู่ค้าเจ้าของรถ \u2014</option>'+partners.map(function(c){
+          var k=c.kind||'customer';
+          var tg=k==='supplier'?'ซัพพลายเออร์':(k==='both'?'ลูกค้า + ซัพพลายเออร์':'ลูกค้า');
+          return '<option value="'+esc(c.id)+'">'+esc(c.name)+' \u00b7 '+tg+'</option>';}).join('')
+      : '<option value="">(ยังไม่มีคู่ค้า \u2014 เพิ่มที่ตั้งค่า)</option>';
+    if(keepP)inPartnerSel.value=keepP;
+  }
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
   // box table
@@ -5442,12 +5487,12 @@ function renderSetup(){
   }):Object.values(S.customers);
   var cs=idSort(csAll,uiSort.cust);
   $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=Object.values(S.boxes).filter(function(b){return b.customer===c.id&&b.status==='out';}).length;
-    return '<tr data-tag="'+esc(c.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(c.contact||'-')+'</td>'
+    return '<tr data-tag="'+esc(c.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(c.contact||'-')+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c"><div class="row-actions">'
       +'<button class="btn sm ghost" onclick="editCust(\''+esc(c.id)+'\')">แก้ไข</button>'
       +'<button class="btn sm red" onclick="delCust(\''+esc(c.id)+'\')">ลบ</button>'
       +'</div></td></tr>';
-  }).join(''):emptyRow(8,'ยังไม่มีลูกค้า');
+  }).join(''):emptyRow(9,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
   setupBulkTable('custBody','cust-cb','cbAllCust','bulkCust','bulkCustCnt');
 
@@ -9661,6 +9706,17 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    "รถของคู่ค้า":"Vehicle owner (partner)",
+    "รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ":"A vehicle at the gate always belongs to a supplier (delivering new boxes) or a customer (returning them)",
+    "— เลือกคู่ค้าเจ้าของรถ —":"- Select the vehicle owner -",
+    "(ยังไม่มีคู่ค้า — เพิ่มที่ตั้งค่า)":"(No partners yet - add one in Setup)",
+    "ประเภทคู่ค้า":"Partner type",
+    "ลูกค้า (รับกล่องออกไป)":"Customer (receives boxes)",
+    "ซัพพลายเออร์ (ส่งกล่องเข้ามา)":"Supplier (sends boxes in)",
+    "ทั้งลูกค้าและซัพพลายเออร์":"Both customer and supplier",
+    "ซัพพลายเออร์":"Supplier",
+    "ลูกค้า + ซัพพลายเออร์":"Customer + supplier",
+    "(ยังไม่มีซัพพลายเออร์ — เพิ่มที่ตั้งค่า)":"(No suppliers yet - add one in Setup)",
     /* ---- รอบเก็บตก: ประโยคอธิบายยาว ๆ ที่ FRAG เคยแปลครึ่งเดียวจนอ่านไม่รู้เรื่อง ----
        พวกนี้ต้องเป็น EXACT เพราะ FRAG แทนที่คำเดี่ยวกลางประโยค (เช่น "คิวส่งออก",
        "บาร์โค้ด", "แร็ค") แล้วเหลือไทยรอบ ๆ ปนอังกฤษ ซึ่งอ่านยากกว่าไม่แปลเลย */
