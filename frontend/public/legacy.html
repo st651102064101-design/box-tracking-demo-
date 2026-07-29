@@ -1244,7 +1244,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .w3d-legendbar i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px;}
   .w3d-hint{position:absolute;right:13px;bottom:12px;font-size:11.5px;color:var(--muted);background:color-mix(in srgb,var(--surface) 80%,transparent);border:.5px solid var(--line);border-radius:999px;padding:8px 14px;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);z-index:5;}
   @media(max-width:900px){.w3d-hint{display:none;}}
-  .w3d-detail{position:absolute;top:13px;right:13px;width:308px;max-width:calc(100% - 26px);max-height:calc(100% - 26px);overflow:auto;background:color-mix(in srgb,var(--surface) 90%,transparent);border:.5px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);z-index:6;padding:15px 16px 13px;}
+  /* เริ่มใต้แถวปุ่มมุมขวา (top 13 + ปุ่มสูง 36 + เว้น 10) — การ์ดกับแถวปุ่มเคย
+     ปักมุมเดียวกันทั้งคู่ ปุ่มเลยทับหัวการ์ดจนอ่านรหัสช่อง/ปิดการ์ดไม่ได้ */
+  .w3d-detail{position:absolute;top:59px;right:13px;width:308px;max-width:calc(100% - 26px);max-height:calc(100% - 72px);overflow:auto;background:color-mix(in srgb,var(--surface) 90%,transparent);border:.5px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);z-index:6;padding:15px 16px 13px;}
   .w3dd-head{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
   .w3dd-tag{font-family:var(--mono);font-size:18px;font-weight:700;}
   .w3dd-x{margin-left:auto;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--ink) 7%,transparent);font-size:12px;flex:0 0 auto;}
@@ -1279,6 +1281,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="w3d-fab" id="w3dSpin" title="หมุนพรีเซนต์อัตโนมัติ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14.5-4.6M20 12a8 8 0 0 1-14.5 4.6"/><path d="M18.5 3v4.4H14M5.5 21v-4.4H10"/></svg></span></button>
         <button class="w3d-fab" id="w3dReset" title="กลับมุมมองเริ่มต้น"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span></button>
         <button class="w3d-fab" id="w3dRoof" title="ซ่อน/แสดงหลังคา"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v9h14v-9"/></svg></span></button>
+        <button class="w3d-fab" id="w3dLights" title="เปิดไฟในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.9 1 .9 1.7v.5h5.4v-.5c0-.7.4-1.3.9-1.7A6 6 0 0 0 12 3Z"/></svg></span></button>
         <button class="w3d-fab" id="w3dFull" title="แสดงเต็มจอ"><span class="svgi svgi-expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg></span></button>
         <button class="w3d-fab" id="w3dInfoToggle" title="ซ่อนรายละเอียด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-8.5 4-9.5 7 1 3 4.5 7 9.5 7s8.5-4 9.5-7c-1-3-4.5-7-9.5-7Z"/><circle cx="12" cy="12" r="2.6"/></svg></span></button>
       </div>
@@ -10298,6 +10301,8 @@ const MAT={
   sensor:new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),
   ringM:new THREE.MeshBasicMaterial({color:0xa8f931,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}),
   lampOn:new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:2.4,roughness:0.35}),
+  /* หน้าโคมตอนปิดไฟ — กระจกขุ่นที่ไม่เปล่งแสงเอง ยังเห็นว่ามีโคมแขวนอยู่ */
+  lampOff:new THREE.MeshStandardMaterial({color:0x8e9298,emissive:0x000000,roughness:0.55,metalness:0.15}),
   /* ลำแสงและวงแสงบนพื้นของโคม high-bay — additive จึงบวกความสว่างให้พื้นผิวข้างใต้
      แทนที่จะทาสีขาวทับ ทำให้อ่านเป็น "แสง" ไม่ใช่ "แผ่นพลาสติกขุ่น" */
   lightBeam:new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.06,
@@ -10526,6 +10531,14 @@ let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
 const DOCK={};                                   // สถานะท่าเทียบ — คงอยู่ข้าม rebuild
 const ROOF={on:true,mesh:null};                  // เปิด/ปิดหลังคา — ต้องจำข้าม rebuild ไม่งั้นกดซ่อนแล้วเด้งกลับ
+/* ไฟในคลัง — ปิดไว้เป็นค่าเริ่มต้น เปิดเมื่อกดปุ่มเท่านั้น
+   ต้องจำข้าม rebuild เหมือนหลังคา ไม่งั้นพอข้อมูลเปลี่ยนแล้วฉากถูกสร้างใหม่
+   ไฟที่ผู้ใช้เพิ่งเปิดจะดับเอง (fx = กรวยแสง + วงแสงบนพื้น, lamp = หน้าโคม) */
+const LIGHTS={on:false,fx:[],lamp:null};
+function applyLights(){
+  if(LIGHTS.lamp)LIGHTS.lamp.material=LIGHTS.on?MAT.lampOn:MAT.lampOff;
+  LIGHTS.fx.forEach(m=>{m.visible=LIGHTS.on;});
+}
 const opsRoot=new THREE.Group();scene.add(opsRoot); // รถ/forklift ไม่ถูกล้างเมื่อ rebuild
 let beaconT=0;
 const raycaster=new THREE.Raycaster(),ptr=new THREE.Vector2();
@@ -10991,7 +11004,8 @@ function build(){
   }
   instMesh(beamsCeil,MAT.column,(z,p,s)=>{p.set((bMinX+bMaxX)/2,WALL_H-0.5,z);s.set(bW-0.6,0.2,0.24);},true);
   instMesh(lamps,MAT.cage,(it,p,s)=>{p.set(it[0],WALL_H-0.86,it[1]);s.set(0.66,0.14,0.44);},true);
-  instMesh(lamps,MAT.lampOn,(it,p,s)=>{p.set(it[0],WALL_H-0.96,it[1]);s.set(0.58,0.05,0.36);},true);
+  LIGHTS.fx=[];
+  LIGHTS.lamp=instMesh(lamps,MAT.lampOn,(it,p,s)=>{p.set(it[0],WALL_H-0.96,it[1]);s.set(0.58,0.05,0.36);},true);
   /* แสงที่ส่องลงมาจากโคมทุกดวง — PointLight ต่อดวงชนเพดานจำนวนไฟของ WebGL
      ตั้งแต่โคมหลักสิบดวง จึงวาดเป็นกรวยแสงโปร่ง + วงแสงบนพื้นแทน ได้ภาพเดียวกัน
      โดยไม่เพิ่มภาระต่อเฟรม (ConeGeometry ปลายแหลมชี้ขึ้นอยู่แล้ว — วางจุดยอด
@@ -11005,8 +11019,9 @@ function build(){
       p.set(it[0],beamH/2+0.02,it[1]);s.set(3.6,beamH,3.6);m4.compose(p,q,s);beams.setMatrixAt(i,m4);
       p.set(it[0],0.03,it[1]);s.set(3.9,0.02,3.9);m4.compose(p,q,s);pools.setMatrixAt(i,m4);
     });
-    [beams,pools].forEach(m=>{m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.renderOrder=2;root.add(m);});
+    [beams,pools].forEach(m=>{m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.renderOrder=2;root.add(m);LIGHTS.fx.push(m);});
   }
+  applyLights();   // ฉากเพิ่งถูกสร้างใหม่ — บังคับให้ตรงกับสวิตช์ที่ผู้ใช้ตั้งไว้
 
   /* ── ประตูม้วน + dock shelter + dock leveler ── */
   const n=gs.length,gp=bW/(n||1);
@@ -12443,6 +12458,20 @@ roofBtn.addEventListener('click',()=>{
   setRoofUI();
 });
 setRoofUI();
+
+/* ไฟในคลัง — เริ่มที่ปิด คลังจึงดูตามแสงธรรมชาติที่ลอดโดมลงมาก่อน
+   กดเพื่อเปิดโคม high-bay ทั้งแถว (ปุ่มติดไฟ = ไฟเปิดอยู่) */
+const lightBtn=document.getElementById('w3dLights');
+function setLightUI(){
+  lightBtn.classList.toggle('active',LIGHTS.on);
+  lightBtn.title=LIGHTS.on?'ปิดไฟในคลัง':'เปิดไฟในคลัง';
+}
+lightBtn.addEventListener('click',()=>{
+  LIGHTS.on=!LIGHTS.on;
+  applyLights();
+  setLightUI();
+});
+setLightUI();
 
 const fullBtn=document.getElementById('w3dFull');
 const FULL_ICON_ENTER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>';
