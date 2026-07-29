@@ -9858,6 +9858,9 @@ function openColumnMapModal(opts){
     "ต้องติดตามคืน":"Needs chasing",
     "เพิ่งเข้ามาวันนี้":"Arrived today",
     "ยังไม่ได้ตั้งค่าตำแหน่งแร็ค":"Rack positions not configured yet",
+    "ติดแท็กแล้ว รอยกไปพัก":"Tagged - waiting for pickup",
+    "ปลายสายพาน · forklift มารับที่นี่":"End of the belt - forklifts collect here",
+    "TAGGED · รอ forklift":"TAGGED - awaiting forklift",
     "ลากหมุน · ล้อซูม · คลิกกล่อง/ช่องดูรายละเอียด — 1 กล่องในฉาก = กล่องจริง 1 ใบ":"Drag to rotate - scroll to zoom - click a box or slot for details - one box on screen is one real box",
     "ป้อมยาม · จุดตรวจรถเข้า-ออก":"Gatehouse - vehicle checkpoint",
     "ลานจอดรถบรรทุก":"Truck yard",
@@ -11992,7 +11995,7 @@ function build(){
   const inGate=gs.find(g=>LY.gateDir[g]==='in'),outGate=gs.find(g=>LY.gateDir[g]==='out');
   const inGX=inGate!=null?LY.gateX[inGate]:bMinX+bW*0.3;
   const outGX=outGate!=null?LY.gateX[outGate]:bMaxX-bW*0.3;
-  LY.zoneSlots={stg:[],rfid:[],out:[],ret:[]};
+  LY.zoneSlots={stg:[],rfid:[],out:[],ret:[],tagged:[]};
 
   /* ── กันแร็คโซนพักงานทะลุผนัง ────────────────────────────────
      buildLowRack วางแร็คโดยยึด o.x เป็น "จุดกึ่งกลาง" แล้วกว้าง bays×STG_BAY
@@ -12051,6 +12054,22 @@ function build(){
   LY.obstacles.push({x0:benchX-1.15,x1:benchX+1.15,z0:dockLaneZ-1.98,z1:dockLaneZ-1.02});
   const bl=makeLabel('จุดติด RFID','พิมพ์ tag · ผูกกับกล่อง',{fs:26,h:0.5,fg:'#8b5cf6',subFg:'#8b5cf6'});
   bl.position.set(benchX,1.72,dockLaneZ-1.5);root.add(bl);
+
+  /* 2b) จุดวางกล่องที่ติดแท็กแล้ว — ปลายทางของสายพาน ต้นทางของ forklift
+     ก่อนหน้านี้ forklift วิ่งไปยกกล่องจากบนสายพานโดยตรง ซึ่งเป็นกล่องที่ "ยัง
+     ไม่ได้ติดแท็ก" และกำลังไหลไปหาโต๊ะติดแท็กอยู่ — ผิดลำดับงานจริง
+     ของจริงกล่องต้องผ่านโต๊ะติด RFID ก่อน แล้วถูกวางลงที่จุดพักนี้ จากนั้น
+     forklift ค่อยมายกไปที่จุดรอจัดเก็บ (STG) จุดนี้จึงเป็นตัวคั่นสองขั้นนั้น */
+  const tagdBays=3;
+  const tagdX=fitRackX(benchX,tagdBays);
+  const tagdZ=dockLaneZ-STG_D/2-4.4;
+  const tagdRack=buildLowRack({x:tagdX,z:tagdZ,bays:tagdBays,levels:1,codePrefix:'TGD',
+    label:'ติดแท็กแล้ว รอยกไปพัก',sub:'ปลายสายพาน · forklift มารับที่นี่',
+    beam:MAT.rfidBeam,fg:'#8b5cf6',subFg:'#8b5cf6',hang:'TAGGED · รอ forklift'});
+  LY.zoneSlots.tagged=tagdRack.slots;
+  root.add(paint(tagdBays*STG_BAY+0.6,STG_D+1.6,MAT.stagePad,tagdRack.group.position.x,tagdZ,0.016));
+  LY.obstacles.push({x0:tagdRack.group.position.x-(tagdBays*STG_BAY)/2,x1:tagdRack.group.position.x+(tagdBays*STG_BAY)/2,
+                     z0:tagdZ-STG_D/2,z1:tagdZ+STG_D/2});
 
   /* 3) รอส่งออก (outbound staging) — แยกแร็คต่อ DO */
   const byDO=new Map();
@@ -12424,7 +12443,9 @@ function agentSrcDst(a){
   if(a.role==='receive')  return [zoneSlotPoint('ret',i)||gatePoint(gateOf('in')), zoneSlotPoint('stg',i)];
   if(a.role==='putaway')  return [zoneSlotPoint('stg',a.task.idx*CHUNK+i), cellPoint(freeCells[(a.task.idx*CHUNK+i)%Math.max(freeCells.length,1)])];
   if(a.role==='load')     return [zoneSlotPoint('out',i), gatePoint(gateOf('out'))];
-  if(a.role==='tag')      return [zoneSlotPoint('rfid',i), zoneSlotPoint('stg',i+8)];
+  /* ยกจาก "จุดที่ติดแท็กแล้ว" ไปที่จุดรอจัดเก็บ — ไม่ใช่ยกจากบนสายพานที่กล่อง
+     ยังไหลไปหาโต๊ะติดแท็กอยู่ (ยังไม่ได้ติดแท็ก จึงยังยกไปเก็บไม่ได้) */
+  if(a.role==='tag')      return [zoneSlotPoint('tagged',i), zoneSlotPoint('stg',i+8)];
   return [null,null];
 }
 function gateOf(dir){
