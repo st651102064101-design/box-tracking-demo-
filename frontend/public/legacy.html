@@ -2035,25 +2035,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
     </div>
-    <!-- ===== จุดรอ Putaway / รอจัดเก็บ (Staging) ต่อคลัง ===== -->
-    <div class="card hover" id="stgCard">
-      <h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v5H3zM3 15h18v5H3z"/><path d="M8 8V4h8v4"/></svg></span> จุดรอ Putaway / รอจัดเก็บ (Staging)</h3>
-      <p class="desc">พื้นที่พักกล่องหลังผ่าน Gate ขาเข้า ก่อนขึ้นชั้นวางจริง — คลังนี้มีแร็คพักเดียว กำหนดได้ว่ามีกี่ช่อง ค่าเริ่มต้น <b>STG-01 – STG-05</b> ตามคลังเสมือน 3D — แต่ละช่องเลือกได้ว่าใช้เป็นตำแหน่งจริงในผัง 3D (ใส่แร็ค) หรือกรองอย่างเดียว (ไม่มีตำแหน่งจริง)</p>
-      <div class="grid g2" style="margin-bottom:14px;">
-        <div class="field"><label>คลัง <span class="req">*</span></label><select id="stgWh" onchange="renderStagingMaster()"></select></div>
-        <div class="field"><label>จำนวนช่องพัก (bays)</label>
-          <div class="auto-tag-row">
-            <input id="stgCount" type="number" min="1" max="30" step="1" autocomplete="off" style="font-family:var(--mono);">
-            <button type="button" class="btn ghost sm" onclick="applyStagingCount()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span> บันทึกจำนวน</button>
-          </div>
-        </div>
-      </div>
-      <div id="stgList"></div>
-      <div class="row" style="margin-top:14px;align-items:center;">
-        <button class="btn ghost sm" onclick="resetStagingBays()"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> ตั้งค่าเริ่มต้น STG-01 – STG-05</button>
-        <div class="spacer"></div>
-        <span class="muted small" id="stgHint"></span>
-      </div>
     </div>
     <div class="tablecard">
       <div class="tablehead" style="flex-wrap:wrap;gap:8px;">
@@ -2939,93 +2920,9 @@ function renderWhGateTypeList(preset){
 window.renderWhGateTypeList=renderWhGateTypeList;
 ['whGateFrom','whGateTo'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){renderWhGateTypeList();});});
 (function(){var s=$('#whGateType');if(s)s.addEventListener('change',function(){var v=s.value;$all('#whGateTypeList .wh-gt-sel').forEach(function(x){x.value=v;});});renderWhGateTypeList();})();
-/* ===== จุดรอ Putaway / รอจัดเก็บ (Staging bays) ต่อคลัง =====
-   คลังละแร็คเดียวเท่านั้น — กำหนดแค่ "จำนวนช่อง" ไม่ใช่รายการรหัสที่เพิ่ม/ลบเองได้ทีละช่อง
-   ค่าเริ่มต้น STG-01 – STG-05 ให้ตรงกับแร็คพักในคลังเสมือน 3D
-   เก็บที่ S.warehouses[wh].stagingBays (รายชื่อช่อง, auto-gen จากจำนวน) และ
-   S.warehouses[wh].stagingBayTypes (ต่อช่อง: 'rack'=มีตำแหน่งจริงในผัง 3D, 'filter'=กรองอย่างเดียว ไม่สร้างตำแหน่งจริง) */
-var DEFAULT_STAGING_BAYS=['STG-01','STG-02','STG-03','STG-04','STG-05'];
-function whStagingBays(whId){
-  var w=S.warehouses[whId]||{};
-  var a=Array.isArray(w.stagingBays)?w.stagingBays.filter(function(c){return !!String(c==null?'':c).trim();}):null;
-  return (a&&a.length)?a.slice():DEFAULT_STAGING_BAYS.slice();
-}
-function stagingBayType(whId,code){
-  var w=S.warehouses[whId]||{};
-  var t=w.stagingBayTypes&&typeof w.stagingBayTypes==='object'?w.stagingBayTypes[code]:null;
-  return t==='filter'?'filter':'rack';
-}
-function setWhStagingBays(whId,arr){
-  var w=S.warehouses[whId];if(!w)return;
-  var before=JSON.parse(JSON.stringify(w));
-  w.stagingBays=arr.slice();
-  auditEntry('UPDATE',USER,whId,'จุดรอ Putaway '+arr.length+' ช่อง',before,w);
-  save();renderStagingMaster();
-  if(window.W3D&&window.W3D.refresh)window.W3D.refresh();
-}
-function setStagingBayType(whId,code,type){
-  var w=S.warehouses[whId];if(!w)return;
-  var before=JSON.parse(JSON.stringify(w));
-  w.stagingBayTypes=Object.assign({},w.stagingBayTypes||{});
-  w.stagingBayTypes[code]=type;
-  auditEntry('UPDATE',USER,whId,'ประเภทช่องรอ Putaway '+code+' → '+(type==='filter'?'กรองอย่างเดียว':'ใส่แร็ค'),before,w);
-  save();renderStagingMaster();
-  if(window.W3D&&window.W3D.refresh)window.W3D.refresh();
-}
-/* จำนวนกล่องที่รอ putaway อยู่ในแร็คนี้ (ยังไม่มีโซน/แร็คจริงจาก Location Master) */
-function stagingBoxCount(whId){
-  return Object.values(S.boxes||{}).filter(function(b){
-    if(b.status!=='warehouse')return false;
-    var l=b.location||{};
-    if((l.wh||'')!==whId)return false;
-    return !(l.zone||l.rack);
-  }).length;
-}
-function renderStagingMaster(){
-  var sel=$('#stgWh');if(!sel)return;
-  var whs=Object.values(S.warehouses);
-  var keep=sel.value;
-  sel.innerHTML=whs.length
-    ? whs.map(function(w){return '<option value="'+esc(w.id)+'">'+esc(w.name||w.id)+'</option>';}).join('')
-    : '<option value="">— ยังไม่มีคลัง —</option>';
-  if(keep&&S.warehouses[keep])sel.value=keep;
-  var wh=sel.value;
-  var bays=whStagingBays(wh);
-  var custom=!!(S.warehouses[wh]&&Array.isArray(S.warehouses[wh].stagingBays)&&S.warehouses[wh].stagingBays.length);
-  var box=$('#stgList');
-  if(box)box.innerHTML=bays.length?bays.map(function(c){
-    return '<span class="stg-chip">'+esc(c)+'</span>';
-  }).join(''):'<span class="muted small">ยังไม่มีจุดพัก — กด “ตั้งค่าเริ่มต้น” เพื่อสร้าง STG-01 – STG-05</span>';
-  var cnt=$('#stgCount');if(cnt&&document.activeElement!==cnt)cnt.value=bays.length;
-  var hint=$('#stgHint');
-  if(hint)hint.textContent=wh
-    ?((custom?'บันทึกไว้เอง · ':'ค่าเริ่มต้นระบบ · ')+bays.length+' ช่อง · มีกล่องรอจัดเก็บอยู่ในแร็คนี้ '+stagingBoxCount(wh)+' ใบ')
-    :'';
-}
-function applyStagingCount(){
-  var sel=$('#stgWh'),inp=$('#stgCount');
-  var wh=sel&&sel.value;
-  if(!wh)return toast('ทำไม่ได้','ยังไม่มีคลังในระบบ — เพิ่มคลังที่ "คลัง & ประตู" ก่อน','err');
-  var n=Math.max(1,Math.min(30,parseInt((inp&&inp.value)||'0',10)||0));
-  if(!n)return toast('กรอกจำนวนช่องไม่ถูกต้อง',null,'err');
-  var arr=[];for(var i=1;i<=n;i++)arr.push('STG-'+String(i).padStart(2,'0'));
-  setWhStagingBays(wh,arr);
-  toast('บันทึกจำนวนช่องแล้ว',n+' ช่อง · '+whName(wh),'ok');
-}
-function toggleStagingBayType(i){
-  var wh=($('#stgWh')||{}).value;if(!wh)return;
-  var bays=whStagingBays(wh),code=bays[i];if(!code)return;
-  setStagingBayType(wh,code,stagingBayType(wh,code)==='rack'?'filter':'rack');
-}
-function resetStagingBays(){
-  var wh=($('#stgWh')||{}).value;if(!wh)return toast('ทำไม่ได้','ยังไม่มีคลังในระบบ','err');
-  var w=S.warehouses[wh];if(w)w.stagingBayTypes={};
-  setWhStagingBays(wh,DEFAULT_STAGING_BAYS.slice());
-  toast('ตั้งค่าเริ่มต้นแล้ว','STG-01 – STG-05 · '+whName(wh),'ok');
-}
-window.whStagingBays=whStagingBays;window.renderStagingMaster=renderStagingMaster;
-window.applyStagingCount=applyStagingCount;window.toggleStagingBayType=toggleStagingBayType;
-window.resetStagingBays=resetStagingBays;
+/* จุดพักรอ Putaway ถูกถอดออกจาก Master แล้ว — เป็นแค่ตำแหน่งในฉาก 3D ไม่ใช่ข้อมูลที่เก็บลง DB
+   (ดู stagingCodes() ฝั่งโมดูล 3D ซึ่งสร้างจำนวนช่องเองตามของที่ค้างอยู่จริง) */
+
 
 /* Staging (awaiting-putaway) config per warehouse — falls back to system default if not set */
 var DEFAULT_STAGING={zone:'พื้นที่รับของขาเข้า',rack:'STG-01'};
@@ -6333,7 +6230,6 @@ function renderLocMaster() {
     ? whs.map(function(w){ return '<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>'; }).join('')
     : '<option value="">— ยังไม่มีคลัง —</option>';
   ['locWh','bulkLocWh'].forEach(function(id){ var s=$('#'+id); if(s) s.innerHTML=whOpts; });
-  renderStagingMaster();
 
   /* build chip row from live data (also refreshes filter options) */
   buildLocChips();
@@ -11252,14 +11148,14 @@ const raycaster=new THREE.Raycaster(),ptr=new THREE.Vector2();
 
 /* จุดรอ Putaway (staging bays) ของคลังนี้ — ตั้งค่าจากหน้า Master → ตำแหน่งแร็ค
    ไม่ตั้งค่า = STG-01 – STG-05 (ตรงกับค่าเริ่มต้นของหน้า Location Master) */
-function stagingCodes(wh){
-  const w=(St().warehouses||{})[wh]||{};
-  const a=Array.isArray(w.stagingBays)?w.stagingBays.filter(c=>!!String(c==null?'':c).trim()):null;
-  const codes=(a&&a.length)?a.slice():['STG-01','STG-02','STG-03','STG-04','STG-05'];
-  /* ช่องที่ตั้งเป็น "กรองอย่างเดียว" ไม่มีตำแหน่งจริง — ไม่ต้องสร้างบาย 3D ให้ */
-  const types=(w.stagingBayTypes&&typeof w.stagingBayTypes==='object')?w.stagingBayTypes:{};
-  const rackOnly=codes.filter(c=>types[c]!=='filter');
-  return rackOnly.length?rackOnly:codes;
+/* ช่องพักรอ Putaway เป็นแค่ "ที่วางของในฉาก" ไม่ใช่ข้อมูลหลัก จึงไม่เก็บลง DB และไม่มี
+   หน้าตั้งค่าให้กรอกอีกแล้ว — จำนวนช่องคิดจากของที่ค้างรอจัดเก็บอยู่จริง ณ ตอนนั้น
+   พอมีของมากขึ้นก็มีช่องมากขึ้นเอง โดยมีขั้นต่ำไว้ให้ผังอ่านออกแม้ตอนไม่มีของค้าง */
+function stagingCodes(wh,pending){
+  const n=Math.max(5,Math.min(12,pending||0));
+  const codes=[];
+  for(let i=1;i<=n;i++)codes.push('STG-'+String(i).padStart(2,'0'));
+  return codes;
 }
 function statusKey(b){
   if(b.status==='lost')return 'lost';
@@ -12016,7 +11912,7 @@ function build(){
   const CHARGE_X1=bMinX+3.2;      // แถบชิดผนังซ้าย = จุดชาร์จ forklift — ห้ามวางแร็คทับ
 
   /* 1) รอจัดเก็บ (inbound staging) — แร็คเตี้ย จำนวนช่อง = จุดรอ Putaway ที่ตั้งไว้ใน Master */
-  const stgCodes=stagingCodes(curWh);
+  const stgCodes=stagingCodes(curWh,stagingOnly.length);
   const stgBays=Math.max(1,Math.min(maxBays,stgCodes.length));
   const stgRack=buildLowRack({x:fitRackX(X0+Math.min(stgBays*STG_BAY,contentW*0.62)/2-0.3,stgBays,CHARGE_X1),z:zoneLaneZ-STG_D/2-1.5,
     bays:stgBays,levels:2,codePrefix:'STG',codes:stgCodes,label:'รอจัดเก็บ '+stagingOnly.length+' ใบ',sub:stgCodes.length+' จุดพัก · '+stgCodes[0]+(stgCodes.length>1?(' – '+stgCodes[stgCodes.length-1]):''),beam:MAT.stageBeam,hang:'STAGING · รอจัดเก็บ'});
@@ -12443,9 +12339,17 @@ function agentSrcDst(a){
   if(a.role==='receive')  return [zoneSlotPoint('ret',i)||gatePoint(gateOf('in')), zoneSlotPoint('stg',i)];
   if(a.role==='putaway')  return [zoneSlotPoint('stg',a.task.idx*CHUNK+i), cellPoint(freeCells[(a.task.idx*CHUNK+i)%Math.max(freeCells.length,1)])];
   if(a.role==='load')     return [zoneSlotPoint('out',i), gatePoint(gateOf('out'))];
-  /* ยกจาก "จุดที่ติดแท็กแล้ว" ไปที่จุดรอจัดเก็บ — ไม่ใช่ยกจากบนสายพานที่กล่อง
-     ยังไหลไปหาโต๊ะติดแท็กอยู่ (ยังไม่ได้ติดแท็ก จึงยังยกไปเก็บไม่ได้) */
-  if(a.role==='tag')      return [zoneSlotPoint('tagged',i), zoneSlotPoint('stg',i+8)];
+  /* งานขาเข้าเดินเป็นสองขาสลับกัน คนขับคันเดียวทำจบทั้งชุดแบบที่คลังจริงทำกัน
+       ขาคู่  ยกจาก "จุดที่ติดแท็กแล้ว" ไปพักที่จุดรอจัดเก็บ (STG)
+       ขาคี่  ยกจากจุดรอจัดเก็บ ขึ้นไปวางที่ "ช่องแร็คจริง" ที่ยังว่างอยู่
+     ก่อนหน้านี้มีแต่ขาแรก กล่องจึงไปกองค้างที่ STG โดยไม่มีใครยกขึ้นชั้นวางเลย
+     ส่วนขาขึ้นแร็คจะเห็นก็ต่อเมื่อมีของค้างที่ STG อยู่แล้วเท่านั้น (บทบาท putaway)
+     ซึ่งกับคลังที่เพิ่งรับของเข้ามาใหม่จะยังไม่มี — ขั้นตอนสุดท้ายของวงจรจึงหายไป */
+  if(a.role==='tag'){
+    const leg=Math.floor(i/2);
+    if(i%2===0) return [zoneSlotPoint('tagged',leg), zoneSlotPoint('stg',leg+8)];
+    return [zoneSlotPoint('stg',leg+8), cellPoint(freeCells[leg%Math.max(freeCells.length,1)])];
+  }
   return [null,null];
 }
 function gateOf(dir){
