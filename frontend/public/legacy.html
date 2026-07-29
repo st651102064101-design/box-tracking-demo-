@@ -2333,10 +2333,29 @@ function apiFetch(path,opt){
   });
 }
 window.apiUrl=apiUrl;window.apiFetch=apiFetch;window.setApiRoot=setApiRoot;window.apiRoot=apiRoot;
+/* Identifies this browser tab to the server for the lifetime of the page. It
+   comes back on the realtime ping so a tab can tell its own write apart from
+   somebody else's and skip re-downloading what it just uploaded. */
+var CLIENT_ID=(function(){
+  try{ if(window.crypto&&crypto.randomUUID)return crypto.randomUUID(); }catch(e){}
+  return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+})();
+window.BT_CLIENT_ID=CLIENT_ID;
+/* Set while we are redrawing from a snapshot the server just handed us.
+   renderAll() ends in save(), so without this an incoming update would be
+   PUT straight back — and because save() uploads this tab's whole S, a tab
+   that echoed a stale copy would overwrite whatever the other tab had just
+   written. Adopting is strictly a read; it must never write. */
+var SUPPRESS_SAVE=false;
+window.btSuppressSave=function(fn){
+  SUPPRESS_SAVE=true;
+  try{fn();}finally{SUPPRESS_SAVE=false;}
+};
 function save(){
+  if(SUPPRESS_SAVE)return;
   apiFetch('/api/state',{
     method:'PUT',
-    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),
     body:JSON.stringify(S)
   }).then(function(r){
     if(r.status===401){window.location.href='/login';}
@@ -2366,6 +2385,14 @@ function loadFromServer(){
     .then(function(d){ if(d) S=normalizeState(d); })
     .catch(function(e){console.warn('[BoxTrace] load from server failed',e);});
 }
+/* Swap in a snapshot the caller already holds, with the same normalisation
+   loadFromServer() applies but without a second round-trip. The live-update
+   path (the 3D module's poll/SSE) has the payload in hand already.
+   This exists because that path used to call a global load(), which this app
+   has not had since persistence moved from localStorage to the API — the
+   typeof guard around it silently did nothing, so state pulled from the
+   server was written to localStorage and then never actually adopted. */
+function adoptStateSnapshot(d){ if(d) S=normalizeState(d); }
 
 /* ===== helpers ===== */
 function $(s,c){return (c||document).querySelector(s);}
@@ -9896,10 +9923,23 @@ async function pullState(){
 }
 /* เซิร์ฟเวอร์เป็น source of truth — โหลดเข้าแอปด้วยกลไกเดิม (load + renderAll) */
 function adoptServerState(st){
-  try{localStorage.setItem(SKEY,JSON.stringify(st));}catch(_){}
+  /* mirror it for the next reload, but mark it as already-synced so the
+     persistence bridge does not PUT the server's own snapshot back at it */
+  const snap=JSON.stringify(st);
+  if(typeof Wn.boxtraceAdoptServerJson==='function')Wn.boxtraceAdoptServerJson(snap);
+  else try{localStorage.setItem(SKEY,snap);}catch(_){}
   try{
-    if(typeof Wn.load==='function')Wn.load();
-    if(typeof Wn.renderAll==='function')Wn.renderAll();
+    /* read-only redraw: renderAll() would otherwise save() this snapshot
+       back to the server and clobber a concurrent write from another tab */
+    const redraw=()=>{
+      /* actually put the snapshot into the app's S — adoptStateSnapshot is the
+         app's own loader; Wn.load is the pre-API name, kept only as a fallback */
+      if(typeof Wn.adoptStateSnapshot==='function')Wn.adoptStateSnapshot(st);
+      else if(typeof Wn.load==='function')Wn.load();
+      if(typeof Wn.renderAll==='function')Wn.renderAll();
+    };
+    if(typeof Wn.btSuppressSave==='function')Wn.btSuppressSave(redraw);
+    else redraw();
   }catch(e){console.warn('w3d adopt',e);}
   scheduleBuild();
 }
@@ -10179,16 +10219,24 @@ function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);
 function makeLabel(txt,sub,o){
   o=o||{};const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
   const c=document.createElement('canvas'),g=c.getContext('2d');
-  g.font='600 '+fs+'px '+FONTS;let tw=g.measureText(txt).width;
-  if(sub){g.font='500 '+sfs+'px '+FONTS;tw=Math.max(tw,g.measureText(sub).width);}
+  const widthOf=(s,w,px)=>{g.font=w+' '+px+'px '+FONTS;return g.measureText(s).width;};
+  let tw=widthOf(txt,600,fs);
+  if(sub)tw=Math.max(tw,widthOf(sub,500,sfs));
   const wpx=Math.ceil(tw+padd*2),hpx=Math.ceil(fs*1.32+(sub?sfs*1.5:0)+padd*0.9);
   c.width=wpx*2;c.height=hpx*2;g.scale(2,2);
+  /* ย่อฟอนต์ให้พอดีผ้าใบก่อนวาด — ความกว้างถูกวัดไว้ก่อนกำหนด canvas.width ซึ่ง
+     รีเซ็ต state ของ context ทิ้ง ถ้าเว็บฟอนต์ไทย (Anuphan) โหลดเสร็จคาบเกี่ยว
+     ช่วงนั้น ข้อความจะกว้างกว่าที่วัดไว้แล้วล้นออกไปทางขวาจนถูกตัดหาย ย่อให้พอดี
+     จึงอ่านครบเสมอไม่ว่าฟอนต์จะมาถึงตอนไหน */
+  const inner=wpx-padd*1.2;
+  const fit=(s,w,px)=>{let n=px;while(n>px*0.55&&widthOf(s,w,n)>inner)n-=1;return n;};
+  const fsF=fit(txt,600,fs),sfsF=sub?fit(sub,500,sfs):sfs;
   g.globalAlpha=o.alpha!=null?o.alpha:0.93;rr(g,1,1,wpx-2,hpx-2,Math.min(hpx*0.3,22));
   g.fillStyle=o.bg||PAL.lblBg;g.fill();
   g.globalAlpha=1;g.lineWidth=1.4;g.strokeStyle=o.border||PAL.lblLine;g.stroke();
-  g.fillStyle=o.fg||PAL.lblInk;g.font='600 '+fs+'px '+FONTS;g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle=o.fg||PAL.lblInk;g.font='600 '+fsF+'px '+FONTS;g.textAlign='center';g.textBaseline='middle';
   g.fillText(txt,wpx/2,sub?hpx*0.36:hpx*0.52);
-  if(sub){g.fillStyle=o.subFg||PAL.lblMuted;g.font='500 '+sfs+'px '+FONTS;g.fillText(sub,wpx/2,hpx*0.74);}
+  if(sub){g.fillStyle=o.subFg||PAL.lblMuted;g.font='500 '+sfsF+'px '+FONTS;g.fillText(sub,wpx/2,hpx*0.74);}
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
   const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});m.userData.own=true;
   const sp=new THREE.Sprite(m);const h=o.h||1.05;
@@ -10207,7 +10255,18 @@ function boxDims(t){
   if(GEO.byType.has(t))return GEO.byType.get(t);
   let d=[0.6,0.4,0.35];
   const bt=(St().boxtypes||{})[t];
-  if(bt&&bt.dim){const p=String(bt.dim).split(/[×xX*]/).map(s=>parseFloat(s)/1000).filter(v=>v>0);if(p.length===3)d=p;}
+  if(bt&&bt.dim){
+    const raw=String(bt.dim).split(/[×xX*]/).map(s=>parseFloat(s)).filter(v=>v>0);
+    /* ฟิลด์ในหน้า Master เขียนว่า "ขนาด (มม.)" แต่ของจริงมีคนกรอกเป็นเซนติเมตร
+       อยู่บ่อย เช่น 30x40x30 ซึ่งถ้าอ่านเป็นมิลลิเมตรจะได้กล่องด้านละ 3 ซม. —
+       เล็กจนมองไม่เห็นในฉาก ทำให้ชั้นวาง/สายพานดูเหมือนว่างเปล่าทั้งที่มีของอยู่
+       ลังหมุนเวียนจริงไม่มีด้านไหนสั้นกว่า 100 มม. จึงถือว่าชุดตัวเลขที่เล็กกว่า
+       นั้นเป็นเซนติเมตรแล้วคูณกลับ ดีกว่าวาดเป็นจุดฝุ่นโดยไม่บอกอะไรเลย */
+    if(raw.length===3){
+      const per=Math.max.apply(null,raw)<100?100:1000;   /* ซม. : มม. ต่อเมตร */
+      d=raw.map(v=>v/per);
+    }
+  }
   const rec={l:Math.min(d[0],1.14),w:Math.min(d[1],1.12),h:Math.min(d[2],1.1),
     geo:shared(new THREE.BoxGeometry(Math.min(d[0],1.14),Math.min(d[2],1.1),Math.min(d[1],1.12)))};
   GEO.byType.set(t,rec);return rec;
@@ -12257,7 +12316,12 @@ if(typeof Wn.save==='function'&&!Wn.save.__w3d){
   const o=Wn.save;const f=function(){const r=o.apply(this,arguments);scheduleBuild();return r;};f.__w3d=1;Wn.save=f;
 }
 window.addEventListener('storage',e=>{
-  if(e.key===SKEY){try{if(typeof Wn.load==='function'){Wn.load();if(typeof Wn.renderAll==='function')Wn.renderAll();}}catch(_){}scheduleBuild();}
+  /* another tab in this browser wrote the snapshot — redraw from it, but do
+     not save() it back out (see btSuppressSave) */
+  if(e.key===SKEY){try{
+    const redraw=()=>{if(typeof Wn.load==='function'){Wn.load();if(typeof Wn.renderAll==='function')Wn.renderAll();}};
+    if(typeof Wn.btSuppressSave==='function')Wn.btSuppressSave(redraw);else redraw();
+  }catch(_){}scheduleBuild();}
 });
 new MutationObserver(()=>{palette();buildTextures();refreshMatColors();scheduleBuild();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
@@ -12271,12 +12335,66 @@ tick();
 
 /* ---------- poll DB: รับงานที่เครื่องอื่น/PDA ยิงเข้ามา ---------- */
 let srvSig=stateSig(St());
-setInterval(async()=>{
-  const st=await pullState();
-  if(!st){renderOps();return;}
-  const ns=stateSig(st);
-  if(ns===srvSig)return;
-  srvSig=ns;adoptServerState(st);
+
+/* Pull once and adopt only if something really moved. The signature check is
+   what keeps a redraw (and the save() it triggers) from bouncing back and
+   forth between tabs forever. */
+let syncing=false;
+async function syncNow(){
+  if(syncing)return;
+  syncing=true;
+  try{
+    const st=await pullState();
+    if(!st){renderOps();return;}
+    const ns=stateSig(st);
+    if(ns===srvSig)return;
+    srvSig=ns;adoptServerState(st);
+  }finally{ syncing=false; }
+}
+
+/* ── realtime ──────────────────────────────────────────────────────────────
+   The server holds this connection open and pings whenever warehouse state
+   changes, so a scan at the gate reaches every dashboard in the time one HTTP
+   round-trip takes instead of on the next 4-second tick.
+   EventSource cannot carry an Authorization header, hence the token in the
+   query string; the backend keeps that URL out of its access log.
+   It also reconnects on its own after a drop, which on warehouse Wi-Fi is the
+   half of a socket we actually needed. */
+let liveStream=false, es=null;
+function connectStream(){
+  if(!window.EventSource||es)return;
+  const t=token();
+  if(!t)return;                       /* not signed in yet — the poll still covers us */
+  try{ es=new EventSource('/api/stream?token='+encodeURIComponent(t)); }
+  catch(e){ es=null; return; }
+  es.addEventListener('hello',()=>{ liveStream=true; });
+  es.addEventListener('state',ev=>{
+    liveStream=true;
+    let d=null; try{ d=JSON.parse(ev.data); }catch(_){}
+    /* our own write coming back — the snapshot is already on screen */
+    if(d&&d.origin&&d.origin===Wn.BT_CLIENT_ID)return;
+    syncNow();
+  });
+  es.onerror=()=>{
+    /* EventSource retries by itself; drop back to fast polling until a frame
+       actually arrives again, so a silently dead pipe can't leave us blind. */
+    liveStream=false;
+  };
+}
+connectStream();
+/* Signing in happens after this module runs, so keep trying until there is a
+   token to connect with. */
+if(!es)setTimeout(connectStream,3000);
+
+/* Safety net. While the stream is healthy this only needs to catch the case
+   where it is quietly wedged — every POLL_MS-th tick is plenty. With the
+   stream down it is the whole mechanism again, at its original rate. */
+let pollTick=0;
+setInterval(()=>{
+  pollTick++;
+  if(!es)connectStream();
+  if(liveStream&&(pollTick%8))return;
+  syncNow();
 },POLL_MS);
 })();
 
