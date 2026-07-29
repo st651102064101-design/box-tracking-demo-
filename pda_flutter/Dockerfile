@@ -8,7 +8,14 @@ WORKDIR /app
 COPY pubspec.yaml pubspec.lock* ./
 RUN flutter pub get
 COPY . .
-RUN flutter build web --release
+# --pwa-strategy=none disables the service worker Flutter otherwise registers.
+# It caches the app shell ahead of the network, so it serves the previous build
+# no matter what Cache-Control nginx sends — a terminal keeps running last
+# week's app after a redeploy, and clearing it means touching every device by
+# hand. Offline capability buys nothing here: the app already keeps its own
+# state snapshot in SharedPreferences (see Prefs.stateCache), which is what a
+# gate actually needs when the network drops.
+RUN flutter build web --release --pwa-strategy=none
 
 FROM nginx:alpine AS runtime
 COPY --from=build /app/build/web /usr/share/nginx/html
