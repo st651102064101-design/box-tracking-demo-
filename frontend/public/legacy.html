@@ -242,81 +242,73 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
    A canvas-drawn iso warehouse whose storage bins light up by live occupancy —
    so the "hero image" is actual data, not decoration. Dark cinematic panel with
    a glass overlay carrying the headline, echoing the reference render. */
-.hero-viz{position:relative;width:100%;height:clamp(300px,42vw,460px);margin:0 0 34px;border-radius:var(--r-lg);
-  overflow:hidden;background:radial-gradient(120% 140% at 70% 15%,#12131a 0%,#0a0b10 55%,#050609 100%);
-  border:.5px solid var(--line);box-shadow:var(--shadow-lg);}
-.hero-viz canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
-/* ---- animated isometric warehouse scene (SVG) ---- */
-.hero-scene{position:absolute;inset:0;width:100%;height:100%;display:block;}
-.hero-scene svg{position:absolute;inset:0;width:100%;height:100%;display:block;}
-.hero-scene text{font-family:system-ui,'Segoe UI',sans-serif;}
-/* flowing dashed route lines */
-.hs-flow{stroke-dasharray:5 9;animation:hsflow 1.1s linear infinite;}
-@keyframes hsflow{to{stroke-dashoffset:-28;}}
-/* pulsing flow arrowheads */
-.hs-arrow{transform-box:fill-box;transform-origin:center;animation:hspulse 1.6s ease-in-out infinite;}
-.hs-arrow.d1{animation-delay:.3s;} .hs-arrow.d2{animation-delay:.6s;} .hs-arrow.d3{animation-delay:.9s;} .hs-arrow.d4{animation-delay:1.2s;}
-@keyframes hspulse{0%,100%{opacity:.45;} 50%{opacity:1;}}
-/* gentle carton breathing on shelves */
-.hs-breathe{transform-box:fill-box;transform-origin:center bottom;animation:hsbreathe 4s ease-in-out infinite;}
-@keyframes hsbreathe{0%,100%{transform:translateY(0);} 50%{transform:translateY(-1.5px);}}
-/* scan sweep bar */
-.hs-sweep{animation:hssweep 5.5s linear infinite;}
-@keyframes hssweep{0%{transform:translateX(-260px);opacity:0;} 8%{opacity:1;} 92%{opacity:1;} 100%{transform:translateX(1180px);opacity:0;}}
-/* forklift + worker bob */
-.hs-bob{transform-box:fill-box;transform-origin:center bottom;animation:hsbob 1.1s ease-in-out infinite;}
-@keyframes hsbob{0%,100%{transform:translateY(0) rotate(0deg);} 50%{transform:translateY(-2px) rotate(-.6deg);}}
-/* beacon light blink on robot/forklift */
-.hs-beacon{animation:hsblink 1s steps(2,end) infinite;}
-@keyframes hsblink{0%,49%{opacity:1;} 50%,100%{opacity:.2;}}
-@media(prefers-reduced-motion:reduce){
-  .hs-flow,.hs-arrow,.hs-breathe,.hs-sweep,.hs-bob,.hs-beacon{animation:none;}
-  .hero-scene svg .hs-mover>animateMotion,.hero-scene svg animateTransform{display:none;}
-}
-.hero-viz-overlay{position:absolute;inset:0;pointer-events:none;padding:clamp(20px,3vw,40px);
-  display:flex;flex-direction:column;justify-content:space-between;}
-.hvo-panel{align-self:flex-start;background:rgba(20,22,30,.42);backdrop-filter:saturate(160%) blur(14px);
-  -webkit-backdrop-filter:saturate(160%) blur(14px);border:1px solid rgba(255,255,255,.1);
-  border-radius:22px;padding:clamp(16px,2vw,26px) clamp(20px,2.4vw,32px);box-shadow:0 20px 60px rgba(0,0,0,.5);}
-.hvo-eyebrow{font-size:13px;font-weight:600;letter-spacing:.02em;
-  background:linear-gradient(90deg,var(--accent),#7ad6ff 60%,#c78bff);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px;}
-.hvo-title{font-size:clamp(30px,5vw,58px);font-weight:800;line-height:1.02;letter-spacing:-.04em;
-  color:#f5f5f7;text-shadow:0 2px 30px rgba(0,0,0,.5);}
-.hvo-legend{align-self:flex-start;display:flex;gap:16px;flex-wrap:wrap;font-size:12px;font-weight:500;color:rgba(245,245,247,.82);}
-.hvo-legend span{display:inline-flex;align-items:center;gap:7px;background:rgba(10,11,16,.5);
-  border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:6px 12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
-.hvo-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
-.hvo-dot.occ{background:var(--accent);box-shadow:0 0 8px 1px color-mix(in srgb,var(--accent) 70%,transparent);}
-.hvo-dot.free{background:#3a4256;box-shadow:0 0 6px rgba(120,150,255,.35);}
-@media(max-width:760px){.hero-viz{height:clamp(240px,60vw,340px);}}
+/* ---- LIVE FLOW BOARD (2D pane) ----------------------------------------
+   ผังกระบวนการที่ทุกตัวเลขมาจาก S จริง ไม่ใช่ภาพประกอบ จึงใช้ HTML+CSS แทน SVG
+   ที่วาดมือ: ตัวอักษรเป็นข้อความจริง (อ่านออก/ค้นได้/ไม่ต้องเดาความกว้างฟอนต์ไทย)
+   สีมาจาก custom property ชุดเดียวกับทั้งระบบ จึงสลับ light/dark ได้เอง และ
+   อัปเดตด้วยการแก้เฉพาะค่าที่เปลี่ยน ไม่ได้ประกอบ markup ใหม่ทั้งก้อนทุกรอบ */
+.hero-viz{position:relative;width:100%;margin:0 0 34px;border-radius:var(--r-lg);
+  overflow:hidden;background:var(--surface);
+  border:.5px solid var(--line);box-shadow:var(--shadow);}
+.hero-scene{display:block;padding:18px 18px 16px;}
 
-/* ── hero scene "how to read this" help button + hover popover ── */
-.hvo-help-wrap{position:absolute;top:clamp(16px,2.4vw,28px);right:clamp(16px,2.4vw,28px);
-  z-index:6;pointer-events:auto;}
-.hvo-help{width:34px;height:34px;border-radius:50%;cursor:help;padding:0;
-  background:rgba(10,11,16,.55);border:1px solid rgba(255,255,255,.14);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  display:flex;align-items:center;justify-content:center;color:#e7ecf4;
-  transition:background .2s,border-color .2s,transform .2s;}
-.hvo-help:hover,.hvo-help:focus-visible{background:rgba(20,22,30,.75);border-color:var(--accent);transform:scale(1.06);}
-.hvo-help svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-.hvo-help-pop{position:absolute;top:calc(100% + 10px);right:0;width:min(320px,calc(100vw - 60px));
-  background:rgba(14,16,22,.94);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);
-  border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px;
-  box-shadow:0 24px 60px rgba(0,0,0,.55);opacity:0;visibility:hidden;transform:translateY(-6px);
-  transition:opacity .18s,transform .18s,visibility .18s;pointer-events:none;z-index:7;}
-.hvo-help-wrap:hover .hvo-help-pop,.hvo-help:focus-visible+.hvo-help-pop,.hvo-help-pop:hover{
-  opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto;}
-.hvo-help-pop h5{font-size:12.5px;font-weight:700;color:var(--accentInk,#c9fa7a);letter-spacing:.02em;margin:0 0 10px;}
-.hvo-help-pop ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
-.hvo-help-pop li{display:flex;gap:9px;font-size:12px;line-height:1.5;color:rgba(245,245,247,.86);}
-.hvo-help-pop li i{flex:0 0 auto;width:9px;height:9px;border-radius:50%;margin-top:4px;}
-.hvo-help-pop li i.occ{background:var(--accent);box-shadow:0 0 6px 1px color-mix(in srgb,var(--accent) 70%,transparent);}
-.hvo-help-pop li i.free{background:#3a4256;}
-.hvo-help-pop li i.truck{background:#7ad6ff;}
-.hvo-help-pop li i.move{background:#c78bff;}
-.hvo-help-pop b{color:#fff;font-weight:700;}
-@media(max-width:760px){.hvo-help-pop{right:auto;left:0;}}
+.fb-top{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.fb-kpi{flex:1 1 150px;min-width:140px;text-align:left;padding:11px 14px;border-radius:14px;
+  background:var(--surface2);border:.5px solid var(--line);transition:border-color .18s,background .18s;}
+button.fb-kpi{cursor:pointer;} button.fb-kpi:hover{border-color:var(--line2);background:var(--surface);}
+.fb-kpi .k{font-size:11.5px;color:var(--muted);font-weight:600;display:block;}
+.fb-kpi .v{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.5px;color:var(--ink);
+  display:block;line-height:1.25;font-variant-numeric:tabular-nums;}
+.fb-kpi .s{font-size:11px;color:var(--muted);}
+.fb-bar{display:block;width:100%;height:6px;border-radius:999px;background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden;margin-top:7px;}
+.fb-bar i{display:block;height:100%;border-radius:999px;background:var(--accent);transition:width .4s ease,background .3s;}
+.fb-bar.warn i{background:var(--warn);} .fb-bar.bad i{background:var(--neg);}
+
+/* ราง: โหนดสเตจสลับกับลูกศร เลื่อนแนวนอนได้บนจอแคบแทนที่จะบีบจนอ่านไม่ออก */
+.fb-rail{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:6px;}
+.fb-node{flex:0 0 auto;min-width:124px;text-align:left;padding:12px 14px;border-radius:15px;
+  background:var(--surface2);border:1px solid var(--line);cursor:pointer;
+  transition:border-color .18s,background .18s,transform .18s;}
+.fb-node:hover{border-color:var(--line2);transform:translateY(-2px);}
+.fb-node .n{font-size:11.5px;font-weight:700;color:var(--ink2);display:block;line-height:1.35;}
+.fb-node .c{font-family:var(--mono);font-size:27px;font-weight:700;letter-spacing:-.6px;color:var(--ink);
+  display:block;line-height:1.2;font-variant-numeric:tabular-nums;}
+.fb-node .a{font-size:10.5px;color:var(--muted);display:block;line-height:1.4;min-height:15px;}
+/* สถานะโหนดสะท้อน "งานค้างนานแค่ไหน" ไม่ใช่แค่จำนวน — 0 ชิ้นคือจบงาน ไม่ใช่ปัญหา */
+.fb-node.idle{opacity:.55;}
+.fb-node.ok{border-color:color-mix(in srgb,var(--pos) 45%,var(--line));}
+.fb-node.ok .c{color:var(--pos);}
+.fb-node.warn{border-color:var(--warn);background:var(--warnSoft);}
+.fb-node.warn .c{color:var(--warn);}
+.fb-node.bad{border-color:var(--neg);background:var(--negSoft);}
+.fb-node.bad .c{color:var(--neg);}
+.fb-node .flag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.03em;
+  padding:1px 6px;border-radius:999px;margin-top:3px;background:var(--neg);color:#fff;}
+.fb-node.warn .flag{background:var(--warn);color:#1d1d1f;}
+
+.fb-edge{flex:0 0 auto;align-self:center;display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:0 9px;color:var(--muted);}
+.fb-edge svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.fb-edge .t{font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap;}
+.fb-edge.live{color:var(--accentInk);}
+.fb-edge.live svg{stroke:var(--accent);}
+
+.fb-exc{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:.5px solid var(--line);}
+.fb-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+  font-size:11.5px;font-weight:600;background:var(--surface2);color:var(--ink2);
+  border:.5px solid var(--line);cursor:pointer;transition:border-color .18s;}
+.fb-chip:hover{border-color:var(--line2);}
+.fb-chip b{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;}
+.fb-chip.on.bad{background:var(--negSoft);color:var(--neg);border-color:color-mix(in srgb,var(--neg) 35%,transparent);}
+.fb-chip.on.warn{background:var(--warnSoft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent);}
+.fb-chip.off{opacity:.5;}
+.fb-foot{margin-top:11px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.fb-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
+@media(max-width:760px){
+  .hero-scene{padding:14px 12px;}
+  .fb-node{min-width:112px;padding:10px 11px;}
+  .fb-node .c{font-size:23px;}
+}
 
 /* per-KPI-card particle canvases (cloud / ring / stream) sitting behind the number */
 .loop .node .node-particles{position:absolute;inset:0;width:100%;height:100%;
@@ -1231,27 +1223,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <div class="viz-pane" id="vizPane2d">
   <div class="hero-viz" id="heroViz">
-    <div id="heroScene" class="hero-scene" aria-hidden="true"></div>
-    <div class="hero-viz-overlay">
-      <div class="hvo-help-wrap no-print">
-      <button type="button" class="hvo-help" tabindex="0" aria-label="วิธีอ่านภาพจำลองคลังนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 1 1 3.9 2.7c-.9.5-1.4 1-1.4 2v.3"/><path d="M12 17v.1"/></svg></span></button>
-      <div class="hvo-help-pop" role="tooltip">
-        <h5>วิธีอ่านภาพจำลองนี้ — ทุกอย่างมาจากข้อมูลจริง</h5>
-        <ul>
-          <li><i class="occ"></i> <span><b>ช่องมีของ</b> ในชั้นวาง = ติดขอบเขียว + มีกล่องอยู่ — คำนวณจากตำแหน่งที่มีกล่องจริงในระบบ</span></li>
-          <li><i class="free"></i> <span><b>ช่องว่าง</b> = ถาดสีเข้ม ไม่มีขอบเขียว — สัดส่วนมีของ/ว่างเปลี่ยนตามอัตราครองพื้นที่จริง</span></li>
-          <li><i class="truck"></i> <span><b>รถ INBOUND / DELIVERY</b> แสดงอยู่ตลอด — จะ <b>สว่างเต็ม</b> เมื่อมีการยิง Gate เข้า/ออกจริงในวันนี้ ถ้ายังไม่มีรายการวันนี้ รถจะแสดงแบบ <b>จางลง</b> (ยังไม่ทำงาน)</span></li>
-          <li><i class="move"></i> <span><b>กล่อง/หุ่นยนต์ที่เคลื่อนที่</b> วิ่งตามลูกศรแสดงทิศทางการไหลของงาน (cross-dock) ตลอดเวลา — บอกลำดับ เข้า → เก็บ → หยิบ → ออก</span></li>
-          <li><i class="occ"></i> <span><b>จุดสถานะแต่ละโซน</b> — จุด<b>เขียวเรืองแสง</b> = โซนนั้นมีของ/กำลังทำงาน (พร้อมตัวเลขจริง เช่น มีของ, รอเก็บ, ส่งวันนี้), จุด<b>เทา</b> = ว่าง/ยังไม่มีงาน</span></li>
-          <li><i class="occ"></i> <span><b>กองพัก Putaway</b> (ซ้าย) แสดงเมื่อมีกล่องผ่าน Gate เข้า รอเก็บเข้าชั้นจริง — <b>กองขาออก Outbound</b> (ขวา) แสดงตามจำนวนที่ส่งออก <b>วันนี้</b> (กล่องที่ผ่าน Gate ออกแล้วจะไม่ track ต่อ จึงไม่นับกล่องที่ออกไปวันก่อน)</span></li>
-        </ul>
-      </div>
-      </div>
-      <div class="hvo-panel">
-        <div class="hvo-eyebrow">— Real-time overview</div>
-        <div class="hvo-title">Every box<br>tracked live</div>
-      </div>
-    </div>
+    <div id="heroScene" class="hero-scene"></div>
   </div>
     </div>
     <div class="viz-pane" id="vizPane3d" style="display:none;">
@@ -1977,7 +1949,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" style="color:var(--neg);" onclick="if(typeof window.boxtraceLogout==='function')window.boxtraceLogout();" title="ออกจากบัญชีที่ล็อกอินอยู่ (กลับไปหน้า login)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17l5-5-5-5M20 12H9M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg></span> ออกจากระบบ</button></div>
+      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"></div>
       <div class="twrap"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
     </div>
@@ -7483,473 +7455,246 @@ window.seedDemo=seedDemo;
 })();
 
 /* ============================================================================
-   ANIMATED ISOMETRIC WAREHOUSE SCENE (SVG)
+   LIVE FLOW BOARD (2D pane)
    ----------------------------------------------------------------------------
-   Hand-built isometric infographic: INVENTORY racks, OUTBOUND STAGING with
-   Location 1-4, kraft-box pallets, INBOUND + DELIVERY trucks, a moving forklift
-   and AMR robot, walking workers, and animated CROSS-DOCK flow arrows.
-   Pure SVG + CSS keyframes + SMIL motion — no external assets, no RAF loop.
-   Respects prefers-reduced-motion (drops SMIL movers, CSS media query stops
-   keyframes). Decorative only — not data-bound.
+   ผังกระบวนการของคลังที่ทุกตัวเลขอ่านจาก S จริง — ไม่มีค่าตายตัวเหลืออยู่เลย
+   สเตจเรียงตาม lifecycle ที่โค้ดทำจริง (ลงทะเบียน → Gate In → Putaway →
+   บนชั้นวาง → Gate Out → อยู่กับลูกค้า → เกินกำหนด) และแต่ละสเตจกดเข้าไปดู
+   รายการที่กรองไว้แล้วได้ผ่าน goInventory() ตัวเดียวกับที่ KPI การ์ดใช้
+
+   ทำไมเป็น HTML ไม่ใช่ SVG อย่างของเดิม: ตัวเลข/ป้ายเป็นข้อความจริง จึงไม่ต้อง
+   เดาความกว้างฟอนต์ไทยเอง สีมาจาก custom property ชุดเดียวกับทั้งระบบจึงสลับ
+   ธีมได้เอง และอัปเดตด้วยการแก้เฉพาะค่าที่เปลี่ยน — ของเดิมประกอบ SVG ใหม่ทั้ง
+   ก้อนทุกครั้งที่ข้อมูลขยับ ทำให้แอนิเมชันทุกตัวรีสตาร์ตทุก 4 วินาที
    ============================================================================ */
 (function(){
   "use strict";
   var host=document.getElementById('heroScene'); if(!host) return;
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  var VBX=-140, VBY=-30, VBW=1360, VBH=590, T=35, Z=23.4, OX=636, OY=132;
+  var W=window, DAYMS=86400000;
 
-  // ---- live data feed (fed by renderOverview via window.updateHeroScene) ----
-  // Every element below reads from SCENE so the hero mirrors real warehouse state.
-  var SCENE = {
-    slots: 0,        // total defined storage locations
-    occSlots: 0,     // locations currently holding a box (Occupied)
-    inv: 0,          // boxes in warehouse
-    staging: 0,      // boxes waiting at putaway staging
-    out: 0,          // boxes currently out with customers
-    outToday: 0,     // outbound gate events today
-    inToday: 0,      // inbound gate events today
-    total: 0,        // all boxes in the system
-    ready: false     // false until real data has arrived
-  };
+  /* อ่าน helper ของแอปหลักแบบไม่ผูกมัด — ไฟล์นี้ถูก parse ก่อนบางตัวถูกนิยาม
+     และ build() แรกอาจวิ่งก่อน loadFromServer() เสร็จ */
+  function St(){ return W.S||{}; }
+  function num(n){ return (typeof W.nf==='function')?W.nf(n):String(n); }
+  function dayKey(d){ return (typeof W.dstr==='function')?W.dstr(d):new Date(d||Date.now()).toISOString().slice(0,10); }
+  function isOver(b){ return (typeof W.isOverdue==='function')?!!W.isOverdue(b):false; }
+  function dueDays(b){ return (typeof W.boxDueDays==='function')?W.boxDueDays(b):null; }
+  function expDays(b){ return (typeof W.daysToExpiry==='function')?W.daysToExpiry(b):null; }
+  function go(fn){ try{ fn(); }catch(e){ console.warn('[flowboard] drill-through failed',e); } }
 
-  function iso(x,y,z){ return [OX+(x-y)*T, OY+(x+y)*T*0.5-(z||0)*Z]; }
-  function P(p){ return p[0].toFixed(1)+','+p[1].toFixed(1); }
-  function poly(pts,fill,extra){ return '<polygon points="'+pts.map(P).join(' ')+'" fill="'+fill+'"'+(extra||'')+'/>'; }
+  var ARROW='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6"/></svg>';
 
-  // palettes — white cartons / black steel / green vehicles & accents
-  var LIME='#a8f931';
-  var KRAFT={top:'#eef1f5',right:'#c3cad4',left:'#a3abb8'};   // white carton
-  var BOX2 ={top:'#e2e7ee',right:'#b4bcc8',left:'#959eac'};   // light-gray carton (variety)
-  var STEEL={top:'#39414f',right:'#252b35',left:'#1b2028'};   // dark rack frame / posts
-  var BEAM ={top:'#a8f931',right:'#72c022',left:'#4f8a16'};   // green shelf beams
-  var PANEL={top:'#252b34',right:'#1a1f27',left:'#12161c'};   // dark back panel
-  var TBODY={top:'#2c9c5e',right:'#1d7344',left:'#155433'};   // truck cargo (green)
-  var TCAB ={top:'#3fbf74',right:'#2a8f54',left:'#1f6e40'};   // truck cab (bright green)
-  var PBASE={top:'#39404c',right:'#282e38',left:'#1e232b'};   // pallet base (dark gray)
-  var GBODY={top:'#37b06a',right:'#238a4f',left:'#19693b'};   // forklift/AMR green body
+  /* แต่ละสเตจผูกกับ predicate จริงบน S.boxes (ดู compute()) — warn/bad คือ
+     จำนวน "วันที่ค้างนานสุด" ที่จะเริ่มเตือน ไม่ใช่จำนวนชิ้น เพราะของ 200 ใบที่
+     เพิ่งเข้ามาเมื่อเช้าไม่ใช่คอขวด แต่ของ 3 ใบที่ค้างมา 5 วันคือคอขวด */
+  var STAGES=[
+    {k:'tag', n:'รอติด Tag', warn:2, bad:5,
+     go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติด Tag'}); }},
+    {k:'inq', n:'คิวรับเข้า',
+     go:function(){ W.switchTab&&W.switchTab('gatein'); }},
+    {k:'put', n:'รอจัดเก็บขึ้นชั้น', warn:1, bad:3,
+     go:function(){ W.goInventory&&W.goInventory({status:'putaway',label:'กล่องที่รับเข้าแล้ว แต่ยังไม่ขึ้นชั้นวาง'}); }},
+    {k:'rack', n:'บนชั้นวาง',
+     go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง'}); }},
+    {k:'outq', n:'คิวส่งออก',
+     go:function(){ W.switchTab&&W.switchTab('gateout'); }},
+    {k:'cust', n:'อยู่กับลูกค้า',
+     go:function(){ W.goInventory&&W.goInventory({status:'awaiting',label:'กล่องที่อยู่กับลูกค้า · รอคืน'}); }},
+    {k:'over', n:'เกินกำหนดคืน',
+     go:function(){ W.goInventory&&W.goInventory({status:'overdue',label:'กล่องเกินกำหนดคืน'}); }}
+  ];
+  /* ช่วงที่เป็น "ประตูจริง" สองช่วง — ติดยอดที่ผ่านประตูวันนี้กำกับไว้บนลูกศร */
+  var EDGE_GATE={1:'in',4:'out'};   /* 1 = คิวรับเข้า→รอจัดเก็บ, 4 = คิวส่งออก→อยู่กับลูกค้า */
 
-  // isometric cuboid at ground (x,y) base-z, footprint w×d, height h
-  function box(x,y,z,w,d,h,c,cls){
-    var t=[iso(x,y,z+h),iso(x+w,y,z+h),iso(x+w,y+d,z+h),iso(x,y+d,z+h)];
-    var r=[iso(x+w,y,z),iso(x+w,y+d,z),iso(x+w,y+d,z+h),iso(x+w,y,z+h)];
-    var l=[iso(x,y+d,z),iso(x+w,y+d,z),iso(x+w,y+d,z+h),iso(x,y+d,z+h)];
-    var st=' stroke="rgba(0,0,0,.18)" stroke-width=".7" stroke-linejoin="round"';
-    return '<g'+(cls?' class="'+cls+'"':'')+'>'+poly(l,c.left,st)+poly(r,c.right,st)+poly(t,c.top,st)+'</g>';
-  }
+  var EXC=[
+    {k:'hold',   n:'พักใช้งาน',  cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'hold',label:'กล่องที่พักใช้งาน (Hold)'}); }},
+    {k:'damage', n:'ชำรุด',      cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'damage',label:'กล่องชำรุด'}); }},
+    {k:'lost',   n:'สูญหาย',     cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'lost',label:'กล่องสูญหาย'}); }},
+    {k:'nearExp',n:'ใกล้หมดอายุ', cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — ตรวจวันหมดอายุ'}); }},
+    {k:'expired',n:'หมดอายุแล้ว', cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — หมดอายุแล้ว'}); }}
+  ];
 
-  // a rack bay: dark back panel, orange shelf planks, kraft boxes, optional label
-  function rackBay(x,y,w,d,label){
-    var s='<g>';
-    s+=box(x,y,0,w,0.16,3.5,PANEL);                 // back panel
-    [0.02,1.55,3.05].forEach(function(z){ s+=box(x,y,z,w,d,0.12,BEAM); }); // shelves
-    [0.16,1.69].forEach(function(z){                 // kraft boxes per shelf
-      var n=Math.max(1,Math.round(w/1.0)), bw=(w-0.24)/n;
-      for(var i=0;i<n;i++) s+=box(x+0.12+i*bw, y+0.22, z, bw-0.14, d-0.5, 1.0, KRAFT,'hs-breathe');
-    });
-    if(label){ var lp=iso(x+w/2, y+0.03, 2.55);
-      s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="#d7dfec" font-size="12.5" font-weight="700" text-anchor="middle" opacity=".92">'+label+'</text>'; }
-    return s+'</g>';
-  }
+  /* จำแนกกล่องทุกใบครั้งเดียวต่อรอบ แล้วเก็บทั้งจำนวนและ "อายุงานค้าง" ไปพร้อมกัน */
+  function compute(){
+    var S=St(), all=Object.values(S.boxes||{}), evs=S.events||[];
+    var today=dayKey(), now=Date.now();
+    var c={tag:0,inq:(W.pendingIn||[]).length,put:0,rack:0,outq:(W.pendingOut||[]).length,cust:0,over:0};
+    var oldest={tag:0,put:0};
+    var soonestDue=null, worstOver=0;
+    var exc={hold:0,damage:0,lost:0,nearExp:0,expired:0};
 
-  // kraft-box pallet stack
-  function pallet(x,y,layers){
-    var s='<g>'; s+=box(x-0.05,y-0.05,0,1.3,1.3,0.18,PBASE);
-    for(var k=0;k<layers;k++) s+=box(x+0.08,y+0.08,0.18+k*0.9,1.1,1.1,0.85,k%2?BOX2:KRAFT,'hs-breathe');
-    return s+'</g>';
-  }
+    all.forEach(function(b){
+      var st=b.status, l=b.location||{};
+      /* สถานะข้อยกเว้นออกนอกสายพานหลัก — นับแยกไว้เป็นชิปด้านล่าง */
+      if(st==='hold'){exc.hold++;return;}
+      if(st==='damage'){exc.damage++;return;}
+      if(st==='lost'){exc.lost++;return;}
 
-  // tall multi-level pallet-racking block (the reference centerpiece)
-  // bays run along +x, `levels` shelves up in z, depth `d` along y
-  // Empty (unlit) bin colours — reads as the "ว่าง (Empty)" legend swatch.
-  var EMPTY={top:'#2b323d',right:'#20262f',left:'#171b22'};
-  function rackBlock(x,y,bays,levels,w,d,label,occFrac){
-    var s='<g>', H=levels*1.2, SHELF={top:'#333b47',right:'#242b34',left:'#1a1f27'};
-    var nBins=bays*levels;
-    // how many bins are occupied — proportional to live occupancy, at least the
-    // ones we truly have stock for, capped to the rack's visual capacity.
-    var occBins = (occFrac==null) ? nBins : Math.max(0, Math.min(nBins, Math.round(nBins*occFrac)));
-    s+=box(x,y,0,bays*w,0.12,H,PANEL);                 // dark back panel
-    for(var bx=0;bx<=bays;bx++){                        // steel uprights (front+back)
-      s+=box(x+bx*w-0.05,y-0.04,0,0.1,0.1,H,STEEL);
-      s+=box(x+bx*w-0.05,y+d-0.06,0,0.1,0.1,H,STEEL);
-    }
-    var seen=0;
-    for(var lv=0; lv<levels; lv++){                    // each shelf: dark deck + slim green trim
-      var z=lv*1.2;
-      s+=box(x,y,z,bays*w,d,0.08,SHELF);                       // dark shelf deck
-      s+=box(x,y+d-0.12,z+0.08,bays*w,0.12,0.07,BEAM);        // thin green front beam
-      for(var b=0;b<bays;b++){
-        var bx0=x+b*w+0.13;
-        s+=box(bx0,y+0.16,z+0.08,w-0.26,d-0.4,0.12,PBASE);               // pallet
-        // fill lower shelves first, left→right, so occupancy reads bottom-up
-        var idx=lv*bays+b;
-        var isOcc = idx < occBins;
-        seen++;
-        if(isOcc){
-          s+=box(bx0+0.05,y+0.24,z+0.20,w-0.36,d-0.56,0.82,(b+lv)%2?BOX2:KRAFT,'hs-breathe'); // stock carton
-          s+=box(bx0+0.05,y+d-0.34,z+0.20,w-0.36,0.06,0.82,BEAM);        // lime front edge = Occupied
+      /* ยังไม่ยืนยันบาร์โค้ด = ยังไม่นับว่าอยู่ในคลัง แม้ status จะเป็น warehouse แล้ว */
+      if(st==='pending'||(st==='warehouse'&&b.labeled===false)){
+        c.tag++;
+        var t=+new Date(b.regAt||b.lastSeenAt||now);
+        if(t&&(!oldest.tag||t<oldest.tag))oldest.tag=t;
+        return;
+      }
+      if(st==='warehouse'){
+        /* Gate In วางกล่องไว้ที่คลังโดยเว้น zone/rack — ที่ค้างตรงนี้คือยังไม่ Putaway */
+        if(!l.zone&&!l.rack){
+          c.put++;
+          var t2=+new Date(b.lastSeenAt||b.regAt||now);
+          if(t2&&(!oldest.put||t2<oldest.put))oldest.put=t2;
+        }else c.rack++;
+        var xd=expDays(b);
+        if(xd!=null){ if(xd<0)exc.expired++; else if(xd<=30)exc.nearExp++; }
+        return;
+      }
+      if(st==='out'){
+        if(isOver(b)){
+          c.over++;
+          var od=dueDays(b);
+          if(od!=null&&-od>worstOver)worstOver=-od;
         }else{
-          // empty slot: a low dark tray, clearly "ว่าง"
-          s+=box(bx0+0.08,y+0.28,z+0.20,w-0.42,d-0.62,0.12,EMPTY);
+          c.cust++;
+          var dd=dueDays(b);
+          if(dd!=null&&(soonestDue==null||dd<soonestDue))soonestDue=dd;
         }
       }
-    }
-    if(label){ var lp=iso(x+bays*w*0.5, y+0.02, H+0.35);
-      s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="#c3ccdb" font-size="13" font-weight="800" letter-spacing=".5" text-anchor="middle" opacity=".9">'+label+'</text>'; }
-    return s+'</g>';
+    });
+
+    /* ความเคลื่อนไหววันนี้อ่านจาก event stream จริง — 'in-new' คือของใหม่ครั้งแรก
+       ส่วน 'in' คือของที่ลูกค้าคืนกลับมา ทั้งคู่นับเป็นขาเข้าของวันนี้เหมือนกัน */
+    var inToday=0,outToday=0;
+    evs.forEach(function(e){
+      if(!e||!e.ts||dayKey(new Date(e.ts))!==today)return;
+      if(e.dir==='out')outToday++;
+      else if(e.dir==='in'||e.dir==='in-new')inToday++;
+    });
+
+    var slots=Object.keys(S.locations||{}).length;
+    var occ=(typeof W.locOccupancyMap==='function')?Object.keys(W.locOccupancyMap()).length:0;
+    var age=function(ms){ return ms?Math.max(0,Math.floor((now-ms)/DAYMS)):0; };
+
+    return {c:c,exc:exc,inToday:inToday,outToday:outToday,
+      slots:slots,occ:occ,pct:slots?Math.round(occ/slots*100):0,
+      age:{tag:age(oldest.tag),put:age(oldest.put)},
+      soonestDue:soonestDue,worstOver:worstOver};
   }
 
-  // weigh-scale station: platform + box + dial post
-  function scale(x,y){
-    var s='<g>';
-    s+=box(x,y,0,1.15,1.15,0.16,STEEL);                    // platform
-    s+=box(x-0.05,y-0.05,0.16,1.25,1.25,0.05,BEAM);        // green scale top plate
-    s+=box(x+0.2,y+0.22,0.21,0.75,0.72,0.62,KRAFT,'hs-breathe'); // box being weighed
-    var pp=iso(x+1.05,y+0.1,0), pt=iso(x+1.05,y+0.1,1.5);  // dial post
-    s+='<line x1="'+pp[0].toFixed(1)+'" y1="'+pp[1].toFixed(1)+'" x2="'+pt[0].toFixed(1)+'" y2="'+pt[1].toFixed(1)+'" stroke="#2b3140" stroke-width="2.4"/>';
-    s+='<circle cx="'+pt[0].toFixed(1)+'" cy="'+pt[1].toFixed(1)+'" r="6.5" fill="#12161c" stroke="'+LIME+'" stroke-width="1.4"/>';
-    s+='<circle class="hs-beacon" cx="'+pt[0].toFixed(1)+'" cy="'+pt[1].toFixed(1)+'" r="2" fill="'+LIME+'"/>';
-    return s+'</g>';
+  /* โครงถูกสร้างครั้งเดียว จากนั้น paint() แก้เฉพาะข้อความ/คลาสที่เปลี่ยนจริง */
+  var el={};
+  function scaffold(){
+    var h='<div class="fb-top">'
+      +'<button type="button" class="fb-kpi" data-k="in"><span class="k">เข้าวันนี้ · Gate In</span>'
+        +'<span class="v" data-f="inToday">0</span><span class="s">รับเข้าใหม่ + รับคืน</span></button>'
+      +'<button type="button" class="fb-kpi" data-k="out"><span class="k">ออกวันนี้ · Gate Out</span>'
+        +'<span class="v" data-f="outToday">0</span><span class="s">จ่ายออกให้ลูกค้า</span></button>'
+      +'<div class="fb-kpi"><span class="k">ความหนาแน่นพื้นที่</span>'
+        +'<span class="v" data-f="pct">—</span><span class="s" data-f="occtxt">—</span>'
+        +'<span class="fb-bar" data-f="bar"><i></i></span></div>'
+      +'</div>';
+
+    h+='<div class="fb-rail">';
+    STAGES.forEach(function(s,i){
+      if(i){
+        var g=EDGE_GATE[i];
+        h+='<div class="fb-edge"'+(g?' data-edge="'+g+'"':'')+'>'+ARROW
+          +(g?'<span class="t" data-f="edge-'+g+'">0</span>':'')+'</div>';
+      }
+      h+='<button type="button" class="fb-node idle" data-stage="'+s.k+'">'
+        +'<span class="n">'+s.n+'</span>'
+        +'<span class="c" data-f="c-'+s.k+'">0</span>'
+        +'<span class="a" data-f="a-'+s.k+'"></span>'
+        +'</button>';
+    });
+    h+='</div>';
+
+    h+='<div class="fb-exc">'+EXC.map(function(x){
+      return '<button type="button" class="fb-chip off" data-exc="'+x.k+'">'+x.n+' <b data-f="x-'+x.k+'">0</b></button>';
+    }).join('')+'</div>';
+
+    h+='<div class="fb-foot"><span class="fb-dot"></span><span data-f="foot">กำลังอ่านข้อมูลจากฐานข้อมูล…</span></div>';
+
+    host.innerHTML=h;
+
+    Array.prototype.forEach.call(host.querySelectorAll('[data-f]'),function(n){ el[n.getAttribute('data-f')]=n; });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-stage]'),function(n){
+      var k=n.getAttribute('data-stage');
+      var s=STAGES.filter(function(x){return x.k===k;})[0];
+      if(s&&s.go)n.addEventListener('click',function(){go(s.go);});
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-exc]'),function(n){
+      var k=n.getAttribute('data-exc');
+      var x=EXC.filter(function(y){return y.k===k;})[0];
+      if(x&&x.go)n.addEventListener('click',function(){go(x.go);});
+    });
+    var kin=host.querySelector('[data-k="in"]'),kout=host.querySelector('[data-k="out"]');
+    if(kin)kin.addEventListener('click',function(){go(function(){ W.showGateTodayList&&W.showGateTodayList('in'); });});
+    if(kout)kout.addEventListener('click',function(){go(function(){ W.showGateTodayList&&W.showGateTodayList('out'); });});
   }
 
-  // RFID scan gate — a portal (two antenna posts + top beam + green scan plane)
-  // spans along +y at fixed x, so items passing along the x-axis go through it
-  function rfidGate(x,y,span,label){
-    var H=2.7, s='<g>', POST={top:'#eef1f5',right:'#c3cad4',left:'#a3abb8'};
-    // green scan plane between the posts
-    var sp=[iso(x,y,0.04),iso(x,y+span,0.04),iso(x,y+span,H-0.1),iso(x,y,H-0.1)];
-    s+='<polygon points="'+sp.map(P).join(' ')+'" fill="rgba(168,249,49,.13)" stroke="'+LIME+'" stroke-width="1" stroke-dasharray="4 4" opacity=".8"/>';
-    // posts (both ends)
-    s+=box(x-0.08,y-0.08,0,0.16,0.16,H,POST);
-    s+=box(x-0.08,y+span-0.08,0,0.16,0.16,H,POST);
-    // green antenna panels on the inner faces
-    s+=box(x-0.04,y+0.05,0.55,0.08,0.55,1.5,BEAM);
-    s+=box(x-0.04,y+span-0.6,0.55,0.08,0.55,1.5,BEAM);
-    // top beam
-    s+=box(x-0.1,y-0.08,H,0.2,span+0.16,0.2,POST);
-    // scan beacon + label
-    var bc=iso(x,y+span*0.5,H+0.22); s+='<circle class="hs-beacon" cx="'+bc[0].toFixed(1)+'" cy="'+bc[1].toFixed(1)+'" r="3" fill="'+LIME+'"/>';
-    if(label){ var lp=iso(x,y+span*0.5,H+0.75); s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="'+LIME+'" font-size="11" font-weight="800" letter-spacing=".5" text-anchor="middle">'+label+'</text>'; }
-    return s+'</g>';
-  }
-  // rfid gate rotated 90 deg - posts spread along X, scan-plane faces the Y axis.
-  // Use this for gates that traffic moving along +Y/-Y (e.g. the truckY inbound truck) drives through.
-  function rfidGateY(x,y,span,label){
-    var H=2.7, s='<g>', POST={top:'#eef1f5',right:'#c3cad4',left:'#a3abb8'};
-    var sp=[iso(x,y,0.04),iso(x+span,y,0.04),iso(x+span,y,H-0.1),iso(x,y,H-0.1)];
-    s+='<polygon points="'+sp.map(P).join(' ')+'" fill="rgba(168,249,49,.13)" stroke="'+LIME+'" stroke-width="1" stroke-dasharray="4 4" opacity=".8"/>';
-    s+=box(x-0.08,y-0.08,0,0.16,0.16,H,POST);
-    s+=box(x+span-0.08,y-0.08,0,0.16,0.16,H,POST);
-    s+=box(x+0.05,y-0.04,0.55,0.55,0.08,1.5,BEAM);
-    s+=box(x+span-0.6,y-0.04,0.55,0.55,0.08,1.5,BEAM);
-    s+=box(x-0.08,y-0.1,H,span+0.16,0.2,0.2,POST);
-    var bc=iso(x+span*0.5,y,H+0.22); s+='<circle class="hs-beacon" cx="'+bc[0].toFixed(1)+'" cy="'+bc[1].toFixed(1)+'" r="3" fill="'+LIME+'"/>';
-    if(label){ var lp=iso(x+span*0.5,y,H+0.75); s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="'+LIME+'" font-size="11" font-weight="800" letter-spacing=".5" text-anchor="middle">'+label+'</text>'; }
-    return s+'</g>';
-  }
+  function setTxt(k,v){ var n=el[k]; if(n&&n.textContent!==v)n.textContent=v; }
+  function setCls(n,v){ if(n&&n.className!==v)n.className=v; }
 
-  // green forklift lifting a stack of white pallets (front hero prop)
-  function forkliftLift(x,y){
-    var s='<g>';
-    // shadow
-    var sh=[iso(x-0.3,y-0.3,0),iso(x+2.2,y-0.3,0),iso(x+2.2,y+1.5,0),iso(x-0.3,y+1.5,0)];
-    s+=poly(sh,'rgba(0,0,0,.24)');
-    // counterweight + cab body (green)
-    s+=box(x+0.9,y+0.1,0.12,1.1,1.1,1.0,GBODY);
-    // overhead guard posts
-    var g1=iso(x+1.0,y+0.15,1.0),g2=iso(x+1.0,y+0.15,2.1),g3=iso(x+1.9,y+0.15,2.1),g4=iso(x+1.9,y+0.15,1.0);
-    s+='<polyline points="'+P(g1)+' '+P(g2)+' '+P(g3)+' '+P(g4)+'" fill="none" stroke="#20323f" stroke-width="2.6"/>';
-    // driver (green)
-    var dr=iso(x+1.45,y+0.6,0.9); s+='<g transform="translate('+dr[0].toFixed(1)+','+dr[1].toFixed(1)+')">'+workerMini()+'</g>';
-    // mast (front, toward -x) + lifted pallet stack
-    var m1=iso(x+0.15,y+0.3,0),m2=iso(x+0.15,y+0.3,2.3),m3=iso(x+0.15,y+0.9,2.3),m4=iso(x+0.15,y+0.9,0);
-    s+='<polyline points="'+P(m1)+' '+P(m2)+'" fill="none" stroke="#2b3947" stroke-width="3.2"/>';
-    s+='<polyline points="'+P(m4)+' '+P(m3)+'" fill="none" stroke="#2b3947" stroke-width="3.2"/>';
-    // lifted load — two white pallets high on the forks
-    s+=box(x-0.55,y+0.2,1.15,1.05,0.95,0.16,PBASE);
-    s+=box(x-0.5,y+0.26,1.31,0.95,0.82,0.6,KRAFT);
-    s+=box(x-0.55,y+0.2,1.95,1.05,0.95,0.16,PBASE);
-    s+=box(x-0.5,y+0.26,2.11,0.95,0.82,0.6,BOX2);
-    // wheels
-    [ [x+1.0,y+1.15],[x+1.9,y+1.15],[x+0.55,y+1.1] ].forEach(function(p){ var c=iso(p[0],p[1],0.05); s+='<ellipse cx="'+c[0].toFixed(1)+'" cy="'+c[1].toFixed(1)+'" rx="8" ry="4.5" fill="#12141a"/>'; });
-    s+='<circle class="hs-beacon" cx="'+iso(x+1.9,y+0.15,2.15)[0].toFixed(1)+'" cy="'+iso(x+1.9,y+0.15,2.15)[1].toFixed(1)+'" r="2.4" fill="'+LIME+'"/>';
-    return s+'</g>';
-  }
-  // compact worker for the forklift seat
-  function workerMini(){
-    return '<g><rect x="-6" y="-10" width="12" height="15" rx="3.5" fill="#37b06a"/>'
-      +'<rect x="-1.6" y="-10" width="3.2" height="15" fill="#eef1f5" opacity=".5"/>'
-      +'<circle cx="0" cy="-14" r="4.2" fill="#e8b78c"/>'
-      +'<path d="M-5,-14 a5,5 0 0 1 10,0 z" fill="#eef1f5"/></g>';
-  }
+  function paint(){
+    if(!el.foot)return;
+    var d=compute();
 
-  // truck oriented along +X (cab at +x end → points screen-right). For DELIVERY.
-  function truckX(x,y,label){
-    var cargoLen=2.8,w=1.5,cargoH=2.5,cabLen=1.1,cabH=1.9, s='<g>';
-    var sh=[iso(x-0.2,y-0.2,0),iso(x+cargoLen+cabLen+0.25,y-0.2,0),iso(x+cargoLen+cabLen+0.25,y+w+0.2,0),iso(x-0.2,y+w+0.2,0)];
-    s+=poly(sh,'rgba(0,0,0,.22)');
-    s+=box(x,y,0.14,cargoLen,w,cargoH,TBODY);
-    var cx=x+cargoLen; s+=box(cx,y,0.14,cabLen,w,cabH,TCAB);
-    var wx=cx+cabLen;
-    var ws=[iso(wx,y+0.15,cabH*0.45),iso(wx,y+w-0.15,cabH*0.45),iso(wx,y+w-0.15,cabH),iso(wx,y+0.15,cabH)];
-    s+=poly(ws,'rgba(178,224,255,.9)');
-    [x+0.5,x+cargoLen-0.4,cx+cabLen*0.55].forEach(function(px){ var c=iso(px,y+w+0.05,0.05); s+='<ellipse cx="'+c[0].toFixed(1)+'" cy="'+c[1].toFixed(1)+'" rx="8" ry="4.5" fill="#14161c"/>'; });
-    if(label){ var lp=iso(x+cargoLen*0.5,y+w+0.06,cargoH*0.52);
-      s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="#fff" font-size="12.5" font-weight="800" letter-spacing=".5" text-anchor="middle">'+label+'</text>'; }
-    return s+'</g>';
-  }
-  // truck oriented along +Y (cab at +y end → points screen-lower-left). For INBOUND.
-  function truckY(x,y,label){
-    var cargoLen=2.8,w=1.5,cargoH=2.5,cabLen=1.1,cabH=1.9, s='<g>';
-    var sh=[iso(x-0.2,y-0.2,0),iso(x+w+0.2,y-0.2,0),iso(x+w+0.2,y+cargoLen+cabLen+0.25,0),iso(x-0.2,y+cargoLen+cabLen+0.25,0)];
-    s+=poly(sh,'rgba(0,0,0,.22)');
-    s+=box(x,y,0.14,w,cargoLen,cargoH,TBODY);
-    var cy=y+cargoLen; s+=box(x,cy,0.14,w,cabLen,cabH,TCAB);
-    var wy=cy+cabLen;
-    var ws=[iso(x+0.15,wy,cabH*0.45),iso(x+w-0.15,wy,cabH*0.45),iso(x+w-0.15,wy,cabH),iso(x+0.15,wy,cabH)];
-    s+=poly(ws,'rgba(178,224,255,.9)');
-    [y+0.5,y+cargoLen-0.4,cy+cabLen*0.55].forEach(function(py){ var c=iso(x+w+0.05,py,0.05); s+='<ellipse cx="'+c[0].toFixed(1)+'" cy="'+c[1].toFixed(1)+'" rx="8" ry="4.5" fill="#14161c"/>'; });
-    if(label){ var lp=iso(x+w+0.06,y+cargoLen*0.5,cargoH*0.52);
-      s+='<text x="'+lp[0].toFixed(1)+'" y="'+lp[1].toFixed(1)+'" fill="#fff" font-size="12.5" font-weight="800" letter-spacing=".5" text-anchor="middle">'+label+'</text>'; }
-    return s+'</g>';
-  }
-
-  // stylized iso worker (green uniform + white hard hat)
-  function worker(){
-    return '<g>'
-      +'<ellipse cx="0" cy="21" rx="10" ry="4" fill="rgba(0,0,0,.22)"/>'
-      +'<rect x="-5.5" y="4" width="4.5" height="17" rx="2" fill="#1f6e40"/>'
-      +'<rect x="1" y="4" width="4.5" height="17" rx="2" fill="#175636"/>'
-      +'<rect x="-7.5" y="-12" width="15" height="19" rx="4" fill="#37b06a"/>'
-      +'<rect x="-2" y="-12" width="4" height="19" fill="#eef1f5" opacity=".55"/>'
-      +'<rect x="-10.5" y="-10" width="4.5" height="14" rx="2.2" fill="#238a4f"/>'
-      +'<rect x="6" y="-10" width="4.5" height="14" rx="2.2" fill="#238a4f"/>'
-      +'<circle cx="0" cy="-17.5" r="5" fill="#e8b78c"/>'
-      +'<path d="M-6.2,-17.5 a6.2,6 0 0 1 12.4,0 z" fill="#eef1f5"/>'
-      +'</g>';
-  }
-
-  // AMR robot carrying a white box (green deck)
-  function robotShape(){
-    return '<g class="hs-bob">'
-      +'<ellipse cx="0" cy="7" rx="21" ry="8" fill="rgba(0,0,0,.24)"/>'
-      +'<rect x="-19" y="-6" width="38" height="16" rx="5" fill="#238a4f" stroke="#12161c"/>'
-      +'<rect x="-19" y="-1" width="38" height="6" rx="3" fill="#155433"/>'
-      +'<polygon points="-12,-9 0,-15 12,-9 0,-3" fill="#eef1f5"/>'
-      +'<polygon points="-12,-9 -12,1 0,7 0,-3" fill="#a3abb8"/>'
-      +'<polygon points="12,-9 12,1 0,7 0,-3" fill="#c3cad4"/>'
-      +'<circle class="hs-beacon" cx="0" cy="-17" r="2.7" fill="'+LIME+'"/>'
-      +'</g>';
-  }
-
-  // small green forklift facing left, carrying a white box
-  function forkliftShape(){
-    return '<g class="hs-bob">'
-      +'<ellipse cx="-2" cy="15" rx="27" ry="9" fill="rgba(0,0,0,.24)"/>'
-      +'<polygon points="2,-2 22,-8 22,10 2,16" fill="#238a4f"/>'
-      +'<polygon points="2,-2 -5,-6 -5,12 2,16" fill="#37b06a"/>'
-      +'<line x1="7" y1="-8" x2="7" y2="-30" stroke="#20323f" stroke-width="2.6"/>'
-      +'<line x1="18" y1="-10" x2="18" y2="-30" stroke="#20323f" stroke-width="2.6"/>'
-      +'<line x1="7" y1="-30" x2="18" y2="-30" stroke="#20323f" stroke-width="2.6"/>'
-      +'<line x1="-8" y1="-24" x2="-8" y2="16" stroke="#2b3947" stroke-width="3"/>'
-      +'<line x1="-12" y1="-24" x2="-12" y2="16" stroke="#2b3947" stroke-width="3"/>'
-      +'<line x1="-12" y1="13" x2="-27" y2="16" stroke="#cbd0da" stroke-width="2.6"/>'
-      +'<polygon points="-31,2 -19,-4 -7,2 -19,8" fill="#eef1f5"/>'
-      +'<polygon points="-31,2 -31,12 -19,18 -19,8" fill="#a3abb8"/>'
-      +'<polygon points="-7,2 -7,12 -19,18 -19,8" fill="#c3cad4"/>'
-      +'<circle cx="-2" cy="16" r="5.2" fill="#12141a"/>'
-      +'<circle cx="16" cy="14" r="6.2" fill="#12141a"/>'
-      +'<circle class="hs-beacon" cx="12.5" cy="-32" r="2.5" fill="'+LIME+'"/>'
-      +'</g>';
-  }
-
-  // mover wrapper with SMIL round-trip motion (skipped under reduced-motion)
-  function mover(inner, ax,ay, bx,by, dur){
-    var a=iso(ax,ay,0), b=iso(bx,by,0);
-    var anim = reduce ? '' :
-      '<animateMotion dur="'+dur+'s" repeatCount="indefinite" calcMode="linear" keyPoints="0;0.5;1" keyTimes="0;0.5;1" '
-      +'path="M '+P(a)+' L '+P(b)+' L '+P(a)+'"/>';
-    // when reduced, park it at the midpoint
-    var park = reduce ? ' transform="translate('+((a[0]+b[0])/2).toFixed(1)+','+((a[1]+b[1])/2).toFixed(1)+')"' : '';
-    return '<g class="hs-mover"'+park+'>'+anim+inner+'</g>';
-  }
-
-  // flat green floor pad (open staging area marked on the ground)
-  function floorPad(x,y,w,d){
-    var p=[iso(x,y,0),iso(x+w,y,0),iso(x+w,y+d,0),iso(x,y+d,0)];
-    return '<polygon points="'+p.map(P).join(' ')+'" fill="rgba(168,249,49,.09)" stroke="'+LIME+'" stroke-width="1.4" stroke-dasharray="6 5" opacity=".85"/>';
-  }
-  // small floating carton (for the travelling-box animation)
-  function boxIcon(){
-    return '<g class="hs-bob">'
-      +'<ellipse cx="0" cy="11" rx="12" ry="4.5" fill="rgba(0,0,0,.22)"/>'
-      +'<polygon points="-13,-4 0,-11 13,-4 0,3" fill="#eef1f5"/>'
-      +'<polygon points="-13,-4 -13,8 0,15 0,3" fill="#a3abb8"/>'
-      +'<polygon points="13,-4 13,8 0,15 0,3" fill="#c3cad4"/>'
-      +'</g>';
-  }
-  // mover following a multi-point ground path (Inbound → Putaway → Inventory …)
-  function moverPath(inner, pts, dur){
-    if(reduce){ var m=pts[1]||pts[0]; var q=iso(m[0],m[1],0); return '<g transform="translate('+q[0].toFixed(1)+','+q[1].toFixed(1)+')">'+inner+'</g>'; }
-    var d='M '+pts.map(function(p){ var q=iso(p[0],p[1],0); return P(q); }).join(' L ');
-    return '<g class="hs-mover"><animateMotion dur="'+dur+'s" repeatCount="indefinite" calcMode="linear" path="'+d+'"/>'+inner+'</g>';
-  }
-
-  // animated flow arrow (dashed line + pulsing head)
-  function flow(ax,ay,bx,by,cls){
-    var a=iso(ax,ay,0.05), b=iso(bx,by,0.05);
-    var ang=Math.atan2(b[1]-a[1],b[0]-a[0]),sz=10;
-    var h1=b, h2=[b[0]-sz*Math.cos(ang-0.5),b[1]-sz*Math.sin(ang-0.5)], h3=[b[0]-sz*Math.cos(ang+0.5),b[1]-sz*Math.sin(ang+0.5)];
-    return '<line class="hs-flow" x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)
-      +'" stroke="'+LIME+'" stroke-width="2.6" stroke-linecap="round"/>'
-      +'<polygon class="hs-arrow '+(cls||'')+'" points="'+P(h1)+' '+P(h2)+' '+P(h3)+'" fill="'+LIME+'"/>';
-  }
-
-  // slanted label like the reference infographic
-  function label(txt,x,y,z,rot,size,fill){
-    var p=iso(x,y,z||0);
-    return '<text x="'+p[0].toFixed(1)+'" y="'+p[1].toFixed(1)+'" fill="'+(fill||'#8b93a4')
-      +'" font-size="'+(size||18)+'" font-weight="800" letter-spacing=".6" text-anchor="middle" '
-      +'transform="rotate('+rot+' '+p[0].toFixed(1)+' '+p[1].toFixed(1)+')" opacity=".85">'+txt+'</text>';
-  }
-
-  // floating status beacon over a zone: green (pulsing) = active/has stock,
-  // gray = idle/empty. Optional text badge shows the live count.
-  function statusDot(x,y,z,active,txt){
-    var p=iso(x,y,z||0), col=active?LIME:'#586074';
-    var g='<g>';
-    if(active) g+='<circle class="hs-beacon" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="8" fill="'+col+'" opacity=".3"/>';
-    g+='<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="4.6" fill="'+col+'" stroke="#0a0d14" stroke-width="1.3"/>';
-    if(txt!=null){
-      var tx=(p[0]+9).toFixed(1), ty=(p[1]+4).toFixed(1), tw=(''+txt).length*6.6+10;
-      g+='<rect x="'+(p[0]+6).toFixed(1)+'" y="'+(p[1]-6).toFixed(1)+'" width="'+tw.toFixed(1)+'" height="16" rx="8" fill="rgba(10,13,20,.72)" stroke="'+(active?'rgba(168,249,49,.35)':'rgba(120,140,170,.3)')+'" stroke-width="1"/>';
-      g+='<text x="'+(p[0]+11).toFixed(1)+'" y="'+ty+'" fill="#e7ecf4" font-size="10.5" font-weight="700">'+txt+'</text>';
-    }
-    return g+'</g>';
-  }
-
-  function build(){
-    var s='<svg viewBox="'+VBX+' '+VBY+' '+VBW+' '+VBH+'" preserveAspectRatio="xMidYMid meet">';
-    // defs
-    s+='<defs>'
-      +'<linearGradient id="hsFloor" x1="0" y1="0" x2="0" y2="1">'
-      +'<stop offset="0" stop-color="#1b1f2b" stop-opacity=".55"/><stop offset="1" stop-color="#0a0c12" stop-opacity=".05"/></linearGradient>'
-      +'<linearGradient id="hsSweep" x1="0" y1="0" x2="1" y2="0">'
-      +'<stop offset="0" stop-color="#a8f931" stop-opacity="0"/><stop offset=".5" stop-color="#a8f931" stop-opacity=".10"/><stop offset="1" stop-color="#a8f931" stop-opacity="0"/></linearGradient>'
-      +'</defs>';
-
-    // floor + grid
-    (function(){
-      var c=[iso(-4,-3,0),iso(13,-3,0),iso(13,10,0),iso(-4,10,0)];
-      s+=poly(c,'url(#hsFloor)');
-      for(var g=-3;g<=10;g+=1){ var a=iso(-4,g,0),b=iso(13,g,0); s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="rgba(120,150,255,.05)" stroke-width="1"/>'; }
-      for(var g2=-4;g2<=13;g2+=1){ var a2=iso(g2,-3,0),b2=iso(g2,10,0); s+='<line x1="'+a2[0].toFixed(1)+'" y1="'+a2[1].toFixed(1)+'" x2="'+b2[0].toFixed(1)+'" y2="'+b2[1].toFixed(1)+'" stroke="rgba(120,150,255,.05)" stroke-width="1"/>'; }
-    })();
-
-    // ---- live occupancy fraction (Occupied slots / total slots) ----
-    // Before real data arrives, show a gentle default so the hero isn't bare.
-    var frac;
-    if(!SCENE.ready) frac=0.58;
-    else if(SCENE.slots>0) frac=SCENE.occSlots/SCENE.slots;
-    else if(SCENE.total>0) frac=SCENE.inv/Math.max(SCENE.total,SCENE.inv,1);
-    else frac=0;
-
-    // ---- INVENTORY : tall dense pallet-racking block (centerpiece) ----
-    // Each bin lights up (Occupied) or stays a dark empty tray (ว่าง) by real occupancy.
-    s+=rackBlock(0.4,0.2,4,4,1.5,1.5,null,frac);
-
-    // ---- OUTBOUND STAGING : pallets packed & waiting at the dock TODAY ----
-    // Bound to today's outbound gate activity, NOT the lifetime `out` count — once a
-    // box passes the OUT gate it leaves the site and we no longer track its location,
-    // so lifetime `out` boxes are not physically staged here. This keeps the dock
-    // consistent with the DELIVERY truck / moving cartons (also outToday-driven).
-    s+=floorPad(7.4,1.4,5.6,2.8);
-    var nStage = SCENE.ready ? Math.max(0, Math.min(3, Math.ceil(SCENE.outToday/4))) : 3;
-    var stageSpots=[[8.1,1.9,2],[9.6,2.5,3],[11.2,2.1,2]];
-    for(var si=0; si<nStage; si++) s+=pallet(stageSpots[si][0],stageSpots[si][1],stageSpots[si][2]);
-
-    // ---- PUTAWAY STAGING : boxes waiting to go up to Inventory (real staging count) ----
-    s+=floorPad(-0.2,4.0,2.7,2.0);
-    var showPut = SCENE.ready ? SCENE.staging>0 : true;
-    if(showPut){
-      s+=box(0.3,4.4,0,0.95,0.95,0.9,KRAFT,'hs-breathe');
-      if(!SCENE.ready || SCENE.staging>1) s+=box(1.35,4.7,0,0.85,0.85,0.78,BOX2,'hs-breathe');
+    setTxt('inToday',num(d.inToday));
+    setTxt('outToday',num(d.outToday));
+    setTxt('pct',d.slots?(d.pct+'%'):'—');
+    setTxt('occtxt',d.slots?(num(d.occ)+' / '+num(d.slots)+' ช่องมีของ'):'ยังไม่ได้ตั้งค่าตำแหน่งแร็ค');
+    if(el.bar){
+      setCls(el.bar,'fb-bar'+(d.pct>=90?' bad':d.pct>=70?' warn':''));
+      var fill=el.bar.querySelector('i');
+      if(fill)fill.style.width=(d.slots?Math.min(100,d.pct):0)+'%';
     }
 
-    // ---- weigh-scale station + a loose carton ----
-    s+=scale(4.9,3.4);
-    s+=box(6.6,4.7,0,1.0,1.0,0.95,KRAFT);
+    STAGES.forEach(function(s){
+      var n=d.c[s.k]||0, cls='fb-node', sub='';
+      if(!n){ cls+=' idle'; }
+      else if(s.k==='over'){
+        cls+=' bad';
+        sub=d.worstOver>0?('ค้างนานสุด '+d.worstOver+' วัน'):'ต้องติดตามคืน';
+      }else if(s.k==='cust'){
+        if(d.soonestDue!=null&&d.soonestDue<=2){ cls+=' warn'; sub='ครบกำหนดใน '+Math.max(d.soonestDue,0)+' วัน'; }
+        else { cls+=' ok'; sub=(d.soonestDue!=null)?('ครบกำหนดเร็วสุด '+d.soonestDue+' วัน'):''; }
+      }else if(s.warn!=null){
+        var a=d.age[s.k]||0;
+        if(a>=s.bad){ cls+=' bad'; sub='ค้างนานสุด '+a+' วัน'; }
+        else if(a>=s.warn){ cls+=' warn'; sub='ค้างนานสุด '+a+' วัน'; }
+        else { cls+=' ok'; sub=a>0?('ค้างนานสุด '+a+' วัน'):'เพิ่งเข้ามาวันนี้'; }
+      }else cls+=' ok';
+      setTxt('c-'+s.k,num(n));
+      setTxt('a-'+s.k,sub);
+      setCls(host.querySelector('[data-stage="'+s.k+'"]'),cls);
+    });
 
-    // ---- green forklift moving stock Putaway → Inventory shelves ----
-    s+=forkliftLift(2.2,2.5);
+    setTxt('edge-in',d.inToday?('+'+num(d.inToday)):'0');
+    setTxt('edge-out',d.outToday?('−'+num(d.outToday)):'0');
+    setCls(host.querySelector('[data-edge="in"]'),'fb-edge'+(d.inToday?' live':''));
+    setCls(host.querySelector('[data-edge="out"]'),'fb-edge'+(d.outToday?' live':''));
 
-    // ---- workers ----
-    var wA=iso(5.9,3.0,0), wB=iso(8.8,2.6,0);
-    s+='<g transform="translate('+wA[0].toFixed(1)+','+wA[1].toFixed(1)+')">'+worker()+'</g>';
-    s+='<g transform="translate('+wB[0].toFixed(1)+','+wB[1].toFixed(1)+')">'+worker()+'</g>';
+    EXC.forEach(function(x){
+      var v=d.exc[x.k]||0;
+      setTxt('x-'+x.k,num(v));
+      setCls(host.querySelector('[data-exc="'+x.k+'"]'),'fb-chip '+(v?('on '+x.cls):'off'));
+    });
 
-    // ---- trucks : always present (part of the dock); full when there's gate
-    //      traffic today, dimmed to "idle" when there isn't ----
-    var actIn  = SCENE.ready ? SCENE.inToday>0  : true;
-    var actOut = SCENE.ready ? SCENE.outToday>0 : true;
-    // Trucks parked well back from the RFID gates (large clearance) so the dock
-    // reads open and it's clear the gate is a separate checkpoint, not the truck.
-    s+='<g opacity="'+(actIn?1:0.42)+'">'+truckY(3.6,8.8,null)+'</g>';       // INBOUND — points down-left (+Y); tail pulled far back from RFID·IN
-    s+='<g opacity="'+(actOut?1:0.42)+'">'+truckX(9.95,5.4,'DELIVERY')+'</g>'; // DELIVERY — points right (+X); tail pulled far back from RFID·OUT
-
-    // ---- RFID scan gates (goods pass through on entry / exit) ----
-    s+=rfidGateY(3.45,6.15,1.8,'RFID · IN');    // inbound gate (at inbound truck mouth) — faces +Y/-Y, same direction as the inbound truck
-    s+=rfidGate(8.6,4.6,1.8,'RFID · OUT');   // outbound gate (at delivery loading point)
-
-    // ---- flow arrows ----
-    // Real process order: Inbound Staging -> Gate In -> Putaway Staging -> Inventory
-    //   -> pack onto pallets (Outbound Staging, BEFORE the gate) -> Gate Out (scanned)
-    //   -> loaded on truck -> leaves the site (we lose location visibility here;
-    //   the box's status simply becomes "out with customer", not staged anywhere).
-    s+=flow(3.75,8.5, 4.15,6.35,'');    // inbound truck (parked far back) -> RFID·IN (scanned on entry)
-    s+=flow(4.0,5.95, 1.9,4.75,'d1');   // RFID·IN -> Putaway staging (points OUT of the in-gate)
-    s+=flow(1.3,4.0, 2.6,1.8,'d2');     // putaway -> inventory
-    s+=flow(5.6,1.75, 9.5,2.4,'d3');    // inventory -> outbound staging (packed, waiting for gate)
-    s+=flow(9.8,3.3, 8.6,4.35,'');      // outbound staging -> RFID·OUT (scanned)
-    s+=flow(8.55,5.15, 9.95,6.1,'d4');  // RFID·OUT -> onto the truck (parked far back) -> leaves site
-
-    // ---- travelling cartons — always animate along the flow arrows so the
-    //      cross-dock cycle is always visible (the arrows themselves render
-    //      unconditionally). Truck brightness/staging counts stay data-driven. ----
-    s+=moverPath(boxIcon(), [[3.6,8.5],[1.4,4.6],[2.8,1.1]], 9);   // Inbound truck → Putaway → Inventory
-    s+=moverPath(boxIcon(), [[5.6,1.75],[9.5,2.6],[8.6,4.35],[9.95,6.0]], 9);  // Inventory → staged → RFID·OUT → onto truck
-
-    // ---- labels (spaced so none overlap) ----
-    s+=label('INVENTORY', 1.6,-1.0,4.9, -20, 20, '#c3ccdb');
-    s+=label('OUTBOUND STAGING', 12.8,5.6,0, 24, 14, '#9fb0c2');
-    s+=label('PUTAWAY STAGING', 0.2,6.4,0, 26, 13, '#8fd6a0');
-    s+=label('INBOUND STAGING', 2.2,10.2,0, 26, 13, '#aeb6c6');
-
-    // ---- per-zone live status beacons — every station shows a clear dot ----
-    if(SCENE.ready){
-      var occN=SCENE.slots>0?SCENE.occSlots:SCENE.inv;
-      s+=statusDot(2.4,0.0,5.2, occN>0, 'มีของ '+occN);                 // INVENTORY
-      s+=statusDot(0.9,4.9,1.5, SCENE.staging>0, 'รอเก็บ '+SCENE.staging);  // PUTAWAY STAGING
-      s+=statusDot(9.6,1.6,1.5, SCENE.outToday>0, 'ส่งวันนี้ '+SCENE.outToday); // OUTBOUND STAGING
-      s+=statusDot(4.35,9.55,2.75, SCENE.inToday>0, SCENE.inToday>0?('เข้า '+SCENE.inToday):'ว่าง');  // INBOUND truck
-      s+=statusDot(11.4,6.15,2.75, SCENE.outToday>0, SCENE.outToday>0?('ออก '+SCENE.outToday):'ว่าง'); // DELIVERY truck
-    }
-
-    // ---- scan sweep (topmost) ----
-    if(!reduce) s+='<rect class="hs-sweep" x="'+VBX+'" y="'+VBY+'" width="150" height="'+VBH+'" fill="url(#hsSweep)"/>';
-
-    s+='</svg>';
-    host.innerHTML=s;
+    /* งานค้างรวม = ทุกอย่างที่ยังไม่ถึงชั้นวางและยังไม่ออกจากคลัง */
+    var wip=d.c.tag+d.c.inq+d.c.put+d.c.outq;
+    var t=new Date();
+    setTxt('foot','งานค้างในระบบรวม '+num(wip)+' ใบ · ข้อมูลสด อัปเดต '
+      +('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2));
   }
 
-  // Live feed: renderOverview calls this whenever warehouse state changes.
-  window.updateHeroScene = function(d){
-    if(d){ for(var k in d){ if(d.hasOwnProperty(k)) SCENE[k]=d[k]; } SCENE.ready=true; }
-    build();
-  };
+  /* renderOverview() ถูกเรียกทุกครั้งที่ state เปลี่ยน ทั้งจากการแก้ในเครื่องและจาก
+     poll ที่ดึง DB มาใหม่ — เกาะ hook เดิมชื่อเดิมไว้ จึงไม่ต้องมี poller ตัวที่สอง
+     และไม่ไปแตะ save() ที่จะทำให้เกิดลูป PUT */
+  W.updateHeroScene=function(){ paint(); };
+  W.updateFlowBoard=paint;
 
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', build);
-  else build();
+  scaffold();
+  paint();
 })();
 
 /* ===== INIT =====
@@ -7989,7 +7734,18 @@ var invCustFilter = ''; /* '' = all customers; customer ID string = specific cus
 var invViewMode = 'serial'; // 'serial' | 'summary'
 
 /* Returns true if a warehouse box has NOT been putaway to a real rack yet */
-function isAtStaging(b) { return false; } /* SOW: no staging step */
+/* "รับเข้าแล้ว แต่ยังไม่ได้ระบุตำแหน่งบนแร็ค" — Gate In ลงกล่องไว้ที่คลังโดยเว้น
+   zone/rack ว่าง (ดู #btnCheckIn) แล้ว Putaway ค่อยเติมให้ทีหลัง กล่องที่ค้างอยู่
+   ระหว่างสองขั้นนี้คือ WIP จริงของคลัง และเป็นคอขวดที่ผังกระบวนการต้องมองเห็น
+   เดิมฟังก์ชันนี้ถูก stub เป็น false ไว้ ทำให้ตัวนับ "รอจัดเก็บ" เป็น 0 ตลอด
+   ทั้งที่ฝั่ง 3D (statusKey) นับได้จริง — คนละความจริงกันอยู่คนละที่
+   หมายเหตุ: ไม่แตะ isStagingLoc() ซึ่งเป็นคนละตัวและถูกใช้คัดกล่องตอนจัดของออก
+   การเปลี่ยนตัวนั้นจะเปลี่ยนพฤติกรรมการจ่ายของจริง */
+function isAtStaging(b) {
+  if (!b || b.status !== 'warehouse') return false;
+  var l = b.location || {};
+  return !l.zone && !l.rack;
+}
 
 function invLocText(b) {
   if (b.status === 'out') return '<span class="muted">— อยู่กับลูกค้า —</span>';
@@ -12903,7 +12659,11 @@ document.addEventListener('fullscreenchange',()=>setTimeout(resize,60));
 function stateSig(st){
   if(!st)return '';
   const b=Object.values(st.boxes||{}).map(x=>x.tag+':'+x.status+':'+((x.location||{}).zone||'')+((x.location||{}).rack||'')+((x.location||{}).shelf||'')+((x.location||{}).slot||'')+(x.labeled===false?'!':''));
-  return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')+'#'+Object.keys(st.locations||{}).length;
+  /* จำนวน event ต้องอยู่ในลายเซ็นด้วย ไม่งั้นการยิง Gate ที่ไม่ได้เปลี่ยนตำแหน่งกล่อง
+     (เช่น ของใหม่เข้าคลังครั้งแรก) จะไม่ถูกมองว่า "state เปลี่ยน" แล้วตัวนับ
+     "เข้า/ออกวันนี้" บนผังกระบวนการจะค้างจนกว่าจะมีอย่างอื่นขยับ */
+  return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')
+    +'#'+Object.keys(st.locations||{}).length+'#'+(st.events||[]).length;
 }
 let buildT=null;
 function scheduleBuild(){clearTimeout(buildT);buildT=setTimeout(()=>{try{build();}catch(e){console.error('twin rebuild',e);}},220);}
