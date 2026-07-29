@@ -2776,7 +2776,7 @@ $('#btnAddBox').onclick = function() {
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
     var lot = val('bLot'); var expiry = val('bExpiry');
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-      lot:lot,expiry:expiry,regAt:iso(),
+      lot:lot,expiry:expiry,regAt:iso(),regBy:USER,
       location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]};
     auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
@@ -2790,7 +2790,7 @@ $('#btnAddBox').onclick = function() {
     var blot = val('bLot'); var bexp = val('bExpiry');
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + pad(n, 2);
       if (!S.boxes[tag]) { S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-        lot:blot,expiry:bexp,regAt:iso(),
+        lot:blot,expiry:bexp,regAt:iso(),regBy:USER,
         location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, pre+pad(start,2)+'…'+pre+pad(start+qty-1,2), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติด Tag'); renderPrefixDatalist(); renderAll();
@@ -4297,8 +4297,11 @@ function statusPill(s,ctx){
   if(s==='warehouse'&&ctx&&ctx.labeled===false){
     return '<span class="pill warn">รอติด Tag</span>';
   }
-  if(s==='warehouse'&&ctx&&isStagingLoc(ctx.location||ctx.loc||{})){
-    return '<span class="pill ok">ในคลัง</span>';
+  /* รับเข้าคลังแล้ว แต่ยังไม่ได้ระบุตำแหน่งบนแร็ค — ของยังกองอยู่หน้าประตู หยิบไป
+     จ่ายไม่ได้จนกว่าจะ Putaway จึงต้องอ่านออกทันทีว่าไม่ใช่ "ในคลัง" ที่พร้อมใช้ */
+  if(s==='warehouse'&&ctx){
+    var _l=ctx.location||ctx.loc||{};
+    if(!_l.zone&&!_l.rack)return '<span class="pill warn">รอ Putaway</span>';
   }
   var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอติด Tag'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
 /* small warning badge shown next to the status pill when a box was brought in
@@ -7763,10 +7766,36 @@ function invCustText(b) {
   if (b.status === 'lost') return '<span class="small muted">' + esc(custName(b.customer)) + (b.lostReason === 'auto-overdue' ? ' · Auto' : '') + '</span>';
   return '<span class="muted">—</span>';
 }
+/* ผู้ที่ลงทะเบียนกล่องแต่ละใบ อ่านย้อนจาก Audit Log — กล่องที่ยังไม่เคยผ่านประตู
+   จะไม่มี history เลย ชื่อคนบันทึกจึงอยู่ในรายการ CREATE เท่านั้น
+   การสร้างเป็นชุดเก็บ itemId เป็นช่วง (BT-01…BT-05) แต่แนบ tags จริงไว้ใน after
+   จึงต้องกางออกมาทีละใบ ไม่งั้นทั้งชุดจะหาคนบันทึกไม่เจอ
+   ทำดัชนีครั้งเดียวแล้วใช้ซ้ำ เพราะฟังก์ชันนี้ถูกเรียกทุกแถวของตาราง */
+var _regByIdx = null, _regByIdxLen = -1;
+function regByIndex() {
+  var log = S.auditLog || [];
+  if (_regByIdx && _regByIdxLen === log.length) return _regByIdx;
+  var m = {};
+  for (var i = log.length - 1; i >= 0; i--) {
+    var e = log[i];
+    if (!e || e.action !== 'CREATE' || !e.recorder) continue;
+    var after = e.after;
+    if (typeof after === 'string') { try { after = JSON.parse(after); } catch (_) { after = null; } }
+    var tags = after && after.tags;
+    if (tags && tags.length) tags.forEach(function(t){ m[t] = e.recorder; });
+    else if (e.itemId && e.itemId.indexOf('\u2026') < 0) m[e.itemId] = e.recorder;
+  }
+  _regByIdx = m; _regByIdxLen = log.length;
+  return m;
+}
+/* ทุกใบต้องสาวกลับได้ว่าใครแตะล่าสุด — ไล่จากเหตุการณ์ล่าสุดย้อนไปจนถึงคนที่
+   ลงทะเบียนไว้ตอนแรก ช่องนี้จึงไม่ควรว่าง */
 function invLastRecorder(b) {
   var h = (b.history || []);
   for (var i = h.length - 1; i >= 0; i--) { if (h[i].recorder) return h[i].recorder; }
-  return '—';
+  if (b.regBy) return b.regBy;
+  var r = regByIndex()[b.tag];
+  return r || 'ไม่ระบุ';
 }
 
 /* ---- extra filter state (set by goInventory) ---- */
