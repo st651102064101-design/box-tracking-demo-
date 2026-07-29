@@ -178,11 +178,12 @@
      surprised people with a browser alert on the main screen. The picker
      modal (and the employee/user-management panel) now carries an explicit
      "ออกจากระบบ" button that calls this instead. ──────────────────────────*/
+  /* No confirm(): reaching here already took a deliberate click on "ออกจากระบบ"
+     inside the account menu, so a second native dialog only adds a step to a
+     harmless, instantly reversible action — signing back in is one click. */
   window.boxtraceLogout = function () {
-    if (window.confirm('ออกจากระบบ?')) {
-      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
-      gotoLogin();
-    }
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    gotoLogin();
   };
 
   // Kick off priming once the DOM (and the app's boot) has run.

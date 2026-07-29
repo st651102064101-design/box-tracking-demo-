@@ -130,14 +130,26 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
    เป็นงานเล็กที่ทำบ่อย การเปิดม่านดำทับทั้งหน้าจึงหนักเกินความจำเป็นและทำให้
    หลุดบริบทของหน้าที่กำลังดูอยู่ */
 .who-wrap{position:relative;}
-.who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:270px;max-width:340px;
-  background:var(--panel);border:.5px solid var(--line);border-radius:14px;padding:10px;
-  box-shadow:0 18px 44px rgba(0,0,0,.22);}
+/* --surface คือพื้นทึบของการ์ดทั้งระบบ (เดิมเขียน var(--panel) ซึ่งไม่มีตัวแปรนี้
+   อยู่จริง CSS จึงตกไปเป็นโปร่งใสและมองทะลุเห็นเนื้อหาข้างหลัง) */
+.who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;width:max-content;min-width:300px;max-width:360px;
+  background:var(--surface);border:.5px solid var(--line);border-radius:14px;padding:10px;
+  box-shadow:0 18px 44px rgba(0,0,0,.35);}
 .who-menu[hidden]{display:none;}
 .who-menu .wm-head{font-size:11px;color:var(--muted);padding:2px 4px 8px;line-height:1.45;}
-.who-menu .wm-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
-.who-menu .wm-sep{border-top:.5px solid var(--line);margin:8px 0 8px;}
-@media(max-width:560px){.who-menu{position:fixed;left:12px;right:12px;top:64px;min-width:0;max-width:none;}}
+.who-menu .wm-sep{border-top:.5px solid var(--line);margin:8px 0;}
+/* แถวพนักงาน: ชื่อกับตำแหน่งวางซ้อนกันในคอลัมน์เดียว ไม่ใช่เรียงข้างกันแล้วแย่งที่
+   จนชื่อถูกบีบตัดเป็น "ผู้ / ดูแล / ระบบ" — ป้าย "ปัจจุบัน" กับปุ่มแก้ไขอยู่ขวาสุด
+   และห้ามหด (flex:0 0 auto) ให้ชื่อเป็นตัวที่ยืด-หดแทน */
+.who-menu .wm-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.who-menu .wm-pick{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  padding:8px 10px;border-radius:10px;border:.5px solid transparent;background:transparent;
+  color:var(--ink);cursor:pointer;text-align:left;font:inherit;}
+.who-menu .wm-pick:hover{background:var(--surface2);border-color:var(--line);}
+.who-menu .wm-nm{font-size:14px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.who-menu .wm-meta{font-size:11.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.who-menu .wm-row .pill,.who-menu .wm-row .btn{flex:0 0 auto;white-space:nowrap;}
+@media(max-width:560px){.who-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;min-width:0;max-width:none;}}
 .iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
@@ -1598,6 +1610,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="bulkbar" id="bulkInv" style="display:none;">
       <span class="bcnt" id="bulkInvCnt"></span>
       <button class="btn sm accent" id="bulkInvRelocate"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายพิกัดจัดเก็บ</button>
+      <button class="btn sm ghost" id="bulkInvTag" title="พิมพ์ฉลาก/แท็ก RFID ของกล่องที่เลือก แล้วบันทึกว่าติดแท็กแล้ว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg></span> ติดแท็ก RFID</button>
       <button class="btn sm ghost" id="bulkInvShip"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งให้ลูกค้า</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
@@ -3302,10 +3315,10 @@ function pickUser(){
       var meta=[e.role,e.dept].filter(Boolean).join(' · ');
       var canEdit=isAdmin()||(currentEmp()&&currentEmp().id===e.id);
       return '<div class="wm-row">'
-      +'<button class="btn ghost sm" style="flex:1;justify-content:flex-start;gap:10px;min-width:0;" onclick="setCurrentUser(\''+esc(e.name).replace(/'/g,"\\'")+'\');closeWhoMenu();">'
-      +'<b>'+esc(e.name)+'</b>'
-      +(meta?'<span class="muted">'+esc(meta)+'</span>':'')
-      +(USER===e.name?' <span class="pill ok" style="margin-left:auto;">'+IC('check','tick')+' ปัจจุบัน</span>':'')+'</button>'
+      +'<button class="wm-pick" onclick="setCurrentUser(\''+esc(e.name).replace(/'/g,"\\'")+'\');closeWhoMenu();">'
+      +'<span class="wm-nm">'+esc(e.name)+'</span>'
+      +(meta?'<span class="wm-meta">'+esc(meta)+'</span>':'')+'</button>'
+      +(USER===e.name?'<span class="pill ok">'+IC('check','tick')+' ปัจจุบัน</span>':'')
       +(canEdit?'<button class="btn ghost sm" title="แก้ไขข้อมูลพนักงาน" onclick="closeWhoMenu();pickUserEditEmp(\''+esc(e.id)+'\');">แก้ไข</button>':'')
       +'</div>';}).join('');
     h='<div class="wm-head">ใช้แสดงเป็น "ผู้บันทึก" ในทุกหน้าจนกว่าจะเปลี่ยน</div>'+opts
@@ -8031,6 +8044,18 @@ window.commitInvReceive = commitInvReceive;
 /* ====== BULK: relocate / ship / write-off ====== */
 $('#bulkInvClear').addEventListener('click', function() { clearBulk('inv-cb', 'bulkInv', 'cbAllInv'); });
 
+/* ติดแท็ก RFID หลายใบพร้อมกัน — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ
+   "รอติด Tag" ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง
+   ใช้ printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว ซึ่งบันทึก labeled=true ให้อยู่แล้ว
+   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง */
+$('#bulkInvTag').addEventListener('click', function() {
+  var tags = getChecked('inv-cb'); if (!tags.length) return;
+  var done = tags.filter(function(t) { var b = S.boxes[t]; return b && b.labeled === true; });
+  if (done.length === tags.length) {
+    return toast('ติดแท็กครบแล้ว', 'ทั้ง ' + tags.length + ' ใบบันทึกว่าติดแท็กแล้ว', 'info');
+  }
+  printLabels(tags);
+});
 $('#bulkInvRelocate').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
   var bad = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status !== 'warehouse'; });
@@ -9636,6 +9661,31 @@ function openColumnMapModal(opts){
   /* ---- EXACT phrase dictionary (whole-node text, Thai -> English) ---- */
   
   var EXACT = {
+    /* ---- รอบเก็บตก: ผังกระบวนการ 2D + ป้ายในฉาก 3D + แถบสถานะฉาก ---- */
+    "คานแร็ค = ตำแหน่งจริงจาก Location Master":"Rack beams = real locations from Location Master",
+    "DB สด · poll 4 วิ":"DB live - polling every 4s",
+    "ออฟไลน์ · ใช้ state ในเครื่อง":"Offline - using local state",
+    "ช่องว่าง":"Empty slot",
+    "รอจัดเก็บขึ้นชั้น":"Awaiting putaway",
+    "อยู่กับลูกค้า":"With customer",
+    "ใกล้หมดอายุ":"Near expiry",
+    "หมดอายุแล้ว":"Expired",
+    "พักใช้งาน":"On hold",
+    "ต้องติดตามคืน":"Needs chasing",
+    "เพิ่งเข้ามาวันนี้":"Arrived today",
+    "ยังไม่ได้ตั้งค่าตำแหน่งแร็ค":"Rack positions not configured yet",
+    "ลากหมุน · ล้อซูม · คลิกกล่อง/ช่องดูรายละเอียด — 1 กล่องในฉาก = กล่องจริง 1 ใบ":"Drag to rotate - scroll to zoom - click a box or slot for details - one box on screen is one real box",
+    "ป้อมยาม · จุดตรวจรถเข้า-ออก":"Gatehouse - vehicle checkpoint",
+    "ลานจอดรถบรรทุก":"Truck yard",
+    "รอเรียกเข้า dock":"Waiting to be called to a dock",
+    "จุดติด RFID":"RFID tagging station",
+    "พิมพ์ tag · ผูกกับกล่อง":"Print tag - bind to box",
+    "จุดชาร์จแบต forklift":"Forklift charging point",
+    "ที่พักรถเมื่อไม่มีงาน":"Parked when idle",
+    "ยังไม่ผูก tag เข้าระบบ":"Not yet bound to a tag",
+    "รอผ่าน Gate เข้าคลัง":"Waiting to pass the gate into the warehouse",
+    "STAGING · รอจัดเก็บ":"STAGING - awaiting putaway",
+    "⇄ เข้า/ออก":"<-> in / out",
     "หลังคาโปร่ง — กดเพื่อดูหลังคาจริง + แผงโซลาร์เซลล์":"Translucent roof - tap for the real roof + solar panels",
     "หลังคาจริง + แผงโซลาร์เซลล์ — กดเพื่อซ่อนหลังคาทั้งหมด":"Real roof + solar panels - tap to hide the roof entirely",
     "ซ่อนหลังคาทั้งหมด — กดเพื่อกลับเป็นหลังคาโปร่ง":"Roof hidden - tap to go back to the translucent roof",
@@ -10239,7 +10289,22 @@ function openColumnMapModal(opts){
     " โซน · ":" zones - "," แร็ค · ":" racks - "," ตำแหน่ง · มีของ ":" locations - occupied ",
     " ตำแหน่ง":" locations","มีของ ":"Occupied "," ใช้พื้นที่ ":" - space used ","ย้ายตำแหน่งจัดเก็บ · ":"Relocate - ",
     "คิวส่งออก":"Ship queue","คิวรับเข้า":"Receive queue",
-    "ส่งออกสำเร็จ":"Shipped out","บันทึกสำเร็จ":"Saved","ลบแล้ว":"Deleted","ใส่ข้อมูลตัวอย่างแล้ว":"Sample data loaded"
+    "ส่งออกสำเร็จ":"Shipped out","บันทึกสำเร็จ":"Saved","ลบแล้ว":"Deleted","ใส่ข้อมูลตัวอย่างแล้ว":"Sample data loaded",
+    /* ---- รอบเก็บตก: ตัวเลขบนผังกระบวนการ 2D และป้ายที่ประกอบจากตัวเลขในฉาก 3D ---- */
+    "ค้างนานสุด ":"oldest "," ช่องมีของ":" slots occupied",
+    "งานค้างในระบบรวม ":"Pending in system "," · ข้อมูลสด อัปเดต ":" - live, updated ",
+    "บนชั้นวาง ":"On shelf ","ครองพื้นที่ ":"occupying "," ช่อง (":" slots (",
+    "ค้างอยู่ที่ลูกค้า ":"With customers ","มูลค่ารวม ":"total value ","มูลค่า ":"value ",
+    "สูญหาย ":"Lost ","รอจัดเก็บ ":"Awaiting putaway ","รอติด RFID ":"Awaiting RFID tag ",
+    "รอส่งออก ":"Awaiting dispatch ","คืนจากลูกค้า ":"Returned by customer ",
+    "Digital Twin สด":"Digital Twin live"," จุดพัก · ":" staging bays - ",
+    "ขาเข้าอย่างเดียว":"inbound only","ขาออกอย่างเดียว":"outbound only"," แร็ค":" racks",
+    /* สถานะท่าเทียบรถ (ต่อกันเป็นสตริงเดียว "G1 … · G2 …") — "ว่าง" นำหน้าด้วยช่องว่าง
+       เพื่อไม่ให้ไปโดนคำประสมอย่าง "ช่องว่าง"/"พื้นที่ว่าง" กลางคำ */
+    "เทียบแล้ว · ขนของ":"docked - loading","ถอยเทียบท่า":"reversing to dock",
+    "เตรียมถอย":"ready to reverse","รถเข้ามา":"truck approaching",
+    "ออกจากท่า":"leaving the dock","ออกถนน":"on the road","ปิดประตู":"closing the door",
+    " ว่าง":" empty","(วิ่ง ":"(running "
   };
   /* ---- กฎที่ต้องดูบริบท (ทำก่อน FRAG) ----
      ลักษณนามไทยเป็นคำสั้นที่ไปโผล่กลางคำอื่นได้ FRAG ซึ่งแทนที่แบบตรงตัวล้วนๆ
@@ -10357,7 +10422,17 @@ function openColumnMapModal(opts){
     busy = false;
     /* control labels can re-wrap in the sidebar header → re-measure the vertical nav's top offset */
     if(typeof window.syncNavTop==='function')window.syncNavTop();
+    /* ป้ายในฉาก 3D เป็นภาพ ต้องวาดใหม่ถึงจะเปลี่ยนภาษาตาม */
+    if(typeof window.btLangChanged==='function')window.btLangChanged(lang);
   }
+
+  /* ฉาก 3D เขียนตัวหนังสือลงบน canvas texture ไม่ใช่ DOM — MutationObserver ข้างบน
+     จึงมองไม่เห็นและแปลป้ายในฉากให้ไม่ได้ เปิด translateStr ออกไปให้โมดูล 3D เรียก
+     พจนานุกรมชุดเดียวกันตอนสร้างป้าย และแจ้งเมื่อภาษาเปลี่ยนเพื่อให้มันวาดใหม่ */
+  window.btI18n = {
+    lang: function(){ return lang; },
+    t: function(s){ return (lang === "en" && s) ? translateStr(s) : s; }
+  };
 
   window.changeLanguage = applyLang;                       /* per spec: changeLanguage(lang) */
   window.toggleLang = function(){ applyLang(lang === "en" ? "th" : "en"); };
@@ -10719,7 +10794,12 @@ function paint(l,w,material,x,z,y){
 }
 function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
 function makeLabel(txt,sub,o){
-  o=o||{};const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
+  o=o||{};
+  /* ป้ายพวกนี้เป็นภาพที่วาดลงบน canvas ไม่ใช่ DOM ตัวสลับภาษาซึ่งไล่แปล DOM
+     จึงเข้าไม่ถึง — แปลตรงนี้ด้วยพจนานุกรมชุดเดียวกัน แล้ววาดใหม่ทั้งฉากเมื่อ
+     ผู้ใช้สลับภาษา (ดู Wn.btLangChanged) */
+  if(Wn.btI18n&&Wn.btI18n.t){txt=Wn.btI18n.t(txt);if(sub)sub=Wn.btI18n.t(sub);}
+  const fs=o.fs||46,sfs=Math.round(fs*0.54),padd=fs*0.6;
   const c=document.createElement('canvas'),g=c.getContext('2d');
   const widthOf=(s,w,px)=>{g.font=w+' '+px+'px '+FONTS;return g.measureText(s).width;};
   let tw=widthOf(txt,600,fs);
@@ -12949,6 +13029,8 @@ function applyInfoVisible(){
 }
 infoBtn.addEventListener('click',()=>{infoVisible=!infoVisible;applyInfoVisible();});
 applyInfoVisible();
+/* สลับภาษา → ป้ายในฉากต้องถูกวาดใหม่ (เป็น texture ไม่ใช่ DOM) */
+Wn.btLangChanged=function(){scheduleBuild();};
 Wn.W3D={closeCard(){clearSel();},selectTag(t){focusTag(t);},refresh(){scheduleBuild();},
   openTrack(t){if(document.fullscreenElement)document.exitFullscreen();if(Wn.trackBox)Wn.trackBox(t);if(Wn.switchTab)Wn.switchTab('track');},
   gateOut(g){confirmGate(g,'out');},gateIn(g){confirmGate(g,'in');},state(){return S;},
