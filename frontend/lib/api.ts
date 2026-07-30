@@ -30,7 +30,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    // Zod validation failures come back as { error: 'validation_error', issues: [...] }
+    // with no top-level message — each issue already carries a human-readable Thai
+    // message (e.g. "รหัสผ่านอย่างน้อย 6 ตัวอักษร"), so surface those instead of the
+    // generic error code.
+    const issues: { message?: string }[] = Array.isArray(body?.issues) ? body.issues : [];
+    const issueText = issues.map((i) => i.message).filter(Boolean).join(' · ');
+    throw new Error(issueText || body?.message || body?.error || `HTTP ${res.status}`);
+  }
   return body as T;
 }
 
