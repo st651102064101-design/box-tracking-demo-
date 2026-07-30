@@ -475,12 +475,51 @@ class AppController extends ChangeNotifier {
     if (m == 'out' && customerList.length == 1) {
       outCustomer = (customerList.first['id'] ?? '').toString();
     }
+    _rememberLastSelection(m);
     notifyListeners();
     _connectReader();
   }
 
   void goScanIn() => setMode('in');
   void goScanOut() => setMode('out');
+
+  // ═══════════════════════ "ล่าสุด" shortcut ═══════════════════════════════
+  /// คนละแนวคิดกับ deviceWh/deviceGate (ค่าประจำเครื่อง ตั้งครั้งเดียวตอน
+  /// provisioning) — นี่คือคลัง/ทิศทาง/ประตูที่ *คนที่กำลังใช้เครื่องอยู่ตอนนี้*
+  /// เพิ่งเลือกจากหน้าแรกจริงๆ ไม่ว่าจะผ่านการเลือกเองหรือข้ามมาเพราะมีตัวเลือก
+  /// เดียว จึงบันทึกจากจุดเดียวใน setMode() ให้ครอบคลุมทุกเส้นทาง
+  void _rememberLastSelection(String m) {
+    prefs.lastMode = m;
+    prefs.lastWh = wh;
+    prefs.lastGate = gate;
+  }
+
+  bool get hasLastSelection =>
+      prefs.lastMode.isNotEmpty && prefs.lastWh.isNotEmpty && prefs.lastGate.isNotEmpty;
+  String get lastModeLabel => prefs.lastMode == 'in' ? 'รับเข้า / รับคืน' : 'ส่งออก';
+  String get lastWhName => S?.whName(prefs.lastWh) ?? prefs.lastWh;
+  String get lastGate => prefs.lastGate;
+
+  /// ทำซ้ำตัวเลือกล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
+  /// คลังและประตูนั้นยังมีอยู่จริงตอนนี้ (กันกรณีถูกลบ/ย้ายไปหลังจากบันทึกไว้)
+  void resumeLastSelection() {
+    final m = prefs.lastMode, w = prefs.lastWh, g = prefs.lastGate;
+    if (m.isEmpty || w.isEmpty || g.isEmpty) return;
+    if (!warehouseList.any((x) => (x['id'] ?? '').toString() == w)) {
+      toastMsg('ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      return;
+    }
+    final savedWh = wh, savedGate = gate;
+    wh = w;
+    if (!currentGates.contains(int.tryParse(g))) {
+      wh = savedWh;
+      gate = savedGate;
+      toastMsg('ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      return;
+    }
+    gate = g;
+    m == 'in' ? goScanIn() : goScanOut();
+  }
 
   void goTrack() {
     touch();

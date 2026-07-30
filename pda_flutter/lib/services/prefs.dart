@@ -32,6 +32,14 @@ class Prefs {
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
 
+  // the last คลัง/ทิศทาง/ประตู actually picked from the home screen — a
+  // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
+  // properties of the terminal itself. Persisted (not just in-memory) so the
+  // "ล่าสุด" card still remembers after the app restarts.
+  static const _kLastMode = 'boxtrace_last_mode';
+  static const _kLastWh = 'boxtrace_last_wh';
+  static const _kLastGate = 'boxtrace_last_gate';
+
   String get lang => _p.getString(_kLang) ?? 'th';
   set lang(String v) => _p.setString(_kLang, v);
 
@@ -92,6 +100,17 @@ class Prefs {
   /// Minutes of inactivity before the operator is signed out. 0 disables it.
   int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
   set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
+
+  /// Empty means "nothing picked yet" — the "ล่าสุด" shortcut stays hidden
+  /// until a real คลัง/ทิศทาง/ประตู combination has been used at least once.
+  String get lastMode => _p.getString(_kLastMode) ?? '';
+  set lastMode(String v) => _p.setString(_kLastMode, v);
+
+  String get lastWh => _p.getString(_kLastWh) ?? '';
+  set lastWh(String v) => _p.setString(_kLastWh, v);
+
+  String get lastGate => _p.getString(_kLastGate) ?? '';
+  set lastGate(String v) => _p.setString(_kLastGate, v);
 
   /// Last known `S` snapshot. Restored before the network call on boot so the
   /// badge screen has employee names — and the scanner has box data — even

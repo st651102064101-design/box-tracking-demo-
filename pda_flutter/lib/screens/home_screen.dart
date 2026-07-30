@@ -105,13 +105,28 @@ class HomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 14),
                   child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
                 ),
+              if (c.canScan && c.hasLastSelection) ...[
+                const SizedBox(height: 16),
+                const Caption('ล่าสุด'),
+                const SizedBox(height: 10),
+                _ActionCard(
+                  small: true,
+                  icon: Icons.history,
+                  iconColor: C.ink2,
+                  iconBg: C.neutralBg,
+                  title: c.lastModeLabel,
+                  sub: '${c.lastWhName} · ประตู ${c.lastGate}',
+                  onTap: c.resumeLastSelection,
+                ),
+              ],
               const SizedBox(height: 16),
               const Caption('งานหลัก'),
               const SizedBox(height: 10),
               // เดิมซ่อนเมนูที่ไม่ตรงทิศทางประตูประจำเครื่องไปเลย — แต่เครื่องเดียวอาจ
-              // ต้องพกไปใช้ได้ทั้งขาเข้า/ขาออกในกะเดียวกัน จึงโชว์ทั้งสองเมนูเสมอ แล้วให้
-              // เลือกประตูที่ตรงทิศทางตอนกดใช้งานแทน (ดู _pickGateThen ด้านล่าง) — ยัง
-              // กันพลาดอยู่เหมือนเดิม แค่ย้ายจุดเลือกจาก "ตอนตั้งเครื่อง" มาเป็น "ตอนใช้งาน"
+              // ต้องพกไปใช้ได้ทั้งขาเข้า/ขาออกในกะเดียวกัน หรือแม้แต่หลายคลัง จึงโชว์
+              // ทั้งสองเมนูเสมอ แล้วให้เลือก คลัง > ประตู ที่ตรงทิศทางตอนกดใช้งานแทน
+              // (ดู _pickPostThen ด้านล่าง) — ยังกันพลาดอยู่เหมือนเดิม แค่ย้ายจุดเลือก
+              // จาก "ตอนตั้งเครื่อง" มาเป็น "ตอนใช้งาน"
               if (c.canScan) ...[
                 _ActionCard(
                   dark: true,
@@ -120,7 +135,7 @@ class HomeScreen extends StatelessWidget {
                   iconBg: C.onInk.withValues(alpha: 0.12),
                   title: 'รับเข้า / รับคืน',
                   sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
-                  onTap: () => _pickGateThen(context, c, 'in'),
+                  onTap: () => _pickPostThen(context, c, 'in'),
                 ),
                 const SizedBox(height: 12),
                 _ActionCard(
@@ -129,7 +144,7 @@ class HomeScreen extends StatelessWidget {
                   iconBg: C.orangeBg,
                   title: 'ส่งออก',
                   sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
-                  onTap: () => _pickGateThen(context, c, 'out'),
+                  onTap: () => _pickPostThen(context, c, 'out'),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -205,11 +220,57 @@ void _openHandover(BuildContext context, AppController c) {
   );
 }
 
-/// รับเข้า/ส่งออกตอนนี้ไม่ผูกกับประตูประจำเครื่องอีกต่อไป — เครื่องเดียวอาจพกไปใช้
-/// ที่ประตูไหนก็ได้ในกะเดียวกัน ฟังก์ชันนี้จึงกรองเฉพาะประตูที่ตั้งค่าไว้ตรงทิศทาง
-/// ที่กด (เข้า/ออก/both) แล้วให้เลือกก่อนเข้าหน้าจ่อ-ยิงจริง — ประตูที่เลือกมีผลแค่
-/// รอบใช้งานนี้ ไม่ได้บันทึกทับค่าประจำเครื่องที่ตั้งไว้ตอน provisioning
-void _pickGateThen(BuildContext context, AppController c, String mode) {
+/// รับเข้า/ส่งออกตอนนี้ไม่ผูกกับคลัง/ประตูประจำเครื่องอีกต่อไป — เครื่องเดียวอาจพกไป
+/// ใช้ที่คลังหรือประตูไหนก็ได้ในกะเดียวกัน ลำดับการเลือกจึงเป็น คลัง > ประตู เสมอ
+/// (ประตูกรองเฉพาะที่ตั้งค่าไว้ตรงทิศทางที่กด) แต่ละขั้นข้ามตัวเองถ้ามีตัวเลือกเดียว
+/// พอดี — ทั้งคลังและประตูที่เลือกมีผลแค่รอบใช้งานนี้ ไม่ได้บันทึกทับค่าประจำเครื่อง
+/// ที่ตั้งไว้ตอน provisioning
+void _pickPostThen(BuildContext context, AppController c, String mode) {
+  final whs = c.warehouseList;
+  if (whs.isEmpty) {
+    c.toastMsg('ยังไม่มีคลังในระบบ', 'ไปเพิ่มคลังที่ระบบหลักก่อน', ResultKind.warn);
+    return;
+  }
+  if (whs.length == 1) {
+    _pickGateThen(context, c, (whs.first['id'] ?? '').toString(), mode);
+    return;
+  }
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(mode == 'in' ? 'รับเข้าที่คลังไหน' : 'ส่งออกที่คลังไหน',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 14),
+          ...whs.map((w) {
+            final id = (w['id'] ?? '').toString();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: _WhPickTile(
+                name: (w['name'] ?? id).toString(),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _pickGateThen(context, c, id, mode);
+                },
+              ),
+            );
+          }),
+        ],
+      ),
+    ),
+  );
+}
+
+/// ขั้นที่สอง — เลือกประตูภายในคลังที่เพิ่งได้มา กรองเฉพาะประตูที่ตรงทิศทาง
+void _pickGateThen(BuildContext context, AppController c, String whId, String mode) {
+  c.pickWh(whId); // อาจเลือกประตูแรกที่เจอไว้ชั่วคราว — ด้านล่างจะทับด้วยประตูที่ตรงทิศทางจริงเสมอ
   final valid = c.currentGates.where((g) => c.gateTypeOf(g) == mode || c.gateTypeOf(g) == 'both').toList();
   if (valid.isEmpty) {
     c.toastMsg(
@@ -258,6 +319,34 @@ void _pickGateThen(BuildContext context, AppController c, String mode) {
       ),
     ),
   );
+}
+
+class _WhPickTile extends StatelessWidget {
+  final String name;
+  final VoidCallback onTap;
+  const _WhPickTile({required this.name, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: C.neutralBg,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+              ),
+              Icon(Icons.chevron_right, size: 20, color: C.chevron),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _GatePickChip extends StatelessWidget {
