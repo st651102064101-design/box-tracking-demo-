@@ -11438,6 +11438,71 @@ function buildTruck(){
   });
   return g;
 }
+/* รถกระบะตอนเดียว (single-cab pickup) — คันเล็กสุดในลาน ใช้ตำแหน่งจอดที่ 2
+   ท้ายรถเป็นกระบะเปิด (ไม่มีตู้/ประตูม้วน) จึงไม่มี rearDoor เหมือนรถกล่อง
+   — เดินตามพิกัด local เดียวกับ buildTruck(): +X คือหน้ารถเสมอ */
+function buildPickup(){
+  const g=new THREE.Group();
+  g.add(bx(5.0,0.22,0.95,MAT.truckTrim,0,0.55,0));                  // chassis
+  g.add(bx(1.6,1.5,1.9,MAT.truckCab,1.55,1.45,0));                  // ห้องโดยสารตอนเดียว
+  g.add(bx(0.08,0.62,1.7,MAT.glass,2.32,1.75,0,true));               // กระจกหน้า
+  g.add(bx(1.62,0.14,1.92,MAT.truckBody,1.55,2.22,0,true));          // หลังคา
+  g.add(bx(0.35,0.42,1.9,MAT.truckTrim,2.55,0.62,0,true));           // กันชนหน้า
+  g.add(bx(2.6,0.14,1.9,MAT.truckBody,-0.85,0.85,0,true));           // พื้นกระบะ
+  g.add(bx(2.6,0.34,0.08,MAT.truckBody,-0.85,1.05,0.93,true));       // กระบะข้างซ้าย
+  g.add(bx(2.6,0.34,0.08,MAT.truckBody,-0.85,1.05,-0.93,true));      // กระบะข้างขวา
+  g.add(bx(0.08,0.5,1.9,MAT.truckBody,-2.15,1.10,0,true));           // กระบะท้าย
+  const wp=[[1.55,0.90],[1.55,-0.90],[-1.15,0.90],[-1.15,-0.90]];
+  g.userData.wheels=[];
+  wp.forEach(p=>{const w=new THREE.Mesh(GEO.wheel,MAT.wheel);w.scale.setScalar(0.86);w.position.set(p[0],0.44,p[1]);g.add(w);g.userData.wheels.push(w);});
+  g.userData.headlights=[];g.userData.taillights=[];g.userData.reverse=[];
+  [0.55,-0.55].forEach(zz=>{
+    const hl=new THREE.Mesh(GEO.unit,MAT.headlight.clone());hl.material.userData.own=true;
+    hl.scale.set(0.10,0.18,0.26);hl.position.set(2.72,1.0,zz);g.add(hl);g.userData.headlights.push(hl);
+    const tl=new THREE.Mesh(GEO.unit,MAT.taillight.clone());tl.material.userData.own=true;
+    tl.scale.set(0.08,0.22,0.18);tl.position.set(-2.18,1.05,zz);g.add(tl);g.userData.taillights.push(tl);
+    const rv=new THREE.Mesh(GEO.unit,MAT.reverse.clone());rv.material.userData.own=true;
+    rv.scale.set(0.08,0.13,0.13);rv.position.set(-2.18,0.82,zz);g.add(rv);g.userData.reverse.push(rv);
+  });
+  return g;
+}
+/* รถเทรลเลอร์ (tractor + trailer) — คันใหญ่สุดในลาน ใช้ตำแหน่งจอดที่ 4
+   จำลองเป็นชิ้นเดียวแข็ง (ไม่ได้ทำข้อพับจริงระหว่างหัวลาก/หางพ่วง) — พอสำหรับ
+   ฉากตกแต่ง ให้สัดส่วนยาวกว่ารถกล่องชัดเจนและมีล้อหลายเพลาตามจริง */
+function buildTrailer(){
+  const g=new THREE.Group();
+  g.add(bx(9.9,0.26,1.05,MAT.truckTrim,-0.6,0.62,0));                // แชสซีรวม
+  g.add(bx(1.9,2.0,2.3,MAT.truckCab,3.75,1.85,0));                   // ห้องโดยสารหัวลาก
+  g.add(bx(0.1,0.7,2.0,MAT.glass,4.62,2.15,0,true));                 // กระจกหน้า
+  g.add(bx(1.92,0.16,2.32,MAT.truckBody,3.75,2.92,0,true));          // หลังคาหัวลาก
+  g.add(bx(0.4,0.5,2.24,MAT.truckTrim,4.55,0.72,0,true));            // กันชนหน้า
+  g.add(bx(7.6,2.6,2.42,MAT.truckBody,-2.55,2.10,0));                // ตู้หางพ่วง
+  const ribs=new THREE.Mesh(GEO.unit,new THREE.MeshStandardMaterial({color:0xffffff,map:TEX.metal,roughness:0.45,metalness:0.3}));
+  ribs.material.userData.own=true;ribs.scale.set(7.62,2.56,2.46);ribs.position.set(-2.55,2.10,0);g.add(ribs);
+  const rear=new THREE.Group();
+  rear.add(bx(0.12,2.4,2.38,MAT.truckTrim,-6.34,2.10,0));            // ประตูท้าย
+  g.add(rear);g.userData.rearDoor=rear;
+  const wp=[[3.7,1.02],[3.7,-1.02],[2.0,1.02],[2.0,-1.02],
+    [-4.0,1.05],[-4.0,-1.05],[-4.7,1.05],[-4.7,-1.05]];
+  g.userData.wheels=[];
+  wp.forEach(p=>{const w=new THREE.Mesh(GEO.wheel,MAT.wheel);w.position.set(p[0],0.5,p[1]);g.add(w);g.userData.wheels.push(w);});
+  g.userData.headlights=[];g.userData.taillights=[];g.userData.reverse=[];
+  [0.62,-0.62].forEach(zz=>{
+    const hl=new THREE.Mesh(GEO.unit,MAT.headlight.clone());hl.material.userData.own=true;
+    hl.scale.set(0.12,0.22,0.3);hl.position.set(4.62,1.0,zz);g.add(hl);g.userData.headlights.push(hl);
+    const tl=new THREE.Mesh(GEO.unit,MAT.taillight.clone());tl.material.userData.own=true;
+    tl.scale.set(0.1,0.26,0.22);tl.position.set(-6.38,1.1,zz);g.add(tl);g.userData.taillights.push(tl);
+    const rv=new THREE.Mesh(GEO.unit,MAT.reverse.clone());rv.material.userData.own=true;
+    rv.scale.set(0.1,0.16,0.16);rv.position.set(-6.38,0.82,zz);g.add(rv);g.userData.reverse.push(rv);
+  });
+  return g;
+}
+/* เลือกโมเดลรถตามชนิดที่ตำแหน่งจอดกำหนดไว้ — 'box' คือ buildTruck() เดิม */
+function buildTruckByKind(kind){
+  if(kind==='pickup')return buildPickup();
+  if(kind==='trailer')return buildTrailer();
+  return buildTruck();
+}
 const setLights=(g,k,on,i)=>((g.userData[k]||[]).forEach(m=>{m.material.emissiveIntensity=on?(i||1.4):0;}));
 const setRearDoor=(g,open)=>{if(g&&g.userData.rearDoor)g.userData.rearDoor.visible=!open;};
 function setTruckVisible(g,v){g.visible=v;}
@@ -11469,6 +11534,8 @@ let COUNTS={},sel=null,anims=[];
 let agents=[],gateDoors={},TASKS={},freeCells=[];
 let CONVEYORS=[];                                // แถบสายพานที่ต้องเลื่อนกล่องทุกเฟรม — รีเซ็ตทุกครั้งที่ build()
 const DOCK={};                                   // สถานะท่าเทียบ — คงอยู่ข้าม rebuild
+const YARD=[];                                    // ที่จอดรถบรรทุก 4 ช่อง — คงอยู่ข้าม rebuild เช่นกัน
+                                                   // (แต่ละช่องคือรถคันเดียวกันตลอด: จอด/ออกไปวิ่งงาน/กลับมาจอด)
 /* หลังคา 3 โหมด วนด้วยปุ่มเดียว — ต้องจำข้าม rebuild ไม่งั้นกดแล้วเด้งกลับ
      glass  โปร่งแสง มองทะลุลงไปเห็นของข้างในได้ทันที (ค่าเริ่มต้น)
      solid  แผ่นเมทัลชีตทึบจริง + แผงโซลาร์เซลล์เต็มผืนหลังคา
@@ -12004,6 +12071,33 @@ function build(){
   }
   applyLights();   // ฉากเพิ่งถูกสร้างใหม่ — บังคับให้ตรงกับสวิตช์ที่ผู้ใช้ตั้งไว้
 
+  /* ── ลานจอดรถบรรทุก: 4 ช่อง คงอยู่ข้าม rebuild เหมือน DOCK (รถคันเดียวกันจอด/
+     ออกวิ่งงาน/กลับมาจอดที่เดิม) — ต้องพร้อมก่อน loop ประตูข้างล่าง เพราะรถที่มี
+     งานค้างตอนเปิดฉากต้องรู้ทันทีว่ายืมมาจากช่องไหน (ดู dk.init) ประเภทรถ 2 ช่อง
+     แรกคงเดิม (กล่อง) อีก 2 ช่องใหม่เป็นกระบะตอนเดียวและเทรลเลอร์ */
+  const bays=[0,1,2,3].map(i=>LY.bMaxX+8+i*4.2);
+  const bayKind=['box','pickup','box','trailer'];
+  bays.forEach((bx_,i)=>{
+    const bay=YARD[i]||(YARD[i]={i,kind:bayKind[i],state:'parked',rotPark:Math.PI/2});
+    /* +2.1: กึ่งกลางระหว่างเส้นแบ่งช่อง (ระยะห่างช่องละ 4.2) เหมือนโค้ดเดิมที่วางรถ
+       ไว้กึ่งกลางแต่ละช่อง ไม่ใช่ชิดเส้นซ้าย */
+    const truckX=bx_+2.1;
+    bay.x=truckX;bay.z=LY.yardZ+2.0;bay.roadX=truckX;bay.roadZ=LY.roadMid-1.6;
+    if(!bay.truck){
+      const t=buildTruckByKind(bay.kind);t.scale.setScalar(TRUCK_SCALE);
+      opsRoot.add(t);
+      bay.truck=t;
+    }
+    /* truckPick ถูกล้างเป็น [] ทุกครั้งที่ build() ทำงาน (ดูช่วงต้นฟังก์ชัน) ต้อง
+       ลงทะเบียนรถที่ "จอดอยู่" ใหม่ทุกรอบ — คันที่ "ออกไปวิ่งงาน" ไม่ต้องมาลงที่นี่
+       เพราะ loop ประตูข้างล่างลงทะเบียนให้เองทุกรอบเช่นกัน (ผ่าน dk.truck) */
+    if(bay.state==='parked'){
+      bay.truck.position.set(bay.x,0,bay.z);bay.truck.rotation.y=bay.rotPark;
+      bay.truck.traverse(nn=>{if(nn.isMesh){nn.userData.yard=true;nn.userData.gate=null;nn.userData.gateDir=null;truckPick.push(nn);}});
+    }
+  });
+  LY.yardBays=bays;
+
   /* ── ประตูม้วน + dock shelter + dock leveler ── */
   const n=gs.length,gp=bW/(n||1);
   let prevEdge=bMinX;
@@ -12072,14 +12166,18 @@ function build(){
     gl.position.set(gx,WALL_H-0.6,dockZ+0.5);root.add(gl);
     const dk=DOCK[g]||(DOCK[g]={gate:g,state:'empty',t:0,loadTrips:0,truck:null});
     Object.assign(dk,{gate:g,gx,dir:gdir,signalRed:red,signalGreen:grn,leveler:lev});
-    if(!dk.init){   /* เปิดฉากมา — ประตูที่มีงานค้างมีรถเทียบท่าอยู่แล้ว */
+    if(!dk.init){   /* เปิดฉากมา — ประตูที่มีงานค้างมีรถเทียบท่าอยู่แล้ว (ยืมรถจากช่องจอดที่ว่าง) */
       dk.init=1;
       if((gdir!=='in'&&qOut().length)||(gdir!=='out'&&qIn().length)){
-        const t0=buildTruck();t0.scale.setScalar(TRUCK_SCALE);t0.rotation.y=-Math.PI/2;
-        dk.dockPos={x:gx,z:truckDockZ()};
-        t0.position.set(gx,0,dk.dockPos.z);opsRoot.add(t0);
-        setLights(t0,'taillights',true,0.7);
-        dk.truck=t0;dk.state='docked';dk.t=0;setRearDoor(t0,true);
+        const bay=YARD.find(b=>b.state==='parked');
+        if(bay){
+          bay.state='out';dk.bay=bay;dk.bayRoad={x:bay.roadX,z:bay.roadZ};
+          const t0=bay.truck;t0.rotation.y=-Math.PI/2;
+          dk.dockPos={x:gx,z:truckDockZ()};
+          t0.position.set(gx,0,dk.dockPos.z);
+          setLights(t0,'taillights',true,0.7);
+          dk.truck=t0;dk.state='docked';dk.t=0;setRearDoor(t0,true);
+        }
       }
     }
     if(dk.truck){
@@ -12091,7 +12189,15 @@ function build(){
       dk.truck.traverse(nn=>{if(nn.isMesh){nn.userData.gate=g;nn.userData.gateDir=gdir;truckPick.push(nn);}});
     }
   });
-  Object.keys(DOCK).forEach(k=>{if(gs.indexOf(+k)<0&&gs.indexOf(k)<0){const t=DOCK[k].truck;if(t){opsRoot.remove(t);disposeTree(t);}delete DOCK[k];}});
+  /* ประตูถูกลบออกจากผัง — คืนรถที่ยืมมา (ถ้ามี) กลับช่องจอดเดิมแทนที่จะทิ้งเมช
+     ทิ้ง (เมชเป็นของช่องจอด ใช้ซ้ำได้ ไม่ใช่ของประตู) แล้วค่อยลบสถานะ dock นี้ */
+  Object.keys(DOCK).forEach(k=>{
+    if(gs.indexOf(+k)>=0||gs.indexOf(k)>=0)return;
+    const dk=DOCK[k];
+    if(dk.truck&&dk.bay){dk.bay.state='parked';dk.bay.truck.position.set(dk.bay.x,0,dk.bay.z);dk.bay.truck.rotation.y=dk.bay.rotPark;}
+    else if(dk.truck){opsRoot.remove(dk.truck);disposeTree(dk.truck);}
+    delete DOCK[k];
+  });
   root.add(bx(Math.max(0.05,bMaxX-prevEdge),WALL_H,0.24,MAT.dockwall,(prevEdge+bMaxX)/2,WALL_H/2,dockZ));
   LY.obstacles.push({x0:prevEdge,x1:bMaxX,z0:dockZ-0.25,z1:dockZ+0.25});
 
@@ -12447,19 +12553,13 @@ function build(){
   /* ทางม้าลายหน้าป้อม + ช่องจอดรถบรรทุกในลาน */
   const cross=[];for(let z=road0+0.6;z<road1-0.4;z+=0.8)cross.push(z);
   instMesh(cross,MAT.paintW,(z,p,s)=>{p.set(guardX+7.6,0.021,z);s.set(0.5,0.02,0.56);},true);
-  const bays=[];for(let i=0;i<4;i++)bays.push(bMaxX+8+i*4.2);
+  /* ตีเส้น + ป้ายลานจอด — bays/YARD ถูกสร้างไว้แล้วก่อน loop ประตูด้านบน */
   bays.forEach(x=>{
     root.add(paint(0.14,9.0,MAT.paintY,x,yardZ+2.0,0.02));
   });
   root.add(paint(bays[bays.length-1]-bays[0]+0.14,0.14,MAT.paintY,(bays[0]+bays[bays.length-1])/2,yardZ-2.4,0.02));
   const pl=makeLabel('ลานจอดรถบรรทุก','รอเรียกเข้า dock',{fs:28,h:0.58});
   pl.position.set((bays[0]+bays[bays.length-1])/2,2.6,yardZ-2.4);root.add(pl);
-  /* รถรอคิวในลาน 2 คัน */
-  [0,2].forEach((bi,k)=>{
-    const t=buildTruck();t.scale.setScalar(0.75);t.rotation.y=-Math.PI/2;
-    t.position.set(bays[bi]+2.1,0,yardZ+2.0);root.add(t);
-    t.traverse(nn=>{if(nn.isMesh){nn.userData.yard=true;}});
-  });
 
   /* ── KPI + ชื่อคลัง ── */
   const rackTop=Math.max(...segs.map(sg=>BASE_Y+sg.rk.shelves*SHELF_H),3);
@@ -12883,21 +12983,28 @@ function bez(p0,p1,p2,k){
   const m=1-k;
   return {x:m*m*p0.x+2*m*k*p1.x+k*k*p2.x, z:m*m*p0.z+2*m*k*p1.z+k*k*p2.z};
 }
+/* มุมสั้นสุดจาก a ไปยัง b (เรเดียน ในช่วง (-PI,PI]) — ใช้หมุนรถระหว่าง maneuver
+   โดยไม่ต้องรู้ล่วงหน้าว่ามาจากทิศไหน (ขาไปเลี้ยวคนละด้านกับขากลับ เพราะรถมา
+   จากลานจอดฝั่งขวาเข้าประตูซึ่งอาจอยู่ซ้ายหรือขวาของ align.x ก็ได้) */
+function angDelta(a,b){let d=(b-a)%(Math.PI*2);if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return d;}
+/* ยืมรถจากช่องจอดที่ว่าง (ไม่ได้สร้างรถใหม่ลอยๆ อีกต่อไป) แล้วเริ่มเดินทางจาก
+   ช่องจอดนั้นจริงๆ — ถ้าลานเต็ม (ทุกช่องออกไปวิ่งงานอยู่) ก็แค่ไม่จ่ายงาน รอบ
+   'empty' ข้างล่างจะลองใหม่เองตามเวลาเดิม ไม่ต้องมีคิวรอแยกต่างหาก */
 function dockRequest(d,forced){
-  const st=St();
   if(d.state!=='empty')return;
   const needOut=d.dir!=='in'&&qOut().length>0;
   const needIn=d.dir!=='out'&&qIn().length>0;
   if(!forced&&!needOut&&!needIn)return;
-  const t=buildTruck();t.scale.setScalar(TRUCK_SCALE);
-  t.rotation.y=0;
-  t.position.set(LY.bMinX-34,0,LY.roadMid-1.6);
-  opsRoot.add(t);
+  const bay=YARD.find(b=>b.state==='parked');
+  if(!bay)return;                      // ลานเต็ม — ลองใหม่รอบหน้า
+  bay.state='out';
+  const t=bay.truck;
   setLights(t,'headlights',true,1.2);
-  t.traverse(nn=>{if(nn.isMesh){nn.userData.gate=d.gate;nn.userData.gateDir=d.dir;truckPick.push(nn);}});
-  d.truck=t;d.state='approach';d.t=0;d.loadTrips=0;d.forced=!!forced;
+  t.traverse(nn=>{if(nn.isMesh){nn.userData.gate=d.gate;nn.userData.gateDir=d.dir;}});
+  d.truck=t;d.bay=bay;d.state='pullout';d.t=0;d.loadTrips=0;d.forced=!!forced;
   d.align={x:d.gx+9.5,z:LY.roadMid-1.6};
   d.dockPos={x:d.gx,z:truckDockZ()};
+  d.bayRoad={x:bay.roadX,z:bay.roadZ};
 }
 function updateDocks(dt){
   Object.values(DOCK).forEach(d=>{
@@ -12908,22 +13015,33 @@ function updateDocks(dt){
       case 'empty':
         if(d.t>3.5){d.t=0;dockRequest(d);}
         break;
-      case 'approach': {
+      case 'pullout': { // ออกจากช่องจอด (หันหน้า rotPark) → ขึ้นถนน หันหน้า PI (ซ้าย)
+        const K=Math.min(1,d.t/2.6);
+        const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
+        const bay=d.bay;
+        const p=bez({x:bay.x,z:bay.z},{x:bay.x,z:(bay.z+d.bayRoad.z)/2},d.bayRoad,e);
+        t.position.set(p.x,0,p.z);
+        t.rotation.y=bay.rotPark+angDelta(bay.rotPark,Math.PI)*e;
+        t.userData.wheels.forEach(w=>w.rotation.z-=dt*4.2);
+        if(K>=1){t.position.set(d.bayRoad.x,0,d.bayRoad.z);t.rotation.y=Math.PI;d.state='approach';d.t=0;}
+        break;
+      }
+      case 'approach': { // วิ่งซ้ายตามถนนจากลานไปยังจุดเลี้ยวเข้าประตู (หันหน้า PI เสมอ)
         const spd=11*dt;
-        t.position.x=Math.min(d.align.x,t.position.x+spd);
-        t.userData.wheels.forEach(w=>w.rotation.z-=spd/0.33);
-        if(t.position.x>=d.align.x-0.05){d.state='hold';d.t=0;setLights(t,'taillights',true,1.0);}
+        t.position.x=Math.max(d.align.x,t.position.x-spd);
+        t.userData.wheels.forEach(w=>w.rotation.z+=spd/0.33);
+        if(t.position.x<=d.align.x+0.05){d.state='hold';d.t=0;setLights(t,'taillights',true,1.0);}
         break;
       }
       case 'hold':
         if(d.t>0.8){d.state='reverse';d.t=0;setLights(t,'reverse',true,1.6);}
         break;
-      case 'reverse': {
+      case 'reverse': { // เข้าประตู — หมุนจาก PI (มาจากขวา) ไป -PI/2 (จอดเทียบท่า) ทางลัดสุด
         const K=Math.min(1,d.t/5.6);
         const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
         const p=bez(d.align,{x:d.align.x,z:(LY.dockZ+LY.apron1)/2},d.dockPos,e);
         t.position.set(p.x,0,p.z);
-        t.rotation.y=-Math.PI/2*e;
+        t.rotation.y=Math.PI+angDelta(Math.PI,-Math.PI/2)*e;
         t.userData.wheels.forEach(w=>w.rotation.z+=dt*4.2);
         if(K>=1){
           t.position.set(d.dockPos.x,0,d.dockPos.z);t.rotation.y=-Math.PI/2;
@@ -12953,7 +13071,8 @@ function updateDocks(dt){
           setLights(t,'headlights',true,1.4);
         }
         break;
-      case 'depart': {
+      case 'depart': { // ออกจากท่า หันหน้า -PI/2 → 0 (ขวา) — ทิศเดิม ไม่ต้องแก้ เพราะลาน
+                        // จอดอยู่ฝั่งขวาของอาคารเสมอ ขากลับจึงวิ่งขวาพอดี
         const K=Math.min(1,d.t/4.4);
         const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
         const p=bez(d.dockPos,{x:d.dockPos.x,z:(LY.dockZ+LY.apron1)/2},{x:d.gx+11,z:LY.roadMid+1.7},e);
@@ -12963,15 +13082,28 @@ function updateDocks(dt){
         if(K>=1){d.state='run';d.t=0;}
         break;
       }
-      case 'run': {
+      case 'run': { // วิ่งขวาตามถนนกลับไปยังจุดเลี้ยวเข้าช่องจอดเดิม (หันหน้า 0)
         const spd=13*dt;
-        t.position.x+=spd;
+        t.position.x=Math.min(d.bayRoad.x,t.position.x+spd);
         t.userData.wheels.forEach(w=>w.rotation.z-=spd/0.33);
-        if(t.position.x>LY.bMaxX+40){
-          opsRoot.remove(t);disposeTree(t);
-          truckPick=truckPick.filter(m=>m.userData.gate!==d.gate||m.userData.yard);
-          d.truck=null;d.state='empty';d.t=0;d.forced=false;
-          d.signalGreen.material.emissiveIntensity=0;
+        if(t.position.x>=d.bayRoad.x-0.05){d.state='pullin';d.t=0;}
+        break;
+      }
+      case 'pullin': { // ถอยเข้าช่องจอดเดิม หันหน้า 0 → rotPark ทางลัดสุด
+        const K=Math.min(1,d.t/2.6);
+        const e=K<0.5?2*K*K:1-Math.pow(-2*K+2,2)/2;
+        const bay=d.bay;
+        const p=bez(d.bayRoad,{x:bay.x,z:(d.bayRoad.z+bay.z)/2},{x:bay.x,z:bay.z},e);
+        t.position.set(p.x,0,p.z);
+        t.rotation.y=0+angDelta(0,bay.rotPark)*e;
+        t.userData.wheels.forEach(w=>w.rotation.z-=dt*4.2);
+        if(K>=1){
+          t.position.set(bay.x,0,bay.z);t.rotation.y=bay.rotPark;
+          setLights(t,'headlights',false);setLights(t,'taillights',false);setLights(t,'reverse',false);
+          t.traverse(nn=>{if(nn.isMesh){nn.userData.gate=null;nn.userData.gateDir=null;}});
+          bay.state='parked';
+          d.truck=null;d.bay=null;d.state='empty';d.t=0;d.forced=false;
+          if(d.signalGreen)d.signalGreen.material.emissiveIntensity=0;
         }
         break;
       }
