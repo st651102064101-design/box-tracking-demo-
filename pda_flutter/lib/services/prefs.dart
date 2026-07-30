@@ -22,10 +22,9 @@ class Prefs {
   static const _kPassword = 'boxtrace_password';
   static const _kToken = 'boxtrace_token';
 
-  // this device's provisioning state + behaviour. คลัง/ประตูไม่ใช่ของเครื่องอีก
-  // ต่อไปแล้ว (ดู lastWh/lastGate ด้านล่าง) — เครื่องแค่ต้องเชื่อมต่อระบบหลักได้
-  // ครั้งหนึ่งก่อนถึงจะใช้งานได้
-  static const _kDeviceSetupDone = 'boxtrace_device_setup_done';
+  // this device's fixed post (warehouse + gate) and behaviour
+  static const _kDeviceWh = 'boxtrace_device_wh';
+  static const _kDeviceGate = 'boxtrace_device_gate';
   static const _kIdleLock = 'boxtrace_idle_lock_minutes';
 
   static const _kStateCache = 'boxtrace_state_cache';
@@ -33,11 +32,10 @@ class Prefs {
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
 
-  // the last คลัง/ทิศทาง/ประตู actually picked from the home screen — a
+  // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
   // properties of the terminal itself. Persisted (not just in-memory) so the
-  // "ล่าสุด" card still remembers after the app restarts.
-  static const _kLastMode = 'boxtrace_last_mode';
+  // "ล่าสุด" pick still remembers after the app restarts.
   static const _kLastWh = 'boxtrace_last_wh';
   static const _kLastGate = 'boxtrace_last_gate';
 
@@ -90,21 +88,20 @@ class Prefs {
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
 
-  /// True once this terminal has connected to the main system at least once
-  /// (see AppController.deviceConfigured). คลัง/ประตูไม่ได้ถูกถามตอนตั้งค่าเครื่อง
-  /// อีกต่อไป — ผู้ใช้เลือกเองทุกครั้งตอนเริ่มงานแทน (ดู AppController.pickPostThen)
-  bool get deviceSetupDone => _p.getBool(_kDeviceSetupDone) ?? false;
-  set deviceSetupDone(bool v) => _p.setBool(_kDeviceSetupDone, v);
+  /// The warehouse + gate this terminal is stationed at. A non-empty gate is
+  /// what marks the device as provisioned (see AppController.deviceConfigured).
+  String get deviceWh => _p.getString(_kDeviceWh) ?? '';
+  set deviceWh(String v) => _p.setString(_kDeviceWh, v);
+
+  String get deviceGate => _p.getString(_kDeviceGate) ?? '';
+  set deviceGate(String v) => _p.setString(_kDeviceGate, v);
 
   /// Minutes of inactivity before the operator is signed out. 0 disables it.
   int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
   set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
 
   /// Empty means "nothing picked yet" — the "ล่าสุด" shortcut stays hidden
-  /// until a real คลัง/ทิศทาง/ประตู combination has been used at least once.
-  String get lastMode => _p.getString(_kLastMode) ?? '';
-  set lastMode(String v) => _p.setString(_kLastMode, v);
-
+  /// until a real คลัง/ประตู combination has been confirmed at least once.
   String get lastWh => _p.getString(_kLastWh) ?? '';
   set lastWh(String v) => _p.setString(_kLastWh, v);
 

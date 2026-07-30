@@ -34,11 +34,18 @@ class Toast {
 /// Identity is split in two on purpose:
 ///
 ///  * The **device** authenticates, once, with a service account stored in
-///    [Prefs] and stays signed in for good. It is also what fixes the warehouse
-///    and gate — a terminal lives at one door, so nobody re-picks that daily.
+///    [Prefs] and stays signed in for good. Its provisioned warehouse/gate
+///    ([Prefs.deviceWh]/[Prefs.deviceGate]) is only ever a starting suggestion
+///    for the report screen's picker below — the same handheld may work
+///    different gates across a shift.
 ///  * The **operator** is a row of the WMS employee master ([Employee]) chosen
 ///    by scanning their badge. There is no account and no password behind it,
 ///    so people are managed entirely from the web app's "พนักงาน" page.
+///
+/// Every badge-in lands on the report screen, which asks the operator to
+/// confirm a warehouse then a gate (skipped only when there's truly nothing
+/// to choose) before the "งานหลัก" action buttons appear — see
+/// [postConfirmed], [selectPendingWh], [confirmPost].
 class AppController extends ChangeNotifier {
   final ApiClient api;
   final Prefs prefs;
@@ -59,6 +66,20 @@ class AppController extends ChangeNotifier {
 
   String wh = '';
   String gate = '';
+
+  /// Badged in but hasn't picked a warehouse/gate for this visit to the
+  /// report screen yet — the "งานหลัก" action buttons stay hidden behind a
+  /// เลือกคลัง/เลือกประตู list until this flips true. Reset on every fresh
+  /// badge-in by [_resetPost]; auto-true when there is truly nothing to pick
+  /// (a single warehouse with a single gate) or the operator is a viewer who
+  /// only searches and never needs a post at all.
+  bool postConfirmed = false;
+
+  /// The warehouse picked mid-flow, before a gate has been chosen for it —
+  /// separate from [wh] (the *confirmed* post) so the report screen's list
+  /// doesn't clobber [isVisiting]/employee ranking while a pick is still in
+  /// progress.
+  String? pendingWh;
 
   // ── scanning ────────────────────────────────────────────────────────────
   String mode = 'in'; // 'in' | 'out'
@@ -116,11 +137,8 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
 
-    // ไม่มี "คลัง/ประตูประจำเครื่อง" ให้เริ่มจากอีกต่อไป — ใช้ค่าที่เพิ่งใช้ล่าสุด
-    // (ถ้ามี) เป็นแค่ค่าเริ่มต้นให้หัวจอมีอะไรแสดง จะเลือกใหม่ทุกครั้งที่กด
-    // รับเข้า/ส่งออกจากหน้าแรกอยู่ดี (ดู _pickPostThen ใน home_screen.dart)
-    wh = prefs.lastWh;
-    gate = prefs.lastGate;
+    wh = prefs.deviceWh;
+    gate = prefs.deviceGate;
 
     // wire the Zebra reader
     _tagSub = rfid.tags.listen(_onReaderTag);
@@ -138,11 +156,18 @@ class AppController extends ChangeNotifier {
     // No operator is ever restored: a shift always starts with a badge scan,
     // which takes a second and can't mis-attribute the next person's work.
     screen = deviceConfigured ? Screen.login : Screen.deviceSetup;
-    if (deviceConfigured) _connectReader();
+    if (deviceConfigured) {
+      _connectReader();
+    } else {
+      _autoSelectSinglePost();
+    }
     _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
+    // Only now, on a device with no cached snapshot, is the warehouse list
+    // known — so a fresh terminal gets its single option filled in too.
+    if (screen == Screen.deviceSetup) _autoSelectSinglePost();
     notifyListeners();
   }
 
@@ -324,6 +349,7 @@ class AppController extends ChangeNotifier {
     if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
     touch();
+    _resetPost();
     screen = Screen.home;
     notifyListeners();
     _connectReader();
@@ -392,10 +418,8 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
-  /// A terminal is provisioned once it has connected to the main system at
-  /// least once — คลัง/ประตูไม่ใช่ส่วนหนึ่งของการ provision อีกต่อไป (เลือกเองทุก
-  /// ครั้งตอนกดรับเข้า/ส่งออกจากหน้าแรกแทน ดู pickWh/pickGate ด้านล่าง)
-  bool get deviceConfigured => prefs.deviceSetupDone;
+  /// A terminal is provisioned once it has been told which gate it serves.
+  bool get deviceConfigured => prefs.deviceGate.isNotEmpty;
 
   /// Who may re-point the device or edit its connection: a supervisor, or
   /// anyone standing at a locked terminal. The threat this guards against is
@@ -422,17 +446,79 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Marks the terminal as provisioned once it has a working connection —
-  /// there is no คลัง/ประตู left to persist here; that's chosen per task now.
-  void finishDeviceSetup() {
-    if (!connected) {
-      toastMsg('เชื่อมต่อระบบหลักก่อน', '', ResultKind.warn);
+  // ═══════════════════════ report-screen post picker ════════════════════════
+  /// Called on every fresh badge-in. Clears any pick left over from a
+  /// previous operator and decides whether there's really a choice to make.
+  void _resetPost() {
+    pendingWh = null;
+    if (!canScan) {
+      // A viewer only ever searches — that's warehouse-agnostic, so don't
+      // make them pick a post before they're allowed to do anything at all.
+      postConfirmed = true;
       return;
     }
-    prefs.deviceSetupDone = true;
+    final whs = warehouseList;
+    if (whs.length == 1) {
+      final id = (whs.first['id'] ?? '').toString();
+      final gates = S?.gatesOf(id) ?? const [];
+      if (gates.length == 1) {
+        confirmPost(id, gates.first);
+        return;
+      }
+    }
+    postConfirmed = false;
+  }
+
+  /// Step 1 of the report-screen picker — choose a warehouse. Skips straight
+  /// to confirming when that warehouse has only one gate.
+  void selectPendingWh(String id) {
+    pendingWh = id;
+    final gates = S?.gatesOf(id) ?? const [];
+    if (gates.length == 1) {
+      confirmPost(id, gates.first);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// Step 2 — choose the gate within [pendingWh], locking in this visit's
+  /// post and revealing the action buttons.
+  void confirmPost(String whId, int g) {
+    wh = whId;
+    gate = '$g';
+    pendingWh = null;
+    postConfirmed = true;
+    _rememberLastPost();
+    notifyListeners();
+  }
+
+  /// Back out of the gate list to pick a different warehouse.
+  void clearPendingWh() {
+    pendingWh = null;
+    notifyListeners();
+  }
+
+  /// Lets the operator pick a different warehouse/gate mid-shift without a
+  /// full handover — e.g. moving from one gate to another. Re-runs the same
+  /// logic a fresh badge-in gets.
+  void reselectPost() {
+    _resetPost();
+    notifyListeners();
+  }
+
+  /// Persists this terminal's post. From here on every operator who badges in
+  /// works this gate without being asked.
+  void saveDevicePost() {
+    if (wh.isEmpty || gate.isEmpty) {
+      toastMsg('เลือกคลังและประตูก่อน', '', ResultKind.warn);
+      return;
+    }
+    prefs.deviceWh = wh;
+    prefs.deviceGate = gate;
     screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
-    toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
+    toastMsg('ตั้งค่าเครื่องแล้ว', '$selWhName · ประตู $gate', ResultKind.ok);
+    _connectReader();
   }
 
   void setIdleLockMinutes(int m) {
@@ -440,7 +526,19 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void goDeviceSetup() => go(Screen.deviceSetup);
+  void goDeviceSetup() {
+    _autoSelectSinglePost();
+    go(Screen.deviceSetup);
+  }
+
+  /// A site with one warehouse — or a warehouse with one gate — offers no real
+  /// choice, so fill it in rather than making whoever provisions the device tap
+  /// the only option there is. [pickWh] handles the single-gate half.
+  void _autoSelectSinglePost() {
+    if (wh.isNotEmpty) return;
+    final whs = warehouseList;
+    if (whs.length == 1) pickWh((whs.first['id'] ?? '').toString());
+  }
 
   // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {
@@ -459,7 +557,6 @@ class AppController extends ChangeNotifier {
     if (m == 'out' && customerList.length == 1) {
       outCustomer = (customerList.first['id'] ?? '').toString();
     }
-    _rememberLastSelection(m);
     notifyListeners();
     _connectReader();
   }
@@ -469,40 +566,34 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ "ล่าสุด" shortcut ═══════════════════════════════
   /// คนละแนวคิดกับ deviceWh/deviceGate (ค่าประจำเครื่อง ตั้งครั้งเดียวตอน
-  /// provisioning) — นี่คือคลัง/ทิศทาง/ประตูที่ *คนที่กำลังใช้เครื่องอยู่ตอนนี้*
-  /// เพิ่งเลือกจากหน้าแรกจริงๆ ไม่ว่าจะผ่านการเลือกเองหรือข้ามมาเพราะมีตัวเลือก
-  /// เดียว จึงบันทึกจากจุดเดียวใน setMode() ให้ครอบคลุมทุกเส้นทาง
-  void _rememberLastSelection(String m) {
-    prefs.lastMode = m;
+  /// provisioning) — นี่คือคลัง/ประตูที่ *คนที่กำลังใช้เครื่องอยู่ตอนนี้* เพิ่งยืนยันจาก
+  /// หน้ารายงานจริงๆ ไม่ว่าจะผ่านการเลือกเองหรือข้ามมาเพราะมีตัวเลือกเดียว จึงบันทึก
+  /// จากจุดเดียวใน [confirmPost] ให้ครอบคลุมทุกเส้นทาง
+  void _rememberLastPost() {
     prefs.lastWh = wh;
     prefs.lastGate = gate;
   }
 
-  bool get hasLastSelection =>
-      prefs.lastMode.isNotEmpty && prefs.lastWh.isNotEmpty && prefs.lastGate.isNotEmpty;
-  String get lastModeLabel => prefs.lastMode == 'in' ? 'รับเข้า / รับคืน' : 'ส่งออก';
+  bool get hasLastSelection => prefs.lastWh.isNotEmpty && prefs.lastGate.isNotEmpty;
+  String get lastWh => prefs.lastWh;
   String get lastWhName => S?.whName(prefs.lastWh) ?? prefs.lastWh;
   String get lastGate => prefs.lastGate;
 
-  /// ทำซ้ำตัวเลือกล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
+  /// ยืนยันคลัง/ประตูล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
   /// คลังและประตูนั้นยังมีอยู่จริงตอนนี้ (กันกรณีถูกลบ/ย้ายไปหลังจากบันทึกไว้)
-  void resumeLastSelection() {
-    final m = prefs.lastMode, w = prefs.lastWh, g = prefs.lastGate;
-    if (m.isEmpty || w.isEmpty || g.isEmpty) return;
+  void useLastPost() {
+    final w = prefs.lastWh, g = prefs.lastGate;
+    if (w.isEmpty || g.isEmpty) return;
     if (!warehouseList.any((x) => (x['id'] ?? '').toString() == w)) {
       toastMsg('ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
-    final savedWh = wh, savedGate = gate;
-    wh = w;
-    if (!currentGates.contains(int.tryParse(g))) {
-      wh = savedWh;
-      gate = savedGate;
+    final gi = int.tryParse(g);
+    if (gi == null || !(S?.gatesOf(w) ?? const []).contains(gi)) {
       toastMsg('ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
-    gate = g;
-    m == 'in' ? goScanIn() : goScanOut();
+    confirmPost(w, gi);
   }
 
   void goTrack() {

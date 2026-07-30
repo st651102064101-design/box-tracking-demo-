@@ -49,7 +49,10 @@ class HomeScreen extends StatelessWidget {
                             Icon(Icons.expand_more, size: 17, color: C.chevron),
                           ],
                         ),
-                        Text('${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}',
+                        Text(
+                            c.postConfirmed
+                                ? '${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}'
+                                : 'ยังไม่ได้เลือกคลัง/ประตู',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: C.muted)),
@@ -84,89 +87,147 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              // stats
-              Row(
-                children: [
-                  Expanded(child: _Stat(value: '${c.warehouseCount}', label: 'ในคลัง')),
-                  const SizedBox(width: 9),
-                  Expanded(child: _Stat(value: '${c.outCount}', label: 'ออกอยู่', valueColor: C.orange)),
-                  const SizedBox(width: 9),
-                  Expanded(child: _TodayStat(inN: c.todayIn, outN: c.todayOut)),
-                ],
-              ),
-              if (c.emp != null && c.isVisiting(c.emp!))
-                Padding(
-                  padding: const EdgeInsets.only(top: 14),
-                  child: _Note('คุณประจำ ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
-                      '— รายการที่ยิงจะบันทึกที่ ${c.selWhName} ประตู ${c.gate}'),
-                ),
-              if (!c.canScan)
-                Padding(
-                  padding: const EdgeInsets.only(top: 14),
-                  child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
-                ),
-              if (c.canScan && c.hasLastSelection) ...[
-                const SizedBox(height: 16),
-                const Caption('ล่าสุด'),
-                const SizedBox(height: 10),
-                _ActionCard(
-                  small: true,
-                  icon: Icons.history,
-                  iconColor: C.ink2,
-                  iconBg: C.neutralBg,
-                  title: c.lastModeLabel,
-                  sub: '${c.lastWhName} · ประตู ${c.lastGate}',
-                  onTap: c.resumeLastSelection,
-                ),
-              ],
-              const SizedBox(height: 16),
-              const Caption('งานหลัก'),
-              const SizedBox(height: 10),
-              // เดิมซ่อนเมนูที่ไม่ตรงทิศทางประตูประจำเครื่องไปเลย — แต่เครื่องเดียวอาจ
-              // ต้องพกไปใช้ได้ทั้งขาเข้า/ขาออกในกะเดียวกัน หรือแม้แต่หลายคลัง จึงโชว์
-              // ทั้งสองเมนูเสมอ แล้วให้เลือก คลัง > ประตู ที่ตรงทิศทางตอนกดใช้งานแทน
-              // (ดู _pickPostThen ด้านล่าง) — ยังกันพลาดอยู่เหมือนเดิม แค่ย้ายจุดเลือก
-              // จาก "ตอนตั้งเครื่อง" มาเป็น "ตอนใช้งาน"
-              if (c.canScan) ...[
-                _ActionCard(
-                  dark: true,
-                  icon: Icons.south,
-                  iconColor: C.lime,
-                  iconBg: C.onInk.withValues(alpha: 0.12),
-                  title: 'รับเข้า / รับคืน',
-                  sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
-                  onTap: () => _pickPostThen(context, c, 'in'),
-                ),
-                const SizedBox(height: 12),
-                _ActionCard(
-                  icon: Icons.north,
-                  iconColor: C.orange,
-                  iconBg: C.orangeBg,
-                  title: 'ส่งออก',
-                  sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
-                  onTap: () => _pickPostThen(context, c, 'out'),
-                ),
-                const SizedBox(height: 12),
-              ],
-              _ActionCard(
-                small: true,
-                icon: Icons.search,
-                iconColor: C.ink2,
-                iconBg: C.neutralBg,
-                title: 'ค้นหา / ตรวจสอบกล่อง',
-                sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
-                onTap: c.goTrack,
-              ),
-              if (c.outbox.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
-              ],
+              ...(c.postConfirmed ? _confirmedBody(c) : _postPickerBody(c)),
             ],
           ),
         ),
       ],
     );
   }
+}
+
+/// รอยิงบัตรแล้ว แต่ยังไม่ได้ยืนยันคลัง/ประตูของรอบทำงานนี้ — "งานหลัก" ยังไม่โผล่
+/// จนกว่าจะเลือกคลังแล้วเลือกประตูให้ครบ (ดู [AppController.selectPendingWh] /
+/// [AppController.confirmPost])
+List<Widget> _postPickerBody(AppController c) {
+  final whs = c.warehouseList;
+  if (whs.isEmpty) {
+    return [
+      const SizedBox(height: 16),
+      _Note('ยังไม่มีคลังในระบบ — ไปเพิ่มคลังที่ระบบหลักก่อน'),
+    ];
+  }
+  final pendingWh = c.pendingWh;
+  if (pendingWh == null) {
+    final showLast = c.hasLastSelection && whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
+    return [
+      const SizedBox(height: 16),
+      const Caption('เลือกคลัง'),
+      const SizedBox(height: 10),
+      if (showLast) ...[
+        _WhPickTile(
+          name: '${c.lastWhName} · ประตู ${c.lastGate}',
+          tag: 'ล่าสุด',
+          icon: Icons.history,
+          onTap: c.useLastPost,
+        ),
+        const SizedBox(height: 9),
+      ],
+      ...whs.map((w) {
+        final id = (w['id'] ?? '').toString();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 9),
+          child: _WhPickTile(
+            name: (w['name'] ?? id).toString(),
+            onTap: () => c.selectPendingWh(id),
+          ),
+        );
+      }),
+    ];
+  }
+  final gates = c.S?.gatesOf(pendingWh) ?? const [];
+  final whName = c.S?.whName(pendingWh) ?? pendingWh;
+  return [
+    const SizedBox(height: 16),
+    Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: Caption('เลือกประตู · $whName')),
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: c.clearPendingWh,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Text('เปลี่ยนคลัง',
+                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 10),
+    Wrap(
+      spacing: 9,
+      runSpacing: 9,
+      children: gates.map((g) => _GatePickChip(label: '$g', onTap: () => c.confirmPost(pendingWh, g))).toList(),
+    ),
+  ];
+}
+
+/// คลัง/ประตูยืนยันแล้ว — สถิติ + "งานหลัก" ตามปกติ
+List<Widget> _confirmedBody(AppController c) {
+  return [
+    Row(
+      children: [
+        Expanded(child: _Stat(value: '${c.warehouseCount}', label: 'ในคลัง')),
+        const SizedBox(width: 9),
+        Expanded(child: _Stat(value: '${c.outCount}', label: 'ออกอยู่', valueColor: C.orange)),
+        const SizedBox(width: 9),
+        Expanded(child: _TodayStat(inN: c.todayIn, outN: c.todayOut)),
+      ],
+    ),
+    if (c.emp != null && c.isVisiting(c.emp!))
+      Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: _Note('คุณประจำ ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
+            '— รายการที่ยิงจะบันทึกที่ ${c.selWhName} ประตู ${c.gate}'),
+      ),
+    if (!c.canScan)
+      Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
+      ),
+    const SizedBox(height: 16),
+    const Caption('งานหลัก'),
+    const SizedBox(height: 10),
+    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
+    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
+    if (c.canScan && c.currentGateType != 'out') ...[
+      _ActionCard(
+        dark: true,
+        icon: Icons.south,
+        iconColor: C.lime,
+        iconBg: C.onInk.withValues(alpha: 0.12),
+        title: 'รับเข้า / รับคืน',
+        sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
+        onTap: c.goScanIn,
+      ),
+      const SizedBox(height: 12),
+    ],
+    if (c.canScan && c.currentGateType != 'in') ...[
+      _ActionCard(
+        icon: Icons.north,
+        iconColor: C.orange,
+        iconBg: C.orangeBg,
+        title: 'ส่งออก',
+        sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
+        onTap: c.goScanOut,
+      ),
+      const SizedBox(height: 12),
+    ],
+    _ActionCard(
+      small: true,
+      icon: Icons.search,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'ค้นหา / ตรวจสอบกล่อง',
+      sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
+      onTap: c.goTrack,
+    ),
+    if (c.outbox.isNotEmpty) ...[
+      const SizedBox(height: 14),
+      _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
+    ],
+  ];
 }
 
 /// Handover sheet: end this person's session, or hand the device to the next
@@ -202,6 +263,18 @@ void _openHandover(BuildContext context, AppController c) {
               c.lock();
             },
           ),
+          if (c.canScan) ...[
+            const SizedBox(height: 10),
+            _SheetAction(
+              icon: Icons.sync_alt,
+              label: 'เปลี่ยนคลัง/ประตู',
+              sub: 'เลือกจุดทำงานใหม่สำหรับกะนี้',
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                c.reselectPost();
+              },
+            ),
+          ],
           if (c.canConfigureDevice) ...[
             const SizedBox(height: 10),
             _SheetAction(
@@ -220,115 +293,17 @@ void _openHandover(BuildContext context, AppController c) {
   );
 }
 
-/// รับเข้า/ส่งออกตอนนี้ไม่ผูกกับคลัง/ประตูประจำเครื่องอีกต่อไป — เครื่องเดียวอาจพกไป
-/// ใช้ที่คลังหรือประตูไหนก็ได้ในกะเดียวกัน ลำดับการเลือกจึงเป็น คลัง > ประตู เสมอ
-/// (ประตูกรองเฉพาะที่ตั้งค่าไว้ตรงทิศทางที่กด) แต่ละขั้นข้ามตัวเองถ้ามีตัวเลือกเดียว
-/// พอดี — ทั้งคลังและประตูที่เลือกมีผลแค่รอบใช้งานนี้ ไม่ได้บันทึกทับค่าประจำเครื่อง
-/// ที่ตั้งไว้ตอน provisioning
-void _pickPostThen(BuildContext context, AppController c, String mode) {
-  final whs = c.warehouseList;
-  if (whs.isEmpty) {
-    c.toastMsg('ยังไม่มีคลังในระบบ', 'ไปเพิ่มคลังที่ระบบหลักก่อน', ResultKind.warn);
-    return;
-  }
-  if (whs.length == 1) {
-    _pickGateThen(context, c, (whs.first['id'] ?? '').toString(), mode);
-    return;
-  }
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetCtx) => Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(mode == 'in' ? 'รับเข้าที่คลังไหน' : 'ส่งออกที่คลังไหน',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 14),
-          ...whs.map((w) {
-            final id = (w['id'] ?? '').toString();
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: _WhPickTile(
-                name: (w['name'] ?? id).toString(),
-                onTap: () {
-                  Navigator.of(sheetCtx).pop();
-                  _pickGateThen(context, c, id, mode);
-                },
-              ),
-            );
-          }),
-        ],
-      ),
-    ),
-  );
-}
-
-/// ขั้นที่สอง — เลือกประตูภายในคลังที่เพิ่งได้มา กรองเฉพาะประตูที่ตรงทิศทาง
-void _pickGateThen(BuildContext context, AppController c, String whId, String mode) {
-  c.pickWh(whId); // อาจเลือกประตูแรกที่เจอไว้ชั่วคราว — ด้านล่างจะทับด้วยประตูที่ตรงทิศทางจริงเสมอ
-  final valid = c.currentGates.where((g) => c.gateTypeOf(g) == mode || c.gateTypeOf(g) == 'both').toList();
-  if (valid.isEmpty) {
-    c.toastMsg(
-      mode == 'in' ? 'ไม่มีประตูขาเข้าที่ตั้งค่าไว้' : 'ไม่มีประตูขาออกที่ตั้งค่าไว้',
-      'ไปตั้งค่าประตูที่ระบบหลักก่อน',
-      ResultKind.warn,
-    );
-    return;
-  }
-  if (valid.length == 1) {
-    c.pickGate(valid.first);
-    mode == 'in' ? c.goScanIn() : c.goScanOut();
-    return;
-  }
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetCtx) => Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(mode == 'in' ? 'ยิงกล่องเข้าที่ประตูไหน' : 'จ่ายกล่องออกที่ประตูไหน',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text(c.selWhName, style: TextStyle(fontSize: 12.5, color: C.muted)),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 9,
-            runSpacing: 9,
-            children: valid
-                .map((g) => _GatePickChip(
-                      label: '$g',
-                      onTap: () {
-                        Navigator.of(sheetCtx).pop();
-                        c.pickGate(g);
-                        mode == 'in' ? c.goScanIn() : c.goScanOut();
-                      },
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 class _WhPickTile extends StatelessWidget {
   final String name;
   final VoidCallback onTap;
-  const _WhPickTile({required this.name, required this.onTap});
+  final String? tag;
+  final IconData? icon;
+  const _WhPickTile({required this.name, required this.onTap, this.tag, this.icon});
   @override
   Widget build(BuildContext context) {
+    final highlighted = tag != null;
     return Material(
-      color: C.neutralBg,
+      color: highlighted ? C.ink : C.neutralBg,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -337,10 +312,22 @@ class _WhPickTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
           child: Row(
             children: [
+              if (icon != null) ...[
+                Icon(icon, size: 19, color: highlighted ? C.lime : C.ink2),
+                const SizedBox(width: 11),
+              ],
               Expanded(
-                child: Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+                child: Text(name,
+                    style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: highlighted ? C.onInk : null)),
               ),
-              Icon(Icons.chevron_right, size: 20, color: C.chevron),
+              if (tag != null) ...[
+                Pill(tag!, color: C.lime, bg: C.onInk.withValues(alpha: 0.14)),
+                const SizedBox(width: 8),
+              ],
+              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onInk.withValues(alpha: 0.5) : C.chevron),
             ],
           ),
         ),

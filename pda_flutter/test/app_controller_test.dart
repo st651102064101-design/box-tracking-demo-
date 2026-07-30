@@ -652,6 +652,148 @@ void main() {
     });
   });
 
+  group('report-screen post picker', () {
+    Map<String, dynamic> pickerState() => {
+          'boxes': {},
+          'warehouses': {
+            'WH-A': {'id': 'WH-A', 'name': 'คลัง A', 'gates': [1, 2]},
+            'WH-B': {'id': 'WH-B', 'name': 'คลัง B', 'gates': [9]},
+          },
+          'gates': {'1': 'WH-A', '2': 'WH-A', '9': 'WH-B'},
+          'employees': {
+            'EMP-OP': {
+              'id': 'EMP-OP',
+              'name': 'ปฏิบัติการ',
+              'wh': 'WH-A',
+              'access': 'operator',
+              'status': 'active',
+            },
+            'EMP-VIEW': {
+              'id': 'EMP-VIEW',
+              'name': 'ผู้ชม',
+              'wh': 'WH-A',
+              'access': 'viewer',
+              'status': 'active',
+            },
+          },
+          'events': <dynamic>[],
+          'cfg': {'agingDays': 15},
+        };
+
+    Future<AppController> controllerWithState(Map<String, dynamic> state) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await Prefs.load();
+      final c = AppController(api: FakeApi()..state = state, prefs: prefs, rfid: RfidService());
+      await c.refresh();
+      return c;
+    }
+
+    test('badging in with more than one warehouse on file waits for a pick', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      expect(c.postConfirmed, isFalse);
+      expect(c.pendingWh, isNull);
+    });
+
+    test('picking a warehouse with one gate confirms the post immediately', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      c.selectPendingWh('WH-B');
+
+      expect(c.postConfirmed, isTrue);
+      expect(c.wh, 'WH-B');
+      expect(c.gate, '9');
+    });
+
+    test('picking a warehouse with two gates waits for the gate, then confirms', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      c.selectPendingWh('WH-A');
+      expect(c.postConfirmed, isFalse, reason: 'two gates is a real choice');
+      expect(c.pendingWh, 'WH-A');
+
+      c.confirmPost('WH-A', 2);
+      expect(c.postConfirmed, isTrue);
+      expect(c.wh, 'WH-A');
+      expect(c.gate, '2');
+      expect(c.pendingWh, isNull);
+    });
+
+    test('a single warehouse with a single gate skips the picker entirely', () async {
+      final state = pickerState();
+      (state['warehouses'] as Map).remove('WH-A');
+      state['gates'] = {'9': 'WH-B'};
+      final c = await controllerWithState(state);
+
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      expect(c.postConfirmed, isTrue);
+      expect(c.wh, 'WH-B');
+      expect(c.gate, '9');
+    });
+
+    test('a viewer never has to pick a post — search is warehouse-agnostic', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-VIEW'));
+
+      expect(c.postConfirmed, isTrue);
+    });
+
+    test('confirming a post is remembered as ล่าสุด and reusable via useLastPost', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+      c.confirmPost('WH-A', 1);
+      expect(c.hasLastSelection, isTrue);
+      expect(c.lastWh, 'WH-A');
+      expect(c.lastGate, '1');
+
+      c.lock();
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+      expect(c.postConfirmed, isFalse, reason: 'a fresh badge-in always asks again');
+
+      c.useLastPost();
+      expect(c.postConfirmed, isTrue);
+      expect(c.wh, 'WH-A');
+      expect(c.gate, '1');
+    });
+
+    test('useLastPost warns instead of confirming when the remembered warehouse is gone', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+      c.confirmPost('WH-A', 1);
+
+      final state2 = pickerState();
+      (state2['warehouses'] as Map).remove('WH-A');
+      final c2 = AppController(api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
+      await c2.refresh();
+
+      c2.useLastPost();
+
+      expect(c2.postConfirmed, isFalse);
+      expect(c2.toast!.title, 'ไม่พบคลังเดิม');
+    });
+
+    test('useLastPost warns instead of confirming when the remembered gate is gone', () async {
+      final c = await controllerWithState(pickerState());
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+      c.confirmPost('WH-A', 1);
+
+      final state2 = pickerState();
+      (state2['warehouses']['WH-A'] as Map)['gates'] = [2];
+      state2['gates'] = {'2': 'WH-A', '9': 'WH-B'};
+      final c2 = AppController(api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
+      await c2.refresh();
+
+      c2.useLastPost();
+
+      expect(c2.postConfirmed, isFalse);
+      expect(c2.toast!.title, 'ไม่พบประตูเดิม');
+    });
+  });
+
   group('idle auto-lock', () {
     test('locks once the device has sat untouched past the limit', () async {
       final c = await makeController(FakeApi());
