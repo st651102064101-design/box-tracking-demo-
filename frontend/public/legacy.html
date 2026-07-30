@@ -1882,8 +1882,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
           <input id="cReturnDate" type="date" style="display:none;margin-top:8px;" title="เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ">
         </div>
-        <div class="field"><label>ติดต่อ (โทร/อีเมล)</label><input id="cContact" placeholder="02-xxx-xxxx"></div>
-        <div class="field"><label>ที่อยู่/สาขา</label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
+        <div class="field"><label>ติดต่อ (โทร/อีเมล) <span class="req">*</span></label><input id="cContact" placeholder="02-xxx-xxxx"></div>
+        <div class="field"><label>ที่อยู่/สาขา <span class="req">*</span></label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddCust">บันทึกลูกค้า</button>
         <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -3063,6 +3063,8 @@ var editingCust=null;
 $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
   var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
+  var ctc=val('cContact');if(!ctc)return toast('กรอกข้อมูลติดต่อ (โทร/อีเมล)',null,'err');
+  var addr=val('cAddr');if(!addr)return toast('กรอกที่อยู่/สาขา',null,'err');
   if(!editingCust&&S.customers[id])return toast('มีรหัสลูกค้านี้แล้ว',id,'err');
   if(editingCust&&editingCust!==id&&S.customers[id])return toast('รหัสซ้ำ',id,'err');
   /* #cId is readonly today so this can't fire via the UI yet — same defense-in-depth
@@ -3076,7 +3078,7 @@ $('#btnAddCust').onclick=function(){
   /* kind แยกคู่ค้าเป็นลูกค้า/ซัพพลายเออร์ ตามที่ผังงานกำหนดไว้ว่า Contact Master
      ต้องมีประเภท — ระเบียนเก่าที่ยังไม่มีค่านี้ถือเป็น 'customer' เพราะก่อนหน้านี้
      ทะเบียนนี้ใช้เก็บปลายทางขาออกอย่างเดียว */
-  S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:val('cAddr'),contact:val('cContact'),returnDays:rd};
+  S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:addr,contact:ctc,returnDays:rd};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
@@ -10534,6 +10536,7 @@ function openColumnMapModal(opts){
     "รหัสซ้ำ":"Duplicate code","บันทึกประเภทกล่องแล้ว":"Box type saved","ลบไม่ได้":"Can't delete",
     "ช่วงประตูไม่ถูกต้อง":"Invalid gate range","มีรหัสคลังนี้แล้ว":"This warehouse code already exists","ประตูทับซ้อน":"Gate overlap",
     "บันทึกคลังแล้ว":"Warehouse saved","ระบุกำหนดคืน (วัน)":"Enter return period (days)","มีรหัสลูกค้านี้แล้ว":"This customer code already exists",
+    "กรอกข้อมูลติดต่อ (โทร/อีเมล)":"Enter contact info (phone/email)","กรอกที่อยู่/สาขา":"Enter address/branch",
     "ไม่มีสิทธิ์":"No permission","กรอกชื่อพนักงาน":"Enter employee name","กรอกชื่อ-นามสกุล":"Enter full name",
     "ลงทะเบียนสำเร็จ":"Registered successfully","ย้ายตำแหน่งแล้ว":"Relocated","ตีกล่องหายแล้ว":"Marked as lost",
     "ยกเลิกสูญหายแล้ว":"Lost status cancelled","พักการใช้งานแล้ว":"Put on hold","ปลด Hold แล้ว":"Hold released",
