@@ -1651,8 +1651,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
 
   <div class="track-scan reveal d1">
-    <div class="geyebrow">SCAN · QUERY</div>
-    <h3>ค้นหากล่อง / แร็ค</h3>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div class="geyebrow">SCAN · QUERY</div>
+      <button type="button" class="iconbtn" id="btnTrackHelp" title="วิธีใช้งาน" onclick="openTrackHelp()">!</button>
+    </div>
+    <h3>ค้นหากล่อง</h3>
     <div class="gsub">ยิงบาร์โค้ด / บาร์โค้ด หรือพิมพ์เลขกล่อง, PO, DO, ทะเบียนรถ แล้วกด Enter — ระบบดึงทุกกล่องในชุดนั้นพร้อมประวัติและตำแหน่งล่าสุดขึ้นมาให้</div>
     <div class="pad">
       <input id="scanTrack" placeholder="เช่น CRT-01, PO-2026-012 หรือ DO-0001" autocomplete="off">
@@ -1938,7 +1941,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>สถานะ</label>
           <select id="eStatus">
             <option value="active">ปฏิบัติงาน</option>
-            <option value="leave">ลา / พักงานชั่วคราว</option>
             <option value="inactive">พ้นสภาพ</option>
           </select>
         </div>
@@ -3608,10 +3610,35 @@ window.markHold=markHold;window.releaseHold=releaseHold;window.markDamage=markDa
 function daysToExpiry(b){if(!b||!b.expiry)return null;var e=new Date(b.expiry+'T23:59:59');return Math.ceil((e-now())/86400000);}
 function isExpired(b){var d=daysToExpiry(b);return d!=null&&d<0;}
 function isNearExpiry(b,within){within=within||30;var d=daysToExpiry(b);return d!=null&&d>=0&&d<=within;}
+/* calendar year/month/day breakdown from a to b (a assumed on/before b) —
+   a raw day count stops being readable at a glance past a month or so.
+   Counts whole months by walking a's day-of-month forward (letting Date's own
+   overflow handle short months), backing off one month at a time until that
+   doesn't overshoot b, then the remainder is a plain day count — so a start
+   date of the 29th–31st landing in short-Feb crossings can never produce a
+   negative day component the way naive field-by-field subtraction can. */
+function ymdBetween(a,b){
+  var months=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());
+  var probe=new Date(a.getFullYear(),a.getMonth()+months,a.getDate());
+  while(probe>b&&months>0){months--;probe=new Date(a.getFullYear(),a.getMonth()+months,a.getDate());}
+  var d=Math.round((b-probe)/86400000);
+  return {y:Math.floor(months/12),m:months%12,d:d};
+}
+/* short spans (≤30 days, same threshold as the "near expiry" pill) stay as
+   plain days; anything longer becomes "X ปี Y เดือน Z วัน", zero units omitted. */
+function fmtDaySpan(days,a,b){
+  if(days<=30)return days+' วัน';
+  var k=ymdBetween(a,b),parts=[];
+  if(k.y)parts.push(k.y+' ปี');
+  if(k.m)parts.push(k.m+' เดือน');
+  if(k.d||!parts.length)parts.push(k.d+' วัน');
+  return parts.join(' ');
+}
 function expiryPill(b){var d=daysToExpiry(b);if(d==null)return '';
-  if(d<0)return '<span class="pill bad">หมดอายุแล้ว '+Math.abs(d)+' วัน</span>';
+  var exp=new Date(b.expiry+'T23:59:59');
+  if(d<0)return '<span class="pill bad">หมดอายุแล้ว '+fmtDaySpan(-d,exp,now())+'</span>';
   if(d<=30)return '<span class="pill exp">ใกล้หมดอายุ '+d+' วัน</span>';
-  return '<span class="pill gray">หมดอายุอีก '+d+' วัน</span>';}
+  return '<span class="pill gray">หมดอายุอีก '+fmtDaySpan(d,now(),exp)+'</span>';}
 /* best-effort "entered warehouse" time for FIFO ordering */
 function boxReceiveTs(b){
   if(b&&b.history&&b.history.length){for(var i=b.history.length-1;i>=0;i--){var h=b.history[i];if(h.dir==='in'||h.dir==='reg')return h.ts;}}
@@ -3667,7 +3694,7 @@ function openAllocateModal(){
       +'<div id="alResult"></div>'
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
-      +'<button class="btn accent" id="alQueueBtn">'+IC('plus')+' เพิ่มเข้าคิวขาออก</button></div>'
+      +'<button class="btn accent" id="alQueueBtn">'+IC('pin')+' ไปหยิบตามพิกัด</button></div>'
   );
   var sheet=$('#modalSheet');if(sheet)sheet.style.width='640px';
   function refresh(){
@@ -3678,14 +3705,23 @@ function openAllocateModal(){
         +list.map(function(b,i){return '<tr><td class="mono">'+(i+1)+'</td><td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td>'+esc(b.lot||'-')+'</td><td>'+(b.expiry?esc(b.expiry)+' '+expiryPill(b):'<span class="muted">-</span>')+'</td><td class="small">'+fmtTs(boxReceiveTs(b))+'</td><td class="small">'+locShort(b.location)+'</td></tr>';}).join('')
         +'</tbody></table></div>'
       :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้</div>';
-    $('#alQueueBtn')._tags=list.map(function(b){return b.tag;});
   }
   ['alType','alQty','alMode'].forEach(function(id){var e=$('#'+id);if(e){e.addEventListener('input',refresh);e.addEventListener('change',refresh);}});
+  /* "ไปหยิบตามพิกัด" used to push the suggested tags straight into the
+     Gate-Out scan queue (pendingOut) on click — marking them as shipped
+     before anyone had actually laid hands on a box, let alone scanned its
+     barcode/RFID tag. It now hands the type+qty+mode off to the real Pick
+     List flow instead, which groups the same boxes by shelf location, sorts
+     them into a walking route, and only lets a box reach the scan queue once
+     the operator has physically found it (scanned) or explicitly force-ticked
+     it — see openPickListModal / buildPickRows below. */
   $('#alQueueBtn').onclick=function(){
-    var tags=$('#alQueueBtn')._tags||[];if(!tags.length)return toast('ไม่มีกล่องให้เพิ่ม',null,'err');
-    tags.forEach(function(t){if(pendingOut.indexOf(t)<0)pendingOut.push(t);});
-    closeModal();switchTab('gateout');renderOutResult();
-    toast('เพิ่มเข้าคิวขาออกแล้ว',tags.length+' ใบ (ยิงจริงเพื่อยืนยันได้)','ok');
+    var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
+    if(!type)return toast('เลือกประเภทกล่อง',null,'err');
+    if(!qty||qty<1)return toast('กรอกจำนวนให้ถูกต้อง',null,'err');
+    if(!availableQtyForType(type))return toast('ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้',null,'err');
+    closeModal();
+    openPickListModal([{type:type,qty:qty,mode:mode}]);
   };
   refresh();
 }
@@ -3714,8 +3750,8 @@ function compareRoute(ka,kb){
 var pickLines=[]; // {type, qty}
 var pickRows=null; // built by generatePickList(): [{key, loc, locCode, type, tags:[...], confirmed:{tag:true}, forced:bool}]
 var pickShortfalls=[];
-function openPickListModal(){
-  pickLines=[];pickRows=null;
+function openPickListModal(presetLines){
+  pickLines=(presetLines&&presetLines.length)?presetLines.slice():[];pickRows=null;
   var types=Object.values(S.boxtypes);
   var typeOpts='<option value="">— เลือกประเภทกล่อง —</option>'+types.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
   openModal(
@@ -3764,6 +3800,10 @@ function openPickListModal(){
     buildPickRows();renderPickTable();
   };
   renderLines();
+  /* handed off from "ไปหยิบตามพิกัด" with a line already chosen — skip
+     straight to the picking table instead of an empty form the operator
+     would just have to fill in again. */
+  if(pickLines.length){buildPickRows();renderPickTable();}
 }
 window.openPickListModal=openPickListModal;
 
@@ -3773,7 +3813,7 @@ function buildPickRows(){
   var shortfalls=[];
   pickLines.forEach(function(line){
     var excl=usedByType[line.type]||[];
-    var tags=allocateSuggest(line.type,line.qty,'fefo',excl);
+    var tags=allocateSuggest(line.type,line.qty,line.mode||'fefo',excl);
     usedByType[line.type]=excl.concat(tags.map(function(b){return b.tag;}));
     if(tags.length<line.qty)shortfalls.push(typeName(line.type)+': ขอ '+line.qty+' ใบ แต่พร้อมจ่ายจริงเหลือ '+tags.length+' ใบ');
     tags.forEach(function(b){
@@ -5162,6 +5202,19 @@ function boxesForParentId(q){
   tags.sort(function(a,c){return rank(a)-rank(c)||(a<c?-1:a>c?1:0);});
   return {tags:tags,label:(kind?kind+' '+String(q).trim():''),kind:kind};
 }
+function openTrackHelp(){
+  openModal(
+    '<div class="mhead"><h3>วิธีใช้งาน · ค้นหากล่อง</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody">'
+      +'<div class="ts-line"><span class="k">ค้นหากล่องเดียว</span><span class="v">ยิงบาร์โค้ด หรือพิมพ์เลขกล่อง (เช่น CRT-01) แล้วกด Enter — เห็นตำแหน่งล่าสุดและประวัติทั้งหมดของกล่องใบนั้น</span></div>'
+      +'<div class="ts-line"><span class="k">ค้นหาทั้งชุด</span><span class="v">พิมพ์เลข PO, DO หรือทะเบียนรถแทนเลขกล่อง — ระบบดึงทุกกล่องที่อยู่ในชุดนั้นขึ้นมาพร้อมกัน</span></div>'
+      +'<div class="ts-line"><span class="k">ประวัติ</span><span class="v">เรียงจากล่าสุดไปเก่าสุด ครบทุกครั้งที่กล่องเข้า-ออกคลังหรือย้ายตำแหน่ง</span></div>'
+      +'<div class="ts-line"><span class="k">ปุ่มลัด</span><span class="v">รายการปุ่มลัดใต้ช่องค้นหาคือกล่อง/ชุดที่เพิ่งค้นหาไป กดซ้ำเพื่อเปิดดูอีกครั้งได้ทันที</span></div>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn accent" data-close>เข้าใจแล้ว</button></div>'
+  );
+}
+window.openTrackHelp=openTrackHelp;
 function trackBox(tag){
   var raw=(tag||val('scanTrack')).trim();if(!raw)return;
   var one=resolveTag(raw);
@@ -10379,7 +10432,13 @@ function openColumnMapModal(opts){
     "ผ่านประตู":"Through the gate","ออกได้เลย":"ship it out","ประตูสแกนขาออก":"Outbound scan gate",
     "กลับเข้าคลัง":"Back to warehouse","เก็บเข้าชั้น":"onto the shelf","ประตูสแกนขาเข้า":"Inbound scan gate",
     "ยืนยันรับคืน — รอ Putaway":"Confirm receive - awaiting putaway","ใบส่งของ · ข้อมูลรถ":"Delivery Order / Vehicle Info",
-    "สแกนกล่อง":"Scan box","ดูประวัติทั้งหมด":"View full history","ค้นหากล่อง / แร็ค":"Search box / rack","ค้นหา":"Search",
+    "สแกนกล่อง":"Scan box","ดูประวัติทั้งหมด":"View full history","ค้นหากล่อง":"Search box","ค้นหา":"Search",
+    "วิธีใช้งาน":"How to use","วิธีใช้งาน · ค้นหากล่อง":"How to use - Search box",
+    "ค้นหากล่องเดียว":"Search a single box","ค้นหาทั้งชุด":"Search a whole batch","ปุ่มลัด":"Shortcuts","ประวัติ":"History",
+    "ยิงบาร์โค้ด หรือพิมพ์เลขกล่อง (เช่น CRT-01) แล้วกด Enter — เห็นตำแหน่งล่าสุดและประวัติทั้งหมดของกล่องใบนั้น":"Scan the barcode or type the box number (e.g. CRT-01) and press Enter - see its latest location and full history",
+    "พิมพ์เลข PO, DO หรือทะเบียนรถแทนเลขกล่อง — ระบบดึงทุกกล่องที่อยู่ในชุดนั้นขึ้นมาพร้อมกัน":"Type a PO, DO number or license plate instead of a box number - every box in that batch comes up together",
+    "เรียงจากล่าสุดไปเก่าสุด ครบทุกครั้งที่กล่องเข้า-ออกคลังหรือย้ายตำแหน่ง":"Sorted newest to oldest, covering every time the box entered/left the warehouse or moved location",
+    "รายการปุ่มลัดใต้ช่องค้นหาคือกล่อง/ชุดที่เพิ่งค้นหาไป กดซ้ำเพื่อเปิดดูอีกครั้งได้ทันที":"The shortcut buttons under the search box are boxes/batches you searched recently - click one again to reopen it instantly",
     "สต็อกกล่อง":"Box stock","เรียลไทม์":"Real-time","ตั้งค่า":"Setup","บันทึกเพิ่มเติม (ถ้ามี)":"Additional note (if any)",
     "ประตูประจำเครื่องนี้":"Gate for this terminal","— ยังไม่ได้ตั้งค่า —":"- not set -","เปลี่ยนประตู":"Change gate",
     "เลขที่ DO (สร้างอัตโนมัติ)":"DO No. (auto-generated)","แก้เอง":"Manual","ใช้ Auto":"Use Auto","เลขที่ PO":"PO No.",
@@ -10426,7 +10485,7 @@ function openColumnMapModal(opts){
     "ไม่มีสิทธิ์":"No permission","กรอกชื่อพนักงาน":"Enter employee name","กรอกชื่อ-นามสกุล":"Enter full name",
     "ลงทะเบียนสำเร็จ":"Registered successfully","ย้ายตำแหน่งแล้ว":"Relocated","ตีกล่องหายแล้ว":"Marked as lost",
     "ยกเลิกสูญหายแล้ว":"Lost status cancelled","พักการใช้งานแล้ว":"Put on hold","ปลด Hold แล้ว":"Hold released",
-    "ตีชำรุดแล้ว":"Marked as damaged","ซ่อมเสร็จแล้ว":"Repair complete","ไม่มีกล่องให้เพิ่ม":"No box to add",
+    "ตีชำรุดแล้ว":"Marked as damaged","ซ่อมเสร็จแล้ว":"Repair complete","ไปหยิบตามพิกัด":"Go pick by location",
     "เพิ่มเข้าคิวขาออกแล้ว":"Added to ship-out queue","กรอกจำนวนให้ถูกต้อง":"Enter a valid quantity","เกินจำนวนที่มีในสต็อก":"Exceeds available stock",
     "เพิ่มรายการก่อนอย่างน้อย 1 ประเภท":"Add at least 1 line item first","กล่องนี้ไม่อยู่ในรายการหยิบตำแหน่งนี้":"This box isn't in this pick location's list",
     "บางใบถูกใช้ไปก่อนแล้ว":"Some boxes were already claimed","ไม่มีตำแหน่งให้พิมพ์":"No location to print","ไม่มีฟังก์ชันพิมพ์":"Print function unavailable",
