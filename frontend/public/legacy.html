@@ -1732,7 +1732,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
       <!-- Lot / Batch + Expiry (optional — enables FEFO allocation) -->
       <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select>
+        <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select><div id="bSupplierHint" style="display:none;"></div>
           <div class="hint">ผังงานเริ่มที่ "Supplier ส่งกล่องมาใหม่" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร</div></div>
         <div class="field">
           <label>Lot / Batch (สร้างอัตโนมัติ)</label>
@@ -5653,8 +5653,10 @@ function renderSetup(){
      renderAll() ถูกเรียกซ้ำได้ระหว่างที่ผู้ใช้ยังกรอกฟอร์มไม่เสร็จ */
   /* ซัพพลายเออร์สำหรับหน้าลงทะเบียนกล่อง — ไม่บังคับ เพราะกล่องที่มีอยู่เดิม
      ก่อนเริ่มใช้ระบบก็ไม่มีใครจำได้แล้วว่าซื้อมาจากไหน */
-  var bSupSel=$('#bSupplier');
-  if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=supplierOptions(keepS);if(keepS)bSupSel.value=keepS;}
+  var bSupSel=$('#bSupplier'),bSupHint=$('#bSupplierHint');
+  var hasSup=Object.values(S.customers).some(isSupplierKind);
+  if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
+  if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
   var inPartnerSel=$('#inPartner');
   if(inPartnerSel){
     var keepP=inPartnerSel.value;
@@ -10203,7 +10205,7 @@ function openColumnMapModal(opts){
     "เพิ่มคลัง":"Add warehouse",
     "เพิ่มคลัง & ประตู":"Add warehouse & gate",
     "เพิ่มประเภทกล่อง":"Add box type",
-    "เพิ่มลูกค้า":"Add customer",
+    "เพิ่มลูกค้า":"Add customer","เพิ่มซัพพลายเออร์":"Add supplier",
     "แนะนำหยิบกล่อง (FIFO / FEFO)":"Pick suggestion (FIFO / FEFO)",
     "สแกนบาร์โค้ด":"Scan barcode",
     "กรอกเอง":"Enter manually",
