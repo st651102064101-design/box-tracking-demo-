@@ -1875,7 +1875,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <option value="supplier">ซัพพลายเออร์ (ส่งกล่องเข้ามา)</option>
           <option value="both">ทั้งลูกค้าและซัพพลายเออร์</option>
         </select></div>
-        <div class="field"><label>กำหนดคืนภายใน (วัน) <span class="req">*</span></label><input id="cReturnDays" type="number" min="1" placeholder="15"></div>
+        <div class="field"><label>กำหนดคืนภายใน (วัน) <span class="req">*</span></label>
+          <div class="row" style="gap:8px;">
+            <input id="cReturnDays" type="number" min="1" placeholder="15" style="flex:1;">
+            <button type="button" class="iconbtn" id="btnCReturnCal" title="เลือกวันครบกำหนดจากปฏิทิน"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span></button>
+          </div>
+          <input id="cReturnDate" type="date" style="display:none;margin-top:8px;" title="เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ">
+        </div>
         <div class="field"><label>ติดต่อ (โทร/อีเมล)</label><input id="cContact" placeholder="02-xxx-xxxx"></div>
         <div class="field"><label>ที่อยู่/สาขา</label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
       </div>
@@ -3032,6 +3038,28 @@ window.editWh=editWh;window.delWh=delWh;
 
 /* ===== SETUP: customers CRUD ===== */
 var editingCust=null;
+/* กำหนดคืนภายใน (วัน) เดิมกรอกได้แค่ตัวเลขวันเปล่าๆ ซึ่งบางคนคิดจากวันที่ตกลง
+   กับลูกค้าไว้ (เช่น "คืนภายในวันที่ 25 ธ.ค.") ง่ายกว่าคิดเป็นจำนวนวันเอง ปุ่มปฏิทิน
+   นี้จึงเป็นแค่ "ตัวช่วยกรอก" — เลือกวันที่แล้วระบบคำนวณจำนวนวันนับจากวันนี้ให้เอง
+   ไม่ได้เก็บวันที่นั้นไว้จริง เพราะข้อมูลหลักของลูกค้าคือ "กี่วัน" ไม่ใช่วันที่ตายตัว */
+(function(){
+  var btn=$('#btnCReturnCal'),dateInp=$('#cReturnDate');
+  if(!btn||!dateInp)return;
+  btn.addEventListener('click',function(){
+    var show=dateInp.style.display==='none';
+    dateInp.style.display=show?'':'none';
+    if(show){dateInp.value='';dateInp.focus();if(dateInp.showPicker)try{dateInp.showPicker();}catch(e){}}
+  });
+  dateInp.addEventListener('change',function(){
+    if(!dateInp.value)return;
+    var today=new Date();today.setHours(0,0,0,0);
+    var target=new Date(dateInp.value+'T00:00:00');
+    var days=Math.round((target-today)/86400000);
+    if(days<1){toast('เลือกวันที่ในอนาคต',null,'err');return;}
+    setv('cReturnDays',days);
+    dateInp.style.display='none';
+  });
+})();
 $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
   var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
@@ -3053,9 +3081,11 @@ $('#btnAddCust').onclick=function(){
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
   ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();
+  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
   toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · คืนใน '+rd+' วัน');renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();};
+  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();
+  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
 var CUST_KIND={customer:{t:'ลูกค้า',c:'ok'},supplier:{t:'ซัพพลายเออร์',c:'purple'},both:{t:'ลูกค้า + ซัพพลายเออร์',c:'gray'}};
@@ -3063,6 +3093,7 @@ function CUST_KIND_LABEL(k){var m=CUST_KIND[k]||CUST_KIND.customer;
   return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
 window.CUST_KIND_LABEL=CUST_KIND_LABEL;
 function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
+  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
   $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
@@ -10404,6 +10435,9 @@ function openColumnMapModal(opts){
     "ดาวน์โหลด PDF (พร้อมพิมพ์)":"Download PDF (print-ready)","แร็คว่างที่ใกล้ที่สุด":"Nearest empty rack","เลือกตำแหน่งเอง":"Choose location manually",
     "ไม่พบตำแหน่งว่างที่ลงทะเบียนไว้ในผัง — เลือกตำแหน่งเอง หรือไปเพิ่มผังชั้นวางก่อน":"No registered empty location found in the layout - choose one manually, or add the rack layout first",
     "ยืนยันติดแท็กเสร็จแล้ว":"Confirm tagging complete","ติดแท็กเสร็จแล้ว":"Tagging complete","ยังไม่ได้เลือกตำแหน่ง":"No location selected",
+    "เลือกวันครบกำหนดจากปฏิทิน":"Pick the due date from a calendar",
+    "เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ":"Pick the due date and the system works out the number of days automatically",
+    "เลือกวันที่ในอนาคต":"Pick a date in the future",
     "กรอกโซนหรือแร็คก่อน — ข้ามการจัดเก็บอัตโนมัติ กล่องยังติดแท็กสำเร็จตามปกติ":"Enter a zone or rack first - auto putaway skipped, the box was still tagged successfully",
     "ยกเลิกสูญหาย / พบแล้ว":"Cancel lost / found","จัดการ":"Actions","อัตราการคืน & การสูญหาย":"Return & loss rate",
     "สรุปตามลูกค้า":"Summary by customer","ประวัติการผ่าน Gate ล่าสุด (30 รายการ)":"Recent gate activity (30 records)",
