@@ -12077,12 +12077,16 @@ function build(){
      แรกคงเดิม (กล่อง) อีก 2 ช่องใหม่เป็นกระบะตอนเดียวและเทรลเลอร์ */
   const bays=[0,1,2,3].map(i=>LY.bMaxX+8+i*4.2);
   const bayKind=['box','pickup','box','trailer'];
+  /* ทุกช่องจอดออก/เข้าผ่านจุดเดียวกัน (กึ่งกลางแนวลาน) แทนที่จะออกตรงหน้าช่องตัวเอง
+     — จุดนี้คือที่ตั้งของป้อมยาม/ไม้กั้นด้านล่าง รถจึงวิ่งผ่านป้อมจริงทุกเที่ยว
+     ไม่ใช่ตัดออกถนนตรงๆ หน้าช่องใครช่องมัน */
+  LY.gateCheckX=(bays[0]+bays[bays.length-1])/2;
   bays.forEach((bx_,i)=>{
     const bay=YARD[i]||(YARD[i]={i,kind:bayKind[i],state:'parked',rotPark:Math.PI/2});
     /* +2.1: กึ่งกลางระหว่างเส้นแบ่งช่อง (ระยะห่างช่องละ 4.2) เหมือนโค้ดเดิมที่วางรถ
        ไว้กึ่งกลางแต่ละช่อง ไม่ใช่ชิดเส้นซ้าย */
     const truckX=bx_+2.1;
-    bay.x=truckX;bay.z=LY.yardZ+2.0;bay.roadX=truckX;bay.roadZ=LY.roadMid-1.6;
+    bay.x=truckX;bay.z=LY.yardZ+2.0;bay.roadX=LY.gateCheckX;bay.roadZ=LY.roadMid-1.6;
     if(!bay.truck){
       const t=buildTruckByKind(bay.kind);t.scale.setScalar(TRUCK_SCALE);
       opsRoot.add(t);
@@ -12532,8 +12536,11 @@ function build(){
     const ll=makeLabel('สูญหาย '+lostBoxes.length+' ใบ','มูลค่า '+fmtBaht(lostVal),{fs:36,h:1.05,fg:'#d70015'});
     ll.position.set(px,2.5,yardZ+1.6);root.add(ll);
   }
-  /* ป้อมยามหน้าทางเข้า ติดถนน */
-  const guardX=bMinX-11,guardZ=road1+2.6;
+  /* ป้อมยาม + ไม้กั้น — ย้ายมาคร่อมทางออกลานจอดรถบรรทุก (LY.gateCheckX) แทนที่จะ
+     อยู่อีกฝั่งของอาคารเฉยๆ เพราะตอนนี้ลานจอดคือจุดที่รถ "ออกจากไซต์งาน" จริง
+     (pullout/pullin วิ่งผ่านจุดนี้เสมอ — ดู updateDocks) รถทุกคันจึงต้องผ่านป้อม
+     นี้จริงๆ ไม่ใช่ตัดออกถนนตรงๆ หน้าช่องใครช่องมัน */
+  const guardX=LY.gateCheckX-2.6,guardZ=LY.yardZ-2.2;
   const guard=new THREE.Group();
   guard.add(bx(3.0,2.7,2.6,MAT.guardWall,0,1.35,0));
   const winM=new THREE.MeshStandardMaterial({color:0xffffff,map:TEX.window,roughness:0.15,metalness:0.4});
@@ -12545,14 +12552,15 @@ function build(){
   guard.position.set(guardX,0,guardZ);root.add(guard);
   const arm=new THREE.Group();
   arm.add(cy(0.14,1.1,MAT.charger,0,0.55,0));
-  const bar=bx(6.4,0.16,0.16,MAT.barrier,3.2,1.05,0);arm.add(bar);
+  const bar=bx(6.4,0.16,0.16,MAT.barrier,3.2,1.05,0);arm.userData.bar=bar;arm.add(bar);
   for(let i=0;i<5;i++)arm.add(bx(0.6,0.17,0.17,MAT.paintR,0.9+i*1.3,1.05,0,true));
   arm.position.set(guardX+2.6,0,road1+0.4);root.add(arm);
+  gateBarrier=arm;                     // ต้องยกอัตโนมัติเมื่อมีรถผ่าน — ดู updateGateBarrier()
   const gl2=makeLabel('ป้อมยาม · จุดตรวจรถเข้า-ออก',null,{fs:28,h:0.56});
   gl2.position.set(guardX,3.6,guardZ);root.add(gl2);
-  /* ทางม้าลายหน้าป้อม + ช่องจอดรถบรรทุกในลาน */
+  /* ทางม้าลายหน้าป้อม */
   const cross=[];for(let z=road0+0.6;z<road1-0.4;z+=0.8)cross.push(z);
-  instMesh(cross,MAT.paintW,(z,p,s)=>{p.set(guardX+7.6,0.021,z);s.set(0.5,0.02,0.56);},true);
+  instMesh(cross,MAT.paintW,(z,p,s)=>{p.set(LY.gateCheckX,0.021,z);s.set(0.5,0.02,0.56);},true);
   /* ตีเส้น + ป้ายลานจอด — bays/YARD ถูกสร้างไว้แล้วก่อน loop ประตูด้านบน */
   bays.forEach(x=>{
     root.add(paint(0.14,9.0,MAT.paintY,x,yardZ+2.0,0.02));

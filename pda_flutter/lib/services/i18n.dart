@@ -32,6 +32,7 @@ class LocaleController extends ChangeNotifier {
         'Every in/out scan is logged under the badge that was scanned',
     'หรือแตะชื่อของคุณ': 'or tap your name',
     'ยังไม่ได้ตั้งค่าเครื่อง': 'Device not set up yet',
+    'ยังไม่ได้เลือกคลัง/ประตู': 'No warehouse/gate picked yet',
     'ตั้งค่าการเชื่อมต่อ': 'Connection settings',
     'ยังไม่มีพนักงานในระบบ': 'No employees on file yet',
     'รอเชื่อมต่อกับระบบหลักก่อน': 'Waiting to connect to the main system',
@@ -43,7 +44,8 @@ class LocaleController extends ChangeNotifier {
 
     // device setup screen
     'ตั้งค่าเครื่อง': 'Device setup',
-    'ตั้งครั้งเดียว — พนักงานไม่ต้องเลือกอีก': 'Set once — operators never pick this again',
+    'เชื่อมต่อครั้งเดียว — เลือกคลัง/ประตูตอนเริ่มงานแทน':
+        'Connect once — pick the warehouse/gate when starting a task instead',
     '1 · การเชื่อมต่อระบบหลัก': '1 · Connection to the main system',
     'เชื่อมต่อแล้ว': 'Connected',
     'กล่อง': 'boxes',
@@ -56,26 +58,14 @@ class LocaleController extends ChangeNotifier {
         'This account belongs to the terminal, not to a person — set once when the device is issued',
     'กำลังเชื่อมต่อ…': 'Connecting…',
     'บันทึก & เชื่อมต่อ': 'Save & connect',
-    '2 · เครื่องนี้ประจำคลังไหน': '2 · Which warehouse is this device stationed at',
-    'เชื่อมต่อระบบหลักก่อน จึงจะเลือกคลังได้': 'Connect to the main system first to pick a warehouse',
-    '3 · ประจำประตูไหน': '3 · Which gate',
     'ล็อกหน้าจอเมื่อไม่มีการใช้งาน': 'Lock the screen when idle',
     'ไม่ล็อก': 'Never',
     'นาที': 'min',
     'ยิงบัตรอีกครั้งเพื่อปลดล็อก · จะไม่ล็อกขณะมีกล่องค้างอยู่ในคิว':
         'Scan a badge to unlock · never locks while boxes are queued',
     'บันทึกและเริ่มใช้งาน': 'Save and start',
-    'เลือกคลังและประตูก่อน': 'Select a warehouse and gate first',
-    'เข้า': 'IN',
-    'ออก': 'OUT',
-    'เข้า/ออก': 'IN/OUT',
     'ประตู': 'Gate',
   };
-
-  String gateRangeText(int? first, int? last) {
-    if (first == null || last == null) return lang == 'en' ? 'Gate —' : 'ประตู —';
-    return lang == 'en' ? 'Gate $first–$last' : 'ประตู $first–$last';
-  }
 }
 
 /// Small "TH | EN" pill button, styled like a round icon button, meant to sit

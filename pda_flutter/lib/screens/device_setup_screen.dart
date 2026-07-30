@@ -7,13 +7,14 @@ import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// Provisioning a terminal — done once, by whoever hands the device out.
+/// Connecting a terminal to the main system — done once, by whoever hands the
+/// device out. It holds the one password in the whole product — the device's
+/// own service account, typed by an admin, never by warehouse staff.
 ///
-/// This screen is the reason operators never see a setup step: the warehouse
-/// and gate are properties of *this device at this door*, so they are answered
-/// here and then never asked again. It also holds the one password in the
-/// whole product — the device's own service account, typed by an admin, never
-/// by warehouse staff.
+/// คลัง/ประตูไม่ได้ถูกถามที่นี่อีกต่อไป — เดิมเคยผูกเครื่องไว้กับประตูเดียวถาวร
+/// แต่เครื่องจริงพกไปใช้หลายคลัง/ประตูในกะเดียวกันได้ จึงย้ายไปเลือกตอนกด
+/// รับเข้า/ส่งออกจากหน้าแรกแทน (ดู AppController.pickWh/pickGate และ
+/// home_screen.dart._pickPostThen)
 class DeviceSetupScreen extends StatefulWidget {
   const DeviceSetupScreen({super.key});
 
@@ -50,7 +51,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final loc = context.watch<LocaleController>();
     final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
-    final canSave = c.wh.isNotEmpty && c.gate.isNotEmpty;
+    final canSave = c.connected;
     // A device being provisioned for the first time has nowhere to go back to.
     final canLeave = c.deviceConfigured;
 
@@ -59,7 +60,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
         StickyHeader(
           onBack: canLeave ? c.backToHome : null,
           title: Text(loc.t('ตั้งค่าเครื่อง')),
-          subtitle: Text(loc.t('ตั้งครั้งเดียว — พนักงานไม่ต้องเลือกอีก')),
+          subtitle: Text(loc.t('เชื่อมต่อครั้งเดียว — เลือกคลัง/ประตูตอนเริ่มงานแทน')),
           actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
         ),
         Expanded(
@@ -152,48 +153,6 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              _StepLabel(loc.t('2 · เครื่องนี้ประจำคลังไหน')),
-              const SizedBox(height: 11),
-              if (c.warehouseList.isEmpty)
-                Text(loc.t('เชื่อมต่อระบบหลักก่อน จึงจะเลือกคลังได้'),
-                    style: TextStyle(fontSize: 13, color: C.faint)),
-              ...c.warehouseList.map((w) {
-                final id = (w['id'] ?? '').toString();
-                final gs = (w['gates'] is List) ? (w['gates'] as List) : const [];
-                final gText = gs.isEmpty
-                    ? loc.gateRangeText(null, null)
-                    : loc.gateRangeText(int.tryParse('${gs.first}'), int.tryParse('${gs.last}'));
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _WarehouseTile(
-                    name: (w['name'] ?? id).toString(),
-                    gateText: gText,
-                    selected: c.wh == id,
-                    onTap: () => c.pickWh(id),
-                  ),
-                );
-              }),
-              if (c.wh.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _StepLabel('${loc.t('3 · ประจำประตูไหน')} — ${c.selWhName}'),
-                const SizedBox(height: 11),
-                Wrap(
-                  spacing: 9,
-                  runSpacing: 9,
-                  children: c.currentGates.map((g) {
-                    return _GateChip(
-                      label: '$g',
-                      dirLabel: _dirLabel(c.gateTypeOf(g), loc),
-                      selected: c.gate == '$g',
-                      onTap: () => c.pickGate(g),
-                    );
-                  }).toList(),
-                ),
-              ],
-              const SizedBox(height: 20),
-              // Unnumbered: the numbered steps are the "where does this device
-              // live" flow, and step 3 only appears once a warehouse is picked —
-              // numbering this one too would show a 1 · 2 · 4 gap until then.
               _StepLabel(loc.t('ล็อกหน้าจอเมื่อไม่มีการใช้งาน')),
               const SizedBox(height: 11),
               _IdleLockPicker(
@@ -217,22 +176,11 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
           child: PrimaryButton(
             label: loc.t('บันทึกและเริ่มใช้งาน'),
             trailing: Icon(Icons.arrow_forward, size: 19, color: canSave ? C.limeDeep : C.faint),
-            onTap: canSave ? c.saveDevicePost : null,
+            onTap: canSave ? c.finishDeviceSetup : null,
           ),
         ),
       ],
     );
-  }
-
-  static String _dirLabel(String dir, LocaleController loc) {
-    switch (dir) {
-      case 'in':
-        return loc.t('เข้า');
-      case 'out':
-        return loc.t('ออก');
-      default:
-        return loc.t('เข้า/ออก');
-    }
   }
 }
 
@@ -279,55 +227,6 @@ class _StepLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink));
-}
-
-class _WarehouseTile extends StatelessWidget {
-  final String name, gateText;
-  final bool selected;
-  final VoidCallback onTap;
-  const _WarehouseTile({required this.name, required this.gateText, required this.selected, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: C.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: selected ? C.ink : C.border, width: selected ? 1.5 : 1),
-            boxShadow: selected
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 14, offset: const Offset(0, 4))]
-                : null,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
-                    Text(gateText, style: TextStyle(fontSize: 12, color: C.muted)),
-                  ],
-                ),
-              ),
-              if (selected)
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(color: C.lime, shape: BoxShape.circle),
-                  child: Icon(Icons.check, size: 15, color: C.limeDeep),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _GateChip extends StatelessWidget {

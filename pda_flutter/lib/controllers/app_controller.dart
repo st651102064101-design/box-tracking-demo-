@@ -116,8 +116,11 @@ class AppController extends ChangeNotifier {
       ..clear()
       ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
 
-    wh = prefs.deviceWh;
-    gate = prefs.deviceGate;
+    // ไม่มี "คลัง/ประตูประจำเครื่อง" ให้เริ่มจากอีกต่อไป — ใช้ค่าที่เพิ่งใช้ล่าสุด
+    // (ถ้ามี) เป็นแค่ค่าเริ่มต้นให้หัวจอมีอะไรแสดง จะเลือกใหม่ทุกครั้งที่กด
+    // รับเข้า/ส่งออกจากหน้าแรกอยู่ดี (ดู _pickPostThen ใน home_screen.dart)
+    wh = prefs.lastWh;
+    gate = prefs.lastGate;
 
     // wire the Zebra reader
     _tagSub = rfid.tags.listen(_onReaderTag);
@@ -135,18 +138,11 @@ class AppController extends ChangeNotifier {
     // No operator is ever restored: a shift always starts with a badge scan,
     // which takes a second and can't mis-attribute the next person's work.
     screen = deviceConfigured ? Screen.login : Screen.deviceSetup;
-    if (deviceConfigured) {
-      _connectReader();
-    } else {
-      _autoSelectSinglePost();
-    }
+    if (deviceConfigured) _connectReader();
     _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
-    // Only now, on a device with no cached snapshot, is the warehouse list
-    // known — so a fresh terminal gets its single option filled in too.
-    if (screen == Screen.deviceSetup) _autoSelectSinglePost();
     notifyListeners();
   }
 
@@ -396,8 +392,10 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
-  /// A terminal is provisioned once it has been told which gate it serves.
-  bool get deviceConfigured => prefs.deviceGate.isNotEmpty;
+  /// A terminal is provisioned once it has connected to the main system at
+  /// least once — คลัง/ประตูไม่ใช่ส่วนหนึ่งของการ provision อีกต่อไป (เลือกเองทุก
+  /// ครั้งตอนกดรับเข้า/ส่งออกจากหน้าแรกแทน ดู pickWh/pickGate ด้านล่าง)
+  bool get deviceConfigured => prefs.deviceSetupDone;
 
   /// Who may re-point the device or edit its connection: a supervisor, or
   /// anyone standing at a locked terminal. The threat this guards against is
@@ -424,19 +422,17 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Persists this terminal's post. From here on every operator who badges in
-  /// works this gate without being asked.
-  void saveDevicePost() {
-    if (wh.isEmpty || gate.isEmpty) {
-      toastMsg('เลือกคลังและประตูก่อน', '', ResultKind.warn);
+  /// Marks the terminal as provisioned once it has a working connection —
+  /// there is no คลัง/ประตู left to persist here; that's chosen per task now.
+  void finishDeviceSetup() {
+    if (!connected) {
+      toastMsg('เชื่อมต่อระบบหลักก่อน', '', ResultKind.warn);
       return;
     }
-    prefs.deviceWh = wh;
-    prefs.deviceGate = gate;
+    prefs.deviceSetupDone = true;
     screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
-    toastMsg('ตั้งค่าเครื่องแล้ว', '$selWhName · ประตู $gate', ResultKind.ok);
-    _connectReader();
+    toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
   }
 
   void setIdleLockMinutes(int m) {
@@ -444,19 +440,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void goDeviceSetup() {
-    _autoSelectSinglePost();
-    go(Screen.deviceSetup);
-  }
-
-  /// A site with one warehouse — or a warehouse with one gate — offers no real
-  /// choice, so fill it in rather than making whoever provisions the device tap
-  /// the only option there is. [pickWh] handles the single-gate half.
-  void _autoSelectSinglePost() {
-    if (wh.isNotEmpty) return;
-    final whs = warehouseList;
-    if (whs.length == 1) pickWh((whs.first['id'] ?? '').toString());
-  }
+  void goDeviceSetup() => go(Screen.deviceSetup);
 
   // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {

@@ -204,9 +204,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const Wordmark(),
                       Text(
-                        c.deviceConfigured
-                            ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
-                            : loc.t('ยังไม่ได้ตั้งค่าเครื่อง'),
+                        !c.deviceConfigured
+                            ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
+                            : (c.wh.isNotEmpty && c.gate.isNotEmpty)
+                                ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+                                : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12, color: C.muted),

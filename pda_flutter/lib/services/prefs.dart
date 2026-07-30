@@ -22,9 +22,10 @@ class Prefs {
   static const _kPassword = 'boxtrace_password';
   static const _kToken = 'boxtrace_token';
 
-  // this device's fixed post (warehouse + gate) and behaviour
-  static const _kDeviceWh = 'boxtrace_device_wh';
-  static const _kDeviceGate = 'boxtrace_device_gate';
+  // this device's provisioning state + behaviour. คลัง/ประตูไม่ใช่ของเครื่องอีก
+  // ต่อไปแล้ว (ดู lastWh/lastGate ด้านล่าง) — เครื่องแค่ต้องเชื่อมต่อระบบหลักได้
+  // ครั้งหนึ่งก่อนถึงจะใช้งานได้
+  static const _kDeviceSetupDone = 'boxtrace_device_setup_done';
   static const _kIdleLock = 'boxtrace_idle_lock_minutes';
 
   static const _kStateCache = 'boxtrace_state_cache';
@@ -89,13 +90,11 @@ class Prefs {
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
 
-  /// The warehouse + gate this terminal is stationed at. A non-empty gate is
-  /// what marks the device as provisioned (see AppController.deviceConfigured).
-  String get deviceWh => _p.getString(_kDeviceWh) ?? '';
-  set deviceWh(String v) => _p.setString(_kDeviceWh, v);
-
-  String get deviceGate => _p.getString(_kDeviceGate) ?? '';
-  set deviceGate(String v) => _p.setString(_kDeviceGate, v);
+  /// True once this terminal has connected to the main system at least once
+  /// (see AppController.deviceConfigured). คลัง/ประตูไม่ได้ถูกถามตอนตั้งค่าเครื่อง
+  /// อีกต่อไป — ผู้ใช้เลือกเองทุกครั้งตอนเริ่มงานแทน (ดู AppController.pickPostThen)
+  bool get deviceSetupDone => _p.getBool(_kDeviceSetupDone) ?? false;
+  set deviceSetupDone(bool v) => _p.setBool(_kDeviceSetupDone, v);
 
   /// Minutes of inactivity before the operator is signed out. 0 disables it.
   int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
