@@ -2035,7 +2035,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
     </div>
-    </div>
     <div class="tablecard">
       <div class="tablehead" style="flex-wrap:wrap;gap:8px;">
         <h4>รายการตำแหน่งแร็ค</h4><span class="tag" id="cntLoc"></span>
@@ -11460,15 +11459,17 @@ function build(){
   function feed(zone,rack,shelf,slot){
     const key=zone+'\u0000'+rack;
     let r=rackMap.get(key);
-    if(!r){r={zone,rack,shelves:0,slots:0};rackMap.set(key,r);}
-    r.shelves=Math.max(r.shelves,Math.floor(Number(shelf))||0);
-    r.slots=Math.max(r.slots,Math.floor(Number(slot))||0);
+    if(!r){r={zone,rack,shelfSet:new Set(),slotSet:new Set()};rackMap.set(key,r);}
+    const sh=Math.floor(Number(shelf))||0;if(sh>0)r.shelfSet.add(sh);
+    const sl=Math.floor(Number(slot))||0;if(sl>0)r.slotSet.add(sl);
   }
   Object.values(st.locations||{}).forEach(l=>{if((l.wh||'')!==curWh)return;if(!(l.zone||l.rack))return;feed(l.zone||'—',l.rack||'R?',l.shelf,l.slot);});
   Object.values(st.boxes||{}).forEach(b=>{if(b.status!=='warehouse')return;const l=b.location||{};if((l.wh||'')!==curWh)return;if(!(l.zone||l.rack))return;feed(l.zone||'—',l.rack||'R?',l.shelf,l.slot);});
-  /* จำนวนชั้น (shelf) และช่อง (slot) ต้องตรงกับที่ลงทะเบียนจริงใน Location Master
-     (เดิมบังคับขั้นต่ำ 3 ชั้น × 4 ช่อง ทุกแร็คจึงหน้าตาเท่ากันหมด ไม่ตรงแร็คจริง) */
-  rackMap.forEach(r=>{r.shelves=Math.max(1,r.shelves||0);r.slots=Math.max(1,r.slots||0);});
+  /* จำนวนชั้น (shelf) และช่อง (slot) ต้องตรงกับ "จำนวนเลขที่ต่างกันจริง" ที่ลงทะเบียนไว้ใน
+     Location Master ไม่ใช่เลขสูงสุดที่เจอ — แร็คที่เพิ่มตำแหน่งเดียวโดยระบุเลขช่องเอง
+     (เช่น มีแค่ช่อง "02" ไม่มีช่อง "01") ไม่ได้แปลว่าต้องมี 2 ช่อง มีจริงแค่ 1 ช่อง
+     เดิมใช้เลขสูงสุดเป็นจำนวนช่อง ทำให้แร็คแบบนี้กลายเป็นหลายช่องผิดจากที่ลงทะเบียนจริง */
+  rackMap.forEach(r=>{r.shelves=Math.max(1,r.shelfSet.size);r.slots=Math.max(1,r.slotSet.size);});
   const zones=[...new Set([...rackMap.values()].map(r=>r.zone))].sort();
 
   /* ── ผังแร็ค (คงอัลกอริทึมเดิมของแอป) + คำนวณ "ทางเดินรถ" ต่อแถว ── */
