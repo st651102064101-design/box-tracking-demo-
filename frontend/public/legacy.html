@@ -1882,16 +1882,28 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
           <input id="cReturnDate" type="date" style="display:none;margin-top:8px;" title="เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ">
         </div>
-        <div class="field"><label>ติดต่อ (โทร/อีเมล) <span class="req">*</span></label><input id="cContact" placeholder="02-xxx-xxxx"></div>
+        <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="cPhone" placeholder="02-xxx-xxxx"></div>
+        <div class="field"><label>อีเมล</label><input id="cEmail" type="email" placeholder="contact@company.com"></div>
         <div class="field"><label>ที่อยู่/สาขา <span class="req">*</span></label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
+        <div class="field"><label>เลขประจำตัวผู้เสียภาษี</label><input id="cTaxId" placeholder="0-0000-00000-00-0"></div>
+        <div class="field"><label>ผู้ติดต่อหลัก</label><input id="cContactPerson" placeholder="ชื่อผู้ประสานงาน"></div>
+        <div class="field"><label>สถานะการใช้งาน</label><select id="cStatus">
+          <option value="active">ใช้งาน</option>
+          <option value="inactive">ปิดใช้งานชั่วคราว</option>
+          <option value="blocked">ระงับการใช้งาน</option>
+        </select></div>
+        <div class="field"><label>วงเงินมัดจำ/เครดิต (บาท)</label><input id="cCreditLimit" type="number" min="0" placeholder="0"></div>
+        <div class="field"><label>อัตราค่าปรับ/วัน (บาท)</label><input id="cFineRate" type="number" min="0" placeholder="0"></div>
+        <div class="field"><label>ค่าปรับกล่องหาย (บาท)</label><input id="cLostFine" type="number" min="0" placeholder="0"></div>
       </div>
+      <div class="hint" id="custHeldHint" style="display:none;margin-top:10px;"></div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddCust">บันทึกลูกค้า</button>
         <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
       <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       <button class="btn ghost sm" onclick="exportCustPDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div>
       <div class="bulkbar" id="bulkCust" style="display:none;">
         <span class="bcnt" id="bulkCustCnt"></span>
@@ -3060,10 +3072,11 @@ var editingCust=null;
     dateInp.style.display='none';
   });
 })();
+var CUST_FIELDS=['cName','cPhone','cEmail','cAddr','cTaxId','cContactPerson','cCreditLimit','cFineRate','cLostFine','cReturnDays'];
 $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
   var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
-  var ctc=val('cContact');if(!ctc)return toast('กรอกข้อมูลติดต่อ (โทร/อีเมล)',null,'err');
+  var phone=val('cPhone'),email=val('cEmail');if(!phone&&!email)return toast('กรอกเบอร์โทรศัพท์หรืออีเมลอย่างน้อยหนึ่งช่อง',null,'err');
   var addr=val('cAddr');if(!addr)return toast('กรอกที่อยู่/สาขา',null,'err');
   if(!editingCust&&S.customers[id])return toast('มีรหัสลูกค้านี้แล้ว',id,'err');
   if(editingCust&&editingCust!==id&&S.customers[id])return toast('รหัสซ้ำ',id,'err');
@@ -3077,25 +3090,44 @@ $('#btnAddCust').onclick=function(){
   if(editingCust&&editingCust!==id)delete S.customers[editingCust];
   /* kind แยกคู่ค้าเป็นลูกค้า/ซัพพลายเออร์ ตามที่ผังงานกำหนดไว้ว่า Contact Master
      ต้องมีประเภท — ระเบียนเก่าที่ยังไม่มีค่านี้ถือเป็น 'customer' เพราะก่อนหน้านี้
-     ทะเบียนนี้ใช้เก็บปลายทางขาออกอย่างเดียว */
-  S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:addr,contact:ctc,returnDays:rd};
+     ทะเบียนนี้ใช้เก็บปลายทางขาออกอย่างเดียว
+     tax_id / ผู้ติดต่อหลัก / เครดิต / ค่าปรับ เป็นฟิลด์เสริมสำหรับงานการเงินและ
+     ตามงาน — ไม่บังคับกรอก เพราะกระทบแค่รายงาน ไม่ใช่ flow หลักของกล่อง */
+  S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:addr,phone:phone,email:email,
+    taxId:val('cTaxId'),contactPerson:val('cContactPerson'),status:val('cStatus')||'active',
+    creditLimit:num('cCreditLimit')||0,fineRate:num('cFineRate')||0,lostFine:num('cLostFine')||0,
+    returnDays:rd};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();
+  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');cIdAuto.reset();
   var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
+  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';
   toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · คืนใน '+rd+' วัน');renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  ['cName','cAddr','cContact','cReturnDays'].forEach(function(i){setv(i,'');});setv('cKind','customer');cIdAuto.reset();
-  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';};
+  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');cIdAuto.reset();
+  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
+  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
 var CUST_KIND={customer:{t:'ลูกค้า',c:'ok'},supplier:{t:'ซัพพลายเออร์',c:'purple'},both:{t:'ลูกค้า + ซัพพลายเออร์',c:'gray'}};
 function CUST_KIND_LABEL(k){var m=CUST_KIND[k]||CUST_KIND.customer;
   return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
 window.CUST_KIND_LABEL=CUST_KIND_LABEL;
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDays',c.returnDays||'');setv('cContact',c.contact||'');setv('cAddr',c.addr||'');
+var CUST_STATUS={active:{t:'ใช้งาน',c:'ok'},inactive:{t:'ปิดใช้งานชั่วคราว',c:'gray'},blocked:{t:'ระงับการใช้งาน',c:'bad'}};
+function CUST_STATUS_LABEL(s){var m=CUST_STATUS[s]||CUST_STATUS.active;
+  return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
+window.CUST_STATUS_LABEL=CUST_STATUS_LABEL;
+/* กล่องค้างคืนของลูกค้ารายนี้ — คำนวณสดจากกล่องจริงเสมอ (status='out' ผูกกับ
+   c.id) ไม่เก็บเป็นตัวเลขแยกต่างหาก กันข้อมูลสองชุดไม่ตรงกัน */
+function custHeldCount(id){return Object.values(S.boxes).filter(function(b){return b.customer===id&&b.status==='out';}).length;}
+window.custHeldCount=custHeldCount;
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDays',c.returnDays||'');
+  setv('cPhone',c.phone||c.contact||'');setv('cEmail',c.email||'');setv('cAddr',c.addr||'');
+  setv('cTaxId',c.taxId||'');setv('cContactPerson',c.contactPerson||'');setv('cStatus',c.status||'active');
+  setv('cCreditLimit',c.creditLimit||'');setv('cFineRate',c.fineRate||'');setv('cLostFine',c.lostFine||'');
   var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
+  var cHH=$('#custHeldHint');if(cHH){cHH.style.display='block';cHH.innerHTML='กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: <b>'+custHeldCount(id)+' ใบ</b>';}
   $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
@@ -5736,16 +5768,17 @@ function renderSetup(){
   // customer table
   var sbc=val('schCust').toLowerCase();
   var csAll=sbc?Object.values(S.customers).filter(function(c){
-    return (c.id+' '+(c.name||'')+' '+(c.addr||'')+' '+(c.contact||'')).toLowerCase().indexOf(sbc)>=0;
+    return (c.id+' '+(c.name||'')+' '+(c.addr||'')+' '+(c.phone||c.contact||'')+' '+(c.email||'')+' '+(c.contactPerson||'')).toLowerCase().indexOf(sbc)>=0;
   }):Object.values(S.customers);
   var cs=idSort(csAll,uiSort.cust);
-  $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=Object.values(S.boxes).filter(function(b){return b.customer===c.id&&b.status==='out';}).length;
-    return '<tr data-tag="'+esc(c.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(c.contact||'-')+'</td>'
+  $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
+    var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
+    return '<tr data-tag="'+esc(c.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c"><div class="row-actions">'
       +'<button class="btn sm ghost" onclick="editCust(\''+esc(c.id)+'\')">แก้ไข</button>'
       +'<button class="btn sm red" onclick="delCust(\''+esc(c.id)+'\')">ลบ</button>'
       +'</div></td></tr>';
-  }).join(''):emptyRow(9,'ยังไม่มีลูกค้า');
+  }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
   setupBulkTable('custBody','cust-cb','cbAllCust','bulkCust','bulkCustCnt');
 
@@ -9132,10 +9165,12 @@ window.exportWhExcel = exportWhExcel;
 
 function exportCustExcel() {
   var custs = Object.values(S.customers).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'ติดต่อ', 'กล่องที่ถืออยู่'];
+  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
   var rows = custs.map(function(c) {
-    var holding = Object.values(S.boxes).filter(function(b) { return b.status === 'out' && b.customer === c.id; }).length;
-    return [c.id, c.name, c.returnDays || '', c.addr || '', c.contact || '', holding];
+    var holding = custHeldCount(c.id);
+    return [c.id, c.name, (CUST_KIND[c.kind]||CUST_KIND.customer).t, (CUST_STATUS[c.status]||CUST_STATUS.active).t,
+      c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
+      c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
   downloadXLS('customers-' + dstr() + '.xls', headers, rows);
 }
@@ -9290,10 +9325,12 @@ window.exportWhPDF = exportWhPDF;
 
 function exportCustPDF() {
   var custs = Object.values(S.customers).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'ติดต่อ', 'กล่องที่ถืออยู่'];
+  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
   var rows = custs.map(function(c) {
-    var holding = Object.values(S.boxes).filter(function(b) { return b.status === 'out' && b.customer === c.id; }).length;
-    return [c.id, c.name, c.returnDays || '', c.addr || '', c.contact || '', holding];
+    var holding = custHeldCount(c.id);
+    return [c.id, c.name, (CUST_KIND[c.kind]||CUST_KIND.customer).t, (CUST_STATUS[c.status]||CUST_STATUS.active).t,
+      c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
+      c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
   exportPDF('รายงานลูกค้า (Customers)', dstr(), headers, rows);
 }
@@ -10460,6 +10497,11 @@ function openColumnMapModal(opts){
     "รหัสพนักงาน (สร้างอัตโนมัติ)":"Employee code (auto-generated)","ชื่อ–นามสกุล":"Full name","ตำแหน่ง":"Position",
     "แผนก / หน่วยงาน":"Department / Unit","คลังที่สังกัด":"Assigned warehouse","กะการทำงาน":"Work shift","— ไม่ระบุ —":"- none -",
     "เบอร์โทรศัพท์":"Phone number","อีเมล":"Email","วันเริ่มงาน":"Start date","สิทธิ์การใช้งาน":"Access level",
+    "เลขประจำตัวผู้เสียภาษี":"Tax ID","ผู้ติดต่อหลัก":"Primary contact","สถานะการใช้งาน":"Account status",
+    "วงเงินมัดจำ/เครดิต (บาท)":"Credit/deposit limit (THB)","อัตราค่าปรับ/วัน (บาท)":"Overdue fine per day (THB)","ค่าปรับกล่องหาย (บาท)":"Lost box fine (THB)",
+    "ชื่อผู้ประสานงาน":"Coordinator name","ใช้งาน":"Active","ปิดใช้งานชั่วคราว":"Temporarily inactive","ระงับการใช้งาน":"Blocked",
+    "กรอกเบอร์โทรศัพท์หรืออีเมลอย่างน้อยหนึ่งช่อง":"Enter at least a phone number or an email",
+    "กล่องที่ถืออยู่":"Boxes currently held","เลขผู้เสียภาษี":"Tax ID","วงเงินเครดิต":"Credit limit","ค่าปรับ/วัน":"Fine/day","ค่าปรับกล่องหาย":"Lost box fine",
     "บันทึกพนักงาน":"Save employee","รายชื่อพนักงาน":"Employee list","แผนก":"Department","คลัง":"Warehouse","กะ":"Shift",
     "ประเภทประตู (Gate Type)":"Gate type (Gate Type)","โซนพัก (Staging Zone)":"Staging zone","แร็ค/จุดพัก (Staging Rack)":"Staging rack",
     "คลังและประตู":"Warehouses & gates","ประตู":"Gate","ประเภทประตู":"Gate type","กล่องที่เก็บอยู่":"Boxes stored",
@@ -10536,6 +10578,7 @@ function openColumnMapModal(opts){
     "รหัสซ้ำ":"Duplicate code","บันทึกประเภทกล่องแล้ว":"Box type saved","ลบไม่ได้":"Can't delete",
     "ช่วงประตูไม่ถูกต้อง":"Invalid gate range","มีรหัสคลังนี้แล้ว":"This warehouse code already exists","ประตูทับซ้อน":"Gate overlap",
     "บันทึกคลังแล้ว":"Warehouse saved","ระบุกำหนดคืน (วัน)":"Enter return period (days)","มีรหัสลูกค้านี้แล้ว":"This customer code already exists",
+    "บันทึกลูกค้าแล้ว":"Customer saved","อัปเดตลูกค้าแล้ว":"Customer updated",
     "กรอกข้อมูลติดต่อ (โทร/อีเมล)":"Enter contact info (phone/email)","กรอกที่อยู่/สาขา":"Enter address/branch",
     "ไม่มีสิทธิ์":"No permission","กรอกชื่อพนักงาน":"Enter employee name","กรอกชื่อ-นามสกุล":"Enter full name",
     "ลงทะเบียนสำเร็จ":"Registered successfully","ย้ายตำแหน่งแล้ว":"Relocated","ตีกล่องหายแล้ว":"Marked as lost",
@@ -10682,6 +10725,7 @@ function openColumnMapModal(opts){
     "มีกล่องรอจัดเก็บอยู่ในแร็คนี้ ":"boxes awaiting putaway in this rack ",
     "ประเภทช่องรอ Putaway ":"Putaway slot type ","จุดรอ Putaway ":"Putaway staging ",
     "→ ใส่แร็ค":"→ into rack","→ กรองอย่างเดียว":"→ filter only",
+    "กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: ":"Boxes currently with this customer: ",
     "ติดแท็ก RFID (":"RFID tagging (",
     "จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดแท็ก — ":"Automatically put away (Putaway) right after confirming the tag - ",
     "ใบยังไม่มีตำแหน่งจัดเก็บจริง":"boxes still lack a real storage location",
