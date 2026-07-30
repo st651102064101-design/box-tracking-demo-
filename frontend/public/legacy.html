@@ -4387,6 +4387,14 @@ function labelsToPDF(boxes){
   w.document.open();w.document.write(html);w.document.close();
 }
 window.labelsToPDF=labelsToPDF;
+/* จำค่าติ๊ก "จัดเก็บขึ้นแร็คอัตโนมัติ" ไว้ข้ามครั้ง — เดิม checkbox ตั้ง checked
+   ตายตัวทุกครั้งที่เปิด modal ใหม่ ถ้าผู้ใช้ปลดติ๊กไว้เพราะไม่ต้องการ auto-putaway
+   (เช่น จะเอาไปวางเองที่โซนพิเศษ) พอเปิดรอบถัดไปก็ต้องมาปลดซ้ำทุกที เก็บลง
+   localStorage แบบเดียวกับ preference อื่นๆ ในแอปนี้ (boxtrace_theme,
+   boxtrace_layout, ฯลฯ) — ค่าเริ่มต้นเป็น true เพื่อคงพฤติกรรมเดิมไว้ให้คนที่ไม่เคย
+   แตะ checkbox นี้เลย */
+function tagAutoPutawayPref(){try{var v=localStorage.getItem('boxtrace_tag_auto_putaway');return v===null?true:v==='1';}catch(e){return true;}}
+function setTagAutoPutawayPref(on){try{localStorage.setItem('boxtrace_tag_auto_putaway',on?'1':'0');}catch(e){}}
 /* เดิมกดเปิด modal นี้ปุ๊บ labeled=true ถูกตั้งทันทีแบบเงียบๆ ก่อนผู้ใช้ทำอะไรเลย
    ผู้ใช้เลยรู้สึกว่าปุ่ม "ติดแท็ก RFID" กดแล้วไม่มีอะไรเกิดขึ้นจริง (สถานะ "รอติด Tag"
    ของกล่องที่เพิ่งลงทะเบียนใหม่ (pending) ไม่ขยับเลย เพราะคอลัมน์นั้นอ่านจาก status
@@ -4409,7 +4417,7 @@ function printLabels(tags){if(!tags||!tags.length)return;
     putawaySection=
       '<div style="margin:16px 2px 0;border-top:.5px solid var(--line);padding-top:14px;">'
         +'<label class="row" style="gap:8px;cursor:pointer;align-items:flex-start;">'
-          +'<input type="checkbox" id="tagAutoPutaway" checked style="width:auto;margin-top:3px;">'
+          +'<input type="checkbox" id="tagAutoPutaway"'+(tagAutoPutawayPref()?' checked':'')+' style="width:auto;margin-top:3px;">'
           +'<span>จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดแท็ก — '+pending.length+' ใบยังไม่มีตำแหน่งจัดเก็บจริง</span>'
         +'</label>'
         +'<div id="tagPutawayArea" style="margin-top:10px;">'
@@ -4437,7 +4445,11 @@ function printLabels(tags){if(!tags||!tags.length)return;
     },i*200);});
   };
   $('#btnPdfDownload').onclick=function(){labelsToPDF(boxes);};
-  if(pending.length)bindLocPicker('tagPutaway',{wh:defaultPutaway().wh});
+  if(pending.length){
+    bindLocPicker('tagPutaway',{wh:defaultPutaway().wh});
+    var autoCb=$('#tagAutoPutaway');
+    if(autoCb)autoCb.addEventListener('change',function(){setTagAutoPutawayPref(autoCb.checked);});
+  }
   $('#btnConfirmTagged').onclick=function(){confirmTagged(tags,pending.map(function(b){return b.tag;}));};
 }
 window.printLabels=printLabels;
