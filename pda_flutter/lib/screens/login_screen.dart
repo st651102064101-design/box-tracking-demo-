@@ -38,6 +38,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _badge = TextEditingController();
   Timer? _flush;
 
+  /// เวลาที่ตัวอักษรก่อนหน้ามาถึง — ใช้วัดจังหวะห่างระหว่างตัวอักษรของรอบกรอกนี้
+  DateTime? _lastKeyAt;
+  /// true เมื่อเจอจังหวะกดแบบคนพิมพ์ (ห่างเกิน [_scanGapMs]) อย่างน้อยหนึ่งครั้งใน
+  /// รอบกรอกนี้ — ตัวสแกน (keyboard-wedge) พ่นตัวอักษรเร็วกว่านี้มาก (ปกติ <20ms/ตัว)
+  /// ดังนั้นถ้าเจอช่องว่างยาวขนาดนี้แม้แต่ครั้งเดียว แสดงว่าเป็นคนพิมพ์เอง ไม่ใช่สแกน
+  bool _looksTyped = false;
+
+  static const _scanGapMs = 80;
+  static const _scanFlushMs = 220;
+
   @override
   void initState() {
     super.initState();
@@ -68,16 +78,46 @@ class _LoginScreenState extends State<LoginScreen> {
     _flush?.cancel();
     final code = _badge.text;
     _badge.clear();
+    _lastKeyAt = null;
+    if (_looksTyped) setState(() => _looksTyped = false);
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
   }
 
+  /// จังหวะตัวอักษรมาถึงคือสิ่งที่แยกสแกน-กับ-พิมพ์เองได้จริง ไม่ใช่แค่ "หยุดนิ่งกี่ ms"
+  /// อย่างเดิม — เดิมยิง submit อัตโนมัติทุกครั้งที่หยุดพิมพ์ 250ms ไม่ว่าจะพิมพ์เองหรือ
+  /// สแกน ถ้าคนพิมพ์เว้นจังหวะคิดเลขระหว่างตัวเกิน 250ms (ปกติมาก) ระบบจะยิง submit
+  /// ทั้งที่กรอกไม่ครบ
+  ///
+  /// จุดพลาดที่เจอตอนทดสอบ (สำคัญ ต้องจำไว้): ห้ามตั้งเวลานับถอยหลังไว้ล่วงหน้า
+  /// "เผื่อ" ว่าตัวถัดไปจะมาเร็ว แล้วค่อยยกเลิกทีหลังถ้าเจอจังหวะช้า — เพราะถ้าคน
+  /// พิมพ์ตัวถัดไปช้ากว่าเวลาที่ตั้งไว้ (เช่น พิมพ์ห่างกัน 400ms แต่ตั้ง timer ไว้แค่
+  /// 220ms) ตัว timer จะยิง submit ทิ้งไปก่อนที่จะได้เห็นจังหวะช้านั้นด้วยซ้ำ กลาย
+  /// เป็นส่ง submit ทีละตัวอักษรตลอดการพิมพ์ วิธีที่ถูกคือ "ห้ามตั้ง timer ล่วงหน้า
+  /// เด็ดขาด — ตั้งได้ก็ต่อเมื่อเพิ่งเห็นจังหวะจริงระหว่างตัวอักษร 2 ตัวที่พิมพ์มาแล้ว
+  /// ว่าเร็วแบบสแกนเท่านั้น" ตัวอักษรตัวแรกของรอบกรอกจึงไม่มีวันไปตั้ง timer เอง
+  /// (ยังไม่มีจังหวะให้เทียบ) ต้องรอตัวที่สองมาก่อนเสมอ
   void _onBadgeChanged(String v) {
     _flush?.cancel();
-    if (v.trim().isEmpty) return;
-    // Not every DataWedge profile appends an Enter suffix. Nothing else types
-    // on this screen, so a short pause is a safe end-of-scan signal.
-    _flush = Timer(const Duration(milliseconds: 250), _submitBadge);
+    final now = DateTime.now();
+    if (v.isEmpty) {
+      _lastKeyAt = null;
+      setState(() => _looksTyped = false);
+      return;
+    }
+    final prev = _lastKeyAt;
+    _lastKeyAt = now;
+    setState(() {}); // repaint the confirm button's enabled state regardless
+    if (prev == null) return; // first char of this entry — no gap to judge yet
+    final gapMs = now.difference(prev).inMilliseconds;
+    if (gapMs > _scanGapMs) {
+      if (!_looksTyped) setState(() => _looksTyped = true);
+      return; // a human-speed gap was just confirmed — never auto-submit again
+    }
+    if (_looksTyped) return; // an earlier gap already flagged this as manual entry
+    // This exact gap just arrived at scanner speed, so arm a short quiet-period
+    // check — reacting to a gap that already happened, never predicting one.
+    _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
   }
 
   /// The capture field, shown rather than hidden.
@@ -114,6 +154,15 @@ class _LoginScreenState extends State<LoginScreen> {
           filled: true,
           fillColor: C.onInk.withValues(alpha: 0.08),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          // ปุ่มยืนยันด้วยมือเสมอ ไม่ใช่แค่ตอนพิมพ์เอง — เผื่อกรณีสแกนไม่จบ (การ์ดเสีย
+          // ครึ่งใบ) หรืออุปกรณ์ไม่ต่อ Enter suffix มาให้ ผู้ใช้ก็ยังกดจบเองได้เสมอ
+          suffixIcon: _badge.text.trim().isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(Icons.check_circle, color: C.lime),
+                  tooltip: loc.t('ยืนยัน'),
+                  onPressed: _submitBadge,
+                ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
             borderSide: BorderSide(color: C.onInk.withValues(alpha: 0.16)),

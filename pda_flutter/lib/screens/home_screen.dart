@@ -108,9 +108,11 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 16),
               const Caption('งานหลัก'),
               const SizedBox(height: 10),
-              // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
-              // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
-              if (c.canScan && c.currentGateType != 'out') ...[
+              // เดิมซ่อนเมนูที่ไม่ตรงทิศทางประตูประจำเครื่องไปเลย — แต่เครื่องเดียวอาจ
+              // ต้องพกไปใช้ได้ทั้งขาเข้า/ขาออกในกะเดียวกัน จึงโชว์ทั้งสองเมนูเสมอ แล้วให้
+              // เลือกประตูที่ตรงทิศทางตอนกดใช้งานแทน (ดู _pickGateThen ด้านล่าง) — ยัง
+              // กันพลาดอยู่เหมือนเดิม แค่ย้ายจุดเลือกจาก "ตอนตั้งเครื่อง" มาเป็น "ตอนใช้งาน"
+              if (c.canScan) ...[
                 _ActionCard(
                   dark: true,
                   icon: Icons.south,
@@ -118,18 +120,16 @@ class HomeScreen extends StatelessWidget {
                   iconBg: C.onInk.withValues(alpha: 0.12),
                   title: 'รับเข้า / รับคืน',
                   sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
-                  onTap: c.goScanIn,
+                  onTap: () => _pickGateThen(context, c, 'in'),
                 ),
                 const SizedBox(height: 12),
-              ],
-              if (c.canScan && c.currentGateType != 'in') ...[
                 _ActionCard(
                   icon: Icons.north,
                   iconColor: C.orange,
                   iconBg: C.orangeBg,
                   title: 'ส่งออก',
                   sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
-                  onTap: c.goScanOut,
+                  onTap: () => _pickGateThen(context, c, 'out'),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -203,6 +203,86 @@ void _openHandover(BuildContext context, AppController c) {
       ),
     ),
   );
+}
+
+/// รับเข้า/ส่งออกตอนนี้ไม่ผูกกับประตูประจำเครื่องอีกต่อไป — เครื่องเดียวอาจพกไปใช้
+/// ที่ประตูไหนก็ได้ในกะเดียวกัน ฟังก์ชันนี้จึงกรองเฉพาะประตูที่ตั้งค่าไว้ตรงทิศทาง
+/// ที่กด (เข้า/ออก/both) แล้วให้เลือกก่อนเข้าหน้าจ่อ-ยิงจริง — ประตูที่เลือกมีผลแค่
+/// รอบใช้งานนี้ ไม่ได้บันทึกทับค่าประจำเครื่องที่ตั้งไว้ตอน provisioning
+void _pickGateThen(BuildContext context, AppController c, String mode) {
+  final valid = c.currentGates.where((g) => c.gateTypeOf(g) == mode || c.gateTypeOf(g) == 'both').toList();
+  if (valid.isEmpty) {
+    c.toastMsg(
+      mode == 'in' ? 'ไม่มีประตูขาเข้าที่ตั้งค่าไว้' : 'ไม่มีประตูขาออกที่ตั้งค่าไว้',
+      'ไปตั้งค่าประตูที่ระบบหลักก่อน',
+      ResultKind.warn,
+    );
+    return;
+  }
+  if (valid.length == 1) {
+    c.pickGate(valid.first);
+    mode == 'in' ? c.goScanIn() : c.goScanOut();
+    return;
+  }
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(mode == 'in' ? 'ยิงกล่องเข้าที่ประตูไหน' : 'จ่ายกล่องออกที่ประตูไหน',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(c.selWhName, style: TextStyle(fontSize: 12.5, color: C.muted)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: valid
+                .map((g) => _GatePickChip(
+                      label: '$g',
+                      onTap: () {
+                        Navigator.of(sheetCtx).pop();
+                        c.pickGate(g);
+                        mode == 'in' ? c.goScanIn() : c.goScanOut();
+                      },
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _GatePickChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _GatePickChip({required this.label, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: C.neutralBg,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 64),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border2)),
+          child: Text('ประตู $label',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        ),
+      ),
+    );
+  }
 }
 
 class _SheetAction extends StatelessWidget {

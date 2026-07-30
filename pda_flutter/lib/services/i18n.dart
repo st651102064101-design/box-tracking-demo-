@@ -39,6 +39,7 @@ class LocaleController extends ChangeNotifier {
         'No data from the BoxTrace main system yet — tap below to set up the connection',
     'เชื่อมต่อไม่ได้': 'Could not connect',
     'ผู้ดูแลระบบ': 'Administrator',
+    'ยืนยัน': 'Confirm',
 
     // device setup screen
     'ตั้งค่าเครื่อง': 'Device setup',
