@@ -77,7 +77,7 @@ npm run dev:frontend
 
 ไฟล์ต้นฉบับถูกเก็บไว้ 2 ที่:
 
-- `reference/rfid-gate_v17-3d.html` — **ต้นฉบับเป๊ะ ไม่แตะเลย** (ไว้เทียบ diff)
+- `docs/reference/rfid-gate_v17-3d.html` — **ต้นฉบับเป๊ะ ไม่แตะเลย** (ไว้เทียบ diff)
 - `frontend/public/legacy.html` — ไฟล์เดียวกัน **ต่างกันแค่บรรทัดเดียว** คือแทรก
   `<script src="/legacy-sync.js"></script>` ใน `<head>`
 
@@ -104,8 +104,11 @@ npm run dev:frontend
 ```
 .
 ├─ docker-compose.yml          # db (Postgres 16) + backend + frontend
-├─ reference/
-│  └─ rfid-gate_v17-3d.html    # ต้นฉบับ 100% (ไม่แก้)
+├─ docs/
+│  ├─ reference/
+│  │  └─ rfid-gate_v17-3d.html # ต้นฉบับ 100% (ไม่แก้)
+│  └─ deploy/
+│     └─ nginx.conf.example    # reverse-proxy ตัวอย่าง (TLS termination)
 ├─ backend/
 │  ├─ src/
 │  │  ├─ index.ts              # bootstrap + listen
