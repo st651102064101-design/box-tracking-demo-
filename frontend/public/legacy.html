@@ -1974,8 +1974,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <div class="tablecard">
       <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"></div>
-      <div class="twrap"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
+      <div class="bulkbar" id="bulkEmp" style="display:none;">
+        <span class="bcnt" id="bulkEmpCnt"></span>
+        <button class="btn sm red" id="bulkEmpDel">ลบที่เลือก</button>
+        <button class="btn sm gray" id="bulkEmpClear">ยกเลิก</button>
+      </div>
     </div>
   </div>
 
@@ -5854,7 +5859,7 @@ function renderSetup(){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var canEdit=empAdmin||(currentEmp()&&currentEmp().id===e.id);
-    return '<tr><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(USER===e.name?' <span class="pill ok" style="font-size:11px;">ปัจจุบัน</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
+    return '<tr data-tag="'+esc(e.id)+'"><td class="cb-td">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(USER===e.name?' <span class="pill ok" style="font-size:11px;">ปัจจุบัน</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c"><div class="row-actions">'
@@ -5862,8 +5867,10 @@ function renderSetup(){
       +(canEdit?'<button class="btn sm ghost" onclick="editEmp(\''+esc(e.id)+'\')">แก้ไข</button>':'')
       +(empAdmin?'<button class="btn sm red" onclick="delEmp(\''+esc(e.id)+'\')">ลบ</button>':'')
       +'</div></td></tr>';
-  }).join(''):emptyRow(10,'ยังไม่มีพนักงาน');
+  }).join(''):emptyRow(11,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
+  setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
+  if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
 }
 $('#schBox').addEventListener('input',renderSetup);
 $('#filtBoxStatus').addEventListener('change',renderSetup);
@@ -7039,6 +7046,18 @@ $('#bulkCustDel').addEventListener('click',function(){
     free.forEach(function(id){var before=Object.assign({},S.customers[id]);delete S.customers[id];auditEntry('DELETE',USER,id,before.name||id,before,null);});
     save();clearBulk('cust-cb','bulkCust','cbAllCust');
     toast('ลบแล้ว',free.length+' ราย'+(inUse.length?(' · ข้าม '+inUse.length):''));renderAll();
+  });
+});
+/* ===== employee (emp) bulk delete — admin-only, same rule as the single-row delEmp() ===== */
+$('#bulkEmpClear').addEventListener('click',function(){clearBulk('emp-cb','bulkEmp','cbAllEmp');});
+$('#bulkEmpDel').addEventListener('click',function(){
+  if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
+  var ids=getChecked('emp-cb');if(!ids.length)return;
+  confirmA('ลบ '+ids.length+' พนักงานที่เลือก?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานเหล่านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){
+    if(!ok)return;
+    ids.forEach(function(id){var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);});
+    save();clearBulk('emp-cb','bulkEmp','cbAllEmp');
+    toast('ลบแล้ว',ids.length+' คน');renderAll();
   });
 });
 /* ===== bulk delete — every tag in the batch must be individually re-scanned
