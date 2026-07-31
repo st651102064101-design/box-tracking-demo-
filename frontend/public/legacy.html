@@ -1950,10 +1950,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
         <div class="field"><label>สิทธิ์การใช้งาน</label>
           <select id="eAccess">
-            <option value="operator">พนักงานปฏิบัติการ (ยิง Gate)</option>
-            <option value="supervisor">หัวหน้างาน</option>
-            <option value="admin">ผู้ดูแลระบบ (Master)</option>
-            <option value="viewer">ผู้ชมอย่างเดียว</option>
+            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ (ยิง Gate)</option>
+            <option value="supervisor" title="สิทธิ์เท่าพนักงานปฏิบัติการ — เป็นแค่ตำแหน่งงาน ไม่ได้เพิ่มสิทธิ์พิเศษในระบบ">หัวหน้างาน</option>
+            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ (Master)</option>
+            <option value="viewer" title="ดูข้อมูลได้อย่างเดียว — ยิง Gate, แก้ไขข้อมูลหลัก, หรือบันทึกอะไรไม่ได้เลย">ผู้ชมอย่างเดียว</option>
           </select>
         </div>
         <div class="field"><label>สถานะ</label>
@@ -1963,6 +1963,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </select>
         </div>
       </div>
+      <p class="desc" style="margin-top:10px;">
+        <b>สิทธิ์การใช้งานทำอะไรได้บ้าง:</b>
+        <b>ผู้ดูแลระบบ</b> — ยิง Gate, แก้ไขข้อมูลหลัก, และเพิ่ม/แก้ไข/ลบพนักงานได้ทั้งหมด ·
+        <b>พนักงานปฏิบัติการ / หัวหน้างาน</b> — ยิง Gate และแก้ไขข้อมูลหลักได้ แต่จัดการพนักงานคนอื่นไม่ได้ (หัวหน้างานเป็นแค่ตำแหน่ง ไม่ได้เพิ่มสิทธิ์) ·
+        <b>ผู้ชมอย่างเดียว</b> — ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย
+      </p>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddEmp">บันทึกพนักงาน</button>
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
@@ -1970,12 +1976,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"></div>
       <div class="twrap"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
-    </div>
-    <div class="tablecard" id="userRolesCard" style="display:none;">
-      <div class="tablehead"><h4>บัญชีผู้ใช้ระบบ (Login) &amp; สิทธิ์จริง</h4><span class="tag" id="cntUserRoles"></span></div>
-      <p class="desc">Role ที่นี่คือสิทธิ์จริงที่ backend บังคับใช้ (จาก JWT) — ผูกบัญชีเข้ากับพนักงานด้านบนเพื่อให้ "สิทธิ์การใช้งาน" ในตารางพนักงานตรงกับบัญชี login โดยอัตโนมัติ</p>
-      <div class="twrap"><table><thead><tr><th>Username</th><th>ชื่อบัญชี</th><th>Role</th><th>ผูกกับพนักงาน</th></tr></thead>
-        <tbody id="userRolesBody"></tbody></table></div>
     </div>
   </div>
 
@@ -5864,80 +5864,7 @@ function renderSetup(){
       +'</div></td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
-  renderUserRoles();
 }
-
-/* ===== admin: real login-account role management, synced with the legacy employee
-   "สิทธิ์" field server-side (see PATCH /api/auth/users/:id/role) ===== */
-function setUserRole(userId,role){
-  return apiFetch('/api/auth/users/'+userId+'/role',{
-    method:'PATCH',
-    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-    body:JSON.stringify({role:role})
-  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
-}
-function linkEmployeeToUser(empId,userId){
-  return apiFetch('/api/auth/employees/'+encodeURIComponent(empId)+'/link',{
-    method:'PATCH',
-    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-    body:JSON.stringify({userId:userId})
-  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
-}
-window.onUserRoleChange=function(sel,userId){
-  var role=sel.value;
-  setUserRole(userId,role).then(function(){
-    toast('บันทึกแล้ว','เปลี่ยนสิทธิ์เป็น '+role);
-    USER_ROLES_CACHE=null;
-    return loadFromServer();
-  }).then(function(){renderAll();}).catch(function(e){
-    toast('ผิดพลาด',String((e&&e.message)||e),'err');USER_ROLES_CACHE=null;renderUserRoles();
-  });
-};
-window.onEmployeeLinkChange=function(sel,userId,prevEmpId){
-  var newEmpId=sel.value;
-  var calls=[];
-  if(prevEmpId&&prevEmpId!==newEmpId)calls.push(linkEmployeeToUser(prevEmpId,null));
-  if(newEmpId)calls.push(linkEmployeeToUser(newEmpId,userId));
-  Promise.all(calls).then(function(){
-    toast('บันทึกแล้ว','ผูกบัญชีเรียบร้อย');
-    USER_ROLES_CACHE=null;
-    return loadFromServer();
-  }).then(function(){renderAll();}).catch(function(e){
-    toast('ผิดพลาด',String((e&&e.message)||e),'err');USER_ROLES_CACHE=null;renderUserRoles();
-  });
-};
-/* renderSetup() runs on every keystroke in the setup search boxes, so this caches
-   the account list rather than re-fetching /api/auth/users on each render — only a
-   role/link mutation (above) or a fresh page load invalidates it. */
-var USER_ROLES_CACHE=null;
-function renderUserRoles(){
-  var card=$('#userRolesCard');if(!card)return;
-  if(!isAdmin()){card.style.display='none';return;}
-  card.style.display='';
-  var fetchUsers=USER_ROLES_CACHE?Promise.resolve({users:USER_ROLES_CACHE}):apiFetch('/api/auth/users',{headers:authHeaders()})
-    .then(function(r){return r.ok?r.json():{users:[]};});
-  fetchUsers
-    .then(function(d){
-      var users=d.users||[];USER_ROLES_CACHE=users;
-      var emps=Object.values(S.employees||{});
-      $('#cntUserRoles').textContent=users.length+' บัญชี';
-      $('#userRolesBody').innerHTML=users.length?users.map(function(u){
-        var linkedEmp=emps.filter(function(e){return e.userId===u.id;})[0];
-        var empOptions='<option value="">— ไม่ผูก —</option>'+emps.map(function(e){
-          return '<option value="'+esc(e.id)+'"'+(linkedEmp&&linkedEmp.id===e.id?' selected':'')+'>'+esc(e.id)+' · '+esc(e.name)+'</option>';
-        }).join('');
-        var roleOptions=['admin','staff','viewer'].map(function(r){
-          return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r+'</option>';
-        }).join('');
-        var prevEmpArg=linkedEmp?("'"+esc(linkedEmp.id)+"'"):'null';
-        return '<tr><td class="mono">'+esc(u.username)+'</td><td>'+esc(u.name)+'</td>'
-          +'<td><select onchange="onUserRoleChange(this,'+u.id+')">'+roleOptions+'</select></td>'
-          +'<td><select onchange="onEmployeeLinkChange(this,'+u.id+','+prevEmpArg+')">'+empOptions+'</select></td></tr>';
-      }).join(''):emptyRow(4,'ไม่พบบัญชีผู้ใช้');
-    })
-    .catch(function(e){console.warn('[BoxTrace] โหลดบัญชีผู้ใช้ไม่สำเร็จ',e);});
-}
-window.renderUserRoles=renderUserRoles;
 $('#schBox').addEventListener('input',renderSetup);
 $('#filtBoxStatus').addEventListener('change',renderSetup);
 /* box-type search â works by typing OR by scanning a barcode of the type code.
