@@ -418,8 +418,10 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
-  /// A terminal is provisioned once it has been told which gate it serves.
-  bool get deviceConfigured => prefs.deviceGate.isNotEmpty;
+  /// A terminal is provisioned once someone has completed device_setup_screen
+  /// at least once (see finishDeviceSetup) — not tied to a fixed gate, since
+  /// warehouse/gate are picked per-visit instead.
+  bool get deviceConfigured => prefs.deviceConfigured;
 
   /// Who may re-point the device or edit its connection: a supervisor, or
   /// anyone standing at a locked terminal. The threat this guards against is
@@ -506,18 +508,16 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Persists this terminal's post. From here on every operator who badges in
-  /// works this gate without being asked.
-  void saveDevicePost() {
-    if (wh.isEmpty || gate.isEmpty) {
-      toastMsg('เลือกคลังและประตูก่อน', '', ResultKind.warn);
-      return;
-    }
-    prefs.deviceWh = wh;
-    prefs.deviceGate = gate;
+  /// The last step of device_setup_screen.dart's bottom button, enabled once
+  /// [connected] is true. Warehouse/gate are no longer fixed at setup time —
+  /// they're picked per-visit instead (see pickWh/pickGate/confirmPost) — so
+  /// "configured" now just means this terminal has a working connection and
+  /// has been through setup once.
+  void finishDeviceSetup() {
+    prefs.deviceConfigured = true;
     screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
-    toastMsg('ตั้งค่าเครื่องแล้ว', '$selWhName · ประตู $gate', ResultKind.ok);
+    toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
     _connectReader();
   }
 

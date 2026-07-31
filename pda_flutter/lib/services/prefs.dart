@@ -25,6 +25,7 @@ class Prefs {
   // this device's fixed post (warehouse + gate) and behaviour
   static const _kDeviceWh = 'boxtrace_device_wh';
   static const _kDeviceGate = 'boxtrace_device_gate';
+  static const _kDeviceConfigured = 'boxtrace_device_configured';
   static const _kIdleLock = 'boxtrace_idle_lock_minutes';
 
   static const _kStateCache = 'boxtrace_state_cache';
@@ -88,13 +89,20 @@ class Prefs {
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
 
-  /// The warehouse + gate this terminal is stationed at. A non-empty gate is
-  /// what marks the device as provisioned (see AppController.deviceConfigured).
+  /// Legacy fixed-post fields from before warehouse/gate moved to a per-visit
+  /// pick (see lastWh/lastGate below) — kept only so an old install's saved
+  /// values aren't silently discarded; nothing sets or reads them anymore.
   String get deviceWh => _p.getString(_kDeviceWh) ?? '';
   set deviceWh(String v) => _p.setString(_kDeviceWh, v);
 
   String get deviceGate => _p.getString(_kDeviceGate) ?? '';
   set deviceGate(String v) => _p.setString(_kDeviceGate, v);
+
+  /// Set once device_setup_screen's bottom button is completed (see
+  /// AppController.finishDeviceSetup). Marks the terminal as provisioned —
+  /// independent of any particular warehouse/gate.
+  bool get deviceConfigured => _p.getBool(_kDeviceConfigured) ?? false;
+  set deviceConfigured(bool v) => _p.setBool(_kDeviceConfigured, v);
 
   /// Minutes of inactivity before the operator is signed out. 0 disables it.
   int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
