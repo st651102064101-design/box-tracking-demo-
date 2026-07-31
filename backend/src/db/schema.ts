@@ -102,6 +102,12 @@ export const employees = pgTable('employees', {
   id: text('id').primaryKey(),
   name: text('name'),
   role: text('role'),
+  /** Links this employee record to its login account, so the JWT-authenticated
+   *  `users.role` (admin/staff/viewer) is the single source of truth for access
+   *  control — the legacy `data.access` field is kept in sync from it instead
+   *  of being an independent, client-editable permission. Nullable: employees
+   *  created before this link existed, or without a login account. */
+  userId: integer('user_id').references(() => users.id),
   data: jsonb('data').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

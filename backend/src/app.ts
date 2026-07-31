@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { authRouter } from './routes/auth.js';
@@ -22,10 +24,23 @@ import { currentVersion, subscriberCount } from './lib/bus.js';
 const PRIVATE_LAN_ORIGIN =
   /^https?:\/\/(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|192\.168(?:\.\d{1,3}){2})(?::\d+)?$/;
 
+/** Throttles credential-guessing against /login and self-registration spam
+ *  against /register — both are public, unauthenticated endpoints. */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', message: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
+});
+
 /** Build the Express app (kept separate from listen() so Supertest can import it). */
 export function createApp() {
   const app = express();
 
+  // This is a JSON API + SSE stream, never an HTML page host, so helmet's
+  // default (strict, self-only) CSP has nothing legitimate to break here.
+  app.use(helmet());
   app.use(
     cors({
       origin(origin, cb) {
@@ -37,7 +52,10 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '25mb' })); // full-state snapshots can be large
+  // Full-state snapshots can be large, but 25mb was needlessly generous for a
+  // request body and widened the DoS surface; 10mb comfortably covers real
+  // snapshots while capping worst-case memory per request.
+  app.use(express.json({ limit: '10mb' }));
   /* The SSE URL carries the auth token as a query parameter, because
      EventSource cannot send headers. Access logs are the one place that
      must not end up written down, and one line per long-lived connection
@@ -56,6 +74,8 @@ export function createApp() {
       streams: subscriberCount(),
     }));
 
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
   app.use('/api/auth', authRouter);
   app.use('/api/state', stateRouter);
   app.use('/api/gate', gateRouter);

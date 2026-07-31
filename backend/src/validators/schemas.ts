@@ -10,7 +10,16 @@ export const registerSchema = z.object({
   username: z.string().min(3, 'ชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร'),
   password: z.string().min(6, 'รหัสผ่านอย่างน้อย 6 ตัวอักษร'),
   name: z.string().min(1, 'กรุณากรอกชื่อ'),
-  role: z.enum(['admin', 'staff', 'viewer']).optional().default('staff'),
+  // No `role` here: every self-registration starts as 'staff', promoted only
+  // via the admin-only PATCH /api/auth/users/:id/role endpoint.
+});
+
+export const linkEmployeeSchema = z.object({
+  userId: z.number().int().positive().nullable(),
+});
+
+export const updateRoleSchema = z.object({
+  role: z.enum(['admin', 'staff', 'viewer']),
 });
 
 /* ─── full application state (the localStorage `S` snapshot) ────────────────

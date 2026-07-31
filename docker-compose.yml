@@ -27,7 +27,7 @@ services:
       USE_PGLITE: "false"
       DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_EXPIRES_IN: 12h
+      JWT_EXPIRES_IN: 2h
       CORS_ORIGIN: http://localhost:3000,http://localhost:5100
       SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}

@@ -1971,6 +1971,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="twrap"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
     </div>
+    <div class="tablecard" id="userRolesCard" style="display:none;">
+      <div class="tablehead"><h4>บัญชีผู้ใช้ระบบ (Login) &amp; สิทธิ์จริง</h4><span class="tag" id="cntUserRoles"></span></div>
+      <p class="desc">Role ที่นี่คือสิทธิ์จริงที่ backend บังคับใช้ (จาก JWT) — ผูกบัญชีเข้ากับพนักงานด้านบนเพื่อให้ "สิทธิ์การใช้งาน" ในตารางพนักงานตรงกับบัญชี login โดยอัตโนมัติ</p>
+      <div class="twrap"><table><thead><tr><th>Username</th><th>ชื่อบัญชี</th><th>Role</th><th>ผูกกับพนักงาน</th></tr></thead>
+        <tbody id="userRolesBody"></tbody></table></div>
+    </div>
   </div>
 
   <!-- ===== AUDIT LOG ssec ===== -->
@@ -2346,6 +2352,25 @@ function authHeaders(){
   var t=null; try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
   return t?{'Authorization':'Bearer '+t}:{};
 }
+/* Decodes the `role` claim out of the JWT the Next.js login flow issued —
+   this is the account's real, server-verified role (admin/staff/viewer),
+   as opposed to the legacy S.employees[x].access field below, which used to
+   be the only thing gating admin UI even though it's just client-side state
+   anyone with API access could rewrite. */
+function decodeJwtRole(t){
+  try{
+    var b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    while(b64.length%4)b64+='=';
+    var json=decodeURIComponent(atob(b64).split('').map(function(c){
+      return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(json).role||null;
+  }catch(e){return null;}
+}
+var MY_ROLE=(function(){
+  var t=null;try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
+  return t?decodeJwtRole(t):null;
+})();
 /* ===== API root — backend จริงรันที่พอร์ต 4000 =====
    ปกติหน้านี้ถูกเสิร์ฟจาก Next (พอร์ต 3000) แล้วเรียก /api/state บน origin เดียวกัน
    แต่ถ้าเปิดจากพอร์ตอื่น (เช่น 5100) หรือเปิดไฟล์ตรงๆ origin นั้นไม่มี /api/state
@@ -2453,7 +2478,12 @@ function adoptStateSnapshot(d){ if(d) S=normalizeState(d); }
 /* ===== helpers ===== */
 function $(s,c){return (c||document).querySelector(s);}
 function $all(s,c){return Array.prototype.slice.call((c||document).querySelectorAll(s));}
-function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+/* Also entity-encodes ' — harmless in plain HTML text (renders identically),
+   but load-bearing for the many call sites that splice esc(...) output into
+   inline onclick="fn('...')" handlers: without it, a value containing a
+   literal ' (e.g. a user-entered customer/warehouse id) breaks out of that
+   JS string literal and can inject arbitrary script (stored XSS). */
+function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML.replace(/'/g,'&#39;');}
 /* Thai Kedmanee → US-QWERTY reverse keymap: when Windows is left in Thai input mode,
    a barcode/RFID scanner (which emulates a keyboard) sends the same physical keystrokes
    but the OS renders Thai glyphs instead of the intended ASCII. This maps each Thai
@@ -3178,9 +3208,14 @@ window.delBox=delBox;window.delCust=delCust;window.editCust=editCust;
 /* label maps for the WMS employee master */
 var EMP_SHIFT={morning:'กะเช้า',afternoon:'กะบ่าย',night:'กะดึก',general:'ทั่วไป'};
 var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัวหน้างาน',admin:'ผู้ดูแลระบบ',viewer:'ผู้ชม'};
-/* ===== permission helpers: only an employee with access==='admin' may add/edit/delete employee records ===== */
+/* ===== permission helpers: only an account whose JWT role is 'admin' may add/edit/delete
+   employee records or change anyone's role. This used to check S.employees[x].access, but
+   that field is just client-side state — anyone with API access could rewrite it to grant
+   themselves admin. MY_ROLE comes from the server-signed JWT, so it can't be self-granted;
+   the backend also independently enforces this on every write (see /api/state, /api/masters,
+   /api/auth/users/:id/role), so this client-side check is UX-only, not the real gate. ===== */
 function currentEmp(){var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}return null;}
-function isAdmin(){var e=currentEmp();return !!e&&e.access==='admin';}
+function isAdmin(){return MY_ROLE==='admin';}
 window.isAdmin=isAdmin;window.currentEmp=currentEmp;
 var EMP_STATUS={active:{t:'ปฏิบัติงาน',c:'ok'},leave:{t:'ลา/พักงาน',c:'warn'},inactive:{t:'พ้นสภาพ',c:'bad'}};
 function empFields(){
@@ -5829,7 +5864,80 @@ function renderSetup(){
       +'</div></td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
+  renderUserRoles();
 }
+
+/* ===== admin: real login-account role management, synced with the legacy employee
+   "สิทธิ์" field server-side (see PATCH /api/auth/users/:id/role) ===== */
+function setUserRole(userId,role){
+  return apiFetch('/api/auth/users/'+userId+'/role',{
+    method:'PATCH',
+    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:JSON.stringify({role:role})
+  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+}
+function linkEmployeeToUser(empId,userId){
+  return apiFetch('/api/auth/employees/'+encodeURIComponent(empId)+'/link',{
+    method:'PATCH',
+    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:JSON.stringify({userId:userId})
+  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+}
+window.onUserRoleChange=function(sel,userId){
+  var role=sel.value;
+  setUserRole(userId,role).then(function(){
+    toast('บันทึกแล้ว','เปลี่ยนสิทธิ์เป็น '+role);
+    USER_ROLES_CACHE=null;
+    return loadFromServer();
+  }).then(function(){renderAll();}).catch(function(e){
+    toast('ผิดพลาด',String((e&&e.message)||e),'err');USER_ROLES_CACHE=null;renderUserRoles();
+  });
+};
+window.onEmployeeLinkChange=function(sel,userId,prevEmpId){
+  var newEmpId=sel.value;
+  var calls=[];
+  if(prevEmpId&&prevEmpId!==newEmpId)calls.push(linkEmployeeToUser(prevEmpId,null));
+  if(newEmpId)calls.push(linkEmployeeToUser(newEmpId,userId));
+  Promise.all(calls).then(function(){
+    toast('บันทึกแล้ว','ผูกบัญชีเรียบร้อย');
+    USER_ROLES_CACHE=null;
+    return loadFromServer();
+  }).then(function(){renderAll();}).catch(function(e){
+    toast('ผิดพลาด',String((e&&e.message)||e),'err');USER_ROLES_CACHE=null;renderUserRoles();
+  });
+};
+/* renderSetup() runs on every keystroke in the setup search boxes, so this caches
+   the account list rather than re-fetching /api/auth/users on each render — only a
+   role/link mutation (above) or a fresh page load invalidates it. */
+var USER_ROLES_CACHE=null;
+function renderUserRoles(){
+  var card=$('#userRolesCard');if(!card)return;
+  if(!isAdmin()){card.style.display='none';return;}
+  card.style.display='';
+  var fetchUsers=USER_ROLES_CACHE?Promise.resolve({users:USER_ROLES_CACHE}):apiFetch('/api/auth/users',{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():{users:[]};});
+  fetchUsers
+    .then(function(d){
+      var users=d.users||[];USER_ROLES_CACHE=users;
+      var emps=Object.values(S.employees||{});
+      $('#cntUserRoles').textContent=users.length+' บัญชี';
+      $('#userRolesBody').innerHTML=users.length?users.map(function(u){
+        var linkedEmp=emps.filter(function(e){return e.userId===u.id;})[0];
+        var empOptions='<option value="">— ไม่ผูก —</option>'+emps.map(function(e){
+          return '<option value="'+esc(e.id)+'"'+(linkedEmp&&linkedEmp.id===e.id?' selected':'')+'>'+esc(e.id)+' · '+esc(e.name)+'</option>';
+        }).join('');
+        var roleOptions=['admin','staff','viewer'].map(function(r){
+          return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r+'</option>';
+        }).join('');
+        var prevEmpArg=linkedEmp?("'"+esc(linkedEmp.id)+"'"):'null';
+        return '<tr><td class="mono">'+esc(u.username)+'</td><td>'+esc(u.name)+'</td>'
+          +'<td><select onchange="onUserRoleChange(this,'+u.id+')">'+roleOptions+'</select></td>'
+          +'<td><select onchange="onEmployeeLinkChange(this,'+u.id+','+prevEmpArg+')">'+empOptions+'</select></td></tr>';
+      }).join(''):emptyRow(4,'ไม่พบบัญชีผู้ใช้');
+    })
+    .catch(function(e){console.warn('[BoxTrace] โหลดบัญชีผู้ใช้ไม่สำเร็จ',e);});
+}
+window.renderUserRoles=renderUserRoles;
 $('#schBox').addEventListener('input',renderSetup);
 $('#filtBoxStatus').addEventListener('change',renderSetup);
 /* box-type search â works by typing OR by scanning a barcode of the type code.

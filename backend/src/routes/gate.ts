@@ -3,12 +3,13 @@ import { getDb } from '../db/client.js';
 import { gateOut, gateIn } from '../services/gate.js';
 import { gateOutSchema, gateInSchema } from '../validators/schemas.js';
 import { asyncHandler } from '../middleware/error.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { bump } from '../lib/bus.js';
 
 /** Server-side gate operations for physical readers / integrations. */
 export const gateRouter = Router();
 gateRouter.use(requireAuth);
+gateRouter.use(requireRole('admin', 'staff'));
 
 /**
  * The terminal that sent the scan, from its own bearer token — a handheld

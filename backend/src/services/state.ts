@@ -101,7 +101,12 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     vehicles: mapBy(vehRows, (r) => r.id),
     putaway: mapBy(putRows, (r) => r.id),
     doRecords: mapBy(doRows, (r) => r.id),
-    employees: mapBy(empRows, (r) => r.id),
+    /* `userId` is a typed column (set only via the admin-only PATCH /link
+       endpoint), not part of the client-editable `data` blob — merge it in
+       so the frontend can see which login account an employee is linked to. */
+    employees: Object.fromEntries(
+      empRows.map((r) => [r.id, { ...(r.data as Record<string, unknown>), userId: r.userId }]),
+    ),
     locations: mapBy(locRows, (r) => r.code),
     inventory: mapBy(invRows, (r) => r.id),
     auditLog: auditRows.map((r) => r.data),
@@ -264,6 +269,11 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
           id,
           name: (e.name as string) ?? null,
           role: (e.role as string) ?? null,
+          /* This table is wiped and fully reinserted on every save() — userId
+             is a typed column, not part of `data`, so it must be carried over
+             explicitly here or the account link set via PATCH /link would be
+             silently dropped on the very next unrelated state save. */
+          userId: toInt(e.userId),
           data: e,
           updatedAt: new Date(),
         };

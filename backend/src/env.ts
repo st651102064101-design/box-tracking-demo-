@@ -1,5 +1,10 @@
 import 'dotenv/config';
 
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be set in production — refusing to start with the dev fallback secret.');
+}
+
 /** Centralised, typed access to environment configuration. */
 export const env = {
   port: Number(process.env.PORT ?? 4000),
@@ -8,7 +13,8 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-secret-change-me',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '12h',
+  // Kept short since there's no refresh-token flow yet — a stolen token self-expires quickly.
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
   seedAdmin: {
     username: process.env.SEED_ADMIN_USERNAME ?? 'admin',
     password: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',

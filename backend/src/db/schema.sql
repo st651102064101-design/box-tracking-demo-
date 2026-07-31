@@ -79,9 +79,13 @@ CREATE TABLE IF NOT EXISTS employees (
   id         TEXT PRIMARY KEY,
   name       TEXT,
   role       TEXT,
+  user_id    INTEGER REFERENCES users(id),
   data       JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Additive migration for databases created before user_id existed.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
 
 CREATE TABLE IF NOT EXISTS boxes (
   tag          TEXT PRIMARY KEY,

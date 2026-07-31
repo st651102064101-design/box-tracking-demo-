@@ -69,9 +69,11 @@ export default function LoginPage() {
           {mode === 'login' ? 'ยังไม่มีบัญชี? สมัครใหม่' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}
         </button>
 
-        <p className="mt-6 text-center text-xs text-ink-2/50">
-          บัญชีเริ่มต้น (หลัง <code>npm run db:seed</code>): <b>admin / admin123</b>
-        </p>
+        {process.env.NODE_ENV !== 'production' && (
+          <p className="mt-6 text-center text-xs text-ink-2/50">
+            Dev only — บัญชีเริ่มต้นตั้งจาก <code>SEED_ADMIN_*</code> env vars (ดู <code>npm run db:seed</code>)
+          </p>
+        )}
       </div>
     </main>
   );
