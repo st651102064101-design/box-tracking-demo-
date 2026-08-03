@@ -826,6 +826,7 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .pill.exp{background:color-mix(in srgb,#a855f7 16%,transparent);color:#7e22ce;border:.5px solid color-mix(in srgb,#a855f7 42%,transparent);}
 
 .muted{color:var(--muted);} .small{font-size:13px;}
+tr.row-click{cursor:pointer;} tr.row-click:hover{background:color-mix(in srgb,var(--fg,#000) 5%,transparent);}
 .row{display:flex;gap:11px;flex-wrap:wrap;align-items:center;} .spacer{flex:1;}
 .tag{font-size:11.5px;color:var(--muted);font-weight:400;}
 .diff-neg{color:var(--neg);font-weight:600;} .diff-pos{color:var(--pos);font-weight:600;}
@@ -3317,6 +3318,28 @@ $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textConten
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
+/* Row click → one modal with every per-employee action, instead of a button
+   rail crammed into the row (unreadable once access/status pills are added). */
+function openEmpActions(id){
+  var e=S.employees[id];if(!e)return;
+  var empAdmin=isAdmin();
+  var canEdit=empAdmin||(currentEmp()&&currentEmp().id===id);
+  var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
+  openModal(
+    '<div class="mhead"><h3>'+esc(e.name||e.id)+'</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody">'
+      +'<p class="desc" style="margin-top:0;">'+esc(e.id)+' · '+esc(e.role||'-')+(e.dept?' · '+esc(e.dept):'')+(whTxt!=='-'?' · '+whTxt:'')+'</p>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+        +'<button class="btn ghost" title="แสดงบาร์โค้ดสำหรับยิงเข้าระบบที่ PDA" onclick="closeModal();printEmpBadge(\''+esc(id)+'\')">บัตร</button>'
+        +(canEdit?'<button class="btn ghost" onclick="closeModal();editEmp(\''+esc(id)+'\')">แก้ไข</button>':'')
+        +(empAdmin?'<button class="btn ghost" title="ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้" onclick="closeModal();setEmpCredentials(\''+esc(id)+'\',\''+esc(e.name||id)+'\',\''+esc(e.loginUsername||'')+'\')">'+(e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน')+'</button>':'')
+        +(empAdmin?'<button class="btn ghost" title="ออกรหัส OTP ให้พนักงานตั้งรหัส PIN ใหม่บน PDA" onclick="closeModal();resetEmpPin(\''+esc(id)+'\',\''+esc(e.name||id)+'\')">รีเซ็ต PIN</button>':'')
+        +(empAdmin?'<button class="btn red" onclick="closeModal();delEmp(\''+esc(id)+'\')">ลบ</button>':'')
+      +'</div>'
+    +'</div>'
+  );
+}
+window.openEmpActions=openEmpActions;
 function editEmp(id){
   var e=S.employees[id];if(!e)return;
   var self=currentEmp()&&currentEmp().id===id;
@@ -3404,15 +3427,14 @@ function setEmpCredentials(id,name,currentUsername){
 }
 window.setEmpCredentials=setEmpCredentials;
 
-/* ===== EMPLOYEE BADGE (Code 39) =====
+/* ===== EMPLOYEE BADGE =====
    The PDA signs an operator in by reading their badge, so the badge has to be
    printable from here — that is the whole reason warehouse staff need no
    accounts and no passwords.
 
-   Code 39 rather than a QR: it encodes exactly the charset employee ids use
-   (0-9 A-Z and "-"), the Zebra imager reads it out of the box, and the whole
-   symbology is a 44-entry lookup table — no library, no CDN, nothing to break
-   when the warehouse PC is offline. */
+   Rendered as Code 128 (code128SVG, below) to match the symbology every other
+   ZPL label in this app uses (^BCN in locationZPL/generateZPL) — one barcode
+   reader profile for the whole warehouse instead of a Code 39 special case. */
 var C39={'0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw',
 '5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn',
 'A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn',
@@ -3474,7 +3496,7 @@ function printEmpBadge(id){
     +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
     +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
     +'</div><div class="brand">◈ BoxTrace</div></div>'
-    +'<div class="bc">'+code39Svg(code)+'<div class="code">'+esc(code)+'</div></div>'
+    +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
     +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
     +'</body></html>');
   w.document.close();
@@ -6065,17 +6087,10 @@ function renderSetup(){
   $('#empBody').innerHTML=eps.length?eps.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-    var canEdit=empAdmin||(currentEmp()&&currentEmp().id===e.id);
-    return '<tr data-tag="'+esc(e.id)+'"><td class="cb-td">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(USER===e.name?' <span class="pill ok" style="font-size:11px;">ปัจจุบัน</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
+    return '<tr data-tag="'+esc(e.id)+'" class="row-click" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(USER===e.name?' <span class="pill ok" style="font-size:11px;">ปัจจุบัน</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
-      +'<td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" title="พิมพ์บัตรสำหรับยิงเข้าระบบที่ PDA" onclick="printEmpBadge(\''+esc(e.id)+'\')">บัตร</button>'
-      +(canEdit?'<button class="btn sm ghost" onclick="editEmp(\''+esc(e.id)+'\')">แก้ไข</button>':'')
-      +(empAdmin?'<button class="btn sm ghost" title="ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้" onclick="setEmpCredentials(\''+esc(e.id)+'\',\''+esc(e.name||e.id)+'\',\''+esc(e.loginUsername||'')+'\')">'+(e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน')+'</button>':'')
-      +(empAdmin?'<button class="btn sm ghost" title="ออกรหัส OTP ให้พนักงานตั้งรหัส PIN ใหม่บน PDA" onclick="resetEmpPin(\''+esc(e.id)+'\',\''+esc(e.name||e.id)+'\')">รีเซ็ต PIN</button>':'')
-      +(empAdmin?'<button class="btn sm red" onclick="delEmp(\''+esc(e.id)+'\')">ลบ</button>':'')
-      +'</div></td></tr>';
+      +'<td class="c muted">›</td></tr>';
   }).join(''):emptyRow(11,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');

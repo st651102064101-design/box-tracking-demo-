@@ -29,10 +29,12 @@ android {
 
     defaultConfig {
         applicationId = "com.abss.boxtrace_pda"
-        // rfidapi3lib's own manifest declares minSdk 29, so the merger rejects
-        // anything lower. MC3390R ships Android 10/11 (API 29/30), so this
-        // costs us no supported device.
-        minSdk = 29
+        // rfidapi3lib's own manifest declares minSdk 29; most MC3390R units
+        // ship Android 10/11 (API 29/30). This particular unit is stuck on
+        // Android 8.1 (API 27, no OTA available), so minSdk is lowered and
+        // AndroidManifest.xml overrides the library's declared minSdk to let
+        // the merger accept it. RFID functionality is unverified on API 27.
+        minSdk = 27
         targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName

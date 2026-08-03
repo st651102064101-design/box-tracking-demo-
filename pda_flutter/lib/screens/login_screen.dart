@@ -41,6 +41,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// เวลาที่ตัวอักษรก่อนหน้ามาถึง — ใช้วัดจังหวะห่างระหว่างตัวอักษรของรอบกรอกนี้
   DateTime? _lastKeyAt;
+  /// ความยาวข้อความหลัง onChanged ครั้งก่อน — บาง build ของคีย์บอร์ด-wedge (โดยเฉพาะ
+  /// เครื่อง MC3390R ที่ต้อง fallback ไป Android เก่า) ส่งทั้งรหัสมาในเหตุการณ์ onChanged
+  /// เดียว ไม่ใช่ทีละตัวอักษร ถ้าเทียบจังหวะระหว่างตัวอักษรไม่ได้เพราะตัวเดียวมาครบเลย
+  /// ก็ต้องดูจากตรงนี้แทน: เพิ่มมากกว่า 1 ตัวอักษรในเหตุการณ์เดียวคือมนุษย์พิมพ์ไม่ทัน
+  /// แน่นอน จึงถือเป็นหลักฐานว่าเป็นการสแกนได้เลย
+  int _prevLen = 0;
   /// true เมื่อเจอจังหวะกดแบบคนพิมพ์ (ห่างเกิน [_scanGapMs]) อย่างน้อยหนึ่งครั้งใน
   /// รอบกรอกนี้ — ตัวสแกน (keyboard-wedge) พ่นตัวอักษรเร็วกว่านี้มาก (ปกติ <20ms/ตัว)
   /// ดังนั้นถ้าเจอช่องว่างยาวขนาดนี้แม้แต่ครั้งเดียว แสดงว่าเป็นคนพิมพ์เอง ไม่ใช่สแกน
@@ -80,6 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final code = _badge.text;
     _badge.clear();
     _lastKeyAt = null;
+    _prevLen = 0;
     if (_looksTyped) setState(() => _looksTyped = false);
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
@@ -103,12 +110,26 @@ class _LoginScreenState extends State<LoginScreen> {
     final now = DateTime.now();
     if (v.isEmpty) {
       _lastKeyAt = null;
+      _prevLen = 0;
       setState(() => _looksTyped = false);
       return;
     }
+    final addedChars = v.length - _prevLen;
+    _prevLen = v.length;
     final prev = _lastKeyAt;
     _lastKeyAt = now;
     setState(() {}); // repaint the confirm button's enabled state regardless
+    // Some keyboard-wedge implementations (seen on the MC3390R's older Android
+    // build) deliver the whole scanned code in one onChanged call instead of
+    // one call per keystroke, so there is never a second call to measure a
+    // gap between. No human adds more than one character between two frames,
+    // so more than one new character in a single callback is scan-speed proof
+    // on its own — treat it the same as a fast inter-key gap, below.
+    if (addedChars > 1) {
+      if (_looksTyped) return;
+      _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
+      return;
+    }
     if (prev == null) return; // first char of this entry — no gap to judge yet
     final gapMs = now.difference(prev).inMilliseconds;
     if (gapMs > _scanGapMs) {
