@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../lib/jwt.js';
-import { subscribe, currentVersion } from '../lib/bus.js';
+import { subscribe, subscribeEvents, currentVersion } from '../lib/bus.js';
 
 /**
  * `GET /api/stream` — server-sent events telling clients that state changed.
@@ -66,6 +66,9 @@ streamRouter.get('/', (req, res) => {
   const unsubscribe = subscribe((version, origin) => {
     res.write(`event: state\ndata: ${JSON.stringify({ v: version, origin })}\n\n`);
   });
+  const unsubscribeEvents = subscribeEvents((event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  });
 
   const heartbeat = setInterval(() => {
     res.write(': hb\n\n'); // an SSE comment — ignored by the client, keeps the socket warm
@@ -74,6 +77,7 @@ streamRouter.get('/', (req, res) => {
   const close = () => {
     clearInterval(heartbeat);
     unsubscribe();
+    unsubscribeEvents();
   };
   req.on('close', close);
   res.on('close', close);

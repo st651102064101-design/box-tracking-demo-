@@ -45,3 +45,31 @@ export function subscribe(listener: ChangeListener): () => void {
 
 export const currentVersion = () => version;
 export const subscriberCount = () => listeners.size;
+
+/**
+ * Named, one-shot notifications that ride the same SSE pipe as `bump()` but
+ * aren't a "the whole state snapshot changed, go re-fetch it" signal — e.g.
+ * "a PIN reset OTP was just issued for this employee, from a PDA, with no
+ * admin in the loop to have seen it happen otherwise" (see routes/pin.ts).
+ * Kept separate from ChangeListener so a stream subscriber can pass either
+ * kind straight to the client without conflating "state changed" with "FYI".
+ */
+export type EventListener = (event: string, data: unknown) => void;
+const eventListeners = new Set<EventListener>();
+
+export function emitEvent(event: string, data: unknown): void {
+  for (const listener of eventListeners) {
+    try {
+      listener(event, data);
+    } catch {
+      /* same reasoning as bump()'s try/catch above */
+    }
+  }
+}
+
+export function subscribeEvents(listener: EventListener): () => void {
+  eventListeners.add(listener);
+  return () => {
+    eventListeners.delete(listener);
+  };
+}

@@ -14,6 +14,15 @@ export const authRouter = Router();
  *  two role vocabularies stay in sync instead of drifting independently. */
 const ACCESS_BY_ROLE: Record<string, string> = { admin: 'admin', staff: 'operator', viewer: 'viewer' };
 
+/** The inverse — an employee's `access` level (operator/supervisor/admin/viewer,
+ *  the richer legacy vocabulary shown in the UI) collapses to the coarser
+ *  admin/staff/viewer set for the JWT `role` claim, since that's what
+ *  requireRole() on /api/masters, /api/gate, /api/state actually checks.
+ *  Employees keep seeing their real access label client-side (it still rides
+ *  along in `S.employees[x].access`) — only token-based authorization is
+ *  normalized here. */
+const ROLE_BY_ACCESS: Record<string, string> = { admin: 'admin', operator: 'staff', supervisor: 'staff', viewer: 'viewer' };
+
 /** POST /api/auth/register — create a user account. Role is never client-supplied:
  *  every self-registration starts as 'staff'; an admin promotes via PATCH /users/:id/role. */
 authRouter.post(
@@ -35,18 +44,47 @@ authRouter.post(
   }),
 );
 
-/** POST /api/auth/login — exchange credentials for a JWT. */
+/** POST /api/auth/login — exchange credentials for a JWT.
+ *
+ * Checks the `users` table (system/service accounts — what devices and the
+ * seeded admin/admin123 use) first, then falls back to `employees` with a
+ * username/password on file (set by an admin via PUT
+ * /api/employees/:id/credentials — see routes/pin.ts). Same endpoint, same
+ * JWT shape either way; only the employee branch sets `employeeId` on the
+ * token so the frontend can tell which one signed in. */
 authRouter.post(
   '/login',
   asyncHandler(async (req, res) => {
     const input = loginSchema.parse(req.body);
     const db = getDb();
     const [row] = await db.select().from(users).where(eq(users.username, input.username));
-    if (!row || !(await verifyPassword(input.password, row.passwordHash))) {
-      throw httpError(401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'invalid_credentials');
+    if (row && (await verifyPassword(input.password, row.passwordHash))) {
+      const token = signToken({ sub: row.id, username: row.username, name: row.name, role: row.role });
+      return res.json({ token, user: publicUser(row) });
     }
-    const token = signToken({ sub: row.id, username: row.username, name: row.name, role: row.role });
-    res.json({ token, user: publicUser(row) });
+
+    const [emp] = await db.select().from(employees).where(eq(employees.username, input.username));
+    if (emp?.passwordHash && (await verifyPassword(input.password, emp.passwordHash))) {
+      // employees.role is a job TITLE ("หัวหน้างาน") — the actual permission
+      // level (operator/supervisor/admin/viewer) only lives in the legacy
+      // `data` jsonb blob under `access`, since it never got its own column.
+      const access = (emp.data as Record<string, unknown> | null)?.access;
+      const accessLevel = typeof access === 'string' && access ? access : 'operator';
+      const role = ROLE_BY_ACCESS[accessLevel] ?? 'staff';
+      const token = signToken({
+        sub: emp.id,
+        username: emp.username!,
+        name: emp.name ?? emp.username!,
+        role,
+        employeeId: emp.id,
+      });
+      return res.json({
+        token,
+        user: { id: emp.id, username: emp.username, name: emp.name, role, employeeId: emp.id },
+      });
+    }
+
+    throw httpError(401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'invalid_credentials');
   }),
 );
 

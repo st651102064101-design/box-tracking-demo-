@@ -101,11 +101,23 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     vehicles: mapBy(vehRows, (r) => r.id),
     putaway: mapBy(putRows, (r) => r.id),
     doRecords: mapBy(doRows, (r) => r.id),
-    /* `userId` is a typed column (set only via the admin-only PATCH /link
-       endpoint), not part of the client-editable `data` blob — merge it in
-       so the frontend can see which login account an employee is linked to. */
+    /* `userId`, PIN status, and employee-login status are typed columns, not
+       part of the client-editable `data` blob — merge them in so the frontend
+       can see them. `hasPin`/`hasLogin`/`loginUsername` are surfaced (never
+       the hashes, and `loginUsername` only because a username isn't a secret)
+       so the employee master page can show status without the API ever
+       handing back anything usable to guess or replay. */
     employees: Object.fromEntries(
-      empRows.map((r) => [r.id, { ...(r.data as Record<string, unknown>), userId: r.userId }]),
+      empRows.map((r) => [
+        r.id,
+        {
+          ...(r.data as Record<string, unknown>),
+          userId: r.userId,
+          hasPin: !!r.pinHash,
+          hasLogin: !!r.passwordHash,
+          loginUsername: r.username ?? null,
+        },
+      ]),
     ),
     locations: mapBy(locRows, (r) => r.code),
     inventory: mapBy(invRows, (r) => r.id),
@@ -116,6 +128,24 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
 export async function replaceState(db: DB, s: StatePayload): Promise<void> {
   await db.transaction(async (tx) => {
+    // PDA PIN data (pinHash / pending reset OTP) and each employee's own
+    // web-app login (username/passwordHash) never round-trip through the
+    // legacy `S.employees` payload — the frontend that calls PUT /api/state
+    // has no idea either exists. Capture both before the wipe below so every
+    // employee save from the web app doesn't silently erase them.
+    const pinById = new Map(
+      (await tx
+        .select({
+          id: employees.id,
+          pinHash: employees.pinHash,
+          pinResetOtpHash: employees.pinResetOtpHash,
+          pinResetExpiresAt: employees.pinResetExpiresAt,
+          username: employees.username,
+          passwordHash: employees.passwordHash,
+        })
+        .from(employees)).map((r) => [r.id, r]),
+    );
+
     // 1) wipe all domain tables (users are untouched)
     await Promise.all([
       tx.delete(boxes),
@@ -265,6 +295,7 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
       employees,
       Object.entries(s.employees ?? {}).map(([id, raw]) => {
         const e = raw as Record<string, unknown>;
+        const pin = pinById.get(id);
         return {
           id,
           name: (e.name as string) ?? null,
@@ -272,9 +303,16 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
           /* This table is wiped and fully reinserted on every save() — userId
              is a typed column, not part of `data`, so it must be carried over
              explicitly here or the account link set via PATCH /link would be
-             silently dropped on the very next unrelated state save. */
+             silently dropped on the very next unrelated state save. Same
+             reasoning for the PIN/login columns, captured into pinById above
+             since they never round-trip through `data` at all (see composeState). */
           userId: toInt(e.userId),
           data: e,
+          pinHash: pin?.pinHash ?? null,
+          pinResetOtpHash: pin?.pinResetOtpHash ?? null,
+          pinResetExpiresAt: pin?.pinResetExpiresAt ?? null,
+          username: pin?.username ?? null,
+          passwordHash: pin?.passwordHash ?? null,
           updatedAt: new Date(),
         };
       }),

@@ -10,6 +10,7 @@ import '../services/i18n.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/pin_pad.dart';
 
 /// The badge screen — where every shift starts and where the device sits
 /// whenever nobody is working it.
@@ -118,6 +119,160 @@ class _LoginScreenState extends State<LoginScreen> {
     // This exact gap just arrived at scanner speed, so arm a short quiet-period
     // check — reacting to a gap that already happened, never predicting one.
     _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
+  }
+
+  /// Tapping a name is a shortcut for a badge scan, so it goes through the
+  /// same PIN gate: first tap ever offers to set a 4-digit PIN (or skip),
+  /// every tap after that — once one is set — asks for it before starting the
+  /// session. The PIN itself is verified against a bcrypt hash on the backend
+  /// (see `ApiClient.setEmployeePin`/`verifyEmployeePin`), so it works the
+  /// same on every PDA an employee badges into, not just this device — only
+  /// the "did they skip on this device" memory is local (see [Prefs.pinSkipped]).
+  Future<void> _tapEmployee(Employee e) async {
+    final c = context.read<AppController>();
+
+    if (e.hasPin) {
+      await _verifyThenEnter(e);
+      return;
+    }
+    if (c.prefs.pinSkipped(e.id)) {
+      final err = c.identifyAs(e);
+      if (err != null) c.toastMsg(err, '', ResultKind.err);
+      return;
+    }
+
+    final result = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN สำหรับ ${e.name}',
+      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
+      allowSkip: true,
+    );
+    if (result == null) return; // dismissed — ask again next time
+    if (result.skipped) {
+      c.prefs.skipPin(e.id);
+      if (!mounted) return;
+      final err = c.identifyAs(e);
+      if (err != null) c.toastMsg(err, '', ResultKind.err);
+      return;
+    }
+    if (result.pin == null) return;
+    final firstPin = result.pin!;
+    // Confirm before saving — a mistyped first entry would otherwise lock the
+    // operator out of their own name with a PIN they never meant to set.
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN อีกครั้ง',
+      subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
+      validate: (entered) async => entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
+    if (!mounted) return;
+    try {
+      await c.api.setEmployeePin(e.id, firstPin);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    if (!mounted) return;
+    // Backend now has the PIN, but the local employee list won't say
+    // `hasPin: true` until the next `/api/state` fetch — log in on this
+    // successful set rather than making the operator badge in twice.
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
+  }
+
+  Future<void> _verifyThenEnter(Employee e) async {
+    final c = context.read<AppController>();
+    final result = await showPinPad(
+      context,
+      title: 'ใส่รหัส PIN ของ ${e.name}',
+      showForgot: true,
+      validate: (entered) async {
+        try {
+          final ok = await c.api.verifyEmployeePin(e.id, entered);
+          return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+        } catch (err) {
+          return 'ตรวจสอบรหัสไม่สำเร็จ — เช็คการเชื่อมต่อแล้วลองใหม่';
+        }
+      },
+    );
+    if (result == null) return; // cancelled
+    if (result.forgot) {
+      await _forgotPin(e);
+      return;
+    }
+    if (result.pin == null) return;
+    if (!mounted) return;
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
+  }
+
+  /// "ลืมรหัส PIN?" — mints a 6-digit OTP straight from the PDA, no admin
+  /// needing to click a "reset" button first (same endpoint the web app's
+  /// admin-only button calls; the device's own service-account token is
+  /// authorized for it too). The code itself never comes back to this
+  /// device, though — the backend only ever hands it to an open admin
+  /// browser tab in real time (see backend/src/routes/pin.ts /
+  /// 'pinResetRequested' in legacy.html). That's deliberate: the whole point
+  /// of a second person in this flow is that whoever "forgot" their PIN
+  /// can't just read the replacement off their own screen. The operator here
+  /// has to actually get the code from someone looking at the admin page.
+  Future<void> _forgotPin(Employee e) async {
+    final c = context.read<AppController>();
+    try {
+      await c.api.requestPinReset(e.id);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+
+    if (!mounted) return;
+    c.toastMsg(
+      'ส่งคำขอ OTP แล้ว',
+      'รหัสจะขึ้นที่หน้าจัดการระบบของผู้ดูแลระบบ — ขอรหัส 6 หลักจากเขา แล้วกรอกด้านล่าง',
+      ResultKind.info,
+    );
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: 'รหัส 6 หลักจากผู้ดูแลระบบ (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!mounted) return;
+    final newPinResult = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
+    );
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    if (!mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
 
   /// The capture field, shown rather than hidden.
@@ -262,10 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: _EmployeeTile(
                           emp: e,
                           visiting: c.isVisiting(e),
-                          onTap: () {
-                            final err = c.identifyAs(e);
-                            if (err != null) c.toastMsg(err, '', ResultKind.err);
-                          },
+                          onTap: () => _tapEmployee(e),
                         ),
                       )),
                 ],

@@ -76,16 +76,31 @@ CREATE TABLE IF NOT EXISTS locations (
 );
 
 CREATE TABLE IF NOT EXISTS employees (
-  id         TEXT PRIMARY KEY,
-  name       TEXT,
-  role       TEXT,
-  user_id    INTEGER REFERENCES users(id),
-  data       JSONB NOT NULL DEFAULT '{}'::jsonb,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                    TEXT PRIMARY KEY,
+  name                  TEXT,
+  role                  TEXT,
+  user_id               INTEGER REFERENCES users(id),
+  data                  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  pin_hash              TEXT,
+  pin_reset_otp_hash    TEXT,
+  pin_reset_expires_at  TIMESTAMPTZ,
+  username              TEXT UNIQUE,
+  password_hash         TEXT,
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Additive migration for databases created before user_id existed.
+-- Additive migrations for databases created before these columns existed.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_otp_hash TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_expires_at TIMESTAMPTZ;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS username TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_username_unique') THEN
+    ALTER TABLE employees ADD CONSTRAINT employees_username_unique UNIQUE (username);
+  END IF;
+END $$;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 CREATE TABLE IF NOT EXISTS boxes (
   tag          TEXT PRIMARY KEY,

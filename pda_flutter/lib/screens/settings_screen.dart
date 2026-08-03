@@ -7,6 +7,7 @@ import '../controllers/app_controller.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/pin_pad.dart';
 
 /// In-shift settings: what the operator can see and do without leaving their
 /// session. Anything that changes what this terminal *is* — its address, its
@@ -88,6 +89,15 @@ class SettingsScreen extends StatelessWidget {
                   onTap: null,
                 ),
               if (c.emp != null) ...[
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.pin_outlined,
+                  title: 'รหัส PIN ส่วนตัว',
+                  sub: c.emp!.hasPin
+                      ? 'ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส'
+                      : 'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ',
+                  onTap: () => _setupPin(context, c),
+                ),
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.swap_horiz,
@@ -174,6 +184,39 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Lets an already-signed-in operator set (or replace) their own PIN —
+  /// the way in for whoever tapped "ข้าม / ไม่ตั้ง PIN" the first time and
+  /// changed their mind, or wants a new one. No old-PIN check: they're
+  /// already authenticated for this session, that's the whole point of
+  /// putting this here instead of only on the badge screen.
+  Future<void> _setupPin(BuildContext context, AppController c) async {
+    final e = c.emp;
+    if (e == null) return;
+    final first = await showPinPad(
+      context,
+      title: e.hasPin ? 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}' : 'ตั้งรหัส PIN สำหรับ ${e.name}',
+      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน',
+    );
+    if (first == null || first.pin == null) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN อีกครั้ง',
+      subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
+      validate: (entered) async => entered == first.pin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
+    if (!context.mounted) return;
+    try {
+      await c.api.setEmployeePin(e.id, first.pin!);
+    } catch (err) {
+      if (!context.mounted) return;
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    c.toastMsg('ตั้งรหัส PIN แล้ว', '', ResultKind.ok);
   }
 }
 

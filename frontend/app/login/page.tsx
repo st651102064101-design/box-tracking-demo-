@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { login, register, setToken } from '@/lib/api';
 
 export default function LoginPage() {
@@ -10,6 +10,15 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Prefilled when arriving from the web app's "switch account" flow (see
+  // switchToEmployee in legacy.html) — ?u=<their username>, so the person
+  // just switching identity only has to type their own password, not
+  // remember/retype the username they were just shown.
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search).get('u');
+    if (u) setUsername(u);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
