@@ -398,52 +398,61 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-          if (!c.connected)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
-              child: _Notice(
-                text: c.connError == null
-                    ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
-                    : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
-                actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
-                onAction: c.goDeviceSetup,
-              ),
-            ),
-          _BadgePrompt(field: _captureField(loc)),
-          if (people.isEmpty)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, color: C.faint),
-                  ),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(22, 4, 22, bottom + 20),
-                children: [
+          // Everything below the header scrolls as one unit — the badge-scan
+          // card used to be pinned outside the list, which left it stuck in
+          // place (and could crowd out the employee list, or sit half-hidden
+          // behind the keyboard) on shorter screens. Now a scan/tap-name flow
+          // is one continuous scrollable column, header excepted.
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(0, 0, 0, bottom + 20),
+              children: [
+                if (!c.connected)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                        style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                    padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+                    child: _Notice(
+                      text: c.connError == null
+                          ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
+                          : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
+                      actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
+                      onAction: c.goDeviceSetup,
+                    ),
                   ),
-                  ...people.map((e) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _EmployeeTile(
-                          emp: e,
-                          visiting: c.isVisiting(e),
-                          onTap: () => _tapEmployee(e),
+                _BadgePrompt(field: _captureField(loc)),
+                if (people.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, color: C.faint),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                              style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
                         ),
-                      )),
-                ],
-              ),
+                        ...people.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _EmployeeTile(
+                                emp: e,
+                                visiting: c.isVisiting(e),
+                                onTap: () => _tapEmployee(e),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+              ],
             ),
+          ),
         ],
     );
   }

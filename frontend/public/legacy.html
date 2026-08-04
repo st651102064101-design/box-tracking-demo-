@@ -3745,7 +3745,8 @@ function openBoxActionModal(tag){
 
   var actions=[];
   actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span> ติดตามกล่องนี้',cls:'btn ghost',fn:'closeModal();trackBox(\''+esc(tag)+'\');switchTab(\'track\');'});
-  actions.push({label:'<span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg></span> ติดแท็ก RFID',cls:'btn ghost',fn:'closeModal();printLabels([\''+esc(tag)+'\'])'});
+  actions.push({label:'<span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg></span> พิมพ์ป้ายแท็ก',cls:'btn ghost',fn:'closeModal();printLabels([\''+esc(tag)+'\'])'});
+  actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> '+(b.rfidTid?'เปลี่ยนแท็ก RFID':'ผูกแท็ก RFID'),cls:'btn ghost',fn:'closeModal();openRfidTagModal(\''+esc(tag)+'\')'});
   if(b.status==='warehouse'){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายตำแหน่งจัดเก็บ',cls:'btn ghost',fn:'closeModal();openRelocateModal(\''+esc(tag)+'\')'});
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)',cls:'btn ghost',fn:'closeModal();markHold(\''+esc(tag)+'\')'});
@@ -3773,6 +3774,7 @@ function openBoxActionModal(tag){
       +'<div class="ts-line"><span class="k">สถานะ</span><span class="v">'+statusPill(b.status,b)+'</span></div>'
       +'<div class="ts-line"><span class="k">ตำแหน่ง / ลูกค้า</span><span class="v">'+locOrCust+'</span></div>'
       +((b.lot||b.expiry)?'<div class="ts-line"><span class="k">Lot / หมดอายุ</span><span class="v">'+(b.lot?esc(b.lot):'<span class="muted">-</span>')+(b.expiry?' · '+esc(b.expiry)+' '+expiryPill(b):'')+'</span></div>':'')
+      +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+(b.rfidTid?'<span class="mono small">'+esc(b.rfidTid)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
       +'<div class="ts-line"><span class="k">เห็นล่าสุด</span><span class="v">'+fmtTs(b.lastSeenAt)+'</span></div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
@@ -3783,6 +3785,103 @@ function openBoxActionModal(tag){
   );
 }
 window.openBoxActionModal=openBoxActionModal;
+
+/* ===== RFID TAG ASSOCIATION =====
+   Attaches (or, after a damaged sticker, re-attaches) an RFID tag's TID+EPC
+   to a box that already has a barcode. Writes through the dedicated
+   POST/DELETE /api/boxes/:tag/rfid endpoints directly — deliberately NOT
+   through save()/S, because the duplicate-TID check has to run against every
+   box on the server, not just whatever this tab's S happens to have loaded.
+   See backend/src/services/rfid.ts for the associate/replace/detach rules. */
+function openRfidTagModal(tag){
+  var b=S.boxes[tag];if(!b)return;
+  var hasTag=!!b.rfidTid;
+  openModal(
+    '<div class="mhead"><h3>'+(hasTag?'เปลี่ยนแท็ก RFID':'ผูกแท็ก RFID')+' · <span class="mono">'+esc(tag)+'</span></h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody">'
+      +(hasTag
+        ?'<p class="desc">กล่องนี้มีแท็กผูกอยู่แล้ว (TID ปัจจุบัน: <span class="mono">'+esc(b.rfidTid)+'</span>) — ใช้หน้านี้เมื่อแท็กเดิมชำรุดและต้องแปะแท็กแผ่นใหม่แทน</p>'
+        :'<p class="desc">ยิงแท็ก RFID เปล่าด้วยเครื่องอ่าน แล้วกรอกค่า TID/EPC ที่อ่านได้จากแท็กลงช่องด้านล่าง</p>')
+      +'<div class="field"><label>TID (เลขประจำตัวแท็กจากโรงงาน — แก้ไขไม่ได้)</label><input id="rfTid" placeholder="เช่น E200001122334455" autocomplete="off" class="mono" spellcheck="false"></div>'
+      +'<div class="field"><label>EPC (ค่าที่เขียนลงหน่วยความจำแท็ก)</label><input id="rfEpc" placeholder="เช่น 000000000000424F582D31" autocomplete="off" class="mono" spellcheck="false"></div>'
+      +'<div class="row" style="gap:10px;align-items:center;margin-top:6px;">'
+        +'<button type="button" class="btn ghost sm" onclick="fillSuggestedEpc(\''+esc(tag)+'\')">ใช้ค่าแนะนำจากบาร์โค้ด</button>'
+        +'<span class="muted small">เข้ารหัสบาร์โค้ด "'+esc(tag)+'" เป็นเลขฐาน 16 ให้ก่อนเขียนแท็ก</span>'
+      +'</div>'
+    +'</div>'
+    +'<div class="mfoot">'
+      +'<button class="btn gray" data-close>ยกเลิก</button>'
+      +(hasTag?'<button class="btn red" onclick="detachRfidTag(\''+esc(tag)+'\')">ถอดแท็ก</button>':'')
+      +'<button class="btn accent" id="rfSaveBtn">'+(hasTag?'เปลี่ยนแท็ก':'บันทึก')+'</button>'
+    +'</div>'
+  );
+  $('#rfSaveBtn').onclick=function(){submitRfidTag(tag);};
+}
+window.openRfidTagModal=openRfidTagModal;
+
+/** Fills the EPC field with what encodeBarcodeToEpcHex on the server would
+ *  write for this barcode — the value a blank tag should actually get. */
+function fillSuggestedEpc(tag){
+  apiFetch('/api/rfid/encode/'+encodeURIComponent(tag),{headers:authHeaders()})
+    .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'สร้างค่าแนะนำไม่สำเร็จ');return b;});})
+    .then(function(b){setv('rfEpc',b.epcHex);})
+    .catch(function(e){toast('สร้างค่าแนะนำไม่สำเร็จ',e.message||'','err');});
+}
+window.fillSuggestedEpc=fillSuggestedEpc;
+
+function submitRfidTag(tag){
+  var tid=(val('rfTid')||'').trim().toUpperCase();
+  var epc=(val('rfEpc')||'').trim().toUpperCase();
+  if(!/^[0-9A-F]{8,}$/.test(tid))return toast('TID ไม่ถูกต้อง','ต้องเป็นเลขฐาน 16 อย่างน้อย 8 หลัก','err');
+  if(!/^[0-9A-F]{8,}$/.test(epc))return toast('EPC ไม่ถูกต้อง','ต้องเป็นเลขฐาน 16 อย่างน้อย 8 หลัก','err');
+  doAssociateRfid(tag,tid,epc,false);
+}
+window.submitRfidTag=submitRfidTag;
+
+function doAssociateRfid(tag,tid,epc,replace){
+  apiFetch('/api/boxes/'+encodeURIComponent(tag)+'/rfid',{
+    method:'POST',
+    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:JSON.stringify({rfidTid:tid,rfidEpc:epc,replace:replace})
+  })
+    .then(function(r){return r.json().then(function(b){if(!r.ok){var err=new Error(b.message||'ผูกแท็กไม่สำเร็จ');err.code=b.error;throw err;}return b;});})
+    .then(function(b){
+      // Optimistic — this write bypasses save()/S, so without this the row
+      // would still show "ไม่มี RFID" until the next full state refresh.
+      if(S.boxes[tag]){S.boxes[tag].rfidTid=b.rfidTid;S.boxes[tag].rfidEpc=b.rfidEpc;}
+      closeModal();renderAll();
+      toast(replace?'เปลี่ยนแท็กแล้ว':'ผูกแท็กแล้ว',tag+' · TID '+b.rfidTid,'ok');
+    })
+    .catch(function(e){
+      if(e.code==='already_tagged'&&!replace){
+        confirmA('กล่องนี้มีแท็กผูกอยู่แล้ว',e.message,'เปลี่ยนแท็ก').then(function(ok){
+          if(ok)doAssociateRfid(tag,tid,epc,true);
+        });
+        return;
+      }
+      toast('ผูกแท็กไม่สำเร็จ',e.message||'','err');
+    });
+}
+window.doAssociateRfid=doAssociateRfid;
+
+/** Detaches whatever tag a box carries — before scrapping it, or before its
+ *  physical tag gets reused elsewhere. Reachable from openRfidTagModal only
+ *  when the box actually has one (see the conditional action below). */
+function detachRfidTag(tag){
+  var b=S.boxes[tag];if(!b||!b.rfidTid)return;
+  confirmA('ถอดแท็ก RFID?','กล่อง '+tag+' จะกลับไปค้นหาได้ด้วยบาร์โค้ดเท่านั้น จนกว่าจะผูกแท็กใหม่','ถอดแท็ก',true).then(function(ok){
+    if(!ok)return;
+    apiFetch('/api/boxes/'+encodeURIComponent(tag)+'/rfid',{method:'DELETE',headers:authHeaders()})
+      .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'ถอดแท็กไม่สำเร็จ');return b;});})
+      .then(function(){
+        if(S.boxes[tag]){S.boxes[tag].rfidTid=null;S.boxes[tag].rfidEpc=null;}
+        closeModal();renderAll();
+        toast('ถอดแท็กแล้ว',tag,'ok');
+      })
+      .catch(function(e){toast('ถอดแท็กไม่สำเร็จ',e.message||'','err');});
+  });
+}
+window.detachRfidTag=detachRfidTag;
 
 /* ===== CONTACT LOG — ปิด loop "ติดต่อลูกค้า" ในผังงาน =====
    ผังงานมีเส้นวนจาก "รายงาน Overdue" กลับไป "ติดต่อลูกค้า" แต่ระบบเดิมบอกได้แค่ว่า
@@ -4878,10 +4977,18 @@ function statusPill(s,ctx){
     if(!_l.zone&&!_l.rack)return '<span class="pill warn">รอ Putaway</span>';
   }
   var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอติด Tag'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
-/* small warning badge shown next to the status pill when a box was brought in
-   via the barcode fallback (gate down) and its RFID tag has not yet been
-   confirmed readable by an actual RFID gate pass */
-function rfidBadge(b){return '';} /* barcode-only: no unverified-tag concept */
+/* small badge shown next to the status pill: whether this box has an RFID
+   tag associated at all yet (see openRfidTagModal). Silent (no badge) once
+   labeled=false boxes cover "not tagged" via their own "รอติด Tag" status
+   pill already — this only needs to speak up for a box that's otherwise
+   marked ready but still has no RFID, since that's the case an operator
+   could easily miss at a glance. */
+function rfidBadge(b){
+  if(!b||b.labeled===false)return '';
+  return b.rfidTid
+    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="TID '+esc(b.rfidTid)+'">RFID</span>'
+    : ' <span class="pill warn" style="font-size:10px;padding:1px 6px;">ไม่มี RFID</span>';
+}
 function journeyDots(s){var d1='<span class="jd '+(s==='warehouse'?'on-wh':'dim')+'"></span>';var d2='<span class="jd '+(s==='out'?'on-out':'dim')+'"></span>';var d3='<span class="jd '+(s==='lost'?'on-lost':'dim')+'"></span>';return '<span class="journey">'+d1+d2+d3+'</span>';}
 
 /* ===================================================================

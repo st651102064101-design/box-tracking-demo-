@@ -86,6 +86,17 @@ export const gateOutSchema = z.object({
   vehicleType: z.string().optional(),
 });
 
+/* ─── RFID tag association ─────────────────────────────────────────────────*/
+const HEX = /^[0-9A-Fa-f]+$/;
+export const rfidAssociateSchema = z.object({
+  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8),
+  rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
+  /** Must be set explicitly to overwrite a box that already carries a tag —
+   *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
+   *  no tag yet just associates normally. */
+  replace: z.boolean().optional().default(false),
+});
+
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
   gate: z.number().int().positive(),

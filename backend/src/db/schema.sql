@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS boxes (
   due_at       TIMESTAMPTZ,
   last_seen_at TIMESTAMPTZ,
   labeled      BOOLEAN NOT NULL DEFAULT false,
+  rfid_tid     TEXT UNIQUE,
+  rfid_epc     TEXT,
   location     JSONB NOT NULL DEFAULT '{}'::jsonb,
   history      JSONB NOT NULL DEFAULT '[]'::jsonb,
   data         JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -125,6 +127,16 @@ CREATE TABLE IF NOT EXISTS boxes (
 CREATE INDEX IF NOT EXISTS boxes_status_idx   ON boxes (status);
 CREATE INDEX IF NOT EXISTS boxes_customer_idx ON boxes (customer);
 CREATE INDEX IF NOT EXISTS boxes_due_idx      ON boxes (due_at);
+
+-- Additive migrations for databases created before RFID columns existed.
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS rfid_tid TEXT;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS rfid_epc TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'boxes_rfid_tid_unique') THEN
+    ALTER TABLE boxes ADD CONSTRAINT boxes_rfid_tid_unique UNIQUE (rfid_tid);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS boxes_rfid_epc_idx ON boxes (rfid_epc);
 
 CREATE TABLE IF NOT EXISTS vehicles (
   id         TEXT PRIMARY KEY,
