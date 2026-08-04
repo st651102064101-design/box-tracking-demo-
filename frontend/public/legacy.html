@@ -8799,12 +8799,25 @@ window.commitInvReceive = commitInvReceive;
 /* ====== BULK: relocate / ship / write-off ====== */
 $('#bulkInvClear').addEventListener('click', function() { clearBulk('inv-cb', 'bulkInv', 'cbAllInv'); });
 
-/* พิมพ์ป้ายบาร์โค้ด/QR หลายใบพร้อมกัน — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ
-   "รอติดบาร์โค้ด" ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง ใช้
-   printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว ซึ่งบันทึก labeled=true ให้อยู่แล้ว
-   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง — ผูกแท็ก RFID (ต่าง
-   จากป้ายบาร์โค้ด/QR) ไม่มีปุ่มบนเว็บนี้ เพราะต้องมีเครื่องอ่านจริง ทำได้จาก
-   PDA เท่านั้น (ดู pda_flutter/lib/screens/rfid_register_screen.dart) */
+/* ย้ายพิกัด/จัดเก็บครั้งแรกได้เมื่ออยู่ในคลังแล้ว หรือติดป้ายแล้วรอ Putaway
+   (pending+labeled) — ยังไม่ติดป้าย (pending ธรรมดา) / ส่งออก / หาย ยังทำไม่ได้ */
+function canBulkRelocate(b) {
+  if (!b) return false;
+  if (b.status === 'warehouse') return true;
+  if (b.status === 'pending' && b.labeled === true) return true;
+  return false;
+}
+function needsPutawayLoc(b) {
+  if (!b) return false;
+  if (b.status === 'pending' && b.labeled === true) return true;
+  if (b.status === 'warehouse' && isAtStaging(b)) return true;
+  return false;
+}
+
+/* พิมพ์ป้ายบาร์โค้ด/QR หลายใบพร้อมกัน — ใช้ printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว
+   ซึ่งบันทึก labeled=true ให้อยู่แล้ว จากนั้นเลือกหลายใบแล้วกดย้ายพิกัดเพื่อ Putaway
+   ครั้งแรกได้ — ผูกแท็ก RFID (ต่างจากป้ายบาร์โค้ด/QR) ไม่มีปุ่มบนเว็บนี้ เพราะต้องมี
+   เครื่องอ่านจริง ทำได้จาก PDA เท่านั้น (ดู pda_flutter/lib/screens/rfid_register_screen.dart) */
 $('#bulkInvTag').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
   var done = tags.filter(function(t) { var b = S.boxes[t]; return b && b.labeled === true; });
@@ -8815,7 +8828,7 @@ $('#bulkInvTag').addEventListener('click', function() {
 });
 $('#bulkInvRelocate').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var bad = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status !== 'warehouse'; });
+  var bad = tags.filter(function(t) { return !canBulkRelocate(S.boxes[t]); });
   if (bad.length) return toast('ย้ายได้เฉพาะกล่องในคลัง', 'มี ' + bad.length + ' ใบไม่อยู่ในคลัง', 'err');
   var dp = defaultPutaway();
   openModal(
@@ -8836,18 +8849,52 @@ $('#bulkInvRelocate').addEventListener('click', function() {
 function commitBulkRelocate(tags) {
   var wh = val('brlWh'); var recorder = USER; var ts = iso();
   var loc = { wh: wh, zone: val('brlZone'), rack: val('brlRack'), shelf: val('brlShelf'), slot: val('brlSlot'), gate: null, ts: ts };
+  var locStr = [loc.zone, loc.rack, loc.shelf, loc.slot].filter(Boolean).join(' · ');
+  if ((loc.zone || loc.rack || loc.shelf || loc.slot) && !hasRegisteredLocation(loc.wh, loc.zone, loc.rack, loc.shelf, loc.slot)) {
+    return toast('ตำแหน่งไม่อยู่ในผังที่ลงทะเบียน', 'กรุณาเลือกโซน/แร็ค/ชั้น/ช่องจากรายการที่มีเท่านั้น', 'err');
+  }
+  if (tags.some(function(t) { return needsPutawayLoc(S.boxes[t]); }) && !loc.zone && !loc.rack) {
+    return toast('ยังไม่ได้ระบุตำแหน่งจัดเก็บ', 'กรอกโซนหรือแร็คก่อนยืนยัน Putaway มิฉะนั้นกล่องจะค้างสถานะ "รอ Putaway"', 'err');
+  }
   var n = 0;
+  var typesIn = {};
   tags.forEach(function(t) {
-    var b = S.boxes[t]; if (!b || b.status !== 'warehouse') return;
-    var before = Object.assign({}, b.location || {});
-    b.location = loc; b.lastSeenAt = ts;
-    b.history.push({ dir: 'relocate', ts: ts, wh: wh, loc: loc, recorder: recorder });
-    auditEntry('RELOCATE', recorder, t, typeName(b.type), before, loc);
-    n++;
+    var b = S.boxes[t];
+    if (!canBulkRelocate(b)) return;
+    if (b.status === 'pending' && b.labeled === true) {
+      var isNewBox = !(b.history || []).some(function(h) { return h.dir === 'out'; });
+      b.history.push({ dir: 'in', ts: ts, do: isNewBox ? '' : b.do, po: isNewBox ? '' : b.po, customer: isNewBox ? '' : b.customer, wh: wh, loc: loc, recorder: recorder, note: isNewBox ? 'Initial Inbound + Putaway ผ่าน Inventory (Bulk)' : 'รับเข้าผ่าน Inventory (Bulk)' });
+      S.events.push({ ts: ts, dir: isNewBox ? 'in-new' : 'in', tag: t, type: b.type, do: isNewBox ? '' : b.do, customer: isNewBox ? '' : b.customer, customerName: isNewBox ? '' : custName(b.customer), wh: wh, recorder: recorder });
+      b.status = 'warehouse';
+      if (!isNewBox) b.cycles = (b.cycles || 0) + 1;
+      b.customer = ''; b.do = ''; b.po = '';
+      b.outGate = null; b.outWh = ''; b.outAt = null; b.dueAt = null;
+      b.location = loc; b.lastSeenAt = ts;
+      auditEntry('GATE_IN', recorder, t, typeName(b.type), null, { wh: whName(wh), loc: locStr });
+      typesIn[b.type] = true;
+      n++;
+    } else if (b.status === 'warehouse' && isAtStaging(b)) {
+      var beforeStg = { wh: whName((b.location || {}).wh), loc: locShort(b.location) };
+      b.history.push({ dir: 'putaway', ts: ts, wh: wh, loc: loc, recorder: recorder, note: 'จัดเรียงเข้าแร็คผ่าน Inventory (Bulk)' });
+      b.location = loc; b.lastSeenAt = ts;
+      auditEntry('RELOCATE', recorder, t, typeName(b.type), beforeStg, { wh: whName(wh), loc: locStr });
+      typesIn[b.type] = true;
+      n++;
+    } else if (b.status === 'warehouse') {
+      var before = Object.assign({}, b.location || {});
+      b.location = loc; b.lastSeenAt = ts;
+      b.history.push({ dir: 'relocate', ts: ts, wh: wh, loc: loc, recorder: recorder });
+      auditEntry('RELOCATE', recorder, t, typeName(b.type), before, loc);
+      typesIn[b.type] = true;
+      n++;
+    }
   });
-  saveLastInvLoc(wh, [loc.zone, loc.rack, loc.shelf, loc.slot].filter(Boolean).join(' · '));
+  if (loc.zone || loc.rack || loc.shelf || loc.slot) {
+    Object.keys(typesIn).forEach(function(ty) { S.putaway[ty] = { wh: wh, zone: loc.zone, rack: loc.rack, shelf: loc.shelf, slot: loc.slot }; });
+  }
+  saveLastInvLoc(wh, locStr);
   save(); closeModal(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
-  toast('ย้ายพิกัดแล้ว', n + ' ใบ → ' + whName(wh) + ' ' + [loc.zone, loc.rack, loc.shelf, loc.slot].filter(Boolean).join(' · '));
+  toast('ย้ายพิกัดแล้ว', n + ' ใบ → ' + whName(wh) + ' ' + locStr);
   renderAll();
 }
 window.commitBulkRelocate = commitBulkRelocate;
