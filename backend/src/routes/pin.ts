@@ -35,8 +35,10 @@ function genOtp(): string {
 function maskEmail(email: string): string {
   const [user, domain] = email.split('@');
   if (!domain) return '***';
-  const maskedUser = user.length <= 2 ? user[0] + '*' : user[0] + '*'.repeat(user.length - 2) + user.slice(-1);
-  return `${maskedUser}@${domain}`;
+  const maskedUser = user.length <= 2 ? user[0] + '****' : user.slice(0, 2) + '****';
+  const [dName, dExt] = domain.split('.');
+  const maskedDomain = dName ? dName[0] + '****' + (dExt ? '.' + dExt : '') : domain;
+  return `${maskedUser}@${maskedDomain}`;
 }
 
 /** Throttles reset requests per IP — this endpoint sends an email and is

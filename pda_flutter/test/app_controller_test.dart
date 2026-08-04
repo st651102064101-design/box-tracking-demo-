@@ -193,6 +193,7 @@ Future<AppController> makeController(FakeApi api) async {
   c.gate = '2';
   prefs.deviceWh = 'WH-1';
   prefs.deviceGate = '2';
+  prefs.deviceConfigured = true; // otherwise a restart (see init()) lands back in deviceSetup
   prefs.token = 'device-token'; // already signed in as itself, as a real one is
   c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
   return c;
@@ -595,26 +596,29 @@ void main() {
       expect(c.wh, 'WH-1',
           reason: 'the only warehouse on file is not a choice worth asking about');
 
-      c.pickGate(3);
-      c.saveDevicePost();
-      expect(c.prefs.deviceWh, 'WH-1');
-      expect(c.prefs.deviceGate, '3');
+      // Warehouse/gate are no longer fixed at setup time — they're picked
+      // per-visit instead (see confirmPost/pickWh/pickGate below and
+      // finishDeviceSetup's own doc comment). Finishing setup here only
+      // means "this terminal has a working connection and has been through
+      // setup once", so it doesn't touch prefs.deviceWh/deviceGate at all.
+      c.finishDeviceSetup();
+      expect(c.deviceConfigured, isTrue);
       expect(c.screen, Screen.login, reason: 'setup ends at the badge screen, ready to work');
 
       final c2 = AppController(api: api, prefs: c.prefs, rfid: RfidService());
       await c2.init();
       expect(c2.screen, Screen.login);
-      expect(c2.wh, 'WH-1');
-      expect(c2.gate, '3');
     });
 
-    test('saving refuses an incomplete post', () async {
+    test('finishing setup while already identified goes straight to home, not the badge screen',
+        () async {
       final c = await freshDevice(FakeApi());
-      c.pickWh('WH-1');
-      c.gate = '';
-      c.saveDevicePost();
-      expect(c.prefs.deviceGate, isEmpty);
-      expect(c.toast!.title, 'เลือกคลังและประตูก่อน');
+      await c.init();
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0001'));
+
+      c.finishDeviceSetup();
+      expect(c.deviceConfigured, isTrue);
+      expect(c.screen, Screen.home);
     });
 
     test('picking a warehouse with a single gate fills it in', () async {

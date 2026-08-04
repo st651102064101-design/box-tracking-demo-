@@ -778,10 +778,24 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     int done = 0;
     final failed = <OutboxTx>[];
+    // A rejection the server actually processed and refused (ApiException —
+    // e.g. the box was put on Hold, marked Damaged/Lost, or already shipped
+    // by someone else since this scan was queued) will refuse the exact same
+    // way every time. Retrying it forever just re-fails silently on every
+    // sync and leaves the operator staring at a "ค้าง" count with no way to
+    // clear it short of wiping the outbox — so it's dropped here instead,
+    // same as the live (non-outbox) path in doCommit() already does. Anything
+    // else (timeout, no connection) genuinely might succeed next time, so
+    // that one still goes back in the queue.
+    String? rejectedReason;
+    int rejectedCount = 0;
     for (final tx in pending) {
       try {
         await _postTx(tx);
         done++;
+      } on ApiException catch (e) {
+        rejectedCount++;
+        rejectedReason ??= e.message;
       } catch (_) {
         failed.add(tx);
       }
@@ -796,6 +810,9 @@ class AppController extends ChangeNotifier {
     } catch (_) {}
     if (done > 0) {
       toastMsg('ซิงก์สำเร็จ', '$done รายการเข้าสู่ระบบแล้ว', ResultKind.ok);
+    }
+    if (rejectedCount > 0) {
+      toastMsg('ตัดรายการที่ระบบปฏิเสธ', '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
     }
     if (failed.isNotEmpty) {
       toastMsg('ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);

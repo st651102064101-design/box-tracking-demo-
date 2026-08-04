@@ -98,6 +98,28 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const found = new Map(Array.from(resolved.values()).map((r) => [r.tag, r]));
   const canonicalTags = Array.from(new Set(Array.from(resolved.values()).map((r) => r.tag)));
 
+  /* Only a box actually sitting in the warehouse can ship — mirrors scanOut()
+   * in legacy.html exactly (out/lost/pending/hold/damage are all refused
+   * there with a specific reason). This endpoint has no client-side gate in
+   * front of it (a physical RFID reader or PDA calls it directly), so the
+   * same business rule has to be enforced here too, or Hold/Damage/Lost stop
+   * meaning anything the moment a scan comes from a device instead of the
+   * web UI. */
+  const NOT_SHIPPABLE: Record<string, string> = {
+    out: 'ออกไปแล้ว (ยังไม่คืน)',
+    lost: 'ถูกตีเป็นสูญหาย',
+    pending: 'ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง',
+    hold: 'ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้',
+    damage: 'สถานะชำรุด (Damage) — จ่ายออกไม่ได้',
+  };
+  const blocked = canonicalTags
+    .map((tag) => ({ tag, status: found.get(tag)!.status }))
+    .filter((b) => b.status !== 'warehouse');
+  if (blocked.length) {
+    const detail = blocked.map((b) => `${b.tag} (${NOT_SHIPPABLE[b.status] ?? b.status})`).join(', ');
+    throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
+  }
+
   const wh = await warehouseOfGate(db, gate);
   const returnDays = cust.returnDays ?? cfg?.agingDays ?? 15;
   const outTs = iso();
@@ -233,6 +255,17 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.plate = plate;
       b.driver = driver;
       b.vehicleType = vehicleType;
+      // Every inbound path in the legacy web UI clears these on return (see
+      // legacy.html ~5552/5559/7296/4899) — a box back in the warehouse must
+      // stop reporting the customer/DO/due-date from its last trip out, or
+      // it keeps looking shipped even though status already says otherwise.
+      b.customer = '';
+      b.do = '';
+      b.po = '';
+      b.outGate = null;
+      b.outWh = '';
+      b.outAt = null;
+      b.dueAt = null;
       const history = Array.isArray(b.history) ? (b.history as unknown[]) : [];
       history.push({
         dir: 'in',
@@ -254,6 +287,13 @@ export async function gateIn(db: DB, input: GateInInput) {
           status: 'warehouse',
           cycles: (row.cycles ?? 0) + (wasOut ? 1 : 0),
           lastSeenAt: new Date(inTs),
+          customer: null,
+          doNo: null,
+          po: null,
+          outGate: null,
+          outWh: null,
+          outAt: null,
+          dueAt: null,
           data: b,
           updatedAt: new Date(),
         })

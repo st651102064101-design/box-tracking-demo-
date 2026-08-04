@@ -257,7 +257,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final otpResult = await showPinPad(
       context,
       title: 'กรอกรหัส OTP',
-      subtitle: 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      subtitle: sentTo != null
+          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
+          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
       length: 6,
     );
     if (otpResult == null || otpResult.pin == null) return;

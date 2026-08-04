@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, count, desc, eq, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { boxes } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
@@ -19,14 +19,26 @@ const canWrite = requireRole('admin', 'staff');
  * dashboard can poll/refresh badge counts on their own cadence, independent
  * of whatever's driving the main table's load. Relies on boxes_status_idx
  * (see schema.sql) so this stays a fast index-only scan as the table grows.
+ *
+ * The 'pending' bucket is split the same way legacy.html's own
+ * localStatusCounts()/statusPill() split it: status='pending' with
+ * labeled=true is really "รอ Putaway" (barcode done, just hasn't been
+ * gated in yet), not "รอติดบาร์โค้ด". Grouping by status alone and letting
+ * the client's Object.assign(local, byStatus) overwrite the client's
+ * already-correct split reintroduced that exact double-count bug — this
+ * bucket expression has to match on both ends.
  */
+const STATUS_BUCKET = sql<string>`case when ${boxes.status} = 'pending' and ${boxes.labeled} = true then 'pendingPutaway' else ${boxes.status} end`;
 boxesRouter.get(
   '/status-summary',
   asyncHandler(async (_req, res) => {
     const db = getDb();
-    const rows = await db.select({ status: boxes.status, count: count() }).from(boxes).groupBy(boxes.status);
+    const rows = await db
+      .select({ bucket: STATUS_BUCKET, count: count() })
+      .from(boxes)
+      .groupBy(STATUS_BUCKET);
     const byStatus: Record<string, number> = {};
-    for (const r of rows) byStatus[r.status] = Number(r.count);
+    for (const r of rows) byStatus[r.bucket] = Number(r.count);
     res.json({ byStatus });
   }),
 );
