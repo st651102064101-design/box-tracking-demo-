@@ -1656,7 +1656,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <span class="bcnt" id="bulkInvCnt"></span>
       <button class="btn sm accent" id="bulkInvRelocate"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายพิกัดจัดเก็บ</button>
       <button class="btn sm ghost" id="bulkInvTag" title="พิมพ์ป้ายบาร์โค้ด/QR ของกล่องที่เลือก แล้วบันทึกว่าติดป้ายแล้ว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายบาร์โค้ด</button>
-      <button class="btn sm ghost" id="bulkInvRfid" title="ผูกแท็ก RFID ให้กล่องที่เลือกทีละใบ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> ผูกแท็ก RFID</button>
       <button class="btn sm ghost" id="bulkInvShip"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งให้ลูกค้า</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
@@ -3757,7 +3756,12 @@ function openBoxActionModal(tag){
   var actions=[];
   actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span> ติดตามกล่องนี้',cls:'btn ghost',fn:'closeModal();trackBox(\''+esc(tag)+'\');switchTab(\'track\');'});
   actions.push({label:'<span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายบาร์โค้ด',cls:'btn ghost',fn:'closeModal();printLabels([\''+esc(tag)+'\'])'});
-  actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> '+(b.rfidTid?'เปลี่ยนแท็ก RFID':'ผูกแท็ก RFID'),cls:'btn ghost',fn:'closeModal();openRfidTagModal(\''+esc(tag)+'\')'});
+  /* ผูก/เปลี่ยนแท็ก RFID ทำได้จาก PDA เท่านั้น (มีเครื่องอ่านจริง) — เว็บนี้ไม่มี
+     ทางรับค่า TID/EPC ที่ถูกต้องได้นอกจากให้คนพิมพ์เดาเอง ซึ่งใช้งานจริงไม่ได้
+     เว็บนี้จึงทำได้แค่ "ถอด" แท็กที่ผูกไว้แล้ว (ไม่ต้องพิมพ์อะไร) ไม่ใช่ "ผูก" ใหม่ */
+  if(b.rfidTid){
+    actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> ถอดแท็ก RFID',cls:'btn ghost',fn:'closeModal();detachRfidTag(\''+esc(tag)+'\')'});
+  }
   if(b.status==='warehouse'){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายตำแหน่งจัดเก็บ',cls:'btn ghost',fn:'closeModal();openRelocateModal(\''+esc(tag)+'\')'});
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)',cls:'btn ghost',fn:'closeModal();markHold(\''+esc(tag)+'\')'});
@@ -3797,87 +3801,14 @@ function openBoxActionModal(tag){
 }
 window.openBoxActionModal=openBoxActionModal;
 
-/* ===== RFID TAG ASSOCIATION =====
-   Attaches (or, after a damaged sticker, re-attaches) an RFID tag's TID+EPC
-   to a box that already has a barcode. Writes through the dedicated
-   POST/DELETE /api/boxes/:tag/rfid endpoints directly — deliberately NOT
-   through save()/S, because the duplicate-TID check has to run against every
-   box on the server, not just whatever this tab's S happens to have loaded.
-   See backend/src/services/rfid.ts for the associate/replace/detach rules. */
-function openRfidTagModal(tag){
-  var b=S.boxes[tag];if(!b)return;
-  var hasTag=!!b.rfidTid;
-  openModal(
-    '<div class="mhead"><h3>'+(hasTag?'เปลี่ยนแท็ก RFID':'ผูกแท็ก RFID')+' · <span class="mono">'+esc(tag)+'</span></h3><button class="x" data-close>'+IC('close')+'</button></div>'
-    +'<div class="mbody">'
-      +(hasTag
-        ?'<p class="desc">กล่องนี้มีแท็กผูกอยู่แล้ว (TID ปัจจุบัน: <span class="mono">'+esc(b.rfidTid)+'</span>) — ใช้หน้านี้เมื่อแท็กเดิมชำรุดและต้องแปะแท็กแผ่นใหม่แทน</p>'
-        :'<p class="desc">ยิงแท็ก RFID เปล่าด้วยเครื่องอ่าน แล้วกรอกค่า TID/EPC ที่อ่านได้จากแท็กลงช่องด้านล่าง</p>')
-      +'<div class="field"><label>TID (เลขประจำตัวแท็กจากโรงงาน — แก้ไขไม่ได้)</label><input id="rfTid" placeholder="เช่น E200001122334455" autocomplete="off" class="mono" spellcheck="false"></div>'
-      +'<div class="field"><label>EPC (ค่าที่เขียนลงหน่วยความจำแท็ก)</label><input id="rfEpc" placeholder="เช่น 000000000000424F582D31" autocomplete="off" class="mono" spellcheck="false"></div>'
-      +'<div class="row" style="gap:10px;align-items:center;margin-top:6px;">'
-        +'<button type="button" class="btn ghost sm" onclick="fillSuggestedEpc(\''+esc(tag)+'\')">ใช้ค่าแนะนำจากบาร์โค้ด</button>'
-        +'<span class="muted small">เข้ารหัสบาร์โค้ด "'+esc(tag)+'" เป็นเลขฐาน 16 ให้ก่อนเขียนแท็ก</span>'
-      +'</div>'
-    +'</div>'
-    +'<div class="mfoot">'
-      +'<button class="btn gray" data-close>ยกเลิก</button>'
-      +(hasTag?'<button class="btn red" onclick="detachRfidTag(\''+esc(tag)+'\')">ถอดแท็ก</button>':'')
-      +'<button class="btn accent" id="rfSaveBtn">'+(hasTag?'เปลี่ยนแท็ก':'บันทึก')+'</button>'
-    +'</div>'
-  );
-  $('#rfSaveBtn').onclick=function(){submitRfidTag(tag);};
-}
-window.openRfidTagModal=openRfidTagModal;
-
-/** Fills the EPC field with what encodeBarcodeToEpcHex on the server would
- *  write for this barcode — the value a blank tag should actually get. */
-function fillSuggestedEpc(tag){
-  apiFetch('/api/rfid/encode/'+encodeURIComponent(tag),{headers:authHeaders()})
-    .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'สร้างค่าแนะนำไม่สำเร็จ');return b;});})
-    .then(function(b){setv('rfEpc',b.epcHex);})
-    .catch(function(e){toast('สร้างค่าแนะนำไม่สำเร็จ',e.message||'','err');});
-}
-window.fillSuggestedEpc=fillSuggestedEpc;
-
-function submitRfidTag(tag){
-  var tid=(val('rfTid')||'').trim().toUpperCase();
-  var epc=(val('rfEpc')||'').trim().toUpperCase();
-  if(!/^[0-9A-F]{8,}$/.test(tid))return toast('TID ไม่ถูกต้อง','ต้องเป็นเลขฐาน 16 อย่างน้อย 8 หลัก','err');
-  if(!/^[0-9A-F]{8,}$/.test(epc))return toast('EPC ไม่ถูกต้อง','ต้องเป็นเลขฐาน 16 อย่างน้อย 8 หลัก','err');
-  doAssociateRfid(tag,tid,epc,false);
-}
-window.submitRfidTag=submitRfidTag;
-
-function doAssociateRfid(tag,tid,epc,replace){
-  apiFetch('/api/boxes/'+encodeURIComponent(tag)+'/rfid',{
-    method:'POST',
-    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-    body:JSON.stringify({rfidTid:tid,rfidEpc:epc,replace:replace})
-  })
-    .then(function(r){return r.json().then(function(b){if(!r.ok){var err=new Error(b.message||'ผูกแท็กไม่สำเร็จ');err.code=b.error;throw err;}return b;});})
-    .then(function(b){
-      // Optimistic — this write bypasses save()/S, so without this the row
-      // would still show "ไม่มี RFID" until the next full state refresh.
-      if(S.boxes[tag]){S.boxes[tag].rfidTid=b.rfidTid;S.boxes[tag].rfidEpc=b.rfidEpc;}
-      closeModal();renderAll();
-      toast(replace?'เปลี่ยนแท็กแล้ว':'ผูกแท็กแล้ว',tag+' · TID '+b.rfidTid,'ok');
-    })
-    .catch(function(e){
-      if(e.code==='already_tagged'&&!replace){
-        confirmA('กล่องนี้มีแท็กผูกอยู่แล้ว',e.message,'เปลี่ยนแท็ก').then(function(ok){
-          if(ok)doAssociateRfid(tag,tid,epc,true);
-        });
-        return;
-      }
-      toast('ผูกแท็กไม่สำเร็จ',e.message||'','err');
-    });
-}
-window.doAssociateRfid=doAssociateRfid;
-
-/** Detaches whatever tag a box carries — before scrapping it, or before its
- *  physical tag gets reused elsewhere. Reachable from openRfidTagModal only
- *  when the box actually has one (see the conditional action below). */
+/* ===== RFID TAG ASSOCIATION (detach only) =====
+   Associating/replacing a tag needs a real TID/EPC read off physical
+   hardware — the PDA (see pda_flutter/lib/screens/rfid_register_screen.dart)
+   has the RFID reader; this desktop web app doesn't, so there is no valid
+   way to *attach* a tag here (typing a TID by hand isn't a real tag read —
+   it was tried and correctly rejected as unusable). Detaching needs no
+   reader at all, so that action stays here, reachable directly from the box
+   action list (see openBoxActionModal) without a modal. */
 function detachRfidTag(tag){
   var b=S.boxes[tag];if(!b||!b.rfidTid)return;
   confirmA('ถอดแท็ก RFID?','กล่อง '+tag+' จะกลับไปค้นหาได้ด้วยบาร์โค้ดเท่านั้น จนกว่าจะผูกแท็กใหม่','ถอดแท็ก',true).then(function(ok){
@@ -3893,114 +3824,6 @@ function detachRfidTag(tag){
   });
 }
 window.detachRfidTag=detachRfidTag;
-
-/* ===== BULK RFID TAG ASSOCIATION =====
-   "ผูกแท็ก RFID" (หลายใบ) — คนละเรื่องกับ "พิมพ์ป้ายบาร์โค้ด" (bulkInvTag/
-   printLabels ด้านบน) โดยเจตนา: อันนั้นพิมพ์สติ๊กเกอร์บาร์โค้ด/QR ติดกล่อง
-   ส่วนนี้คือจับคู่ชิป RFID จริงเข้ากับกล่อง คนละวัตถุ คนละปุ่ม คนละ modal
-   ไม่ปนกันเด็ดขาด
-
-   หนึ่งแถวต่อหนึ่งกล่อง — ยิงแท็กแล้วกรอก TID/EPC ทีละแถว เว้นแถวว่างได้ถ้ายัง
-   ไม่มีแท็กพอ (ไม่ error) แล้วกด "บันทึกที่กรอกแล้ว" ครั้งเดียวตอนท้าย ส่งเข้า
-   POST /api/boxes/:tag/rfid ทีละกล่อง (endpoint เดิมที่ openRfidTagModal ใช้ —
-   ไม่มี bulk endpoint แยก เพราะแต่ละกล่องต้องเช็ค TID ซ้ำเป็นรายตัวอยู่แล้ว)
-   ส่ง replace:true เสมอเพราะการเลือกกล่องมาเข้าโฟลว์นี้เองก็แปลว่าตั้งใจ
-   (เปลี่ยน)ผูกแท็กให้ทุกใบที่กรอกอยู่แล้ว — ไม่ต้อง confirm ซ้ำทีละแถวให้วุ่น */
-function openRfidBulkModal(tags){
-  var boxes=tags.map(function(t){return S.boxes[t];}).filter(Boolean);
-  if(!boxes.length)return;
-  var rows=boxes.map(function(b){
-    return '<div class="rfid-bulk-row" data-tag="'+esc(b.tag)+'" style="border-bottom:.5px solid var(--line);padding:12px 2px;">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-        +'<span class="mono" style="font-weight:700;">'+esc(b.tag)+'</span>'
-        +(b.rfidTid?'<span class="muted small">มีแท็กอยู่แล้ว (TID '+esc(b.rfidTid)+') — กรอกเพื่อเปลี่ยน</span>':'')
-      +'</div>'
-      +'<div class="grid g2" style="gap:8px;">'
-        +'<input class="mono rfid-bulk-tid" placeholder="TID เช่น E200001122334455" autocomplete="off" spellcheck="false">'
-        +'<div style="display:flex;gap:6px;">'
-          +'<input class="mono rfid-bulk-epc" placeholder="EPC เช่น 000000000000424F582D31" autocomplete="off" spellcheck="false" style="flex:1;">'
-          +'<button type="button" class="btn ghost sm" onclick="fillBulkSuggestedEpc(\''+esc(b.tag)+'\')" title="เข้ารหัสบาร์โค้ดของกล่องนี้เป็นเลขฐาน 16 ให้">แนะนำ</button>'
-        +'</div>'
-      +'</div>'
-      +'<div class="rfid-bulk-err small" style="color:var(--neg);margin-top:6px;display:none;"></div>'
-    +'</div>';
-  }).join('');
-  openModal(
-    '<div class="mhead"><h3>ผูกแท็ก RFID ('+boxes.length+' ใบ)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
-    +'<div class="mbody">'
-      +'<p class="desc">ยิงแท็ก RFID เปล่าด้วยเครื่องอ่านทีละแผ่น แล้วกรอก TID/EPC ลงแถวของกล่องนั้น — เว้นแถวไหนว่างได้ถ้ายังไม่มีแท็กพอสำหรับกล่องนั้น</p>'
-      +rows
-    +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" id="btnRfidBulkSave">บันทึกที่กรอกแล้ว</button></div>'
-  );
-  var sheet=$('#modalSheet');if(sheet)sheet.style.width='640px';
-  $('#btnRfidBulkSave').onclick=submitRfidBulk;
-}
-window.openRfidBulkModal=openRfidBulkModal;
-
-function fillBulkSuggestedEpc(tag){
-  var row=document.querySelector('.rfid-bulk-row[data-tag="'+CSS.escape(tag)+'"]');
-  if(!row)return;
-  apiFetch('/api/rfid/encode/'+encodeURIComponent(tag),{headers:authHeaders()})
-    .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'สร้างค่าแนะนำไม่สำเร็จ');return b;});})
-    .then(function(b){var inp=row.querySelector('.rfid-bulk-epc');if(inp)inp.value=b.epcHex;})
-    .catch(function(e){toast('สร้างค่าแนะนำไม่สำเร็จ',e.message||'','err');});
-}
-window.fillBulkSuggestedEpc=fillBulkSuggestedEpc;
-
-function submitRfidBulk(){
-  var rowEls=Array.prototype.slice.call(document.querySelectorAll('.rfid-bulk-row'));
-  var jobs=rowEls.map(function(row){
-    var tag=row.dataset.tag;
-    var tid=(row.querySelector('.rfid-bulk-tid').value||'').trim().toUpperCase();
-    var epc=(row.querySelector('.rfid-bulk-epc').value||'').trim().toUpperCase();
-    var errEl=row.querySelector('.rfid-bulk-err');
-    errEl.style.display='none';errEl.textContent='';
-    if(!tid&&!epc)return null; // เว้นว่างไว้ — ยังไม่มีแท็กสำหรับกล่องนี้ ไม่ใช่ error
-    if(!/^[0-9A-F]{8,}$/.test(tid)||!/^[0-9A-F]{8,}$/.test(epc)){
-      errEl.textContent='TID/EPC ต้องเป็นเลขฐาน 16 อย่างน้อย 8 หลักทั้งคู่';errEl.style.display='';
-      return null;
-    }
-    return {tag:tag,tid:tid,epc:epc,errEl:errEl};
-  }).filter(Boolean);
-  if(!jobs.length)return toast('ยังไม่ได้กรอกข้อมูล','กรอก TID/EPC อย่างน้อย 1 กล่องก่อนบันทึก','err');
-  var btn=$('#btnRfidBulkSave');if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก…';}
-  var ok=0,fail=0;
-  var chain=Promise.resolve();
-  jobs.forEach(function(j){
-    // Sequential, not Promise.all — the reused-TID check on the server reads
-    // the DB fresh per request, so two rows in this same batch racing to
-    // claim the same TID (a scan/typo duplicate) both getting through would
-    // defeat that check entirely.
-    chain=chain.then(function(){
-      return apiFetch('/api/boxes/'+encodeURIComponent(j.tag)+'/rfid',{
-        method:'POST',
-        headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-        body:JSON.stringify({rfidTid:j.tid,rfidEpc:j.epc,replace:true})
-      })
-        .then(function(r){return r.json().then(function(b){if(!r.ok){var err=new Error(b.message||'ผูกแท็กไม่สำเร็จ');throw err;}return b;});})
-        .then(function(b){
-          ok++;
-          if(S.boxes[j.tag]){S.boxes[j.tag].rfidTid=b.rfidTid;S.boxes[j.tag].rfidEpc=b.rfidEpc;}
-        })
-        .catch(function(e){
-          fail++;
-          j.errEl.textContent=e.message||'ผูกแท็กไม่สำเร็จ';j.errEl.style.display='';
-        });
-    });
-  });
-  chain.then(function(){
-    if(btn){btn.disabled=false;btn.textContent='บันทึกที่กรอกแล้ว';}
-    if(ok)renderAll();
-    if(fail){
-      toast('ผูกแท็กสำเร็จบางส่วน',ok+' สำเร็จ · '+fail+' ไม่สำเร็จ (ดูข้อความสีแดงใต้แถวที่พลาด)','warn');
-    }else{
-      closeModal();
-      toast('ผูกแท็ก RFID สำเร็จ',ok+' ใบ','ok');
-    }
-  });
-}
-window.submitRfidBulk=submitRfidBulk;
 
 /* ===== CONTACT LOG — ปิด loop "ติดต่อลูกค้า" ในผังงาน =====
    ผังงานมีเส้นวนจาก "รายงาน Overdue" กลับไป "ติดต่อลูกค้า" แต่ระบบเดิมบอกได้แค่ว่า
@@ -4947,8 +4770,8 @@ window.labelsToPDF=labelsToPDF;
    แตะ checkbox นี้เลย */
 function tagAutoPutawayPref(){try{var v=localStorage.getItem('boxtrace_tag_auto_putaway');return v===null?true:v==='1';}catch(e){return true;}}
 function setTagAutoPutawayPref(on){try{localStorage.setItem('boxtrace_tag_auto_putaway',on?'1':'0');}catch(e){}}
-/* พิมพ์ป้ายบาร์โค้ด/QR (ไม่ใช่ RFID — ดู openRfidTagModal/openRfidBulkModal
-   สำหรับการผูกแท็ก RFID จริง คนละเรื่องกัน คนละปุ่มกัน) ให้กล่องที่เลือก แล้วบันทึกว่า
+/* พิมพ์ป้ายบาร์โค้ด/QR (ไม่ใช่ RFID — ผูกแท็ก RFID จริงทำได้จาก PDA เท่านั้น
+   เพราะต้องมีเครื่องอ่าน คนละเรื่องกัน คนละปุ่มกัน) ให้กล่องที่เลือก แล้วบันทึกว่า
    ติดป้ายแล้ว (labeled=true)
 
    เดิมกดเปิด modal นี้ปุ๊บ labeled=true ถูกตั้งทันทีแบบเงียบๆ ก่อนผู้ใช้ทำอะไรเลย
@@ -5101,7 +4924,8 @@ function statusPill(s,ctx){
   }
   var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอติด Tag'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
 /* small badge shown next to the status pill: whether this box has an RFID
-   tag associated at all yet (see openRfidTagModal). Silent (no badge) once
+   tag associated at all yet (associated from the PDA — see
+   pda_flutter/lib/screens/rfid_register_screen.dart). Silent (no badge) once
    labeled=false boxes cover "not tagged" via their own "รอติด Tag" status
    pill already — this only needs to speak up for a box that's otherwise
    marked ready but still has no RFID, since that's the case an operator
@@ -8901,11 +8725,12 @@ window.commitInvReceive = commitInvReceive;
 /* ====== BULK: relocate / ship / write-off ====== */
 $('#bulkInvClear').addEventListener('click', function() { clearBulk('inv-cb', 'bulkInv', 'cbAllInv'); });
 
-/* พิมพ์ป้ายบาร์โค้ด/QR หลายใบพร้อมกัน (ไม่ใช่ RFID — ดู #bulkInvRfid ด้านล่าง
-   สำหรับผูกแท็ก RFID) — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ "รอติด Tag"
-   ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง ใช้
+/* พิมพ์ป้ายบาร์โค้ด/QR หลายใบพร้อมกัน — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ
+   "รอติด Tag" ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง ใช้
    printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว ซึ่งบันทึก labeled=true ให้อยู่แล้ว
-   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง */
+   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง — ผูกแท็ก RFID (ต่าง
+   จากป้ายบาร์โค้ด/QR) ไม่มีปุ่มบนเว็บนี้ เพราะต้องมีเครื่องอ่านจริง ทำได้จาก
+   PDA เท่านั้น (ดู pda_flutter/lib/screens/rfid_register_screen.dart) */
 $('#bulkInvTag').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
   var done = tags.filter(function(t) { var b = S.boxes[t]; return b && b.labeled === true; });
@@ -8913,13 +8738,6 @@ $('#bulkInvTag').addEventListener('click', function() {
     return toast('ติดป้ายครบแล้ว', 'ทั้ง ' + tags.length + ' ใบบันทึกว่าติดป้ายแล้ว', 'info');
   }
   printLabels(tags);
-});
-/* ผูกแท็ก RFID หลายใบพร้อมกัน — คนละเรื่องกับพิมพ์ป้ายบาร์โค้ดด้านบนเลย: นี่คือ
-   การจับคู่ชิป RFID จริงเข้ากับกล่องผ่าน services/rfid.ts ทาง backend
-   (openRfidBulkModal, ประกาศไว้ท้ายไฟล์นี้). */
-$('#bulkInvRfid').addEventListener('click', function() {
-  var tags = getChecked('inv-cb'); if (!tags.length) return;
-  openRfidBulkModal(tags);
 });
 $('#bulkInvRelocate').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
@@ -10584,7 +10402,7 @@ function openColumnMapModal(opts){
     "พื้นที่พักกล่องหลังผ่าน Gate ขาเข้า ก่อนขึ้นชั้นวางจริง — คลังนี้มีแร็คพักเดียว กำหนดได้ว่ามีกี่ช่อง ค่าเริ่มต้น":"Staging area for boxes after the inbound gate, before they go up on the real racks - this warehouse has a single staging rack; set how many slots it has. Default",
     "ลูกค้า / ตำแหน่ง":"Customers / locations",
     "พิมพ์ป้ายบาร์โค้ด":"Print barcode label",
-    "ผูกแท็ก RFID":"Associate RFID tag",
+    "ถอดแท็ก RFID":"Remove RFID tag",
     "บาร์โค้ด (สร้างอัตโนมัติ)":"Barcode (auto-generated)",
     /* ---- รอบเก็บตก: ผังกระบวนการ 2D + ป้ายในฉาก 3D + แถบสถานะฉาก ---- */
     "คานแร็ค = ตำแหน่งจริงจาก Location Master":"Rack beams = real locations from Location Master",
