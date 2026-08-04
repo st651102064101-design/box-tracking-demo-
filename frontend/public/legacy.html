@@ -2388,8 +2388,8 @@ function refreshSortToggleUI(key){
   var dir=uiSort[key]||'desc';
   $all('.sf-btn',wrap).forEach(function(b){b.classList.toggle('active',b.dataset.dir===dir);});
 }
-/* Injects a "ล่าสุด | เก่าสุด" segmented toggle right after `afterId`, once (idempotent) — used
-   instead of hand-editing every tablehead in the HTML. */
+/* Injects a "ล่าสุด | เก่าสุด | ก-ฮ | ฮ-ก" segmented toggle right after `afterId`, once
+   (idempotent) — used instead of hand-editing every tablehead in the HTML. */
 function injectSortToggle(afterId,key){
   var afterEl=document.getElementById(afterId);
   if(!afterEl||document.getElementById('sortTgl_'+key))return;
@@ -2397,6 +2397,8 @@ function injectSortToggle(afterId,key){
     '<div class="seg-filter" id="sortTgl_'+key+'" style="margin-left:8px;">'
     +'<button type="button" class="sf-btn" data-dir="desc" onclick="setSortDir(\''+key+'\',\'desc\')" title="ล่าสุดอยู่บนสุด">ล่าสุด</button>'
     +'<button type="button" class="sf-btn" data-dir="asc" onclick="setSortDir(\''+key+'\',\'asc\')" title="เก่าสุดอยู่บนสุด">เก่าสุด</button>'
+    +'<button type="button" class="sf-btn" data-dir="az" onclick="setSortDir(\''+key+'\',\'az\')" title="เรียง ก-ฮ / A-Z">ก-ฮ</button>'
+    +'<button type="button" class="sf-btn" data-dir="za" onclick="setSortDir(\''+key+'\',\'za\')" title="เรียง ฮ-ก / Z-A">ฮ-ก</button>'
     +'</div>');
 }
 function initSortToggles(){
@@ -2413,6 +2415,19 @@ function initSortToggles(){
 function sortByDir(list,dir,getVal){
   var mul=dir==='asc'?1:-1;
   return list.sort(function(a,b){var va=getVal(a),vb=getVal(b);return va<vb?mul:va>vb?-mul:0;});
+}
+/* alphabetical comparator on a display-name field — 'az' = A-Z/ก-ฮ, 'za' = Z-A/ฮ-ก */
+function nameSort(list,dir,nameField){
+  var mul=dir==='za'?-1:1;
+  return list.slice().sort(function(a,b){
+    var va=String((a&&a[nameField])||''), vb=String((b&&b[nameField])||'');
+    return mul*va.localeCompare(vb,undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+/* drop-in for idSort(list,dir) that also honors 'az'/'za' by sorting on nameField instead of id */
+function sortTable(list,dir,nameField){
+  if(dir==='az'||dir==='za')return nameSort(list,dir,nameField);
+  return idSort(list,dir);
 }
 /* sorts a list of records by their .id field; 'desc' = newest (highest id) first */
 function idSort(list,dir){return sortByDir(list.slice(),dir,function(x){return x.id||'';});}
@@ -6105,7 +6120,10 @@ function renderSetup(){
   var bx=Object.values(S.boxes).filter(function(b){
     if(fs&&b.status!==fs)return false;
     return !sb||(b.tag+typeName(b.type)+custName(b.customer)).toLowerCase().indexOf(sb)>=0;
-  }).sort(function(a,b){var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);});
+  }).sort(function(a,b){
+    if(uiSort.box==='az'||uiSort.box==='za'){var m=uiSort.box==='za'?-1:1;return m*String(a.tag||'').localeCompare(String(b.tag||''),undefined,{numeric:true,sensitivity:'base'});}
+    var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);
+  });
   $('#boxBody').innerHTML=bx.length?bx.map(function(b){
     var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>':(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
     var lotExpCell=(b.lot||b.expiry)
@@ -6132,7 +6150,7 @@ function renderSetup(){
   var btsFiltered=sbt?bts.filter(function(t){
     return (t.id+' '+(t.name||'')+' '+(t.unit||'')+' '+(t.dim||'')).toLowerCase().indexOf(sbt)>=0;
   }):bts;
-  var btsSorted=idSort(btsFiltered,uiSort.btype);
+  var btsSorted=sortTable(btsFiltered,uiSort.btype,'name');
   $('#btypeBody').innerHTML=btsSorted.length?btsSorted.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
     return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openMasterRowActions(\'btype\',\''+esc(t.id)+'\',\''+esc(t.name+' ('+t.id+')')+'\','+(used?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
       +'<td class="r mono">'+used+'</td><td class="c muted">›</td></tr>';
@@ -6145,7 +6163,7 @@ function renderSetup(){
   var whsAll=sbw?Object.values(S.warehouses).filter(function(w){
     return (w.id+' '+(w.name||'')+' '+((w.gates||[]).join(' '))+' '+(w.stagingZone||'')+' '+(w.stagingRack||'')).toLowerCase().indexOf(sbw)>=0;
   }):Object.values(S.warehouses);
-  var whs=idSort(whsAll,uiSort.wh);
+  var whs=sortTable(whsAll,uiSort.wh,'name');
   var gtColors={'both':'var(--ink)','in':'var(--pos)','out':'var(--neg)'};
   $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
     var pendingPutaway=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id&&isStagingLoc(b.location);}).length;
@@ -6165,7 +6183,7 @@ function renderSetup(){
   var csAll=sbc?Object.values(S.customers).filter(function(c){
     return (c.id+' '+(c.name||'')+' '+(c.addr||'')+' '+(c.phone||c.contact||'')+' '+(c.email||'')+' '+(c.contactPerson||'')).toLowerCase().indexOf(sbc)>=0;
   }):Object.values(S.customers);
-  var cs=idSort(csAll,uiSort.cust);
+  var cs=sortTable(csAll,uiSort.cust,'name');
   $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
     return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openMasterRowActions(\'cust\',\''+esc(c.id)+'\',\''+esc(c.name+' ('+c.id+')')+'\','+(held?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
@@ -6206,7 +6224,7 @@ function renderSetup(){
   var epsAll=sbe?Object.values(S.employees).filter(function(e){
     return (e.id+' '+(e.name||'')+' '+(e.role||'')+' '+(e.dept||'')+' '+(e.phone||'')+' '+(e.email||'')+' '+(e.scanCode||'')).toLowerCase().indexOf(sbe)>=0;
   }):Object.values(S.employees);
-  var eps=idSort(epsAll,uiSort.emp);
+  var eps=sortTable(epsAll,uiSort.emp,'name');
   var meId=currentEmp()&&currentEmp().id;
   $('#empBody').innerHTML=eps.length?eps.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
@@ -8423,6 +8441,10 @@ function renderInventory() {
       var as = isAtStaging(a), bs2 = isAtStaging(b);
       if (as !== bs2) return as ? -1 : 1;
     }
+    if (uiSort.inv === 'az' || uiSort.inv === 'za') {
+      var m = uiSort.inv === 'za' ? -1 : 1;
+      return m * String(a.tag || '').localeCompare(String(b.tag || ''), undefined, { numeric: true, sensitivity: 'base' });
+    }
     var dir = uiSort.inv === 'asc' ? 1 : -1;
     var ta = new Date(a.lastSeenAt || a.regAt || 0).getTime();
     var tb = new Date(b.lastSeenAt || b.regAt || 0).getTime();
@@ -8486,6 +8508,12 @@ function renderInvSummary() {
   var rows = Object.values(groups).sort(function(a, b) {
     var so = { warehouse: 0, hold: 1, damage: 2, pending: 3, out: 4, lost: 5 };
     if (so[a.status] !== so[b.status]) return so[a.status] - so[b.status];
+    if (uiSort.inv === 'az' || uiSort.inv === 'za') {
+      var m = uiSort.inv === 'za' ? -1 : 1;
+      var ta = typeName(a.type) || '', tb = typeName(b.type) || '';
+      if (ta !== tb) return m * ta.localeCompare(tb, undefined, { numeric: true, sensitivity: 'base' });
+      return m * a.locLabel.localeCompare(b.locLabel, undefined, { numeric: true, sensitivity: 'base' });
+    }
     if (a.ts !== b.ts) return sortDir * (a.ts - b.ts);
     if (a.type !== b.type) return a.type < b.type ? -1 : 1;
     return a.locLabel < b.locLabel ? -1 : 1;
@@ -9362,6 +9390,10 @@ function renderAuditLog() {
     if (sb && (e.itemId + e.itemName + e.action + e.recorder).toLowerCase().indexOf(sb) < 0) return false;
     return true;
   }).sort(function(a, b) {
+    if (uiSort.audit === 'az' || uiSort.audit === 'za') {
+      var m = uiSort.audit === 'za' ? -1 : 1;
+      return m * String(a.itemName || '').localeCompare(String(b.itemName || ''), undefined, { numeric: true, sensitivity: 'base' });
+    }
     var dir = uiSort.audit === 'asc' ? 1 : -1;
     var ta = new Date(a.ts || 0).getTime(), tb = new Date(b.ts || 0).getTime();
     return dir * (ta - tb);
