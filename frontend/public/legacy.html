@@ -3587,7 +3587,7 @@ function openFirstRegisterModal(){
     +'<div class="grid g3">'
     +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name"></div>'
     +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" value="ผู้ดูแลระบบ" placeholder="เช่น ผู้จัดการคลัง" maxlength="100"></div>'
-    +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>'
+    +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" type="tel" inputmode="tel" value="-" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>'
     +'</div>'
     +'<div class="field" style="margin-top:14px;"><label>อีเมล</label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
     +'</div>'
@@ -3601,6 +3601,7 @@ function openFirstRegisterModal(){
     var role=val('frRole');
     if(role.length>100)return toast('ตำแหน่งยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
     var phoneRaw=val('frPhone');
+    if(phoneRaw==='-')phoneRaw='';
     if(phoneRaw&&!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
     var phoneDigits=normPhoneDigits(phoneRaw);
     var email=val('frEmail');
