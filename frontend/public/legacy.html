@@ -7749,7 +7749,7 @@ window.seedDemo=seedDemo;
     {k:'tag', n:'รอติดบาร์โค้ด', warn:2, bad:5,
      go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติดบาร์โค้ด'}); }},
     {k:'inq', n:'คิวรับเข้า',
-     go:function(){ W.switchTab&&W.switchTab('gatein'); }},
+     go:function(){ W.goInventory&&W.goInventory({status:'out',label:'กล่องที่ควรรับเข้า — ยังอยู่กับลูกค้า'}); }},
     {k:'put', n:'รอจัดเก็บขึ้นชั้น', warn:1, bad:3,
      go:function(){ W.goInventory&&W.goInventory({status:'putaway',label:'กล่องที่รับเข้าแล้ว แต่ยังไม่ขึ้นชั้นวาง'}); }},
     {k:'rack', n:'บนชั้นวาง',
@@ -7776,7 +7776,11 @@ window.seedDemo=seedDemo;
   function compute(){
     var S=St(), all=Object.values(S.boxes||{}), evs=S.events||[];
     var today=dayKey(), now=Date.now();
-    var c={tag:0,inq:(W.pendingIn||[]).length,put:0,rack:0,outq:(W.pendingOut||[]).length,cust:0,over:0};
+    /* inq (คิวรับเข้า) เดิมอ่านจาก pendingIn ซึ่งเป็นคิวสแกนชั่วคราวของหน้าจอ
+       Gate-In เท่านั้น (ว่างเปล่าทุกครั้งที่ยังไม่มีใครสแกนในเซสชันนี้) — เปลี่ยน
+       มานับกล่องสถานะ out ทั้งหมดจาก DB จริงแทน เพราะนั่นคือยอดที่ "ควรรับเข้า"
+       จริง ๆ (ทุกใบที่ยังอยู่กับลูกค้าคือใบที่สุดท้ายต้องผ่าน Gate เข้าอีกครั้ง) */
+    var c={tag:0,inq:0,put:0,rack:0,outq:(W.pendingOut||[]).length,cust:0,over:0};
     var oldest={tag:0,put:0};
     var soonestDue=null, worstOver=0;
     var exc={hold:0,damage:0,lost:0,nearExp:0,expired:0};
@@ -7816,6 +7820,7 @@ window.seedDemo=seedDemo;
         return;
       }
       if(st==='out'){
+        c.inq++;
         if(isOver(b)){
           c.over++;
           var od=dueDays(b);
