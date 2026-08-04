@@ -12609,7 +12609,7 @@ function build(){
   const bar=bx(6.4,0.16,0.16,MAT.barrier,3.2,1.05,0);arm.userData.bar=bar;arm.add(bar);
   for(let i=0;i<5;i++)arm.add(bx(0.6,0.17,0.17,MAT.paintR,0.9+i*1.3,1.05,0,true));
   arm.position.set(guardX+2.6,0,road1+0.4);root.add(arm);
-  gateBarrier=arm;                     // ต้องยกอัตโนมัติเมื่อมีรถผ่าน — ดู updateGateBarrier()
+  const gateBarrier=arm;               // ไม้กั้นป้อมยาม (ยังไม่มี logic ยกอัตโนมัติ)
   const gl2=makeLabel('ป้อมยาม · จุดตรวจรถเข้า-ออก',null,{fs:28,h:0.56});
   gl2.position.set(guardX,3.6,guardZ);root.add(gl2);
   /* ทางม้าลายหน้าป้อม */

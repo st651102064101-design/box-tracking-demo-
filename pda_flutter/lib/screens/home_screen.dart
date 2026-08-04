@@ -158,7 +158,13 @@ List<Widget> _postPickerBody(AppController c) {
     Wrap(
       spacing: 9,
       runSpacing: 9,
-      children: gates.map((g) => _GatePickChip(label: '$g', onTap: () => c.confirmPost(pendingWh, g))).toList(),
+      children: gates
+          .map((g) => _GatePickChip(
+                label: '$g',
+                type: c.S?.gateTypesOf(pendingWh)['$g'] ?? 'both',
+                onTap: () => c.confirmPost(pendingWh, g),
+              ))
+          .toList(),
     ),
   ];
 }
@@ -338,8 +344,27 @@ class _WhPickTile extends StatelessWidget {
 
 class _GatePickChip extends StatelessWidget {
   final String label;
+  final String type;
   final VoidCallback onTap;
-  const _GatePickChip({required this.label, required this.onTap});
+  const _GatePickChip({required this.label, required this.type, required this.onTap});
+
+  // ขาเข้า/ขาออก ต้องเป็นสีตรงข้ามกันชัดเจน (เขียว vs แดง) ส่วนไม้ tone อ่อนของ
+  // C.lime/C.orange ที่ใช้ในการ์ดเมนูหลักไม่ต่างกันพอเมื่อโชว์เป็น label เล็กๆ
+  static const _inColor = Color(0xFF1E8E3E);
+  static const _outColor = Color(0xFFD93025);
+
+  // 'in' | 'out' | 'both' -> spans สีตรงข้ามกัน; 'both' โชว์ทั้งสองคำต่อกัน
+  List<TextSpan> get _typeSpans {
+    const style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
+    final inSpan = TextSpan(text: 'เข้า', style: style.copyWith(color: _inColor));
+    final outSpan = TextSpan(text: 'ออก', style: style.copyWith(color: _outColor));
+    return switch (type) {
+      'in' => [inSpan],
+      'out' => [outSpan],
+      _ => [inSpan, TextSpan(text: '·', style: TextStyle(fontSize: 11, color: C.border2)), outSpan],
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -353,8 +378,15 @@ class _GatePickChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           alignment: Alignment.center,
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border2)),
-          child: Text('ประตู $label',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('ประตู $label',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text.rich(TextSpan(children: _typeSpans)),
+            ],
+          ),
         ),
       ),
     );

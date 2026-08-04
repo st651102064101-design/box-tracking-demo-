@@ -134,6 +134,7 @@ class RfidReaderController(private val context: Context) :
         status("connecting", "กำลังค้นหาเครื่องอ่าน…")
         exec.execute {
             try {
+                patchApi3UtilsContext()
                 if (readers == null) readers = Readers(context, ENUM_TRANSPORT.SERVICE_SERIAL)
                 // attach/deattach are static on Readers, not instance methods
                 Readers.attach(this)
@@ -178,6 +179,35 @@ class RfidReaderController(private val context: Context) :
                 Log.e(TAG, "connect failed", e)
                 status("error", e.message ?: "เชื่อมต่อไม่สำเร็จ")
             }
+        }
+    }
+
+    /**
+     * Works around a bug in rfidapi3lib itself (confirmed by decompiling
+     * API3_TRANSPORT-release-2.0.4.177.aar): on Android ≤ 9,
+     * `TransportSerial` asks `API3Utils.isDeviceRFID()` whether this device
+     * has an integrated reader, and that method reads a *package-private*
+     * static field `API3Utils.m_scontext` — which nothing in the SDK ever
+     * sets. `Readers`'s constructor sets `Readers.m_scontext` instead: two
+     * same-named-but-distinct static fields on two different classes, and
+     * only one of them is wired up. The result is a null Context and an NPE
+     * on every connect attempt on this MC3390R's Android 8.1, with no public
+     * API to fix it — `API3Utils` isn't even a public class, so this can
+     * only be reached with reflection, not a normal Zebra API call. This
+     * device can't take an OS update, so this is the only way to keep the
+     * integrated reader working: mirror the same context onto both fields.
+     * Safe to call every connect attempt; falls through quietly if some
+     * future SDK release removes/renames the field, since RFID would then
+     * be broken for a different reason anyway.
+     */
+    private fun patchApi3UtilsContext() {
+        try {
+            val cls = Class.forName("com.zebra.rfid.api3.API3Utils")
+            val field = cls.getDeclaredField("m_scontext")
+            field.isAccessible = true
+            field.set(null, context.applicationContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "patchApi3UtilsContext: reflection failed, leaving as-is (${e.message})")
         }
     }
 

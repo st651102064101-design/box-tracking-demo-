@@ -29,10 +29,10 @@ android {
 
     defaultConfig {
         applicationId = "com.abss.boxtrace_pda"
-        // rfidapi3lib's own manifest declares minSdk 29, so the merger rejects
-        // anything lower. MC3390R ships Android 10/11 (API 29/30), so this
-        // costs us no supported device.
-        minSdk = 29
+        // The RFID API3 SDK's own AARs declare minSdk 26 (Oreo) as of the
+        // 2.0.4.177 split-module release — this device's actual Android 8.1
+        // (API 27) is above that floor, so no bump is needed here.
+        minSdk = 26
         targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
@@ -55,15 +55,12 @@ flutter {
     source = "../.."
 }
 
-// The Zebra RFID API3 library ships as a local .aar in app/libs.
-repositories {
-    flatDir {
-        dirs "libs"
-    }
-}
-
+// The Zebra RFID API3 SDK ships as a set of local .aar modules in app/libs
+// (split per-module since 2.0.4.x, unlike the single fat rfidapi3lib.aar
+// earlier versions shipped) — pull in every .aar/.jar dropped there instead
+// of naming each module, matching how Zebra's own sample apps consume it.
 dependencies {
-    implementation(name: "rfidapi3lib-2.0.5.275", ext: "aar")
+    implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
     implementation "com.google.code.gson:gson:2.13.2"
     implementation "androidx.core:core-ktx:1.13.1"
 }
