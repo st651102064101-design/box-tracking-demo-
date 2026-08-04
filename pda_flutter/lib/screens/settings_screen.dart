@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/rfid_service.dart';
+import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
@@ -20,11 +21,21 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
+    // Hardware-debug tiles (raw RFID reads, the backend URL) are noise for a
+    // regular operator and only worth showing to an admin — see
+    // Employee.isAdmin. A device with no operator identified yet (emp ==
+    // null) is treated the same as canConfigureDevice does elsewhere.
+    final isAdminOrNull = c.emp == null || c.emp!.isAdmin;
 
     return Column(
       children: [
-        StickyHeader(onBack: c.backToHome, title: const Text('ตั้งค่า')),
+        StickyHeader(
+          onBack: c.backToHome,
+          title: const Text('ตั้งค่า'),
+          actions: [ThemeToggleButton(ctrl: themeCtrl)],
+        ),
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
@@ -67,27 +78,31 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                    if (isAdminOrNull) ...[
+                      const SizedBox(height: 10),
+                      Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
               const _RfidPanel(),
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.biotech_outlined,
-                title: 'ทดสอบอ่านแท็ก RFID',
-                sub: 'ดูค่าดิบที่เครื่องอ่านได้ — EPC, TID, PC, CRC, RSSI ฯลฯ',
-                onTap: () => showRfidTestSheet(context),
-              ),
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.nfc,
-                title: 'รับค่า RFID',
-                sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ไว้ทดสอบเครื่องอ่าน',
-                onTap: () => c.go(Screen.rfidInput),
-              ),
+              if (isAdminOrNull) ...[
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.biotech_outlined,
+                  title: 'ทดสอบอ่านแท็ก RFID',
+                  sub: 'ดูค่าดิบที่เครื่องอ่านได้ — EPC, TID, PC, CRC, RSSI ฯลฯ',
+                  onTap: () => showRfidTestSheet(context),
+                ),
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.nfc,
+                  title: 'รับค่า RFID',
+                  sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ไว้ทดสอบเครื่องอ่าน',
+                  onTap: () => c.go(Screen.rfidInput),
+                ),
+              ],
               const SizedBox(height: 10),
               _tile(
                 icon: Icons.qr_code_scanner,

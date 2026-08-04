@@ -8499,8 +8499,11 @@ function localStatusCounts() {
   var c = { '': all.length, pending: 0, warehouse: 0, hold: 0, damage: 0, out: 0, lost: 0,
     pendingPutaway: 0, noRfid: 0, unlocated: 0 };
   all.forEach(function(b) {
-    if (c[b.status] !== undefined) c[b.status]++;
+    /* 'pending' บาดจ์ (รอติดบาร์โค้ด) ต้องไม่รวมกล่องที่ labeled=true — พวกนั้น
+       คือ "รอ Putaway" (นับแยกไว้ที่ pendingPutaway) เดียวกับบั๊กที่แก้ใน
+       flow board compute() ไปแล้ว ต้องแก้ที่นี่ด้วยเพราะเป็นคนละจุดกัน */
     if (b.status === 'pending' && b.labeled === true) c.pendingPutaway++;
+    else if (c[b.status] !== undefined) c[b.status]++;
     if (b.labeled !== false && !b.rfidTid) c.noRfid++;
     if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
   });
