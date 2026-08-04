@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/employee.dart';
+import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
@@ -192,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
@@ -242,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
       req = await c.api.requestPinReset(e.id);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
 
@@ -283,7 +284,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
