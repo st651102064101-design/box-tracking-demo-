@@ -26,27 +26,19 @@ class RootScreen extends StatelessWidget {
     // InheritedWidget mechanism, so this repaints on a dark/light toggle even
     // though RootScreen itself never watches ThemeController directly.
     return Scaffold(
-      body: Listener(
-        // Any touch anywhere counts as the device being in use, which keeps the
-        // idle auto-lock from firing on someone who is reading the screen
-        // rather than tapping through it. Listener (not GestureDetector) so it
-        // observes without ever competing for a gesture.
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => c.touch(),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: _body(c),
-                  ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _body(c),
                 ),
-                const ToastOverlay(),
-              ],
-            ),
+              ),
+              const ToastOverlay(),
+            ],
           ),
         ),
       ),

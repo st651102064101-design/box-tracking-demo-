@@ -177,7 +177,6 @@ class AppController extends ChangeNotifier {
     } else {
       _autoSelectSinglePost();
     }
-    _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
@@ -254,7 +253,6 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _toastTimer?.cancel();
-    _idleTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
@@ -327,7 +325,6 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
   void go(Screen s) {
-    touch();
     screen = s;
     notifyListeners();
   }
@@ -338,7 +335,6 @@ class AppController extends ChangeNotifier {
   /// Where "back" lands: Home during a session, otherwise the badge screen —
   /// or device setup on a terminal that was never provisioned.
   void backToHome() {
-    touch();
     screen = emp != null
         ? Screen.home
         : deviceConfigured
@@ -403,7 +399,6 @@ class AppController extends ChangeNotifier {
     if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
     prefs.lastEmpId = e.id;
-    touch();
     _resetPost();
     screen = Screen.home;
     notifyListeners();
@@ -435,51 +430,13 @@ class AppController extends ChangeNotifier {
   /// Ends the current operator's session and returns to the badge screen. The
   /// device stays signed in and stationed where it is — this is a handover
   /// between people, not a sign-out of the terminal.
-  void lock({bool auto = false}) {
-    final droppedQueue = queue.isNotEmpty;
+  void lock() {
     emp = null;
     queue.clear();
     lastResult = null;
     _clearForms();
     screen = Screen.login;
-    if (auto) {
-      toastMsg(
-        'ล็อกหน้าจออัตโนมัติ',
-        droppedQueue ? 'ยิงบัตรเพื่อทำงานต่อ — รายการที่สแกนค้างไว้ถูกล้างแล้ว กรุณายิงซ้ำ' : 'ยิงบัตรเพื่อทำงานต่อ',
-        ResultKind.info,
-      );
-    }
     notifyListeners();
-  }
-
-  // ═══════════════════════ idle auto-lock ══════════════════════════════════
-  DateTime _lastTouch = DateTime.now();
-  Timer? _idleTimer;
-
-  /// Marks the device as in use. Called from every navigation and scan, plus
-  /// any pointer event (see RootScreen), so the idle clock tracks real work.
-  void touch() => _lastTouch = DateTime.now();
-
-  void _startIdleWatch() {
-    _idleTimer?.cancel();
-    _idleTimer = Timer.periodic(const Duration(seconds: 30), (_) => checkIdle());
-  }
-
-  /// Locks the device if it has sat untouched past the configured limit.
-  /// [now] is injectable so the rule can be tested without waiting ten minutes.
-  ///
-  /// Locks even with scans pending in [queue] — same as the manual "switch
-  /// person" lock, which already clears it unconditionally. An earlier version
-  /// skipped locking whenever the queue was non-empty to avoid dropping an
-  /// in-progress batch, but that made a single un-committed scan disable
-  /// auto-lock forever: the device would just sit signed in, indefinitely,
-  /// which is the worse trade for an unattended terminal. Those tags are still
-  /// physically on the boxes and take a few seconds to re-scan.
-  @visibleForTesting
-  void checkIdle([DateTime? now]) {
-    final limit = prefs.idleLockMinutes;
-    if (limit <= 0 || emp == null || busy) return;
-    if ((now ?? DateTime.now()).difference(_lastTouch).inMinutes >= limit) lock(auto: true);
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
@@ -586,11 +543,6 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
-  void setIdleLockMinutes(int m) {
-    prefs.idleLockMinutes = m;
-    notifyListeners();
-  }
-
   void setDeviceModel(String id) {
     prefs.deviceModel = id;
     notifyListeners();
@@ -616,7 +568,6 @@ class AppController extends ChangeNotifier {
       toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว', ResultKind.warn);
       return;
     }
-    touch();
     mode = m;
     screen = Screen.scan;
     queue.clear();
@@ -667,7 +618,6 @@ class AppController extends ChangeNotifier {
   }
 
   void goTrack() {
-    touch();
     screen = Screen.track;
     trackVal = '';
     trackTag = '';
@@ -688,7 +638,6 @@ class AppController extends ChangeNotifier {
   void addScan(String raw) {
     raw = raw.trim();
     if (raw.isEmpty) return;
-    touch();
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
@@ -756,13 +705,11 @@ class AppController extends ChangeNotifier {
   }
 
   void removeFromQueue(String tag) {
-    touch();
     queue.remove(tag);
     notifyListeners();
   }
 
   void clearQueue() {
-    touch();
     queue.clear();
     lastResult = null;
     notifyListeners();
@@ -800,7 +747,6 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ connectivity / commit ═══════════════════════════
   void toggleOnline() {
-    touch();
     online = !online;
     notifyListeners();
     if (online) {
@@ -869,7 +815,6 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> doCommit() async {
-    touch();
     if (queue.isEmpty) {
       toastMsg('ยังไม่ได้ยิงกล่อง', '', ResultKind.warn);
       return;
@@ -1048,7 +993,6 @@ class AppController extends ChangeNotifier {
   }
 
   void doTrack() {
-    touch();
     final raw = trackVal.trim();
     if (raw.isEmpty) {
       trackTag = '';
@@ -1107,6 +1051,21 @@ class AppController extends ChangeNotifier {
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
     }
     notifyListeners();
+  }
+
+  /// The device-setup screen's single bottom button: connects with whatever
+  /// is currently in the form, then finishes setup automatically once that
+  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
+  /// then this button separately, which read as the button being broken when
+  /// really it was just gated on a connection nobody had triggered yet. Does
+  /// nothing further on failure — [applyConnection] already toasted why.
+  Future<void> completeDeviceSetup({
+    required String baseUrl,
+    String? username,
+    String? password,
+  }) async {
+    await applyConnection(baseUrl: baseUrl, username: username, password: password);
+    if (connected) finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════

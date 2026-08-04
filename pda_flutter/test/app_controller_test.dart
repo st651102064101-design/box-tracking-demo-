@@ -794,49 +794,6 @@ void main() {
     });
   });
 
-  group('idle auto-lock', () {
-    test('locks once the device has sat untouched past the limit', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.touch();
-
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 9)));
-      expect(c.emp, isNotNull);
-
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 11)));
-      expect(c.emp, isNull);
-      expect(c.screen, Screen.login);
-    });
-
-    test('still locks — and clears the queue — even with boxes queued', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.mode = 'out';
-      c.addScan('CRT-01');
-
-      c.checkIdle(DateTime.now().add(const Duration(hours: 2)));
-
-      expect(c.emp, isNull, reason: 'an unattended signed-in terminal is worse than a re-scan');
-      expect(c.screen, Screen.login);
-      expect(c.queue, isEmpty);
-    });
-
-    test('any activity resets the clock', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.go(Screen.home); // go() touches
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 9)));
-      expect(c.emp, isNotNull);
-    });
-
-    test('a limit of 0 disables auto-lock entirely', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 0;
-      c.checkIdle(DateTime.now().add(const Duration(days: 1)));
-      expect(c.emp, isNotNull);
-    });
-  });
-
   group('offline resilience', () {
     test('refresh caches the snapshot so the next boot has data', () async {
       final api = FakeApi();

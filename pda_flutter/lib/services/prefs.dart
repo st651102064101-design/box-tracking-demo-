@@ -26,7 +26,6 @@ class Prefs {
   static const _kDeviceWh = 'boxtrace_device_wh';
   static const _kDeviceGate = 'boxtrace_device_gate';
   static const _kDeviceConfigured = 'boxtrace_device_configured';
-  static const _kIdleLock = 'boxtrace_idle_lock_minutes';
   static const _kDeviceModel = 'boxtrace_device_model';
 
   static const _kStateCache = 'boxtrace_state_cache';
@@ -139,10 +138,6 @@ class Prefs {
   /// independent of any particular warehouse/gate.
   bool get deviceConfigured => _p.getBool(_kDeviceConfigured) ?? false;
   set deviceConfigured(bool v) => _p.setBool(_kDeviceConfigured, v);
-
-  /// Minutes of inactivity before the operator is signed out. 0 disables it.
-  int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
-  set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
 
   /// Which handheld model this terminal is provisioned on (e.g. `'mc3390r'`),
   /// picked once during setup — see [DeviceSetupScreen]'s device-model step.

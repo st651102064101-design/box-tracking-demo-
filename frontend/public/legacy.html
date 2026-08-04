@@ -2609,6 +2609,18 @@ function num(id){return parseFloat(val(id))||0;}
 function normPhoneDigits(raw){return String(raw||'').replace(/[\s()-]/g,'');}
 function isValidThaiPhone(raw){var d=normPhoneDigits(raw);return /^0\d{8,9}$/.test(d);}
 function isValidEmail(raw){var e=String(raw||'').trim();return e.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);}
+/* Auto-dashes a phone field as the person types (098-000-0000 / 02-000-0000
+   shape) — bind via oninput="formatPhoneOnInput(this)". Always rebuilds from
+   digits-only rather than patching around the caret, so pasting or deleting
+   mid-string never leaves a stray dash behind; cursor jumping to the end on
+   every keystroke is an accepted trade-off for that simplicity here. */
+function formatPhoneOnInput(el){
+  var d=normPhoneDigits(el.value).slice(0,10);
+  var out=d;
+  if(d.length>6)out=d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+  else if(d.length>3)out=d.slice(0,3)+'-'+d.slice(3);
+  el.value=out;
+}
 function setv(id,v){var e=$('#'+id);if(e)e.value=(v==null?'':v);}
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -3579,43 +3591,89 @@ window.pickUserEditEmp=pickUserEditEmp;
    cannot be dismissed by clicking the backdrop / X — it only closes once the
    form is submitted. After this, the "พนักงาน" page can add many employees
    but is locked to admin-only (see isAdmin()/renderSetup()). */
+/* Two-step wizard: step 1 collects identity (name/role/phone/email — the same
+   fields every account needs), step 2 collects the rest of the employee
+   master record (dept/wh/shift/start date/scan code) so this first employee
+   ends up with a complete record instead of one they have to go back and
+   fill in later from the พนักงาน page. Step 1's answers are held in
+   `frStep1` (a closure var) across the two renders — this is one flow, just
+   drawn as two modal screens, not two independent forms. */
 function openFirstRegisterModal(){
   var bd=$('#modal .backdrop');if(bd)bd.removeAttribute('data-close');
-  var h='<div class="mhead"><h3>ลงทะเบียนผู้ใช้งานคนแรก</h3></div>'
-    +'<div class="mbody">'
-    +'<p class="muted small" style="margin:0 0 16px;">ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์ <b>ผู้ดูแลระบบ (Admin)</b> โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้</p>'
-    +'<div class="grid g3">'
-    +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name"></div>'
-    +'<div class="field"><label>ตำแหน่ง <span class="req">*</span></label><input id="frRole" value="ผู้ดูแลระบบ" readonly></div>'
-    +'<div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="frPhone" type="tel" inputmode="tel" placeholder="098-000-0000" maxlength="15" autocomplete="tel"></div>'
-    +'</div>'
-    +'<div class="field" style="margin-top:14px;"><label>อีเมล <span class="req">*</span></label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
-    +'</div>'
-    +'<div class="mfoot"><button class="btn accent" id="btnFirstReg">ลงทะเบียนและเริ่มใช้งาน</button></div>';
-  $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');
-  $('#btnFirstReg').onclick=function(){
-    var nm=val('frName');
-    if(!nm)return toast('กรอกชื่อ-นามสกุล',null,'err');
-    if(nm.length<2)return toast('ชื่อ-นามสกุลสั้นเกินไป','อย่างน้อย 2 ตัวอักษร','err');
-    if(nm.length>100)return toast('ชื่อ-นามสกุลยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
-    var role=val('frRole');
-    var phoneRaw=val('frPhone');
-    if(!phoneRaw)return toast('กรอกเบอร์โทรศัพท์',null,'err');
-    if(!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 098-000-0000','err');
-    var phoneDigits=normPhoneDigits(phoneRaw);
-    var email=val('frEmail');
-    if(!email)return toast('กรอกอีเมล',null,'err');
-    if(!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
-    var id=nextSeqId('EMP-',Object.keys(S.employees));
-    var rec={id:id,name:nm,role:role||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:phoneDigits,email:email.toLowerCase(),startDate:'',scanCode:id,access:'admin',status:'active'};
-    S.employees[id]=rec;
-    auditEntry('CREATE',nm,id,nm,null,rec);
-    save();
-    if(bd)bd.setAttribute('data-close','');
-    $('#modal').classList.remove('show');
-    setCurrentUser(nm);
-    toast('ลงทะเบียนสำเร็จ',nm+' · สิทธิ์ผู้ดูแลระบบ');
-  };
+  var frStep1=null;
+  renderStep1();
+
+  function renderStep1(){
+    var h='<div class="mhead"><h3>ลงทะเบียนผู้ใช้งานคนแรก</h3></div>'
+      +'<div class="mbody">'
+      +'<p class="muted small" style="margin:0 0 16px;">ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์ <b>ผู้ดูแลระบบ (Admin)</b> โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้</p>'
+      +'<div class="grid g3">'
+      +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name" value="'+esc(frStep1?frStep1.name:'')+'"></div>'
+      +'<div class="field"><label>ตำแหน่ง <span class="req">*</span></label><input id="frRole" value="ผู้ดูแลระบบ" readonly></div>'
+      +'<div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="frPhone" type="tel" inputmode="tel" placeholder="098-000-0000" maxlength="12" autocomplete="tel" oninput="formatPhoneOnInput(this)" value="'+esc(frStep1?frStep1.phone:'')+'"></div>'
+      +'</div>'
+      +'<div class="field" style="margin-top:14px;"><label>อีเมล <span class="req">*</span></label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email" value="'+esc(frStep1?frStep1.email:'')+'"></div>'
+      +'</div>'
+      +'<div class="mfoot"><button class="btn accent" id="btnFirstReg">ถัดไป</button></div>';
+    $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');
+    $('#btnFirstReg').onclick=function(){
+      var nm=val('frName');
+      if(!nm)return toast('กรอกชื่อ-นามสกุล',null,'err');
+      if(nm.length<2)return toast('ชื่อ-นามสกุลสั้นเกินไป','อย่างน้อย 2 ตัวอักษร','err');
+      if(nm.length>100)return toast('ชื่อ-นามสกุลยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
+      var role=val('frRole');
+      var phoneRaw=val('frPhone');
+      if(!phoneRaw)return toast('กรอกเบอร์โทรศัพท์',null,'err');
+      if(!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 098-000-0000','err');
+      var email=val('frEmail');
+      if(!email)return toast('กรอกอีเมล',null,'err');
+      if(!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
+      frStep1={name:nm,role:role||'ผู้ดูแลระบบ',phone:phoneRaw,email:email};
+      renderStep2();
+    };
+  }
+
+  function renderStep2(){
+    var h='<div class="mhead"><h3>ข้อมูลเพิ่มเติม</h3></div>'
+      +'<div class="mbody">'
+      +'<p class="muted small" style="margin:0 0 16px;">ไม่บังคับกรอก — เพิ่มทีหลังได้ที่หน้า "พนักงาน" เช่นกัน</p>'
+      +'<div class="grid g3">'
+      +'<div class="field"><label>แผนก / หน่วยงาน</label><input id="frDept" placeholder="เช่น คลังสินค้า, จัดส่ง"></div>'
+      +'<div class="field"><label>คลังที่สังกัด</label><select id="frWh">'+invWhOptions('')+'</select></div>'
+      +'<div class="field"><label>กะการทำงาน</label>'
+        +'<select id="frShift">'
+          +'<option value="">— ไม่ระบุ —</option>'
+          +'<option value="morning">กะเช้า (08:00–17:00)</option>'
+          +'<option value="afternoon">กะบ่าย (14:00–22:00)</option>'
+          +'<option value="night">กะดึก (22:00–06:00)</option>'
+          +'<option value="general">ทั่วไป / ยืดหยุ่น</option>'
+        +'</select>'
+      +'</div>'
+      +'</div>'
+      +'<div class="grid g2" style="margin-top:14px;">'
+      +'<div class="field"><label>วันเริ่มงาน</label><input id="frStart" type="date"></div>'
+      +'<div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="frScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>'
+      +'</div>'
+      +'</div>'
+      +'<div class="mfoot"><button class="btn gray" id="btnFirstRegBack">ย้อนกลับ</button><button class="btn accent" id="btnFirstReg2">ลงทะเบียนและเริ่มใช้งาน</button></div>';
+    $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');
+    $('#btnFirstRegBack').onclick=function(){renderStep1();};
+    $('#btnFirstReg2').onclick=function(){
+      var phoneDigits=normPhoneDigits(frStep1.phone);
+      var id=nextSeqId('EMP-',Object.keys(S.employees));
+      var rec={id:id,name:frStep1.name,role:frStep1.role,dept:val('frDept'),wh:val('frWh'),shift:val('frShift'),
+        phone:phoneDigits,email:frStep1.email.toLowerCase(),startDate:val('frStart'),
+        scanCode:val('frScan'),access:'admin',status:'active'};
+      rec.scanCode=(rec.scanCode||'').trim()||id;
+      S.employees[id]=rec;
+      auditEntry('CREATE',frStep1.name,id,frStep1.name,null,rec);
+      save();
+      if(bd)bd.setAttribute('data-close','');
+      $('#modal').classList.remove('show');
+      setCurrentUser(frStep1.name);
+      toast('ลงทะเบียนสำเร็จ',frStep1.name+' · สิทธิ์ผู้ดูแลระบบ');
+    };
+  }
 }
 window.openFirstRegisterModal=openFirstRegisterModal;
 

@@ -35,6 +35,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url = TextEditingController(text: c.prefs.baseUrl);
     _account = TextEditingController(text: c.prefs.username);
     _password = TextEditingController();
+    // Only one hardware profile is qualified today (see _kDeviceProfiles) —
+    // making someone tap the one option they have no real choice about would
+    // just be friction, so it's picked for them the moment this screen opens.
+    if (_kDeviceProfiles.length == 1 && c.prefs.deviceModel.isEmpty) {
+      c.setDeviceModel(_kDeviceProfiles.first.id);
+    }
   }
 
   @override
@@ -51,7 +57,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final loc = context.watch<LocaleController>();
     final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
-    final canSave = c.connected && c.prefs.deviceModel.isNotEmpty;
+    final canSave = c.prefs.deviceModel.isNotEmpty;
     // A device being provisioned for the first time has nowhere to go back to.
     final canLeave = c.deviceConfigured;
 
@@ -83,28 +89,33 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: c.connected ? C.lime : C.red,
-                            shape: BoxShape.circle,
+                    // Only shown once there's something to say — connected, or
+                    // a real error from the last attempt. Nothing has failed
+                    // yet on a fresh setup screen, so there's nothing to report.
+                    if (c.connected || c.connError != null) ...[
+                      Row(
+                        children: [
+                          Container(
+                            width: 11,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              color: c.connected ? C.lime : C.red,
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Text(
-                            c.connected
-                                ? '${loc.t('เชื่อมต่อแล้ว')} · ${c.boxCount} ${loc.t('กล่อง')}'
-                                : (c.connError ?? loc.t('ยังไม่พบข้อมูล')),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(
+                              c.connected
+                                  ? '${loc.t('เชื่อมต่อแล้ว')} · ${c.boxCount} ${loc.t('กล่อง')}'
+                                  : c.connError!,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     FieldLabel(loc.t('ที่อยู่เซิร์ฟเวอร์')),
                     TextField(
                       controller: _url,
@@ -160,14 +171,6 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 18),
-              _StepLabel(loc.t('ล็อกหน้าจอเมื่อไม่มีการใช้งาน')),
-              const SizedBox(height: 11),
-              _IdleLockPicker(
-                minutes: c.prefs.idleLockMinutes,
-                onPick: c.setIdleLockMinutes,
-                loc: loc,
-              ),
             ],
           ),
         ),
@@ -182,9 +185,15 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             ),
           ),
           child: PrimaryButton(
-            label: loc.t('บันทึกและเริ่มใช้งาน'),
+            label: c.busy ? loc.t('กำลังเชื่อมต่อ…') : loc.t('บันทึกและเริ่มใช้งาน'),
             trailing: Icon(Icons.arrow_forward, size: 19, color: canSave ? C.limeDeep : C.faint),
-            onTap: canSave ? c.finishDeviceSetup : null,
+            onTap: (canSave && !c.busy)
+                ? () => c.completeDeviceSetup(
+                      baseUrl: _url.text,
+                      username: _account.text,
+                      password: _password.text,
+                    )
+                : null,
           ),
         ),
       ],
@@ -225,7 +234,9 @@ const _kDeviceProfiles = [
 /// Step 1 of setup: which handheld model this terminal is. Required before
 /// "บันทึกและเริ่มใช้งาน" unlocks (see `canSave` in [DeviceSetupScreen]) —
 /// recorded once per terminal so the fleet's hardware inventory stays
-/// accurate without anyone having to audit it by hand later.
+/// accurate without anyone having to audit it by hand later. Auto-picked in
+/// [_DeviceSetupScreenState.initState] whenever there's only one option, so
+/// this list stays visible as confirmation rather than a required tap.
 class _DeviceModelPicker extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onPick;
@@ -319,93 +330,10 @@ class _DeviceProfileTile extends StatelessWidget {
   }
 }
 
-/// Idle timeout choices, in minutes. 0 disables auto-lock outright, which is
-/// a legitimate answer for a device that never leaves one person's hands.
-class _IdleLockPicker extends StatelessWidget {
-  final int minutes;
-  final ValueChanged<int> onPick;
-  final LocaleController loc;
-  const _IdleLockPicker({required this.minutes, required this.onPick, required this.loc});
-
-  static const _options = [0, 5, 10, 30];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 9,
-          runSpacing: 9,
-          children: _options
-              .map((m) => _GateChip(
-                    label: m == 0 ? loc.t('ไม่ล็อก') : '$m',
-                    dirLabel: m == 0 ? null : loc.t('นาที'),
-                    selected: minutes == m,
-                    onTap: () => onPick(m),
-                  ))
-              .toList(),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          loc.t('ยิงบัตรอีกครั้งเพื่อปลดล็อก · จะไม่ล็อกขณะมีกล่องค้างอยู่ในคิว'),
-          style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
-        ),
-      ],
-    );
-  }
-}
-
 class _StepLabel extends StatelessWidget {
   final String text;
   const _StepLabel(this.text);
   @override
   Widget build(BuildContext context) =>
       Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink));
-}
-
-class _GateChip extends StatelessWidget {
-  final String label;
-  final String? dirLabel;
-  final bool selected;
-  final VoidCallback onTap;
-  const _GateChip({required this.label, this.dirLabel, required this.selected, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? C.ink : C.surface,
-      borderRadius: BorderRadius.circular(13),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(13),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 64),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: selected ? C.ink : C.border2, width: selected ? 1.5 : 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? C.onInk : C.ink,
-                      fontFeatures: const [FontFeature.tabularFigures()])),
-              if (dirLabel != null)
-                Text(dirLabel!,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                        color: selected ? C.onInk.withValues(alpha: 0.7) : C.muted)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
