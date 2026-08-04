@@ -1036,6 +1036,23 @@ class AppController extends ChangeNotifier {
 
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
 
+  /// Live typeahead for the track search box — every tag containing what's
+  /// typed so far, updated on every keystroke rather than waiting for Enter.
+  /// Capped at 20: a match list longer than a PDA screen can show at once
+  /// isn't narrowing anything down yet, just more to scroll past.
+  List<String> get trackSuggestions {
+    final s = S;
+    final q = trackVal.trim().toLowerCase();
+    if (s == null || q.isEmpty) return const [];
+    final matches = s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
+    return matches.take(20).toList();
+  }
+
+  void selectTrackSuggestion(String tag) {
+    trackVal = tag;
+    doTrack();
+  }
+
   // ═══════════════════════ settings ════════════════════════════════════════
   /// Applies the terminal's connection details and re-authenticates. The
   /// service credentials are the device's own — an operator never sees them,
