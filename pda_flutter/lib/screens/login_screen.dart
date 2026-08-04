@@ -365,7 +365,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    return Column(
+    // A plain Column here forced the header + badge prompt to a fixed height
+    // and only let the employee list underneath scroll on its own — on the
+    // handheld's short screen that clipped everything below the fold with no
+    // way to reach it. One scroll view for the whole page instead, so the
+    // page scrolls as a unit whenever it doesn't fit.
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: bottom + 20),
+      child: Column(
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
@@ -411,27 +418,26 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           _BadgePrompt(field: _captureField(loc)),
           if (people.isEmpty)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, color: C.faint),
-                  ),
-                ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13.5, color: C.faint),
               ),
             )
           else
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(22, 4, 22, bottom + 20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                        style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                          style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                   ...people.map((e) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -445,6 +451,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
         ],
+      ),
     );
   }
 }

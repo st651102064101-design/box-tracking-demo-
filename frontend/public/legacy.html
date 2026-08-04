@@ -827,6 +827,8 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 
 .muted{color:var(--muted);} .small{font-size:13px;}
 tr.row-click{cursor:pointer;} tr.row-click:hover{background:color-mix(in srgb,var(--fg,#000) 5%,transparent);}
+tr.row-self{background:color-mix(in srgb,var(--accent,#22c55e) 12%,transparent);box-shadow:inset 3px 0 0 var(--accent,#22c55e);}
+tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transparent);}
 .row{display:flex;gap:11px;flex-wrap:wrap;align-items:center;} .spacer{flex:1;}
 .tag{font-size:11.5px;color:var(--muted);font-weight:400;}
 .diff-neg{color:var(--neg);font-weight:600;} .diff-pos{color:var(--pos);font-weight:600;}
@@ -6084,10 +6086,12 @@ function renderSetup(){
     return (e.id+' '+(e.name||'')+' '+(e.role||'')+' '+(e.dept||'')+' '+(e.phone||'')+' '+(e.email||'')+' '+(e.scanCode||'')).toLowerCase().indexOf(sbe)>=0;
   }):Object.values(S.employees);
   var eps=idSort(epsAll,uiSort.emp);
+  var meId=currentEmp()&&currentEmp().id;
   $('#empBody').innerHTML=eps.length?eps.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-    return '<tr data-tag="'+esc(e.id)+'" class="row-click" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(USER===e.name?' <span class="pill ok" style="font-size:11px;">ปัจจุบัน</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
+    var isMe=meId&&e.id===meId;
+    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
