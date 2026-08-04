@@ -1176,6 +1176,36 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
 <!-- ===================== OVERVIEW ===================== -->
 <section class="tab active" id="tab-overview">
+  <style>
+  /* Master Data Health Check — warns when the dashboard is reading from
+     master tables (rack locations / box types / customers-suppliers /
+     employees) that nobody has filled in yet. Every number on this page
+     derives from those tables, so an empty one isn't "no activity today",
+     it's "there's nothing here to compute from" — worth a distinct warning,
+     not silence. */
+  .mdh-banner{display:flex;align-items:flex-start;gap:12px;margin:0 0 20px;padding:14px 16px;
+    border-radius:16px;background:var(--warnSoft);border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));}
+  .mdh-banner .mdh-ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);}
+  .mdh-banner .mdh-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .mdh-body{flex:1;min-width:0;}
+  .mdh-title{font-size:13.5px;font-weight:700;color:var(--warn);letter-spacing:-.01em;}
+  .mdh-list{margin-top:3px;font-size:12.5px;color:var(--ink2);line-height:1.5;}
+  .mdh-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .mdh-action{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+    padding:6px 12px;border-radius:999px;background:var(--surface);color:var(--warn);
+    border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));transition:background .15s,border-color .15s;}
+  .mdh-action:hover{background:color-mix(in srgb,var(--warn) 10%,var(--surface));border-color:var(--warn);}
+  /* inline "not set up yet" hint reused inside KPI cards (e.g. space
+     utilisation) — same warn color, tucked into a card instead of the banner */
+  .mdh-inline{color:var(--warn);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 80%,black);}
+  /* the density KPI card itself, while rack locations are unset */
+  .mdh-inline-kpi .s{color:var(--warn);font-weight:600;}
+  .mdh-inline-kpi .v{color:var(--warn);}
+  </style>
+  <div id="mdHealthBanner"></div>
+
   <div class="hero">
     <div class="eyebrow reveal">ภาพรวมแบบเรียลไทม์</div>
     <h1 class="h-title reveal d1">กล่องทุกใบ<br>รู้อยู่ที่ไหน</h1>
@@ -3639,7 +3669,6 @@ function openFirstRegisterModal(){
       +'<p class="muted small" style="margin:0 0 16px;">ไม่บังคับกรอก — เพิ่มทีหลังได้ที่หน้า "พนักงาน" เช่นกัน</p>'
       +'<div class="grid g3">'
       +'<div class="field"><label>แผนก / หน่วยงาน</label><input id="frDept" placeholder="เช่น คลังสินค้า, จัดส่ง"></div>'
-      +'<div class="field"><label>คลังที่สังกัด</label><select id="frWh">'+invWhOptions('')+'</select></div>'
       +'<div class="field"><label>กะการทำงาน</label>'
         +'<select id="frShift">'
           +'<option value="">— ไม่ระบุ —</option>'
@@ -3649,9 +3678,6 @@ function openFirstRegisterModal(){
           +'<option value="general">ทั่วไป / ยืดหยุ่น</option>'
         +'</select>'
       +'</div>'
-      +'</div>'
-      +'<div class="grid g2" style="margin-top:14px;">'
-      +'<div class="field"><label>วันเริ่มงาน</label><input id="frStart" type="date"></div>'
       +'<div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="frScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>'
       +'</div>'
       +'</div>'
@@ -3661,8 +3687,8 @@ function openFirstRegisterModal(){
     $('#btnFirstReg2').onclick=function(){
       var phoneDigits=normPhoneDigits(frStep1.phone);
       var id=nextSeqId('EMP-',Object.keys(S.employees));
-      var rec={id:id,name:frStep1.name,role:frStep1.role,dept:val('frDept'),wh:val('frWh'),shift:val('frShift'),
-        phone:phoneDigits,email:frStep1.email.toLowerCase(),startDate:val('frStart'),
+      var rec={id:id,name:frStep1.name,role:frStep1.role,dept:val('frDept'),wh:'',shift:val('frShift'),
+        phone:phoneDigits,email:frStep1.email.toLowerCase(),startDate:'',
         scanCode:val('frScan'),access:'admin',status:'active'};
       rec.scanCode=(rec.scanCode||'').trim()||id;
       S.employees[id]=rec;
@@ -5715,10 +5741,45 @@ function trackCardHtml(b){
   +'</div>';
 }
 
+/* ===== MASTER DATA HEALTH CHECK =====
+   Every KPI on the dashboard is computed from these four master tables —
+   an empty one isn't "quiet today", it's "nothing to compute from yet",
+   which reads very differently to someone new to the system. Checked as
+   a plain function (not baked into renderOverview) so it can be unit-
+   tested or reused (e.g. a startup check) independent of the DOM. */
+var MD_HEALTH_CHECKS=[
+  {key:'loc',   label:'ตำแหน่งแร็ค',        stab:'loc',   test:function(){return Object.keys(S.locations||{}).length>0;}},
+  {key:'btype', label:'ประเภทกล่อง/สินทรัพย์', stab:'btype', test:function(){return Object.keys(S.boxtypes||{}).length>0;}},
+  {key:'cust',  label:'ลูกค้า/คู่ค้า',        stab:'cust',  test:function(){return Object.keys(S.customers||{}).length>0;}},
+  {key:'emp',   label:'ผู้ใช้งานระบบ',       stab:'emp',   test:function(){return Object.keys(S.employees||{}).length>0;}}
+];
+/** Returns the checks currently missing data — [] once everything is set up. */
+function checkMasterDataHealth(){
+  return MD_HEALTH_CHECKS.filter(function(c){return !c.test();});
+}
+/** Renders (or clears) the warning banner at the top of the dashboard. */
+function renderMdHealthBanner(){
+  var host=$('#mdHealthBanner');if(!host)return;
+  var missing=checkMasterDataHealth();
+  if(!missing.length){host.innerHTML='';return;}
+  var names=missing.map(function(c){return c.label;}).join(', ');
+  host.innerHTML='<div class="mdh-banner">'
+    +'<span class="mdh-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18.5a1.8 1.8 0 0 0 1.55 2.7h17.3a1.8 1.8 0 0 0 1.55-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg></span>'
+    +'<div class="mdh-body">'
+      +'<div class="mdh-title">ระบบยังขาดการตั้งค่า</div>'
+      +'<div class="mdh-list">ยังไม่มีข้อมูล: <b>'+esc(names)+'</b> — กรุณาตั้งค่าก่อนเริ่มใช้งานระบบ</div>'
+      +'<div class="mdh-actions">'+missing.map(function(c){
+        return '<button type="button" class="mdh-action" onclick="goSetup(\''+c.stab+'\')">ตั้งค่า'+esc(c.label)+'ทันที</button>';
+      }).join('')+'</div>'
+    +'</div>'
+  +'</div>';
+}
+
 /* ===== OVERVIEW (dashboard + reports merged) ===== */
 function chev(id){return chevSvg(id);}
 function renderOverview(){
   applyAutoLost();
+  renderMdHealthBanner();
   var all=Object.values(S.boxes);
   var wh=all.filter(function(b){return b.status==='warehouse';}).length;
   var out=all.filter(function(b){return b.status==='out';}).length;
@@ -7751,9 +7812,9 @@ window.seedDemo=seedDemo;
         +'<span class="v" data-f="inToday">0</span><span class="s">รับเข้าใหม่ + รับคืน</span></button>'
       +'<button type="button" class="fb-kpi" data-k="out"><span class="k">ออกวันนี้ · Gate Out</span>'
         +'<span class="v" data-f="outToday">0</span><span class="s">จ่ายออกให้ลูกค้า</span></button>'
-      +'<div class="fb-kpi"><span class="k">ความหนาแน่นพื้นที่</span>'
+      +'<button type="button" class="fb-kpi" data-k="density"><span class="k">ความหนาแน่นพื้นที่</span>'
         +'<span class="v" data-f="pct">—</span><span class="s" data-f="occtxt">—</span>'
-        +'<span class="fb-bar" data-f="bar"><i></i></span></div>'
+        +'<span class="fb-bar" data-f="bar"><i></i></span></button>'
       +'</div>';
 
     h+='<div class="fb-rail">';
@@ -7793,6 +7854,12 @@ window.seedDemo=seedDemo;
     var kin=host.querySelector('[data-k="in"]'),kout=host.querySelector('[data-k="out"]');
     if(kin)kin.addEventListener('click',function(){go(function(){ W.showGateTodayList&&W.showGateTodayList('in'); });});
     if(kout)kout.addEventListener('click',function(){go(function(){ W.showGateTodayList&&W.showGateTodayList('out'); });});
+    // Density card only acts as a quick-link while rack locations are unset —
+    // once real slots exist, clicking it isn't "go fix this," it's just a stat.
+    var kdensity=host.querySelector('[data-k="density"]');
+    if(kdensity)kdensity.addEventListener('click',function(){
+      if(!Object.keys(S.locations||{}).length)goSetup('loc');
+    });
   }
 
   function setTxt(k,v){ var n=el[k]; if(n&&n.textContent!==v)n.textContent=v; }
@@ -7805,7 +7872,8 @@ window.seedDemo=seedDemo;
     setTxt('inToday',num(d.inToday));
     setTxt('outToday',num(d.outToday));
     setTxt('pct',d.slots?(d.pct+'%'):'—');
-    setTxt('occtxt',d.slots?(num(d.occ)+' / '+num(d.slots)+' ช่องมีของ'):'ยังไม่ได้ตั้งค่าตำแหน่งแร็ค');
+    setTxt('occtxt',d.slots?(num(d.occ)+' / '+num(d.slots)+' ช่องมีของ'):'ยังไม่ได้ตั้งค่าตำแหน่งแร็ค [คลิกเพื่อตั้งค่า]');
+    setCls(host.querySelector('[data-k="density"]'),'fb-kpi'+(d.slots?'':' mdh-inline-kpi'));
     if(el.bar){
       setCls(el.bar,'fb-bar'+(d.pct>=90?' bad':d.pct>=70?' warn':''));
       var fill=el.bar.querySelector('i');
