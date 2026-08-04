@@ -1713,11 +1713,33 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
 <!-- ===================== SETUP / MASTER ===================== -->
 <section class="tab" id="tab-setup">
+  <style>
+  /* Master-data Excel/CSV import — preview table shown between column-mapping
+     and commit (see openImportPreviewModal). Reuses every other modal/table
+     class already in the file; these three states (ok/error/duplicate) are
+     the only genuinely new visual pattern, so they're the only new CSS. */
+  .import-preview-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:340px;overflow-y:auto;margin-bottom:6px;}
+  .import-preview-table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap;}
+  .import-preview-table thead th{position:sticky;top:0;background:var(--surface2);text-align:left;
+    padding:8px 12px;font-weight:600;color:var(--ink2);border-bottom:1px solid var(--line);}
+  .import-preview-table td{padding:7px 12px;border-bottom:1px solid var(--line);color:var(--ink);}
+  .import-preview-table tr:last-child td{border-bottom:none;}
+  .import-row-err td{background:color-mix(in srgb,var(--neg) 7%,var(--surface));}
+  .import-row-err .import-status-cell{color:var(--neg);font-weight:600;font-size:12px;}
+  .import-row-dup td{background:color-mix(in srgb,var(--warn) 8%,var(--surface));}
+  .import-row-dup .import-status-cell{color:var(--warn);font-weight:600;font-size:12px;}
+  </style>
   <div class="hero">
     <div class="eyebrow reveal">Master</div>
     <h1 class="h-title reveal d1">ตั้งค่า</h1>
     <p class="h-sub reveal d2">ลงทะเบียนกล่อง · ประเภทกล่อง · คลังและประตู · ลูกค้า · พารามิเตอร์ — ระบบเก็บประวัติเข้า·ออกเบื้องหลังให้อัตโนมัติ</p>
   </div>
+
+  <!-- Shared across all 6 Setup sub-tabs — which entity a click targets is
+       set by openImportModal() right before .click(), so one hidden input
+       (and one change handler) covers every "นำเข้า Excel" button below
+       instead of six near-identical wired-up inputs. -->
+  <input type="file" id="importFileShared" accept=".xlsx,.xls,.csv" style="display:none;">
 
   <div class="row no-print reveal" style="margin-bottom:22px;">
     <button class="btn ghost sm stab active" data-stab="btype">ประเภทกล่อง</button>
@@ -1809,6 +1831,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </select>
         <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
         <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
+        <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
         <button class="btn ghost sm" onclick="exportBoxPDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
@@ -1844,7 +1867,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       <button class="btn ghost sm" onclick="exportBtypePDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="btypeBody"></tbody></table></div>
@@ -1888,7 +1911,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelWh" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>คลังและประตู</h4><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>คลังและประตู</h4><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       <button class="btn ghost sm" onclick="exportWhPDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="whBody"></tbody></table></div>
@@ -1944,7 +1967,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       <button class="btn ghost sm" onclick="exportCustPDF()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> Export PDF</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div>
@@ -2016,7 +2039,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"></div>
+      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -2127,6 +2150,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <button class="ivs-btn active" data-lview="map"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> ผังแร็ค</button>
           <button class="ivs-btn" data-lview="table"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span> ตาราง</button>
         </div>
+        <button class="btn ghost sm" onclick="openImportModal('loc')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="printFilteredLocLabels()" title="พิมพ์บาร์โค้ดป้ายเฉพาะที่กรองอยู่"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้าย (ที่กรอง)</button>
         <button class="btn ghost sm" id="btnClearOrphanLoc" style="display:none;color:var(--neg);" title="ลบตำแหน่งที่ไม่มีโซน (ข้อมูลตกค้างจากบั๊กเดิม)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ล้างตำแหน่งไม่มีโซน</button>
       </div>
@@ -3712,7 +3736,7 @@ function openRelocateModal(tag){
     +'<div class="mbody">'
       +'<p class="muted small" style="margin:0 0 16px;">'+esc(typeName(b.type))+' — ตำแหน่งปัจจุบัน: '+(loc.wh?esc(whName(loc.wh)):'<span class="muted">ยังไม่ระบุ</span>')+'</p>'
       +'<div class="grid g2" style="margin-bottom:14px;">'
-        +'<div class="field"><label>คลัง</label>'+(Object.keys(S.warehouses).length?'<select id="rlWh">'+invWhOptions(loc.wh)+'</select>':'<button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง</button>')+'</div>'
+        +'<div class="field"><label>คลัง</label>'+warehouseFieldHtml('rlWh', loc.wh)+'</div>'
         +'<div class="field"><label>ผู้ดำเนินการ</label><input id="rlRecorder" value="'+esc(USER)+'" readonly></div>'
       +'</div>'
       +locPickerHtml('rl',loc)
@@ -5050,6 +5074,7 @@ function pickGate(dir){
   var allGs=allGateNums();
   if(!allGs.length){openModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');return;}
   var gs=gateNumsForDir(dir);
+  if(gs.length===1){setFixedGate(dir,gs[0]);return;}
   var excluded=allGs.length-gs.length;
   var excludedNote=excluded>0?('<div class="tag" style="margin-bottom:10px;color:var(--warn);"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ซ่อน '+excluded+' ประตูที่ไม่รองรับทิศทางนี้</div>'):'';
   if(!gs.length){openModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม"</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');return;}
@@ -8798,7 +8823,7 @@ $('#bulkInvRelocate').addEventListener('click', function() {
     + '<div class="mbody">'
       + '<p class="muted small" style="margin:0 0 16px;">เลือกคลัง/โซน/แร็คใหม่ครั้งเดียว — อัปเดตทั้ง ' + tags.length + ' ใบพร้อมกัน</p>'
       + '<div class="grid g2" style="margin-bottom:14px;">'
-        + '<div class="field"><label>คลัง</label>' + (Object.keys(S.warehouses).length ? '<select id="brlWh">' + invWhOptions(dp.wh) + '</select>' : '<button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง</button>') + '</div>'
+        + '<div class="field"><label>คลัง</label>' + warehouseFieldHtml('brlWh', dp.wh) + '</div>'
         + '<div class="field"><label>ผู้บันทึก</label><input id="brlRecorder" value="' + esc(USER) + '" readonly></div>'
       + '</div>'
       + locPickerHtml('brl', { wh: dp.wh })
@@ -8902,14 +8927,22 @@ function invDistinctValues(field) {
 function invWhOptions(sel) {
   var whs = Object.values(S.warehouses);
   if (!whs.length) return '<option value="">(ยังไม่มีคลัง)</option>';
+  if (whs.length === 1 && !sel) sel = whs[0].id;
   return whs.map(function(w) {
     return '<option value="' + esc(w.id) + '"' + (String(sel) === String(w.id) ? ' selected' : '') + '>' + esc(w.name) + '</option>';
   }).join('');
 }
-function invWhField(sel) {
+function warehouseFieldHtml(selectId, sel) {
   var whs = Object.values(S.warehouses);
   if (!whs.length) return '<button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง</button>';
-  return '<select id="invRcvWh">' + invWhOptions(sel) + '</select>';
+  if (whs.length === 1) {
+    var w = whs[0];
+    return '<input type="hidden" id="' + selectId + '" value="' + esc(w.id) + '"><div class="tag" style="display:inline-flex;align-items:center;gap:6px;">' + esc(w.name) + ' · เลือกอัตโนมัติ</div>';
+  }
+  return '<select id="' + selectId + '">' + invWhOptions(sel) + '</select>';
+}
+function invWhField(sel) {
+  return warehouseFieldHtml('invWh', sel);
 }
 function custSelectField(selectId) {
   if (!Object.keys(S.customers).length) return '<button class="btn accent" onclick="closeModal();goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';
@@ -8974,7 +9007,7 @@ function openInvModal(code) {
       + '</div>'
       + '<div class="grid g3" style="margin-bottom:14px;">'
         + '<div class="field"><label>หน่วย</label><input id="invUnit" list="invUnitList" placeholder="เลือกประเภทก่อน" value="' + (it ? esc(it.unit || '') : '') + '"><datalist id="invUnitList">' + INV_COMMON_UNITS.map(function(u) { return '<option value="' + esc(u) + '">'; }).join('') + '</datalist></div>'
-        + '<div class="field"><label>คลังที่เก็บ</label>' + (Object.keys(S.warehouses).length ? '<select id="invWh">' + invWhOptions(dp.wh) + '</select>' : '<button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง</button>') + '</div>'
+        + '<div class="field"><label>คลังที่เก็บ</label>' + invWhField(dp.wh) + '</div>'
         + '<div class="field"><label>โซน / แร็ค</label><input id="invLoc" list="invLocList" placeholder="เลือกจากรายการ หรือพิมพ์ตำแหน่งใหม่" value="' + esc(dp.loc || '') + '"><datalist id="invLocList">' + invDistinctValues('loc').map(function(l) { return '<option value="' + esc(l) + '">'; }).join('') + '</datalist></div>'
       + '</div>'
       + '<div class="field" style="margin-bottom:14px;"><label>หมายเหตุ</label><input id="invNote" placeholder="หมายเหตุเพิ่มเติม" value="' + (it ? esc(it.note || '') : '') + '"></div>'
@@ -9914,6 +9947,450 @@ function openColumnMapModal(opts){
     opts.onConfirm(colMap);
   };
 }
+
+/* ============================================================================
+   MASTER DATA BULK IMPORT (.xlsx / .xls / .csv) — box types, warehouses &
+   gates, box registration, customers/suppliers, employees, rack locations
+   ----------------------------------------------------------------------------
+   Same column-mapping engine as the Gate ขาเข้า/ขาออก importers above
+   (openColumnMapModal) — one entity-agnostic 3-step flow (pick file → map
+   columns → preview & confirm) driven per entity by IMPORT_CONFIGS, instead
+   of six copy-pasted importers. Every record built here goes through the
+   exact same validators and produces the exact same object shape the
+   corresponding manual "Add" form does (see each config's validateRow/
+   buildRecord) — the spreadsheet is just a faster way to fill in that form,
+   not a separate path with its own rules.
+   ========================================================================== */
+(function(){
+  /* ---- id/tag generators — mirror the manual forms' own numbering so an
+     imported batch and a manually-added record can never collide. ---- */
+
+  /* nextSeqId(prefix, existingIds) only looks at the array it's given, so a
+     generator has to grow that array itself after every id it hands out —
+     otherwise every row in one import would get the identical next number. */
+  function makeSeqIdGen(prefix, existingIds){
+    var used = existingIds.slice();
+    return function(){
+      var id = nextSeqId(prefix, used);
+      used.push(id);
+      return id;
+    };
+  }
+  /* Box tags aren't a flat sequence — they're per-type-prefix counters
+     (nextTagForType scans live S.boxes for TYPEPREFIX-NN). Import can't
+     write rows into S.boxes mid-preview, so this keeps its own counters,
+     seeded from S.boxes once, mirroring tagPrefixForType's exact prefix
+     rule and pad(...,2) width so the sequence a batch import produces
+     continues seamlessly from — and into — manual single/batch add. */
+  function makeBoxTagGen(){
+    var counters={};
+    Object.keys(S.boxes).forEach(function(id){
+      var m=id.match(/^([A-Z0-9]+-)(\d+)$/);
+      if(m){var p=m[1],n=parseInt(m[2],10);if(!counters[p]||n>counters[p])counters[p]=n;}
+    });
+    return function(typeId){
+      if(!typeId)return genTagId();
+      var prefix=tagPrefixForType(typeId);
+      var next=(counters[prefix]||0)+1;
+      counters[prefix]=next;
+      return prefix+pad(next,2);
+    };
+  }
+
+  function mapRowValues(row, colMap, cfg){
+    var m={};
+    cfg.fields.forEach(function(f){
+      var idx=colMap[f.key];
+      var v=(idx!=null&&idx>=0)?row[idx]:'';
+      m[f.key]=String(v==null?'':v).trim();
+    });
+    return m;
+  }
+
+  var ENUM_ERR={
+    gateType:'ประเภทประตูต้องเป็น both/in/out',
+    kind:'ประเภทคู่ค้าต้องเป็น customer/supplier/both',
+    custStatus:'สถานะต้องเป็น active/inactive/blocked',
+    shift:'กะต้องเป็น morning/afternoon/night/general',
+    access:'สิทธิ์ต้องเป็น operator/supervisor/admin/viewer',
+    empStatus:'สถานะต้องเป็น active/inactive'
+  };
+  function enumOk(v,list){return !v||list.indexOf(v.toLowerCase())>=0;}
+
+  /* opts.fields entries follow openColumnMapModal's contract exactly
+     ({key,label,required,aliases}) — cfg.fields is passed to it unmodified. */
+  var IMPORT_CONFIGS={
+    btype:{
+      key:'btype', label:'ประเภทกล่อง', targetKey:'boxtypes', idField:'id', idKind:'seq', idPrefix:'BT-',
+      fields:[
+        {key:'id',   label:'รหัสประเภท (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'name', label:'ชื่อประเภท', required:true, aliases:['name','ชื่อ','ชื่อประเภท']},
+        {key:'unit', label:'หน่วยนับ', required:true, aliases:['unit','หน่วย','หน่วยนับ']},
+        {key:'value',label:'มูลค่าต่อใบ (บาท)', required:false, aliases:['value','มูลค่า','ราคา']},
+        {key:'dim',  label:'ขนาด (มม.)', required:false, aliases:['dim','ขนาด','size']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.name)e.push('ไม่มีชื่อประเภท');
+        if(!m.unit)e.push('ไม่มีหน่วยนับ');
+        if(m.value!==''&&isNaN(Number(m.value)))e.push('มูลค่าต้องเป็นตัวเลข');
+        return e;
+      },
+      buildRecord:function(m,id){
+        return {id:id,name:m.name,unit:m.unit,value:(m.value===''?null:Number(m.value)),dim:m.dim||''};
+      }
+    },
+
+    wh:{
+      key:'wh', label:'คลัง & ประตู', targetKey:'warehouses', idField:'id', idKind:'seq', idPrefix:'WH-',
+      fields:[
+        {key:'id',       label:'รหัสคลัง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'name',     label:'ชื่อคลัง', required:true, aliases:['name','ชื่อ','ชื่อคลัง']},
+        {key:'gateFrom', label:'ประตูเริ่ม', required:true, aliases:['gatefrom','ประตูเริ่ม','from']},
+        {key:'gateTo',   label:'ประตูสิ้นสุด', required:true, aliases:['gateto','ประตูสิ้นสุด','to']},
+        {key:'gateType', label:'ประเภทประตู (both/in/out)', required:false, aliases:['gatetype','ประเภทประตู']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.name)e.push('ไม่มีชื่อคลัง');
+        var from=Number(m.gateFrom),to=Number(m.gateTo);
+        if(!m.gateFrom||!m.gateTo||isNaN(from)||isNaN(to)||from<1||to<from)e.push('ช่วงประตูไม่ถูกต้อง');
+        if(!enumOk(m.gateType,['both','in','out']))e.push(ENUM_ERR.gateType);
+        return e;
+      },
+      buildRecord:function(m,id){
+        var from=Number(m.gateFrom),to=Number(m.gateTo),gates=[];
+        for(var k=from;k<=to;k++)gates.push(k);
+        var gt=(m.gateType||'both').toLowerCase(),gtMap={};
+        gates.forEach(function(g){gtMap[g]=gt;});
+        return {id:id,name:m.name,gates:gates,gateType:gt,gateTypes:gtMap};
+      },
+      afterCommit:function(){rebuildGates();}
+    },
+
+    box:{
+      key:'box', label:'ลงทะเบียนกล่อง', targetKey:'boxes', idField:'tag', idKind:'boxtag',
+      fields:[
+        {key:'tag',      label:'บาร์โค้ด (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['tag','barcode','บาร์โค้ด']},
+        {key:'typeId',   label:'รหัสประเภทกล่อง', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท']},
+        {key:'supplier', label:'รหัสซัพพลายเออร์', required:false, aliases:['supplier','ซัพพลายเออร์','รหัสซัพพลายเออร์']},
+        {key:'lot',      label:'Lot/Batch', required:false, aliases:['lot','batch']},
+        {key:'expiry',   label:'วันหมดอายุ (YYYY-MM-DD)', required:false, aliases:['expiry','วันหมดอายุ']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.typeId)e.push('ไม่มีรหัสประเภทกล่อง');
+        else if(!S.boxtypes[m.typeId])e.push('ไม่พบประเภทกล่อง '+m.typeId+' ในระบบ');
+        if(m.expiry&&isNaN(Date.parse(m.expiry)))e.push('รูปแบบวันหมดอายุไม่ถูกต้อง');
+        return e;
+      },
+      buildRecord:function(m,tag){
+        var type=S.boxtypes[m.typeId];
+        var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
+        return {tag:tag,type:m.typeId,value:value,status:'pending',cycles:0,
+          customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+          lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
+          regAt:iso(),regBy:USER,
+          location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},
+          lastSeenAt:iso(),labeled:false,history:[]};
+      }
+    },
+
+    cust:{
+      key:'cust', label:'ลูกค้า/คู่ค้า', targetKey:'customers', idField:'id', idKind:'seq', idPrefix:'CUST-',
+      fields:[
+        {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท']},
+        {key:'kind',          label:'ประเภทคู่ค้า (customer/supplier/both)', required:false, aliases:['kind','ประเภท','ประเภทคู่ค้า']},
+        {key:'returnDays',    label:'กำหนดคืนภายใน (วัน)', required:true, aliases:['returndays','กำหนดคืน','วัน']},
+        {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์']},
+        {key:'email',         label:'อีเมล', required:false, aliases:['email','อีเมล']},
+        {key:'addr',          label:'ที่อยู่/สาขา', required:true, aliases:['address','addr','ที่อยู่']},
+        {key:'taxId',         label:'เลขประจำตัวผู้เสียภาษี', required:false, aliases:['taxid','เลขภาษี']},
+        {key:'contactPerson', label:'ผู้ติดต่อหลัก', required:false, aliases:['contact','ผู้ติดต่อ']},
+        {key:'status',        label:'สถานะ (active/inactive/blocked)', required:false, aliases:['status','สถานะ']},
+        {key:'creditLimit',   label:'วงเงินมัดจำ/เครดิต', required:false, aliases:['creditlimit','วงเงิน']},
+        {key:'fineRate',      label:'อัตราค่าปรับ/วัน', required:false, aliases:['finerate','ค่าปรับ']},
+        {key:'lostFine',      label:'ค่าปรับกล่องหาย', required:false, aliases:['lostfine','ค่าปรับกล่องหาย']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.name)e.push('ไม่มีชื่อลูกค้า');
+        if(!m.returnDays||isNaN(Number(m.returnDays))||Number(m.returnDays)<1)e.push('กำหนดคืน (วัน) ไม่ถูกต้อง');
+        if(!m.phone&&!m.email)e.push('ต้องมีเบอร์โทรหรืออีเมลอย่างน้อยหนึ่งอย่าง');
+        if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
+        if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
+        if(!m.addr)e.push('ไม่มีที่อยู่/สาขา');
+        if(!enumOk(m.kind,['customer','supplier','both']))e.push(ENUM_ERR.kind);
+        if(!enumOk(m.status,['active','inactive','blocked']))e.push(ENUM_ERR.custStatus);
+        return e;
+      },
+      buildRecord:function(m,id){
+        return {id:id,name:m.name,kind:(m.kind||'customer').toLowerCase(),addr:m.addr,
+          phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
+          taxId:m.taxId||'',contactPerson:m.contactPerson||'',
+          status:(m.status||'active').toLowerCase(),
+          creditLimit:Number(m.creditLimit)||0,fineRate:Number(m.fineRate)||0,
+          lostFine:Number(m.lostFine)||0,returnDays:Number(m.returnDays)};
+      }
+    },
+
+    emp:{
+      key:'emp', label:'พนักงาน', targetKey:'employees', idField:'id', idKind:'seq', idPrefix:'EMP-',
+      fields:[
+        {key:'id',        label:'รหัสพนักงาน (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'name',      label:'ชื่อ–นามสกุล', required:true, aliases:['name','ชื่อ','ชื่อ-นามสกุล']},
+        {key:'role',      label:'ตำแหน่ง', required:false, aliases:['role','ตำแหน่ง']},
+        {key:'dept',      label:'แผนก/หน่วยงาน', required:false, aliases:['dept','แผนก']},
+        {key:'wh',        label:'รหัสคลังที่สังกัด', required:false, aliases:['wh','คลัง']},
+        {key:'shift',     label:'กะ (morning/afternoon/night/general)', required:false, aliases:['shift','กะ']},
+        {key:'phone',     label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร']},
+        {key:'email',     label:'อีเมล', required:false, aliases:['email','อีเมล']},
+        {key:'startDate', label:'วันเริ่มงาน', required:false, aliases:['startdate','วันเริ่มงาน']},
+        {key:'scanCode',  label:'รหัสบัตรพนักงาน (เว้นว่างได้)', required:false, aliases:['scancode','รหัสบัตร']},
+        {key:'access',    label:'สิทธิ์ (operator/supervisor/admin/viewer)', required:false, aliases:['access','สิทธิ์']},
+        {key:'status',    label:'สถานะ (active/inactive)', required:false, aliases:['status','สถานะ']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.name)e.push('ไม่มีชื่อพนักงาน');
+        if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
+        if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
+        if(m.wh&&!S.warehouses[m.wh])e.push('ไม่พบรหัสคลัง '+m.wh);
+        if(!enumOk(m.shift,['morning','afternoon','night','general']))e.push(ENUM_ERR.shift);
+        if(!enumOk(m.access,['operator','supervisor','admin','viewer']))e.push(ENUM_ERR.access);
+        if(!enumOk(m.status,['active','inactive']))e.push(ENUM_ERR.empStatus);
+        return e;
+      },
+      buildRecord:function(m,id){
+        return {id:id,name:m.name,role:m.role||'',dept:m.dept||'',wh:m.wh||'',
+          shift:m.shift||'',phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
+          startDate:m.startDate||'',scanCode:(m.scanCode||'').trim()||id,
+          access:(m.access||'operator').toLowerCase(),status:(m.status||'active').toLowerCase()};
+      }
+    },
+
+    loc:{
+      key:'loc', label:'ตำแหน่งแร็ค', targetKey:'locations', idField:'code', idKind:'loc',
+      fields:[
+        {key:'code',  label:'รหัสตำแหน่ง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['code','รหัส','รหัสตำแหน่ง']},
+        {key:'wh',    label:'รหัสคลัง', required:true, aliases:['wh','คลัง']},
+        {key:'zone',  label:'โซน', required:true, aliases:['zone','โซน']},
+        {key:'rack',  label:'แร็ค', required:false, aliases:['rack','แร็ค']},
+        {key:'shelf', label:'ชั้น', required:false, aliases:['shelf','ชั้น']},
+        {key:'slot',  label:'ช่อง', required:false, aliases:['slot','ช่อง']},
+        {key:'type',  label:'ประเภทแร็ค', required:false, aliases:['type','ประเภทแร็ค']},
+        {key:'note',  label:'หมายเหตุ', required:false, aliases:['note','หมายเหตุ']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        if(!m.wh)e.push('ไม่มีรหัสคลัง');
+        else if(!S.warehouses[m.wh])e.push('ไม่พบรหัสคลัง '+m.wh);
+        if(!m.zone)e.push('ไม่มีโซน');
+        return e;
+      },
+      buildRecord:function(m,code){
+        return {code:code,wh:m.wh,zone:m.zone,rack:m.rack||'',shelf:m.shelf||'',
+          slot:m.slot||'',type:m.type||'',note:m.note||''};
+      }
+    }
+  };
+
+  /* ---- Step 1: pick a file → parse → open the column-mapping modal ----
+     One shared <input type=file> (#importFileShared) for all six entities —
+     which one a click targets is set here right before .click(), same idea
+     as _importTargetKey below. Mirrors handleOutImportFile's read/parse
+     exactly (inline SheetJS, header:1, blank rows filtered up front). */
+  var _importTargetKey=null;
+  window.openImportModal=function(entityKey){
+    if(!IMPORT_CONFIGS[entityKey])return;
+    if(typeof XLSX==='undefined'){toast('ไลบรารี Excel ยังไม่พร้อม','โหลดหน้าใหม่แล้วลองอีกครั้ง','err');return;}
+    _importTargetKey=entityKey;
+    var input=document.getElementById('importFileShared');
+    if(input)input.click();
+  };
+  window.handleImportFile=function(e){
+    var f=e.target.files&&e.target.files[0];
+    e.target.value='';
+    var cfg=IMPORT_CONFIGS[_importTargetKey];
+    if(!f||!cfg)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var wb=XLSX.read(new Uint8Array(r.result),{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        if(!ws){toast('ไฟล์ว่างเปล่า','ไม่พบชีตข้อมูลในไฟล์','err');return;}
+        var rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,blankrows:false});
+        var rows=(rawRows||[]).filter(function(row){
+          return row&&row.some(function(c){return String(c==null?'':c).trim()!=='';});
+        });
+        if(!rows.length){toast('ไฟล์ว่างเปล่า','ไม่มีข้อมูลในไฟล์','err');return;}
+        var head=rows[0].map(function(h){return String(h||'').trim();});
+        openColumnMapModal({
+          side:'import-'+cfg.key, fname:f.name, head:head, rows:rows, fields:cfg.fields,
+          onConfirm:function(colMap){openImportPreviewModal(rows,colMap,cfg,f.name);}
+        });
+      }catch(err){toast('นำเข้าไม่สำเร็จ','ไฟล์ไม่ถูกต้อง หรือไม่ใช่ไฟล์ Excel/CSV','err');}
+    };
+    r.readAsArrayBuffer(f);
+  };
+  var _importFileEl=document.getElementById('importFileShared');
+  if(_importFileEl)_importFileEl.addEventListener('change',window.handleImportFile);
+
+  /* ---- Step 2 output → validate + resolve ids for every data row ----
+     Duplicate-id policy: skip by default (dup:true, excluded from the
+     default commit set) — a bad spreadsheet must never be able to silently
+     clobber curated master data. The preview modal's opt-in "เขียนทับ"
+     checkbox is the only way a dup row gets committed, and it always
+     overwrites, never merges. */
+  function importParseAndValidate(rows,colMap,cfg){
+    var existing=Object.keys(S[cfg.targetKey]);
+    var claimed={};
+    existing.forEach(function(id){claimed[id.toLowerCase()]=1;});
+    var seqGen=(cfg.idKind==='seq')?makeSeqIdGen(cfg.idPrefix,existing):null;
+    var boxTagGen=(cfg.idKind==='boxtag')?makeBoxTagGen():null;
+    var seenScan={};
+    if(cfg.key==='emp'){
+      Object.values(S.employees).forEach(function(x){if(x.scanCode)seenScan[String(x.scanCode).toLowerCase()]=1;});
+    }
+
+    var results=[];
+    for(var i=1;i<rows.length;i++){
+      var mapped=mapRowValues(rows[i],colMap,cfg);
+      var errors=cfg.validateRow(mapped)||[];
+      var explicitId=cfg.idField?mapped[cfg.idField]:'';
+      var dup=false,id=null;
+
+      if(explicitId){
+        var key=explicitId.toLowerCase();
+        id=explicitId;
+        if(claimed[key])dup=true;else claimed[key]=1;
+      }else if(!errors.length){
+        if(cfg.key==='box')id=boxTagGen(mapped.typeId);
+        else if(cfg.key==='loc'){
+          id=locBuildCode(mapped.zone,mapped.rack,mapped.shelf,mapped.slot);
+          var lkey=id.toLowerCase();
+          if(claimed[lkey])dup=true;else claimed[lkey]=1;
+        }else id=seqGen();
+      }
+
+      if(cfg.key==='emp'&&!errors.length&&!dup){
+        var scFinal=((mapped.scanCode||'').trim()||id||'').toLowerCase();
+        if(scFinal){
+          if(seenScan[scFinal])errors.push('รหัสบัตรพนักงานซ้ำกับที่มีอยู่แล้วหรือในไฟล์');
+          else seenScan[scFinal]=1;
+        }
+      }
+
+      results.push({rowNum:i+1,mapped:mapped,errors:errors,dup:dup,id:id});
+    }
+    return results;
+  }
+
+  /* ---- Step 3: preview table + confirm ---- */
+  window.openImportPreviewModal=function(rows,colMap,cfg,fname){
+    var results=importParseAndValidate(rows,colMap,cfg);
+    var okRows=results.filter(function(x){return !x.errors.length&&!x.dup;});
+    var dupRows=results.filter(function(x){return !x.errors.length&&x.dup;});
+    var errRows=results.filter(function(x){return x.errors.length;});
+
+    var h='<div class="mhead"><h3>ตรวจสอบก่อนนำเข้า · '+esc(cfg.label)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
+    h+='<div class="mbody" style="max-height:70vh;overflow:auto;">';
+    h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname)+'</b> · '+results.length+' แถวข้อมูล</p>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'
+     +'<div style="flex:1;min-width:120px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
+     +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);">'+okRows.length+'</div>'
+     +'<div class="small" style="color:var(--pos);">พร้อมนำเข้า</div></div>'
+     +'<div style="flex:1;min-width:120px;background:var(--negSoft);border:1px solid var(--neg);border-radius:12px;padding:12px 14px;">'
+     +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--neg);">'+errRows.length+'</div>'
+     +'<div class="small" style="color:var(--neg);">ข้าม (ข้อมูลไม่ถูกต้อง)</div></div>'
+     +'<div style="flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
+     +'<div class="mono" style="font-size:26px;font-weight:800;">'+dupRows.length+'</div>'
+     +'<div class="small muted">ข้าม (รหัสซ้ำ)</div></div></div>';
+
+    if(dupRows.length){
+      h+='<label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;">'
+       +'<input type="checkbox" id="importOverwriteDup"> เขียนทับรายการที่มีรหัสซ้ำแทนการข้าม</label>';
+    }
+
+    h+='<div class="import-preview-wrap"><table class="import-preview-table"><thead><tr><th>#</th>'
+     +cfg.fields.map(function(fl){return '<th>'+esc(fl.label)+'</th>';}).join('')+'<th>สถานะ</th></tr></thead><tbody>';
+    results.slice(0,50).forEach(function(x){
+      var rowCls=x.errors.length?'import-row-err':(x.dup?'import-row-dup':'');
+      var status=x.errors.length?esc(x.errors.join(', '))
+                :x.dup?'รหัสซ้ำ: '+esc(x.id||'')
+                :'<span class="pill ok">พร้อมนำเข้า</span>';
+      h+='<tr class="'+rowCls+'"><td>'+x.rowNum+'</td>'
+       +cfg.fields.map(function(fl){return '<td>'+esc(x.mapped[fl.key]||'')+'</td>';}).join('')
+       +'<td class="import-status-cell">'+status+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    if(results.length>50)h+='<p class="muted small">แสดง 50 แถวแรกจากทั้งหมด '+results.length+' แถว</p>';
+    h+='</div>';
+    h+='<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button>'
+     +'<button class="btn pos" id="importConfirmBtn"'+((okRows.length||dupRows.length)?'':' disabled')+'>ยืนยันนำเข้า ('+okRows.length+' รายการ)</button></div>';
+    openModal(h);
+
+    var confirmBtn=document.getElementById('importConfirmBtn');
+    var ovEl=document.getElementById('importOverwriteDup');
+    if(ovEl){
+      ovEl.addEventListener('change',function(){
+        var n=okRows.length+(ovEl.checked?dupRows.length:0);
+        confirmBtn.textContent='ยืนยันนำเข้า ('+n+' รายการ)';
+        confirmBtn.disabled=n===0;
+      });
+    }
+    confirmBtn.onclick=function(){
+      var overwrite=!!(ovEl&&ovEl.checked);
+      var toCommit=overwrite?okRows.concat(dupRows):okRows;
+      closeModal();
+      commitImportRows(toCommit,cfg,fname,errRows.length+(overwrite?0:dupRows.length));
+    };
+  };
+
+  /* ---- Commit: write records, ONE audit entry for the whole batch (mirrors
+     the box batch-add precedent — a per-row audit entry for a 500-row import
+     would mean 500 sequential full-state saves and 500 near-identical log
+     rows, neither of which helps anyone). Locations get an audit entry here
+     even though the manual single-add path doesn't (see cfg research —
+     that's an existing gap in btnAddLoc, not something worth repeating). ---- */
+  window.commitImportRows=function(rows,cfg,fname,skippedCount){
+    var addedIds=[];
+    rows.forEach(function(x){
+      S[cfg.targetKey][x.id]=cfg.buildRecord(x.mapped,x.id);
+      addedIds.push(x.id);
+    });
+    if(cfg.afterCommit&&addedIds.length)cfg.afterCommit();
+    if(addedIds.length){
+      var idsSummary=addedIds.length===1?addedIds[0]:(addedIds[0]+'…'+addedIds[addedIds.length-1]);
+      auditEntry('CREATE',USER,idsSummary,'นำเข้าจาก Excel: '+fname+' ('+addedIds.length+' รายการ · '+cfg.label+')',null,
+        {count:addedIds.length,ids:addedIds,fname:fname});
+    }
+    renderAll();
+    openImportSummaryModal(fname,addedIds,skippedCount,cfg);
+  };
+
+  window.openImportSummaryModal=function(fname,addedIds,skippedCount,cfg){
+    function chips(list){return list.map(function(t){return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span></span></span>';}).join('');}
+    var h='<div class="mhead"><h3>ผลการนำเข้า · '+esc(cfg.label)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
+    h+='<div class="mbody" style="max-height:66vh;overflow:auto;">';
+    h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
+     +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
+     +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);">'+addedIds.length+'</div>'
+     +'<div class="small" style="color:var(--pos);">นำเข้าแล้ว</div></div>'
+     +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
+     +'<div class="mono" style="font-size:26px;font-weight:800;">'+skippedCount+'</div>'
+     +'<div class="small muted">ข้าม</div></div></div>';
+    if(addedIds.length)h+='<div class="c2-label">นำเข้าสำเร็จ · '+addedIds.length+' รายการ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(addedIds)+'</div>';
+    h+='</div>';
+    h+='<div class="mfoot"><button class="btn accent" data-close>เข้าใจแล้ว</button></div>';
+    openModal(h);
+    toast(addedIds.length?'นำเข้าสำเร็จ':'ไม่มีรายการที่นำเข้าได้',
+      addedIds.length?(addedIds.length+' รายการ · '+cfg.label):'ดูรายละเอียดในหน้าต่างสรุป',
+      addedIds.length?'ok':'err');
+  };
+})();
 
 /* ============================================================================
    OUTBOUND BULK IMPORT (.xlsx / .xls / .csv)  — added feature
