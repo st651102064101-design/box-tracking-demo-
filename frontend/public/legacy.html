@@ -677,6 +677,12 @@ table{border-collapse:collapse;width:100%;font-size:14px;}
 th,td{padding:13px 18px;text-align:left;border-bottom:.5px solid var(--line);white-space:nowrap;letter-spacing:-.01em;}
 th{position:sticky;top:0;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);
   font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0;z-index:2;}
+thead th{cursor:pointer;user-select:none;}
+thead th:has(input),thead th:has(select),thead th:has(button),thead th:empty{cursor:default;}
+thead th::after{content:'';display:inline-block;width:9px;margin-left:5px;font-size:9px;opacity:.35;vertical-align:1px;}
+thead th:not(:has(input)):not(:has(select)):not(:has(button)):not(:empty)::after{content:'\21C5';}
+thead th[data-sort-dir="asc"]::after{content:'\25B2';opacity:1;color:var(--brand,var(--accent,#3b82f6));}
+thead th[data-sort-dir="desc"]::after{content:'\25BC';opacity:1;color:var(--brand,var(--accent,#3b82f6));}
 tbody tr{transition:background .15s;} tbody tr:hover{background:var(--surface2);}
 td.r,th.r{text-align:right;} td.c,th.c{text-align:center;}
 .empty{padding:64px 20px;text-align:center;color:var(--muted);}
@@ -3565,18 +3571,28 @@ function openFirstRegisterModal(){
     +'<div class="mbody">'
     +'<p class="muted small" style="margin:0 0 16px;">ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์ <b>ผู้ดูแลระบบ (Admin)</b> โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้</p>'
     +'<div class="grid g3">'
-    +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี"></div>'
-    +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" placeholder="เช่น ผู้จัดการคลัง"></div>'
-    +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>'
+    +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name"></div>'
+    +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" placeholder="เช่น ผู้จัดการคลัง" maxlength="100"></div>'
+    +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>'
     +'</div>'
-    +'<div class="field" style="margin-top:14px;"><label>อีเมล</label><input id="frEmail" inputmode="email" placeholder="name@company.com"></div>'
+    +'<div class="field" style="margin-top:14px;"><label>อีเมล</label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
     +'</div>'
     +'<div class="mfoot"><button class="btn accent" id="btnFirstReg">ลงทะเบียนและเริ่มใช้งาน</button></div>';
   $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');
   $('#btnFirstReg').onclick=function(){
-    var nm=val('frName');if(!nm)return toast('กรอกชื่อ-นามสกุล',null,'err');
+    var nm=val('frName');
+    if(!nm)return toast('กรอกชื่อ-นามสกุล',null,'err');
+    if(nm.length<2)return toast('ชื่อ-นามสกุลสั้นเกินไป','อย่างน้อย 2 ตัวอักษร','err');
+    if(nm.length>100)return toast('ชื่อ-นามสกุลยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
+    var role=val('frRole');
+    if(role.length>100)return toast('ตำแหน่งยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
+    var phoneRaw=val('frPhone');
+    var phoneDigits=phoneRaw.replace(/[\s()-]/g,'');
+    if(phoneRaw&&!/^0\d{8,9}$/.test(phoneDigits))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
+    var email=val('frEmail');
+    if(email&&(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
     var id=nextSeqId('EMP-',Object.keys(S.employees));
-    var rec={id:id,name:nm,role:val('frRole')||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:val('frPhone'),email:val('frEmail'),startDate:'',scanCode:id,access:'admin',status:'active'};
+    var rec={id:id,name:nm,role:role||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:phoneDigits,email:email.toLowerCase(),startDate:'',scanCode:id,access:'admin',status:'active'};
     S.employees[id]=rec;
     auditEntry('CREATE',nm,id,nm,null,rec);
     save();
@@ -5946,11 +5962,8 @@ function renderSetup(){
   }):bts;
   var btsSorted=idSort(btsFiltered,uiSort.btype);
   $('#btypeBody').innerHTML=btsSorted.length?btsSorted.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
-    return '<tr data-tag="'+esc(t.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
-      +'<td class="r mono">'+used+'</td><td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editBtype(\''+esc(t.id)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delBtype(\''+esc(t.id)+'\')">ลบ</button>'
-      +'</div></td></tr>';
+    return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openMasterRowActions(\'btype\',\''+esc(t.id)+'\',\''+esc(t.name+' ('+t.id+')')+'\','+(used?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
+      +'<td class="r mono">'+used+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(8,'ยังไม่มีประเภทกล่อง');
   $('#cntBtype').textContent=bts.length+' ประเภท';
   setupBulkTable('btypeBody','btype-cb','cbAllBtype','bulkBtype','bulkBtypeCnt');
@@ -5967,13 +5980,10 @@ function renderSetup(){
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
     var gtHtml=[gtT.both?'<span>⇄ '+gtT.both+'</span>':'',gtT['in']?'<span style="color:var(--accentInk);">↓ เข้า '+gtT['in']+'</span>':'',gtT.out?'<span style="color:var(--neg);">↑ ออก '+gtT.out+'</span>':''].filter(Boolean).join(' · ');
-    return '<tr data-tag="'+esc(w.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb wh-cb" data-tag="'+esc(w.id)+'"></td><td class="mono"><b>'+esc(w.id)+'</b></td><td>'+esc(w.name)+'</td><td>ประตู '+gr+'</td>'
+    return '<tr data-tag="'+esc(w.id)+'" class="row-click" onclick="openMasterRowActions(\'wh\',\''+esc(w.id)+'\',\''+esc(w.name+' ('+w.id+')')+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb wh-cb" data-tag="'+esc(w.id)+'"></td><td class="mono"><b>'+esc(w.id)+'</b></td><td>'+esc(w.name)+'</td><td>ประตู '+gr+'</td>'
       +'<td><span style="font-size:12px;font-weight:700;">'+gtHtml+'</span></td>'
       +'<td class="r mono">'+nf(held)+'</td>'
-      +'<td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editWh(\''+esc(w.id)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delWh(\''+esc(w.id)+'\')">ลบ</button>'
-      +'</div></td></tr>';
+      +'<td class="c muted">›</td></tr>';
   }).join(''):emptyRow(7,'ยังไม่มีคลัง');
   $('#cntWh').textContent=whs.length+' คลัง · '+allGateNums().length+' ประตู';
   setupBulkTable('whBody','wh-cb','cbAllWh','bulkWh','bulkWhCnt');
@@ -5986,11 +5996,8 @@ function renderSetup(){
   var cs=idSort(csAll,uiSort.cust);
   $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
-    return '<tr data-tag="'+esc(c.id)+'"><td class="cb-td"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
-      +'<td class="r mono">'+held+'</td><td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editCust(\''+esc(c.id)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delCust(\''+esc(c.id)+'\')">ลบ</button>'
-      +'</div></td></tr>';
+    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openMasterRowActions(\'cust\',\''+esc(c.id)+'\',\''+esc(c.name+' ('+c.id+')')+'\','+(held?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
+      +'<td class="r mono">'+held+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
   setupBulkTable('custBody','cust-cb','cbAllCust','bulkCust','bulkCustCnt');
@@ -14051,6 +14058,47 @@ setInterval(()=>{
 },POLL_MS);
 })();
 
+</script>
+<script>
+/* Generic click-to-sort for every table's header row. Delegated on document
+   so it works for tables re-rendered by the app's own poll/refresh cycle
+   without each render function needing to know about sorting. Skips header
+   cells that hold a control (checkbox/select/button) or carry no text —
+   there's nothing meaningful to sort those columns by. */
+(function(){
+  function parseNum(s){
+    var c=s.replace(/[,฿%\s]/g,'');
+    if(c===''||isNaN(c))return null;
+    return parseFloat(c);
+  }
+  document.addEventListener('click',function(ev){
+    var th=ev.target.closest('thead th');
+    if(!th)return;
+    if(th.querySelector('input,select,button,textarea'))return;
+    if(!th.textContent.trim())return;
+    var table=th.closest('table');
+    if(!table)return;
+    var tbody=table.tBodies[0];
+    if(!tbody)return;
+    var headRow=th.parentElement;
+    var ths=Array.prototype.slice.call(headRow.children);
+    var idx=ths.indexOf(th);
+    var rows=Array.prototype.slice.call(tbody.rows);
+    if(!rows.length)return;
+    var dir=th.getAttribute('data-sort-dir')==='asc'?'desc':'asc';
+    ths.forEach(function(h){h.removeAttribute('data-sort-dir');});
+    th.setAttribute('data-sort-dir',dir);
+    var mult=dir==='asc'?1:-1;
+    rows.sort(function(a,b){
+      var ca=a.cells[idx],cb=b.cells[idx];
+      var va=ca?ca.textContent.trim():'',vb=cb?cb.textContent.trim():'';
+      var na=parseNum(va),nb=parseNum(vb);
+      var cmp=(na!==null&&nb!==null)?(na-nb):va.localeCompare(vb,'th');
+      return cmp*mult;
+    });
+    rows.forEach(function(r){tbody.appendChild(r);});
+  });
+})();
 </script>
 </body>
 </html>
