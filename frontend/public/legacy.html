@@ -1444,7 +1444,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <option value="minor">มีตำหนิเล็กน้อย (ยังใช้ได้)</option>
         <option value="damaged">ชำรุด (ต้องซ่อม/เปลี่ยน)</option>
       </select><div class="hint">บันทึกไว้เป็นหลักฐานว่ากล่องออกไปในสภาพใด — ใช้เทียบตอนรับคืน</div></div>
-      <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" list="dl-tel" placeholder="08x-xxx-xxxx" autocomplete="off"></div>
+      <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
     <div id="outVehicleQuick"></div>
@@ -1514,7 +1514,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="inVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
-      <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" list="dl-tel" placeholder="08x-xxx-xxxx" autocomplete="off"></div>
+      <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div class="field" style="margin-top:14px;"><label>หมายเหตุ</label><input id="inNote" placeholder="บันทึกเพิ่มเติม (ถ้ามี)"></div>
     <div id="inVehicleQuick" style="margin-top:14px;"></div>
@@ -1895,8 +1895,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
           <input id="cReturnDate" type="date" style="display:none;margin-top:8px;" title="เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ">
         </div>
-        <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="cPhone" placeholder="02-xxx-xxxx"></div>
-        <div class="field"><label>อีเมล</label><input id="cEmail" type="email" placeholder="contact@company.com"></div>
+        <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="cPhone" type="tel" inputmode="tel" placeholder="02-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
+        <div class="field"><label>อีเมล</label><input id="cEmail" type="email" inputmode="email" placeholder="contact@company.com" maxlength="254" autocomplete="email"></div>
         <div class="field"><label>ที่อยู่/สาขา <span class="req">*</span></label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
         <div class="field"><label>เลขประจำตัวผู้เสียภาษี</label><input id="cTaxId" placeholder="0-0000-00000-00-0"></div>
         <div class="field"><label>ผู้ติดต่อหลัก</label><input id="cContactPerson" placeholder="ชื่อผู้ประสานงาน"></div>
@@ -1955,8 +1955,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
       <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>เบอร์โทรศัพท์</label><input id="ePhone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>
-        <div class="field"><label>อีเมล</label><input id="eEmail" inputmode="email" placeholder="name@company.com"></div>
+        <div class="field"><label>เบอร์โทรศัพท์</label><input id="ePhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
+        <div class="field"><label>อีเมล</label><input id="eEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>
         <div class="field"><label>วันเริ่มงาน</label><input id="eStart" type="date"></div>
       </div>
       <div class="grid g3" style="margin-top:14px;">
@@ -2602,6 +2602,13 @@ function genDocNo(prefix){return prefix+'-'+dstr()+'-'+hmsCompact();}
 function fmtTs(s){if(!s)return '-';var d=new Date(s);return dstr(d)+' '+tstr(d);}
 function val(id){var e=$('#'+id);return e?String(e.value).trim():'';}
 function num(id){return parseFloat(val(id))||0;}
+/* Shared phone/email format checks, used by every form across the app that
+   collects one (customer, employee, driver, first-run registration). Dashes
+   are something the person typing chooses to add themselves — this only
+   strips them for validation, it never inserts or reformats what they typed. */
+function normPhoneDigits(raw){return String(raw||'').replace(/[\s()-]/g,'');}
+function isValidThaiPhone(raw){var d=normPhoneDigits(raw);return /^0\d{8,9}$/.test(d);}
+function isValidEmail(raw){var e=String(raw||'').trim();return e.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);}
 function setv(id,v){var e=$('#'+id);if(e)e.value=(v==null?'':v);}
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -3169,6 +3176,9 @@ $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
   var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
   var phone=val('cPhone'),email=val('cEmail');if(!phone&&!email)return toast('กรอกเบอร์โทรศัพท์หรืออีเมลอย่างน้อยหนึ่งช่อง',null,'err');
+  if(phone&&!isValidThaiPhone(phone))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 02-123-4567','err');
+  phone=normPhoneDigits(phone);
+  if(email&&!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
   var addr=val('cAddr');if(!addr)return toast('กรอกที่อยู่/สาขา',null,'err');
   if(!editingCust&&S.customers[id])return toast('มีรหัสลูกค้านี้แล้ว',id,'err');
   if(editingCust&&editingCust!==id&&S.customers[id])return toast('รหัสซ้ำ',id,'err');
@@ -3307,11 +3317,15 @@ $('#btnAddEmp').onclick=function(){
   var selfEditing0=!isNew0&&currentEmp()&&currentEmp().id===editingEmp;
   if(!firstEver0&&!isAdmin()&&!selfEditing0)return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะเพิ่ม/แก้ไขพนักงานได้','err');
   var id=val('eId'),nm=val('eName');if(!nm)return toast('กรอกชื่อพนักงาน',null,'err');
+  var ePhoneRaw=val('ePhone');
+  if(ePhoneRaw&&!isValidThaiPhone(ePhoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
+  var eEmailRaw=val('eEmail');
+  if(eEmailRaw&&!isValidEmail(eEmailRaw))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
   if(!id){id=nextSeqId('EMP-',Object.keys(S.employees));}
   var isNew=!editingEmp;
   var firstEver=isNew&&Object.keys(S.employees).length===0;
   var before=editingEmp?Object.assign({},S.employees[editingEmp]):null;
-  var rec=empFields();rec.id=id;
+  var rec=empFields();rec.id=id;rec.phone=normPhoneDigits(ePhoneRaw);
   /* The scan code is what the PDA matches a badge against, so every employee needs one —
      default it to their own id rather than leaving people unable to sign in at the gate.
      It must also be unique, or a badge scan would resolve to two different people. */
@@ -3572,7 +3586,7 @@ function openFirstRegisterModal(){
     +'<p class="muted small" style="margin:0 0 16px;">ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์ <b>ผู้ดูแลระบบ (Admin)</b> โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้</p>'
     +'<div class="grid g3">'
     +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name"></div>'
-    +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" placeholder="เช่น ผู้จัดการคลัง" maxlength="100"></div>'
+    +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" value="ผู้ดูแลระบบ" placeholder="เช่น ผู้จัดการคลัง" maxlength="100"></div>'
     +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>'
     +'</div>'
     +'<div class="field" style="margin-top:14px;"><label>อีเมล</label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
@@ -3587,10 +3601,10 @@ function openFirstRegisterModal(){
     var role=val('frRole');
     if(role.length>100)return toast('ตำแหน่งยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
     var phoneRaw=val('frPhone');
-    var phoneDigits=phoneRaw.replace(/[\s()-]/g,'');
-    if(phoneRaw&&!/^0\d{8,9}$/.test(phoneDigits))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
+    if(phoneRaw&&!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
+    var phoneDigits=normPhoneDigits(phoneRaw);
     var email=val('frEmail');
-    if(email&&(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
+    if(email&&!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
     var id=nextSeqId('EMP-',Object.keys(S.employees));
     var rec={id:id,name:nm,role:role||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:phoneDigits,email:email.toLowerCase(),startDate:'',scanCode:id,access:'admin',status:'active'};
     S.employees[id]=rec;
@@ -5310,6 +5324,7 @@ function saveOutbound(){
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
   if(!plate)return toast('กรอกทะเบียนรถ','จำเป็นสำหรับ Gate ขาออก','err');
   if(!driver)return toast('กรอกชื่อคนขับ','จำเป็นสำหรับ Gate ขาออก','err');
+  if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var outTs=iso();var dueTs=new Date(Date.now()+rd*86400000).toISOString();
   var dueDateStr=ddmmyyyy(new Date(dueTs)); // Actual Due Date in DD/MM/YYYY — same value shown live in #doDueDatePreview
   pendingOut.forEach(function(t){var b=S.boxes[t];
@@ -5410,6 +5425,7 @@ $('#btnCheckIn').onclick=function(){
   var wh=gateWh(gate);
   var loc={wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:Number(gate),ts:iso()};
   var vehicle=val('inVehicle'),tel=val('inDriverTel'),note=val('inNote');
+  if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var inTs=iso();
   var newCount=0,returnCount=0;
   pendingIn.forEach(function(t){var b=S.boxes[t];
