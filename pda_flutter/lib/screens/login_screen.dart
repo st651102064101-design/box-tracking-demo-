@@ -209,7 +209,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await showPinPad(
       context,
       title: 'ใส่รหัส PIN ของ ${e.name}',
-      showForgot: true,
       validate: (entered) async {
         try {
           final ok = await c.api.verifyEmployeePin(e.id, entered);
@@ -220,78 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
     if (result == null) return; // cancelled
-    if (result.forgot) {
-      await _forgotPin(e);
-      return;
-    }
     if (result.pin == null) return;
     if (!mounted) return;
-    final err = c.identifyAs(e);
-    if (err != null) c.toastMsg(err, '', ResultKind.err);
-  }
-
-  /// "ลืมรหัส PIN?" — mints a 6-digit OTP straight from the PDA, no admin
-  /// needing to click a "reset" button first (same endpoint the web app's
-  /// admin-only button calls; the device's own service-account token is
-  /// authorized for it too). The code itself never comes back to this
-  /// device, though — the backend only ever hands it to an open admin
-  /// browser tab in real time (see backend/src/routes/pin.ts /
-  /// 'pinResetRequested' in legacy.html). That's deliberate: the whole point
-  /// of a second person in this flow is that whoever "forgot" their PIN
-  /// can't just read the replacement off their own screen. The operator here
-  /// has to actually get the code from someone looking at the admin page.
-  Future<void> _forgotPin(Employee e) async {
-    final c = context.read<AppController>();
-    try {
-      await c.api.requestPinReset(e.id);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
-      return;
-    }
-
-    if (!mounted) return;
-    c.toastMsg(
-      'ส่งคำขอ OTP แล้ว',
-      'รหัสจะขึ้นที่หน้าจัดการระบบของผู้ดูแลระบบ — ขอรหัส 6 หลักจากเขา แล้วกรอกด้านล่าง',
-      ResultKind.info,
-    );
-    final otpResult = await showPinPad(
-      context,
-      title: 'กรอกรหัส OTP',
-      subtitle: 'รหัส 6 หลักจากผู้ดูแลระบบ (มีอายุ 5 นาที)',
-      length: 6,
-    );
-    if (otpResult == null || otpResult.pin == null) return;
-    final otp = otpResult.pin!;
-
-    if (!mounted) return;
-    final newPinResult = await showPinPad(
-      context,
-      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
-    );
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!mounted) return;
-    final confirm = await showPinPad(
-      context,
-      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
-    );
-    if (confirm == null || confirm.pin == null) return;
-
-    if (!mounted) return;
-    try {
-      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
-      return;
-    }
-    c.prefs.clearPinSkip(e.id);
-    if (!mounted) return;
-    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
     final err = c.identifyAs(e);
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
