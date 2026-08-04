@@ -1,13 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { login, register, setToken } from '@/lib/api';
+import { login, setToken } from '@/lib/api';
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -25,10 +23,7 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
-      const res =
-        mode === 'login'
-          ? await login(username.trim(), password)
-          : await register(username.trim(), password, name.trim() || username.trim());
+      const res = await login(username.trim(), password);
       setToken(res.token);
       window.location.replace('/');
     } catch (err) {
@@ -48,14 +43,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">
-          {mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชีใหม่'}
-        </h2>
+        <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">เข้าสู่ระบบ</h2>
 
         <form onSubmit={submit} className="space-y-3">
-          {mode === 'register' && (
-            <Field label="ชื่อ-นามสกุล" value={name} onChange={setName} placeholder="เช่น สมชาย ใจดี" />
-          )}
           <Field label="ชื่อผู้ใช้" value={username} onChange={setUsername} placeholder="username" autoFocus />
           <Field label="รหัสผ่าน" value={password} onChange={setPassword} type="password" placeholder="••••••" />
 
@@ -66,17 +56,9 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? 'กำลังดำเนินการ…' : mode === 'login' ? 'เข้าสู่ระบบ' : 'สมัครและเข้าสู่ระบบ'}
+            {busy ? 'กำลังดำเนินการ…' : 'เข้าสู่ระบบ'}
           </button>
         </form>
-
-        <button
-          type="button"
-          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-          className="mt-4 w-full text-center text-sm text-ink-2/70 hover:text-ink"
-        >
-          {mode === 'login' ? 'ยังไม่มีบัญชี? สมัครใหม่' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}
-        </button>
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">

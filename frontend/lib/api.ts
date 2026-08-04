@@ -49,10 +49,17 @@ export function login(username: string, password: string) {
   });
 }
 
-export function register(username: string, password: string, name: string) {
-  return request<{ token: string; user: AuthUser }>('/auth/register', {
+export function forgotPassword(username: string) {
+  return request<{ ok: true; sentTo: string | null }>('/auth/forgot-password', {
     method: 'POST',
-    body: JSON.stringify({ username, password, name }),
+    body: JSON.stringify({ username }),
+  });
+}
+
+export function resetPassword(username: string, otp: string, password: string) {
+  return request<{ token: string; user: AuthUser }>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ username, otp, password }),
   });
 }
 
