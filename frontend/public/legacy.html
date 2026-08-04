@@ -3326,6 +3326,7 @@ function openEmpActions(id){
   var e=S.employees[id];if(!e)return;
   var empAdmin=isAdmin();
   var canEdit=empAdmin||(currentEmp()&&currentEmp().id===id);
+  var isSelf=currentEmp()&&currentEmp().id===id;
   var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
   openModal(
     '<div class="mhead"><h3>'+esc(e.name||e.id)+'</h3><button class="x" data-close>'+IC('close')+'</button></div>'
@@ -3336,7 +3337,7 @@ function openEmpActions(id){
         +(canEdit?'<button class="btn ghost" onclick="closeModal();editEmp(\''+esc(id)+'\')">แก้ไข</button>':'')
         +(empAdmin?'<button class="btn ghost" title="ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้" onclick="closeModal();setEmpCredentials(\''+esc(id)+'\',\''+esc(e.name||id)+'\',\''+esc(e.loginUsername||'')+'\')">'+(e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน')+'</button>':'')
         +(empAdmin?'<button class="btn ghost" title="ออกรหัส OTP ให้พนักงานตั้งรหัส PIN ใหม่บน PDA" onclick="closeModal();resetEmpPin(\''+esc(id)+'\',\''+esc(e.name||id)+'\')">รีเซ็ต PIN</button>':'')
-        +(empAdmin?'<button class="btn red" onclick="closeModal();delEmp(\''+esc(id)+'\')">ลบ</button>':'')
+        +(empAdmin&&!isSelf?'<button class="btn red" onclick="closeModal();delEmp(\''+esc(id)+'\')">ลบ</button>':'')
       +'</div>'
     +'</div>'
   );
@@ -3354,6 +3355,10 @@ function editEmp(id){
   renderSetup();}
 function delEmp(id){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
+  /* Design decision: even an admin may not delete their own logged-in employee
+     record — self-deletion has no sane recovery path (locked out, no one left
+     to undo it). Force them to have another admin delete the account instead. */
+  if(currentEmp()&&currentEmp().id===id)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
 
@@ -6091,7 +6096,7 @@ function renderSetup(){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var isMe=meId&&e.id===meId;
-    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
+    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
@@ -7280,12 +7285,19 @@ $('#bulkCustDel').addEventListener('click',function(){
 $('#bulkEmpClear').addEventListener('click',function(){clearBulk('emp-cb','bulkEmp','cbAllEmp');});
 $('#bulkEmpDel').addEventListener('click',function(){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
-  var ids=getChecked('emp-cb');if(!ids.length)return;
-  confirmA('ลบ '+ids.length+' พนักงานที่เลือก?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานเหล่านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){
+  var checked=getChecked('emp-cb');if(!checked.length)return;
+  /* same self-deletion guard as the single-row delEmp() — silently drop the
+     current user's own id from the batch rather than blocking the whole action,
+     since it may have slipped in via "select all" */
+  var selfId=currentEmp()&&currentEmp().id;
+  var ids=checked.filter(function(id){return id!==selfId;});
+  var skippedSelf=checked.length!==ids.length;
+  if(!ids.length)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
+  confirmA('ลบ '+ids.length+' พนักงานที่เลือก?',(skippedSelf?'ข้ามบัญชีของตัวเอง 1 ราย · ':'')+'ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานเหล่านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){
     if(!ok)return;
     ids.forEach(function(id){var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);});
     save();clearBulk('emp-cb','bulkEmp','cbAllEmp');
-    toast('ลบแล้ว',ids.length+' คน');renderAll();
+    toast('ลบแล้ว',ids.length+' คน'+(skippedSelf?' · ข้ามตัวเอง 1':''));renderAll();
   });
 });
 /* ===== bulk delete — every tag in the batch must be individually re-scanned
