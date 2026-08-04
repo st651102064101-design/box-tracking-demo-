@@ -125,6 +125,28 @@ class RfidReaderController(private val context: Context) :
     private inline fun str(f: () -> Any?): String? = try { f()?.toString() } catch (e: Exception) { null }
     private inline fun num(f: () -> Int): Int? = try { f() } catch (e: Exception) { null }
 
+    /**
+     * RFIDAPI3 2.0.3.162's `TransportSerial` no-arg constructor calls the
+     * package-private `API3Utils.isDeviceRFID()`, which on API ≤ 28 reads a
+     * static `m_scontext` field that nothing in the SDK ever assigns — every
+     * `Readers`/`IReaders` constructor sets its *own* static context, never
+     * this one. The resulting NPE isn't caught (the SDK only catches
+     * `InvalidUsageException` there), so it aborts the whole connect. Prime
+     * the field by reflection before touching `Readers` so that check
+     * actually runs instead of crashing. Safe to call repeatedly; no-op if
+     * the field ever disappears in a future SDK build.
+     */
+    private fun primeApi3UtilsContext() {
+        try {
+            val cls = Class.forName("com.zebra.rfid.api3.API3Utils")
+            val field = cls.getDeclaredField("m_scontext")
+            field.isAccessible = true
+            field.set(null, context)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not prime API3Utils context (SDK internals changed?)", e)
+        }
+    }
+
     // ── connect / configure ───────────────────────────────────────────────
     fun connect() {
         if (isConnected()) {
@@ -134,6 +156,7 @@ class RfidReaderController(private val context: Context) :
         status("connecting", "กำลังค้นหาเครื่องอ่าน…")
         exec.execute {
             try {
+                primeApi3UtilsContext()
                 if (readers == null) readers = Readers(context, ENUM_TRANSPORT.SERVICE_SERIAL)
                 // attach/deattach are static on Readers, not instance methods
                 Readers.attach(this)
@@ -175,8 +198,9 @@ class RfidReaderController(private val context: Context) :
                     status("error", "เชื่อมต่อไม่สำเร็จ")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "connect failed", e)
-                status("error", e.message ?: "เชื่อมต่อไม่สำเร็จ")
+                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
+                Log.e(TAG, "connect failed$detail", e)
+                status("error", (e.message ?: "เชื่อมต่อไม่สำเร็จ") + detail)
             }
         }
     }
@@ -255,9 +279,11 @@ class RfidReaderController(private val context: Context) :
     fun startInventory() {
         exec.execute {
             try {
+                Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
                 reader?.Actions?.Inventory?.perform()
             } catch (e: Exception) {
-                Log.w(TAG, "startInventory failed", e)
+                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
+                Log.w(TAG, "startInventory failed$detail", e)
             }
         }
     }

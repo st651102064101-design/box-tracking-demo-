@@ -32,13 +32,14 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   final _reads = <_Read>[];
   StreamSubscription<String>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
-  RfidStatus _status = const RfidStatus(RfidState.idle, '');
+  late RfidStatus _status;
   bool _reading = false;
 
   @override
   void initState() {
     super.initState();
     final rfid = context.read<AppController>().rfid;
+    _status = RfidStatus(rfid.state, '');
     _tagSub = rfid.tags.listen((epc) {
       setState(() => _reads.insert(0, _Read(epc, DateTime.now())));
     });
