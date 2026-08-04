@@ -3586,10 +3586,10 @@ function openFirstRegisterModal(){
     +'<p class="muted small" style="margin:0 0 16px;">ยังไม่มีพนักงานในระบบ กรุณาลงทะเบียนตัวเองก่อนเริ่มใช้งาน — คุณจะได้รับสิทธิ์ <b>ผู้ดูแลระบบ (Admin)</b> โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้</p>'
     +'<div class="grid g3">'
     +'<div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="frName" placeholder="เช่น สมศรี ใจดี" maxlength="100" autocomplete="name"></div>'
-    +'<div class="field"><label>ตำแหน่ง</label><input id="frRole" value="ผู้ดูแลระบบ" placeholder="เช่น ผู้จัดการคลัง" maxlength="100"></div>'
-    +'<div class="field"><label>เบอร์โทรศัพท์</label><input id="frPhone" type="tel" inputmode="tel" placeholder="098-000-0000" maxlength="15" autocomplete="tel"></div>'
+    +'<div class="field"><label>ตำแหน่ง <span class="req">*</span></label><input id="frRole" value="ผู้ดูแลระบบ" readonly></div>'
+    +'<div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="frPhone" type="tel" inputmode="tel" placeholder="098-000-0000" maxlength="15" autocomplete="tel"></div>'
     +'</div>'
-    +'<div class="field" style="margin-top:14px;"><label>อีเมล</label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
+    +'<div class="field" style="margin-top:14px;"><label>อีเมล <span class="req">*</span></label><input id="frEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>'
     +'</div>'
     +'<div class="mfoot"><button class="btn accent" id="btnFirstReg">ลงทะเบียนและเริ่มใช้งาน</button></div>';
   $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');
@@ -3599,12 +3599,13 @@ function openFirstRegisterModal(){
     if(nm.length<2)return toast('ชื่อ-นามสกุลสั้นเกินไป','อย่างน้อย 2 ตัวอักษร','err');
     if(nm.length>100)return toast('ชื่อ-นามสกุลยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
     var role=val('frRole');
-    if(role.length>100)return toast('ตำแหน่งยาวเกินไป','ไม่เกิน 100 ตัวอักษร','err');
     var phoneRaw=val('frPhone');
-    if(phoneRaw&&!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 098-000-0000','err');
+    if(!phoneRaw)return toast('กรอกเบอร์โทรศัพท์',null,'err');
+    if(!isValidThaiPhone(phoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 098-000-0000','err');
     var phoneDigits=normPhoneDigits(phoneRaw);
     var email=val('frEmail');
-    if(email&&!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
+    if(!email)return toast('กรอกอีเมล',null,'err');
+    if(!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
     var id=nextSeqId('EMP-',Object.keys(S.employees));
     var rec={id:id,name:nm,role:role||'ผู้ดูแลระบบ',dept:'',wh:'',shift:'',phone:phoneDigits,email:email.toLowerCase(),startDate:'',scanCode:id,access:'admin',status:'active'};
     S.employees[id]=rec;
