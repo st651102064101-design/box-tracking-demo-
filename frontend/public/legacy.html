@@ -3558,7 +3558,15 @@ window.pickUser=pickUser;
    it happens. Facebook-style: unread badge count, click to open a scrollable
    history, items stay until explicitly cleared, not until a CSS animation
    finishes. */
-var NOTIFS=(function(){try{return JSON.parse(localStorage.getItem('boxtrace_notifs')||'[]');}catch(e){return [];}})();
+var NOTIFS=(function(){
+  var loaded;
+  try{loaded=JSON.parse(localStorage.getItem('boxtrace_notifs')||'[]');}catch(e){return [];}
+  // One-time cleanup: entries saved before the pinResetRequested listener
+  // started skipping admin-self-triggered resets (see connectStream below)
+  // are permanently otp-less dead notifications — nothing left to reveal,
+  // ever. Drop them so a stale bell item isn't stuck there forever.
+  return loaded.filter(function(n){return !(n.type==='pinReset'&&!n.otp);});
+})();
 function saveNotifs(){try{localStorage.setItem('boxtrace_notifs',JSON.stringify(NOTIFS.slice(0,30)));}catch(e){}}
 function pushNotif(n){
   n.id='n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -14175,9 +14183,18 @@ function connectStream(){
     let d=null; try{ d=JSON.parse(ev.data); }catch(_){}
     if(!d)return;
     if(!isAdmin())return; /* only worth surfacing to someone who could act on it */
+    // An admin's own "รีเซ็ต PIN" click reaches this same listener (SSE
+    // broadcasts to every admin tab, including the sender's) — but that case
+    // already showed the code via showOtpModal in the response handler, and
+    // the backend deliberately sends otp:null here for it (see pin.ts) so it
+    // wouldn't be echoed redundantly. Pushing a bell entry anyway left a
+    // permanent "คำขอ OTP" notification with no code to reveal — nothing to
+    // act on, ever. Only the employee-initiated case (PDA "ลืมรหัส PIN?")
+    // actually needs a second person to see and relay a code they don't
+    // already have, so only that case gets a persistent notification.
+    if(!d.requestedByEmployee)return;
     pushNotif({type:'pinReset',employeeId:d.employeeId,name:d.name,by:d.by,requestedByEmployee:d.requestedByEmployee,otp:d.otp,ts:d.ts});
-    var who=d.requestedByEmployee?'ตัวพนักงานเอง (จาก PDA)':(d.by||'ระบบ');
-    toast('มีการขอ OTP รีเซ็ต PIN — คลิกเพื่อดูรหัส',(d.name||d.employeeId)+' — ร้องขอโดย '+who,'warn',{ms:12000,onClick:function(){toggleNotifMenu();}});
+    toast('มีการขอ OTP รีเซ็ต PIN — คลิกเพื่อดูรหัส',(d.name||d.employeeId)+' — ร้องขอโดยตัวพนักงานเอง (จาก PDA)','warn',{ms:12000,onClick:function(){toggleNotifMenu();}});
   });
   es.onerror=()=>{
     /* EventSource retries by itself; drop back to fast polling until a frame
