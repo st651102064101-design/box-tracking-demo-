@@ -73,6 +73,13 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const _RfidPanel(),
+              const SizedBox(height: 10),
+              _tile(
+                icon: Icons.nfc,
+                title: 'รับค่า RFID',
+                sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ไว้ทดสอบเครื่องอ่าน',
+                onTap: () => c.go(Screen.rfidInput),
+              ),
               const SizedBox(height: 16),
               if (c.canConfigureDevice)
                 _tile(

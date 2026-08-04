@@ -10,7 +10,7 @@ import '../services/api_client.dart';
 import '../services/prefs.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput }
 
 enum ResultKind { ok, err, warn, info }
 
