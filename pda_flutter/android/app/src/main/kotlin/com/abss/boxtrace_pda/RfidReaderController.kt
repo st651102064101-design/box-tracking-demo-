@@ -252,7 +252,9 @@ class RfidReaderController(private val context: Context) :
             rd.Events.addEventsListener(eventHandler)
             rd.Events.setHandheldEvent(true)          // physical trigger events
             rd.Events.setTagReadEvent(true)           // tag reads
-            rd.Events.setAttachTagDataWithReadEvent(false)
+            // true so TID/PC/CRC/phase etc. ride along on every read event —
+            // the RFID test-read screen needs the full TagData, not just EPC/RSSI.
+            rd.Events.setAttachTagDataWithReadEvent(true)
             rd.Events.setReaderDisconnectEvent(true)
 
             val trigger = TriggerInfo()
@@ -365,6 +367,16 @@ class RfidReaderController(private val context: Context) :
                             "type" to "tag",
                             "epc" to t.getTagID(),
                             "rssi" to t.getPeakRSSI().toInt(),
+                            // Raw diagnostics for the RFID test-read screen — every
+                            // field read defensively since not all of these are
+                            // populated depending on tag/reader/session state.
+                            "tid" to str { t.getTID() },
+                            "pc" to num { t.getPC() },
+                            "crc" to str { t.getStringCRC() },
+                            "antenna" to num { t.getAntennaID().toInt() },
+                            "channel" to str { t.getChannel() },
+                            "phase" to num { t.getPhase().toInt() },
+                            "seenCount" to num { t.getTagSeenCount() },
                         )
                     )
                 }

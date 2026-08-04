@@ -11,6 +11,52 @@ class RfidStatus {
   const RfidStatus(this.state, this.message);
 }
 
+/// One raw tag read exactly as the Zebra SDK reported it — every field beyond
+/// EPC is nullable because not all of them are populated on every read
+/// (depends on tag type, reader session state, `setAttachTagDataWithReadEvent`).
+/// This is the "what does the SDK actually give us" view used by the RFID
+/// test-read screen in Settings; normal scan flows still use the plain [RfidService.tags] stream.
+class RfidTagRead {
+  final String epc;
+  final int? rssi;
+  final String? tid;
+  final int? pc;
+  final String? crc;
+  final int? antenna;
+  final String? channel;
+  final int? phase;
+  final int? seenCount;
+  final DateTime readAt;
+
+  RfidTagRead({
+    required this.epc,
+    this.rssi,
+    this.tid,
+    this.pc,
+    this.crc,
+    this.antenna,
+    this.channel,
+    this.phase,
+    this.seenCount,
+    required this.readAt,
+  });
+
+  factory RfidTagRead.fromEvent(Map event, DateTime readAt) {
+    return RfidTagRead(
+      epc: event['epc']?.toString() ?? '',
+      rssi: event['rssi'] as int?,
+      tid: (event['tid'] as String?)?.isNotEmpty == true ? event['tid'] as String : null,
+      pc: event['pc'] as int?,
+      crc: (event['crc'] as String?)?.isNotEmpty == true ? event['crc'] as String : null,
+      antenna: event['antenna'] as int?,
+      channel: (event['channel'] as String?)?.isNotEmpty == true ? event['channel'] as String : null,
+      phase: event['phase'] as int?,
+      seenCount: event['seenCount'] as int?,
+      readAt: readAt,
+    );
+  }
+}
+
 /// Dart facade over the native Zebra RFIDAPI3 reader (see
 /// `android/app/src/main/kotlin/.../RfidPlugin.kt`).
 ///
@@ -26,6 +72,7 @@ class RfidService {
   static const _events = EventChannel('boxtrace/rfid/events');
 
   final _tagCtrl = StreamController<String>.broadcast();
+  final _rawTagCtrl = StreamController<RfidTagRead>.broadcast();
   final _triggerCtrl = StreamController<bool>.broadcast();
   final _statusCtrl = StreamController<RfidStatus>.broadcast();
 
@@ -34,6 +81,9 @@ class RfidService {
   RfidState get state => _state;
 
   Stream<String> get tags => _tagCtrl.stream;
+  /// Same tag reads as [tags], but with every raw SDK field attached — for the
+  /// RFID test-read screen, not for normal scan flows.
+  Stream<RfidTagRead> get rawTags => _rawTagCtrl.stream;
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
 
@@ -46,7 +96,10 @@ class RfidService {
       switch (type) {
         case 'tag':
           final epc = event['epc']?.toString();
-          if (epc != null && epc.isNotEmpty) _tagCtrl.add(epc);
+          if (epc != null && epc.isNotEmpty) {
+            _tagCtrl.add(epc);
+            _rawTagCtrl.add(RfidTagRead.fromEvent(event, DateTime.now()));
+          }
           break;
         case 'trigger':
           _triggerCtrl.add(event['pressed'] == true);
@@ -157,6 +210,7 @@ class RfidService {
   void dispose() {
     _sub?.cancel();
     _tagCtrl.close();
+    _rawTagCtrl.close();
     _triggerCtrl.close();
     _statusCtrl.close();
   }
