@@ -8,6 +8,7 @@ import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
 import '../services/prefs.dart';
+import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
 enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister }
@@ -119,6 +120,8 @@ class AppController extends ChangeNotifier {
   Timer? _toastTimer;
   final _rnd = Random();
   StreamSubscription? _tagSub, _trigSub, _statusSub;
+  final _realtime = RealtimeService();
+  Timer? _realtimeDebounce;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -157,6 +160,13 @@ class AppController extends ChangeNotifier {
     // Auth + state load runs alongside the splash so a slow or unreachable
     // backend never holds the UI hostage — screens render, then fill in.
     final loading = _ensureAuthAndState();
+    // Live push (see RealtimeService) so a change made anywhere else — the
+    // web app, another PDA, a direct API call — shows up here without the
+    // operator needing to leave the screen and back to force a refetch, same
+    // as the web app already does over the same /api/stream channel. Its own
+    // retry loop handles "no token yet" / "backend unreachable at boot" —
+    // safe to call before [loading] settles.
+    _realtime.connect(baseUrl: () => api.baseUrl, token: () => api.token, onStateChanged: _onRealtimeStateChanged);
     await Future.delayed(const Duration(milliseconds: 420));
 
     // No operator is ever restored: a shift always starts with a badge scan,
@@ -220,6 +230,17 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Debounced so a burst of several 'state' pings close together (e.g. a
+  /// bulk edit on the web app) triggers one refetch, not one per ping.
+  void _onRealtimeStateChanged() {
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 300), () {
+      // A dropped refresh here just waits for the next ping (or the next
+      // local action's own refresh()) — nothing else depends on it landing.
+      refresh().catchError((_) {});
+    });
+  }
+
   /// Human-readable message for an arbitrary error. Strips the leading
   /// `SomethingException: ` that Dart prepends — matching only at the start so
   /// `ClientException: Failed to fetch` doesn't get mangled into `ClientFailed`.
@@ -237,6 +258,8 @@ class AppController extends ChangeNotifier {
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
+    _realtimeDebounce?.cancel();
+    _realtime.dispose();
     super.dispose();
   }
 
