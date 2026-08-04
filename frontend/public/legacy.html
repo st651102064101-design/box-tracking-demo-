@@ -2902,7 +2902,7 @@ function nextTagForType(typeId){
     var m=id.slice(prefix.length).match(/^(\d+)$/);
     if(m){var n=parseInt(m[1],10);if(n>max)max=n;}
   });
-  return prefix+pad(max+1,2);
+  return prefix+String(max+1);
 }
 function refreshTagId(){var t=$('#bTag');if(t&&!t._override)t.value=nextTagForType(val('bType'));}
 setTimeout(function(){refreshTagId();
@@ -3025,11 +3025,11 @@ $('#btnAddBox').onclick = function() {
     if (qty > 2000) return toast('จำนวนมากเกินไป', 'สูงสุด 2000', 'err');
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
     var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
-    for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + pad(n, 2);
+    for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
       if (!S.boxes[tag]) { S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
         lot:blot,expiry:bexp,supplier:bsup,regAt:iso(),regBy:USER,
         location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]}; added++; addedTags.push(tag); } }
-    if (added) auditEntry('CREATE', USER, pre+pad(start,2)+'…'+pre+pad(start+qty-1,2), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
+    if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
@@ -3050,7 +3050,7 @@ function updateBatchPreview(){
   var pre=val('bPrefix');var start=num('bStart')||1;var qty=num('bQty')||0;
   var hint=document.getElementById('bPrefixHint');if(!hint)return;
   if(!pre||qty<=0){hint.textContent='';return;}
-  var first=pre+pad(start,2);var last=pre+pad(start+qty-1,2);
+  var first=pre+String(start);var last=pre+String(start+qty-1);
   hint.textContent=qty===1?('จะสร้าง: '+first):('จะสร้าง: '+first+' … '+last+' ('+qty+' ใบ)');
 }
 
@@ -3753,14 +3753,17 @@ function saveRelocate(tag){
   var b=S.boxes[tag];if(!b)return;
   var recorder=USER;
   var before=Object.assign({},b.location||{});
+  var wasPendingPutaway = b.status === 'pending' && b.labeled === true;
   var wh=val('rlWh');
   var loc={wh:wh,zone:val('rlZone'),rack:val('rlRack'),shelf:val('rlShelf'),slot:val('rlSlot'),gate:(b.location||{}).gate||null,ts:iso()};
+  if (wasPendingPutaway) b.status = 'warehouse';
   b.location=loc;b.lastSeenAt=iso();
-  b.history.push({dir:'relocate',ts:loc.ts,wh:wh,loc:loc,recorder:recorder});
+  if (!Array.isArray(b.history)) b.history = [];
+  b.history.push({dir:wasPendingPutaway?'putaway':'relocate',ts:loc.ts,wh:wh,loc:loc,recorder:recorder});
   auditEntry('RELOCATE',recorder,tag,typeName(b.type),before,loc);
   save();
   closeModal();
-  toast('ย้ายตำแหน่งแล้ว',tag+' → '+(wh?whName(wh):'')+' '+[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · '));
+  toast(wasPendingPutaway?'จัดเก็บขึ้นแร็คแล้ว':'ย้ายตำแหน่งแล้ว',tag+' → '+(wh?whName(wh):'')+' '+[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · '));
   renderAll();
 }
 window.saveRelocate=saveRelocate;
@@ -3785,7 +3788,7 @@ function openBoxActionModal(tag){
   if(b.rfidTid){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> ถอดแท็ก RFID',cls:'btn ghost',fn:'closeModal();detachRfidTag(\''+esc(tag)+'\')'});
   }
-  if(b.status==='warehouse'){
+  if(canRelocateBox(b)){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายตำแหน่งจัดเก็บ',cls:'btn ghost',fn:'closeModal();openRelocateModal(\''+esc(tag)+'\')'});
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)',cls:'btn ghost',fn:'closeModal();markHold(\''+esc(tag)+'\')'});
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ตีชำรุด (Damage)',cls:'btn ghost',fn:'closeModal();markDamage(\''+esc(tag)+'\')'});
@@ -7311,21 +7314,12 @@ window.locSlotClick = locSlotClick;
 $('#bulkLocClear').addEventListener('click', function(){ clearBulk('loc-cb','bulkLoc','cbAllLoc'); });
 $('#bulkLocLabel').addEventListener('click', function(){
   var codes = getChecked('loc-cb'); if (!codes.length) return;
-  var locs = codes.map(function(c){ return S.locations[c]; }).filter(Boolean);
+  var locs = codes.map(function(code){ return S.locations[code]; }).filter(Boolean);
   if (!locs.length) return;
   printLocationLabels(locs.map(function(l){ return { code: l.code, sub: whName(l.wh) }; }));
 });
-$('#bulkLocDel').addEventListener('click', function(){
-  var codes = getChecked('loc-cb'); if (!codes.length) return;
-  confirmA('ลบ '+codes.length+' ตำแหน่งที่เลือก?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
-    if (!ok) return;
-    codes.forEach(function(c){ delete S.locations[c]; });
-    save(); clearBulk('loc-cb','bulkLoc','cbAllLoc'); renderLocMaster();
-    toast('ลบแล้ว', codes.length+' ตำแหน่ง');
-  });
-});
 
-
+      + '<button class="btn accent" onclick="commitBulkRelocate(' + JSON.stringify(eligible).replace(/"/g, '&quot;') + ')">อัปเดตทั้งหมด</button></div>'
 
 /* ===== bulk (box master) ===== */
 function getChecked(cls){return $all('.'+cls+':checked').map(function(c){return c.dataset.tag;});}
@@ -7333,10 +7327,13 @@ function updateBulkBar(cls,barId,cntId){var n=getChecked(cls).length;var bar=$('
   if(bar)bar.style.display=n?'flex':'none';if(cnt)cnt.textContent=n+' รายการที่เลือก';return n;}
 function clearBulk(cls,barId,allId){$all('.'+cls).forEach(function(c){c.checked=false;var tr=c.closest('tr');if(tr)tr.classList.remove('sel-row');});
   var bar=$('#'+barId);if(bar)bar.style.display='none';var a=$('#'+allId);if(a){a.checked=false;a.indeterminate=false;}}
-function setupBulkTable(tbodyId,cls,allId,barId,cntId){var tbody=$('#'+tbodyId);if(!tbody)return;
+    var b = S.boxes[t]; if (!canRelocateBox(b)) return;
   tbody.addEventListener('change',function(e){var cb=e.target;if(!cb.classList.contains(cls))return;
+    var wasPendingPutaway = b.status === 'pending' && b.labeled === true;
+    if (wasPendingPutaway) b.status = 'warehouse';
     cb.closest('tr').classList.toggle('sel-row',cb.checked);var n=updateBulkBar(cls,barId,cntId);
-    var a=$('#'+allId);if(a){var all=$all('.'+cls);a.checked=n===all.length&&all.length>0;a.indeterminate=n>0&&n<all.length;}});
+    if (!Array.isArray(b.history)) b.history = [];
+    b.history.push({ dir: wasPendingPutaway ? 'putaway' : 'relocate', ts: ts, wh: wh, loc: loc, recorder: recorder });
   var a=$('#'+allId);if(!a)return;var fresh=a.cloneNode(true);a.parentNode.replaceChild(fresh,a);
   fresh.addEventListener('change',function(){$all('.'+cls).forEach(function(c){c.checked=fresh.checked;var tr=c.closest('tr');if(tr)tr.classList.toggle('sel-row',fresh.checked);});updateBulkBar(cls,barId,cntId);});}
 $('#bulkBoxClear').addEventListener('click',function(){clearBulk('box-cb','bulkBox','cbAllBox');});
@@ -8021,6 +8018,9 @@ function invCustText(b) {
   if (b.status === 'out') return '<b>' + esc(custName(b.customer)) + '</b>' + (b.do ? '<div class="tag">' + esc(b.do) + '</div>' : '');
   if (b.status === 'lost') return '<span class="small muted">' + esc(custName(b.customer)) + (b.lostReason === 'auto-overdue' ? ' · Auto' : '') + '</span>';
   return '<span class="muted">—</span>';
+}
+function canRelocateBox(b) {
+  return !!b && (b.status === 'warehouse' || (b.status === 'pending' && b.labeled === true));
 }
 /* ผู้ที่ลงทะเบียนกล่องแต่ละใบ อ่านย้อนจาก Audit Log — กล่องที่ยังไม่เคยผ่านประตู
    จะไม่มี history เลย ชื่อคนบันทึกจึงอยู่ในรายการ CREATE เท่านั้น
@@ -8815,7 +8815,7 @@ $('#bulkInvTag').addEventListener('click', function() {
 });
 $('#bulkInvRelocate').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var bad = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status !== 'warehouse'; });
+  var bad = tags.filter(function(t) { return !canRelocateBox(S.boxes[t]); });
   if (bad.length) return toast('ย้ายได้เฉพาะกล่องในคลัง', 'มี ' + bad.length + ' ใบไม่อยู่ในคลัง', 'err');
   var dp = defaultPutaway();
   openModal(
@@ -8838,10 +8838,13 @@ function commitBulkRelocate(tags) {
   var loc = { wh: wh, zone: val('brlZone'), rack: val('brlRack'), shelf: val('brlShelf'), slot: val('brlSlot'), gate: null, ts: ts };
   var n = 0;
   tags.forEach(function(t) {
-    var b = S.boxes[t]; if (!b || b.status !== 'warehouse') return;
+    var b = S.boxes[t]; if (!canRelocateBox(b)) return;
     var before = Object.assign({}, b.location || {});
+    var wasPendingPutaway = b.status === 'pending' && b.labeled === true;
+    if (wasPendingPutaway) b.status = 'warehouse';
     b.location = loc; b.lastSeenAt = ts;
-    b.history.push({ dir: 'relocate', ts: ts, wh: wh, loc: loc, recorder: recorder });
+    if (!Array.isArray(b.history)) b.history = [];
+    b.history.push({ dir: wasPendingPutaway ? 'putaway' : 'relocate', ts: ts, wh: wh, loc: loc, recorder: recorder });
     auditEntry('RELOCATE', recorder, t, typeName(b.type), before, loc);
     n++;
   });

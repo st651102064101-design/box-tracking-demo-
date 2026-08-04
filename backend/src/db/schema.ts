@@ -32,6 +32,14 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: text('role').notNull().default('staff'),
+  /** Where "ลืมรหัสผ่าน?" sends its OTP — set at registration. Nullable only
+   *  for accounts created before this existed; forgot-password refuses to run
+   *  for those until an admin backfills one, same pattern as the employee PDA
+   *  PIN reset in routes/pin.ts. */
+  email: text('email'),
+  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" email OTP; cleared once used. */
+  passwordResetOtpHash: text('password_reset_otp_hash'),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -121,6 +129,11 @@ export const employees = pgTable('employees', {
    *  yet can't sign in as themselves, only be picked as a display name. */
   username: text('username').unique(),
   passwordHash: text('password_hash'),
+  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" (web login, not the PDA PIN)
+   *  email OTP; cleared once used. Separate from pinResetOtpHash above —
+   *  different secret, different expiry, different form. */
+  passwordResetOtpHash: text('password_reset_otp_hash'),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

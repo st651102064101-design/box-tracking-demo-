@@ -696,6 +696,19 @@ void main() {
       expect(c.pendingWh, isNull);
     });
 
+    test('badging in with one warehouse skips the warehouse picker and shows gates', () async {
+      final state = pickerState();
+      (state['warehouses'] as Map).remove('WH-B');
+      state['gates'] = {'1': 'WH-A', '2': 'WH-A'};
+      final c = await controllerWithState(state);
+
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      expect(c.postConfirmed, isFalse);
+      expect(c.pendingWh, 'WH-A');
+      expect(c.wh, isEmpty);
+    });
+
     test('picking a warehouse with one gate confirms the post immediately', () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
@@ -733,6 +746,9 @@ void main() {
       expect(c.postConfirmed, isTrue);
       expect(c.wh, 'WH-B');
       expect(c.gate, '9');
+      expect(c.hasLastSelection, isTrue);
+      expect(c.lastWh, 'WH-B');
+      expect(c.lastGate, '9');
     });
 
     test('a viewer never has to pick a post — search is warehouse-agnostic', () async {

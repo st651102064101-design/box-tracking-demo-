@@ -44,9 +44,10 @@ class Toast {
 ///    so people are managed entirely from the web app's "พนักงาน" page.
 ///
 /// Every badge-in lands on the report screen, which asks the operator to
-/// confirm a warehouse then a gate (skipped only when there's truly nothing
-/// to choose) before the "งานหลัก" action buttons appear — see
-/// [postConfirmed], [selectPendingWh], [confirmPost].
+/// confirm a warehouse then a gate. If there is only one warehouse, the
+/// picker jumps straight to that warehouse's gate list; if there is only one
+/// gate, it confirms the post outright. See [postConfirmed],
+/// [selectPendingWh], [confirmPost].
 class AppController extends ChangeNotifier {
   final ApiClient api;
   final Prefs prefs;
@@ -494,10 +495,13 @@ class AppController extends ChangeNotifier {
     if (whs.length == 1) {
       final id = (whs.first['id'] ?? '').toString();
       final gates = S?.gatesOf(id) ?? const [];
+      pendingWh = id;
       if (gates.length == 1) {
         confirmPost(id, gates.first);
         return;
       }
+      postConfirmed = false;
+      return;
     }
     postConfirmed = false;
   }

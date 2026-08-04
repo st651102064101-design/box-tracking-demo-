@@ -6,13 +6,21 @@
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS users (
-  id            SERIAL PRIMARY KEY,
-  username      TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  name          TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'staff',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                        SERIAL PRIMARY KEY,
+  username                  TEXT NOT NULL UNIQUE,
+  password_hash             TEXT NOT NULL,
+  name                      TEXT NOT NULL,
+  role                      TEXT NOT NULL DEFAULT 'staff',
+  email                     TEXT,
+  password_reset_otp_hash   TEXT,
+  password_reset_expires_at TIMESTAMPTZ,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Additive migrations for databases created before these columns existed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS config (
   id          INTEGER PRIMARY KEY DEFAULT 1,
@@ -86,6 +94,8 @@ CREATE TABLE IF NOT EXISTS employees (
   pin_reset_expires_at  TIMESTAMPTZ,
   username              TEXT UNIQUE,
   password_hash         TEXT,
+  password_reset_otp_hash    TEXT,
+  password_reset_expires_at  TIMESTAMPTZ,
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -101,6 +111,8 @@ DO $$ BEGIN
   END IF;
 END $$;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS boxes (
   tag          TEXT PRIMARY KEY,
