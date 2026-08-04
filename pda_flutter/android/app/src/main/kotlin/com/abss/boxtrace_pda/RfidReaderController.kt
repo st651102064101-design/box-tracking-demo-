@@ -269,6 +269,20 @@ class RfidReaderController(private val context: Context) :
             rd.Config.Antennas.setSingulationControl(1, s)
 
             rd.Actions.PreFilters.deleteAll()
+
+            // Ask the reader to read+report each tag's TID alongside its EPC
+            // during normal inventory — needed for RFID registration (the
+            // factory-burned TID is what makes a tag globally unique; the EPC
+            // alone is just whatever we ourselves wrote into it). Costs a
+            // little more air time per tag than EPC-only inventory, which is
+            // fine here: registration reads one tag at a time, not a bulk sweep.
+            try {
+                val storage = rd.Config.getTagStorageSettings()
+                storage.setTagFields(arrayOf(TAG_FIELD.TID))
+                rd.Config.setTagStorageSettings(storage)
+            } catch (e: Exception) {
+                Log.w(TAG, "enabling TID reporting failed — tag reads will carry EPC only", e)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "configure failed", e)
         }
@@ -356,10 +370,15 @@ class RfidReaderController(private val context: Context) :
                     tagCount++
                     lastEpc = t.getTagID()
                     lastRssi = t.getPeakRSSI().toInt()
+                    // Populated only when TAG_FIELD.TID reporting is on (see
+                    // configureReader) and the tag actually answers the TID
+                    // bank read — null/blank on a tag that doesn't support it.
+                    val tid = try { t.getTID() } catch (e: Exception) { null }
                     emit(
                         mapOf(
                             "type" to "tag",
                             "epc" to t.getTagID(),
+                            "tid" to tid,
                             "rssi" to t.getPeakRSSI().toInt(),
                         )
                     )

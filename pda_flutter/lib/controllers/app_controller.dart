@@ -10,7 +10,7 @@ import '../services/api_client.dart';
 import '../services/prefs.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -1060,7 +1060,8 @@ class AppController extends ChangeNotifier {
     if (screen != Screen.scan &&
         screen != Screen.track &&
         screen != Screen.login &&
-        screen != Screen.rfidInput) {
+        screen != Screen.rfidInput &&
+        screen != Screen.rfidRegister) {
       return;
     }
     if (pressed) {

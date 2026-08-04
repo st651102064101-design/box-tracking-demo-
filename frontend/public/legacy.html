@@ -8421,6 +8421,12 @@ function filteredInvBoxes() {
       if (!(b.status === 'warehouse' && !(b.location || {}).wh)) return false;
     } else if (invStatusFilter === 'putaway') {
       if (!(b.status === 'warehouse' && isAtStaging(b))) return false;
+    } else if (invStatusFilter === 'pending') {
+      /* รอติด Tag: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
+         status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
+         statusPill) ไม่ใช่ "รอติด Tag" ให้ไปอยู่ในแท็บ pendingPutaway แทน
+         ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
+      if (!(b.status === 'pending' && b.labeled !== true)) return false;
     } else if (invStatusFilter === 'pendingPutaway') {
       /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
          คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย

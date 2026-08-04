@@ -11,6 +11,18 @@ class RfidStatus {
   const RfidStatus(this.state, this.message);
 }
 
+/// One tag read, EPC plus (when the reader could get it) the factory TID —
+/// see [RfidService.tagReads]. [tags] only ever carried the EPC, which is
+/// all the original scan-and-match use cases needed; RFID *registration*
+/// needs the TID too, since that's the actually-unique identifier for the
+/// physical chip.
+class RfidTagRead {
+  final String epc;
+  final String? tid;
+  final int? rssi;
+  const RfidTagRead(this.epc, this.tid, this.rssi);
+}
+
 /// Dart facade over the native Zebra RFIDAPI3 reader (see
 /// `android/app/src/main/kotlin/.../RfidPlugin.kt`).
 ///
@@ -26,6 +38,7 @@ class RfidService {
   static const _events = EventChannel('boxtrace/rfid/events');
 
   final _tagCtrl = StreamController<String>.broadcast();
+  final _tagReadCtrl = StreamController<RfidTagRead>.broadcast();
   final _triggerCtrl = StreamController<bool>.broadcast();
   final _statusCtrl = StreamController<RfidStatus>.broadcast();
 
@@ -34,6 +47,7 @@ class RfidService {
   RfidState get state => _state;
 
   Stream<String> get tags => _tagCtrl.stream;
+  Stream<RfidTagRead> get tagReads => _tagReadCtrl.stream;
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
 
@@ -46,7 +60,12 @@ class RfidService {
       switch (type) {
         case 'tag':
           final epc = event['epc']?.toString();
-          if (epc != null && epc.isNotEmpty) _tagCtrl.add(epc);
+          if (epc != null && epc.isNotEmpty) {
+            _tagCtrl.add(epc);
+            final tid = event['tid']?.toString();
+            final rssi = event['rssi'] is int ? event['rssi'] as int : null;
+            _tagReadCtrl.add(RfidTagRead(epc, (tid != null && tid.isNotEmpty) ? tid : null, rssi));
+          }
           break;
         case 'trigger':
           _triggerCtrl.add(event['pressed'] == true);
@@ -157,6 +176,7 @@ class RfidService {
   void dispose() {
     _sub?.cancel();
     _tagCtrl.close();
+    _tagReadCtrl.close();
     _triggerCtrl.close();
     _statusCtrl.close();
   }

@@ -33,6 +33,8 @@ class Prefs {
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
+  static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
+  static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -56,6 +58,22 @@ class Prefs {
   /// power (ไกล) since that's what the reader itself defaults to on connect.
   int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
   set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
+
+  /// How many boxes got an RFID tag registered today, on this device — resets
+  /// itself the first time it's touched on a new calendar day rather than
+  /// needing a midnight timer. `today` is injected (not `DateTime.now()`
+  /// internally) so callers stamp it once per call and tests can control it.
+  int rfidRegisteredToday(String today) {
+    if (_p.getString(_kRfidRegDate) != today) return 0;
+    return _p.getInt(_kRfidRegCount) ?? 0;
+  }
+
+  int bumpRfidRegisteredToday(String today) {
+    final next = rfidRegisteredToday(today) + 1;
+    _p.setString(_kRfidRegDate, today);
+    _p.setInt(_kRfidRegCount, next);
+    return next;
+  }
 
   /// Baked in at build time so a device build ships pointing at the right host
   /// without an operator having to type a URL on a handheld keypad:
