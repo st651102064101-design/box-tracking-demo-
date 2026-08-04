@@ -740,6 +740,10 @@ th.cb-th,td.cb-td{width:40px;padding-left:18px;padding-right:6px;}
 .seg-filter{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;}
 .sf-btn{padding:6px 14px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);}
 .sf-btn:hover{color:var(--ink);} .sf-btn.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);}
+.sf-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;
+  font-family:var(--mono);background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink2);}
+.sf-badge:empty,.sf-badge[data-zero="1"]{display:none;}
+.sf-badge.urgent{background:var(--negSoft);color:var(--neg);}
 tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 /* view switcher */
 .inv-view-sw{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;}
@@ -1613,17 +1617,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <input id="schInv" placeholder="กรองบาร์โค้ด / ประเภท / ลูกค้า / พิกัด">
     </div>
     <div class="seg-filter" id="invStatusSeg">
-      <button class="sf-btn active" data-st="">ทั้งหมด</button>
-      <button class="sf-btn" data-st="pending">รอติดบาร์โค้ด</button>
-      <button class="sf-btn" data-st="pendingPutaway" title="ติดป้ายบาร์โค้ดแล้ว แต่ยังไม่เคยสแกนเข้าคลัง">รอ Putaway</button>
-      <button class="sf-btn" data-st="noRfid" title="กล่องที่ติดป้ายบาร์โค้ดแล้วแต่ยังไม่ได้ผูกแท็ก RFID">รอติด Tag RFID</button>
-      <button class="sf-btn" data-st="warehouse">ในคลัง</button>
+      <button class="sf-btn active" data-st="">ทั้งหมด<span class="sf-badge" data-badge=""></span></button>
+      <button class="sf-btn" data-st="pending">รอติดบาร์โค้ด<span class="sf-badge" data-badge="pending"></span></button>
+      <button class="sf-btn" data-st="pendingPutaway" title="ติดป้ายบาร์โค้ดแล้ว แต่ยังไม่เคยสแกนเข้าคลัง">รอ Putaway<span class="sf-badge" data-badge="pendingPutaway"></span></button>
+      <button class="sf-btn" data-st="noRfid" title="กล่องที่ติดป้ายบาร์โค้ดแล้วแต่ยังไม่ได้ผูกแท็ก RFID">รอติด Tag RFID<span class="sf-badge" data-badge="noRfid"></span></button>
+      <button class="sf-btn" data-st="warehouse">ในคลัง<span class="sf-badge" data-badge="warehouse"></span></button>
 
-      <button class="sf-btn" data-st="hold">Hold</button>
-      <button class="sf-btn" data-st="damage">ชำรุด</button>
-      <button class="sf-btn" data-st="unlocated"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง</button>
-      <button class="sf-btn" data-st="out">ส่งลูกค้า</button>
-      <button class="sf-btn" data-st="lost">แจ้งกล่องหาย</button>
+      <button class="sf-btn" data-st="hold">Hold<span class="sf-badge urgent" data-badge="hold"></span></button>
+      <button class="sf-btn" data-st="damage">ชำรุด<span class="sf-badge urgent" data-badge="damage"></span></button>
+      <button class="sf-btn" data-st="unlocated"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง<span class="sf-badge" data-badge="unlocated"></span></button>
+      <button class="sf-btn" data-st="out">ส่งลูกค้า<span class="sf-badge" data-badge="out"></span></button>
+      <button class="sf-btn" data-st="lost">แจ้งกล่องหาย<span class="sf-badge urgent" data-badge="lost"></span></button>
     </div>
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
@@ -8456,8 +8460,48 @@ function setInvCust(id) {
 }
 window.setInvCust = setInvCust;
 
+/* ── filter-tab badge counts (#invStatusSeg) ──────────────────────────────
+   Instant counts come from the already-loaded S.boxes so badges never sit
+   empty, then get refreshed from the dedicated GET /api/boxes/status-summary
+   endpoint — kept as its own async call, not folded into the main table's
+   render, so a heavier table load never holds badge counts up and vice versa. */
+function localStatusCounts() {
+  var all = Object.values(S.boxes || {});
+  var c = { '': all.length, pending: 0, warehouse: 0, hold: 0, damage: 0, out: 0, lost: 0,
+    pendingPutaway: 0, noRfid: 0, unlocated: 0 };
+  all.forEach(function(b) {
+    if (c[b.status] !== undefined) c[b.status]++;
+    if (b.status === 'pending' && b.labeled === true) c.pendingPutaway++;
+    if (b.labeled !== false && !b.rfidTid) c.noRfid++;
+    if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
+  });
+  return c;
+}
+function applyInvStatusBadges(counts) {
+  var seg = document.getElementById('invStatusSeg'); if (!seg || !counts) return;
+  Array.prototype.forEach.call(seg.querySelectorAll('[data-badge]'), function(el) {
+    var key = el.getAttribute('data-badge');
+    var n = counts[key] || 0;
+    el.textContent = n ? nf(n) : '';
+    if (n) el.removeAttribute('data-zero'); else el.setAttribute('data-zero', '1');
+  });
+}
+function refreshInvStatusBadges() {
+  var local = localStatusCounts();
+  applyInvStatusBadges(local);
+  fetch('/api/boxes/status-summary', { headers: authHeaders() })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.byStatus) return;
+      var total = Object.keys(data.byStatus).reduce(function(a, k) { return a + data.byStatus[k]; }, 0);
+      applyInvStatusBadges(Object.assign({}, local, data.byStatus, { '': total }));
+    })
+    .catch(function() {});
+}
+
 function renderInventory() {
   buildInvCustPills();
+  refreshInvStatusBadges();
   if (invViewMode === 'summary') { renderInvSummary(); return; }
   var body = $('#invBody'); if (!body) return;
   var boxes = filteredInvBoxes().sort(function(a, b) {

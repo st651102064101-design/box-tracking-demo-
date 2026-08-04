@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { boxes } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
@@ -11,6 +11,25 @@ import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 export const boxesRouter = Router();
 boxesRouter.use(requireAuth);
 const canWrite = requireRole('admin', 'staff');
+
+/**
+ * Count-by-status only — backs the filter-tab badges (see legacy.html's
+ * `#invStatusSeg`) without pulling every box's full jsonb `data` blob the way
+ * GET / does. Kept as its own route (not a query flag on GET /) so the
+ * dashboard can poll/refresh badge counts on their own cadence, independent
+ * of whatever's driving the main table's load. Relies on boxes_status_idx
+ * (see schema.sql) so this stays a fast index-only scan as the table grows.
+ */
+boxesRouter.get(
+  '/status-summary',
+  asyncHandler(async (_req, res) => {
+    const db = getDb();
+    const rows = await db.select({ status: boxes.status, count: count() }).from(boxes).groupBy(boxes.status);
+    const byStatus: Record<string, number> = {};
+    for (const r of rows) byStatus[r.status] = Number(r.count);
+    res.json({ byStatus });
+  }),
+);
 
 boxesRouter.get(
   '/',
