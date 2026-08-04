@@ -2205,6 +2205,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <input id="schAudit" placeholder="ค้นหาชื่อ รหัส หรือการกระทำ...">
         </div>
         <div class="field" style="width:160px;margin:0;">
+          <label style="font-size:12px;">หมวดหมู่</label>
+          <select id="filtAuditModule">
+            <option value="">ทั้งหมด</option>
+            <option value="box">กล่อง / คลังสินค้า</option>
+            <option value="btype">ประเภทกล่อง</option>
+            <option value="wh">คลัง & ประตู</option>
+            <option value="cust">ลูกค้า</option>
+            <option value="emp">พนักงาน</option>
+          </select>
+        </div>
+        <div class="field" style="width:160px;margin:0;">
           <label style="font-size:12px;">ประเภทการกระทำ</label>
           <select id="filtAuditAction">
             <option value="">ทั้งหมด</option>
@@ -2214,6 +2225,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <option value="GATE_OUT">Gate ออก</option>
             <option value="GATE_IN">Gate เข้า</option>
             <option value="RELOCATE">ย้ายตำแหน่ง</option>
+            <option value="HOLD">พักการใช้งาน (Hold)</option>
+            <option value="RELEASE_HOLD">ปลด Hold</option>
+            <option value="DAMAGE">ตีชำรุด</option>
+            <option value="REPAIR">ซ่อมเสร็จ</option>
           </select>
         </div>
         <div class="field" style="width:160px;margin:0;">
@@ -8024,6 +8039,18 @@ function auditEntry(action, recorder, itemId, itemName, before, after) {
   if (S.auditLog.length > 5000) S.auditLog = S.auditLog.slice(0, 5000);
   save();
 }
+/* หมวดหมู่ของรายการ audit — เดาจาก prefix ของ itemId เพราะ auditEntry() ไม่ได้
+   เก็บ "module" แยกไว้ตั้งแต่ต้น (มีจุดเรียกมากกว่า 30 ที่ ย้อนไปแก้ทุกจุดเสี่ยง
+   พลาด) รหัสของ 4 มาสเตอร์ดาต้ามี prefix คงที่อยู่แล้ว (ดู idPrefix ในตั้งค่า
+   นำเข้า Excel/CSV) ที่เหลือ (บาร์โค้ดกล่อง/ตำแหน่งแร็ค ฯลฯ) จัดเป็น "box" */
+function auditModuleOf(itemId) {
+  var id = String(itemId || '');
+  if (id.indexOf('BT-') === 0) return 'btype';
+  if (id.indexOf('WH-') === 0) return 'wh';
+  if (id.indexOf('CUST-') === 0) return 'cust';
+  if (id.indexOf('EMP-') === 0) return 'emp';
+  return 'box';
+}
 
 /* ===== INVENTORY = real-time WMS view over S.boxes ===== */
 var invStatusFilter = '';
@@ -9382,9 +9409,11 @@ function renderAuditLog() {
     }
   }
   var sb = (document.getElementById('schAudit') ? document.getElementById('schAudit').value : '').toLowerCase();
+  var fm = (document.getElementById('filtAuditModule') ? document.getElementById('filtAuditModule').value : '');
   var fa = (document.getElementById('filtAuditAction') ? document.getElementById('filtAuditAction').value : '');
   var fu = (document.getElementById('filtAuditUser') ? document.getElementById('filtAuditUser').value : '').toLowerCase();
   var logs = (S.auditLog || []).filter(function(e) {
+    if (fm && auditModuleOf(e.itemId) !== fm) return false;
     if (fa && e.action !== fa) return false;
     if (fu && (e.recorder || '').toLowerCase().indexOf(fu) < 0) return false;
     if (sb && (e.itemId + e.itemName + e.action + e.recorder).toLowerCase().indexOf(sb) < 0) return false;
@@ -9401,7 +9430,9 @@ function renderAuditLog() {
   document.getElementById('cntAudit').textContent = logs.length + ' รายการ';
   var actionLabel = { CREATE: '<span class="pill ok">เพิ่ม</span>', UPDATE: '<span class="pill info">แก้ไข</span>',
     DELETE: '<span class="pill bad">ลบ</span>', GATE_OUT: '<span class="pill teal">Gate ออก</span>',
-    GATE_IN: '<span class="pill ok">Gate เข้า</span>', RELOCATE: '<span class="pill teal">ย้ายตำแหน่ง</span>' };
+    GATE_IN: '<span class="pill ok">Gate เข้า</span>', RELOCATE: '<span class="pill teal">ย้ายตำแหน่ง</span>',
+    HOLD: '<span class="pill warn">Hold</span>', RELEASE_HOLD: '<span class="pill ok">ปลด Hold</span>',
+    DAMAGE: '<span class="pill bad">ชำรุด</span>', REPAIR: '<span class="pill ok">ซ่อมเสร็จ</span>' };
   document.getElementById('auditBody').innerHTML = logs.length ? logs.map(function(e) {
     var before = auditObjText(e.before);
     var after = auditObjText(e.after);
@@ -9428,6 +9459,7 @@ function renderAuditLog() {
   }).join('') : '<tr><td colspan="7"><div class="empty"><div class="e-ic">∅</div>ยังไม่มี Audit Log</div></td></tr>';
 }
 document.getElementById('schAudit').addEventListener('input', renderAuditLog);
+document.getElementById('filtAuditModule').addEventListener('change', renderAuditLog);
 document.getElementById('filtAuditAction').addEventListener('change', renderAuditLog);
 document.getElementById('filtAuditUser').addEventListener('input', renderAuditLog);
 
