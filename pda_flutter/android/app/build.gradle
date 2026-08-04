@@ -29,11 +29,11 @@ android {
 
     defaultConfig {
         applicationId = "com.abss.boxtrace_pda"
-        // rfidapi3lib's own manifest declares minSdk 29; most MC3390R units
-        // ship Android 10/11 (API 29/30). This particular unit is stuck on
-        // Android 8.1 (API 27, no OTA available), so minSdk is lowered and
-        // AndroidManifest.xml overrides the library's declared minSdk to let
-        // the merger accept it. RFID functionality is unverified on API 27.
+        // This unit is stuck on Android 8.1 (API 27, no OTA available).
+        // RFIDAPI3 2.0.5.x requires API 29+ and fails at runtime on this
+        // device, so the app ships RFIDAPI3 2.0.3.162 instead (documented as
+        // Android 8+). AndroidManifest.xml still overrides the library's
+        // declared minSdk to let the manifest merger accept it either way.
         minSdk = 27
         targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
@@ -65,7 +65,25 @@ repositories {
 }
 
 dependencies {
-    implementation(name: "rfidapi3lib-2.0.5.275", ext: "aar")
+    // RFIDAPI3 2.0.3.162 — the vendor SDK ships this version as many small
+    // AARs instead of one bundled jar; the MC3390R's reader classes span
+    // several of them so all are pulled in together.
+    implementation(name: "API3_CMN-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_INTERFACE-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_READER-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_TRANSPORT-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_ASCII-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_NGE-Transportrelease-2.0.3.162", ext: "aar")
+    implementation(name: "API3_NGEUSB-Transportrelease-2.0.3.162", ext: "aar")
+    implementation(name: "API3_NGE-protocolrelease-2.0.3.162", ext: "aar")
+    implementation(name: "API3_ZIOTC-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_ZIOTCTRANSPORT-release-2.0.3.162", ext: "aar")
+    implementation(name: "API3_LLRP-release-2.0.3.162", ext: "aar")
+    implementation(name: "rfidhostlib", ext: "aar")
+    implementation(name: "rfidseriallib", ext: "aar")
     implementation "com.google.code.gson:gson:2.13.2"
     implementation "androidx.core:core-ktx:1.13.1"
+    // API3_NGE-Transport's Theme.Api3Transport extends a MaterialComponents
+    // parent — pull the library in so the manifest merger can resolve it.
+    implementation "com.google.android.material:material:1.12.0"
 }

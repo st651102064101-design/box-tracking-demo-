@@ -2,10 +2,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- This MC3390R unit is stuck on Android 8.1 (API 27, no further OTA
-         available) but rfidapi3lib's own manifest declares minSdk 29. Override
-         so the merger accepts our lower minSdk; RFID functionality on this
-         device is unverified and may fail at runtime if the library actually
-         calls API 29+ surfaces. -->
+         available). RFIDAPI3 2.0.5.x declares minSdk 29 (Android 10+) and
+         fails at runtime here (NPE inside TransportSerial). Downgraded to
+         RFIDAPI3 2.0.3.162, whose docs list "Android 8 and above" — keep this
+         override regardless, since the library's manifest may still declare
+         a minSdk above our app's. -->
     <uses-sdk tools:overrideLibrary="com.zebra.rfid.api3" />
 
     <!-- REST calls to the BoxTrace backend -->
