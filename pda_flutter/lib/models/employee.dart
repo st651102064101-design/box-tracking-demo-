@@ -24,6 +24,11 @@ class Employee {
   /// 'active' | 'leave' | 'inactive'
   final String status;
 
+  /// Whether this employee has a PIN on file on the *backend* — the source of
+  /// truth for the PIN gate, never a device-local flag (a PIN set on one PDA
+  /// must be asked for on every other PDA too).
+  final bool hasPin;
+
   const Employee({
     required this.id,
     required this.name,
@@ -34,6 +39,7 @@ class Employee {
     this.scanCode = '',
     this.access = 'operator',
     this.status = 'active',
+    this.hasPin = false,
   });
 
   /// The web app writes '-' into several fields as its own placeholder for
@@ -54,6 +60,7 @@ class Employee {
         scanCode: _s(j['scanCode']),
         access: _s(j['access'], 'operator'),
         status: _s(j['status'], 'active'),
+        hasPin: j['hasPin'] == true,
       );
 
   /// Employees on leave or off the payroll can't start a session. This is the

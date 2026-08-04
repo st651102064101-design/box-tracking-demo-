@@ -10,6 +10,7 @@ import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
 import { boxesRouter } from './routes/boxes.js';
 import { mastersRouter } from './routes/masters.js';
+import { employeePinRouter } from './routes/pin.js';
 import { streamRouter } from './routes/stream.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
@@ -81,6 +82,7 @@ export function createApp() {
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
   app.use('/api/masters', mastersRouter);
+  app.use('/api/employees', employeePinRouter);
   app.use('/api/stream', streamRouter);
 
   app.use(notFound);

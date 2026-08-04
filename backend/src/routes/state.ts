@@ -50,6 +50,14 @@ stateRouter.put(
       }
     }
 
+    /* Design decision: no one — not even an admin — may delete their own employee
+       record through this endpoint. The client (legacy.html) already blocks this
+       in the UI, but this endpoint accepts a raw state snapshot, so the real gate
+       has to live here: reject any upload that drops the caller's own employeeId. */
+    if (req.user?.employeeId && !(req.user.employeeId in (payload.employees ?? {}))) {
+      throw httpError(403, 'ไม่สามารถลบบัญชีของตัวเองได้', 'forbidden');
+    }
+
     await replaceState(db, payload);
     /* Tell every open stream. The writer's own id rides along so its browser
        can skip re-fetching the snapshot it just uploaded. */

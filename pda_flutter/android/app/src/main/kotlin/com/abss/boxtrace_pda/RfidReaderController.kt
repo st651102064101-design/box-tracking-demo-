@@ -211,10 +211,24 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
+    /**
+     * On some units the on-device RFID service is a different version than
+     * the client SDK bundled in this app, and enumerating one transport
+     * throws instead of just returning empty — seen on this fleet as
+     * SERVICE_SERIAL raising a raw `RuntimeException` ("Error while
+     * instantiating Transport class") wrapping an internal NPE, not the
+     * `InvalidUsageException` the SDK docs lead you to expect. Swallowing
+     * only that one exception type let a SERVICE_SERIAL failure abort the
+     * whole connect() instead of falling through to try Bluetooth/USB next,
+     * which defeated the fallback chain in [connect] entirely. Catch broadly
+     * here — any enumeration failure just means "nothing on this transport,
+     * try the next one."
+     */
     private fun safeList(): ArrayList<ReaderDevice> =
         try {
             readers?.GetAvailableRFIDReaderList() ?: ArrayList()
-        } catch (e: InvalidUsageException) {
+        } catch (e: Exception) {
+            Log.w(TAG, "reader enumeration failed for this transport", e)
             ArrayList()
         }
 

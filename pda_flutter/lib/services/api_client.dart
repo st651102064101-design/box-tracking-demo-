@@ -177,4 +177,37 @@ class ApiClient {
     if (r.statusCode == 404) return null;
     return _decode(r) as Map<String, dynamic>;
   }
+
+  /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN
+  /// outright. Used right after a badge scan (first-time setup or a
+  /// voluntary change), never as part of a forgot-PIN reset.
+  Future<void> setEmployeePin(String employeeId, String pin) async {
+    await _send(() => http.put(_u('/api/employees/$employeeId/pin'),
+        headers: _headers, body: jsonEncode({'pin': pin})));
+  }
+
+  /// POST /api/employees/:id/pin/verify { pin } -> { ok, noPinSet? }
+  Future<bool> verifyEmployeePin(String employeeId, String pin) async {
+    final body = await _send(() => http.post(_u('/api/employees/$employeeId/pin/verify'),
+        headers: _headers, body: jsonEncode({'pin': pin}))) as Map<String, dynamic>;
+    return body['ok'] == true;
+  }
+
+  /// POST /api/employees/:id/pin/reset — mints a 6-digit OTP (5 min TTL).
+  /// Same endpoint the web app's admin-only "รีเซ็ต PIN" button calls; the
+  /// device's own service-account token is enough to call it too, so the PDA
+  /// can self-serve this straight from "ลืมรหัส PIN?" without a round trip
+  /// through an admin's browser session. Returns {otp, expiresAt}.
+  Future<Map<String, dynamic>> requestPinReset(String employeeId) async {
+    return await _send(() => http.post(_u('/api/employees/$employeeId/pin/reset'), headers: _headers))
+        as Map<String, dynamic>;
+  }
+
+  /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the employee's
+  /// side of an admin-issued reset: the OTP the admin relayed, plus the new
+  /// PIN to set once it checks out.
+  Future<void> confirmPinReset(String employeeId, {required String otp, required String pin}) async {
+    await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
+        headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
+  }
 }

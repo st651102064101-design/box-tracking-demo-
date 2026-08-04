@@ -40,6 +40,10 @@ class Prefs {
   static const _kLastWh = 'boxtrace_last_wh';
   static const _kLastGate = 'boxtrace_last_gate';
 
+  // per-device memory of "asked this employee to set a PIN, they skipped" —
+  // the PIN itself is server-side, see [pinSkipped]/[skipPin]/[clearPinSkip].
+  static const _kPinSkipped = 'boxtrace_pin_skipped';
+
   String get lang => _p.getString(_kLang) ?? 'th';
   set lang(String v) => _p.setString(_kLang, v);
 
@@ -143,4 +147,35 @@ class Prefs {
   }
 
   set outbox(List<dynamic> v) => _p.setString(_kOutbox, jsonEncode(v));
+
+  /// The PIN itself lives on the backend now (bcrypt-hashed, see
+  /// `Employee.hasPin` / `ApiClient.setEmployeePin`/`verifyEmployeePin`) —
+  /// that's what makes it work the same on every PDA an employee badges into,
+  /// not just this one. All this device remembers locally is "already asked
+  /// this person once and they chose not to set one", so the setup prompt
+  /// doesn't nag on every badge-in.
+  List<String> get _skipped {
+    final s = _p.getString(_kPinSkipped);
+    if (s == null) return [];
+    try {
+      return List<String>.from(jsonDecode(s));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  bool pinSkipped(String id) => _skipped.contains(id);
+
+  void skipPin(String id) {
+    final sk = _skipped;
+    if (!sk.contains(id)) sk.add(id);
+    _p.setString(_kPinSkipped, jsonEncode(sk));
+  }
+
+  /// Called once [id] has a PIN on the backend, so a later "ข้าม" choice on
+  /// this same device doesn't shadow it.
+  void clearPinSkip(String id) {
+    final sk = _skipped..remove(id);
+    _p.setString(_kPinSkipped, jsonEncode(sk));
+  }
 }

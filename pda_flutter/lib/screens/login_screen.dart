@@ -10,6 +10,7 @@ import '../services/i18n.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/pin_pad.dart';
 
 /// The badge screen — where every shift starts and where the device sits
 /// whenever nobody is working it.
@@ -40,6 +41,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// เวลาที่ตัวอักษรก่อนหน้ามาถึง — ใช้วัดจังหวะห่างระหว่างตัวอักษรของรอบกรอกนี้
   DateTime? _lastKeyAt;
+  /// ความยาวข้อความหลัง onChanged ครั้งก่อน — บาง build ของคีย์บอร์ด-wedge (โดยเฉพาะ
+  /// เครื่อง MC3390R ที่ต้อง fallback ไป Android เก่า) ส่งทั้งรหัสมาในเหตุการณ์ onChanged
+  /// เดียว ไม่ใช่ทีละตัวอักษร ถ้าเทียบจังหวะระหว่างตัวอักษรไม่ได้เพราะตัวเดียวมาครบเลย
+  /// ก็ต้องดูจากตรงนี้แทน: เพิ่มมากกว่า 1 ตัวอักษรในเหตุการณ์เดียวคือมนุษย์พิมพ์ไม่ทัน
+  /// แน่นอน จึงถือเป็นหลักฐานว่าเป็นการสแกนได้เลย
+  int _prevLen = 0;
   /// true เมื่อเจอจังหวะกดแบบคนพิมพ์ (ห่างเกิน [_scanGapMs]) อย่างน้อยหนึ่งครั้งใน
   /// รอบกรอกนี้ — ตัวสแกน (keyboard-wedge) พ่นตัวอักษรเร็วกว่านี้มาก (ปกติ <20ms/ตัว)
   /// ดังนั้นถ้าเจอช่องว่างยาวขนาดนี้แม้แต่ครั้งเดียว แสดงว่าเป็นคนพิมพ์เอง ไม่ใช่สแกน
@@ -79,6 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final code = _badge.text;
     _badge.clear();
     _lastKeyAt = null;
+    _prevLen = 0;
     if (_looksTyped) setState(() => _looksTyped = false);
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
@@ -102,12 +110,26 @@ class _LoginScreenState extends State<LoginScreen> {
     final now = DateTime.now();
     if (v.isEmpty) {
       _lastKeyAt = null;
+      _prevLen = 0;
       setState(() => _looksTyped = false);
       return;
     }
+    final addedChars = v.length - _prevLen;
+    _prevLen = v.length;
     final prev = _lastKeyAt;
     _lastKeyAt = now;
     setState(() {}); // repaint the confirm button's enabled state regardless
+    // Some keyboard-wedge implementations (seen on the MC3390R's older Android
+    // build) deliver the whole scanned code in one onChanged call instead of
+    // one call per keystroke, so there is never a second call to measure a
+    // gap between. No human adds more than one character between two frames,
+    // so more than one new character in a single callback is scan-speed proof
+    // on its own — treat it the same as a fast inter-key gap, below.
+    if (addedChars > 1) {
+      if (_looksTyped) return;
+      _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
+      return;
+    }
     if (prev == null) return; // first char of this entry — no gap to judge yet
     final gapMs = now.difference(prev).inMilliseconds;
     if (gapMs > _scanGapMs) {
@@ -118,6 +140,160 @@ class _LoginScreenState extends State<LoginScreen> {
     // This exact gap just arrived at scanner speed, so arm a short quiet-period
     // check — reacting to a gap that already happened, never predicting one.
     _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
+  }
+
+  /// Tapping a name is a shortcut for a badge scan, so it goes through the
+  /// same PIN gate: first tap ever offers to set a 4-digit PIN (or skip),
+  /// every tap after that — once one is set — asks for it before starting the
+  /// session. The PIN itself is verified against a bcrypt hash on the backend
+  /// (see `ApiClient.setEmployeePin`/`verifyEmployeePin`), so it works the
+  /// same on every PDA an employee badges into, not just this device — only
+  /// the "did they skip on this device" memory is local (see [Prefs.pinSkipped]).
+  Future<void> _tapEmployee(Employee e) async {
+    final c = context.read<AppController>();
+
+    if (e.hasPin) {
+      await _verifyThenEnter(e);
+      return;
+    }
+    if (c.prefs.pinSkipped(e.id)) {
+      final err = c.identifyAs(e);
+      if (err != null) c.toastMsg(err, '', ResultKind.err);
+      return;
+    }
+
+    final result = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN สำหรับ ${e.name}',
+      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
+      allowSkip: true,
+    );
+    if (result == null) return; // dismissed — ask again next time
+    if (result.skipped) {
+      c.prefs.skipPin(e.id);
+      if (!mounted) return;
+      final err = c.identifyAs(e);
+      if (err != null) c.toastMsg(err, '', ResultKind.err);
+      return;
+    }
+    if (result.pin == null) return;
+    final firstPin = result.pin!;
+    // Confirm before saving — a mistyped first entry would otherwise lock the
+    // operator out of their own name with a PIN they never meant to set.
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN อีกครั้ง',
+      subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
+      validate: (entered) async => entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
+    if (!mounted) return;
+    try {
+      await c.api.setEmployeePin(e.id, firstPin);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    if (!mounted) return;
+    // Backend now has the PIN, but the local employee list won't say
+    // `hasPin: true` until the next `/api/state` fetch — log in on this
+    // successful set rather than making the operator badge in twice.
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
+  }
+
+  Future<void> _verifyThenEnter(Employee e) async {
+    final c = context.read<AppController>();
+    final result = await showPinPad(
+      context,
+      title: 'ใส่รหัส PIN ของ ${e.name}',
+      showForgot: true,
+      validate: (entered) async {
+        try {
+          final ok = await c.api.verifyEmployeePin(e.id, entered);
+          return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+        } catch (err) {
+          return 'ตรวจสอบรหัสไม่สำเร็จ — เช็คการเชื่อมต่อแล้วลองใหม่';
+        }
+      },
+    );
+    if (result == null) return; // cancelled
+    if (result.forgot) {
+      await _forgotPin(e);
+      return;
+    }
+    if (result.pin == null) return;
+    if (!mounted) return;
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
+  }
+
+  /// "ลืมรหัส PIN?" — mints a 6-digit OTP straight from the PDA, no admin
+  /// needing to click a "reset" button first (same endpoint the web app's
+  /// admin-only button calls; the device's own service-account token is
+  /// authorized for it too). The code itself never comes back to this
+  /// device, though — the backend only ever hands it to an open admin
+  /// browser tab in real time (see backend/src/routes/pin.ts /
+  /// 'pinResetRequested' in legacy.html). That's deliberate: the whole point
+  /// of a second person in this flow is that whoever "forgot" their PIN
+  /// can't just read the replacement off their own screen. The operator here
+  /// has to actually get the code from someone looking at the admin page.
+  Future<void> _forgotPin(Employee e) async {
+    final c = context.read<AppController>();
+    try {
+      await c.api.requestPinReset(e.id);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+
+    if (!mounted) return;
+    c.toastMsg(
+      'ส่งคำขอ OTP แล้ว',
+      'รหัสจะขึ้นที่หน้าจัดการระบบของผู้ดูแลระบบ — ขอรหัส 6 หลักจากเขา แล้วกรอกด้านล่าง',
+      ResultKind.info,
+    );
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: 'รหัส 6 หลักจากผู้ดูแลระบบ (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!mounted) return;
+    final newPinResult = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
+    );
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    if (!mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
 
   /// The capture field, shown rather than hidden.
@@ -189,7 +365,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    return Column(
+    // A plain Column here forced the header + badge prompt to a fixed height
+    // and only let the employee list underneath scroll on its own — on the
+    // handheld's short screen that clipped everything below the fold with no
+    // way to reach it. One scroll view for the whole page instead, so the
+    // page scrolls as a unit whenever it doesn't fit.
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: bottom + 20),
+      child: Column(
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
@@ -235,43 +418,40 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           _BadgePrompt(field: _captureField(loc)),
           if (people.isEmpty)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, color: C.faint),
-                  ),
-                ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13.5, color: C.faint),
               ),
             )
           else
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(22, 4, 22, bottom + 20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                        style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                          style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                   ...people.map((e) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _EmployeeTile(
                           emp: e,
                           visiting: c.isVisiting(e),
-                          onTap: () {
-                            final err = c.identifyAs(e);
-                            if (err != null) c.toastMsg(err, '', ResultKind.err);
-                          },
+                          onTap: () => _tapEmployee(e),
                         ),
                       )),
                 ],
               ),
             ),
         ],
+      ),
     );
   }
 }
