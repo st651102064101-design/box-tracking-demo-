@@ -82,8 +82,6 @@ CREATE TABLE IF NOT EXISTS employees (
   user_id               INTEGER REFERENCES users(id),
   data                  JSONB NOT NULL DEFAULT '{}'::jsonb,
   pin_hash              TEXT,
-  pin_reset_otp_hash    TEXT,
-  pin_reset_expires_at  TIMESTAMPTZ,
   username              TEXT UNIQUE,
   password_hash         TEXT,
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -92,8 +90,6 @@ CREATE TABLE IF NOT EXISTS employees (
 -- Additive migrations for databases created before these columns existed.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_otp_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_expires_at TIMESTAMPTZ;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS username TEXT;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_username_unique') THEN

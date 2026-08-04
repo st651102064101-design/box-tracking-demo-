@@ -151,33 +151,6 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 .who-menu .wm-row .pill,.who-menu .wm-row .btn{flex:0 0 auto;white-space:nowrap;}
 @media(max-width:560px){.who-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;min-width:0;max-width:none;}}
 
-/* ===== notification bell — a persistent list instead of a toast that's
-   gone in 2.6s before anyone can act on it (see toast() above). Modeled on
-   the Facebook-style pattern the request asked for: unread badge count,
-   click to open a scrollable history, items stay until explicitly cleared,
-   not until a CSS animation finishes. ===== */
-.notif-badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;
-  background:var(--neg,#d70015);color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;}
-.notif-menu{width:360px;max-width:92vw;padding:0;overflow:hidden;}
-.notif-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:.5px solid var(--line);}
-.notif-head h4{margin:0;font-size:13.5px;font-weight:700;}
-.notif-head button{background:none;border:none;color:var(--accentInk,var(--accent));font-size:11.5px;font-weight:600;cursor:pointer;padding:2px;}
-.notif-list{max-height:400px;overflow-y:auto;}
-.notif-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:12.5px;}
-.notif-item{display:block;width:100%;text-align:left;padding:11px 14px;border:none;background:none;cursor:default;
-  border-bottom:.5px solid var(--line);position:relative;}
-.notif-item:last-child{border-bottom:none;}
-.notif-item.unread{background:color-mix(in srgb,var(--accent) 8%,transparent);}
-.notif-item.unread::before{content:'';position:absolute;left:5px;top:18px;width:6px;height:6px;border-radius:50%;background:var(--accent);}
-.notif-item .ni-body{padding-left:var(--ni-indent,0px);}
-.notif-item.unread .ni-body{--ni-indent:12px;}
-.notif-title{font-size:13px;font-weight:700;margin-bottom:2px;}
-.notif-sub{font-size:11.5px;color:var(--muted);margin-bottom:6px;}
-.notif-otp{display:inline-block;font:800 20px var(--mono,monospace);letter-spacing:4px;background:var(--surface2);
-  padding:6px 12px;border-radius:9px;margin-top:2px;border:.5px solid var(--line);color:var(--ink);cursor:pointer;}
-.notif-otp:hover{background:color-mix(in srgb,var(--accent) 12%,var(--surface2));}
-.notif-ts{font-size:10.5px;color:var(--muted);margin-top:6px;}
-@media(max-width:560px){.notif-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;max-width:none;}}
 .iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
@@ -1173,13 +1146,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div><div class="nm">BoxTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
   </div>
   <div class="spacer"></div>
-  <div class="who-wrap" id="notifWrap">
-    <button class="iconbtn no-print" onclick="toggleNotifMenu()" title="การแจ้งเตือน" style="position:relative;">
-      <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
-      <span id="notifBadge" class="notif-badge" hidden>0</span>
-    </button>
-    <div class="who-menu notif-menu" id="notifMenu" hidden></div>
-  </div>
   <div class="who-wrap">
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
     <div class="who-menu" id="whoMenu" hidden></div>
@@ -3336,7 +3302,6 @@ function openEmpActions(id){
         +'<button class="btn ghost" title="แสดงบาร์โค้ดสำหรับยิงเข้าระบบที่ PDA" onclick="closeModal();printEmpBadge(\''+esc(id)+'\')">บัตร</button>'
         +(canEdit?'<button class="btn ghost" onclick="closeModal();editEmp(\''+esc(id)+'\')">แก้ไข</button>':'')
         +(empAdmin?'<button class="btn ghost" title="ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้" onclick="closeModal();setEmpCredentials(\''+esc(id)+'\',\''+esc(e.name||id)+'\',\''+esc(e.loginUsername||'')+'\')">'+(e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน')+'</button>':'')
-        +(empAdmin?'<button class="btn ghost" title="ออกรหัส OTP ให้พนักงานตั้งรหัส PIN ใหม่บน PDA" onclick="closeModal();resetEmpPin(\''+esc(id)+'\',\''+esc(e.name||id)+'\')">รีเซ็ต PIN</button>':'')
         +(empAdmin&&!isSelf?'<button class="btn red" onclick="closeModal();delEmp(\''+esc(id)+'\')">ลบ</button>':'')
       +'</div>'
     +'</div>'
@@ -3361,39 +3326,6 @@ function delEmp(id){
   if(currentEmp()&&currentEmp().id===id)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
-
-/* ===== PDA PIN reset (admin only) =====
-   The PIN itself lives on the backend (bcrypt hash, see backend/src/routes/pin.ts)
-   — this app never sees or stores it. Clicking "รีเซ็ต PIN" mints a 6-digit OTP
-   good for 5 minutes; there's no SMS/Line/Teams wired into this deployment to
-   deliver it automatically, so it's shown here once for the admin to relay to
-   the employee by whatever channel is already at hand (call, chat, in person).
-   The employee then enters that OTP on the PDA's "ลืมรหัส PIN?" flow and picks
-   a brand new PIN — the backend clears the OTP the moment it's used. */
-/* Shared by the admin's own "รีเซ็ต PIN" click and the SSE listener below
-   (a PDA's "ลืมรหัส PIN?" pushes its OTP here instead of showing it on the
-   device — see backend/src/routes/pin.ts) so there's exactly one place that
-   knows what this modal looks like. */
-function showOtpModal(name,otp){
-  openModal('<div class="mbody"><h3>รหัส OTP สำหรับ '+esc(name)+'</h3>'
-    +'<p class="desc">แจ้งรหัสนี้ให้พนักงานเอง — ใช้ตั้ง PIN ใหม่บน PDA ผ่านปุ่ม "ลืมรหัส PIN?" ที่หน้ายิงบัตร</p>'
-    +'<div style="font:700 36px var(--mono,monospace);letter-spacing:6px;text-align:center;padding:18px 0;">'+esc(otp)+'</div>'
-    +'<p class="desc" style="text-align:center;">หมดอายุใน 5 นาที · ใช้ได้ครั้งเดียว</p></div>'
-    +'<div class="mfoot"><button class="btn" data-close>ปิด</button></div>');
-}
-window.showOtpModal=showOtpModal;
-
-function resetEmpPin(id,name){
-  if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะรีเซ็ต PIN ได้','err');
-  confirmA('รีเซ็ต PIN ของ '+name+'?','ระบบจะออกรหัส OTP 6 หลัก อายุ 5 นาที ให้คุณนำไปแจ้งพนักงานเอง (โทร/แชท/บอกต่อหน้า) — PIN เดิมจะยังใช้ได้จนกว่าพนักงานจะกรอก OTP นี้ตั้ง PIN ใหม่สำเร็จ','ออกรหัส OTP').then(function(ok){
-    if(!ok)return;
-    apiFetch('/api/employees/'+encodeURIComponent(id)+'/pin/reset',{method:'POST',headers:authHeaders()})
-      .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'ออกรหัส OTP ไม่สำเร็จ');return b;});})
-      .then(function(b){showOtpModal(name,b.otp);})
-      .catch(function(e){toast('ออกรหัส OTP ไม่สำเร็จ',e.message||'','err');});
-  });
-}
-window.resetEmpPin=resetEmpPin;
 
 /* ===== per-employee web login (admin only) =====
    One account per employee — set here, checked at /login via the backend's
@@ -3558,105 +3490,13 @@ function pickUser(){
 }
 window.pickUser=pickUser;
 
-/* ===== notification center =====
-   A persistent list instead of a toast that's gone in 2.6s before anyone can
-   act on it (see toast() above) — needed because a PDA-initiated PIN reset
-   has to reach an admin who might not be looking at the screen the instant
-   it happens. Facebook-style: unread badge count, click to open a scrollable
-   history, items stay until explicitly cleared, not until a CSS animation
-   finishes. */
-var NOTIFS=(function(){try{return JSON.parse(localStorage.getItem('boxtrace_notifs')||'[]');}catch(e){return [];}})();
-function saveNotifs(){try{localStorage.setItem('boxtrace_notifs',JSON.stringify(NOTIFS.slice(0,30)));}catch(e){}}
-function pushNotif(n){
-  n.id='n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  n.read=false;
-  NOTIFS.unshift(n);
-  NOTIFS=NOTIFS.slice(0,30);
-  saveNotifs();
-  renderNotifBell();
-}
-function unreadNotifCount(){return NOTIFS.filter(function(n){return !n.read;}).length;}
-function timeAgo(iso){
-  var ms=Date.now()-new Date(iso).getTime();
-  if(!(ms>=0))return '';
-  var m=Math.floor(ms/60000);
-  if(m<1)return 'เมื่อสักครู่';
-  if(m<60)return m+' นาทีที่แล้ว';
-  var h=Math.floor(m/60);
-  if(h<24)return h+' ชม.ที่แล้ว';
-  return Math.floor(h/24)+' วันที่แล้ว';
-}
-function renderNotifBell(){
-  var badge=document.getElementById('notifBadge');
-  if(!badge)return;
-  var n=unreadNotifCount();
-  if(n>0){badge.hidden=false;badge.textContent=n>99?'99+':String(n);}
-  else{badge.hidden=true;}
-  var menu=document.getElementById('notifMenu');
-  if(menu&&!menu.hidden)renderNotifList();
-}
-/* Which notif ids currently have their OTP revealed — click-to-reveal so a
-   6-digit code isn't sitting in plain sight in a list that lives in
-   localStorage; transient on purpose (not persisted, resets closed→open). */
-var REVEALED={};
-function toggleReveal(id){REVEALED[id]=!REVEALED[id];renderNotifList();}
-window.toggleReveal=toggleReveal;
-function renderNotifList(){
-  var body=document.getElementById('notifMenu');
-  if(!body)return;
-  var items=NOTIFS.length?NOTIFS.map(function(n){
-    if(n.type==='pinReset'){
-      var who=n.requestedByEmployee?'ตัวพนักงานเอง (จาก PDA)':(n.by||'ระบบ');
-      var revealed=!!REVEALED[n.id];
-      var otpHtml=n.otp
-        ?'<button type="button" class="notif-otp" onclick="toggleReveal(\''+n.id+'\')" title="'+(revealed?'ซ่อนรหัส':'คลิกเพื่อดูรหัส')+'">'
-          +(revealed?esc(n.otp):'•&nbsp;•&nbsp;•&nbsp;•&nbsp;•&nbsp;•')+'</button>'
-        :'';
-      return '<div class="notif-item'+(n.read?'':' unread')+'"><div class="ni-body">'
-        +'<div class="notif-title">คำขอ OTP รีเซ็ต PIN — '+esc(n.name||n.employeeId)+'</div>'
-        +'<div class="notif-sub">ร้องขอโดย '+esc(who)+'</div>'
-        +otpHtml
-        +'<div class="notif-ts">'+esc(timeAgo(n.ts))+(n.otp?' · คลิกรหัสเพื่อดู/ซ่อน':'')+'</div>'
-        +'</div></div>';
-    }
-    return '';
-  }).join(''):'<div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>';
-  body.innerHTML='<div class="notif-head"><h4>การแจ้งเตือน</h4>'
-    +(NOTIFS.length?'<button onclick="clearAllNotifs()">ล้างทั้งหมด</button>':'')
-    +'</div><div class="notif-list">'+items+'</div>';
-}
-function clearAllNotifs(){
-  NOTIFS=[];saveNotifs();renderNotifBell();
-}
-window.clearAllNotifs=clearAllNotifs;
-function closeNotifMenu(){var m=document.getElementById('notifMenu');if(m)m.hidden=true;}
-window.closeNotifMenu=closeNotifMenu;
-function toggleNotifMenu(){
-  var menu=document.getElementById('notifMenu');
-  if(!menu)return;
-  if(!menu.hidden){closeNotifMenu();return;}
-  closeWhoMenu();
-  renderNotifList();
-  menu.hidden=false;
-  // everything currently in the list counts as "seen" once the panel's open —
-  // matches how a Facebook-style bell clears its badge on open, not on
-  // reading each item individually.
-  NOTIFS.forEach(function(n){n.read=true;});
-  saveNotifs();
-  renderNotifBell();
-}
-window.toggleNotifMenu=toggleNotifMenu;
-renderNotifBell();
-
 /* ปิดเมื่อคลิกที่อื่นหรือกด Esc — dropdown ไม่มีม่านทึบให้กดปิดเหมือน modal
    จึงต้องมีทางออกที่ผู้ใช้คาดหวังทั้งสองทาง */
 document.addEventListener('click',function(ev){
   var m=document.getElementById('whoMenu');
   if(m&&!m.hidden&&!ev.target.closest('.who-wrap'))closeWhoMenu();
-  var nm=document.getElementById('notifMenu');
-  if(nm&&!nm.hidden&&!ev.target.closest('#notifWrap'))closeNotifMenu();
 },true);
-document.addEventListener('keydown',function(ev){if(ev.key==='Escape'){closeWhoMenu();closeNotifMenu();}});
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'){closeWhoMenu();}});
 /* "แก้ไข" from the recorder picker: switch to Setup > พนักงาน first, then open the
    edit form once that sub-tab is actually visible (goSetup's own tab-switch is async) */
 function pickUserEditEmp(id){
@@ -14071,22 +13911,6 @@ function connectStream(){
     /* our own write coming back — the snapshot is already on screen */
     if(d&&d.origin&&d.origin===Wn.BT_CLIENT_ID)return;
     syncNow();
-  });
-  /* "ลืมรหัส PIN?" on the PDA triggers a reset with no admin click involved
-     (see backend/src/routes/pin.ts) — but the OTP itself never goes to that
-     device; it only ever reaches an admin session through this event, which
-     is the whole point of routing a reset through a second person. A toast
-     alone isn't enough here (see pushNotif's comment) — it lands in the
-     persistent notification bell too, so it's still there if nobody was
-     looking at the moment it arrived. A quick toast rides along as the
-     "something just happened" cue; the bell is what actually holds the code. */
-  es.addEventListener('pinResetRequested',ev=>{
-    let d=null; try{ d=JSON.parse(ev.data); }catch(_){}
-    if(!d)return;
-    if(!isAdmin())return; /* only worth surfacing to someone who could act on it */
-    pushNotif({type:'pinReset',employeeId:d.employeeId,name:d.name,by:d.by,requestedByEmployee:d.requestedByEmployee,otp:d.otp,ts:d.ts});
-    var who=d.requestedByEmployee?'ตัวพนักงานเอง (จาก PDA)':(d.by||'ระบบ');
-    toast('มีการขอ OTP รีเซ็ต PIN — คลิกเพื่อดูรหัส',(d.name||d.employeeId)+' — ร้องขอโดย '+who,'warn',{ms:12000,onClick:function(){toggleNotifMenu();}});
   });
   es.onerror=()=>{
     /* EventSource retries by itself; drop back to fast polling until a frame
