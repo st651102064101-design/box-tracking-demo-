@@ -1,10 +1,11 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { employees } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
-import { emitEvent } from '../lib/bus.js';
+import { sendMail } from '../lib/mailer.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -14,10 +15,9 @@ import { requireAuth } from '../middleware/auth.js';
  * raw digits, never on the device). Two ways in:
  *   - the employee sets/changes it themselves (already identified by badge —
  *     no OTP needed, that's what the badge scan just proved)
- *   - "ลืมรหัส PIN" or an admin-initiated reset from the web app's employee
- *     page — requires a short-lived OTP the admin relays to the employee out
- *     of band (call, chat, whatever's on hand), since this deployment has no
- *     SMS/Line/Teams integration wired up to send it automatically.
+ *   - "ลืมรหัส PIN?" mints a short-lived OTP and emails it straight to the
+ *     address on the employee's own record — no admin in the loop, since
+ *     unlike a shared PDA there's no second person to relay it through.
  */
 export const employeePinRouter = Router();
 employeePinRouter.use(requireAuth);
@@ -28,6 +28,26 @@ const pinSchema = z.object({ pin: z.string().regex(/^\d{4}$/, 'PIN ต้อง�
 function genOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
+
+/** j***n@company.com — enough to confirm "yes, that's my email" without
+ *  printing the whole address back over the wire. */
+function maskEmail(email: string): string {
+  const [user, domain] = email.split('@');
+  if (!domain) return '***';
+  const maskedUser = user.length <= 2 ? user[0] + '*' : user[0] + '*'.repeat(user.length - 2) + user.slice(-1);
+  return `${maskedUser}@${domain}`;
+}
+
+/** Throttles reset requests per IP — this endpoint sends an email and is
+ *  reachable from a badge screen nobody has signed into yet, so it needs its
+ *  own limit rather than relying on the general auth throttle. */
+const pinResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', message: 'ขอรหัส OTP บ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
+});
 
 /** Set/replace the PIN directly — used right after a badge scan (first-time
  *  setup, or a voluntary change from the in-shift settings screen). No OTP:
@@ -63,57 +83,51 @@ employeePinRouter.post(
   }),
 );
 
-/** Starts a PIN reset: generates a 6-digit OTP good for 5 minutes. Callable
- *  either from the web app's admin-only "รีเซ็ต PIN" button, or straight from
- *  the PDA's own "ลืมรหัส PIN?" (the device's service-account token is
- *  authorized for this too).
- *
- *  Where the code actually goes depends on who asked:
- *   - an admin clicking the web button gets it straight back in this
- *     response, same as before.
- *   - a PDA calling this on an employee's behalf (`req.user.employeeId` set)
- *     does NOT get it back here — the whole point of routing a reset through
- *     a second person is defeated if the device that "forgot" its PIN can
- *     just read the code off its own network response. It only goes out via
- *     `emitEvent`, which reaches admin browser tabs over SSE (see the
- *     'pinResetRequested' listener in legacy.html) — the PDA operator has to
- *     get it from an admin who's actually looking at a screen, same as the
- *     original design, just without anyone having to click a button first. */
+/** Starts a PIN reset: generates a 6-digit OTP good for 5 minutes and emails
+ *  it to the address on the employee's own record. Fails with a clear
+ *  message (not silently) if there's no email on file yet — an admin needs
+ *  to add one via the employee form before this can work for that person. */
 employeePinRouter.post(
   '/:id/pin/reset',
+  pinResetLimiter,
   asyncHandler(async (req, res) => {
     const db = getDb();
+    const rows = await db.select().from(employees).where(eq(employees.id, req.params.id));
+    const row = rows[0];
+    if (!row) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+    const email = ((row.data as Record<string, unknown> | null)?.email as string | undefined)?.trim();
+    if (!email) {
+      throw httpError(400, 'พนักงานคนนี้ยังไม่มีอีเมลผูกไว้ — ให้ผู้ดูแลระบบเพิ่มอีเมลในหน้าพนักงานก่อน', 'no_email_on_file');
+    }
+
     const otp = genOtp();
     const pinResetOtpHash = await hashPassword(otp);
     const pinResetExpiresAt = new Date(Date.now() + OTP_TTL_MS);
-    const updated = await db
+    await db
       .update(employees)
       .set({ pinResetOtpHash, pinResetExpiresAt, updatedAt: new Date() })
-      .where(eq(employees.id, req.params.id))
-      .returning({ id: employees.id, name: employees.name });
-    if (!updated.length) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+      .where(eq(employees.id, req.params.id));
 
-    const requestedByEmployee = !!req.user?.employeeId;
-    emitEvent('pinResetRequested', {
-      employeeId: updated[0].id,
-      name: updated[0].name,
-      by: req.user?.name ?? null,
-      requestedByEmployee,
-      // Only carried over SSE when the *device* asked — an admin's own click
-      // already gets it in the HTTP response below, so echoing it back over
-      // the event too would just pop a redundant modal in their own tab.
-      otp: requestedByEmployee ? otp : null,
-      ts: new Date().toISOString(),
+    await sendMail({
+      to: email,
+      subject: 'รหัส OTP สำหรับตั้ง PIN ใหม่ — BoxTrace',
+      text:
+        `รหัส OTP ของคุณคือ ${otp}\n\n` +
+        `ใช้รหัสนี้ที่หน้า "ลืมรหัส PIN?" บนเครื่อง PDA เพื่อตั้ง PIN ใหม่ — รหัสนี้หมดอายุใน 5 นาที และใช้ได้ครั้งเดียว\n\n` +
+        `หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใดๆ — PIN เดิมของคุณยังใช้งานได้ตามปกติ`,
+      html:
+        `<p>รหัส OTP ของคุณคือ</p>` +
+        `<p style="font:700 32px monospace;letter-spacing:6px;">${otp}</p>` +
+        `<p>ใช้รหัสนี้ที่หน้า "ลืมรหัส PIN?" บนเครื่อง PDA เพื่อตั้ง PIN ใหม่ — รหัสนี้หมดอายุใน 5 นาที และใช้ได้ครั้งเดียว</p>` +
+        `<p>หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใดๆ — PIN เดิมของคุณยังใช้งานได้ตามปกติ</p>`,
     });
-    res.json({
-      otp: requestedByEmployee ? null : otp,
-      expiresAt: pinResetExpiresAt.toISOString(),
-    });
+
+    res.json({ ok: true, sentTo: maskEmail(email), expiresAt: pinResetExpiresAt.toISOString() });
   }),
 );
 
-/** The employee's side of a reset: scan badge on the PDA, enter the OTP the
- *  admin relayed, set a new PIN. */
+/** The employee's side of a reset: enter the OTP that arrived by email,
+ *  set a new PIN. */
 const confirmResetSchema = z.object({
   otp: z.string().regex(/^\d{6}$/, 'OTP ต้องเป็นตัวเลข 6 หลัก'),
   pin: z.string().regex(/^\d{4}$/, 'PIN ต้องเป็นตัวเลข 4 หลัก'),
@@ -127,10 +141,10 @@ employeePinRouter.post(
     const row = rows[0];
     if (!row) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
     if (!row.pinResetOtpHash || !row.pinResetExpiresAt) {
-      throw httpError(400, 'ยังไม่มีคำขอรีเซ็ต PIN — ให้ผู้ดูแลระบบกดรีเซ็ตให้ก่อน', 'no_reset_pending');
+      throw httpError(400, 'ยังไม่มีคำขอรีเซ็ต PIN — กด "ลืมรหัส PIN?" เพื่อขอรหัสใหม่ก่อน', 'no_reset_pending');
     }
     if (row.pinResetExpiresAt.getTime() < Date.now()) {
-      throw httpError(400, 'รหัส OTP หมดอายุแล้ว — ให้ผู้ดูแลระบบกดรีเซ็ตใหม่', 'otp_expired');
+      throw httpError(400, 'รหัส OTP หมดอายุแล้ว — กด "ลืมรหัส PIN?" เพื่อขอรหัสใหม่', 'otp_expired');
     }
     const otpOk = await verifyPassword(otp, row.pinResetOtpHash);
     if (!otpOk) throw httpError(400, 'รหัส OTP ไม่ถูกต้อง', 'otp_invalid');

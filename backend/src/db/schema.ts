@@ -112,7 +112,7 @@ export const employees = pgTable('employees', {
   data: jsonb('data').notNull().default({}),
   /** bcrypt hash of the employee's PDA PIN — never the raw digits. */
   pinHash: text('pin_hash'),
-  /** bcrypt hash of a pending admin-issued reset OTP; cleared once used. */
+  /** bcrypt hash of a pending "ลืมรหัส PIN?" email OTP; cleared once used. */
   pinResetOtpHash: text('pin_reset_otp_hash'),
   pinResetExpiresAt: timestamp('pin_reset_expires_at', { withTimezone: true }),
   /** This employee's own web-app login — set by an admin (see PUT

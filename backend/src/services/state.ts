@@ -128,8 +128,8 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
 export async function replaceState(db: DB, s: StatePayload): Promise<void> {
   await db.transaction(async (tx) => {
-    // PDA PIN data (pinHash / pending reset OTP) and each employee's own
-    // web-app login (username/passwordHash) never round-trip through the
+    // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
+    // own web-app login (username/passwordHash) never round-trip through the
     // legacy `S.employees` payload — the frontend that calls PUT /api/state
     // has no idea either exists. Capture both before the wipe below so every
     // employee save from the web app doesn't silently erase them.
