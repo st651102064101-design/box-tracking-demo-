@@ -381,13 +381,18 @@ class AppController extends ChangeNotifier {
   /// device stays signed in and stationed where it is — this is a handover
   /// between people, not a sign-out of the terminal.
   void lock({bool auto = false}) {
+    final droppedQueue = queue.isNotEmpty;
     emp = null;
     queue.clear();
     lastResult = null;
     _clearForms();
     screen = Screen.login;
     if (auto) {
-      toastMsg('ล็อกหน้าจออัตโนมัติ', 'ยิงบัตรเพื่อทำงานต่อ', ResultKind.info);
+      toastMsg(
+        'ล็อกหน้าจออัตโนมัติ',
+        droppedQueue ? 'ยิงบัตรเพื่อทำงานต่อ — รายการที่สแกนค้างไว้ถูกล้างแล้ว กรุณายิงซ้ำ' : 'ยิงบัตรเพื่อทำงานต่อ',
+        ResultKind.info,
+      );
     }
     notifyListeners();
   }
@@ -407,13 +412,18 @@ class AppController extends ChangeNotifier {
 
   /// Locks the device if it has sat untouched past the configured limit.
   /// [now] is injectable so the rule can be tested without waiting ten minutes.
+  ///
+  /// Locks even with scans pending in [queue] — same as the manual "switch
+  /// person" lock, which already clears it unconditionally. An earlier version
+  /// skipped locking whenever the queue was non-empty to avoid dropping an
+  /// in-progress batch, but that made a single un-committed scan disable
+  /// auto-lock forever: the device would just sit signed in, indefinitely,
+  /// which is the worse trade for an unattended terminal. Those tags are still
+  /// physically on the boxes and take a few seconds to re-scan.
   @visibleForTesting
   void checkIdle([DateTime? now]) {
     final limit = prefs.idleLockMinutes;
     if (limit <= 0 || emp == null || busy) return;
-    // Never lock with scans pending: those boxes are physically on a truck and
-    // dropping them to protect an audit trail would be the worse trade.
-    if (queue.isNotEmpty) return;
     if ((now ?? DateTime.now()).difference(_lastTouch).inMinutes >= limit) lock(auto: true);
   }
 

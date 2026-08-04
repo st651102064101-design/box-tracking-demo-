@@ -808,7 +808,7 @@ void main() {
       expect(c.screen, Screen.login);
     });
 
-    test('never locks while boxes are still queued', () async {
+    test('still locks — and clears the queue — even with boxes queued', () async {
       final c = await makeController(FakeApi());
       c.prefs.idleLockMinutes = 10;
       c.mode = 'out';
@@ -816,8 +816,9 @@ void main() {
 
       c.checkIdle(DateTime.now().add(const Duration(hours: 2)));
 
-      expect(c.emp, isNotNull, reason: 'those boxes are on a truck — losing them is worse');
-      expect(c.queue, ['CRT-01']);
+      expect(c.emp, isNull, reason: 'an unattended signed-in terminal is worse than a re-scan');
+      expect(c.screen, Screen.login);
+      expect(c.queue, isEmpty);
     });
 
     test('any activity resets the clock', () async {
