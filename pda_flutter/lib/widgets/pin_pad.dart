@@ -3,32 +3,27 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 
 /// Result of a PIN sheet: either a completed code, or the operator chose to
-/// skip (only possible when the sheet was opened with [allowSkip]) or asked
-/// to reset (only possible with [onForgot] wired up).
+/// skip (only possible when the sheet was opened with [allowSkip]).
 class PinResult {
   final String? pin;
   final bool skipped;
-  final bool forgot;
-  const PinResult._(this.pin, this.skipped, this.forgot);
-  const PinResult.entered(String pin) : this._(pin, false, false);
-  const PinResult.skipped() : this._(null, true, false);
-  const PinResult.forgot() : this._(null, false, true);
+  const PinResult._(this.pin, this.skipped);
+  const PinResult.entered(String pin) : this._(pin, false);
+  const PinResult.skipped() : this._(null, true);
 }
 
 /// A numeric keypad sheet — [length] digits (4 for a PIN, 6 for an OTP).
 /// [validate] is awaited before the sheet closes, so it can round-trip to the
-/// backend (PIN/OTP checks live server-side, never on the device); return an
+/// backend (PIN checks live server-side, never on the device); return an
 /// error message to reject and let the operator try again, or null to accept.
 /// [allowSkip] only makes sense while *setting* a PIN — an employee who
-/// already committed to one can't opt out of entering it later, but they can
-/// tap "ลืมรหัส PIN?" instead when [onForgot] is provided.
+/// already committed to one can't opt out of entering it later.
 Future<PinResult?> showPinPad(
   BuildContext context, {
   required String title,
   String? subtitle,
   int length = 4,
   bool allowSkip = false,
-  bool showForgot = false,
   Future<String?> Function(String pin)? validate,
 }) {
   return showModalBottomSheet<PinResult>(
@@ -41,7 +36,6 @@ Future<PinResult?> showPinPad(
       subtitle: subtitle,
       length: length,
       allowSkip: allowSkip,
-      showForgot: showForgot,
       validate: validate,
     ),
   );
@@ -52,14 +46,12 @@ class _PinPadSheet extends StatefulWidget {
   final String? subtitle;
   final int length;
   final bool allowSkip;
-  final bool showForgot;
   final Future<String?> Function(String pin)? validate;
   const _PinPadSheet({
     required this.title,
     this.subtitle,
     required this.length,
     required this.allowSkip,
-    required this.showForgot,
     this.validate,
   });
 
@@ -177,13 +169,6 @@ class _PinPadSheetState extends State<_PinPadSheet> {
             TextButton(
               onPressed: _checking ? null : () => Navigator.of(context).pop(const PinResult.skipped()),
               child: const Text('ข้าม / ไม่ตั้ง PIN'),
-            ),
-          ],
-          if (widget.showForgot) ...[
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: _checking ? null : () => Navigator.of(context).pop(const PinResult.forgot()),
-              child: const Text('ลืมรหัส PIN?'),
             ),
           ],
         ],

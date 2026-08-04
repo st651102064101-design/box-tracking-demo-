@@ -193,28 +193,4 @@ class ApiClient {
     return body['ok'] == true;
   }
 
-  /// POST /api/employees/:id/pin/reset — mints a 6-digit OTP (5 min TTL).
-  /// Same endpoint the web app's admin-only "รีเซ็ต PIN" button calls; the
-  /// device's own service-account token is enough to call it too, so the PDA
-  /// can self-serve this straight from "ลืมรหัส PIN?" without a round trip
-  /// through an admin's browser session. Returns {otp, expiresAt}.
-  ///
-  /// `viaDevice: true` tells the backend this came from a PDA, not an admin's
-  /// own browser click — both authenticate as the same shared device/admin
-  /// account, so there's no other way for it to tell the two apart. Without
-  /// this flag the backend can't route the OTP to an admin's screen (see
-  /// backend/src/routes/pin.ts) and hands it straight back here instead,
-  /// defeating the whole point of the second-person handoff.
-  Future<Map<String, dynamic>> requestPinReset(String employeeId) async {
-    return await _send(() => http.post(_u('/api/employees/$employeeId/pin/reset'),
-        headers: _headers, body: jsonEncode({'viaDevice': true}))) as Map<String, dynamic>;
-  }
-
-  /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the employee's
-  /// side of an admin-issued reset: the OTP the admin relayed, plus the new
-  /// PIN to set once it checks out.
-  Future<void> confirmPinReset(String employeeId, {required String otp, required String pin}) async {
-    await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
-        headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
-  }
 }
