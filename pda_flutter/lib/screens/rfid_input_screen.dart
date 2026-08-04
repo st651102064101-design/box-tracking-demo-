@@ -8,11 +8,45 @@ import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// One tag read: EPC + when it came in. Newest first.
+/// One tag read: every raw SDK field it came with, plus when it arrived.
+/// Newest first. A manually-typed code (no trigger pull involved) only ever
+/// has an EPC — everything else stays null.
 class _Read {
   final String epc;
   final DateTime at;
-  const _Read(this.epc, this.at);
+  final String? tid;
+  final int? rssi;
+  final int? pc;
+  final String? crc;
+  final int? antenna;
+  final String? channel;
+  final int? phase;
+  final int? seenCount;
+  const _Read(
+    this.epc,
+    this.at, {
+    this.tid,
+    this.rssi,
+    this.pc,
+    this.crc,
+    this.antenna,
+    this.channel,
+    this.phase,
+    this.seenCount,
+  });
+
+  factory _Read.fromTagRead(RfidTagRead r, DateTime at) => _Read(
+        r.epc,
+        at,
+        tid: r.tid,
+        rssi: r.rssi,
+        pc: r.pc,
+        crc: r.crc,
+        antenna: r.antenna,
+        channel: r.channel,
+        phase: r.phase,
+        seenCount: r.seenCount,
+      );
 
   /// The EPC as the reader gives it (hex) converted to base-10 — a 24-hex-digit
   /// EPC like `000000000000000000000005` reads a lot more like "a tag" and a
@@ -41,7 +75,7 @@ class RfidInputScreen extends StatefulWidget {
 class _RfidInputScreenState extends State<RfidInputScreen> {
   final _manualCtrl = TextEditingController();
   final _reads = <_Read>[];
-  StreamSubscription<String>? _tagSub;
+  StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
   StreamSubscription<bool>? _triggerSub;
   late RfidStatus _status;
@@ -52,8 +86,8 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     super.initState();
     final rfid = context.read<AppController>().rfid;
     _status = RfidStatus(rfid.state, '');
-    _tagSub = rfid.tags.listen((epc) {
-      setState(() => _reads.insert(0, _Read(epc, DateTime.now())));
+    _tagSub = rfid.tagReads.listen((r) {
+      setState(() => _reads.insert(0, _Read.fromTagRead(r, DateTime.now())));
     });
     _statusSub = rfid.status.listen((s) => setState(() => _status = s));
     // The physical gun trigger drives start/stopInventory from AppController
@@ -225,34 +259,56 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: C.border),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.nfc, size: 18, color: C.muted),
-                            const SizedBox(width: 11),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(r.epc,
-                                      style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          fontFamily: 'monospace',
-                                          letterSpacing: 0.4)),
-                                  if (r.decimal != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text('เลขฐาน 10: ${r.decimal}',
-                                          style: TextStyle(
-                                              fontSize: 12,
+                            Row(
+                              children: [
+                                Icon(Icons.nfc, size: 18, color: C.muted),
+                                const SizedBox(width: 11),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(r.epc,
+                                          style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w700,
                                               fontFamily: 'monospace',
-                                              color: C.muted)),
-                                    ),
-                                ],
-                              ),
+                                              letterSpacing: 0.4)),
+                                      if (r.decimal != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text('เลขฐาน 10: ${r.decimal}',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontFamily: 'monospace',
+                                                  color: C.muted)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Text(_fmtTime(r.at), style: TextStyle(fontSize: 12, color: C.faint)),
+                              ],
                             ),
-                            Text(_fmtTime(r.at), style: TextStyle(fontSize: 12, color: C.faint)),
+                            const SizedBox(height: 9),
+                            Divider(height: 1, color: C.border),
+                            const SizedBox(height: 9),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 6,
+                              children: [
+                                _field('TID', r.tid),
+                                _field('PC', r.pc?.toRadixString(16).toUpperCase()),
+                                _field('CRC', r.crc),
+                                _field('RSSI', r.rssi?.toString()),
+                                _field('Antenna', r.antenna?.toString()),
+                                _field('Channel', r.channel),
+                                _field('Phase', r.phase?.toString()),
+                                _field('Seen', r.seenCount?.toString()),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -266,4 +322,24 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
 
   String _fmtTime(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
+
+  Widget _field(String label, String? value) {
+    final text = (value == null || value.isEmpty) ? '—' : value;
+    return SizedBox(
+      width: 128,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 10.5, color: C.muted)),
+          Text(text,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'monospace',
+                color: text == '—' ? C.faint : C.ink,
+              )),
+        ],
+      ),
+    );
+  }
 }

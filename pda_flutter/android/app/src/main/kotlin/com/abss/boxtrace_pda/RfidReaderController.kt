@@ -60,6 +60,13 @@ class RfidReaderController(private val context: Context) :
     private var tagCount = 0L
     private var lastEpc: String? = null
     private var lastRssi: Int? = null
+    // How often the inventory-time TID piggyback came back empty and the
+    // explicit fallback read (readTidExplicit) had to run instead, and how
+    // often that fallback actually recovered a TID — see eventReadNotify.
+    // Surfaced in diagnostics() so "TID keeps failing" can be told apart from
+    // "the piggyback path never works on this reader/firmware" at a glance.
+    private var tidFallbackAttempts = 0L
+    private var tidFallbackSuccesses = 0L
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -113,6 +120,8 @@ class RfidReaderController(private val context: Context) :
         m["lastEpc"] = lastEpc
         m["lastRssi"] = lastRssi
         m["lastError"] = lastError
+        m["tidFallbackAttempts"] = tidFallbackAttempts
+        m["tidFallbackSuccesses"] = tidFallbackSuccesses
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -359,6 +368,49 @@ class RfidReaderController(private val context: Context) :
         status("disconnected", "เครื่องอ่านหลุดการเชื่อมต่อ")
     }
 
+    /**
+     * Explicit, targeted read of a specific tag's TID memory bank — fallback
+     * for when the inventory-time piggyback (TAG_FIELD.TID in
+     * configureReader) comes back empty. That piggyback report rides along
+     * with the same singulation round that reports EPC, so on a weaker or
+     * more fleeting read it can fail even for a tag that supports TID
+     * perfectly well — nearly every EPC Gen2 tag has one baked in at the
+     * factory, it's part of the standard, so "the tag doesn't support TID"
+     * is rarely the real story behind a null read. This issues a dedicated
+     * Select+Read sequence at just that EPC instead of relying on the
+     * inventory round's spare capacity, which is far more likely to succeed
+     * for a tag that is, in fact, sitting right in front of the antenna.
+     *
+     * Blocking (readWait) — only called from eventReadNotify when exactly
+     * one tag came back in the batch (see call site), so this never runs
+     * per-tag across a large bulk inventory sweep and stalls the read-event
+     * thread for the whole batch; it only adds latency to the single-tag
+     * case (registration, the live-viewer) where that cost is already
+     * accepted for the piggyback read itself.
+     */
+    private fun readTidExplicit(epc: String): String? {
+        val rd = reader ?: return null
+        return try {
+            tidFallbackAttempts++
+            val tagAccess = rd.Actions.TagAccess
+            // ReadAccessParams is a Java inner (non-static) class — Kotlin
+            // constructs it off an instance of the enclosing TagAccess, not
+            // as a free-standing constructor call.
+            val params = tagAccess.ReadAccessParams()
+            params.setMemoryBank(MEMORY_BANK.MEMORY_BANK_TID)
+            params.setOffset(0)
+            params.setCount(6) // words — 96 bits, the mandatory Gen2 TID length
+            params.setAccessPassword(0)
+            val result = tagAccess.readWait(epc, params, AntennaInfo())
+            val tid = result?.getTID()?.takeIf { it.isNotEmpty() } ?: result?.getTagID()?.takeIf { it.isNotEmpty() }
+            if (tid != null) tidFallbackSuccesses++
+            tid
+        } catch (ex: Exception) {
+            Log.w(TAG, "explicit TID read failed for $epc", ex)
+            null
+        }
+    }
+
     // ── SDK read/status callbacks ─────────────────────────────────────────
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
@@ -368,18 +420,33 @@ class RfidReaderController(private val context: Context) :
                 beep()
                 for (t in tags) {
                     tagCount++
-                    lastEpc = t.getTagID()
+                    val epc = t.getTagID()
+                    lastEpc = epc
                     lastRssi = t.getPeakRSSI().toInt()
                     // Populated only when TAG_FIELD.TID reporting is on (see
                     // configureReader) and the tag actually answers the TID
-                    // bank read — null/blank on a tag that doesn't support it.
-                    val tid = try { t.getTID() } catch (e: Exception) { null }
+                    // bank read within the inventory round — null/blank here
+                    // does NOT mean the tag lacks a TID, just that the
+                    // piggyback read didn't land this round. Only worth the
+                    // extra blocking read below when this batch is a single
+                    // tag (registration / live-viewer) — a bulk multi-tag
+                    // sweep skips it so one slow tag can't stall the rest.
+                    var tid = try { t.getTID() } catch (ex: Exception) { null }
+                    if (tid.isNullOrEmpty() && !epc.isNullOrEmpty() && tags.size == 1) {
+                        tid = readTidExplicit(epc)
+                    }
                     emit(
                         mapOf(
                             "type" to "tag",
-                            "epc" to t.getTagID(),
+                            "epc" to epc,
                             "tid" to tid,
                             "rssi" to t.getPeakRSSI().toInt(),
+                            "pc" to num { t.getPC() },
+                            "crc" to str { t.getStringCRC() },
+                            "antenna" to num { t.getAntennaID().toInt() },
+                            "channel" to str { t.getChannel() },
+                            "phase" to num { t.getPhase().toInt() },
+                            "seenCount" to num { t.getTagSeenCount() },
                         )
                     )
                 }

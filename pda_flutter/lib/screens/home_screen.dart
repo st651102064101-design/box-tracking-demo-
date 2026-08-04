@@ -137,6 +137,7 @@ List<Widget> _postPickerBody(AppController c) {
   }
   final gates = c.S?.gatesOf(pendingWh) ?? const [];
   final whName = c.S?.whName(pendingWh) ?? pendingWh;
+  final gateTypes = c.S?.gateTypesOf(pendingWh) ?? const {};
   return [
     const SizedBox(height: 16),
     Row(
@@ -158,7 +159,13 @@ List<Widget> _postPickerBody(AppController c) {
     Wrap(
       spacing: 9,
       runSpacing: 9,
-      children: gates.map((g) => _GatePickChip(label: '$g', onTap: () => c.confirmPost(pendingWh, g))).toList(),
+      children: gates
+          .map((g) => _GatePickChip(
+                label: '$g',
+                dir: gateTypes['$g'] ?? 'both',
+                onTap: () => c.confirmPost(pendingWh, g),
+              ))
+          .toList(),
     ),
   ];
 }
@@ -338,8 +345,9 @@ class _WhPickTile extends StatelessWidget {
 
 class _GatePickChip extends StatelessWidget {
   final String label;
+  final String dir; // 'in' | 'out' | 'both'
   final VoidCallback onTap;
-  const _GatePickChip({required this.label, required this.onTap});
+  const _GatePickChip({required this.label, required this.dir, required this.onTap});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -353,11 +361,38 @@ class _GatePickChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           alignment: Alignment.center,
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border2)),
-          child: Text('ประตู $label',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('ประตู $label',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(_gateDirLabel(dir),
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: dir == 'out' ? C.orange : (dir == 'in' ? C.lime : C.muted),
+                  )),
+            ],
+          ),
         ),
       ),
     );
+  }
+}
+
+/// Always names a direction, unlike [_gateDirSuffix] (which leaves 'both'
+/// blank for the header line) — the whole point here is to make a gate
+/// picked from a list say up front whether it's inbound-only, outbound-only,
+/// or both, so an operator can't confirm the wrong one by accident.
+String _gateDirLabel(String dir) {
+  switch (dir) {
+    case 'in':
+      return 'ขาเข้า';
+    case 'out':
+      return 'ขาออก';
+    default:
+      return 'ขาเข้า และ ขาออก';
   }
 }
 

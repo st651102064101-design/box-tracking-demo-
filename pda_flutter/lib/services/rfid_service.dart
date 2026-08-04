@@ -11,16 +11,36 @@ class RfidStatus {
   const RfidStatus(this.state, this.message);
 }
 
-/// One tag read, EPC plus (when the reader could get it) the factory TID —
-/// see [RfidService.tagReads]. [tags] only ever carried the EPC, which is
-/// all the original scan-and-match use cases needed; RFID *registration*
-/// needs the TID too, since that's the actually-unique identifier for the
-/// physical chip.
+/// One tag read exactly as the Zebra SDK reported it — EPC plus every other
+/// field it could get (TID, RSSI, PC, CRC, antenna, channel, phase, seen
+/// count). See [RfidService.tagReads]. [tags] only ever carried the EPC,
+/// which is all the original scan-and-match use cases needed; RFID
+/// *registration* needs the TID too, since that's the actually-unique
+/// identifier for the physical chip — the rest is here so the "รับค่า RFID"
+/// live-viewer screen can show exactly what the SDK does and doesn't return
+/// per read, which is the fastest way to tell a reader/config problem apart
+/// from a tag that genuinely doesn't support a field.
 class RfidTagRead {
   final String epc;
   final String? tid;
   final int? rssi;
-  const RfidTagRead(this.epc, this.tid, this.rssi);
+  final int? pc;
+  final String? crc;
+  final int? antenna;
+  final String? channel;
+  final int? phase;
+  final int? seenCount;
+  const RfidTagRead(
+    this.epc,
+    this.tid,
+    this.rssi, {
+    this.pc,
+    this.crc,
+    this.antenna,
+    this.channel,
+    this.phase,
+    this.seenCount,
+  });
 }
 
 /// Dart facade over the native Zebra RFIDAPI3 reader (see
@@ -64,7 +84,19 @@ class RfidService {
             _tagCtrl.add(epc);
             final tid = event['tid']?.toString();
             final rssi = event['rssi'] is int ? event['rssi'] as int : null;
-            _tagReadCtrl.add(RfidTagRead(epc, (tid != null && tid.isNotEmpty) ? tid : null, rssi));
+            final crc = event['crc']?.toString();
+            final channel = event['channel']?.toString();
+            _tagReadCtrl.add(RfidTagRead(
+              epc,
+              (tid != null && tid.isNotEmpty) ? tid : null,
+              rssi,
+              pc: event['pc'] is int ? event['pc'] as int : null,
+              crc: (crc != null && crc.isNotEmpty) ? crc : null,
+              antenna: event['antenna'] is int ? event['antenna'] as int : null,
+              channel: (channel != null && channel.isNotEmpty) ? channel : null,
+              phase: event['phase'] is int ? event['phase'] as int : null,
+              seenCount: event['seenCount'] is int ? event['seenCount'] as int : null,
+            ));
           }
           break;
         case 'trigger':
