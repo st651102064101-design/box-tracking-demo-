@@ -10,7 +10,7 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc } from 'drizzle-orm';
+import { asc, desc } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import {
   boxes,
@@ -76,7 +76,9 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     db.select().from(putaway),
     db.select().from(inventory),
     db.select().from(events).orderBy(asc(events.id)),
-    db.select().from(auditLog).orderBy(asc(auditLog.id)),
+    /* newest-first by ts, not insertion order — audit_log is append-only now
+       (see replaceState below), so id order no longer tracks recency */
+    db.select().from(auditLog).orderBy(desc(auditLog.ts)),
     db.select().from(config),
     db.select().from(sequences),
   ]);
@@ -147,6 +149,8 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
     );
 
     // 1) wipe all domain tables (users are untouched)
+    // audit_log is deliberately NOT wiped here — see the audit log section
+    // below for why (backend routes now write into it directly too).
     await Promise.all([
       tx.delete(boxes),
       tx.delete(customers),
@@ -160,7 +164,6 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
       tx.delete(putaway),
       tx.delete(inventory),
       tx.delete(events),
-      tx.delete(auditLog),
       tx.delete(sequences),
     ]);
 
@@ -359,11 +362,30 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
       }),
     );
 
-    // 9) audit log (preserve array order; original stores newest-first)
-    await chunkInsert(
-      tx,
-      auditLog,
-      (s.auditLog ?? []).map((a) => {
+    // 9) audit log — APPEND ONLY. Backend routes (RFID association, PIN
+    // reset, employee credentials — see services/audit.ts) insert straight
+    // into this table so PDA-driven changes show up in the same Audit Log
+    // the legacy dashboard reads. Wiping the table here on every legacy.html
+    // save (like every other table above) would silently delete anything
+    // those routes wrote between saves, since the client's local S.auditLog
+    // has no way to know about them. Instead, only add entries the client
+    // has that the DB doesn't already have — deduped on
+    // (ts, action, entityId, actor) since plain audit rows have no
+    // client-supplied id to key off more precisely; two distinct real
+    // actions colliding on all four in the same millisecond isn't a
+    // realistic risk for this app's traffic.
+    const existingAuditRows = await tx
+      .select({ ts: auditLog.ts, action: auditLog.action, entityId: auditLog.entityId, actor: auditLog.actor })
+      .from(auditLog);
+    const auditKey = (ts: Date, action: string | null, entityId: string | null, actor: string | null) =>
+      `${ts.toISOString()}|${action}|${entityId}|${actor}`;
+    const existingAuditKeys = new Set(
+      existingAuditRows.map((r: { ts: Date; action: string | null; entityId: string | null; actor: string | null }) =>
+        auditKey(r.ts, r.action, r.entityId, r.actor),
+      ),
+    );
+    const newAuditRows = (s.auditLog ?? [])
+      .map((a) => {
         const e = a as Record<string, unknown>;
         return {
           action: (e.action as string) ?? null,
@@ -375,8 +397,9 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
           data: e,
           ts: toDate(e.ts) ?? new Date(),
         };
-      }),
-    );
+      })
+      .filter((r) => !existingAuditKeys.has(auditKey(r.ts, r.action, r.entityId, r.actor)));
+    await chunkInsert(tx, auditLog, newAuditRows);
   });
 }
 

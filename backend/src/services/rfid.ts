@@ -9,8 +9,9 @@
  */
 import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
-import { boxes, auditLog } from '../db/schema.js';
+import { boxes } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
+import { writeAuditLog } from './audit.js';
 
 type BoxRow = typeof boxes.$inferSelect;
 
@@ -113,13 +114,14 @@ export async function associateTag(db: DB, input: AssociateInput) {
       .set({ rfidTid, rfidEpc, data, updatedAt: new Date() })
       .where(eq(boxes.tag, tag));
 
-    await tx.insert(auditLog).values({
+    const after = { rfidTid, rfidEpc };
+    await writeAuditLog(tx, {
       action: before.rfidTid ? 'rfid_replace' : 'rfid_associate',
       actor,
-      entityId: tag,
-      entityName: tag,
+      itemId: tag,
+      itemName: tag,
       before,
-      after: { rfidTid, rfidEpc },
+      after,
     });
 
     return { tag, rfidTid, rfidEpc };
@@ -141,14 +143,8 @@ export async function detachTag(db: DB, tag: string, actor: string) {
       .set({ rfidTid: null, rfidEpc: null, data, updatedAt: new Date() })
       .where(eq(boxes.tag, tag));
 
-    await tx.insert(auditLog).values({
-      action: 'rfid_detach',
-      actor,
-      entityId: tag,
-      entityName: tag,
-      before,
-      after: { rfidTid: null, rfidEpc: null },
-    });
+    const after = { rfidTid: null, rfidEpc: null };
+    await writeAuditLog(tx, { action: 'rfid_detach', actor, itemId: tag, itemName: tag, before, after });
 
     return { tag };
   });

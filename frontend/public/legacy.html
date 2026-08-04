@@ -2233,6 +2233,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <option value="RELEASE_HOLD">ปลด Hold</option>
             <option value="DAMAGE">ตีชำรุด</option>
             <option value="REPAIR">ซ่อมเสร็จ</option>
+            <option value="rfid_associate">ผูกแท็ก RFID</option>
+            <option value="rfid_replace">เปลี่ยนแท็ก RFID</option>
+            <option value="rfid_detach">ถอดแท็ก RFID</option>
+            <option value="pin_set">ตั้ง/เปลี่ยนรหัส PIN</option>
+            <option value="pin_reset">รีเซ็ต PIN (OTP)</option>
+            <option value="credentials_set">ตั้งบัญชีเข้าสู่ระบบเว็บ</option>
           </select>
         </div>
         <div class="field" style="width:160px;margin:0;">
@@ -3765,7 +3771,7 @@ window.openFirstRegisterModal=openFirstRegisterModal;
 
 /* ===== RELOCATE BOX (move stored location) ===== */
 function openRelocateModal(tag){
-  var b=S.boxes[tag];if(!b||b.status!=='warehouse')return;
+  var b=S.boxes[tag];if(!b||!canRelocateBox(b))return;
   var loc=b.location||{};
   openModal(
     '<div class="mhead"><h3>ย้ายตำแหน่งจัดเก็บ · '+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
@@ -9476,7 +9482,10 @@ function renderAuditLog() {
     DELETE: '<span class="pill bad">ลบ</span>', GATE_OUT: '<span class="pill teal">Gate ออก</span>',
     GATE_IN: '<span class="pill ok">Gate เข้า</span>', RELOCATE: '<span class="pill teal">ย้ายตำแหน่ง</span>',
     HOLD: '<span class="pill warn">Hold</span>', RELEASE_HOLD: '<span class="pill ok">ปลด Hold</span>',
-    DAMAGE: '<span class="pill bad">ชำรุด</span>', REPAIR: '<span class="pill ok">ซ่อมเสร็จ</span>' };
+    DAMAGE: '<span class="pill bad">ชำรุด</span>', REPAIR: '<span class="pill ok">ซ่อมเสร็จ</span>',
+    rfid_associate: '<span class="pill ok">ผูกแท็ก RFID</span>', rfid_replace: '<span class="pill info">เปลี่ยนแท็ก RFID</span>',
+    rfid_detach: '<span class="pill teal">ถอดแท็ก RFID</span>', pin_set: '<span class="pill info">ตั้ง PIN</span>',
+    pin_reset: '<span class="pill warn">รีเซ็ต PIN (OTP)</span>', credentials_set: '<span class="pill info">ตั้งบัญชีเว็บ</span>' };
   document.getElementById('auditBody').innerHTML = logs.length ? logs.map(function(e) {
     var before = auditObjText(e.before);
     var after = auditObjText(e.after);
