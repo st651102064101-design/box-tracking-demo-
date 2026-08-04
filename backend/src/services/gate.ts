@@ -6,10 +6,11 @@
  * Box lifecycle (mirrors the original app):
  *   pending → (label) → out → warehouse → out → …   (cycles++ on each return)
  */
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import { boxes, customers, config, gates, events, doRecords, employees } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
+import { resolveBoxesByCodes } from './rfid.js';
 
 const DAY = 86_400_000;
 const iso = () => new Date().toISOString();
@@ -59,6 +60,9 @@ async function resolveOperator(
 }
 
 export interface GateOutInput {
+  /** Barcodes and/or RFID reads (EPC/TID) — resolved against boxes before
+   *  anything else, so a handheld never has to know which kind of scan it
+   *  captured. See services/rfid.ts. */
   tags: string[];
   customer: string;
   gate: number;
@@ -87,10 +91,12 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const [cust] = await db.select().from(customers).where(eq(customers.id, customer));
   if (!cust) throw httpError(404, 'ไม่พบลูกค้า', 'customer_not_found');
   const [cfg] = await db.select().from(config);
-  const rows = await db.select().from(boxes).where(inArray(boxes.tag, tags));
-  const found = new Map(rows.map((r) => [r.tag, r]));
-  const missing = tags.filter((t) => !found.has(t));
+  const { resolved, missing } = await resolveBoxesByCodes(db, tags);
   if (missing.length) throw httpError(404, `ไม่พบกล่อง: ${missing.join(', ')}`, 'box_not_found');
+  // Barcode + RFID for the same box in one batch (mis-scan, or an operator
+  // double-checking) must not ship it twice — dedupe on the canonical tag.
+  const found = new Map(Array.from(resolved.values()).map((r) => [r.tag, r]));
+  const canonicalTags = Array.from(new Set(Array.from(resolved.values()).map((r) => r.tag)));
 
   const wh = await warehouseOfGate(db, gate);
   const returnDays = cust.returnDays ?? cfg?.agingDays ?? 15;
@@ -99,7 +105,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const shipped: string[] = [];
 
   await db.transaction(async (tx) => {
-    for (const tag of tags) {
+    for (const tag of canonicalTags) {
       const row = found.get(tag)!;
       const b = { ...(row.data as Record<string, unknown>) };
       b.status = 'out';
@@ -186,6 +192,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
 }
 
 export interface GateInInput {
+  /** Barcodes and/or RFID reads (EPC/TID) — see GateOutInput.tags. */
   tags: string[];
   gate: number;
   employeeId?: string;
@@ -206,18 +213,18 @@ export async function gateIn(db: DB, input: GateInInput) {
   const vehicleType = input.vehicleType ?? '';
   const wh = await warehouseOfGate(db, gate);
   const inTs = iso();
-  const rows = await db.select().from(boxes).where(inArray(boxes.tag, tags));
-  const found = new Map(rows.map((r) => [r.tag, r]));
+  const { resolved, missing } = await resolveBoxesByCodes(db, tags);
+  // Same-box dedupe as gateOut — see comment there.
+  const canonicalTags = Array.from(new Set(Array.from(resolved.values()).map((r) => r.tag)));
+  const found = new Map(Array.from(resolved.values()).map((r) => [r.tag, r]));
   const received: string[] = [];
-  const unknown: string[] = [];
+  // Reported as the operator's own scanned code (barcode or RFID, whichever
+  // they actually shot), not a canonical tag that was never resolved.
+  const unknown: string[] = missing;
 
   await db.transaction(async (tx) => {
-    for (const tag of tags) {
-      const row = found.get(tag);
-      if (!row) {
-        unknown.push(tag);
-        continue;
-      }
+    for (const tag of canonicalTags) {
+      const row = found.get(tag)!;
       const b = { ...(row.data as Record<string, unknown>) };
       const wasOut = b.status === 'out';
       b.status = 'warehouse';

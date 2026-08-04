@@ -64,4 +64,7 @@ dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
     implementation "com.google.code.gson:gson:2.13.2"
     implementation "androidx.core:core-ktx:1.13.1"
+    // API3_NGE-Transport's Theme.Api3Transport extends a MaterialComponents
+    // parent — pull the library in so the manifest merger can resolve it.
+    implementation "com.google.android.material:material:1.12.0"
 }

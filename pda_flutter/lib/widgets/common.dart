@@ -11,7 +11,7 @@ class BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: C.ink,
+        color: C.heroBg,
         borderRadius: BorderRadius.circular(size * 0.29),
       ),
       alignment: Alignment.center,
@@ -118,7 +118,34 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
-/// Round icon button (back chevron, gear, …).
+/// iOS-style back affordance: a bare, thin "‹" chevron with no button
+/// chrome around it, sized to a comfortable 44×44 tap target the way Apple
+/// specifies. Deliberately not a [RoundIconButton] — a bordered circle reads
+/// as "an action", while back is navigation and should recede.
+class BackChevron extends StatelessWidget {
+  final VoidCallback? onTap;
+  const BackChevron({super.key, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          // arrow_back_ios_new is Apple's own chevron shape (the older
+          // arrow_back_ios carries a stray leading gap).
+          child: Icon(Icons.arrow_back_ios_new, size: 20, color: C.ink),
+        ),
+      ),
+    );
+  }
+}
+
+/// Round icon button (gear, …).
 class RoundIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
@@ -166,17 +193,20 @@ class StickyHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, top + 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(8, top + 12, 16, 12),
       decoration: BoxDecoration(
-        color: Color(0xDBF5F5F7),
+        // Was a hardcoded near-white (0xDBF5F5F7), which left every
+        // sub-screen wearing a light header bar in dark mode. C.bg tracks
+        // the theme, so it follows the rest of the app.
+        color: C.bg,
         border: Border(bottom: BorderSide(color: C.border, width: 0.5)),
       ),
       child: Row(
         children: [
-          if (onBack != null) ...[
-            RoundIconButton(icon: Icons.chevron_left, onTap: onBack),
-            const SizedBox(width: 12),
-          ],
+          if (onBack != null)
+            BackChevron(onTap: onBack)
+          else
+            const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

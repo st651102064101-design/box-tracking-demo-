@@ -210,6 +210,14 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
         dueAt: toDate(b.dueAt),
         lastSeenAt: toDate(b.lastSeenAt),
         labeled: b.labeled !== false,
+        // The legacy UI round-trips whatever GET /api/state gave it
+        // (composeState returns `data` verbatim, which includes these once
+        // POST /api/boxes/:tag/rfid has set them), so a full-state PUT after
+        // that has to re-extract them into the typed columns too — otherwise
+        // a save from the legacy UI would silently make the box unfindable
+        // by RFID again despite `data.rfidTid` still being right there.
+        rfidTid: (b.rfidTid as string) ?? null,
+        rfidEpc: (b.rfidEpc as string) ?? null,
         location: (b.location as object) ?? {},
         history: (b.history as unknown[]) ?? [],
         data: b,

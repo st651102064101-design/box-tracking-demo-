@@ -57,6 +57,19 @@ class C {
   static Color neutralBg = const Color(0xFFECEEEF);
   static Color neutralBg2 = const Color(0xFFF0F0F2);
 
+  /// Fixed near-black brand tile/card background — deliberately does NOT
+  /// invert with [apply] like [ink] does. [ink] is "foreground ink colour,"
+  /// which correctly flips to near-white so text stays legible on a dark
+  /// background in dark mode; but a handful of spots (the badge-scan hero
+  /// card, the "◈" brand mark) use it as a *fixed dark brand surface* — the
+  /// tile is always meant to look like dark plastic with a lime glyph on it,
+  /// in both themes. Reusing [ink] for that meant the tile turned white in
+  /// dark mode right along with the text color flip, which was the bug.
+  static const Color heroBg = Color(0xFF1D1D1F);
+  /// Foreground for content painted on [heroBg] — fixed white for the same
+  /// reason: it must stay legible against a background that never changes.
+  static const Color onHero = Color(0xFFFFFFFF);
+
   /// Swap every token to its light or dark value in one shot.
   static void apply(bool dark) {
     isDark = dark;

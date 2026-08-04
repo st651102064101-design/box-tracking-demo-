@@ -9,6 +9,8 @@ import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'track_screen.dart';
 import 'settings_screen.dart';
+import 'rfid_input_screen.dart';
+import 'rfid_register_screen.dart';
 import 'toast_overlay.dart';
 
 /// Hosts the current screen inside a phone-width frame (max 560px, like the
@@ -67,6 +69,10 @@ class RootScreen extends StatelessWidget {
         return const TrackScreen(key: ValueKey('track'));
       case Screen.settings:
         return const SettingsScreen(key: ValueKey('settings'));
+      case Screen.rfidInput:
+        return const RfidInputScreen(key: ValueKey('rfidInput'));
+      case Screen.rfidRegister:
+        return const RfidRegisterScreen(key: ValueKey('rfidRegister'));
     }
   }
 }

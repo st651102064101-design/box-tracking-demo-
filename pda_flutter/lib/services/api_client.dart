@@ -171,11 +171,29 @@ class ApiClient {
         }))) as Map<String, dynamic>;
   }
 
-  /// GET /api/boxes/:tag
-  Future<Map<String, dynamic>?> getBox(String tag) async {
-    final r = await http.get(_u('/api/boxes/$tag'), headers: _headers).timeout(_timeout);
+  /// GET /api/boxes/:code — code may be a barcode or an RFID EPC/TID; the
+  /// backend resolves whichever it turns out to be (see services/rfid.ts).
+  Future<Map<String, dynamic>?> getBox(String code) async {
+    final r = await http.get(_u('/api/boxes/$code'), headers: _headers).timeout(_timeout);
     if (r.statusCode == 404) return null;
     return _decode(r) as Map<String, dynamic>;
+  }
+
+  /// POST /api/boxes/:tag/rfid { rfidTid, rfidEpc, replace? } — attach (or,
+  /// with replace:true, re-attach after a damaged tag swap) an RFID tag to
+  /// an already-registered box. Throws [ApiException] with code
+  /// 'rfid_tid_in_use' or 'already_tagged' for the two conflict cases the
+  /// caller may want to handle specially (see services/rfid.ts).
+  Future<Map<String, dynamic>> associateRfid(
+    String tag, {
+    required String rfidTid,
+    required String rfidEpc,
+    bool replace = false,
+  }) async {
+    return await _send(() => http.post(_u('/api/boxes/$tag/rfid'),
+        headers: _headers,
+        body: jsonEncode({'rfidTid': rfidTid, 'rfidEpc': rfidEpc, 'replace': replace})))
+        as Map<String, dynamic>;
   }
 
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN

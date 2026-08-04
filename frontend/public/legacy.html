@@ -1576,9 +1576,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <div class="seg-filter" id="invStatusSeg">
       <button class="sf-btn active" data-st="">ทั้งหมด</button>
-      <button class="sf-btn" data-st="pending">รอติด Tag</button>
+      <button class="sf-btn" data-st="pending">รอติดบาร์โค้ด</button>
+      <button class="sf-btn" data-st="pendingPutaway" title="ติดป้ายบาร์โค้ดแล้ว แต่ยังไม่เคยสแกนเข้าคลัง">รอ Putaway</button>
+      <button class="sf-btn" data-st="noRfid" title="กล่องที่ติดป้ายบาร์โค้ดแล้วแต่ยังไม่ได้ผูกแท็ก RFID">รอติด Tag RFID</button>
       <button class="sf-btn" data-st="warehouse">ในคลัง</button>
-      
+
       <button class="sf-btn" data-st="hold">Hold</button>
       <button class="sf-btn" data-st="damage">ชำรุด</button>
       <button class="sf-btn" data-st="unlocated"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง</button>
@@ -1621,7 +1623,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="bulkbar" id="bulkInv" style="display:none;">
       <span class="bcnt" id="bulkInvCnt"></span>
       <button class="btn sm accent" id="bulkInvRelocate"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายพิกัดจัดเก็บ</button>
-      <button class="btn sm ghost" id="bulkInvTag" title="พิมพ์ฉลาก/แท็ก RFID ของกล่องที่เลือก แล้วบันทึกว่าติดแท็กแล้ว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg></span> ติดแท็ก RFID</button>
+      <button class="btn sm ghost" id="bulkInvTag" title="พิมพ์ป้ายบาร์โค้ด/QR ของกล่องที่เลือก แล้วบันทึกว่าติดป้ายแล้ว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายบาร์โค้ด</button>
       <button class="btn sm ghost" id="bulkInvShip"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งให้ลูกค้า</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
@@ -1755,13 +1757,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="row" style="margin-top:20px;">
         <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
         <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
+        <button class="btn gray" id="btnCancelBox" style="display:none;">ยกเลิกแก้ไข</button>
       </div>
     </div>
     <div class="tablecard">
       <div class="tablehead"><h4>กล่องที่ลงทะเบียน</h4><span class="tag" id="cntBox"></span><div class="spacer"></div>
         <select id="filtBoxStatus" style="width:auto;">
           <option value="">ทุกสถานะ</option>
-          <option value="pending">รอติด Tag</option>
+          <option value="pending">รอติดบาร์โค้ด</option>
           <option value="warehouse">ในคลัง</option>
           <option value="hold">พักใช้งาน (Hold)</option>
           <option value="damage">ชำรุด (Damage)</option>
@@ -2879,7 +2882,51 @@ $all('#boxModeSw .ivs-btn').forEach(function(btn) {
   btn.addEventListener('click', function() { setBoxRegMode(btn.dataset.mode); });
 });
 
+/* ═══════ EDIT (Master "ลงทะเบียนกล่อง" is CRUD-only — see editBox/delBox) ═══
+   ทุก action ที่เกี่ยวกับ lifecycle จริงของกล่อง (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/
+   Hold/ชำรุด/กล่องหาย ฯลฯ) ต้องทำที่หน้า Inventory เท่านั้น — เพื่อไม่ให้มี
+   เมนูซ้ำกันสองที่ หน้านี้จึงมีแค่ แก้ไข field ทะเบียน (ประเภท/Lot/หมดอายุ/
+   ซัพพลายเออร์) กับลบ ตรงกับรูปแบบเดียวกับตาราง "ประเภทกล่อง" ข้างล่าง */
+var editingBox=null;
+function editBox(tag){
+  var b=S.boxes[tag];if(!b)return;
+  // goSetup('box') switches sub-tabs on its own setTimeout(60) — its click
+  // handler calls setBoxRegMode(), which resets #btnAddBox's label back to
+  // "บันทึกรับเข้า". Filling the form has to happen *after* that settles,
+  // not before, or the edit-mode label/fields get immediately clobbered.
+  goSetup('box');
+  setTimeout(function(){
+    editingBox=tag;
+    setBoxRegMode('single');
+    var t=$('#bTag');if(t){t.value=tag;t.readOnly=true;t._override=true;}
+    ['btnRegenTag','btnOverrideTag'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=true;});
+    setv('bType',b.type||'');setv('bLot',b.lot||'');setv('bExpiry',b.expiry||'');setv('bSupplier',b.supplier||'');
+    $('#btnAddBox').textContent='อัปเดตกล่อง';$('#btnCancelBox').style.display='inline-flex';
+  },80);
+}
+window.editBox=editBox;
+function cancelEditBox(){
+  editingBox=null;
+  var t=$('#bTag');if(t){t.readOnly=true;t._override=false;}
+  ['btnRegenTag','btnOverrideTag'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=false;});
+  ['bLot','bExpiry','bSupplier'].forEach(function(i){setv(i,'');});
+  refreshTagId();
+  $('#btnAddBox').textContent='บันทึกรับเข้า';$('#btnCancelBox').style.display='none';
+}
+$('#btnCancelBox').onclick=cancelEditBox;
+
 $('#btnAddBox').onclick = function() {
+  if (editingBox) {
+    var tag = editingBox;
+    var b = S.boxes[tag]; if (!b) { cancelEditBox(); return; }
+    var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
+    var before = Object.assign({}, b);
+    b.type = type; b.lot = val('bLot'); b.expiry = val('bExpiry'); b.supplier = val('bSupplier');
+    auditEntry('UPDATE', USER, tag, typeName(type), before, Object.assign({}, b));
+    save(); cancelEditBox();
+    toast('อัปเดตกล่องแล้ว', tag); renderAll();
+    return;
+  }
   if (boxRegMode === 'single') {
     var tag = val('bTag'); if (!tag) return toast('กรอก บาร์โค้ด', null, 'err');
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
@@ -2891,7 +2938,7 @@ $('#btnAddBox').onclick = function() {
       location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]};
     auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
-    toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติด Tag'); renderAll();
+    toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติดบาร์โค้ด'); renderAll();
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
     var pre = val('bPrefix') || 'BOX-', start = num('bStart') || 1, qty = num('bQty') || 0;
@@ -2904,7 +2951,7 @@ $('#btnAddBox').onclick = function() {
         lot:blot,expiry:bexp,supplier:bsup,regAt:iso(),regBy:USER,
         location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, pre+pad(start,2)+'…'+pre+pad(start+qty-1,2), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
-    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติด Tag'); renderPrefixDatalist(); renderAll();
+    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
   }
@@ -3587,12 +3634,18 @@ function openBoxActionModal(tag){
     ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
     :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
     :b.status==='pending'&&b.labeled===true?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>'
-    :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติด Tag</span>'
+    :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
     :locShort(b.location);
 
   var actions=[];
   actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span> ติดตามกล่องนี้',cls:'btn ghost',fn:'closeModal();trackBox(\''+esc(tag)+'\');switchTab(\'track\');'});
-  actions.push({label:'<span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg></span> ติดแท็ก RFID',cls:'btn ghost',fn:'closeModal();printLabels([\''+esc(tag)+'\'])'});
+  actions.push({label:'<span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายบาร์โค้ด',cls:'btn ghost',fn:'closeModal();printLabels([\''+esc(tag)+'\'])'});
+  /* ผูก/เปลี่ยนแท็ก RFID ทำได้จาก PDA เท่านั้น (มีเครื่องอ่านจริง) — เว็บนี้ไม่มี
+     ทางรับค่า TID/EPC ที่ถูกต้องได้นอกจากให้คนพิมพ์เดาเอง ซึ่งใช้งานจริงไม่ได้
+     เว็บนี้จึงทำได้แค่ "ถอด" แท็กที่ผูกไว้แล้ว (ไม่ต้องพิมพ์อะไร) ไม่ใช่ "ผูก" ใหม่ */
+  if(b.rfidTid){
+    actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> ถอดแท็ก RFID',cls:'btn ghost',fn:'closeModal();detachRfidTag(\''+esc(tag)+'\')'});
+  }
   if(b.status==='warehouse'){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายตำแหน่งจัดเก็บ',cls:'btn ghost',fn:'closeModal();openRelocateModal(\''+esc(tag)+'\')'});
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)',cls:'btn ghost',fn:'closeModal();markHold(\''+esc(tag)+'\')'});
@@ -3620,6 +3673,7 @@ function openBoxActionModal(tag){
       +'<div class="ts-line"><span class="k">สถานะ</span><span class="v">'+statusPill(b.status,b)+'</span></div>'
       +'<div class="ts-line"><span class="k">ตำแหน่ง / ลูกค้า</span><span class="v">'+locOrCust+'</span></div>'
       +((b.lot||b.expiry)?'<div class="ts-line"><span class="k">Lot / หมดอายุ</span><span class="v">'+(b.lot?esc(b.lot):'<span class="muted">-</span>')+(b.expiry?' · '+esc(b.expiry)+' '+expiryPill(b):'')+'</span></div>':'')
+      +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+(b.rfidTid?'<span class="mono small">'+esc(b.rfidTid)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
       +'<div class="ts-line"><span class="k">เห็นล่าสุด</span><span class="v">'+fmtTs(b.lastSeenAt)+'</span></div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
@@ -3630,6 +3684,30 @@ function openBoxActionModal(tag){
   );
 }
 window.openBoxActionModal=openBoxActionModal;
+
+/* ===== RFID TAG ASSOCIATION (detach only) =====
+   Associating/replacing a tag needs a real TID/EPC read off physical
+   hardware — the PDA (see pda_flutter/lib/screens/rfid_register_screen.dart)
+   has the RFID reader; this desktop web app doesn't, so there is no valid
+   way to *attach* a tag here (typing a TID by hand isn't a real tag read —
+   it was tried and correctly rejected as unusable). Detaching needs no
+   reader at all, so that action stays here, reachable directly from the box
+   action list (see openBoxActionModal) without a modal. */
+function detachRfidTag(tag){
+  var b=S.boxes[tag];if(!b||!b.rfidTid)return;
+  confirmA('ถอดแท็ก RFID?','กล่อง '+tag+' จะกลับไปค้นหาได้ด้วยบาร์โค้ดเท่านั้น จนกว่าจะผูกแท็กใหม่','ถอดแท็ก',true).then(function(ok){
+    if(!ok)return;
+    apiFetch('/api/boxes/'+encodeURIComponent(tag)+'/rfid',{method:'DELETE',headers:authHeaders()})
+      .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'ถอดแท็กไม่สำเร็จ');return b;});})
+      .then(function(){
+        if(S.boxes[tag]){S.boxes[tag].rfidTid=null;S.boxes[tag].rfidEpc=null;}
+        closeModal();renderAll();
+        toast('ถอดแท็กแล้ว',tag,'ok');
+      })
+      .catch(function(e){toast('ถอดแท็กไม่สำเร็จ',e.message||'','err');});
+  });
+}
+window.detachRfidTag=detachRfidTag;
 
 /* ===== CONTACT LOG — ปิด loop "ติดต่อลูกค้า" ในผังงาน =====
    ผังงานมีเส้นวนจาก "รายงาน Overdue" กลับไป "ติดต่อลูกค้า" แต่ระบบเดิมบอกได้แค่ว่า
@@ -4576,11 +4654,15 @@ window.labelsToPDF=labelsToPDF;
    แตะ checkbox นี้เลย */
 function tagAutoPutawayPref(){try{var v=localStorage.getItem('boxtrace_tag_auto_putaway');return v===null?true:v==='1';}catch(e){return true;}}
 function setTagAutoPutawayPref(on){try{localStorage.setItem('boxtrace_tag_auto_putaway',on?'1':'0');}catch(e){}}
-/* เดิมกดเปิด modal นี้ปุ๊บ labeled=true ถูกตั้งทันทีแบบเงียบๆ ก่อนผู้ใช้ทำอะไรเลย
-   ผู้ใช้เลยรู้สึกว่าปุ่ม "ติดแท็ก RFID" กดแล้วไม่มีอะไรเกิดขึ้นจริง (สถานะ "รอติด Tag"
-   ของกล่องที่เพิ่งลงทะเบียนใหม่ (pending) ไม่ขยับเลย เพราะคอลัมน์นั้นอ่านจาก status
-   ไม่ใช่ labeled) จึงเปลี่ยนเป็นต้องกดปุ่ม "ยืนยันติดแท็กเสร็จแล้ว" เอง และเพิ่ม
-   ตัวเลือก Putaway อัตโนมัติให้กล่องที่ยังไม่มีตำแหน่งจริงในคราวเดียวกัน */
+/* พิมพ์ป้ายบาร์โค้ด/QR (ไม่ใช่ RFID — ผูกแท็ก RFID จริงทำได้จาก PDA เท่านั้น
+   เพราะต้องมีเครื่องอ่าน คนละเรื่องกัน คนละปุ่มกัน) ให้กล่องที่เลือก แล้วบันทึกว่า
+   ติดป้ายแล้ว (labeled=true)
+
+   เดิมกดเปิด modal นี้ปุ๊บ labeled=true ถูกตั้งทันทีแบบเงียบๆ ก่อนผู้ใช้ทำอะไรเลย
+   ผู้ใช้เลยรู้สึกว่าปุ่มกดแล้วไม่มีอะไรเกิดขึ้นจริง (สถานะ "รอติดบาร์โค้ด" ของกล่องที่เพิ่ง
+   ลงทะเบียนใหม่ (pending) ไม่ขยับเลย เพราะคอลัมน์นั้นอ่านจาก status ไม่ใช่ labeled)
+   จึงเปลี่ยนเป็นต้องกดปุ่ม "ยืนยันติดป้ายเสร็จแล้ว" เอง และเพิ่มตัวเลือก Putaway
+   อัตโนมัติให้กล่องที่ยังไม่มีตำแหน่งจริงในคราวเดียวกัน */
 function printLabels(tags){if(!tags||!tags.length)return;
   var boxes=tags.map(function(t){return S.boxes[t];}).filter(Boolean);
   if(!boxes.length)return;
@@ -4599,7 +4681,7 @@ function printLabels(tags){if(!tags||!tags.length)return;
       '<div style="margin:16px 2px 0;border-top:.5px solid var(--line);padding-top:14px;">'
         +'<label class="row" style="gap:8px;cursor:pointer;align-items:flex-start;">'
           +'<input type="checkbox" id="tagAutoPutaway"'+(tagAutoPutawayPref()?' checked':'')+' style="width:auto;margin-top:3px;">'
-          +'<span>จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดแท็ก — '+pending.length+' ใบยังไม่มีตำแหน่งจัดเก็บจริง</span>'
+          +'<span>จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดป้าย — '+pending.length+' ใบยังไม่มีตำแหน่งจัดเก็บจริง</span>'
         +'</label>'
         +'<div id="tagPutawayArea" style="margin-top:10px;">'
           +'<div class="seg-filter" id="tagPutawayModeSeg" style="margin-bottom:10px;">'
@@ -4612,12 +4694,12 @@ function printLabels(tags){if(!tags||!tags.length)return;
       +'</div>';
   }
   openModal(
-    '<div class="mhead"><h3>ติดแท็ก RFID ('+boxes.length+' ใบ)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    '<div class="mhead"><h3>พิมพ์ป้ายบาร์โค้ด ('+boxes.length+' ใบ)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
     +'<div class="mbody" id="zplPreviewBody" style="background:var(--bg);"><div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;padding:6px;">'+cards+'</div>'+putawaySection+'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
       +'<button class="btn ghost" id="btnZplDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PNG</button>'
       +'<button class="btn ghost" id="btnPdfDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PDF (พร้อมพิมพ์)</button>'
-      +'<button class="btn accent" id="btnConfirmTagged"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg></span> ยืนยันติดแท็กเสร็จแล้ว</button></div>'
+      +'<button class="btn accent" id="btnConfirmTagged"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg></span> ยืนยันติดป้ายเสร็จแล้ว</button></div>'
   );
   var sheet=$('#modalSheet');if(sheet)sheet.style.width='820px';
   $('#btnZplDownload').onclick=function(){
@@ -4640,7 +4722,7 @@ window.setTagPutawayMode=function(mode){
   if(n)n.style.display=mode==='nearest'?'':'none';
   if(p)p.style.display=mode==='pick'?'':'none';
 };
-/* ปุ่ม "ยืนยันติดแท็กเสร็จแล้ว" — ต้องกดเองเสมอ (ไม่ตั้ง labeled=true ตอนเปิด modal
+/* ปุ่ม "ยืนยันติดป้ายเสร็จแล้ว" — ต้องกดเองเสมอ (ไม่ตั้ง labeled=true ตอนเปิด modal
    อีกต่อไป) แล้วถ้าเลือก Putaway อัตโนมัติ ก็พาส่วนที่ยังไม่มีตำแหน่งไปตามเส้นทาง
    เดียวกับ commitInvReceive() (ใช้กติกา isNewBox เดิม) เพื่อให้ history/สถานะ
    ตรงกับกล่องที่รับเข้าผ่านหน้า Gate In ทุกประการ ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
@@ -4658,7 +4740,7 @@ function confirmTagged(allTags,pendingTags){
       if(mode==='pick'){
         var manualLoc={wh:dp.wh,zone:val('tagPutawayZone'),rack:val('tagPutawayRack'),shelf:val('tagPutawayShelf'),slot:val('tagPutawaySlot')};
         if(!manualLoc.zone&&!manualLoc.rack){
-          toast('ยังไม่ได้เลือกตำแหน่ง','กรอกโซนหรือแร็คก่อน — ข้ามการจัดเก็บอัตโนมัติ กล่องยังติดแท็กสำเร็จตามปกติ','err');
+          toast('ยังไม่ได้เลือกตำแหน่ง','กรอกโซนหรือแร็คก่อน — ข้ามการจัดเก็บอัตโนมัติ กล่องยังติดป้ายสำเร็จตามปกติ','err');
         }else locs=pendingTags.map(function(){return manualLoc;});
       }else{
         locs=findFreeLocations(dp.wh,pendingTags.length);
@@ -4670,7 +4752,7 @@ function confirmTagged(allTags,pendingTags){
           var loc=locs[i];if(!loc){skipped++;return;}
           var wh=loc.wh||dp.wh;
           var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
-          b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,note:isNewBox?'Initial Inbound ผ่านการติดแท็ก RFID':'รับเข้าผ่านการติดแท็ก RFID'});
+          b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,note:isNewBox?'Initial Inbound ผ่านการติดป้ายบาร์โค้ด':'รับเข้าผ่านการติดป้ายบาร์โค้ด'});
           S.events.push({ts:ts,dir:isNewBox?'in-new':'in',tag:t,type:b.type,do:isNewBox?'':b.do,customer:isNewBox?'':b.customer,customerName:isNewBox?'':custName(b.customer),wh:wh,recorder:USER});
           b.status='warehouse';if(!isNewBox)b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';
           b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
@@ -4683,8 +4765,8 @@ function confirmTagged(allTags,pendingTags){
     }
   }
   save();closeModal();
-  var msg='ติดแท็กแล้ว '+boxes.length+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
-  toast('ติดแท็กเสร็จแล้ว',msg,'ok');
+  var msg='ติดป้ายแล้ว '+boxes.length+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
+  toast('ติดป้ายเสร็จแล้ว',msg,'ok');
   renderAll();
 }
 window.confirmTagged=confirmTagged;
@@ -4710,10 +4792,10 @@ window.printAllLabels=printAllLabels;
    high-contrast pill so it can't be missed or mistaken for "ในคลัง". */
 function statusPill(s,ctx){
   if(s==='warehouse'&&ctx&&ctx.labeled===false){
-    return '<span class="pill warn">รอติด Tag</span>';
+    return '<span class="pill warn">รอติดบาร์โค้ด</span>';
   }
   /* กล่องใหม่ (pending) ที่ยืนยันติดแท็กแล้วแต่เลือกไม่ให้ระบบ Putaway ให้ทันที
-     ยังไม่มีตำแหน่งจัดเก็บจริง จึงต้องแยกจาก "รอติด Tag" (ยังไม่ติดแท็กเลย) —
+     ยังไม่มีตำแหน่งจัดเก็บจริง จึงต้องแยกจาก "รอติดบาร์โค้ด" (ยังไม่ติดแท็กเลย) —
      ไม่งั้นปุ่มติดแท็กจะดูเหมือน "ไม่ทำงาน" เพราะสถานะไม่ขยับเลยหลังกดยืนยัน */
   if(s==='pending'&&ctx&&ctx.labeled===true){
     return '<span class="pill warn">รอ Putaway</span>';
@@ -4724,11 +4806,20 @@ function statusPill(s,ctx){
     var _l=ctx.location||ctx.loc||{};
     if(!_l.zone&&!_l.rack)return '<span class="pill warn">รอ Putaway</span>';
   }
-  var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอติด Tag'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
-/* small warning badge shown next to the status pill when a box was brought in
-   via the barcode fallback (gate down) and its RFID tag has not yet been
-   confirmed readable by an actual RFID gate pass */
-function rfidBadge(b){return '';} /* barcode-only: no unverified-tag concept */
+  var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอติดบาร์โค้ด'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
+/* small badge shown next to the status pill: whether this box has an RFID
+   tag associated at all yet (associated from the PDA — see
+   pda_flutter/lib/screens/rfid_register_screen.dart). Silent (no badge) once
+   labeled=false boxes cover "not tagged" via their own "รอติดบาร์โค้ด" status
+   pill already — this only needs to speak up for a box that's otherwise
+   marked ready but still has no RFID, since that's the case an operator
+   could easily miss at a glance. */
+function rfidBadge(b){
+  if(!b||b.labeled===false)return '';
+  return b.rfidTid
+    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="TID '+esc(b.rfidTid)+'">RFID</span>'
+    : ' <span class="pill warn" style="font-size:10px;padding:1px 6px;">ไม่มี RFID</span>';
+}
 function journeyDots(s){var d1='<span class="jd '+(s==='warehouse'?'on-wh':'dim')+'"></span>';var d2='<span class="jd '+(s==='out'?'on-out':'dim')+'"></span>';var d3='<span class="jd '+(s==='lost'?'on-lost':'dim')+'"></span>';return '<span class="journey">'+d1+d2+d3+'</span>';}
 
 /* ===================================================================
@@ -5467,7 +5558,7 @@ function trackCardHtml(b){
   var nowLoc;
   if(b.status==='warehouse')nowLoc='อยู่ใน '+whName((b.location||{}).wh)+' '+(function(){var l=b.location||{};var t=[l.zone&&('โซน '+l.zone),l.rack&&('แร็ค '+l.rack),l.shelf&&('ชั้น '+l.shelf),l.slot&&('ช่อง '+l.slot)].filter(Boolean).join(' · ');return t?'· '+t:'';})();
   else if(b.status==='out')nowLoc='ออกไปอยู่ที่ '+custName(b.customer)+(b.po?' · PO '+b.po:'');
-  else if(b.status==='pending')nowLoc='รอติด Tag — ยังไม่เคยสแกนเข้า';
+  else if(b.status==='pending')nowLoc='รอติดบาร์โค้ด — ยังไม่เคยสแกนเข้า';
   else nowLoc='ถูกตีเป็นสูญหาย';
 
   var statusColor=b.status==='warehouse'?'on-wh':b.status==='out'?'on-out':b.status==='pending'?'':'on-lost';
@@ -5643,7 +5734,7 @@ function renderOverview(){
         var locOrCust=b.status==='out'
           ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
           :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
-          :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติด Tag</span>'
+          :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
           :locShort(b.location);
 
         typeFlowHtml+='<tr class="flowrow" style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
@@ -5828,18 +5919,24 @@ function renderSetup(){
     return !sb||(b.tag+typeName(b.type)+custName(b.customer)).toLowerCase().indexOf(sb)>=0;
   }).sort(function(a,b){var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);});
   $('#boxBody').innerHTML=bx.length?bx.map(function(b){
-    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติด Tag</span>':(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
+    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>':(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
     var lotExpCell=(b.lot||b.expiry)
       ?(b.lot?('<span class="mono">'+esc(b.lot)+'</span>'):'')+(b.expiry?((b.lot?'<div class="tag" style="margin-top:2px;">':'')+esc(b.expiry)+' '+expiryPill(b)+(b.lot?'</div>':'')):'')
       :'<span class="muted small">-</span>';
-    return '<tr data-tag="'+esc(b.tag)+'" style="cursor:pointer;" onclick="if(event.target.type!==\'checkbox\')openBoxActionModal(\''+esc(b.tag)+'\')"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
+    /* CRUD only here (แก้ไข/ลบ) — ทุกอย่างที่เป็น lifecycle จริงของกล่อง
+       (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
+       เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
+    return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
       +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
-      +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td></tr>';
+      +'<td class="c"><div class="row-actions">'
+      +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
+      +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
+      +'</div></td></tr>';
   }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
   var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
-  $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติด Tag '+totalPending+'</span>':'');
+  $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติดบาร์โค้ด '+totalPending+'</span>':'');
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
 
   // box type table
@@ -7472,8 +7569,8 @@ window.seedDemo=seedDemo;
      จำนวน "วันที่ค้างนานสุด" ที่จะเริ่มเตือน ไม่ใช่จำนวนชิ้น เพราะของ 200 ใบที่
      เพิ่งเข้ามาเมื่อเช้าไม่ใช่คอขวด แต่ของ 3 ใบที่ค้างมา 5 วันคือคอขวด */
   var STAGES=[
-    {k:'tag', n:'รอติด Tag', warn:2, bad:5,
-     go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติด Tag'}); }},
+    {k:'tag', n:'รอติดบาร์โค้ด', warn:2, bad:5,
+     go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติดบาร์โค้ด'}); }},
     {k:'inq', n:'คิวรับเข้า',
      go:function(){ W.switchTab&&W.switchTab('gatein'); }},
     {k:'put', n:'รอจัดเก็บขึ้นชั้น', warn:1, bad:3,
@@ -7734,10 +7831,10 @@ function isAtStaging(b) {
 function invLocText(b) {
   if (b.status === 'out') return '<span class="muted">— อยู่กับลูกค้า —</span>';
   if (b.status === 'lost') return '<span class="muted">— แจ้งกล่องหาย —</span>';
-  /* ติดแท็กแล้วแต่เลือกไม่ให้ระบบ Putaway ให้ทันที — แยกจาก "รอติด Tag" ที่ยัง
+  /* ติดแท็กแล้วแต่เลือกไม่ให้ระบบ Putaway ให้ทันที — แยกจาก "รอติดบาร์โค้ด" ที่ยัง
      ไม่ติดแท็กเลย ไม่งั้นคอลัมน์นี้จะดูเหมือนไม่ขยับแม้กดยืนยันติดแท็กไปแล้ว */
   if (b.status === 'pending' && b.labeled === true) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>';
-  if (b.status === 'pending') return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติด Tag</span>';
+  if (b.status === 'pending') return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
   var loc = b.location || {};
   if (!loc.wh) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง</span>';
   if (isStagingLoc(loc)) {
@@ -8047,6 +8144,22 @@ function filteredInvBoxes() {
       if (!(b.status === 'warehouse' && !(b.location || {}).wh)) return false;
     } else if (invStatusFilter === 'putaway') {
       if (!(b.status === 'warehouse' && isAtStaging(b))) return false;
+    } else if (invStatusFilter === 'pending') {
+      /* รอติดบาร์โค้ด: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
+         status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
+         statusPill) ไม่ใช่ "รอติดบาร์โค้ด" ให้ไปอยู่ในแท็บ pendingPutaway แทน
+         ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
+      if (!(b.status === 'pending' && b.labeled !== true)) return false;
+    } else if (invStatusFilter === 'pendingPutaway') {
+      /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
+         คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย
+         (ดู statusPill สำหรับ pill "รอ Putaway" ตัวเดียวกันนี้) */
+      if (!(b.status === 'pending' && b.labeled === true)) return false;
+    } else if (invStatusFilter === 'noRfid') {
+      /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
+         badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
+         labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
+      if (b.labeled === false || b.rfidTid) return false;
     } else if (invStatusFilter === 'outToday') {
       /* ออกวันนี้: boxes that have an 'out' history event today */
       var outToday = (b.history || []).some(function(h){
@@ -8151,7 +8264,7 @@ function renderInvSummary() {
       locLabel = 'กล่องหาย';
     } else if (b.status === 'pending') {
       locKey = 'PENDING';
-      locLabel = 'รอติด Tag';
+      locLabel = 'รอติดบาร์โค้ด';
     } else if (isStagingLoc(loc)) {
       locKey = 'STG|' + (loc.wh || '') + '|' + (loc.zone || '') + '|' + (loc.rack || '');
       locLabel = stagingLabel(loc) + (loc.wh ? ' · ' + whName(loc.wh) : '');
@@ -8179,7 +8292,7 @@ function renderInvSummary() {
 
   if (!rows.length) { body.innerHTML = '<tr><td colspan="6">' + emptyRow(6, 'ยังไม่มีกล่องในเงื่อนไขนี้').replace(/<tr>|<\/tr>/g,'') + '</td></tr>'; return; }
 
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'แจ้งกล่องหาย', pending: 'รอติด Tag' };
+  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'แจ้งกล่องหาย', pending: 'รอติดบาร์โค้ด' };
   body.innerHTML = rows.map(function(g) {
     var isStg = g.status === 'warehouse' && g.locKey.indexOf('STG') === 0;
     var isOut = g.status === 'out';
@@ -8452,7 +8565,7 @@ function renderInvRcv() {
   if (!res) return;
   res.innerHTML = invReceiveQueue.length ? '<div class="lines">' + invReceiveQueue.map(function(t) {
     var b = S.boxes[t] || {}; var bt = S.boxtypes[b.type] || {};
-    var srcLabel = b.status === 'pending' ? 'กล่องใหม่ (รอติด Tag)' : b.status === 'warehouse' ? 'Putaway ในคลัง' : ('จากลูกค้า: ' + custName(b.customer));
+    var srcLabel = b.status === 'pending' ? 'กล่องใหม่ (รอติดบาร์โค้ด)' : b.status === 'warehouse' ? 'Putaway ในคลัง' : ('จากลูกค้า: ' + custName(b.customer));
     return '<div class="lineitem"><div style="flex:1;"><b class="mono">' + esc(t) + '</b>'
       + '<div class="tag">' + esc(typeName(b.type)) + ' · หน่วย: ' + esc(bt.unit || '-') + ' · ' + esc(srcLabel) + '</div></div>'
       + '<button class="del" onclick="invRcvRemove(\'' + esc(t) + '\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
@@ -8511,15 +8624,17 @@ window.commitInvReceive = commitInvReceive;
 /* ====== BULK: relocate / ship / write-off ====== */
 $('#bulkInvClear').addEventListener('click', function() { clearBulk('inv-cb', 'bulkInv', 'cbAllInv'); });
 
-/* ติดแท็ก RFID หลายใบพร้อมกัน — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ
-   "รอติด Tag" ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง
-   ใช้ printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว ซึ่งบันทึก labeled=true ให้อยู่แล้ว
-   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง */
+/* พิมพ์ป้ายบาร์โค้ด/QR หลายใบพร้อมกัน — กล่องที่ลงทะเบียนใหม่มาเป็นชุดจะค้างสถานะ
+   "รอติดบาร์โค้ด" ทั้งชุด และปุ่มย้ายพิกัดข้างๆ ปฏิเสธมันทุกใบเพราะยังไม่อยู่ในคลัง ใช้
+   printLabels() ตัวเดิมที่ใช้กับกล่องเดี่ยว ซึ่งบันทึก labeled=true ให้อยู่แล้ว
+   จึงเป็นเส้นทางเดียวกันเป๊ะ ไม่ได้ตั้งกติกาใหม่ขึ้นมาเอง — ผูกแท็ก RFID (ต่าง
+   จากป้ายบาร์โค้ด/QR) ไม่มีปุ่มบนเว็บนี้ เพราะต้องมีเครื่องอ่านจริง ทำได้จาก
+   PDA เท่านั้น (ดู pda_flutter/lib/screens/rfid_register_screen.dart) */
 $('#bulkInvTag').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
   var done = tags.filter(function(t) { var b = S.boxes[t]; return b && b.labeled === true; });
   if (done.length === tags.length) {
-    return toast('ติดแท็กครบแล้ว', 'ทั้ง ' + tags.length + ' ใบบันทึกว่าติดแท็กแล้ว', 'info');
+    return toast('ติดป้ายครบแล้ว', 'ทั้ง ' + tags.length + ' ใบบันทึกว่าติดป้ายแล้ว', 'info');
   }
   printLabels(tags);
 });
@@ -9242,7 +9357,7 @@ window.exportOverviewPDF = exportOverviewPDF;
 
 function exportInvExcel() {
   // Export the live WMS box-stock view (respects status filter + search)
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอติด Tag' };
+  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอติดบาร์โค้ด' };
   var boxes = filteredInvBoxes().sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'ผู้บันทึกล่าสุด', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
@@ -9260,7 +9375,7 @@ window.exportInvExcel = exportInvExcel;
 
 function exportBoxExcel() {
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอติด Tag' };
+  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอติดบาร์โค้ด' };
   var headers = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'PO', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
@@ -9402,7 +9517,7 @@ function exportPDF(title, subtitle, headers, rows, opts) {
 window.exportPDF = exportPDF;
 
 function exportInvPDF() {
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอติด Tag' };
+  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอติดบาร์โค้ด' };
   var boxes = filteredInvBoxes().sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'ผู้บันทึกล่าสุด', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
@@ -9420,7 +9535,7 @@ window.exportInvPDF = exportInvPDF;
 
 function exportBoxPDF() {
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอติด Tag' };
+  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอติดบาร์โค้ด' };
   var headers = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'PO', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
@@ -10185,7 +10300,8 @@ function openColumnMapModal(opts){
     "ระบุข้อมูลแร็ค 1 ชุด ระบบจะสร้างตำแหน่งทุก ชั้น × ช่อง ให้อัตโนมัติ":"Enter one rack definition and the system creates every shelf x slot location automatically",
     "พื้นที่พักกล่องหลังผ่าน Gate ขาเข้า ก่อนขึ้นชั้นวางจริง — คลังนี้มีแร็คพักเดียว กำหนดได้ว่ามีกี่ช่อง ค่าเริ่มต้น":"Staging area for boxes after the inbound gate, before they go up on the real racks - this warehouse has a single staging rack; set how many slots it has. Default",
     "ลูกค้า / ตำแหน่ง":"Customers / locations",
-    "ติดแท็ก RFID":"RFID tagging",
+    "พิมพ์ป้ายบาร์โค้ด":"Print barcode label",
+    "ถอดแท็ก RFID":"Remove RFID tag",
     "บาร์โค้ด (สร้างอัตโนมัติ)":"Barcode (auto-generated)",
     /* ---- รอบเก็บตก: ผังกระบวนการ 2D + ป้ายในฉาก 3D + แถบสถานะฉาก ---- */
     "คานแร็ค = ตำแหน่งจริงจาก Location Master":"Rack beams = real locations from Location Master",
@@ -10655,7 +10771,7 @@ function openColumnMapModal(opts){
     "ยกเลิก":"Cancel","พิกัดจัดเก็บ":"Storage location","จำนวน (Qty)":"Qty","มูลค่ารวม (฿)":"Total value (THB)",
     "คลัง & ประตู":"Warehouse & Gate","ลงทะเบียนกล่อง":"Register box","ลูกค้า":"Customer","พนักงาน":"Employees",
     "ทุกสถานะ":"All statuses","พักใช้งาน (Hold)":"On hold (Hold)","ชำรุด (Damage)":"Damaged (Damage)","สูญหาย":"Lost",
-    "จัดเรียงเข้าแร็ค (Putaway)":"Putaway to rack","ทั้งหมด":"All","รอติด Tag":"Awaiting tag","ในคลัง":"In warehouse",
+    "จัดเรียงเข้าแร็ค (Putaway)":"Putaway to rack","ทั้งหมด":"All","รอติดบาร์โค้ด":"Awaiting barcode","ในคลัง":"In warehouse",
     "ชำรุด":"Damaged","ยังไม่ระบุตำแหน่ง":"No location","ส่งลูกค้า":"At customer","แจ้งกล่องหาย":"Report lost",
     "รายใบ":"By unit","สรุปสต็อก":"Stock summary","บาร์โค้ดตำแหน่ง":"Location barcode","เลือกทั้งหมด":"Select all",
     "รหัส RFID":"RFID code","ประเภทกล่อง":"Box type","พิกัดที่อยู่":"Location","สถานะ":"Status",
@@ -10809,7 +10925,7 @@ function openColumnMapModal(opts){
   var FRAG = {
     "ย้ายพิกัดจัดเก็บ · ":"Relocate - ",
     "ส่งให้ลูกค้า · ":"Ship to customer - ",
-    "รอติด Tag ":"Awaiting tag ",
+    "รอติดบาร์โค้ด ":"Awaiting barcode ",
     "ดูกล่องในคลัง ":"View boxes in ",
     "ดูกล่องทั้งหมดใน ":"View all boxes in ",
     "ลบกล่อง ":"Delete box ",
@@ -10860,8 +10976,8 @@ function openColumnMapModal(opts){
     "ประเภทช่องรอ Putaway ":"Putaway slot type ","จุดรอ Putaway ":"Putaway staging ",
     "→ ใส่แร็ค":"→ into rack","→ กรองอย่างเดียว":"→ filter only",
     "กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: ":"Boxes currently with this customer: ",
-    "ติดแท็ก RFID (":"RFID tagging (",
-    "จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดแท็ก — ":"Automatically put away (Putaway) right after confirming the tag - ",
+    "พิมพ์ป้ายบาร์โค้ด (":"Print barcode label (",
+    "จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดป้าย — ":"Automatically put away (Putaway) right after confirming the label - ",
     "ใบยังไม่มีตำแหน่งจัดเก็บจริง":"boxes still lack a real storage location",
     "ระบบจะจัดเก็บที่ ":"The system will store it at ",
     " — เหลืออีก ":" - short by "," ใบไม่พอช่องว่าง จะค้างเป็น \"รอ Putaway\"":" boxes; the rest stays \"Awaiting putaway\"",
