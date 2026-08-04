@@ -43,7 +43,6 @@ class StateSnapshot {
   }
 
   int get boxCount => boxesRaw.length;
-  bool get connected => boxCount > 0;
 
   Box? box(String tag) {
     final r = boxesRaw[tag];

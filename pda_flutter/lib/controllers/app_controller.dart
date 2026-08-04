@@ -58,6 +58,14 @@ class AppController extends ChangeNotifier {
   Screen screen = Screen.boot;
   StateSnapshot? S;
 
+  /// True only once a live `GET /api/state` has actually succeeded this
+  /// session — set in [refresh]. `S` alone can't answer this: it's also
+  /// populated eagerly at boot from [Prefs.stateCache] so a terminal with no
+  /// network yet still has employee/box data to show, and a fresh warehouse
+  /// with zero boxes registered is a perfectly valid live connection too, so
+  /// nothing about the snapshot's *contents* can stand in for this.
+  bool _liveConnected = false;
+
   /// The operator currently holding the device — null whenever it is locked.
   Employee? emp;
 
@@ -226,6 +234,7 @@ class AppController extends ChangeNotifier {
     final json = await api.getState();
     S = StateSnapshot.fromJson(json);
     prefs.stateCache = json;
+    _liveConnected = true;
     notifyListeners();
   }
 
@@ -1112,7 +1121,7 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
-  bool get connected => S?.connected ?? false;
+  bool get connected => _liveConnected;
   int get boxCount => S?.boxCount ?? 0;
   String get selWhName => S?.whName(wh) ?? wh;
 
