@@ -68,17 +68,25 @@ employeePinRouter.post(
  *  the PDA's own "ลืมรหัส PIN?" (the device's service-account token is
  *  authorized for this too).
  *
- *  Where the code actually goes depends on who asked:
+ *  Where the code actually goes depends on who asked. The original version
+ *  of this route tried to infer that from `req.user.employeeId`, on the
+ *  assumption a PDA would be authenticated as the employee themselves — but
+ *  every PDA in this deployment signs in with the device's own shared
+ *  service account (the same `users` row an admin's own browser session
+ *  could also be using), so `employeeId` is never set either way and every
+ *  request looked admin-initiated. The OTP was going straight back to the
+ *  PDA's own screen — exactly the leak this flow exists to prevent. The PDA
+ *  now says so explicitly (`viaDevice: true` in the body) instead of relying
+ *  on a token shape that can't actually distinguish the two callers:
  *   - an admin clicking the web button gets it straight back in this
  *     response, same as before.
- *   - a PDA calling this on an employee's behalf (`req.user.employeeId` set)
- *     does NOT get it back here — the whole point of routing a reset through
- *     a second person is defeated if the device that "forgot" its PIN can
- *     just read the code off its own network response. It only goes out via
- *     `emitEvent`, which reaches admin browser tabs over SSE (see the
- *     'pinResetRequested' listener in legacy.html) — the PDA operator has to
- *     get it from an admin who's actually looking at a screen, same as the
- *     original design, just without anyone having to click a button first. */
+ *   - a PDA request (`viaDevice: true`) does NOT get it back here — the
+ *     whole point of routing a reset through a second person is defeated if
+ *     the device that "forgot" its PIN can just read the code off its own
+ *     network response. It only goes out via `emitEvent`, which reaches
+ *     admin browser tabs over SSE (see the 'pinResetRequested' listener in
+ *     legacy.html) — the PDA operator has to get it from an admin who's
+ *     actually looking at a screen. */
 employeePinRouter.post(
   '/:id/pin/reset',
   asyncHandler(async (req, res) => {
@@ -93,7 +101,7 @@ employeePinRouter.post(
       .returning({ id: employees.id, name: employees.name });
     if (!updated.length) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
 
-    const requestedByEmployee = !!req.user?.employeeId;
+    const requestedByEmployee = req.body?.viaDevice === true || !!req.user?.employeeId;
     emitEvent('pinResetRequested', {
       employeeId: updated[0].id,
       name: updated[0].name,
