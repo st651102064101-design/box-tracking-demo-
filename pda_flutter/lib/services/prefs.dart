@@ -32,6 +32,7 @@ class Prefs {
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -49,6 +50,12 @@ class Prefs {
 
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
+
+  /// Antenna transmit power as a percentage of the reader's max — the knob
+  /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full
+  /// power (ไกล) since that's what the reader itself defaults to on connect.
+  int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
+  set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
 
   /// Baked in at build time so a device build ships pointing at the right host
   /// without an operator having to type a URL on a handheld keypad:

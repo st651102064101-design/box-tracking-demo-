@@ -1,6 +1,8 @@
 package com.abss.boxtrace_pda
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -32,6 +34,16 @@ class RfidReaderController(private val context: Context) :
     }
 
     private val main = Handler(Looper.getMainLooper())
+    // One short beep per read batch — not per tag, or a multi-tag inventory
+    // burst turns into a machine-gun of overlapping tones.
+    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }
+    private fun beep() {
+        try {
+            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+        } catch (e: Exception) {
+            Log.w(TAG, "beep failed", e)
+        }
+    }
     private val exec = Executors.newSingleThreadExecutor()
 
     private var readers: Readers? = null
@@ -318,6 +330,7 @@ class RfidReaderController(private val context: Context) :
             reader = null
             readers?.Dispose()
             readers = null
+            toneGen.release()
         } catch (e: Exception) {
             Log.w(TAG, "dispose failed", e)
         }
@@ -337,7 +350,8 @@ class RfidReaderController(private val context: Context) :
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
-            if (tags != null) {
+            if (tags != null && tags.isNotEmpty()) {
+                beep()
                 for (t in tags) {
                     tagCount++
                     lastEpc = t.getTagID()

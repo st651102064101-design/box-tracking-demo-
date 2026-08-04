@@ -13,6 +13,17 @@ class _Read {
   final String epc;
   final DateTime at;
   const _Read(this.epc, this.at);
+
+  /// The EPC as the reader gives it (hex) converted to base-10 — a 24-hex-digit
+  /// EPC like `000000000000000000000005` reads a lot more like "a tag" and a
+  /// lot less like a wall of hex once it's just `5`. BigInt because a full
+  /// 96-bit EPC overflows a 64-bit int. Null for anything that isn't valid
+  /// hex (e.g. a manually-typed code).
+  String? get decimal {
+    final hex = epc.replaceAll(RegExp(r'\s'), '');
+    if (hex.isEmpty || !RegExp(r'^[0-9A-Fa-f]+$').hasMatch(hex)) return null;
+    return BigInt.parse(hex, radix: 16).toString();
+  }
 }
 
 /// Standalone RFID input screen: connect to the MC3390R reader, hold the
@@ -32,6 +43,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   final _reads = <_Read>[];
   StreamSubscription<String>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
+  StreamSubscription<bool>? _triggerSub;
   late RfidStatus _status;
   bool _reading = false;
 
@@ -44,6 +56,10 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
       setState(() => _reads.insert(0, _Read(epc, DateTime.now())));
     });
     _statusSub = rfid.status.listen((s) => setState(() => _status = s));
+    // The physical gun trigger drives start/stopInventory from AppController
+    // (see _onReaderTrigger) — mirror that here so the on-screen button stays
+    // in sync whether the read was started by a tap or a trigger pull.
+    _triggerSub = rfid.triggers.listen((pressed) => setState(() => _reading = pressed));
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
@@ -53,6 +69,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   void dispose() {
     _tagSub?.cancel();
     _statusSub?.cancel();
+    _triggerSub?.cancel();
     _manualCtrl.dispose();
     super.dispose();
   }
@@ -213,12 +230,27 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
                             Icon(Icons.nfc, size: 18, color: C.muted),
                             const SizedBox(width: 11),
                             Expanded(
-                              child: Text(r.epc,
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'monospace',
-                                      letterSpacing: 0.4)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(r.epc,
+                                      style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          fontFamily: 'monospace',
+                                          letterSpacing: 0.4)),
+                                  if (r.decimal != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text('เลขฐาน 10: ${r.decimal}',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontFamily: 'monospace',
+                                              color: C.muted)),
+                                    ),
+                                ],
+                              ),
                             ),
                             Text(_fmtTime(r.at), style: TextStyle(fontSize: 12, color: C.faint)),
                           ],

@@ -145,6 +145,12 @@ class AppController extends ChangeNotifier {
     _trigSub = rfid.triggers.listen(_onReaderTrigger);
     _statusSub = rfid.status.listen((s) {
       rfidStatus = s;
+      // Reader firmware resets to full power on every connect, so the
+      // saved ใกล้/ปานกลาง/ไกล pick has to be re-applied each time — not
+      // just when the operator changes it in settings.
+      if (s.state == RfidState.connected) {
+        rfid.setPowerPercent(prefs.rfidPowerPercent);
+      }
       notifyListeners();
     });
 
@@ -1051,7 +1057,12 @@ class AppController extends ChangeNotifier {
   }
 
   void _onReaderTrigger(bool pressed) {
-    if (screen != Screen.scan && screen != Screen.track && screen != Screen.login) return;
+    if (screen != Screen.scan &&
+        screen != Screen.track &&
+        screen != Screen.login &&
+        screen != Screen.rfidInput) {
+      return;
+    }
     if (pressed) {
       rfid.startInventory();
     } else {

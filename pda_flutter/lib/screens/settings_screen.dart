@@ -244,10 +244,12 @@ class _RfidPanel extends StatefulWidget {
 class _RfidPanelState extends State<_RfidPanel> {
   Map<String, dynamic> _d = const {};
   Timer? _poll;
+  late int _rangePercent;
 
   @override
   void initState() {
     super.initState();
+    _rangePercent = context.read<AppController>().prefs.rfidPowerPercent;
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
     _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
@@ -340,6 +342,21 @@ class _RfidPanelState extends State<_RfidPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(c.rfidStatus.message, style: TextStyle(fontSize: 12, color: C.muted)),
             ),
+          if (c.rfid.supported) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            _RangePicker(
+              value: _rangePercent,
+              onChanged: (v) {
+                setState(() => _rangePercent = v);
+                c.prefs.rfidPowerPercent = v;
+                c.rfid.setPowerPercent(v);
+              },
+            ),
+          ],
           if (!c.rfid.supported)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -411,6 +428,67 @@ class _RfidPanelState extends State<_RfidPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// ใกล้ / ปานกลาง / ไกล — a friendlier face on antenna transmit power than a
+/// raw index, since "power 190/270" means nothing to an operator but "อ่าน
+/// เฉพาะกล่องใกล้ตัว" does. Maps to a percentage of the reader's max power;
+/// [RfidReaderController.setPower] converts that into an actual index.
+class _RangePicker extends StatelessWidget {
+  static const _steps = [
+    (label: 'ใกล้', sub: '~30 ซม.', percent: 30),
+    (label: 'ปานกลาง', sub: '~1-2 ม.', percent: 65),
+    (label: 'ไกล', sub: 'สุดกำลังเครื่อง', percent: 100),
+  ];
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _RangePicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    // Snap to the nearest step so a value saved by an older build (or typed
+    // via some future settings-import feature) still highlights sensibly
+    // instead of leaving every option unselected.
+    final nearest = _steps.reduce(
+      (a, b) => (value - a.percent).abs() <= (value - b.percent).abs() ? a : b,
+    );
+    return Row(
+      children: _steps.map((s) {
+        final selected = s == nearest;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: s == _steps.last ? 0 : 8),
+            child: GestureDetector(
+              onTap: () => onChanged(s.percent),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? C.ink : C.surface,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: selected ? C.ink : C.border2),
+                ),
+                child: Column(
+                  children: [
+                    Text(s.label,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: selected ? C.surface : C.ink)),
+                    const SizedBox(height: 2),
+                    Text(s.sub,
+                        style: TextStyle(
+                            fontSize: 10.5,
+                            color: selected ? C.surface.withOpacity(0.7) : C.muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
