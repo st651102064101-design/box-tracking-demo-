@@ -196,10 +196,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    // Backend now has the PIN, but the cached employee list won't say
+    // `hasPin: true` until the next `/api/state` fetch — patch it locally so
+    // a lock/re-badge later in this same session doesn't ask to set it again.
+    c.markPinSet(e.id);
     if (!mounted) return;
-    // Backend now has the PIN, but the local employee list won't say
-    // `hasPin: true` until the next `/api/state` fetch — log in on this
-    // successful set rather than making the operator badge in twice.
     final err = c.identifyAs(e);
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }

@@ -386,6 +386,18 @@ class AppController extends ChangeNotifier {
   /// this terminal serves — surfaced as a note on screen, never a block.
   bool isVisiting(Employee e) => e.wh.isNotEmpty && wh.isNotEmpty && e.wh != wh;
 
+  /// Patches the cached snapshot's `hasPin` flag for [employeeId] right after
+  /// a successful `setEmployeePin` call. Without this, `S` (built from the
+  /// last `/api/state` fetch, which can be minutes old) still says
+  /// `hasPin: false` for the rest of this session — so a lock/re-badge before
+  /// the next fetch would ask the operator to set a PIN they just set.
+  void markPinSet(String employeeId) {
+    final raw = S?.employees[employeeId];
+    if (raw is! Map) return;
+    S!.employees[employeeId] = {...raw, 'hasPin': true};
+    notifyListeners();
+  }
+
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
     if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
