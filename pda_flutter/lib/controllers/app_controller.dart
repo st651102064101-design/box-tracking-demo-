@@ -360,12 +360,25 @@ class AppController extends ChangeNotifier {
         .map((m) => Employee.fromJson(Map<String, dynamic>.from(m)))
         .where((e) => e.active && e.name.isNotEmpty)
         .toList();
+    final last = prefs.lastEmpId;
     list.sort((a, b) {
+      // Whoever used this terminal last goes first — on a device worked by
+      // the same one or two people all week, that's almost always the person
+      // holding it now, and it saves them scrolling for their own name.
+      if (last.isNotEmpty) {
+        final lastRank = (a.id == last ? 0 : 1) - (b.id == last ? 0 : 1);
+        if (lastRank != 0) return lastRank;
+      }
       final rank = _homeRank(a) - _homeRank(b);
       return rank != 0 ? rank : a.name.compareTo(b.name);
     });
     return list;
   }
+
+  /// Employee id of the last person to start a shift on this device, or ''.
+  /// The badge screen tags this row "ล่าสุด"; it changes ordering and nothing
+  /// else — the PIN gate is identical either way.
+  String get lastEmpId => prefs.lastEmpId;
 
   int _homeRank(Employee e) => (e.wh.isEmpty || e.wh == wh) ? 0 : 1;
 
@@ -377,6 +390,7 @@ class AppController extends ChangeNotifier {
   String? identifyAs(Employee e) {
     if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
+    prefs.lastEmpId = e.id;
     touch();
     _resetPost();
     screen = Screen.home;

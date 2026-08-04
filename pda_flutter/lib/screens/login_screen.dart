@@ -440,6 +440,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: _EmployeeTile(
                                 emp: e,
                                 visiting: c.isVisiting(e),
+                                isLast: e.id == c.lastEmpId,
                                 onTap: () => _tapEmployee(e),
                               ),
                             )),
@@ -544,8 +545,14 @@ class _Notice extends StatelessWidget {
 class _EmployeeTile extends StatelessWidget {
   final Employee emp;
   final bool visiting;
+  final bool isLast;
   final VoidCallback onTap;
-  const _EmployeeTile({required this.emp, required this.visiting, required this.onTap});
+  const _EmployeeTile({
+    required this.emp,
+    required this.visiting,
+    required this.onTap,
+    this.isLast = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -560,7 +567,10 @@ class _EmployeeTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: C.border),
+            // The last person to work this device is already sorted to the
+            // top; the accent border is what makes that visible at a glance
+            // rather than looking like an arbitrary sort order.
+            border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
             boxShadow: [
               BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
             ],
@@ -593,6 +603,10 @@ class _EmployeeTile extends StatelessWidget {
                   ],
                 ),
               ),
+              if (isLast) ...[
+                Pill('ล่าสุด', color: C.limeText, bg: C.limeBg),
+                const SizedBox(width: 6),
+              ],
               if (visiting) ...[
                 Pill('ต่างคลัง', color: C.orange, bg: C.orangeBg),
                 const SizedBox(width: 6),

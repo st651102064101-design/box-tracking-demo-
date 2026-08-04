@@ -43,6 +43,12 @@ class Prefs {
   static const _kLastWh = 'boxtrace_last_wh';
   static const _kLastGate = 'boxtrace_last_gate';
 
+  // The employee who most recently started a shift on this terminal, so the
+  // badge screen can float them to the top of "หรือแตะชื่อของคุณ" instead of
+  // making the same person hunt for their own name in a long alphabetical
+  // list every time. Per-device, same as the คลัง/ประตู shortcut above.
+  static const _kLastEmp = 'boxtrace_last_emp';
+
   // per-device memory of "asked this employee to set a PIN, they skipped" —
   // the PIN itself is server-side, see [pinSkipped]/[skipPin]/[clearPinSkip].
   static const _kPinSkipped = 'boxtrace_pin_skipped';
@@ -144,6 +150,13 @@ class Prefs {
 
   String get lastGate => _p.getString(_kLastGate) ?? '';
   set lastGate(String v) => _p.setString(_kLastGate, v);
+
+  /// Employee id of the last person to start a shift here — empty until
+  /// someone has. Only a display hint for the badge screen's ordering; it
+  /// grants nothing and still goes through the same PIN gate as any other
+  /// name on the list.
+  String get lastEmpId => _p.getString(_kLastEmp) ?? '';
+  set lastEmpId(String v) => _p.setString(_kLastEmp, v);
 
   /// Last known `S` snapshot. Restored before the network call on boot so the
   /// badge screen has employee names — and the scanner has box data — even
