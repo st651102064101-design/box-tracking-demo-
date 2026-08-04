@@ -65,6 +65,13 @@ class LocaleController extends ChangeNotifier {
         'Scan a badge to unlock · never locks while boxes are queued',
     'บันทึกและเริ่มใช้งาน': 'Save and start',
     'ประตู': 'Gate',
+    '1 · อุปกรณ์ที่ใช้งาน': '1 · Device in use',
+    '2 · การเชื่อมต่อระบบหลัก': '2 · Core system connection',
+    'ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อให้ระบบตั้งค่าฟังก์ชันเครื่องอ่าน RFID ให้ถูกต้อง':
+        'Specify the handheld model this terminal is running on, so the system configures its RFID reader correctly',
+    'ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป':
+        'Only this model is currently supported — additional models will be added in a future update',
+    'เครื่องอ่าน RFID ในตัวเครื่อง': 'Integrated RFID reader',
   };
 }
 

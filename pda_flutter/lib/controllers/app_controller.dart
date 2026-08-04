@@ -526,6 +526,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDeviceModel(String id) {
+    prefs.deviceModel = id;
+    notifyListeners();
+  }
+
   void goDeviceSetup() {
     _autoSelectSinglePost();
     go(Screen.deviceSetup);

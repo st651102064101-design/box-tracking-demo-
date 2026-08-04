@@ -51,7 +51,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final loc = context.watch<LocaleController>();
     final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
-    final canSave = c.connected;
+    final canSave = c.connected && c.prefs.deviceModel.isNotEmpty;
     // A device being provisioned for the first time has nowhere to go back to.
     final canLeave = c.deviceConfigured;
 
@@ -67,7 +67,15 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 18, 16, bottom + 96),
             children: [
-              _StepLabel(loc.t('1 · การเชื่อมต่อระบบหลัก')),
+              _StepLabel(loc.t('1 · อุปกรณ์ที่ใช้งาน')),
+              const SizedBox(height: 11),
+              _DeviceModelPicker(
+                selected: c.prefs.deviceModel,
+                onPick: c.setDeviceModel,
+                loc: loc,
+              ),
+              const SizedBox(height: 18),
+              _StepLabel(loc.t('2 · การเชื่อมต่อระบบหลัก')),
               const SizedBox(height: 11),
               Panel(
                 padding: const EdgeInsets.all(16),
@@ -180,6 +188,133 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One entry in the supported-hardware catalog. `androidVersion` is shown
+/// verbatim rather than inferred from the running OS, since the point of
+/// this step is to record what the *device* is, independent of whatever
+/// firmware happens to be on it at provisioning time.
+class _DeviceProfile {
+  final String id;
+  final String name;
+  final String androidVersion;
+  final String note;
+  const _DeviceProfile({
+    required this.id,
+    required this.name,
+    required this.androidVersion,
+    required this.note,
+  });
+}
+
+/// The devices this build has been qualified against. A single entry today —
+/// see [_DeviceModelPicker]'s footnote — but kept as a list (not a fixed
+/// value) so adding the next supported model is a one-line change here, not
+/// a rewrite of this screen.
+const _kDeviceProfiles = [
+  _DeviceProfile(
+    id: 'mc3390r',
+    name: 'Zebra MC3300 Series (MC3390R)',
+    androidVersion: 'Android 8.0 (Oreo)',
+    note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
+  ),
+];
+
+/// Step 1 of setup: which handheld model this terminal is. Required before
+/// "บันทึกและเริ่มใช้งาน" unlocks (see `canSave` in [DeviceSetupScreen]) —
+/// recorded once per terminal so the fleet's hardware inventory stays
+/// accurate without anyone having to audit it by hand later.
+class _DeviceModelPicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onPick;
+  final LocaleController loc;
+  const _DeviceModelPicker({required this.selected, required this.onPick, required this.loc});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          loc.t('ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อให้ระบบตั้งค่าฟังก์ชันเครื่องอ่าน RFID ให้ถูกต้อง'),
+          style: TextStyle(fontSize: 12.5, color: C.muted, height: 1.4),
+        ),
+        const SizedBox(height: 11),
+        ..._kDeviceProfiles.map((p) => Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: _DeviceProfileTile(
+                profile: p,
+                selected: selected == p.id,
+                onTap: () => onPick(p.id),
+              ),
+            )),
+        Text(
+          loc.t('ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป'),
+          style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeviceProfileTile extends StatelessWidget {
+  final _DeviceProfile profile;
+  final bool selected;
+  final VoidCallback onTap;
+  const _DeviceProfileTile({required this.profile, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? C.limeBg : C.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: selected ? C.limeBorder : C.border2, width: selected ? 1.5 : 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected ? C.lime : C.neutralBg,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.qr_code_scanner,
+                    size: 20, color: selected ? C.limeDeep : C.ink2),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(profile.name,
+                        style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('${profile.androidVersion} · ${profile.note}',
+                        style: TextStyle(fontSize: 12, color: C.muted)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 22,
+                color: selected ? C.limeText : C.chevron,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

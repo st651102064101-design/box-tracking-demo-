@@ -27,6 +27,7 @@ class Prefs {
   static const _kDeviceGate = 'boxtrace_device_gate';
   static const _kDeviceConfigured = 'boxtrace_device_configured';
   static const _kIdleLock = 'boxtrace_idle_lock_minutes';
+  static const _kDeviceModel = 'boxtrace_device_model';
 
   static const _kStateCache = 'boxtrace_state_cache';
   static const _kOutbox = 'boxtrace_pda_outbox';
@@ -111,6 +112,16 @@ class Prefs {
   /// Minutes of inactivity before the operator is signed out. 0 disables it.
   int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
   set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
+
+  /// Which handheld model this terminal is provisioned on (e.g. `'mc3390r'`),
+  /// picked once during setup — see [DeviceSetupScreen]'s device-model step.
+  /// Currently informational rather than switching behavior (every profile
+  /// in the catalog maps to the same Zebra RFID bridge today), but recording
+  /// it up front means a future model with different reader hardware doesn't
+  /// need every already-deployed terminal re-provisioned to tell them apart.
+  /// Empty means "not chosen yet."
+  String get deviceModel => _p.getString(_kDeviceModel) ?? '';
+  set deviceModel(String v) => _p.setString(_kDeviceModel, v);
 
   /// Empty means "nothing picked yet" — the "ล่าสุด" shortcut stays hidden
   /// until a real คลัง/ประตู combination has been confirmed at least once.
