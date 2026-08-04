@@ -1755,6 +1755,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="row" style="margin-top:20px;">
         <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
         <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
+        <button class="btn gray" id="btnCancelBox" style="display:none;">ยกเลิกแก้ไข</button>
       </div>
     </div>
     <div class="tablecard">
@@ -2879,7 +2880,51 @@ $all('#boxModeSw .ivs-btn').forEach(function(btn) {
   btn.addEventListener('click', function() { setBoxRegMode(btn.dataset.mode); });
 });
 
+/* ═══════ EDIT (Master "ลงทะเบียนกล่อง" is CRUD-only — see editBox/delBox) ═══
+   ทุก action ที่เกี่ยวกับ lifecycle จริงของกล่อง (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/
+   Hold/ชำรุด/กล่องหาย ฯลฯ) ต้องทำที่หน้า Inventory เท่านั้น — เพื่อไม่ให้มี
+   เมนูซ้ำกันสองที่ หน้านี้จึงมีแค่ แก้ไข field ทะเบียน (ประเภท/Lot/หมดอายุ/
+   ซัพพลายเออร์) กับลบ ตรงกับรูปแบบเดียวกับตาราง "ประเภทกล่อง" ข้างล่าง */
+var editingBox=null;
+function editBox(tag){
+  var b=S.boxes[tag];if(!b)return;
+  // goSetup('box') switches sub-tabs on its own setTimeout(60) — its click
+  // handler calls setBoxRegMode(), which resets #btnAddBox's label back to
+  // "บันทึกรับเข้า". Filling the form has to happen *after* that settles,
+  // not before, or the edit-mode label/fields get immediately clobbered.
+  goSetup('box');
+  setTimeout(function(){
+    editingBox=tag;
+    setBoxRegMode('single');
+    var t=$('#bTag');if(t){t.value=tag;t.readOnly=true;t._override=true;}
+    ['btnRegenTag','btnOverrideTag'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=true;});
+    setv('bType',b.type||'');setv('bLot',b.lot||'');setv('bExpiry',b.expiry||'');setv('bSupplier',b.supplier||'');
+    $('#btnAddBox').textContent='อัปเดตกล่อง';$('#btnCancelBox').style.display='inline-flex';
+  },80);
+}
+window.editBox=editBox;
+function cancelEditBox(){
+  editingBox=null;
+  var t=$('#bTag');if(t){t.readOnly=true;t._override=false;}
+  ['btnRegenTag','btnOverrideTag'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=false;});
+  ['bLot','bExpiry','bSupplier'].forEach(function(i){setv(i,'');});
+  refreshTagId();
+  $('#btnAddBox').textContent='บันทึกรับเข้า';$('#btnCancelBox').style.display='none';
+}
+$('#btnCancelBox').onclick=cancelEditBox;
+
 $('#btnAddBox').onclick = function() {
+  if (editingBox) {
+    var tag = editingBox;
+    var b = S.boxes[tag]; if (!b) { cancelEditBox(); return; }
+    var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
+    var before = Object.assign({}, b);
+    b.type = type; b.lot = val('bLot'); b.expiry = val('bExpiry'); b.supplier = val('bSupplier');
+    auditEntry('UPDATE', USER, tag, typeName(type), before, Object.assign({}, b));
+    save(); cancelEditBox();
+    toast('อัปเดตกล่องแล้ว', tag); renderAll();
+    return;
+  }
   if (boxRegMode === 'single') {
     var tag = val('bTag'); if (!tag) return toast('กรอก บาร์โค้ด', null, 'err');
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
@@ -5871,10 +5916,16 @@ function renderSetup(){
     var lotExpCell=(b.lot||b.expiry)
       ?(b.lot?('<span class="mono">'+esc(b.lot)+'</span>'):'')+(b.expiry?((b.lot?'<div class="tag" style="margin-top:2px;">':'')+esc(b.expiry)+' '+expiryPill(b)+(b.lot?'</div>':'')):'')
       :'<span class="muted small">-</span>';
-    return '<tr data-tag="'+esc(b.tag)+'" style="cursor:pointer;" onclick="if(event.target.type!==\'checkbox\')openBoxActionModal(\''+esc(b.tag)+'\')"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
+    /* CRUD only here (แก้ไข/ลบ) — ทุกอย่างที่เป็น lifecycle จริงของกล่อง
+       (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
+       เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
+    return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
       +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
-      +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td></tr>';
+      +'<td class="c"><div class="row-actions">'
+      +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
+      +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
+      +'</div></td></tr>';
   }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
   var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
