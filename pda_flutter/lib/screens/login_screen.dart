@@ -209,6 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await showPinPad(
       context,
       title: 'ใส่รหัส PIN ของ ${e.name}',
+      showForgot: true,
       validate: (entered) async {
         try {
           final ok = await c.api.verifyEmployeePin(e.id, entered);
@@ -219,8 +220,74 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
     if (result == null) return; // cancelled
+    if (result.forgot) {
+      await _forgotPin(e);
+      return;
+    }
     if (result.pin == null) return;
     if (!mounted) return;
+    final err = c.identifyAs(e);
+    if (err != null) c.toastMsg(err, '', ResultKind.err);
+  }
+
+  /// "ลืมรหัส PIN?" — mints a 6-digit OTP and emails it straight to whatever
+  /// address is on this employee's own record (see backend/src/routes/pin.ts).
+  /// No admin in the loop: unlike the shared PDA there's a real inbox only
+  /// that person can read, so there's no second person needed to relay it.
+  Future<void> _forgotPin(Employee e) async {
+    final c = context.read<AppController>();
+    Map<String, dynamic> req;
+    try {
+      req = await c.api.requestPinReset(e.id);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+
+    if (!mounted) return;
+    final sentTo = req['sentTo']?.toString();
+    c.toastMsg(
+      'ส่งรหัส OTP แล้ว',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      ResultKind.info,
+    );
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!mounted) return;
+    final newPinResult = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
+    );
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    if (!mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
     final err = c.identifyAs(e);
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }

@@ -24,6 +24,19 @@ export const env = {
   pgliteDir: process.env.PGLITE_DIR ?? './.pglite',
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://boxtrace:boxtrace@localhost:5432/boxtrace',
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  // Used to email PDA PIN-reset codes straight to an employee's own inbox
+  // (see routes/pin.ts). Unset in dev by default — sendMail() throws a clear
+  // "not configured" error rather than silently dropping the email, so a
+  // missing setup fails loud instead of leaving an employee locked out with
+  // no explanation.
+  smtp: {
+    host: process.env.SMTP_HOST ?? '',
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: String(process.env.SMTP_SECURE ?? 'false').toLowerCase() === 'true',
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? '',
+  },
 } as const;
 
 export type Env = typeof env;

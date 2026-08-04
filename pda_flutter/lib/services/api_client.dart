@@ -193,4 +193,18 @@ class ApiClient {
     return body['ok'] == true;
   }
 
+  /// POST /api/employees/:id/pin/reset — mints a 6-digit OTP (5 min TTL) and
+  /// emails it to whatever address is on the employee's own record. Returns
+  /// {sentTo, expiresAt}; throws if that employee has no email on file.
+  Future<Map<String, dynamic>> requestPinReset(String employeeId) async {
+    return await _send(() => http.post(_u('/api/employees/$employeeId/pin/reset'), headers: _headers))
+        as Map<String, dynamic>;
+  }
+
+  /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that
+  /// arrived by email, plus the new PIN to set once it checks out.
+  Future<void> confirmPinReset(String employeeId, {required String otp, required String pin}) async {
+    await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
+        headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
+  }
 }
