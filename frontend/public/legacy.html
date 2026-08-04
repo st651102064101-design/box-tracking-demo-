@@ -150,6 +150,13 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 .who-menu .wm-meta{font-size:11.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .who-menu .wm-row .pill,.who-menu .wm-row .btn{flex:0 0 auto;white-space:nowrap;}
 @media(max-width:560px){.who-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;min-width:0;max-width:none;}}
+/* In sidebar-nav mode .who-wrap sits inside the fixed, narrow (var(--sidebar-w))
+   left sidebar — the dropdown's right:0 + min-width:300px anchors it to a box
+   only ~240-280px wide, so it renders with its left edge off-screen. Detach it
+   from that parent entirely and present it as a right-side panel instead. */
+html[data-layout="sidebar"] .who-menu{position:fixed;top:0;right:0;left:auto;bottom:0;
+  width:320px;max-width:88vw;min-width:0;max-height:none;border-radius:0;
+  box-shadow:-8px 0 30px rgba(0,0,0,.3);overflow-y:auto;}
 
 .iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
@@ -176,9 +183,9 @@ main{max-width:1180px;margin:0 auto;padding:0 22px 120px;}
 /* ============================================================ HERO / TYPE ============================================================ */
 .hero{padding:32px 0 24px;border-bottom:.5px solid var(--line);margin-bottom:36px;position:relative;}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.02em;
-  color:var(--accent);text-transform:none;margin-bottom:18px;}
+  color:var(--accentInk);text-transform:none;margin-bottom:18px;}
 .eyebrow::before{content:"";width:22px;height:1.5px;background:var(--accent);display:inline-block;}
-.h-title{font-size:clamp(40px,6.4vw,80px);font-weight:700;letter-spacing:-.045em;line-height:.98;margin:0;
+.h-title{font-size:clamp(40px,6.4vw,80px);font-weight:700;letter-spacing:-.045em;line-height:1.18;margin:0;
   background:linear-gradient(180deg,var(--ink),color-mix(in srgb,var(--ink) 64%,var(--muted)));
   -webkit-background-clip:text;background-clip:text;color:transparent;}
 .h-sub{color:var(--muted);font-size:clamp(17px,2vw,21px);font-weight:400;letter-spacing:-.01em;
@@ -376,10 +383,11 @@ button.fb-kpi{cursor:pointer;} button.fb-kpi:hover{border-color:var(--line2);bac
 .inv-scan-bar .btn{flex:0 0 auto;}
 @media(max-width:640px){.inv-scan-bar{flex-wrap:wrap;}.inv-scan-bar input{order:-1;width:100%;}}
 .invtoolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
-.invsearch{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:transparent;
-  border:1px solid var(--line2);border-radius:12px;padding:0 14px;transition:box-shadow .2s,border-color .2s;}
+.invsearch{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--panelInputBg);
+  border:1px solid var(--panelInputBorder);border-radius:12px;padding:0 14px;transition:box-shadow .2s,border-color .2s;}
 .invsearch:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px var(--accentSoft);}
-.invsearch input{border:none;background:transparent;padding:11px 0;width:100%;}
+.invsearch input{border:none;background:transparent;padding:11px 0;width:100%;color:var(--panelInk);}
+.invsearch input::placeholder{color:var(--panelPlaceholder);}
 .invsearch input:focus{box-shadow:none;background:transparent;}
 .invsearch-ic{color:var(--muted);font-size:14px;flex:0 0 auto;}
 /* customer sub-filter row (shown when status=out) */
@@ -1657,7 +1665,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <thead><tr>
           <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllInv" title="เลือกทั้งหมด"></th>
           <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>พิกัดที่อยู่</th><th>สถานะ</th>
-          <th>ลูกค้า / DO</th><th>ผู้บันทึกล่าสุด</th><th></th>
+          <th>ผู้บันทึกล่าสุด</th><th></th>
         </tr></thead>
         <tbody id="invBody"></tbody>
       </table>
@@ -1705,6 +1713,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <h3>ค้นหากล่อง</h3>
     <div class="gsub">ยิงบาร์โค้ด / บาร์โค้ด หรือพิมพ์เลขกล่อง, PO, DO, ทะเบียนรถ แล้วกด Enter — ระบบดึงทุกกล่องในชุดนั้นพร้อมประวัติและตำแหน่งล่าสุดขึ้นมาให้</div>
+    <div class="row" style="margin:8px 0 2px;">
+      <div class="seg-filter" id="trackSearchModeSeg">
+        <button type="button" class="sf-btn" data-mode="single" onclick="setTrackSearchMode('single')" title="ผลค้นหาล่าสุดแทนที่ของเดิมเสมอ">เดี่ยว</button>
+        <button type="button" class="sf-btn active" data-mode="multi" onclick="setTrackSearchMode('multi')" title="สะสมผลค้นหาไปเรื่อยๆ จนกว่าจะกดล้างข้อมูล">หลายรายการ</button>
+      </div>
+    </div>
     <div class="pad">
       <input id="scanTrack" placeholder="เช่น CRT-01, PO-2026-012 หรือ DO-0001" autocomplete="off">
       <button class="scanbtn" id="btnScanTrack">ค้นหา</button>
@@ -2401,6 +2415,19 @@ var KEY='boxtrace_p1';
 var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
 var USER='demo';try{var savedUser=localStorage.getItem('boxtrace_user');if(savedUser)USER=savedUser;}catch(e){}
 var pendingOut=[];var pendingIn=[];var trackTags=[];
+/* เดี่ยว = ผลค้นหาล่าสุดแทนที่ของเดิมเสมอ, หลายรายการ (ค่าเดิม) = สะสมไปเรื่อยๆ
+   จนกว่าจะกดล้างข้อมูล — ดู trackBox() */
+var TRACK_MODE_KEY='boxtrace_track_mode';
+var trackSearchMode='multi';
+try{var _tm=localStorage.getItem(TRACK_MODE_KEY);if(_tm==='single'||_tm==='multi')trackSearchMode=_tm;}catch(e){}
+function setTrackSearchMode(m){
+  trackSearchMode=(m==='single')?'single':'multi';
+  try{localStorage.setItem(TRACK_MODE_KEY,trackSearchMode);}catch(e){}
+  var seg=document.getElementById('trackSearchModeSeg');
+  if(seg)Array.prototype.forEach.call(seg.querySelectorAll('.sf-btn'),function(b){b.classList.toggle('active',b.dataset.mode===trackSearchMode);});
+}
+window.setTrackSearchMode=setTrackSearchMode;
+setTrackSearchMode(trackSearchMode); /* sync the toggle's active state to whatever was persisted */
 
 /* ===== TABLE SORT DIRECTION (ล่าสุด/เก่าสุด) — every data table defaults to "ล่าสุด" (DESC),
    with a toggle to flip to "เก่าสุด" (ASC). State lives in a plain object (not persisted —
@@ -3848,7 +3875,7 @@ function openBoxActionModal(tag){
   if(b.status==='out'||b.status==='warehouse')actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></span> ตีกล่องหาย',cls:'btn red',fn:'closeModal();markLost(\''+esc(tag)+'\')'});
   if(b.status==='damage')actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></span> ตีกล่องหาย',cls:'btn red',fn:'closeModal();markLost(\''+esc(tag)+'\')'});
   if(b.status==='lost')actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span> ยกเลิกสูญหาย / พบแล้ว',cls:'btn pos',fn:'closeModal();recoverLost(\''+esc(tag)+'\')'});
-  if(b.status==='warehouse'||b.status==='pending')actions.push({label:'ลบกล่องนี้',cls:'btn gray',fn:'closeModal();delBox(\''+esc(tag)+'\')'});
+  if(b.status==='warehouse'||b.status==='pending')actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg></span> ลบกล่องนี้',cls:'btn gray',fn:'closeModal();delBox(\''+esc(tag)+'\')'});
 
   openModal(
     '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
@@ -5693,6 +5720,7 @@ function openTrackHelp(){
 window.openTrackHelp=openTrackHelp;
 function trackBox(tag){
   var raw=(tag||val('scanTrack')).trim();if(!raw)return;
+  if(trackSearchMode==='single')trackTags.length=0; /* เดี่ยว: ผลค้นหาล่าสุดแทนที่ของเดิม */
   var one=resolveTag(raw);
   /* 1) exact box tag → track that single box (original behavior) */
   if(S.boxes[one]){
@@ -8095,11 +8123,6 @@ function invLocText(b) {
   }
   return locShort(b.location);
 }
-function invCustText(b) {
-  if (b.status === 'out') return '<b>' + esc(custName(b.customer)) + '</b>' + (b.do ? '<div class="tag">' + esc(b.do) + '</div>' : '');
-  if (b.status === 'lost') return '<span class="small muted">' + esc(custName(b.customer)) + (b.lostReason === 'auto-overdue' ? ' · Auto' : '') + '</span>';
-  return '<span class="muted">—</span>';
-}
 function canRelocateBox(b) {
   return !!b && (b.status === 'warehouse' || (b.status === 'pending' && b.labeled === true));
 }
@@ -8537,11 +8560,10 @@ function renderInventory() {
       + '<td>' + esc(typeName(b.type)) + '</td>'
       + '<td>' + invLocText(b) + '</td>'
       + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
-      + '<td>' + invCustText(b) + '</td>'
       + '<td class="small">' + esc(invLastRecorder(b)) + '</td>'
       + '<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
     + '</tr>';
-  }).join('') : emptyRow(8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
+  }).join('') : emptyRow(7, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
 }
 
@@ -11554,6 +11576,13 @@ function openColumnMapModal(opts){
     "↑ ขาออกอย่างเดียว (Gate Out Only)":"Outbound only (Gate Out Only)","กะเช้า (08:00–17:00)":"Morning (08:00-17:00)",
     "กะบ่าย (14:00–22:00)":"Afternoon (14:00-22:00)","กะดึก (22:00–06:00)":"Night (22:00-06:00)","ทั่วไป / ยืดหยุ่น":"General / Flexible",
     "พนักงานปฏิบัติการ (ยิง Gate)":"Operator (scan gate)","หัวหน้างาน":"Supervisor","ผู้ดูแลระบบ (Master)":"Administrator (Master)",
+    "สิทธิ์การใช้งานทำอะไรได้บ้าง:":"What each access level can do:","พนักงานปฏิบัติการ / หัวหน้างาน":"Operator / Supervisor",
+    "— ยิง Gate, แก้ไขข้อมูลหลัก, และเพิ่ม/แก้ไข/ลบพนักงานได้ทั้งหมด ·":"- can scan Gate, edit master data, and add/edit/delete any employee ·",
+    "— ยิง Gate และแก้ไขข้อมูลหลักได้ แต่จัดการพนักงานคนอื่นไม่ได้ (หัวหน้างานเป็นแค่ตำแหน่ง ไม่ได้เพิ่มสิทธิ์) ·":"- can scan Gate and edit master data, but can't manage other employees (Supervisor is just a job title, it doesn't grant extra access) ·",
+    "— ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย":"- view only, cannot save or edit anything",
+    "นำเข้า Excel":"Import Excel","นำเข้าข้อมูลจากไฟล์ Excel/CSV":"Import data from an Excel/CSV file",
+    "รอติด Tag RFID":"Awaiting RFID tag","กล่องที่ติดป้ายบาร์โค้ดแล้วแต่ยังไม่ได้ผูกแท็ก RFID":"Boxes already barcode-labeled but not yet RFID-tagged",
+    "ประกอบจาก วันที่ผลิต · รหัสคลัง · กะการทำงาน (คำนวณจากเวลาปัจจุบัน) · ลำดับชุด — กด \"แก้เอง\" ถ้าต้องการระบุเอง":"Built from production date · warehouse code · work shift (calculated from the current time) · batch sequence - press \"Manual\" to enter it yourself",
     "ผู้ชมอย่างเดียว":"Viewer only","ปฏิบัติงาน":"Active","ลา / พักงานชั่วคราว":"On leave / Suspended","พ้นสภาพ":"Terminated",
     "รหัสพนักงาน (สร้างอัตโนมัติ)":"Employee code (auto-generated)","ชื่อ–นามสกุล":"Full name","ตำแหน่ง":"Position",
     "แผนก / หน่วยงาน":"Department / Unit","คลังที่สังกัด":"Assigned warehouse","กะการทำงาน":"Work shift","— ไม่ระบุ —":"- none -",
@@ -12184,6 +12213,11 @@ const MAT={
   wall:mat(0xffffff,{roughness:0.55,metalness:0.34}),roof:mat(0xffffff,{roughness:0.6,metalness:0.3}),
   /* หลังคาทึบของโดม + แผงโซลาร์เซลล์ที่วางบนนั้น (โหมด "หลังคาจริง") */
   roofSolid:mat(0xffffff,{roughness:0.58,metalness:0.34}),
+  /* หน้าจั่วทึบ — ใช้ geometry แผ่นเดียวกันทั้งหัวและท้ายอาคารโดยไม่พลิกด้าน จึงมี
+     ด้านหนึ่งที่ normal หันเข้าตัวอาคาร ถ้าใช้ MAT.wall (single-sided) ตรงๆ ปลาย
+     นั้นจะโปร่งมองทะลุจากด้านนอก ต้อง DoubleSide เฉพาะจั่วเท่านั้น (ไม่แตะ
+     MAT.wall เดิม เพราะกล่องผนังอื่นๆ ทั่วทั้งฉากใช้ร่วมกันอยู่และไม่มีปัญหานี้) */
+  wallGable:mat(0xffffff,{roughness:0.55,metalness:0.34,side:THREE.DoubleSide}),
   solar:mat(0x161d33,{roughness:0.22,metalness:0.62}),
   dockwall:mat(0xffffff,{roughness:0.7}),column:mat(0xffffff,{roughness:0.5,metalness:0.35}),
   door:mat(0xffffff,{roughness:0.48,metalness:0.42}),
@@ -12603,12 +12637,17 @@ const YARD=[];                                    // ที่จอดรถบ
      off    ซ่อนทั้งหลังคา รวมซี่โครง จั่ว และชายคา เหลือแต่ตัวอาคาร
    grp คลุมทุกชิ้นที่เป็น "หลังคา" โหมด off จึงปิดทั้งชุดได้ด้วยการซ่อน grp
    skin = แผ่นโค้ง, gable = หน้าจั่วหัวท้าย (คนละวัสดุกันตอนเป็นหลังคาทึบ) */
-const ROOF={mode:'glass',grp:null,skin:[],gable:[],solar:null};
+/* ค่าเริ่มต้นเป็น 'solid' (ไม่ใช่ 'glass') เพื่อให้เห็นหลังคาจริงตั้งแต่เปิดครั้งแรก
+   และจำค่าที่ผู้ใช้เลือกไว้ข้าม reload ด้วย (แพทเทิร์นเดียวกับ theme/layout/lang) */
+const ROOF_MODE_KEY='boxtrace_roofmode';
+function loadRoofMode(){try{var m=localStorage.getItem(ROOF_MODE_KEY);return(m==='glass'||m==='solid'||m==='off')?m:'solid';}catch(e){return'solid';}}
+function saveRoofMode(m){try{localStorage.setItem(ROOF_MODE_KEY,m);}catch(e){}}
+const ROOF={mode:loadRoofMode(),grp:null,skin:[],gable:[],solar:null};
 function applyRoof(){
   const solid=ROOF.mode==='solid';
   if(ROOF.grp)ROOF.grp.visible=ROOF.mode!=='off';
   ROOF.skin.forEach(m=>{m.material=solid?MAT.roofSolid:MAT.roofGlass;});
-  ROOF.gable.forEach(m=>{m.material=solid?MAT.wall:MAT.roofGlass;});
+  ROOF.gable.forEach(m=>{m.material=solid?MAT.wallGable:MAT.roofGlass;});
   if(ROOF.solar)ROOF.solar.visible=solid;
 }
 /* ไฟในคลัง — ปิดไว้เป็นค่าเริ่มต้น เปิดเมื่อกดปุ่มเท่านั้น
@@ -14674,6 +14713,7 @@ function setRoofUI(){
 }
 roofBtn.addEventListener('click',()=>{
   ROOF.mode=ROOF_SEQ[(ROOF_SEQ.indexOf(ROOF.mode)+1)%ROOF_SEQ.length];
+  saveRoofMode(ROOF.mode);
   applyRoof();
   setRoofUI();
 });
