@@ -34,12 +34,16 @@ class RfidReaderController(private val context: Context) :
     }
 
     private val main = Handler(Looper.getMainLooper())
-    // One short beep per read batch — not per tag, or a multi-tag inventory
-    // burst turns into a machine-gun of overlapping tones.
-    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }
+    // One tick per tag read (not once per batch) — dense, continuous feedback
+    // while the trigger is held on a tag, matching Zebra's own 123RFID Mobile
+    // reference app. STREAM_MUSIC (not STREAM_NOTIFICATION) so it isn't
+    // silenced by a device's "silent notifications" policy, and a short 40ms
+    // tone so back-to-back reads produce distinct ticks instead of one tone
+    // cutting the next one off.
+    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
     private fun beep() {
         try {
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
         } catch (e: Exception) {
             Log.w(TAG, "beep failed", e)
         }
@@ -465,10 +469,10 @@ class RfidReaderController(private val context: Context) :
             val rd = reader ?: return
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
             if (tags != null && tags.isNotEmpty()) {
-                beep()
                 // Sort tags by Peak RSSI descending so near tags (strongest signal) are emitted first
                 val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
                 for (t in sortedTags) {
+                    beep()
                     tagCount++
                     val epc = t.getTagID()
                     lastEpc = epc
