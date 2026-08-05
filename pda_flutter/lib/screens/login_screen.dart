@@ -208,6 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _verifyThenEnter(Employee e) async {
     final c = context.read<AppController>();
+    String? otpSentTo;
     final result = await showPinPad(
       context,
       title: 'ใส่รหัส PIN ของ ${e.name}',
@@ -220,10 +221,19 @@ class _LoginScreenState extends State<LoginScreen> {
           return 'ตรวจสอบรหัสไม่สำเร็จ — เช็คการเชื่อมต่อแล้วลองใหม่';
         }
       },
+      onForgot: () async {
+        try {
+          final req = await c.api.requestPinReset(e.id);
+          otpSentTo = req['sentTo']?.toString();
+          return null;
+        } catch (err) {
+          return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+        }
+      },
     );
     if (result == null) return; // cancelled
     if (result.forgot) {
-      await _forgotPin(e);
+      await _forgotPin(e, otpSentTo);
       return;
     }
     if (result.pin == null) return;
@@ -236,19 +246,14 @@ class _LoginScreenState extends State<LoginScreen> {
   /// address is on this employee's own record (see backend/src/routes/pin.ts).
   /// No admin in the loop: unlike the shared PDA there's a real inbox only
   /// that person can read, so there's no second person needed to relay it.
-  Future<void> _forgotPin(Employee e) async {
-    final c = context.read<AppController>();
-    Map<String, dynamic> req;
-    try {
-      req = await c.api.requestPinReset(e.id);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
-      return;
-    }
-
+  ///
+  /// The OTP request itself already ran inside the PIN sheet's `onForgot`
+  /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
+  /// state for the whole round trip instead of popping and leaving this
+  /// screen idle while it waits. [sentTo] is whatever that request found.
+  Future<void> _forgotPin(Employee e, String? sentTo) async {
     if (!mounted) return;
-    final sentTo = req['sentTo']?.toString();
+    final c = context.read<AppController>();
     c.toastMsg(
       'ส่งรหัส OTP แล้ว',
       sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
