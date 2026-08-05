@@ -297,6 +297,14 @@ class RfidReaderController(private val context: Context) :
             cfg.setTari(0)
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
+            // Enable DPO (Dynamic Power Optimization) — Zebra's smart power management
+            // so near tags with strong signals respond first before ramping up power.
+            try {
+                rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE)
+            } catch (e: Exception) {
+                Log.w(TAG, "enabling DPO failed", e)
+            }
+
             // singulation S0 / state A — read tags continuously while triggered
             val s = rd.Config.Antennas.getSingulationControl(1)
             s.setSession(SESSION.SESSION_S0)
@@ -458,7 +466,9 @@ class RfidReaderController(private val context: Context) :
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
             if (tags != null && tags.isNotEmpty()) {
                 beep()
-                for (t in tags) {
+                // Sort tags by Peak RSSI descending so near tags (strongest signal) are emitted first
+                val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
+                for (t in sortedTags) {
                     tagCount++
                     val epc = t.getTagID()
                     lastEpc = epc
