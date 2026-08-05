@@ -1131,6 +1131,15 @@ class AppController extends ChangeNotifier {
   }
 
   void _onReaderTrigger(bool pressed) {
+    if (!pressed) {
+      // Always safe, and necessary: if the screen changed while the trigger
+      // was still physically held (navigating away mid-press), the reader
+      // must not keep scanning in the background on a screen that has no
+      // business reading tags. Stopping is never gated on which screen this
+      // is — only starting is.
+      rfid.stopInventory();
+      return;
+    }
     if (screen != Screen.scan &&
         screen != Screen.track &&
         screen != Screen.login &&
@@ -1138,11 +1147,7 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidRegister) {
       return;
     }
-    if (pressed) {
-      rfid.startInventory();
-    } else {
-      rfid.stopInventory();
-    }
+    rfid.startInventory();
   }
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
