@@ -157,17 +157,6 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                         style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    PrimaryButton(
-                      label: c.busy ? loc.t('กำลังเชื่อมต่อ…') : loc.t('บันทึก & เชื่อมต่อ'),
-                      onTap: c.busy
-                          ? null
-                          : () => c.applyConnection(
-                                baseUrl: _url.text,
-                                username: _account.text,
-                                password: _password.text,
-                              ),
-                    ),
                   ],
                 ),
               ),
