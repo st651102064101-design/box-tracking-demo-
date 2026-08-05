@@ -5091,9 +5091,19 @@ function statusPill(s,ctx){
 function rfidBadge(b){
   if(!b||b.labeled===false)return '';
   return b.rfidTid
-    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="TID '+esc(b.rfidTid)+'">RFID</span>'
+    /* trailing chars of the TID shown right on the pill (hover still shows the
+       full TID via title) so an operator can identify the tag at a glance
+       instead of having to hover/click every row; click copies the full TID */
+    ? ' <span class="pill mono" style="font-size:10px;padding:1px 6px;cursor:pointer;" title="TID '+esc(b.rfidTid)+' — คลิกเพื่อคัดลอก" data-tid="'+esc(b.rfidTid)+'" onclick="copyRfidTid(this,event)">RFID ·'+esc(b.rfidTid.slice(-6))+'</span>'
     : ' <span class="pill warn" style="font-size:10px;padding:1px 6px;">ไม่มี RFID</span>';
 }
+function copyRfidTid(el,ev){
+  if(ev)ev.stopPropagation();
+  var tid=el.getAttribute('data-tid');if(!tid)return;
+  navigator.clipboard.writeText(tid).catch(function(){});
+  toast('คัดลอก RFID TID แล้ว',tid,'info');
+}
+window.copyRfidTid=copyRfidTid;
 function journeyDots(s){var d1='<span class="jd '+(s==='warehouse'?'on-wh':'dim')+'"></span>';var d2='<span class="jd '+(s==='out'?'on-out':'dim')+'"></span>';var d3='<span class="jd '+(s==='lost'?'on-lost':'dim')+'"></span>';return '<span class="journey">'+d1+d2+d3+'</span>';}
 
 /* ===================================================================
