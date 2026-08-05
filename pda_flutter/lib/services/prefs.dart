@@ -26,13 +26,15 @@ class Prefs {
   static const _kDeviceWh = 'boxtrace_device_wh';
   static const _kDeviceGate = 'boxtrace_device_gate';
   static const _kDeviceConfigured = 'boxtrace_device_configured';
-  static const _kIdleLock = 'boxtrace_idle_lock_minutes';
   static const _kDeviceModel = 'boxtrace_device_model';
 
   static const _kStateCache = 'boxtrace_state_cache';
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
+  static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
+  static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -40,6 +42,12 @@ class Prefs {
   // "ล่าสุด" pick still remembers after the app restarts.
   static const _kLastWh = 'boxtrace_last_wh';
   static const _kLastGate = 'boxtrace_last_gate';
+
+  // The employee who most recently started a shift on this terminal, so the
+  // badge screen can float them to the top of "หรือแตะชื่อของคุณ" instead of
+  // making the same person hunt for their own name in a long alphabetical
+  // list every time. Per-device, same as the คลัง/ประตู shortcut above.
+  static const _kLastEmp = 'boxtrace_last_emp';
 
   // per-device memory of "asked this employee to set a PIN, they skipped" —
   // the PIN itself is server-side, see [pinSkipped]/[skipPin]/[clearPinSkip].
@@ -50,6 +58,28 @@ class Prefs {
 
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
+
+  /// Antenna transmit power as a percentage of the reader's max — the knob
+  /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full
+  /// power (ไกล) since that's what the reader itself defaults to on connect.
+  int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
+  set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
+
+  /// How many boxes got an RFID tag registered today, on this device — resets
+  /// itself the first time it's touched on a new calendar day rather than
+  /// needing a midnight timer. `today` is injected (not `DateTime.now()`
+  /// internally) so callers stamp it once per call and tests can control it.
+  int rfidRegisteredToday(String today) {
+    if (_p.getString(_kRfidRegDate) != today) return 0;
+    return _p.getInt(_kRfidRegCount) ?? 0;
+  }
+
+  int bumpRfidRegisteredToday(String today) {
+    final next = rfidRegisteredToday(today) + 1;
+    _p.setString(_kRfidRegDate, today);
+    _p.setInt(_kRfidRegCount, next);
+    return next;
+  }
 
   /// Baked in at build time so a device build ships pointing at the right host
   /// without an operator having to type a URL on a handheld keypad:
@@ -109,10 +139,6 @@ class Prefs {
   bool get deviceConfigured => _p.getBool(_kDeviceConfigured) ?? false;
   set deviceConfigured(bool v) => _p.setBool(_kDeviceConfigured, v);
 
-  /// Minutes of inactivity before the operator is signed out. 0 disables it.
-  int get idleLockMinutes => _p.getInt(_kIdleLock) ?? 10;
-  set idleLockMinutes(int v) => _p.setInt(_kIdleLock, v);
-
   /// Which handheld model this terminal is provisioned on (e.g. `'mc3390r'`),
   /// picked once during setup — see [DeviceSetupScreen]'s device-model step.
   /// Currently informational rather than switching behavior (every profile
@@ -130,6 +156,13 @@ class Prefs {
 
   String get lastGate => _p.getString(_kLastGate) ?? '';
   set lastGate(String v) => _p.setString(_kLastGate, v);
+
+  /// Employee id of the last person to start a shift here — empty until
+  /// someone has. Only a display hint for the badge screen's ordering; it
+  /// grants nothing and still goes through the same PIN gate as any other
+  /// name on the list.
+  String get lastEmpId => _p.getString(_kLastEmp) ?? '';
+  set lastEmpId(String v) => _p.setString(_kLastEmp, v);
 
   /// Last known `S` snapshot. Restored before the network call on boot so the
   /// badge screen has employee names — and the scanner has box data — even

@@ -74,6 +74,11 @@ class Employee {
   /// connection — the only things on the PDA worth gating.
   bool get isSupervisor => access == 'supervisor' || access == 'admin';
 
+  /// Gates the hardware-debug tiles in Settings (raw RFID reads, the backend
+  /// URL) — low-level values a regular operator has no use for and that only
+  /// add noise/confusion to their screen.
+  bool get isAdmin => access == 'admin';
+
   /// What is actually printed on this person's badge. The WMS fills `scanCode`
   /// in with the employee id when it is left blank, but records created before
   /// that never got one — so fall back to the id here too, or everyone already

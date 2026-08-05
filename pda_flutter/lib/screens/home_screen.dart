@@ -137,6 +137,7 @@ List<Widget> _postPickerBody(AppController c) {
   }
   final gates = c.S?.gatesOf(pendingWh) ?? const [];
   final whName = c.S?.whName(pendingWh) ?? pendingWh;
+  final gateTypes = c.S?.gateTypesOf(pendingWh) ?? const {};
   return [
     const SizedBox(height: 16),
     Row(
@@ -161,7 +162,7 @@ List<Widget> _postPickerBody(AppController c) {
       children: gates
           .map((g) => _GatePickChip(
                 label: '$g',
-                type: c.S?.gateTypesOf(pendingWh)['$g'] ?? 'both',
+                type: gateTypes['$g'] ?? 'both',
                 onTap: () => c.confirmPost(pendingWh, g),
               ))
           .toList(),

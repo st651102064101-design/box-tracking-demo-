@@ -1,6 +1,8 @@
 package com.abss.boxtrace_pda
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -32,6 +34,16 @@ class RfidReaderController(private val context: Context) :
     }
 
     private val main = Handler(Looper.getMainLooper())
+    // One short beep per read batch — not per tag, or a multi-tag inventory
+    // burst turns into a machine-gun of overlapping tones.
+    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }
+    private fun beep() {
+        try {
+            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+        } catch (e: Exception) {
+            Log.w(TAG, "beep failed", e)
+        }
+    }
     private val exec = Executors.newSingleThreadExecutor()
 
     private var readers: Readers? = null
@@ -48,6 +60,17 @@ class RfidReaderController(private val context: Context) :
     private var tagCount = 0L
     private var lastEpc: String? = null
     private var lastRssi: Int? = null
+    // How often the inventory-time TID piggyback came back empty and the
+    // explicit fallback read (readTidExplicit) had to run instead, and how
+    // often that fallback actually recovered a TID — see eventReadNotify.
+    // Surfaced in diagnostics() so "TID keeps failing" can be told apart from
+    // "the piggyback path never works on this reader/firmware" at a glance.
+    private var tidFallbackAttempts = 0L
+    private var tidFallbackSuccesses = 0L
+    // Whether the physical gun trigger is currently held — readTidExplicit
+    // has to stop inventory to run an access operation, and uses this to
+    // decide whether to start it again afterwards.
+    @Volatile private var triggerHeld = false
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -101,6 +124,8 @@ class RfidReaderController(private val context: Context) :
         m["lastEpc"] = lastEpc
         m["lastRssi"] = lastRssi
         m["lastError"] = lastError
+        m["tidFallbackAttempts"] = tidFallbackAttempts
+        m["tidFallbackSuccesses"] = tidFallbackSuccesses
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -176,8 +201,9 @@ class RfidReaderController(private val context: Context) :
                     status("error", "เชื่อมต่อไม่สำเร็จ")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "connect failed", e)
-                status("error", e.message ?: "เชื่อมต่อไม่สำเร็จ")
+                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
+                Log.e(TAG, "connect failed$detail", e)
+                status("error", (e.message ?: "เชื่อมต่อไม่สำเร็จ") + detail)
             }
         }
     }
@@ -271,6 +297,14 @@ class RfidReaderController(private val context: Context) :
             cfg.setTari(0)
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
+            // Enable DPO (Dynamic Power Optimization) — Zebra's smart power management
+            // so near tags with strong signals respond first before ramping up power.
+            try {
+                rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE)
+            } catch (e: Exception) {
+                Log.w(TAG, "enabling DPO failed", e)
+            }
+
             // singulation S0 / state A — read tags continuously while triggered
             val s = rd.Config.Antennas.getSingulationControl(1)
             s.setSession(SESSION.SESSION_S0)
@@ -279,6 +313,22 @@ class RfidReaderController(private val context: Context) :
             rd.Config.Antennas.setSingulationControl(1, s)
 
             rd.Actions.PreFilters.deleteAll()
+
+            // Ask the reader to report every field it has for each tag, not
+            // just the EPC — TID above all (the factory-burned TID is what
+            // makes a tag globally unique; the EPC alone is just whatever we
+            // ourselves wrote into it), plus PC/CRC/phase/etc. for the
+            // diagnostics screen. This used to pass `arrayOf(TAG_FIELD.TID)`,
+            // which *replaces* the reported set rather than adding to it, so
+            // it silently turned off the PC/CRC/antenna/channel fields the
+            // live viewer shows — hence those reading "—" as well.
+            try {
+                val storage = rd.Config.getTagStorageSettings()
+                storage.setTagFields(arrayOf(TAG_FIELD.ALL_TAG_FIELDS))
+                rd.Config.setTagStorageSettings(storage)
+            } catch (e: Exception) {
+                Log.w(TAG, "enabling full tag-field reporting failed — reads may carry EPC only", e)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "configure failed", e)
         }
@@ -301,9 +351,11 @@ class RfidReaderController(private val context: Context) :
     fun startInventory() {
         exec.execute {
             try {
+                Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
                 reader?.Actions?.Inventory?.perform()
             } catch (e: Exception) {
-                Log.w(TAG, "startInventory failed", e)
+                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
+                Log.w(TAG, "startInventory failed$detail", e)
             }
         }
     }
@@ -338,6 +390,7 @@ class RfidReaderController(private val context: Context) :
             reader = null
             readers?.Dispose()
             readers = null
+            toneGen.release()
         } catch (e: Exception) {
             Log.w(TAG, "dispose failed", e)
         }
@@ -352,33 +405,106 @@ class RfidReaderController(private val context: Context) :
         status("disconnected", "เครื่องอ่านหลุดการเชื่อมต่อ")
     }
 
+    /**
+     * Explicit, targeted read of a specific tag's TID memory bank — fallback
+     * for when the inventory-time report comes back without one. Nearly every
+     * EPC Gen2 tag has a TID baked in at the factory (it's mandatory in the
+     * standard), so "this tag has no TID" is rarely the real story behind an
+     * empty read; far more often the inventory round simply didn't carry it.
+     *
+     * Two hard constraints, both learned the painful way, both the reason
+     * this is scheduled onto [exec] rather than called inline:
+     *
+     *  1. It must NOT run on the SDK's event-callback thread. `readWait`
+     *     blocks until the access-operation response arrives, and that
+     *     response is delivered by `Events$ReadDataAndFireEventThread` — the
+     *     very thread `eventReadNotify` runs on. Calling it there blocks the
+     *     thread that would unblock it, and every call died with a bare
+     *     `OperationFailureException`.
+     *  2. An access operation can't run while an inventory is in flight, so
+     *     inventory is stopped first and restarted afterwards if the trigger
+     *     is still held (see [triggerHeld]) — otherwise a held trigger would
+     *     go dead after the first tag.
+     */
+    private fun readTidExplicit(epc: String): String? {
+        val rd = reader ?: return null
+        return try {
+            tidFallbackAttempts++
+            try { rd.Actions.Inventory.stop() } catch (_: Exception) { /* wasn't running */ }
+            val tagAccess = rd.Actions.TagAccess
+            // ReadAccessParams is a Java inner (non-static) class — Kotlin
+            // constructs it off an instance of the enclosing TagAccess, not
+            // as a free-standing constructor call.
+            val params = tagAccess.ReadAccessParams()
+            params.setMemoryBank(MEMORY_BANK.MEMORY_BANK_TID)
+            params.setOffset(0)
+            params.setCount(6) // words — 96 bits, the mandatory Gen2 TID length
+            params.setAccessPassword(0)
+            val result = tagAccess.readWait(epc, params, AntennaInfo())
+            // A TID-bank read lands in getMemoryBankData() on this SDK;
+            // getTID() is only populated when the *inventory* carried it.
+            // Take whichever actually came back.
+            val tid = str { result?.getTID() }?.takeIf { it.isNotEmpty() }
+                ?: str { result?.getMemoryBankData() }?.takeIf { it.isNotEmpty() }
+            if (tid != null) tidFallbackSuccesses++
+            tid
+        } catch (ex: Exception) {
+            Log.w(TAG, "explicit TID read failed for $epc", ex)
+            null
+        } finally {
+            // Put the reader back the way the operator left it.
+            if (triggerHeld) {
+                try { rd.Actions.Inventory.perform() } catch (_: Exception) {}
+            }
+        }
+    }
+
     // ── SDK read/status callbacks ─────────────────────────────────────────
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
-            if (tags != null) {
-                for (t in tags) {
+            if (tags != null && tags.isNotEmpty()) {
+                beep()
+                // Sort tags by Peak RSSI descending so near tags (strongest signal) are emitted first
+                val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
+                for (t in sortedTags) {
                     tagCount++
-                    lastEpc = t.getTagID()
+                    val epc = t.getTagID()
+                    lastEpc = epc
                     lastRssi = t.getPeakRSSI().toInt()
-                    emit(
-                        mapOf(
-                            "type" to "tag",
-                            "epc" to t.getTagID(),
-                            "rssi" to t.getPeakRSSI().toInt(),
-                            // Raw diagnostics for the RFID test-read screen — every
-                            // field read defensively since not all of these are
-                            // populated depending on tag/reader/session state.
-                            "tid" to str { t.getTID() },
-                            "pc" to num { t.getPC() },
-                            "crc" to str { t.getStringCRC() },
-                            "antenna" to num { t.getAntennaID().toInt() },
-                            "channel" to str { t.getChannel() },
-                            "phase" to num { t.getPhase().toInt() },
-                            "seenCount" to num { t.getTagSeenCount() },
-                        )
+                    // Whatever the inventory round happened to carry. Empty
+                    // here does NOT mean the tag lacks a TID — see
+                    // readTidExplicit for the fallback and why it can't run
+                    // inline on this thread.
+                    val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
+                    val payload = mutableMapOf<String, Any?>(
+                        "type" to "tag",
+                        "epc" to epc,
+                        "tid" to inventoryTid,
+                        "rssi" to t.getPeakRSSI().toInt(),
+                        "pc" to num { t.getPC() },
+                        "crc" to str { t.getStringCRC() },
+                        "antenna" to num { t.getAntennaID().toInt() },
+                        "channel" to str { t.getChannel() },
+                        "phase" to num { t.getPhase().toInt() },
+                        "seenCount" to num { t.getTagSeenCount() },
                     )
+                    if (inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
+                        // Single tag in front of the antenna (registration /
+                        // live-viewer) and no TID yet — go get it properly on
+                        // the worker thread, then emit once with the result,
+                        // so the UI sees one complete read instead of a
+                        // TID-less one followed by a correction. A bulk
+                        // multi-tag sweep skips this: those callers only need
+                        // the EPC and shouldn't pay per-tag access latency.
+                        exec.execute {
+                            payload["tid"] = readTidExplicit(epc)
+                            emit(payload)
+                        }
+                    } else {
+                        emit(payload)
+                    }
                 }
             }
         }
@@ -389,10 +515,14 @@ class RfidReaderController(private val context: Context) :
                 STATUS_EVENT_TYPE.HANDHELD_TRIGGER_EVENT -> {
                     val evt = data.HandheldTriggerEventData.getHandheldEvent()
                     when (evt) {
-                        HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED ->
+                        HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED -> {
+                            triggerHeld = true
                             emit(mapOf("type" to "trigger", "pressed" to true))
-                        HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED ->
+                        }
+                        HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED -> {
+                            triggerHeld = false
                             emit(mapOf("type" to "trigger", "pressed" to false))
+                        }
                         else -> {}
                     }
                 }

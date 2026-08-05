@@ -15,7 +15,8 @@ class RfidStatus {
 /// EPC is nullable because not all of them are populated on every read
 /// (depends on tag type, reader session state, `setAttachTagDataWithReadEvent`).
 /// This is the "what does the SDK actually give us" view used by the RFID
-/// test-read screen in Settings; normal scan flows still use the plain [RfidService.tags] stream.
+/// test-read screen in Settings and the RFID register/input screens; normal
+/// scan flows still use the plain [RfidService.tags] stream.
 class RfidTagRead {
   final String epc;
   final int? rssi;
@@ -82,8 +83,10 @@ class RfidService {
 
   Stream<String> get tags => _tagCtrl.stream;
   /// Same tag reads as [tags], but with every raw SDK field attached — for the
-  /// RFID test-read screen, not for normal scan flows.
+  /// RFID test-read, register, and input screens, not for normal scan flows.
   Stream<RfidTagRead> get rawTags => _rawTagCtrl.stream;
+  /// Alias of [rawTags] kept for screens written against the older name.
+  Stream<RfidTagRead> get tagReads => _rawTagCtrl.stream;
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
 

@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from '../lib/password.js';
 import { sendMail } from '../lib/mailer.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
+import { writeAuditLog } from '../services/audit.js';
 
 /**
  * PDA PIN management — a 4-digit courtesy lock an employee sets on their own
@@ -34,8 +35,10 @@ function genOtp(): string {
 function maskEmail(email: string): string {
   const [user, domain] = email.split('@');
   if (!domain) return '***';
-  const maskedUser = user.length <= 2 ? user[0] + '*' : user[0] + '*'.repeat(user.length - 2) + user.slice(-1);
-  return `${maskedUser}@${domain}`;
+  const maskedUser = user.length <= 2 ? user[0] + '****' : user.slice(0, 2) + '****';
+  const [dName, dExt] = domain.split('.');
+  const maskedDomain = dName ? dName[0] + '****' + (dExt ? '.' + dExt : '') : domain;
+  return `${maskedUser}@${maskedDomain}`;
 }
 
 /** Throttles reset requests per IP — this endpoint sends an email and is
@@ -62,8 +65,15 @@ employeePinRouter.put(
       .update(employees)
       .set({ pinHash, updatedAt: new Date() })
       .where(eq(employees.id, req.params.id))
-      .returning({ id: employees.id });
+      .returning({ id: employees.id, name: employees.name });
     if (!updated.length) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+    await writeAuditLog(db, {
+      action: 'pin_set',
+      actor: req.user!.username,
+      itemId: req.params.id,
+      itemName: updated[0].name ?? req.params.id,
+      after: { pinChanged: true },
+    });
     res.json({ ok: true });
   }),
 );
@@ -153,6 +163,13 @@ employeePinRouter.post(
       .update(employees)
       .set({ pinHash, pinResetOtpHash: null, pinResetExpiresAt: null, updatedAt: new Date() })
       .where(eq(employees.id, req.params.id));
+    await writeAuditLog(db, {
+      action: 'pin_reset',
+      actor: req.user!.username,
+      itemId: req.params.id,
+      itemName: row.name ?? req.params.id,
+      after: { pinReset: true, via: 'otp' },
+    });
     res.json({ ok: true });
   }),
 );
@@ -187,8 +204,15 @@ employeePinRouter.put(
       .update(employees)
       .set({ username, passwordHash, updatedAt: new Date() })
       .where(eq(employees.id, req.params.id))
-      .returning({ id: employees.id });
+      .returning({ id: employees.id, name: employees.name });
     if (!updated.length) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+    await writeAuditLog(db, {
+      action: 'credentials_set',
+      actor: req.user!.username,
+      itemId: req.params.id,
+      itemName: updated[0].name ?? req.params.id,
+      after: { username },
+    });
     res.json({ ok: true, username });
   }),
 );

@@ -15,7 +15,7 @@ class BootScreen extends StatelessWidget {
           Container(
             width: 78,
             height: 78,
-            decoration: BoxDecoration(color: C.ink, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: C.heroBg, borderRadius: BorderRadius.circular(20)),
             alignment: Alignment.center,
             child: Text('◈', style: TextStyle(color: C.lime, fontSize: 38, fontWeight: FontWeight.w800)),
           ),

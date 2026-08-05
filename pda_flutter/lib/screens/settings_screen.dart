@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import '../services/rfid_service.dart';
+import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
@@ -20,11 +22,22 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final themeCtrl = context.watch<ThemeController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
+    // Hardware-debug tiles (raw RFID reads, the backend URL) are noise for a
+    // regular operator and only worth showing to an admin — see
+    // Employee.isAdmin. A device with no operator identified yet (emp ==
+    // null) is treated the same as canConfigureDevice does elsewhere.
+    final isAdminOrNull = c.emp == null || c.emp!.isAdmin;
 
     return Column(
       children: [
-        StickyHeader(onBack: c.backToHome, title: const Text('ตั้งค่า')),
+        StickyHeader(
+          onBack: c.backToHome,
+          title: const Text('ตั้งค่า'),
+          actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
+        ),
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
@@ -67,19 +80,37 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                    if (isAdminOrNull) ...[
+                      const SizedBox(height: 10),
+                      Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
               const _RfidPanel(),
+              if (isAdminOrNull) ...[
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.biotech_outlined,
+                  title: 'ทดสอบอ่านแท็ก RFID',
+                  sub: 'ดูค่าดิบที่เครื่องอ่านได้ — EPC, TID, PC, CRC, RSSI ฯลฯ',
+                  onTap: () => showRfidTestSheet(context),
+                ),
+                const SizedBox(height: 10),
+                _tile(
+                  icon: Icons.nfc,
+                  title: 'รับค่า RFID',
+                  sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ไว้ทดสอบเครื่องอ่าน',
+                  onTap: () => c.go(Screen.rfidInput),
+                ),
+              ],
               const SizedBox(height: 10),
               _tile(
-                icon: Icons.biotech_outlined,
-                title: 'ทดสอบอ่านแท็ก RFID',
-                sub: 'ดูค่าดิบที่เครื่องอ่านได้ — EPC, TID, PC, CRC, RSSI ฯลฯ',
-                onTap: () => showRfidTestSheet(context),
+                icon: Icons.qr_code_scanner,
+                title: 'ลงทะเบียนแท็ก RFID',
+                sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
+                onTap: () => c.go(Screen.rfidRegister),
               ),
               const SizedBox(height: 16),
               if (c.canConfigureDevice)
@@ -245,10 +276,12 @@ class _RfidPanel extends StatefulWidget {
 class _RfidPanelState extends State<_RfidPanel> {
   Map<String, dynamic> _d = const {};
   Timer? _poll;
+  late int _rangePercent;
 
   @override
   void initState() {
     super.initState();
+    _rangePercent = context.read<AppController>().prefs.rfidPowerPercent;
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
     _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
@@ -341,6 +374,21 @@ class _RfidPanelState extends State<_RfidPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(c.rfidStatus.message, style: TextStyle(fontSize: 12, color: C.muted)),
             ),
+          if (c.rfid.supported) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            _RangePicker(
+              value: _rangePercent,
+              onChanged: (v) {
+                setState(() => _rangePercent = v);
+                c.prefs.rfidPowerPercent = v;
+                c.rfid.setPowerPercent(v);
+              },
+            ),
+          ],
           if (!c.rfid.supported)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -412,6 +460,67 @@ class _RfidPanelState extends State<_RfidPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// ใกล้ / ปานกลาง / ไกล — a friendlier face on antenna transmit power than a
+/// raw index, since "power 190/270" means nothing to an operator but "อ่าน
+/// เฉพาะกล่องใกล้ตัว" does. Maps to a percentage of the reader's max power;
+/// [RfidReaderController.setPower] converts that into an actual index.
+class _RangePicker extends StatelessWidget {
+  static const _steps = [
+    (label: 'ใกล้', sub: '~30 ซม.', percent: 30),
+    (label: 'ปานกลาง', sub: '~1-2 ม.', percent: 65),
+    (label: 'ไกล', sub: 'สุดกำลังเครื่อง', percent: 100),
+  ];
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _RangePicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    // Snap to the nearest step so a value saved by an older build (or typed
+    // via some future settings-import feature) still highlights sensibly
+    // instead of leaving every option unselected.
+    final nearest = _steps.reduce(
+      (a, b) => (value - a.percent).abs() <= (value - b.percent).abs() ? a : b,
+    );
+    return Row(
+      children: _steps.map((s) {
+        final selected = s == nearest;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: s == _steps.last ? 0 : 8),
+            child: GestureDetector(
+              onTap: () => onChanged(s.percent),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? C.ink : C.surface,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: selected ? C.ink : C.border2),
+                ),
+                child: Column(
+                  children: [
+                    Text(s.label,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: selected ? C.surface : C.ink)),
+                    const SizedBox(height: 2),
+                    Text(s.sub,
+                        style: TextStyle(
+                            fontSize: 10.5,
+                            color: selected ? C.surface.withOpacity(0.7) : C.muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

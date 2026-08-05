@@ -9,6 +9,7 @@ import { authRouter } from './routes/auth.js';
 import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
 import { boxesRouter } from './routes/boxes.js';
+import { rfidRouter } from './routes/rfid.js';
 import { mastersRouter } from './routes/masters.js';
 import { employeePinRouter } from './routes/pin.js';
 import { streamRouter } from './routes/stream.js';
@@ -81,6 +82,7 @@ export function createApp() {
   app.use('/api/state', stateRouter);
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
+  app.use('/api/rfid', rfidRouter);
   app.use('/api/masters', mastersRouter);
   app.use('/api/employees', employeePinRouter);
   app.use('/api/stream', streamRouter);

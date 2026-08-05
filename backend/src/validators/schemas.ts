@@ -10,8 +10,22 @@ export const registerSchema = z.object({
   username: z.string().min(3, 'ชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร'),
   password: z.string().min(6, 'รหัสผ่านอย่างน้อย 6 ตัวอักษร'),
   name: z.string().min(1, 'กรุณากรอกชื่อ'),
+  // Required so "ลืมรหัสผ่าน?" always has somewhere to send the reset OTP —
+  // accounts created before this existed just won't have one on file yet
+  // (see the 'no_email_on_file' error on POST /auth/forgot-password).
+  email: z.string().trim().email('อีเมลไม่ถูกต้อง').max(254, 'อีเมลยาวเกินไป'),
   // No `role` here: every self-registration starts as 'staff', promoted only
   // via the admin-only PATCH /api/auth/users/:id/role endpoint.
+});
+
+export const forgotPasswordRequestSchema = z.object({
+  username: z.string().min(1, 'กรุณากรอกชื่อผู้ใช้'),
+});
+
+export const resetPasswordSchema = z.object({
+  username: z.string().min(1, 'กรุณากรอกชื่อผู้ใช้'),
+  otp: z.string().regex(/^\d{6}$/, 'OTP ต้องเป็นตัวเลข 6 หลัก'),
+  password: z.string().min(6, 'รหัสผ่านอย่างน้อย 6 ตัวอักษร'),
 });
 
 export const linkEmployeeSchema = z.object({
@@ -84,6 +98,17 @@ export const gateOutSchema = z.object({
   plate: z.string().optional(),
   driver: z.string().optional(),
   vehicleType: z.string().optional(),
+});
+
+/* ─── RFID tag association ─────────────────────────────────────────────────*/
+const HEX = /^[0-9A-Fa-f]+$/;
+export const rfidAssociateSchema = z.object({
+  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8),
+  rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
+  /** Must be set explicitly to overwrite a box that already carries a tag —
+   *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
+   *  no tag yet just associates normally. */
+  replace: z.boolean().optional().default(false),
 });
 
 export const gateInSchema = z.object({

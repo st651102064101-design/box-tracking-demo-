@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/employee.dart';
+import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
@@ -192,14 +193,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    // Backend now has the PIN, but the cached employee list won't say
+    // `hasPin: true` until the next `/api/state` fetch — patch it locally so
+    // a lock/re-badge later in this same session doesn't ask to set it again.
+    c.markPinSet(e.id);
     if (!mounted) return;
-    // Backend now has the PIN, but the local employee list won't say
-    // `hasPin: true` until the next `/api/state` fetch — log in on this
-    // successful set rather than making the operator badge in twice.
     final err = c.identifyAs(e);
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
@@ -241,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
       req = await c.api.requestPinReset(e.id);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
 
@@ -255,7 +257,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final otpResult = await showPinPad(
       context,
       title: 'กรอกรหัส OTP',
-      subtitle: 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      subtitle: sentTo != null
+          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
+          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
       length: 6,
     );
     if (otpResult == null || otpResult.pin == null) return;
@@ -282,7 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
@@ -313,7 +317,7 @@ class _LoginScreenState extends State<LoginScreen> {
         enableSuggestions: false,
         textCapitalization: TextCapitalization.characters,
         style: TextStyle(
-            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: C.onInk),
+            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: C.onHero),
         cursorColor: C.lime,
         decoration: InputDecoration(
           hintText: loc.t('ยิงบัตร หรือพิมพ์รหัสพนักงาน'),
@@ -321,10 +325,10 @@ class _LoginScreenState extends State<LoginScreen> {
               fontSize: 13.5,
               letterSpacing: 0,
               fontWeight: FontWeight.w500,
-              color: C.onInk.withValues(alpha: 0.42)),
+              color: C.onHero.withValues(alpha: 0.42)),
           isDense: true,
           filled: true,
-          fillColor: C.onInk.withValues(alpha: 0.08),
+          fillColor: C.onHero.withValues(alpha: 0.08),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           // ปุ่มยืนยันด้วยมือเสมอ ไม่ใช่แค่ตอนพิมพ์เอง — เผื่อกรณีสแกนไม่จบ (การ์ดเสีย
           // ครึ่งใบ) หรืออุปกรณ์ไม่ต่อ Enter suffix มาให้ ผู้ใช้ก็ยังกดจบเองได้เสมอ
@@ -337,11 +341,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: C.onInk.withValues(alpha: 0.16)),
+            borderSide: BorderSide(color: C.onHero.withValues(alpha: 0.16)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: C.onInk.withValues(alpha: 0.16)),
+            borderSide: BorderSide(color: C.onHero.withValues(alpha: 0.16)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -401,51 +405,64 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-          if (!c.connected)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
-              child: _Notice(
-                text: c.connError == null
-                    ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
-                    : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
-                actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
-                onAction: c.goDeviceSetup,
-              ),
-            ),
-          _BadgePrompt(field: _captureField(loc)),
-          if (people.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, color: C.faint),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                          style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                    ),
+          // Everything below the header scrolls as one unit — the badge-scan
+          // card used to be pinned outside the list, which left it stuck in
+          // place (and could crowd out the employee list, or sit half-hidden
+          // behind the keyboard) on shorter screens. Now a scan/tap-name flow
+          // is one continuous scrollable column, header excepted.
+          // Plain Column, not a nested ListView+Expanded — Expanded needs a
+          // bounded height from a parent Flex, but this Column sits inside
+          // the page's SingleChildScrollView, which hands down unbounded
+          // height. That combination renders nothing below the header at
+          // all on web release builds (no visible error, just a blank page).
+          Column(
+            children: [
+              if (!c.connected)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+                  child: _Notice(
+                    text: c.connError == null
+                        ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
+                        : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
+                    actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
+                    onAction: c.goDeviceSetup,
                   ),
-                  ...people.map((e) => Padding(
+                ),
+              _BadgePrompt(field: _captureField(loc)),
+              if (people.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13.5, color: C.faint),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _EmployeeTile(
-                          emp: e,
-                          visiting: c.isVisiting(e),
-                          onTap: () => _tapEmployee(e),
-                        ),
-                      )),
-                ],
-              ),
-            ),
+                        child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                            style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                      ),
+                      ...people.map((e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _EmployeeTile(
+                              emp: e,
+                              visiting: c.isVisiting(e),
+                              isLast: e.id == c.lastEmpId,
+                              onTap: () => _tapEmployee(e),
+                            ),
+                          )),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -467,7 +484,7 @@ class _BadgePrompt extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
         decoration: BoxDecoration(
-          color: C.ink,
+          color: C.heroBg,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -475,7 +492,7 @@ class _BadgePrompt extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
-                color: C.onInk.withValues(alpha: 0.10),
+                color: C.onHero.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.qr_code_2, size: 44, color: C.lime),
@@ -485,13 +502,13 @@ class _BadgePrompt extends StatelessWidget {
               loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700, color: C.onInk, letterSpacing: -0.3),
+                  fontSize: 19, fontWeight: FontWeight.w700, color: C.onHero, letterSpacing: -0.3),
             ),
             const SizedBox(height: 6),
             Text(
               loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: C.onInk.withValues(alpha: 0.62), height: 1.4),
+              style: TextStyle(fontSize: 12.5, color: C.onHero.withValues(alpha: 0.62), height: 1.4),
             ),
             const SizedBox(height: 16),
             field,
@@ -542,8 +559,14 @@ class _Notice extends StatelessWidget {
 class _EmployeeTile extends StatelessWidget {
   final Employee emp;
   final bool visiting;
+  final bool isLast;
   final VoidCallback onTap;
-  const _EmployeeTile({required this.emp, required this.visiting, required this.onTap});
+  const _EmployeeTile({
+    required this.emp,
+    required this.visiting,
+    required this.onTap,
+    this.isLast = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -558,7 +581,10 @@ class _EmployeeTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: C.border),
+            // The last person to work this device is already sorted to the
+            // top; the accent border is what makes that visible at a glance
+            // rather than looking like an arbitrary sort order.
+            border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
             boxShadow: [
               BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
             ],
@@ -591,6 +617,10 @@ class _EmployeeTile extends StatelessWidget {
                   ],
                 ),
               ),
+              if (isLast) ...[
+                Pill('ล่าสุด', color: C.limeText, bg: C.limeBg),
+                const SizedBox(width: 6),
+              ],
               if (visiting) ...[
                 Pill('ต่างคลัง', color: C.orange, bg: C.orangeBg),
                 const SizedBox(width: 6),

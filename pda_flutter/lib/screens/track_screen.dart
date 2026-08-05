@@ -34,6 +34,12 @@ class _TrackScreenState extends State<TrackScreen> {
     c.doTrack();
   }
 
+  void _tapSuggestion(AppController c, String tag) {
+    _ctrl.text = tag;
+    _ctrl.selection = TextSelection.collapsed(offset: tag.length);
+    c.selectTrackSuggestion(tag);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
@@ -94,7 +100,14 @@ class _TrackScreenState extends State<TrackScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              if (c.trackTried && box == null)
+              // Live suggestions as soon as the first character lands —
+              // scanning still works the same (a gun sends the full code +
+              // Enter in one burst, resolving straight to the card below),
+              // this is purely for someone typing by hand who shouldn't have
+              // to get the whole code exactly right before seeing anything.
+              if (box == null && c.trackSuggestions.isNotEmpty)
+                _suggestions(c)
+              else if (c.trackTried && box == null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
@@ -107,6 +120,55 @@ class _TrackScreenState extends State<TrackScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _suggestions(AppController c) {
+    final tags = c.trackSuggestions;
+    final S = c.S;
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(tags.length, (i) {
+          final tag = tags[i];
+          final b = S?.box(tag);
+          return InkWell(
+            onTap: () => _tapSuggestion(c, tag),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                border: i == tags.length - 1 ? null : Border(bottom: BorderSide(color: C.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(tag,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                        if (b != null)
+                          Text(S!.typeName(b.type), style: TextStyle(fontSize: 12, color: C.muted)),
+                      ],
+                    ),
+                  ),
+                  if (b != null) Pill(StatusMeta.of(b.status).label, color: StatusMeta.of(b.status).color, bg: StatusMeta.of(b.status).bg, fontSize: 11),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 

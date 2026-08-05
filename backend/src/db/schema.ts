@@ -22,6 +22,7 @@ import {
   numeric,
   jsonb,
   timestamp,
+  index,
 } from 'drizzle-orm/pg-core';
 
 /* ─── auth ────────────────────────────────────────────────────────────────*/
@@ -31,6 +32,14 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: text('role').notNull().default('staff'),
+  /** Where "ลืมรหัสผ่าน?" sends its OTP — set at registration. Nullable only
+   *  for accounts created before this existed; forgot-password refuses to run
+   *  for those until an admin backfills one, same pattern as the employee PDA
+   *  PIN reset in routes/pin.ts. */
+  email: text('email'),
+  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" email OTP; cleared once used. */
+  passwordResetOtpHash: text('password_reset_otp_hash'),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -120,30 +129,64 @@ export const employees = pgTable('employees', {
    *  yet can't sign in as themselves, only be picked as a display name. */
   username: text('username').unique(),
   passwordHash: text('password_hash'),
+  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" (web login, not the PDA PIN)
+   *  email OTP; cleared once used. Separate from pinResetOtpHash above —
+   *  different secret, different expiry, different form. */
+  passwordResetOtpHash: text('password_reset_otp_hash'),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* ─── the assets: boxes ───────────────────────────────────────────────────*/
-export const boxes = pgTable('boxes', {
-  tag: text('tag').primaryKey(),
-  type: text('type'),
-  value: numeric('value'),
-  status: text('status').notNull().default('pending'),
-  cycles: integer('cycles').notNull().default(0),
-  customer: text('customer'),
-  doNo: text('do_no'),
-  po: text('po'),
-  outGate: integer('out_gate'),
-  outWh: text('out_wh'),
-  outAt: timestamp('out_at', { withTimezone: true }),
-  dueAt: timestamp('due_at', { withTimezone: true }),
-  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
-  labeled: boolean('labeled').notNull().default(false),
-  location: jsonb('location').notNull().default({}),
-  history: jsonb('history').notNull().default([]),
-  data: jsonb('data').notNull().default({}),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const boxes = pgTable(
+  'boxes',
+  {
+    tag: text('tag').primaryKey(),
+    type: text('type'),
+    value: numeric('value'),
+    status: text('status').notNull().default('pending'),
+    cycles: integer('cycles').notNull().default(0),
+    customer: text('customer'),
+    doNo: text('do_no'),
+    po: text('po'),
+    outGate: integer('out_gate'),
+    outWh: text('out_wh'),
+    outAt: timestamp('out_at', { withTimezone: true }),
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    labeled: boolean('labeled').notNull().default(false),
+    /**
+     * RFID commissioning, added on top of the original barcode-only model.
+     * `tag` (the barcode, e.g. "BOX-015") stays the box's permanent identity
+     * forever — RFID is just another way to *find* that same row, which is
+     * why a tag swap (damaged sticker) only ever touches these two columns.
+     *
+     * Both are TEXT, not BYTEA: EPC/TID are always handled as hex strings on
+     * every hop (reader SDK, wire format, this API), a fixed-width 96/128-bit
+     * EPC never blows past a few dozen bytes, and TEXT keeps `LIKE`/equality
+     * search and psql debugging trivial — the compactness BYTEA buys isn't
+     * worth losing that at this row count.
+     *
+     * - rfid_tid: factory-burned, globally unique serial the chip vendor
+     *   lasered in — never rewritable, so UNIQUE is a real DB-level guarantee
+     *   and doubles as the anti-reuse check (see routes/rfid.ts).
+     * - rfid_epc: user memory we write ourselves (see lib/rfid.ts encode) —
+     *   NOT unique at the DB level because a tag mid-replacement legitimately
+     *   has its old EPC still sitting on a shelf sticker for a moment; the
+     *   uniqueness that matters (one *active* box per EPC) is enforced by
+     *   applying it through routes/rfid.ts, not by a blanket constraint.
+     */
+    rfidTid: text('rfid_tid').unique(),
+    rfidEpc: text('rfid_epc'),
+    location: jsonb('location').notNull().default({}),
+    history: jsonb('history').notNull().default([]),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    rfidEpcIdx: index('boxes_rfid_epc_idx').on(table.rfidEpc),
+  }),
+);
 
 /* ─── operational / logistics ─────────────────────────────────────────────*/
 export const vehicles = pgTable('vehicles', {

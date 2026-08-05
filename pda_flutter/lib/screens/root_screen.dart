@@ -9,6 +9,8 @@ import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'track_screen.dart';
 import 'settings_screen.dart';
+import 'rfid_input_screen.dart';
+import 'rfid_register_screen.dart';
 import 'toast_overlay.dart';
 
 /// Hosts the current screen inside a phone-width frame (max 560px, like the
@@ -24,27 +26,19 @@ class RootScreen extends StatelessWidget {
     // InheritedWidget mechanism, so this repaints on a dark/light toggle even
     // though RootScreen itself never watches ThemeController directly.
     return Scaffold(
-      body: Listener(
-        // Any touch anywhere counts as the device being in use, which keeps the
-        // idle auto-lock from firing on someone who is reading the screen
-        // rather than tapping through it. Listener (not GestureDetector) so it
-        // observes without ever competing for a gesture.
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => c.touch(),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: _body(c),
-                  ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _body(c),
                 ),
-                const ToastOverlay(),
-              ],
-            ),
+              ),
+              const ToastOverlay(),
+            ],
           ),
         ),
       ),
@@ -67,6 +61,10 @@ class RootScreen extends StatelessWidget {
         return const TrackScreen(key: ValueKey('track'));
       case Screen.settings:
         return const SettingsScreen(key: ValueKey('settings'));
+      case Screen.rfidInput:
+        return const RfidInputScreen(key: ValueKey('rfidInput'));
+      case Screen.rfidRegister:
+        return const RfidRegisterScreen(key: ValueKey('rfidRegister'));
     }
   }
 }

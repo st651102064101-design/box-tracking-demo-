@@ -8,9 +8,10 @@ import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
 import '../services/prefs.dart';
+import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -43,9 +44,10 @@ class Toast {
 ///    so people are managed entirely from the web app's "พนักงาน" page.
 ///
 /// Every badge-in lands on the report screen, which asks the operator to
-/// confirm a warehouse then a gate (skipped only when there's truly nothing
-/// to choose) before the "งานหลัก" action buttons appear — see
-/// [postConfirmed], [selectPendingWh], [confirmPost].
+/// confirm a warehouse then a gate. If there is only one warehouse, the
+/// picker jumps straight to that warehouse's gate list; if there is only one
+/// gate, it confirms the post outright. See [postConfirmed],
+/// [selectPendingWh], [confirmPost].
 class AppController extends ChangeNotifier {
   final ApiClient api;
   final Prefs prefs;
@@ -56,6 +58,14 @@ class AppController extends ChangeNotifier {
   // ── screen + shift ──────────────────────────────────────────────────────
   Screen screen = Screen.boot;
   StateSnapshot? S;
+
+  /// True only once a live `GET /api/state` has actually succeeded this
+  /// session — set in [refresh]. `S` alone can't answer this: it's also
+  /// populated eagerly at boot from [Prefs.stateCache] so a terminal with no
+  /// network yet still has employee/box data to show, and a fresh warehouse
+  /// with zero boxes registered is a perfectly valid live connection too, so
+  /// nothing about the snapshot's *contents* can stand in for this.
+  bool _liveConnected = false;
 
   /// The operator currently holding the device — null whenever it is locked.
   Employee? emp;
@@ -119,6 +129,8 @@ class AppController extends ChangeNotifier {
   Timer? _toastTimer;
   final _rnd = Random();
   StreamSubscription? _tagSub, _trigSub, _statusSub;
+  final _realtime = RealtimeService();
+  Timer? _realtimeDebounce;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -145,12 +157,25 @@ class AppController extends ChangeNotifier {
     _trigSub = rfid.triggers.listen(_onReaderTrigger);
     _statusSub = rfid.status.listen((s) {
       rfidStatus = s;
+      // Reader firmware resets to full power on every connect, so the
+      // saved ใกล้/ปานกลาง/ไกล pick has to be re-applied each time — not
+      // just when the operator changes it in settings.
+      if (s.state == RfidState.connected) {
+        rfid.setPowerPercent(prefs.rfidPowerPercent);
+      }
       notifyListeners();
     });
 
     // Auth + state load runs alongside the splash so a slow or unreachable
     // backend never holds the UI hostage — screens render, then fill in.
     final loading = _ensureAuthAndState();
+    // Live push (see RealtimeService) so a change made anywhere else — the
+    // web app, another PDA, a direct API call — shows up here without the
+    // operator needing to leave the screen and back to force a refetch, same
+    // as the web app already does over the same /api/stream channel. Its own
+    // retry loop handles "no token yet" / "backend unreachable at boot" —
+    // safe to call before [loading] settles.
+    _realtime.connect(baseUrl: () => api.baseUrl, token: () => api.token, onStateChanged: _onRealtimeStateChanged);
     await Future.delayed(const Duration(milliseconds: 420));
 
     // No operator is ever restored: a shift always starts with a badge scan,
@@ -161,7 +186,6 @@ class AppController extends ChangeNotifier {
     } else {
       _autoSelectSinglePost();
     }
-    _startIdleWatch();
     notifyListeners();
 
     await loading; // never throws — errors land in connError
@@ -211,7 +235,19 @@ class AppController extends ChangeNotifier {
     final json = await api.getState();
     S = StateSnapshot.fromJson(json);
     prefs.stateCache = json;
+    _liveConnected = true;
     notifyListeners();
+  }
+
+  /// Debounced so a burst of several 'state' pings close together (e.g. a
+  /// bulk edit on the web app) triggers one refetch, not one per ping.
+  void _onRealtimeStateChanged() {
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 300), () {
+      // A dropped refresh here just waits for the next ping (or the next
+      // local action's own refresh()) — nothing else depends on it landing.
+      refresh().catchError((_) {});
+    });
   }
 
   /// Human-readable message for an arbitrary error. Strips the leading
@@ -227,10 +263,11 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _toastTimer?.cancel();
-    _idleTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
+    _realtimeDebounce?.cancel();
+    _realtime.dispose();
     super.dispose();
   }
 
@@ -274,6 +311,10 @@ class AppController extends ChangeNotifier {
     final lo = raw.toLowerCase();
     final f = s.boxesRaw.keys.where((k) => k.toLowerCase() == lo);
     if (f.isNotEmpty) return f.first;
+    // RFID EPC/TID reads never match a tag key directly — look them up by
+    // value (case-insensitive, since readers vary on hex casing).
+    final byRfid = s.tagForCode(raw);
+    if (byRfid != null) return byRfid;
     if (_looksThaiGarbled(raw)) {
       final fx = _dethaify(raw);
       if (s.boxesRaw.containsKey(fx)) return fx;
@@ -298,7 +339,6 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
   void go(Screen s) {
-    touch();
     screen = s;
     notifyListeners();
   }
@@ -309,7 +349,6 @@ class AppController extends ChangeNotifier {
   /// Where "back" lands: Home during a session, otherwise the badge screen —
   /// or device setup on a terminal that was never provisioned.
   void backToHome() {
-    touch();
     screen = emp != null
         ? Screen.home
         : deviceConfigured
@@ -331,12 +370,25 @@ class AppController extends ChangeNotifier {
         .map((m) => Employee.fromJson(Map<String, dynamic>.from(m)))
         .where((e) => e.active && e.name.isNotEmpty)
         .toList();
+    final last = prefs.lastEmpId;
     list.sort((a, b) {
+      // Whoever used this terminal last goes first — on a device worked by
+      // the same one or two people all week, that's almost always the person
+      // holding it now, and it saves them scrolling for their own name.
+      if (last.isNotEmpty) {
+        final lastRank = (a.id == last ? 0 : 1) - (b.id == last ? 0 : 1);
+        if (lastRank != 0) return lastRank;
+      }
       final rank = _homeRank(a) - _homeRank(b);
       return rank != 0 ? rank : a.name.compareTo(b.name);
     });
     return list;
   }
+
+  /// Employee id of the last person to start a shift on this device, or ''.
+  /// The badge screen tags this row "ล่าสุด"; it changes ordering and nothing
+  /// else — the PIN gate is identical either way.
+  String get lastEmpId => prefs.lastEmpId;
 
   int _homeRank(Employee e) => (e.wh.isEmpty || e.wh == wh) ? 0 : 1;
 
@@ -344,11 +396,23 @@ class AppController extends ChangeNotifier {
   /// this terminal serves — surfaced as a note on screen, never a block.
   bool isVisiting(Employee e) => e.wh.isNotEmpty && wh.isNotEmpty && e.wh != wh;
 
+  /// Patches the cached snapshot's `hasPin` flag for [employeeId] right after
+  /// a successful `setEmployeePin` call. Without this, `S` (built from the
+  /// last `/api/state` fetch, which can be minutes old) still says
+  /// `hasPin: false` for the rest of this session — so a lock/re-badge before
+  /// the next fetch would ask the operator to set a PIN they just set.
+  void markPinSet(String employeeId) {
+    final raw = S?.employees[employeeId];
+    if (raw is! Map) return;
+    S!.employees[employeeId] = {...raw, 'hasPin': true};
+    notifyListeners();
+  }
+
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
     if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
-    touch();
+    prefs.lastEmpId = e.id;
     _resetPost();
     screen = Screen.home;
     notifyListeners();
@@ -380,51 +444,13 @@ class AppController extends ChangeNotifier {
   /// Ends the current operator's session and returns to the badge screen. The
   /// device stays signed in and stationed where it is — this is a handover
   /// between people, not a sign-out of the terminal.
-  void lock({bool auto = false}) {
-    final droppedQueue = queue.isNotEmpty;
+  void lock() {
     emp = null;
     queue.clear();
     lastResult = null;
     _clearForms();
     screen = Screen.login;
-    if (auto) {
-      toastMsg(
-        'ล็อกหน้าจออัตโนมัติ',
-        droppedQueue ? 'ยิงบัตรเพื่อทำงานต่อ — รายการที่สแกนค้างไว้ถูกล้างแล้ว กรุณายิงซ้ำ' : 'ยิงบัตรเพื่อทำงานต่อ',
-        ResultKind.info,
-      );
-    }
     notifyListeners();
-  }
-
-  // ═══════════════════════ idle auto-lock ══════════════════════════════════
-  DateTime _lastTouch = DateTime.now();
-  Timer? _idleTimer;
-
-  /// Marks the device as in use. Called from every navigation and scan, plus
-  /// any pointer event (see RootScreen), so the idle clock tracks real work.
-  void touch() => _lastTouch = DateTime.now();
-
-  void _startIdleWatch() {
-    _idleTimer?.cancel();
-    _idleTimer = Timer.periodic(const Duration(seconds: 30), (_) => checkIdle());
-  }
-
-  /// Locks the device if it has sat untouched past the configured limit.
-  /// [now] is injectable so the rule can be tested without waiting ten minutes.
-  ///
-  /// Locks even with scans pending in [queue] — same as the manual "switch
-  /// person" lock, which already clears it unconditionally. An earlier version
-  /// skipped locking whenever the queue was non-empty to avoid dropping an
-  /// in-progress batch, but that made a single un-committed scan disable
-  /// auto-lock forever: the device would just sit signed in, indefinitely,
-  /// which is the worse trade for an unattended terminal. Those tags are still
-  /// physically on the boxes and take a few seconds to re-scan.
-  @visibleForTesting
-  void checkIdle([DateTime? now]) {
-    final limit = prefs.idleLockMinutes;
-    if (limit <= 0 || emp == null || busy) return;
-    if ((now ?? DateTime.now()).difference(_lastTouch).inMinutes >= limit) lock(auto: true);
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
@@ -473,10 +499,13 @@ class AppController extends ChangeNotifier {
     if (whs.length == 1) {
       final id = (whs.first['id'] ?? '').toString();
       final gates = S?.gatesOf(id) ?? const [];
+      pendingWh = id;
       if (gates.length == 1) {
         confirmPost(id, gates.first);
         return;
       }
+      postConfirmed = false;
+      return;
     }
     postConfirmed = false;
   }
@@ -531,11 +560,6 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
-  void setIdleLockMinutes(int m) {
-    prefs.idleLockMinutes = m;
-    notifyListeners();
-  }
-
   void setDeviceModel(String id) {
     prefs.deviceModel = id;
     notifyListeners();
@@ -561,7 +585,6 @@ class AppController extends ChangeNotifier {
       toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว', ResultKind.warn);
       return;
     }
-    touch();
     mode = m;
     screen = Screen.scan;
     queue.clear();
@@ -612,7 +635,6 @@ class AppController extends ChangeNotifier {
   }
 
   void goTrack() {
-    touch();
     screen = Screen.track;
     trackVal = '';
     trackTag = '';
@@ -633,7 +655,6 @@ class AppController extends ChangeNotifier {
   void addScan(String raw) {
     raw = raw.trim();
     if (raw.isEmpty) return;
-    touch();
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
@@ -701,13 +722,11 @@ class AppController extends ChangeNotifier {
   }
 
   void removeFromQueue(String tag) {
-    touch();
     queue.remove(tag);
     notifyListeners();
   }
 
   void clearQueue() {
-    touch();
     queue.clear();
     lastResult = null;
     notifyListeners();
@@ -745,7 +764,6 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ connectivity / commit ═══════════════════════════
   void toggleOnline() {
-    touch();
     online = !online;
     notifyListeners();
     if (online) {
@@ -764,10 +782,24 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     int done = 0;
     final failed = <OutboxTx>[];
+    // A rejection the server actually processed and refused (ApiException —
+    // e.g. the box was put on Hold, marked Damaged/Lost, or already shipped
+    // by someone else since this scan was queued) will refuse the exact same
+    // way every time. Retrying it forever just re-fails silently on every
+    // sync and leaves the operator staring at a "ค้าง" count with no way to
+    // clear it short of wiping the outbox — so it's dropped here instead,
+    // same as the live (non-outbox) path in doCommit() already does. Anything
+    // else (timeout, no connection) genuinely might succeed next time, so
+    // that one still goes back in the queue.
+    String? rejectedReason;
+    int rejectedCount = 0;
     for (final tx in pending) {
       try {
         await _postTx(tx);
         done++;
+      } on ApiException catch (e) {
+        rejectedCount++;
+        rejectedReason ??= e.message;
       } catch (_) {
         failed.add(tx);
       }
@@ -782,6 +814,9 @@ class AppController extends ChangeNotifier {
     } catch (_) {}
     if (done > 0) {
       toastMsg('ซิงก์สำเร็จ', '$done รายการเข้าสู่ระบบแล้ว', ResultKind.ok);
+    }
+    if (rejectedCount > 0) {
+      toastMsg('ตัดรายการที่ระบบปฏิเสธ', '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
     }
     if (failed.isNotEmpty) {
       toastMsg('ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
@@ -814,7 +849,6 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> doCommit() async {
-    touch();
     if (queue.isEmpty) {
       toastMsg('ยังไม่ได้ยิงกล่อง', '', ResultKind.warn);
       return;
@@ -993,7 +1027,6 @@ class AppController extends ChangeNotifier {
   }
 
   void doTrack() {
-    touch();
     final raw = trackVal.trim();
     if (raw.isEmpty) {
       trackTag = '';
@@ -1007,6 +1040,23 @@ class AppController extends ChangeNotifier {
   }
 
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
+
+  /// Live typeahead for the track search box — every tag containing what's
+  /// typed so far, updated on every keystroke rather than waiting for Enter.
+  /// Capped at 20: a match list longer than a PDA screen can show at once
+  /// isn't narrowing anything down yet, just more to scroll past.
+  List<String> get trackSuggestions {
+    final s = S;
+    final q = trackVal.trim().toLowerCase();
+    if (s == null || q.isEmpty) return const [];
+    final matches = s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
+    return matches.take(20).toList();
+  }
+
+  void selectTrackSuggestion(String tag) {
+    trackVal = tag;
+    doTrack();
+  }
 
   // ═══════════════════════ settings ════════════════════════════════════════
   /// Applies the terminal's connection details and re-authenticates. The
@@ -1035,6 +1085,21 @@ class AppController extends ChangeNotifier {
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
     }
     notifyListeners();
+  }
+
+  /// The device-setup screen's single bottom button: connects with whatever
+  /// is currently in the form, then finishes setup automatically once that
+  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
+  /// then this button separately, which read as the button being broken when
+  /// really it was just gated on a connection nobody had triggered yet. Does
+  /// nothing further on failure — [applyConnection] already toasted why.
+  Future<void> completeDeviceSetup({
+    required String baseUrl,
+    String? username,
+    String? password,
+  }) async {
+    await applyConnection(baseUrl: baseUrl, username: username, password: password);
+    if (connected) finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
@@ -1066,7 +1131,13 @@ class AppController extends ChangeNotifier {
   }
 
   void _onReaderTrigger(bool pressed) {
-    if (screen != Screen.scan && screen != Screen.track && screen != Screen.login) return;
+    if (screen != Screen.scan &&
+        screen != Screen.track &&
+        screen != Screen.login &&
+        screen != Screen.rfidInput &&
+        screen != Screen.rfidRegister) {
+      return;
+    }
     if (pressed) {
       rfid.startInventory();
     } else {
@@ -1075,7 +1146,7 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
-  bool get connected => S?.connected ?? false;
+  bool get connected => _liveConnected;
   int get boxCount => S?.boxCount ?? 0;
   String get selWhName => S?.whName(wh) ?? wh;
 

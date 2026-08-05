@@ -98,7 +98,9 @@ class FakeApi extends ApiClient {
   }
 }
 
-Map<String, dynamic> box(String tag, String status, {List<dynamic>? history, int cycles = 0}) => {
+Map<String, dynamic> box(String tag, String status,
+        {List<dynamic>? history, int cycles = 0, String? rfidTid, String? rfidEpc}) =>
+    {
       'tag': tag,
       'type': 'BT-CRT',
       'status': status,
@@ -106,6 +108,8 @@ Map<String, dynamic> box(String tag, String status, {List<dynamic>? history, int
       'customer': '',
       'do': '',
       'history': history ?? <dynamic>[],
+      if (rfidTid != null) 'rfidTid': rfidTid,
+      if (rfidEpc != null) 'rfidEpc': rfidEpc,
     };
 
 /// The WMS employee master, which is the PDA's only source of people. Covers
@@ -193,6 +197,7 @@ Future<AppController> makeController(FakeApi api) async {
   c.gate = '2';
   prefs.deviceWh = 'WH-1';
   prefs.deviceGate = '2';
+  prefs.deviceConfigured = true; // otherwise a restart (see init()) lands back in deviceSetup
   prefs.token = 'device-token'; // already signed in as itself, as a real one is
   c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
   return c;
@@ -277,6 +282,30 @@ void main() {
       final c = await makeController(FakeApi());
       c.mode = 'out';
       c.addScan('crt-01');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    test('resolves a scan by RFID EPC, not just the barcode tag', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
+          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('000000000000424F582D3031');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    test('resolves a scan by RFID TID, case-insensitively', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
+          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('e28011912000708fbad20380');
       expect(c.queue, ['CRT-01']);
     });
 
@@ -595,26 +624,29 @@ void main() {
       expect(c.wh, 'WH-1',
           reason: 'the only warehouse on file is not a choice worth asking about');
 
-      c.pickGate(3);
-      c.saveDevicePost();
-      expect(c.prefs.deviceWh, 'WH-1');
-      expect(c.prefs.deviceGate, '3');
+      // Warehouse/gate are no longer fixed at setup time — they're picked
+      // per-visit instead (see confirmPost/pickWh/pickGate below and
+      // finishDeviceSetup's own doc comment). Finishing setup here only
+      // means "this terminal has a working connection and has been through
+      // setup once", so it doesn't touch prefs.deviceWh/deviceGate at all.
+      c.finishDeviceSetup();
+      expect(c.deviceConfigured, isTrue);
       expect(c.screen, Screen.login, reason: 'setup ends at the badge screen, ready to work');
 
       final c2 = AppController(api: api, prefs: c.prefs, rfid: RfidService());
       await c2.init();
       expect(c2.screen, Screen.login);
-      expect(c2.wh, 'WH-1');
-      expect(c2.gate, '3');
     });
 
-    test('saving refuses an incomplete post', () async {
+    test('finishing setup while already identified goes straight to home, not the badge screen',
+        () async {
       final c = await freshDevice(FakeApi());
-      c.pickWh('WH-1');
-      c.gate = '';
-      c.saveDevicePost();
-      expect(c.prefs.deviceGate, isEmpty);
-      expect(c.toast!.title, 'เลือกคลังและประตูก่อน');
+      await c.init();
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0001'));
+
+      c.finishDeviceSetup();
+      expect(c.deviceConfigured, isTrue);
+      expect(c.screen, Screen.home);
     });
 
     test('picking a warehouse with a single gate fills it in', () async {
@@ -696,6 +728,19 @@ void main() {
       expect(c.pendingWh, isNull);
     });
 
+    test('badging in with one warehouse skips the warehouse picker and shows gates', () async {
+      final state = pickerState();
+      (state['warehouses'] as Map).remove('WH-B');
+      state['gates'] = {'1': 'WH-A', '2': 'WH-A'};
+      final c = await controllerWithState(state);
+
+      c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
+
+      expect(c.postConfirmed, isFalse);
+      expect(c.pendingWh, 'WH-A');
+      expect(c.wh, isEmpty);
+    });
+
     test('picking a warehouse with one gate confirms the post immediately', () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
@@ -733,6 +778,9 @@ void main() {
       expect(c.postConfirmed, isTrue);
       expect(c.wh, 'WH-B');
       expect(c.gate, '9');
+      expect(c.hasLastSelection, isTrue);
+      expect(c.lastWh, 'WH-B');
+      expect(c.lastGate, '9');
     });
 
     test('a viewer never has to pick a post — search is warehouse-agnostic', () async {
@@ -791,49 +839,6 @@ void main() {
 
       expect(c2.postConfirmed, isFalse);
       expect(c2.toast!.title, 'ไม่พบประตูเดิม');
-    });
-  });
-
-  group('idle auto-lock', () {
-    test('locks once the device has sat untouched past the limit', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.touch();
-
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 9)));
-      expect(c.emp, isNotNull);
-
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 11)));
-      expect(c.emp, isNull);
-      expect(c.screen, Screen.login);
-    });
-
-    test('still locks — and clears the queue — even with boxes queued', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.mode = 'out';
-      c.addScan('CRT-01');
-
-      c.checkIdle(DateTime.now().add(const Duration(hours: 2)));
-
-      expect(c.emp, isNull, reason: 'an unattended signed-in terminal is worse than a re-scan');
-      expect(c.screen, Screen.login);
-      expect(c.queue, isEmpty);
-    });
-
-    test('any activity resets the clock', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 10;
-      c.go(Screen.home); // go() touches
-      c.checkIdle(DateTime.now().add(const Duration(minutes: 9)));
-      expect(c.emp, isNotNull);
-    });
-
-    test('a limit of 0 disables auto-lock entirely', () async {
-      final c = await makeController(FakeApi());
-      c.prefs.idleLockMinutes = 0;
-      c.checkIdle(DateTime.now().add(const Duration(days: 1)));
-      expect(c.emp, isNotNull);
     });
   });
 
