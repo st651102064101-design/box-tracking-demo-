@@ -185,9 +185,7 @@ main{max-width:1180px;margin:0 auto;padding:0 22px 120px;}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.02em;
   color:var(--accentInk);text-transform:none;margin-bottom:18px;}
 .eyebrow::before{content:"";width:22px;height:1.5px;background:var(--accent);display:inline-block;}
-.h-title{font-size:clamp(40px,6.4vw,80px);font-weight:700;letter-spacing:-.045em;line-height:1.18;margin:0;
-  background:linear-gradient(180deg,var(--ink),color-mix(in srgb,var(--ink) 64%,var(--muted)));
-  -webkit-background-clip:text;background-clip:text;color:transparent;}
+.h-title{font-family:"Anuphan","IBM Plex Sans Thai",var(--font);font-size:clamp(40px,6.4vw,80px);font-weight:700;letter-spacing:-.045em;line-height:1.25;margin:0;color:var(--ink);}
 .h-sub{color:var(--muted);font-size:clamp(17px,2vw,21px);font-weight:400;letter-spacing:-.01em;
   margin:20px 0 0;max-width:620px;line-height:1.45;}
 
@@ -1639,6 +1637,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
   <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
+  <div class="inv-cust-row" id="invWhRow">
+    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> แยกตามคลัง</span>
+    <div class="icr-pills" id="invWhPills"></div>
+  </div>
   <div class="inv-cust-row" id="invCustRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
@@ -1881,7 +1883,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.)</label><input id="btDim" placeholder="600×400×320"></div>
+        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label><input id="btDim" placeholder="600x400x320" title="Format: กว้างxยาวxสูง เช่น 600x400x320"></div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -3080,9 +3082,13 @@ $('#btnAddBox').onclick = function() {
     if (S.boxes[tag]) return toast('มี Tag นี้แล้ว', tag, 'err');
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
     var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
+    var regTs=iso();
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-      lot:lot,expiry:expiry,supplier:sup,regAt:iso(),regBy:USER,
-      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]};
+      lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
+      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:false,
+      /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
+         stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
+      history:[{dir:'reg',ts:regTs,recorder:USER}]};
     auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
     toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติดบาร์โค้ด'); renderAll();
@@ -3094,9 +3100,10 @@ $('#btnAddBox').onclick = function() {
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
     var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
-      if (!S.boxes[tag]) { S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-        lot:blot,expiry:bexp,supplier:bsup,regAt:iso(),regBy:USER,
-        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},lastSeenAt:iso(),labeled:false,history:[]}; added++; addedTags.push(tag); } }
+      if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+        lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
+        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:false,
+        history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
@@ -3165,18 +3172,37 @@ $('#btnAddBtype').onclick=function(){
   }
   var before=editingBtype?Object.assign({},S.boxtypes[editingBtype]):null;
   if(editingBtype&&editingBtype!==id)delete S.boxtypes[editingBtype];
-  S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:val('btDim')};
+  var dimClean = val('btDim').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x'); var dimParts = dimClean.split('x'); if(dimParts.length>3) dimClean=dimParts.slice(0,3).join('x');
+  S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:dimClean};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
   ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();
   toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
   ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
-function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);setv('btDim',t.dim||'');
+function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
   $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
+(function(){
+  var el = document.getElementById('btDim');
+  if (el) {
+    el.addEventListener('input', function() {
+      var v = this.value;
+      v = v.replace(/\s+/g, '');
+      v = v.replace(/[X×]/g, 'x');
+      v = v.replace(/[^0-9x]/g, '');
+      v = v.replace(/^x+/, '');
+      v = v.replace(/x{2,}/g, 'x');
+      var parts = v.split('x');
+      if (parts.length > 3) {
+        v = parts.slice(0, 3).join('x');
+      }
+      this.value = v;
+    });
+  }
+})();
 
 /* ===== SETUP: warehouse/gate CRUD ===== */
 var editingWh=null;
@@ -4941,7 +4967,13 @@ window.setTagPutawayMode=function(mode){
    ตรงกับกล่องที่รับเข้าผ่านหน้า Gate In ทุกประการ ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
 function confirmTagged(allTags,pendingTags){
   var boxes=allTags.map(function(t){return S.boxes[t];}).filter(Boolean);
-  boxes.forEach(function(b){b.labeled=true;});
+  var lblTs=iso();
+  boxes.forEach(function(b){
+    b.labeled=true;b.labeledAt=lblTs;b.labeledBy=USER;
+    /* ขั้น "พิมพ์บาร์โค้ด" ต้องลง history ด้วย ไม่ใช่แค่ flag labeled — ดู boxTimeline */
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'label',ts:lblTs,recorder:USER});
+  });
   var placed=0,skipped=0;
   if(pendingTags.length){
     var autoEl=$('#tagAutoPutaway');
@@ -5071,6 +5103,34 @@ function boxLifecycleState(b){
   else if(b.status==='lost')exception={label:'สูญหาย (Lost)',cls:'bad'};
   return {curIndex:cur,exception:exception};
 }
+/* ===== ไทม์ไลน์ของกล่อง = history จริง + หมุดที่อนุมานได้แน่นอนจากตัวกล่องเอง =====
+   ต้นเหตุบั๊ก "ไทม์ไลน์หายไปหมด": stepper ด้านบนอ่านจาก status/labeled/regAt แต่
+   ไทม์ไลน์อ่านจาก b.history อย่างเดียว — คนละแหล่งข้อมูลกัน พอขั้นตอนไหนเปลี่ยน
+   สถานะโดยไม่ push history ไว้ stepper จะขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง ซึ่งเกิดจริง
+   ที่ "สร้างข้อมูล" (สร้างกล่องด้วย history:[]) และ "พิมพ์บาร์โค้ด" (ตั้ง
+   labeled=true เฉยๆ) — สองขั้นแรกของทุกกล่องจึงหายไปเสมอ
+
+   ตอนนี้ทั้งสองจุดเขียน history แล้ว (ดู addBox/confirmTagged) แต่ฟังก์ชันนี้ยัง
+   เติมหมุดที่ขาดให้ด้วย เพื่อ (1) ซ่อมกล่องที่สร้างไว้ก่อนการแก้นี้ ซึ่งมี history
+   ไม่ครบไปแล้ว และ (2) กันไม่ให้อาการเดิมกลับมาถ้ามีเส้นทางใหม่ลืม push อีก
+   เวลาที่ไม่รู้จริงจะไม่กุขึ้นมา — ทำเครื่องหมาย synth ไว้ให้ผู้ใช้เห็นว่าโดยประมาณ */
+function boxTimeline(b){
+  if(!b)return [];
+  var hist=(b.history||[]).slice();
+  var add=[];
+  /* "สร้างข้อมูล" — ทุกใบมี regAt เสมอ จึงรู้เวลาที่แน่นอน
+     (dir:'reg' ถูกใช้ซ้ำกับ ปลด Hold/ซ่อมเสร็จ/ยกเลิกสูญหาย ด้วย ซึ่งพวกนั้นมี
+     reason เสมอ — เช็ค !h.reason เพื่อไม่ให้นับสลับกัน) */
+  if(b.regAt&&!hist.some(function(h){return h.dir==='reg'&&!h.reason;})){
+    add.push({dir:'reg',ts:b.regAt,recorder:b.regBy});
+  }
+  /* "พิมพ์บาร์โค้ด" — labeled=true บอกว่าเกิดขึ้นแล้ว แต่ของเดิมไม่ได้เก็บเวลาไว้ */
+  if(b.labeled===true&&!hist.some(function(h){return h.dir==='label';})){
+    add.push({dir:'label',ts:b.labeledAt||b.regAt,recorder:b.labeledBy,synth:!b.labeledAt});
+  }
+  return hist.concat(add).sort(function(x,y){return new Date(y.ts||0)-new Date(x.ts||0);});
+}
+window.boxTimeline=boxTimeline;
 /* mode: 'full' = labeled horizontal stepper (Track page), 'compact' = small
    icon-only strip (box quick-view modal) */
 function lifecycleStepper(b,mode){
@@ -5618,6 +5678,9 @@ $('#btnCheckIn').onclick=function(){
     // CASE A: box has never been dispatched (no prior 'out' in history) → first-time inbound, not a return
     var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
     // First successful inbound scan confirms the box's barcode label is attached and readable.
+    // Record when, so boxTimeline() can show the "พิมพ์บาร์โค้ด" step at a real
+    // timestamp instead of falling back to an approximate one.
+    if(!b.labeled){b.labeledAt=inTs;b.labeledBy=recorder;}
     b.labeled=true;
     if(isNewBox){
       b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จาก Supplier) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน'});
@@ -5769,7 +5832,7 @@ function untrackBox(tag){trackTags=trackTags.filter(function(t){return t!==tag;}
 window.untrackBox=untrackBox;
 /* renders ONE tracked box's detail block (header + lifecycle stepper + timeline + info) */
 function trackCardHtml(b){
-  var hist=(b.history||[]).slice().reverse();
+  var hist=boxTimeline(b);   /* history จริง + หมุดที่ขาด เรียงใหม่→เก่าให้แล้ว */
   // last out / last in
   var lastOut=null,lastIn=null;
   hist.forEach(function(h){if(!lastOut&&h.dir==='out')lastOut=h;if(!lastIn&&h.dir==='in')lastIn=h;});
@@ -5787,8 +5850,9 @@ function trackCardHtml(b){
   var tl=hist.length?hist.map(function(h){
     var cls=h.dir==='out'?'out':h.dir==='in'?'in':h.dir==='lost'?'lost':h.dir==='relocate'?'in':'reg';
     var isInitialIn=h.dir==='in'&&(h.note||'').indexOf('Initial Inbound')===0;
-    var title=h.dir==='out'?'ออกจากคลัง → '+custName(h.customer):isInitialIn?'รับเข้าคลัง (ครั้งแรก) '+whName(h.wh):h.dir==='in'?'รับคืนเข้า '+whName(h.wh):h.dir==='lost'?'ตีเป็นสูญหาย':h.dir==='relocate'?'ย้ายตำแหน่งจัดเก็บ':'ลงทะเบียน';
+    var title=h.dir==='out'?'ออกจากคลัง → '+custName(h.customer):isInitialIn?'รับเข้าคลัง (ครั้งแรก) '+whName(h.wh):h.dir==='in'?'รับคืนเข้า '+whName(h.wh):h.dir==='lost'?'ตีเป็นสูญหาย':h.dir==='relocate'?'ย้ายตำแหน่งจัดเก็บ':h.dir==='label'?'พิมพ์/ติดป้ายบาร์โค้ด':h.dir==='putaway'?'จัดเก็บขึ้นชั้นวาง':h.dir==='hold'?'พักการใช้งาน (Hold)':h.dir==='damage'?'ตีชำรุด (Damage)':'ลงทะเบียนกล่องเข้าระบบ';
     var meta=[];
+    if(h.synth)meta.push('เวลาโดยประมาณ');
     if(h.gate)meta.push('ประตู '+h.gate);
     if(h.wh)meta.push(whName(h.wh));
     if(h.loc&&(h.loc.rack||h.loc.zone)){var l=h.loc;meta.push([l.zone&&('โซน '+l.zone),l.rack&&('แร็ค '+l.rack),l.shelf&&('ชั้น '+l.shelf),l.slot&&('ช่อง '+l.slot)].filter(Boolean).join(' '));}
@@ -7628,9 +7692,9 @@ function seedDemo(){
    ['CUST-03','ห้างค้าปลีกกรุงเทพ','รามอินทรา','02-555-6666',30]]
     .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDays:a[4]};});
   // 3 box types
-  var types=[['BT-CRT','ลังพลาสติก 60L',450,'600×400×320','CRT'],
-             ['BT-TOTE','กล่องโทเทอ 30L',320,'400×300×280','TOTE'],
-             ['BT-PLT','พาเลทบ็อกซ์',1850,'1100×1100×760','PLT']];
+  var types=[['BT-CRT','ลังพลาสติก 60L',450,'600x400x320','CRT'],
+             ['BT-TOTE','กล่องโทเทอ 30L',320,'400x300x280','TOTE'],
+             ['BT-PLT','พาเลทบ็อกซ์',1850,'1100x1100x760','PLT']];
   types.forEach(function(t){S.boxtypes[t[0]]={id:t[0],name:t[1],unit:'ใบ',value:t[2],dim:t[3]};});
 
   var plates=['82-1234 กทม','70-5678 สป','55-9012 ปท','กง-4444 นบ','63-7890 ชบ'];
@@ -7818,13 +7882,13 @@ window.seedDemo=seedDemo;
     {k:'tag', n:'รอติดบาร์โค้ด', warn:2, bad:5,
      go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติดบาร์โค้ด'}); }},
     {k:'inq', n:'คิวรับเข้า',
-     go:function(){ W.goInventory&&W.goInventory({status:'out',label:'กล่องที่ควรรับเข้า — ยังอยู่กับลูกค้า'}); }},
+     go:function(){ W.goInventory&&W.goInventory({status:'inboundQueue',label:'คิวรับเข้า — กล่องที่ต้องกลับเข้าคลัง'}); }},
     {k:'put', n:'รอจัดเก็บขึ้นชั้น', warn:1, bad:3,
      go:function(){ W.goInventory&&W.goInventory({status:'putaway',label:'กล่องที่รับเข้าแล้ว แต่ยังไม่ขึ้นชั้นวาง'}); }},
     {k:'rack', n:'บนชั้นวาง',
      go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง'}); }},
     {k:'outq', n:'คิวส่งออก',
-     go:function(){ W.switchTab&&W.switchTab('gateout'); }},
+     go:function(){ W.goInventory&&W.goInventory({status:'outboundQueue',label:'คิวส่งออก — กล่องในคลังที่พร้อมจ่ายออก'}); }},
     {k:'cust', n:'อยู่กับลูกค้า',
      go:function(){ W.goInventory&&W.goInventory({status:'awaiting',label:'กล่องที่อยู่กับลูกค้า · รอคืน'}); }},
     {k:'over', n:'เกินกำหนดคืน',
@@ -8430,6 +8494,15 @@ function filteredInvBoxes() {
          badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
          labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
       if (b.labeled === false || b.rfidTid) return false;
+    } else if (invStatusFilter === 'inboundQueue') {
+      /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
+         สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
+         เพื่อไม่ให้แท็บ "ส่งลูกค้า" ติด active ทั้งที่ผู้ใช้กด "คิวรับเข้า" */
+      if (b.status !== 'out') return false;
+    } else if (invStatusFilter === 'outboundQueue') {
+      /* คิวส่งออก (การ์ด outq): กล่องที่อยู่ในคลังจริง = พร้อมหยิบจ่ายออก
+         (ไม่รวม Hold/ชำรุด ซึ่งถูกกันออกจากการใช้งานไปแล้ว) */
+      if (b.status !== 'warehouse') return false;
     } else if (invStatusFilter === 'outToday') {
       /* ออกวันนี้: boxes that have an 'out' history event today */
       var outToday = (b.history || []).some(function(h){
@@ -8455,6 +8528,31 @@ function filteredInvBoxes() {
 }
 
 /* ---- build customer sub-filter pills ---- */
+/* คลังเดียว = ไม่ต้องเลือกเอง (เลือกให้อัตโนมัติ) — หลายคลังจึงค่อยโชว์แถวตัวเลือก
+   เดียวกับแถวแยกตามลูกค้าด้านล่าง เพื่อดูสต็อกทีละคลังหรือทั้งหมดพร้อมกันได้ */
+function buildInvWhPills() {
+  var whRow = $('#invWhRow'), pillsEl = $('#invWhPills'); if (!whRow || !pillsEl) return;
+  var whs = Object.values(S.warehouses);
+  if (whs.length <= 1) {
+    whRow.classList.remove('show');
+    invWhFilter = whs.length === 1 ? whs[0].id : '';
+    return;
+  }
+  whRow.classList.add('show');
+  whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
+  var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
+  whs.forEach(function(w) {
+    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
+    html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
+  });
+  pillsEl.innerHTML = html;
+}
+function setInvWh(id) {
+  invWhFilter = id;
+  buildInvWhPills();
+  renderInventory();
+}
+window.setInvWh = setInvWh;
 function buildInvCustPills() {
   var custRow = $('#invCustRow'), pillsEl = $('#invCustPills'); if (!custRow || !pillsEl) return;
   var isOut = invStatusFilter === 'out';
@@ -8523,6 +8621,7 @@ function refreshInvStatusBadges() {
 }
 
 function renderInventory() {
+  buildInvWhPills();
   buildInvCustPills();
   refreshInvStatusBadges();
   if (invViewMode === 'summary') { renderInvSummary(); return; }
@@ -10073,12 +10172,14 @@ function openColumnMapModal(opts){
       buildRecord:function(m,tag){
         var type=S.boxtypes[m.typeId];
         var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
+        var regTsI=iso();
         return {tag:tag,type:m.typeId,value:value,status:'pending',cycles:0,
           customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
           lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
-          regAt:iso(),regBy:USER,
-          location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:iso()},
-          lastSeenAt:iso(),labeled:false,history:[]};
+          regAt:regTsI,regBy:USER,
+          location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsI},
+          lastSeenAt:regTsI,labeled:false,
+          history:[{dir:'reg',ts:regTsI,recorder:USER,note:'นำเข้าจากไฟล์ Excel/CSV'}]};
       }
     },
 
