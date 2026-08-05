@@ -3941,7 +3941,8 @@ function openBoxActionModal(tag){
       +'<div class="ts-line"><span class="k">สถานะ</span><span class="v">'+statusPill(b.status,b)+'</span></div>'
       +'<div class="ts-line"><span class="k">ตำแหน่ง / ลูกค้า</span><span class="v">'+locOrCust+'</span></div>'
       +((b.lot||b.expiry)?'<div class="ts-line"><span class="k">Lot / หมดอายุ</span><span class="v">'+(b.lot?esc(b.lot):'<span class="muted">-</span>')+(b.expiry?' · '+esc(b.expiry)+' '+expiryPill(b):'')+'</span></div>':'')
-      +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+(b.rfidTid?'<span class="mono small">'+esc(b.rfidTid)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
+      +'<div class="ts-line"><span class="k">RFID TID</span><span class="v">'+(b.rfidTid?'<span class="mono small">'+esc(b.rfidTid)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
+      +(b.rfidTid?'<div class="ts-line"><span class="k">RFID EPC</span><span class="v">'+(b.rfidEpc?'<span class="mono small">'+esc(b.rfidEpc)+'</span>':'<span class="muted">-</span>')+'</span></div>':'')
       +'<div class="ts-line"><span class="k">เห็นล่าสุด</span><span class="v">'+fmtTs(b.lastSeenAt)+'</span></div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
