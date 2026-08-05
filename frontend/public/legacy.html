@@ -1764,13 +1764,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <input type="file" id="importFileShared" accept=".xlsx,.xls,.csv" style="display:none;">
 
   <div class="row no-print reveal" style="margin-bottom:22px;">
-    <button class="btn ghost sm stab active" data-stab="btype">ประเภทกล่อง</button>
-    <button class="btn ghost sm stab" data-stab="wh">คลัง &amp; ประตู</button>
-    <button class="btn ghost sm stab" data-stab="box">ลงทะเบียนกล่อง</button>
-    <button class="btn ghost sm stab" data-stab="cust">ลูกค้า</button>
-    <button class="btn ghost sm stab" data-stab="emp">พนักงาน</button>
-    <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค</button>
-    <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> Audit Log</button>
+    <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
+    <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
+    <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
+    <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
+    <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
+    <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค<span class="sf-badge" data-stab-badge="loc"></span></button>
+    <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
   </div>
 
@@ -2061,7 +2061,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button></div>
+      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -2173,6 +2173,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <button class="ivs-btn" data-lview="table"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span> ตาราง</button>
         </div>
         <button class="btn ghost sm" onclick="openImportModal('loc')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
+        <button class="btn ghost sm" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
         <button class="btn ghost sm" onclick="printFilteredLocLabels()" title="พิมพ์บาร์โค้ดป้ายเฉพาะที่กรองอยู่"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้าย (ที่กรอง)</button>
         <button class="btn ghost sm" id="btnClearOrphanLoc" style="display:none;color:var(--neg);" title="ลบตำแหน่งที่ไม่มีโซน (ข้อมูลตกค้างจากบั๊กเดิม)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ล้างตำแหน่งไม่มีโซน</button>
       </div>
@@ -3632,7 +3633,31 @@ function code39Svg(text){
 
 /* Opens a print view sized to a CR80 card (86×54mm) so badges can be printed
    on card stock, cut out, and laminated. */
+/* คลิกแล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่ใช่พุ่งไปเปิดหน้าต่างพิมพ์เต็มจอทันที —
+   หน้าต่างพิมพ์จริง (badgeWindowHtml) ยังใช้ป๊อปอัปเดิมอยู่ แต่ยกไปเป็นขั้นถัดไป
+   หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน */
 function printEmpBadge(id){
+  var e=S.employees[id];if(!e)return;
+  var code=(e.scanCode||e.id).toUpperCase();
+  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
+  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
+  openModal(
+    '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody" style="display:flex;justify-content:center;padding:24px 16px;">'
+      +'<div style="width:280px;background:#fff;color:#111;border-radius:10px;padding:16px 18px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;">'
+        +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">'
+          +'<div><div style="font-size:15px;font-weight:700;letter-spacing:-.2px;">'+esc(e.name||e.id)+'</div>'
+          +(meta?'<div style="font-size:11px;color:#666;margin-top:2px;">'+esc(meta)+'</div>':'')
+          +(wh?'<div style="font-size:11px;color:#666;">'+esc(wh)+'</div>':'')
+          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ BoxTrace</div></div>'
+        +'<div style="text-align:center;margin-top:10px;">'+code128SVG(code,80)+'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:1.5px;margin-top:4px;">'+esc(code)+'</div></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printEmpBadgeWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
+  );
+}
+window.printEmpBadge=printEmpBadge;
+function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
   var code=(e.scanCode||e.id).toUpperCase();
   var meta=[e.role,e.dept].filter(Boolean).join(' · ');
@@ -3668,7 +3693,7 @@ function printEmpBadge(id){
   w.document.close();
   w.focus();
 }
-window.printEmpBadge=printEmpBadge;
+window.printEmpBadgeWindow=printEmpBadgeWindow;
 /* Real sign-out: clears the JWT this tab holds and sends the whole browser
    tab (not just the /legacy.html iframe) to /login. Referenced from the
    "ออกจากระบบ" button (which already defensively checks for it) but never
@@ -6184,7 +6209,19 @@ function tglRpt(rowId,chevId){var row=$('#'+rowId),ch=$('#'+chevId);if(!row)retu
 window.tglRpt=tglRpt;
 
 /* ===== SETUP render tables ===== */
+/* จำนวนรายการต่อแท็บย่อยของหน้า Master — ให้เห็นภาพรวมโดยไม่ต้องคลิกเข้าไปดูก่อน */
+function refreshStabBadges(){
+  var counts={btype:Object.keys(S.boxtypes||{}).length,wh:Object.keys(S.warehouses||{}).length,
+    box:Object.keys(S.boxes||{}).length,cust:Object.keys(S.customers||{}).length,
+    emp:Object.keys(S.employees||{}).length,loc:Object.keys(S.locations||{}).length,
+    audit:(S.auditLog||[]).length};
+  Object.keys(counts).forEach(function(k){
+    var el=document.querySelector('[data-stab-badge="'+k+'"]');
+    if(el)el.textContent=counts[k]?nf(counts[k]):'';
+  });
+}
 function renderSetup(){
+  refreshStabBadges();
   // enforce box reg mode UI state (wrap visibility + button active)
   if(typeof setBoxRegMode==='function')setBoxRegMode(typeof boxRegMode!=='undefined'?boxRegMode:'single');
   // box type dropdown
@@ -9817,6 +9854,31 @@ function exportBoxExcel() {
 }
 window.exportBoxExcel = exportBoxExcel;
 
+function exportEmpExcel() {
+  var eps = Object.values(S.employees).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
+  var headers = ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'แผนก', 'คลังที่สังกัด', 'กะ', 'เบอร์โทรศัพท์', 'สิทธิ์การใช้งาน', 'สถานะ'];
+  var rows = eps.map(function(e) {
+    return [e.id, e.name || '', e.role || '', e.dept || '',
+      e.wh && S.warehouses[e.wh] ? S.warehouses[e.wh].name : '',
+      EMP_SHIFT[e.shift] || '', e.phone || '',
+      EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
+  });
+  downloadXLS('employees-' + dstr() + '.xls', headers, rows);
+}
+window.exportEmpExcel = exportEmpExcel;
+
+function exportLocExcel() {
+  var locs = Object.values(S.locations).sort(function(a, b) { return a.code < b.code ? -1 : 1; });
+  var headers = ['รหัสตำแหน่ง', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ประเภทแร็ค', 'มีของ/ว่าง'];
+  var occMap = (typeof locOccupancyMap === 'function') ? locOccupancyMap() : {};
+  var rows = locs.map(function(l) {
+    return [l.code, l.wh && S.warehouses[l.wh] ? S.warehouses[l.wh].name : '', l.zone || '', l.rack || '',
+      l.shelf || '', l.slot || '', l.type || '', occMap[l.code] ? 'มีของ' : 'ว่าง'];
+  });
+  downloadXLS('rack-locations-' + dstr() + '.xls', headers, rows);
+}
+window.exportLocExcel = exportLocExcel;
+
 function exportBtypeExcel() {
   var types = Object.values(S.boxtypes).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
   var headers = ['รหัสประเภท', 'ชื่อประเภท', 'หน่วยนับ', 'มูลค่าต่อใบ', 'ขนาด (มม.)', 'กล่องที่ใช้ประเภทนี้'];
@@ -11495,6 +11557,8 @@ function openColumnMapModal(opts){
     "ลูกค้า / DO":"Customer / DO","ผู้บันทึกล่าสุด":"Last recorder","ย้ายพิกัดจัดเก็บ":"Relocate","ส่งให้ลูกค้า":"Ship to customer",
     "ยกเลิก":"Cancel","พิกัดจัดเก็บ":"Storage location","จำนวน (Qty)":"Qty","มูลค่ารวม (฿)":"Total value (THB)",
     "คลัง & ประตู":"Warehouse & Gate","ลงทะเบียนกล่อง":"Register box","ลูกค้า":"Customer","พนักงาน":"Employees",
+    "ประวัติการใช้งาน":"Audit Log","เปลี่ยนรหัสผ่าน":"Change password","ตั้งรหัสผ่าน":"Set password",
+    "ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้":"Set/change this employee's web login account",
     "ทุกสถานะ":"All statuses","พักใช้งาน (Hold)":"On hold (Hold)","ชำรุด (Damage)":"Damaged (Damage)","สูญหาย":"Lost",
     "จัดเรียงเข้าแร็ค (Putaway)":"Putaway to rack","ทั้งหมด":"All","รอติดบาร์โค้ด":"Awaiting barcode","ในคลัง":"In warehouse",
     "จัดเก็บในคลังแล้ว":"Stored on rack","ผ่าน Gate เข้ามาแล้วและจัดเก็บขึ้นชั้นวางเรียบร้อย":"Gated in and already shelved on a rack",
