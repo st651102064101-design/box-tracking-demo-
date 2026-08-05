@@ -311,6 +311,10 @@ class AppController extends ChangeNotifier {
     final lo = raw.toLowerCase();
     final f = s.boxesRaw.keys.where((k) => k.toLowerCase() == lo);
     if (f.isNotEmpty) return f.first;
+    // RFID EPC/TID reads never match a tag key directly — look them up by
+    // value (case-insensitive, since readers vary on hex casing).
+    final byRfid = s.tagForCode(raw);
+    if (byRfid != null) return byRfid;
     if (_looksThaiGarbled(raw)) {
       final fx = _dethaify(raw);
       if (s.boxesRaw.containsKey(fx)) return fx;

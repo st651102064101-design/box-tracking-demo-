@@ -15,6 +15,8 @@ class Box {
   String? get outWh => raw['outWh']?.toString();
   String? get lastSeenAt => raw['lastSeenAt']?.toString();
   String? get dueAt => raw['dueAt']?.toString();
+  String? get rfidTid => raw['rfidTid']?.toString();
+  String? get rfidEpc => raw['rfidEpc']?.toString();
 
   Map<String, dynamic> get location =>
       (raw['location'] is Map) ? Map<String, dynamic>.from(raw['location']) : const {};

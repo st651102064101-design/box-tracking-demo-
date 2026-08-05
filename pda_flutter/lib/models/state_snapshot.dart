@@ -49,6 +49,24 @@ class StateSnapshot {
     return r is Map ? Box(Map<String, dynamic>.from(r)) : null;
   }
 
+  /// Looks up a box by tag, RFID EPC, or RFID TID — mirrors the backend's
+  /// resolveBoxesByCodes (services/rfid.ts), which resolves scans against
+  /// all three columns. boxesRaw is keyed by tag only, so RFID scans need
+  /// this separate lookup by value.
+  String? tagForCode(String code) {
+    final direct = boxesRaw[code];
+    if (direct is Map) return code;
+    final target = code.toLowerCase();
+    for (final entry in boxesRaw.entries) {
+      final v = entry.value;
+      if (v is! Map) continue;
+      final tid = v['rfidTid']?.toString().toLowerCase();
+      final epc = v['rfidEpc']?.toString().toLowerCase();
+      if (tid == target || epc == target) return entry.key;
+    }
+    return null;
+  }
+
   Iterable<Box> get boxes =>
       boxesRaw.values.whereType<Map>().map((e) => Box(Map<String, dynamic>.from(e)));
 

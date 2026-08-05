@@ -98,7 +98,9 @@ class FakeApi extends ApiClient {
   }
 }
 
-Map<String, dynamic> box(String tag, String status, {List<dynamic>? history, int cycles = 0}) => {
+Map<String, dynamic> box(String tag, String status,
+        {List<dynamic>? history, int cycles = 0, String? rfidTid, String? rfidEpc}) =>
+    {
       'tag': tag,
       'type': 'BT-CRT',
       'status': status,
@@ -106,6 +108,8 @@ Map<String, dynamic> box(String tag, String status, {List<dynamic>? history, int
       'customer': '',
       'do': '',
       'history': history ?? <dynamic>[],
+      if (rfidTid != null) 'rfidTid': rfidTid,
+      if (rfidEpc != null) 'rfidEpc': rfidEpc,
     };
 
 /// The WMS employee master, which is the PDA's only source of people. Covers
@@ -278,6 +282,30 @@ void main() {
       final c = await makeController(FakeApi());
       c.mode = 'out';
       c.addScan('crt-01');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    test('resolves a scan by RFID EPC, not just the barcode tag', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
+          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('000000000000424F582D3031');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    test('resolves a scan by RFID TID, case-insensitively', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
+          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('e28011912000708fbad20380');
       expect(c.queue, ['CRT-01']);
     });
 
