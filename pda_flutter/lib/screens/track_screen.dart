@@ -219,7 +219,7 @@ class _TrackScreenState extends State<TrackScreen> {
         color: C.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: C.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))],
+        boxShadow: C.shadow([BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))]),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -273,7 +273,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     decoration: BoxDecoration(
                       color: connected ? C.lime : C.orange,
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: (connected ? C.limeBg : C.orangeBg), blurRadius: 0, spreadRadius: 3)],
+                      boxShadow: C.shadow([BoxShadow(color: (connected ? C.limeBg : C.orangeBg), blurRadius: 0, spreadRadius: 3)]),
                     ),
                   ),
                   const SizedBox(width: 6),

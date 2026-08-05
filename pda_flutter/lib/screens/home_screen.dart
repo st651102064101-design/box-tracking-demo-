@@ -537,13 +537,13 @@ class _ActionCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
             border: dark ? null : Border.all(color: C.border),
-            boxShadow: [
+            boxShadow: C.shadow([
               BoxShadow(
                 color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
                 blurRadius: dark ? 24 : (small ? 0 : 20),
                 offset: Offset(0, dark ? 8 : 6),
               )
-            ],
+            ]),
           ),
           child: Row(
             children: [

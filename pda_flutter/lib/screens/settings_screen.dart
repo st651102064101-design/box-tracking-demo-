@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/graphics_controller.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../services/theme_controller.dart';
@@ -23,6 +24,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final themeCtrl = context.watch<ThemeController>();
+    final graphicsCtrl = context.watch<GraphicsController>();
     final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     // Hardware-debug tiles (raw RFID reads, the backend URL) are noise for a
@@ -84,6 +86,30 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                       Text(c.prefs.baseUrl, style: TextStyle(fontSize: 11.5, color: C.faint)),
                     ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Panel(
+                padding: const EdgeInsets.all(16),
+                radius: 18,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Caption('ประสิทธิภาพเครื่อง'),
+                    CheckboxListTile(
+                      value: graphicsCtrl.lowGraphics,
+                      onChanged: (v) => graphicsCtrl.set(v ?? false),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      dense: true,
+                      activeColor: C.lime,
+                      checkColor: C.limeDeep,
+                      title: const Text('โหมดประหยัดแบต / กราฟิกขั้นต่ำ',
+                          style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
+                      subtitle: Text('ปิดเงาและอนิเมชันเปลี่ยนหน้าจอ ลดภาระ GPU — เหมาะกับเครื่องรุ่นเก่าหรือแบตใกล้หมด',
+                          style: TextStyle(fontSize: 12, color: C.muted)),
+                    ),
                   ],
                 ),
               ),

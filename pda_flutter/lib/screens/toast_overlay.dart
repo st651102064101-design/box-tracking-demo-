@@ -17,7 +17,7 @@ class ToastOverlay extends StatelessWidget {
       bottom: bottom + 26,
       child: IgnorePointer(
         child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
+          duration: C.anim(const Duration(milliseconds: 220)),
           transitionBuilder: (child, anim) => FadeTransition(
             opacity: anim,
             child: SlideTransition(
@@ -72,7 +72,7 @@ class _Toast extends StatelessWidget {
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(15),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 40, offset: const Offset(0, 12))],
+            boxShadow: C.shadow([BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 40, offset: const Offset(0, 12))]),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

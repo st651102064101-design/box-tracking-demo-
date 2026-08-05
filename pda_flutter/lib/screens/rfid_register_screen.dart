@@ -433,7 +433,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         break;
     }
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
+      duration: C.anim(const Duration(milliseconds: 180)),
       child: Container(
         key: ValueKey(_step),
         width: double.infinity,
@@ -460,7 +460,7 @@ class _RfidDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: pulsing ? [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 0, spreadRadius: 4)] : null,
+        boxShadow: pulsing ? C.shadow([BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 0, spreadRadius: 4)]) : null,
       ),
     );
   }

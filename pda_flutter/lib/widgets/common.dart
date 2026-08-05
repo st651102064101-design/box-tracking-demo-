@@ -64,7 +64,7 @@ class Panel extends StatelessWidget {
         color: color ?? C.surface,
         borderRadius: BorderRadius.circular(radius),
         border: border ?? Border.all(color: C.border),
-        boxShadow: shadow,
+        boxShadow: C.lowGraphics ? null : shadow,
       ),
       child: child,
     );
@@ -95,7 +95,7 @@ class PrimaryButton extends StatelessWidget {
             decoration: enabled
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: C.lime.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))],
+                    boxShadow: C.shadow([BoxShadow(color: C.lime.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))]),
                   )
                 : null,
             child: Row(

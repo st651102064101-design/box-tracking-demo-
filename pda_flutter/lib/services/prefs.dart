@@ -32,6 +32,7 @@ class Prefs {
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kLowGraphics = 'boxtrace_low_graphics';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
@@ -58,6 +59,9 @@ class Prefs {
 
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
+
+  bool get lowGraphicsMode => _p.getBool(_kLowGraphics) ?? false;
+  set lowGraphicsMode(bool v) => _p.setBool(_kLowGraphics, v);
 
   /// Antenna transmit power as a percentage of the reader's max — the knob
   /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full

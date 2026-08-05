@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../theme.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
 import 'device_setup_screen.dart';
@@ -33,7 +34,7 @@ class RootScreen extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
+                  duration: C.anim(const Duration(milliseconds: 220)),
                   child: _body(c),
                 ),
               ),
