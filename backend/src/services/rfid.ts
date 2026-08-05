@@ -67,12 +67,16 @@ export interface AssociateInput {
  * Attaches (or, with `replace: true`, re-attaches after a damaged tag swap)
  * an RFID tag to a box. Two exception cases this deliberately guards:
  *
- * 1. **Reused TID** — `rfid_tid` is a factory-burned serial, so if it's
+ * 1. **Reused tag** — `rfid_tid` is a factory-burned serial, so if it's
  *    already on *another* box, that's either a mis-scan or someone peeling a
  *    tag off one box and sticking it on another without going through this
- *    endpoint. Always rejected (409), `replace` doesn't override this one —
- *    replace is for putting a *new, clean* tag on this box, not stealing
- *    another box's tag.
+ *    endpoint. `rfid_epc` gets the same check even though it's user-written
+ *    (not factory-unique) — resolveBoxesByCodes matches on tag/epc/tid
+ *    interchangeably, so two boxes sharing one EPC would make every scan of
+ *    that EPC resolve to whichever row the query happens to return first,
+ *    silently misrouting gate/track lookups between two real boxes. Always
+ *    rejected (409), `replace` doesn't override this one — replace is for
+ *    putting a *new, clean* tag on this box, not stealing another box's tag.
  * 2. **Already tagged** — a box that already carries a different TID needs
  *    `replace: true` to overwrite, so a second accidental scan of the wrong
  *    box doesn't silently detach its real tag.
@@ -87,7 +91,7 @@ export async function associateTag(db: DB, input: AssociateInput) {
     const [claimedBy] = await tx
       .select()
       .from(boxes)
-      .where(and(eq(boxes.rfidTid, rfidTid), ne(boxes.tag, tag)));
+      .where(and(or(eq(boxes.rfidTid, rfidTid), eq(boxes.rfidEpc, rfidEpc)), ne(boxes.tag, tag)));
     if (claimedBy) {
       throw httpError(
         409,
