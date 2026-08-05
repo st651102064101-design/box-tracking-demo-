@@ -8522,9 +8522,12 @@ function filteredInvBoxes() {
       }
       return true;
     }
-    /* Filter by warehouse */
+    /* Filter by warehouse — match location only; do NOT force status==='warehouse'
+       here, or boxes with any other status (out/pending/hold/…) get wiped from
+       every tab whenever invWhFilter is auto-selected (single-warehouse setups
+       set it on every render, even for the "ส่งลูกค้า"/"out" tab). */
     if (invWhFilter) {
-      if (!((b.location || {}).wh === invWhFilter && b.status === 'warehouse')) return false;
+      if ((b.location || {}).wh !== invWhFilter) return false;
     }
     /* ── standard status filter ── */
     if (invStatusFilter === 'unlocated') {
