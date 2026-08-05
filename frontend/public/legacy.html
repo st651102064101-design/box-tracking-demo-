@@ -1617,6 +1617,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     
   </div>
 
+  <!-- warehouse sub-filter row: shown above the status tabs (when there's more than
+       one warehouse) since picking a warehouse here scopes every status badge/tab
+       below it to that warehouse's boxes only. -->
+  <div class="inv-cust-row" id="invWhRow">
+    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> แยกตามคลัง</span>
+    <div class="icr-pills" id="invWhPills"></div>
+  </div>
   <div class="invtoolbar reveal d2">
     <div class="invsearch">
       <span class="invsearch-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span></span>
@@ -1638,10 +1645,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
   <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
-  <div class="inv-cust-row" id="invWhRow">
-    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> แยกตามคลัง</span>
-    <div class="icr-pills" id="invWhPills"></div>
-  </div>
   <div class="inv-cust-row" id="invCustRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
@@ -8614,15 +8617,20 @@ function buildInvCustPills() {
   var isOut = invStatusFilter === 'out';
   custRow.classList.toggle('show', isOut);
   if (!isOut) { invCustFilter = ''; return; }
-  /* collect customers that have at least one 'out' box */
+  /* collect customers that have at least one 'out' box — scoped to the
+     selected warehouse (invWhFilter), same as the status badges above, so
+     the customer pills stay consistent with whichever warehouse is active */
+  var whBoxes = Object.values(S.boxes).filter(function(b) {
+    return !invWhFilter || (b.location || {}).wh === invWhFilter;
+  });
   var custIds = [];
-  Object.values(S.boxes).forEach(function(b) {
+  whBoxes.forEach(function(b) {
     if (b.status === 'out' && b.customer && custIds.indexOf(b.customer) < 0) custIds.push(b.customer);
   });
   custIds.sort(function(a, b) { return custName(a).localeCompare(custName(b), 'th'); });
   var html = '<button class="icr-pill' + (invCustFilter === '' ? ' active' : '') + '" onclick="setInvCust(\'\')">ทุกลูกค้า</button>';
   custIds.forEach(function(id) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'out' && b.customer === id; }).length;
+    var cnt = whBoxes.filter(function(b) { return b.status === 'out' && b.customer === id; }).length;
     html += '<button class="icr-pill' + (invCustFilter === id ? ' active' : '') + '" onclick="setInvCust(\''+esc(id)+'\')">'+esc(custName(id))+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
   pillsEl.innerHTML = html;
@@ -8641,6 +8649,12 @@ window.setInvCust = setInvCust;
    render, so a heavier table load never holds badge counts up and vice versa. */
 function localStatusCounts() {
   var all = Object.values(S.boxes || {});
+  /* Scope every badge to the selected warehouse (invWhFilter) — otherwise
+     picking a warehouse would filter the table but leave the tab badges
+     (e.g. "รอติด Tag RFID") showing global counts across every warehouse. */
+  if (invWhFilter) {
+    all = all.filter(function(b) { return (b.location || {}).wh === invWhFilter; });
+  }
   var c = { '': all.length, pending: 0, warehouse: 0, hold: 0, damage: 0, out: 0, lost: 0,
     pendingPutaway: 0, noRfid: 0, unlocated: 0 };
   all.forEach(function(b) {
@@ -8666,6 +8680,11 @@ function applyInvStatusBadges(counts) {
 function refreshInvStatusBadges() {
   var local = localStatusCounts();
   applyInvStatusBadges(local);
+  /* GET /status-summary aggregates across ALL warehouses server-side (no wh
+     param) — merging it in would clobber the correct per-warehouse local
+     counts back to global ones the moment a warehouse is selected, so skip
+     the refresh entirely in that case and trust the client-computed counts. */
+  if (invWhFilter) return;
   fetch('/api/boxes/status-summary', { headers: authHeaders() })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
