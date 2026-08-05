@@ -120,6 +120,14 @@ class AppController extends ChangeNotifier {
   String trackTag = '';
   bool trackTried = false;
 
+  /// Every distinct box resolved on the track screen this visit, newest
+  /// first — populated by both a manual search ([doTrack]) and by holding
+  /// the RFID trigger ([_onReaderTag]'s `Screen.track` case), so the two
+  /// entry points build one unified list instead of the single
+  /// [trackTag]/[trackBox] slot above clobbering itself on every read.
+  /// Cleared whenever the operator (re-)enters the screen — see [goTrack].
+  final List<Box> trackResults = [];
+
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
   String? connError;
@@ -639,6 +647,7 @@ class AppController extends ChangeNotifier {
     trackVal = '';
     trackTag = '';
     trackTried = false;
+    trackResults.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1036,10 +1045,25 @@ class AppController extends ChangeNotifier {
     }
     trackTag = resolveTag(raw);
     trackTried = true;
+    // Folded into the same list the RFID trigger streams into, so a manual
+    // search and a held-trigger sweep end up on one shared, deduped list —
+    // trackTag/trackBox above are untouched by this and keep driving the
+    // "not found" message the same way they always have.
+    final b = trackBox;
+    if (b != null) _pushTrackResult(b);
     notifyListeners();
   }
 
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
+
+  /// Adds [b] to the front of [trackResults], removing any earlier entry for
+  /// the same tag first — so re-resolving a box that's already in the list
+  /// (typed again, or read again while the trigger is held) moves it to the
+  /// top instead of appending a duplicate card.
+  void _pushTrackResult(Box b) {
+    trackResults.removeWhere((x) => x.tag == b.tag);
+    trackResults.insert(0, b);
+  }
 
   /// Live typeahead for the track search box — every tag containing what's
   /// typed so far, updated on every keystroke rather than waiting for Enter.
@@ -1056,6 +1080,22 @@ class AppController extends ChangeNotifier {
   void selectTrackSuggestion(String tag) {
     trackVal = tag;
     doTrack();
+  }
+
+  /// The trigger-driven counterpart of [doTrack]: one tag read while the
+  /// RFID trigger is held on the track screen. Unlike [doTrack] this never
+  /// touches [trackVal]/[trackTag]/[trackTried] (those stay exclusively
+  /// driven by the manual search box, per its own contract), and a read
+  /// that doesn't resolve to a real box is dropped silently rather than
+  /// surfacing the "not found" message — with tags arriving several times a
+  /// second, flashing that message on every stray/unregistered read would
+  /// just be noise. A resolved box is pushed onto the shared [trackResults]
+  /// list (deduped by tag), same as a manual search does.
+  void _onTrackTag(String raw) {
+    final b = S?.box(resolveTag(raw));
+    if (b == null) return;
+    _pushTrackResult(b);
+    notifyListeners();
   }
 
   // ═══════════════════════ settings ════════════════════════════════════════
@@ -1117,8 +1157,7 @@ class AppController extends ChangeNotifier {
         addScan(epc);
         break;
       case Screen.track:
-        trackVal = epc;
-        doTrack();
+        _onTrackTag(epc);
         break;
       case Screen.login:
         // An RFID employee card and a printed badge land in the same place.

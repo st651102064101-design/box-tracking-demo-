@@ -50,6 +50,7 @@ class _TrackScreenState extends State<TrackScreen> {
     }
     final bottom = MediaQuery.of(context).padding.bottom;
     final box = c.trackBox;
+    final results = c.trackResults;
 
     return Column(
       children: [
@@ -115,7 +116,16 @@ class _TrackScreenState extends State<TrackScreen> {
                         style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
-              if (box != null) _card(c, box),
+              // Every distinct box resolved this visit — a manual search and
+              // holding the RFID trigger both feed the same list (newest on
+              // top), so sweeping the reader over several boxes stacks their
+              // cards instead of each read overwriting the last.
+              ...List.generate(results.length, (i) {
+                return Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : 14),
+                  child: _card(c, results[i]),
+                );
+              }),
             ],
           ),
         ),
