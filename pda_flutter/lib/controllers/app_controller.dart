@@ -119,6 +119,8 @@ class AppController extends ChangeNotifier {
   String trackVal = '';
   String trackTag = '';
   bool trackTried = false;
+  bool trackSearching = false;
+  String? trackError;
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
@@ -632,9 +634,12 @@ class AppController extends ChangeNotifier {
 
   void goTrack() {
     screen = Screen.track;
+    _trackSeq++;
     trackVal = '';
     trackTag = '';
     trackTried = false;
+    trackSearching = false;
+    trackError = null;
     notifyListeners();
     _connectReader();
   }
@@ -1022,17 +1027,68 @@ class AppController extends ChangeNotifier {
     trackVal = v;
   }
 
-  void doTrack() {
+  // Bumped on every doTrack() call (and on leaving the screen) so a network
+  // reply that lands after a newer search has already started — fast
+  // repeated scans, or someone typing over a pending lookup — can't clobber
+  // trackTag/trackError with a stale result.
+  int _trackSeq = 0;
+
+  /// Resolves [trackVal] to a box. [resolveTag] + [StateSnapshot.box] only
+  /// ever matches a box's own barcode tag — S.boxesRaw is keyed by tag
+  /// alone — so an RFID read (EPC or TID) never matches there even for a
+  /// box that really is registered and tagged. When the local snapshot
+  /// comes up empty this falls back to GET /api/boxes/:code, which resolves
+  /// against tag/rfid_epc/rfid_tid server-side (services/rfid.ts) — the
+  /// same lookup gate.ts itself uses — so "not found" only fires once
+  /// neither the local snapshot nor the backend knows the box. A network
+  /// failure is kept distinct from a genuine not-found via [trackError], so
+  /// a connectivity blip can't be misread as "this box doesn't exist."
+  Future<void> doTrack() async {
     final raw = trackVal.trim();
     if (raw.isEmpty) {
+      _trackSeq++;
       trackTag = '';
       trackTried = false;
+      trackSearching = false;
+      trackError = null;
       notifyListeners();
       return;
     }
-    trackTag = resolveTag(raw);
+    final seq = ++_trackSeq;
+    trackError = null;
+    final localTag = resolveTag(raw);
+    if (S?.box(localTag) != null) {
+      // Instant path — most searches are a barcode that's already in the
+      // local snapshot, no need to round-trip to the backend for those.
+      trackTag = localTag;
+      trackTried = true;
+      trackSearching = false;
+      notifyListeners();
+      return;
+    }
+
+    trackTag = localTag;
     trackTried = true;
+    trackSearching = true;
     notifyListeners();
+    try {
+      final data = await api.getBox(raw);
+      if (seq != _trackSeq) return; // superseded by a newer search
+      if (data != null) {
+        final tag = (data['tag'] ?? raw).toString();
+        // Fold it into the local snapshot too so the rest of the UI (which
+        // reads purely off S) has it without waiting for the next periodic
+        // /api/state refresh.
+        S?.boxesRaw[tag] = data;
+        trackTag = tag;
+      }
+    } catch (e) {
+      if (seq != _trackSeq) return;
+      trackError = 'ค้นหากล่องไม่สำเร็จ — ${_msg(e)}';
+    } finally {
+      if (seq == _trackSeq) trackSearching = false;
+      notifyListeners();
+    }
   }
 
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;

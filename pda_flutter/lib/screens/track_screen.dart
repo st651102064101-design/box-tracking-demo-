@@ -105,13 +105,18 @@ class _TrackScreenState extends State<TrackScreen> {
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (box == null && c.trackSuggestions.isNotEmpty)
+              if (c.trackSearching)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                )
+              else if (box == null && c.trackSuggestions.isNotEmpty)
                 _suggestions(c)
               else if (c.trackTried && box == null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
-                    child: Text('ไม่พบกล่อง "${c.trackVal}" ในระบบ',
+                    child: Text(c.trackError ?? 'ไม่พบกล่อง "${c.trackVal}" ในระบบ',
                         style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
