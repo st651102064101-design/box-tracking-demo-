@@ -1025,6 +1025,7 @@ class AppController extends ChangeNotifier {
   // ═══════════════════════ track ═══════════════════════════════════════════
   void onTrackChanged(String v) {
     trackVal = v;
+    notifyListeners();
   }
 
   // Bumped on every doTrack() call (and on leaving the screen) so a network
