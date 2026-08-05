@@ -644,6 +644,8 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .chip2 b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 auto;
   border-radius:50%;background:var(--panelChipBorder);color:var(--panelInk);cursor:pointer;font-weight:400;
   transition:background .15s,transform .15s;}
+.chip2-cond{flex:0 0 auto;font-size:12px;background:var(--panelInputBg);border:1px solid var(--panelInputBorder);
+  color:var(--panelInk);border-radius:9px;padding:3px 6px;width:auto;}
 .chip2 b:hover{background:var(--neg);color:#fff;transform:scale(1.08);}
 .chip2 b .svgi{width:.72em;height:.72em;}
 .c2-new{font-size:10px;background:var(--accent2);color:var(--accentContrast);border-radius:6px;padding:2px 6px;margin-left:6px;font-weight:700;letter-spacing:.02em;vertical-align:1px;}
@@ -765,6 +767,10 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .inv-sum-tbl .sum-type{font-weight:700;font-size:14px;}
 .inv-sum-tbl .sum-loc{font-size:12.5px;color:var(--muted);margin-top:2px;}
 .inv-sum-row-stg td{background:color-mix(in srgb,var(--warn) 6%,var(--surface));}
+.inv-sum-row-parent:hover td{background:color-mix(in srgb,var(--ink) 4%,var(--surface));}
+.inv-sum-caret{display:inline-flex;vertical-align:-3px;margin-right:6px;color:var(--muted);background:none;border:none;padding:0;cursor:pointer;}
+.inv-sum-caret svg{width:15px;height:15px;transition:transform .15s var(--ease);}
+.inv-sum-caret.open svg{transform:rotate(90deg);}
 .inv-sum-row-stg td:first-child{box-shadow:inset 3px 0 0 var(--warn);}
 .inv-sum-row-out td{background:color-mix(in srgb,var(--ink) 3%,var(--surface));}
 .inv-sum-row-lost td{background:color-mix(in srgb,var(--neg) 4%,var(--surface));}
@@ -1477,14 +1483,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field"><label>กำหนดคืนภายใน (วัน)</label><input id="doReturnDays" type="number" min="1" placeholder="ตามลูกค้า"></div>
       <div class="field"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
-      <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
-      <div class="field"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
+      <div class="field"><label>ทะเบียนรถ</label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
+      <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="outVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
-      <div class="field"><label>สภาพกล่องตอนจ่ายออก <span class="req">*</span></label><select id="outCondition">
-        <option value="good">สมบูรณ์ พร้อมใช้งาน</option>
-        <option value="minor">มีตำหนิเล็กน้อย (ยังใช้ได้)</option>
-        <option value="damaged">ชำรุด (ต้องซ่อม/เปลี่ยน)</option>
-      </select><div class="hint">บันทึกไว้เป็นหลักฐานว่ากล่องออกไปในสภาพใด — ใช้เทียบตอนรับคืน</div></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
@@ -1550,9 +1551,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div id="inGateHint"></div>
     <div class="grid g3">
       <div class="field"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
-      <div class="field"><label>รถของคู่ค้า <span class="req">*</span></label><select id="inPartner"></select>
+      <div class="field"><label>รถของคู่ค้า</label><select id="inPartner"></select>
         <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
-      <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
+      <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><input id="inVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
@@ -5535,13 +5536,26 @@ function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);i
   setv('scanOut','');renderOutResult();$('#scanOut').focus();
 }
 window.scanOut=scanOut;
+/* สภาพกล่องตอนจ่ายออก: เดิมใช้ค่าเดียวทับทั้งคิว ทั้งที่ยิงมาหลายใบพร้อมกันอาจมี
+   ใบไหนชำรุด/มีตำหนิปนอยู่ก็ได้ — เก็บแยกรายใบไว้ใน map นี้ (key=tag) ค่าเริ่มต้น
+   'good' ถ้ายังไม่เคยเลือก */
+var outConditionMap={};
+var OUT_COND_LABEL={good:'สมบูรณ์',minor:'มีตำหนิเล็กน้อย',damaged:'ชำรุด'};
+function setOutCondition(t,v){outConditionMap[t]=v;}
+window.setOutCondition=setOutCondition;
+function outConditionSelectHtml(t){
+  var cur=outConditionMap[t]||'good';
+  return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
+    +['good','minor','damaged'].map(function(v){return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+OUT_COND_LABEL[v]+'</option>';}).join('')
+    +'</select>';
+}
 function renderOutResult(){
   $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
   if(!pendingOut.length){$('#resultOut').innerHTML='';return;}
-  $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span><b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
+  $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
+    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});renderOutResult();}
+function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
@@ -5582,8 +5596,9 @@ function saveOutbound(){
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
   /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
-     history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว */
-  var cond=val('outCondition')||'good';
+     history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
+     แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
+     ค่าเดียวทับทั้งคิวเหมือนเดิม */
   var gate=val('outGate');if(!gate)return toast('เลือกประตูขาออก',null,'err');
   var recorder=val('outRecorder');if(!recorder)return toast('กรอกชื่อผู้บันทึก',null,'err');
   var doNoInput=$('#doNo');var doNo=val('doNo');
@@ -5593,16 +5608,14 @@ function saveOutbound(){
   if(!poNoInput._override){po=nextPoNoPreview();}
   var c=S.customers[cust]||{};var rd=num('doReturnDays')||c.returnDays||S.cfg.agingDays;
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
-  if(!plate)return toast('กรอกทะเบียนรถ','จำเป็นสำหรับ Gate ขาออก','err');
-  if(!driver)return toast('กรอกชื่อคนขับ','จำเป็นสำหรับ Gate ขาออก','err');
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var outTs=iso();var dueTs=new Date(Date.now()+rd*86400000).toISOString();
   var dueDateStr=ddmmyyyy(new Date(dueTs)); // Actual Due Date in DD/MM/YYYY — same value shown live in #doDueDatePreview
-  pendingOut.forEach(function(t){var b=S.boxes[t];
+  pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
     b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=outTs;b.outCondition=cond;
     b.history.push({dir:'out',ts:outTs,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
     S.events.push({ts:outTs,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder});});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];
+  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
   S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:rd};
   save();
@@ -5629,7 +5642,7 @@ $('#btnShipOut').onclick=saveOutbound;
    (ยังคงประตูประจำเครื่อง และ DO/PO ที่ระบบสร้างให้อัตโนมัติไว้) ถามยืนยันถ้ามีคิวค้าง */
 function clearGateOut(){
   function doClear(){
-    pendingOut=[];
+    pendingOut=[];outConditionMap={};
     ['outPlate','outDriver','outVehicle','outDriverTel','doReturnDays'].forEach(function(i){setv(i,'');});
     var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
     renderOutResult();renderVehicleQuick();
@@ -5685,14 +5698,10 @@ $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
-  /* ผังงานกำหนดว่ารถที่เข้าประตูต้องเป็นของคู่ค้าเสมอ และป้ายทะเบียนขาเข้าเป็นข้อบังคับ
-     — ไม่มีสองอย่างนี้ก็สาวกลับไม่ได้ว่ากล่องล็อตนี้มาจากใครและมากับรถคันไหน */
   var partner=val('inPartner');
-  if(!partner)return toast('เลือกคู่ค้าเจ้าของรถ','รถขาเข้าต้องเป็นของซัพพลายเออร์หรือลูกค้า','err');
   if(!val('inRecorder'))setv('inRecorder',USER);
   var recorder=val('inRecorder')||USER;
   var plate=val('inPlate'),driver=val('inDriver');
-  if(!plate)return toast('กรอกทะเบียนรถ','จำเป็นสำหรับ Gate ขาเข้า','err');
   var wh=gateWh(gate);
   var loc={wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:Number(gate),ts:iso()};
   var vehicle=val('inVehicle'),tel=val('inDriverTel'),note=val('inNote');
@@ -6243,7 +6252,13 @@ function renderSetup(){
   // (outGate / inGate are now hidden inputs managed by fixedGates)
   var hasCust=Object.keys(S.customers).length>0;
   var doCustSel=$('#doCustomer'),doCustHint=$('#doCustomerHint');
-  if(doCustSel){doCustSel.innerHTML=hasCust?'<option value="">— เลือกลูกค้า —</option>'+custOptions():'';doCustSel.style.display=hasCust?'':'none';}
+  if(doCustSel){
+    var custList=Object.values(S.customers).filter(isCustomerKind);
+    doCustSel.innerHTML=hasCust?'<option value="">— เลือกลูกค้า —</option>'+custOptions():'';
+    doCustSel.style.display=hasCust?'':'none';
+    /* มีลูกค้าให้เลือกจริงแค่รายเดียว — เลือกให้เลย ไม่ต้องบังคับกดเอง */
+    if(custList.length===1&&!doCustSel.value)doCustSel.value=custList[0].id;
+  }
   /* เจ้าของรถขาเข้า: ซัพพลายเออร์ (ส่งกล่องใหม่) และลูกค้า (คืนกล่อง) อยู่ในรายการ
      เดียวกัน แต่ติดป้ายกำกับให้เห็นว่าใครเป็นอะไร — ค่าที่เลือกไว้ถูกคงไว้ เพราะ
      renderAll() ถูกเรียกซ้ำได้ระหว่างที่ผู้ใช้ยังกรอกฟอร์มไม่เสร็จ */
@@ -6264,6 +6279,7 @@ function renderSetup(){
           return '<option value="'+esc(c.id)+'">'+esc(c.name)+' \u00b7 '+tg+'</option>';}).join('')
       : '<option value="">(ยังไม่มีคู่ค้า \u2014 เพิ่มที่ตั้งค่า)</option>';
     if(keepP)inPartnerSel.value=keepP;
+    else if(partners.length===1)inPartnerSel.value=partners[0].id;
   }
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
@@ -8726,9 +8742,10 @@ function renderInvSummary() {
       locLabel = parts.join(' · ');
     }
     var gk = (b.type || '') + '||' + locKey + '||' + b.status;
-    if (!groups[gk]) groups[gk] = { type: b.type, locLabel: locLabel, status: b.status, locKey: locKey, qty: 0, value: 0, ts: 0 };
+    if (!groups[gk]) groups[gk] = { type: b.type, locLabel: locLabel, status: b.status, locKey: locKey, qty: 0, value: 0, ts: 0, tags: [] };
     groups[gk].qty++;
     groups[gk].value += (b.value || 0);
+    groups[gk].tags.push(b.tag);
     var bts = new Date(b.lastSeenAt || b.regAt || 0).getTime();
     if (bts > groups[gk].ts) groups[gk].ts = bts;
   });
@@ -8751,13 +8768,14 @@ function renderInvSummary() {
   if (!rows.length) { body.innerHTML = '<tr><td colspan="6">' + emptyRow(6, 'ยังไม่มีกล่องในเงื่อนไขนี้').replace(/<tr>|<\/tr>/g,'') + '</td></tr>'; return; }
 
   var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'แจ้งกล่องหาย', pending: 'รอติดบาร์โค้ด' };
-  body.innerHTML = rows.map(function(g) {
+  body.innerHTML = rows.map(function(g, gi) {
     var isStg = g.status === 'warehouse' && g.locKey.indexOf('STG') === 0;
     var isOut = g.status === 'out';
     var isLost = g.status === 'lost';
     var rowCls = isStg ? 'inv-sum-row-stg' : isOut ? 'inv-sum-row-out' : isLost ? 'inv-sum-row-lost' : '';
-    return '<tr class="' + rowCls + '">'
-      + '<td><div class="sum-type">' + esc(typeName(g.type)) + '</div><div class="sum-loc small muted mono">' + esc(g.type) + '</div></td>'
+    var gid = 'invSumGrp' + gi;
+    return '<tr class="' + rowCls + ' inv-sum-row-parent" style="cursor:pointer;" onclick="toggleInvSumGroup(\'' + gid + '\',this)">'
+      + '<td><button type="button" class="inv-sum-caret" aria-label="ขยาย/ยุบ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span></button><div class="sum-type" style="display:inline-block;">' + esc(typeName(g.type)) + '</div><div class="sum-loc small muted mono">' + esc(g.type) + '</div></td>'
       + '<td>' + (isStg
           ? '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>' + esc(g.locLabel) + '</span>'
           : '<span class="small">' + esc(g.locLabel) + '</span>')
@@ -8765,12 +8783,28 @@ function renderInvSummary() {
       + '<td>' + statusPill(g.status) + '</td>'
       + '<td class="qty-cell">' + nf(g.qty) + ' <span class="muted small" style="font-weight:400;">ใบ</span></td>'
       + '<td class="r mono small">' + money(g.value) + '</td>'
-      + '<td class="c">'
-        + ''  
+      + '<td class="c"></td>'
+    + '</tr>'
+    + '<tr class="inv-sum-row-detail" id="' + gid + '" style="display:none;" onclick="event.stopPropagation()">'
+      + '<td colspan="6" style="padding:0;">'
+        + '<div style="padding:8px 12px 12px 40px;display:flex;flex-wrap:wrap;gap:6px;">'
+        + g.tags.map(function(t) {
+            return '<button type="button" class="btn ghost sm" style="padding:4px 10px;" onclick="openBoxActionModal(\'' + esc(t) + '\')">' + esc(t) + '</button>';
+          }).join('')
+        + '</div>'
       + '</td>'
     + '</tr>';
   }).join('');
 }
+/* กระจายแถวสรุปออกมาเป็นรายบาร์โค้ดที่อยู่ในกลุ่มนั้น — คลิกซ้ำเพื่อยุบกลับ */
+function toggleInvSumGroup(gid, rowEl) {
+  var detail = document.getElementById(gid); if (!detail) return;
+  var open = detail.style.display !== 'none';
+  detail.style.display = open ? 'none' : '';
+  var caret = rowEl.querySelector('.inv-sum-caret');
+  if (caret) caret.classList.toggle('open', !open);
+}
+window.toggleInvSumGroup = toggleInvSumGroup;
 
 document.getElementById('schInv').addEventListener('input', function(){
   invWhFilter = ''; invDoFilter = '';

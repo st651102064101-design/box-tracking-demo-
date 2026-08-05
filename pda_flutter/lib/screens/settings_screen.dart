@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
@@ -22,6 +23,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final themeCtrl = context.watch<ThemeController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     // Hardware-debug tiles (raw RFID reads, the backend URL) are noise for a
     // regular operator and only worth showing to an admin — see
@@ -34,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
         StickyHeader(
           onBack: c.backToHome,
           title: const Text('ตั้งค่า'),
-          actions: [ThemeToggleButton(ctrl: themeCtrl)],
+          actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
         ),
         Expanded(
           child: ListView(
