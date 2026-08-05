@@ -185,6 +185,20 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Enable/disable the native TID-enrichment fallback. It's off by default:
+  /// fetching a tag's TID when the inventory round didn't carry one requires
+  /// stopping and restarting inventory around a blocking access read, which
+  /// only the RFID register/input/test-read screens need (they show TID).
+  /// The plain scan flow only ever reads [tags]/[epc] and paid for that
+  /// round trip on every single-tag read for no reason — call this with
+  /// `true` on entry to a TID-consuming screen and `false` on exit.
+  Future<void> setTidEnrichment(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setTidEnrichment', {'enabled': enabled});
+    } catch (_) {}
+  }
+
   Future<bool> isConnected() async {
     if (!supported) return false;
     try {

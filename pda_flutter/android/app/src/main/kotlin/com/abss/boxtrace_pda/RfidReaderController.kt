@@ -72,6 +72,19 @@ class RfidReaderController(private val context: Context) :
     // decide whether to start it again afterwards.
     @Volatile private var triggerHeld = false
 
+    // Off by default: the explicit TID access-read in readTidExplicit stops
+    // and restarts inventory around a blocking op, which is fine for the
+    // three screens that actually show TID (register/input/test-sheet) but
+    // was previously running unconditionally for *every* single-tag read —
+    // including the plain scan screen, which only ever consumes the EPC
+    // stream and never looks at TID. That made an ordinary one-tag
+    // point-and-shoot pay for a stop+access+restart round trip for nothing,
+    // and on a quick trigger squeeze the next perform()/stop() (queued
+    // behind it on the same single-thread [exec]) could end up waiting long
+    // enough that the read looked like it silently failed. Screens that need
+    // TID flip this on for as long as they're mounted.
+    @Volatile private var tidEnrichmentEnabled = false
+
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
@@ -98,6 +111,7 @@ class RfidReaderController(private val context: Context) :
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
+            "setTidEnrichment" -> { tidEnrichmentEnabled = call.argument<Boolean>("enabled") ?: false; result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
@@ -480,7 +494,7 @@ class RfidReaderController(private val context: Context) :
                         "phase" to num { t.getPhase().toInt() },
                         "seenCount" to num { t.getTagSeenCount() },
                     )
-                    if (inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
+                    if (tidEnrichmentEnabled && inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
                         // Single tag in front of the antenna (registration /
                         // live-viewer) and no TID yet — go get it properly on
                         // the worker thread, then emit once with the result,
@@ -507,10 +521,22 @@ class RfidReaderController(private val context: Context) :
                     when (evt) {
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED -> {
                             triggerHeld = true
+                            // Start inventory right here instead of waiting for
+                            // AppController to come back through the
+                            // MethodChannel — that round trip (native → Dart
+                            // isolate → back to native) was enough added
+                            // latency that a quick single-tag point-and-shoot
+                            // could release the trigger before Inventory.perform()
+                            // ever got called. AppController's own startInventory()
+                            // call on the "pressed" event below still arrives
+                            // shortly after; it's a harmless redundant call on an
+                            // already-running inventory.
+                            startInventory()
                             emit(mapOf("type" to "trigger", "pressed" to true))
                         }
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED -> {
                             triggerHeld = false
+                            stopInventory()
                             emit(mapOf("type" to "trigger", "pressed" to false))
                         }
                         else -> {}

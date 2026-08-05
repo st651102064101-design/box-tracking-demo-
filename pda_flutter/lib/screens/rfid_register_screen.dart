@@ -49,6 +49,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
     _tagSub = rfid.tagReads.listen(_onTagRead);
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
+    rfid.setTidEnrichment(true);
   }
 
   @override
@@ -58,6 +59,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _successTimer?.cancel();
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
+    _c.rfid.setTidEnrichment(false);
     super.dispose();
   }
 

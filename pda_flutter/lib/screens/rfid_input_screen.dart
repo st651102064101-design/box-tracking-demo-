@@ -97,6 +97,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
+    rfid.setTidEnrichment(true);
   }
 
   @override
@@ -105,6 +106,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     _statusSub?.cancel();
     _triggerSub?.cancel();
     _manualCtrl.dispose();
+    context.read<AppController>().rfid.setTidEnrichment(false);
     super.dispose();
   }
 

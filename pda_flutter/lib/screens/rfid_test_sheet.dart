@@ -42,12 +42,15 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
       if (!mounted) return;
       setState(() => _reads.insert(0, r));
     });
+    rfid.setTidEnrichment(true);
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    if (_reading) context.read<AppController>().rfid.stopInventory();
+    final rfid = context.read<AppController>().rfid;
+    if (_reading) rfid.stopInventory();
+    rfid.setTidEnrichment(false);
     super.dispose();
   }
 
