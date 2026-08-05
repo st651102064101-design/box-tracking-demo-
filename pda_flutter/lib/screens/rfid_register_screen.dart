@@ -38,6 +38,21 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   bool _binding = false;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
+  // A barcode scanner "types" its whole payload in one fast burst (single-digit
+  // ms between characters) with no reliable Enter/Done keystroke on every
+  // device profile — waiting on onSubmitted alone left a scan sitting in the
+  // field until someone tapped the arrow. This debounce submits once no new
+  // characters have landed for a beat, which a scanner burst always satisfies
+  // almost immediately and normal typing essentially never does by accident.
+  Timer? _barcodeDebounce;
+
+  // A tag read while waiting for RFID is held here for the operator to look
+  // at and confirm — RFID readers pick up whatever tag is nearest, not
+  // necessarily the one meant for this box (a neighbouring box's tag, or an
+  // already-registered one, can easily be in range), so nothing gets written
+  // to the box until this is explicitly confirmed.
+  String? _pendingTid;
+  String? _pendingEpc;
 
   AppController get _c => context.read<AppController>();
 
@@ -57,6 +72,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
+    _barcodeDebounce?.cancel();
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
     _c.rfid.setTidEnrichment(false);
@@ -68,7 +84,18 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
+  void _onBarcodeChanged(String v) {
+    _barcodeDebounce?.cancel();
+    if (v.trim().isEmpty) return;
+    _barcodeDebounce = Timer(const Duration(milliseconds: 200), () {
+      // Bail if the field moved on since this timer was scheduled (submitted
+      // another way, cleared, or the operator kept typing past the window).
+      if (_barcodeCtrl.text.trim() == v.trim()) _submitBarcode();
+    });
+  }
+
   Future<void> _submitBarcode() async {
+    _barcodeDebounce?.cancel();
     final code = _barcodeCtrl.text.trim();
     if (code.isEmpty || _verifying) return;
     setState(() {
@@ -106,12 +133,35 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   }
 
   void _onTagRead(RfidTagRead read) {
-    if (_step != _Step.waitingRfid || _binding) return;
+    if (_step != _Step.waitingRfid || _binding || _pendingTid != null) return;
     if (read.tid == null) {
       setState(() => _rfidError = 'อ่าน TID จากแท็กไม่ได้ — ลองยิงใหม่อีกครั้ง (ต้องเป็นแท็กที่รองรับการอ่าน TID)');
       return;
     }
-    _bind(read.tid!, read.epc);
+    // Stop right away instead of binding — hold the read for the operator to
+    // confirm before it's written anywhere.
+    unawaited(_c.rfid.stopInventory());
+    setState(() {
+      _pendingTid = read.tid;
+      _pendingEpc = read.epc;
+      _rfidError = null;
+    });
+  }
+
+  /// Discard the pending read without binding — e.g. the wrong tag was in
+  /// range. Ready to shoot again immediately.
+  void _rescanRfid() {
+    setState(() {
+      _pendingTid = null;
+      _pendingEpc = null;
+    });
+  }
+
+  void _confirmBind() {
+    final tid = _pendingTid;
+    final epc = _pendingEpc;
+    if (tid == null) return;
+    _bind(tid, epc ?? '');
   }
 
   Future<void> _bind(String tid, String epc) async {
@@ -120,8 +170,9 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     setState(() {
       _binding = true;
       _rfidError = null;
+      _pendingTid = null;
+      _pendingEpc = null;
     });
-    unawaited(_c.rfid.stopInventory());
     try {
       await _c.api.associateRfid(tag, rfidTid: tid, rfidEpc: epc, replace: true);
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
@@ -213,6 +264,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               autocorrect: false,
               enableSuggestions: false,
               enabled: !_verifying,
+              onChanged: _onBarcodeChanged,
               onSubmitted: (_) => _submitBarcode(),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
               decoration: InputDecoration(
@@ -242,12 +294,21 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   Widget _rfidCard() {
     final active = _step == _Step.waitingRfid;
+    final confirming = active && !_binding && _pendingTid != null;
     final connected = _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
     Color dot = C.border2;
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
-      dot = _binding ? C.limeDeep : C.orange;
-      label = _binding ? 'กำลังผูกแท็ก…' : 'เหนี่ยวไกยิงแท็ก RFID';
+      if (_binding) {
+        dot = C.limeDeep;
+        label = 'กำลังผูกแท็ก…';
+      } else if (confirming) {
+        dot = C.orange;
+        label = 'พบแท็ก RFID — ตรวจสอบก่อนผูก';
+      } else {
+        dot = C.orange;
+        label = 'เหนี่ยวไกยิงแท็ก RFID';
+      }
     }
     return Opacity(
       opacity: active ? 1 : 0.55,
@@ -263,12 +324,12 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           children: [
             Row(
               children: [
-                _RfidDot(color: dot, pulsing: active && !_binding),
+                _RfidDot(color: dot, pulsing: active && !_binding && !confirming),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                if (active && !_binding)
+                if (active && !_binding && !confirming)
                   OutlinedButton(
                     onPressed: connected ? _tapToRead : null,
                     style: OutlinedButton.styleFrom(
@@ -281,6 +342,56 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                   ),
               ],
             ),
+            if (confirming) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: C.neutralBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TID: ${_pendingTid ?? "—"}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                    const SizedBox(height: 2),
+                    Text('EPC: ${_pendingEpc ?? "—"}',
+                        style: TextStyle(fontSize: 12, color: C.muted, fontFamily: 'monospace')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _rescanRfid,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: C.ink,
+                        side: BorderSide(color: C.border2),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('ยิงใหม่', style: TextStyle(fontSize: 13)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _confirmBind,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: C.lime,
+                        foregroundColor: C.ink,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('ยืนยันผูกแท็กนี้', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (!connected)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
