@@ -112,21 +112,29 @@ class SettingsScreen extends StatelessWidget {
                 sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
                 onTap: () => c.go(Screen.rfidRegister),
               ),
-              const SizedBox(height: 16),
-              if (c.canConfigureDevice)
-                _tile(
-                  icon: Icons.router_outlined,
-                  title: 'ตั้งค่าเครื่อง',
-                  sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
-                  onTap: c.goDeviceSetup,
-                )
-              else
-                _tile(
-                  icon: Icons.lock_outline,
-                  title: 'ตั้งค่าเครื่อง',
-                  sub: 'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ ${c.selWhName} ประตู ${c.gate}',
-                  onTap: null,
-                ),
+              // Device setup only belongs here before the device has ever been
+              // configured — once AppController.finishDeviceSetup has run,
+              // this tile (both the actionable and locked-placeholder forms)
+              // should disappear from settings for good. Re-running setup
+              // afterward goes through the handover sheet on the home screen
+              // instead (see home_screen.dart _openHandover).
+              if (!c.deviceConfigured) ...[
+                const SizedBox(height: 16),
+                if (c.canConfigureDevice)
+                  _tile(
+                    icon: Icons.router_outlined,
+                    title: 'ตั้งค่าเครื่อง',
+                    sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
+                    onTap: c.goDeviceSetup,
+                  )
+                else
+                  _tile(
+                    icon: Icons.lock_outline,
+                    title: 'ตั้งค่าเครื่อง',
+                    sub: 'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ ${c.selWhName} ประตู ${c.gate}',
+                    onTap: null,
+                  ),
+              ],
               if (c.emp != null) ...[
                 const SizedBox(height: 10),
                 _tile(
