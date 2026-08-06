@@ -449,63 +449,64 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 }
 
-/// ใกล้ / ปานกลาง / ไกล — a friendlier face on antenna transmit power than a
-/// raw index, since "power 190/270" means nothing to an operator but "อ่าน
-/// เฉพาะกล่องใกล้ตัว" does. Maps to a percentage of the reader's max power;
-/// [RfidReaderController.setPower] converts that into an actual index.
+/// Fine-grained transmit-power slider — 0-100% in single-percent steps.
+/// Used to be three fixed presets (ใกล้/ปานกลาง/ไกล), but a preset can't be
+/// tuned to the actual gap between reader and rack on site; this drags to
+/// whatever value cuts out cross-talk from the next aisle over.
+/// [RfidReaderController.setPower] converts the percentage into the reader's
+/// real power index.
 class _RangePicker extends StatelessWidget {
-  static const _steps = [
-    (label: 'ใกล้', sub: '~30 ซม.', percent: 30),
-    (label: 'ปานกลาง', sub: '~1-2 ม.', percent: 65),
-    (label: 'ไกล', sub: 'สุดกำลังเครื่อง', percent: 100),
-  ];
-
   final int value;
   final ValueChanged<int> onChanged;
   const _RangePicker({required this.value, required this.onChanged});
 
+  /// A raw percentage tells an operator nothing about physical range — this
+  /// is the same ใกล้/ปานกลาง/ไกล vocabulary the old preset picker used,
+  /// just derived from the slider's position instead of snapping to it.
+  String _label(int v) {
+    if (v <= 40) return 'ใกล้ · ~30 ซม.';
+    if (v <= 75) return 'ปานกลาง · ~1-2 ม.';
+    return 'ไกล · สุดกำลังเครื่อง';
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Snap to the nearest step so a value saved by an older build (or typed
-    // via some future settings-import feature) still highlights sensibly
-    // instead of leaving every option unselected.
-    final nearest = _steps.reduce(
-      (a, b) => (value - a.percent).abs() <= (value - b.percent).abs() ? a : b,
-    );
-    return Row(
-      children: _steps.map((s) {
-        final selected = s == nearest;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: s == _steps.last ? 0 : 8),
-            child: GestureDetector(
-              onTap: () => onChanged(s.percent),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected ? C.ink : C.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: selected ? C.ink : C.border2),
-                ),
-                child: Column(
-                  children: [
-                    Text(s.label,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? C.surface : C.ink)),
-                    const SizedBox(height: 2),
-                    Text(s.sub,
-                        style: TextStyle(
-                            fontSize: 10.5,
-                            color: selected ? C.surface.withOpacity(0.7) : C.muted)),
-                  ],
-                ),
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(_label(value), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value%',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
-        );
-      }).toList(),
+          child: Slider(
+            value: value.toDouble(),
+            min: 0,
+            max: 100,
+            // No `divisions` — a stepped slider snaps to fixed ticks, which
+            // is the same "only a few presets" limitation this replaced.
+            // Continuous drag reports every whole percent as `value` is
+            // already an int-backed round-trip through onChanged.
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -17,6 +17,14 @@ class ScanScreen extends StatefulWidget {
 
 const _vehicleTypes = ['รถกระบะ', 'รถบรรทุก 6 ล้อ', 'รถบรรทุก 10 ล้อ', 'รถเทรลเลอร์', 'อื่นๆ'];
 
+/// Which physical input the operator is using right now. Both already feed
+/// the same queue (a barcode gun types into [_ScanScreenState._scanCtrl]; an
+/// RFID trigger pull streams through AppController._onReaderTag regardless
+/// of what's on screen) — this only controls what the screen *shows*, so a
+/// crew reading tags isn't staring at a barcode text field they'll never
+/// touch.
+enum _InputMode { barcode, rfid }
+
 class _ScanScreenState extends State<ScanScreen> {
   final _scanCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
@@ -34,6 +42,7 @@ class _ScanScreenState extends State<ScanScreen> {
   /// ScanScreen instance (see root_screen.dart's ValueKey), so this never
   /// needs to be cleared by hand between Gate In and Gate Out.
   bool _detailsStep = false;
+  _InputMode _inputMode = _InputMode.barcode;
 
   /// Debounce auto-submit for the scan field, same reasoning as
   /// RfidRegisterScreen's barcode field: this terminal doesn't reliably send
@@ -355,40 +364,115 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           const SizedBox(height: 11),
+          _inputModeToggle(),
+          const SizedBox(height: 11),
           // scan input — Enter (a scanner's trailing keystroke, or the
           // keyboard's "Go"/"Done" action) submits; no separate tap needed.
-          TextField(
-            controller: _scanCtrl,
-            focusNode: _scanFocus,
-            autofocus: true,
-            textCapitalization: TextCapitalization.characters,
-            autocorrect: false,
-            enableSuggestions: false,
-            onSubmitted: (_) => _submit(c),
-            style: const TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
-            decoration: InputDecoration(
-              hintText: 'ยิงบาร์โค้ด / RFID หรือพิมพ์รหัส',
-              hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
-              filled: true,
-              fillColor: C.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+          // RFID mode drops this entirely: a trigger pull already reaches
+          // the queue through AppController._onReaderTag with nothing typed
+          // here, so an operator reading tags gets a clean screen instead of
+          // a text field they'll never use.
+          if (_inputMode == _InputMode.barcode)
+            TextField(
+              controller: _scanCtrl,
+              focusNode: _scanFocus,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              autocorrect: false,
+              enableSuggestions: false,
+              onSubmitted: (_) => _submit(c),
+              style: const TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัส',
+                hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+                filled: true,
+                fillColor: C.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: C.ink, width: 1.5),
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              decoration: BoxDecoration(
+                color: C.surface,
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                border: Border.all(color: C.fieldBorder, width: 1.5),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: C.ink, width: 1.5),
+              child: Column(
+                children: [
+                  Icon(Icons.wifi_tethering, size: 22, color: C.muted),
+                  const SizedBox(height: 6),
+                  Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
+                      style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                ],
               ),
             ),
-          ),
           if (c.lastResult != null) _resultChip(c.lastResult!),
+        ],
+      ),
+    );
+  }
+
+  Widget _inputModeToggle() {
+    Widget seg(_InputMode m, String label, IconData icon) {
+      final selected = _inputMode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (_inputMode == m) return;
+            setState(() => _inputMode = m);
+            if (m == _InputMode.barcode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _scanFocus.requestFocus());
+            } else {
+              // Nothing left on screen worth the keyboard's space.
+              _scanFocus.unfocus();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(_InputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(_InputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
     );
