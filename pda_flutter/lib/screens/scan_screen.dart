@@ -17,14 +17,6 @@ class ScanScreen extends StatefulWidget {
 
 const _vehicleTypes = ['รถกระบะ', 'รถบรรทุก 6 ล้อ', 'รถบรรทุก 10 ล้อ', 'รถเทรลเลอร์', 'อื่นๆ'];
 
-/// Which physical input the operator is using right now. Both already feed
-/// the same queue (a barcode gun types into [_ScanScreenState._scanCtrl]; an
-/// RFID trigger pull streams through AppController._onReaderTag regardless
-/// of what's on screen) — this only controls what the screen *shows*, so a
-/// crew reading tags isn't staring at a barcode text field they'll never
-/// touch.
-enum _InputMode { barcode, rfid }
-
 class _ScanScreenState extends State<ScanScreen> {
   final _scanCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
@@ -42,7 +34,6 @@ class _ScanScreenState extends State<ScanScreen> {
   /// ScanScreen instance (see root_screen.dart's ValueKey), so this never
   /// needs to be cleared by hand between Gate In and Gate Out.
   bool _detailsStep = false;
-  _InputMode _inputMode = _InputMode.barcode;
 
   /// True while the reader's trigger is actually held down. In RFID mode
   /// this collapses the toggle/status card down to a slim "กำลังอ่าน…"
@@ -153,31 +144,37 @@ class _ScanScreenState extends State<ScanScreen> {
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
-            children: [
-              if (_detailsStep) ...[
-                GestureDetector(
-                  onTap: () => setState(() => _detailsStep = false),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 9),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.chevron_left, size: 17, color: C.muted),
-                        Text('กลับไปสแกนกล่องเพิ่ม',
-                            style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                      ],
+            // Details step shows only the vehicle form — not the scanner
+            // panel (with its บาร์โค้ด/RFID toggle, which has nothing to do
+            // once scanning's done) and not the queue list, which the "×N"
+            // badge on the bottom button already accounts for. "กลับไปสแกน
+            // กล่องเพิ่ม" is the way back to the scan step if either needs
+            // to be seen or changed again.
+            children: _detailsStep
+                ? [
+                    GestureDetector(
+                      onTap: () => setState(() => _detailsStep = false),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 9),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chevron_left, size: 17, color: C.muted),
+                            Text('กลับไปสแกนกล่องเพิ่ม',
+                                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                isOut ? _outForm(c) : _inForm(c),
-              ],
-              const SizedBox(height: 13),
-              _scannerPanel(c),
-              const SizedBox(height: 13),
-              _queueHeader(c),
-              const SizedBox(height: 8),
-              ..._queueList(c),
-            ],
+                    isOut ? _outForm(c) : _inForm(c),
+                  ]
+                : [
+                    _scannerPanel(c),
+                    const SizedBox(height: 13),
+                    _queueHeader(c),
+                    const SizedBox(height: 8),
+                    ..._queueList(c),
+                  ],
           ),
         ),
         // Nothing scanned yet: no "ถัดไป" to press, so there's no button to
@@ -339,7 +336,7 @@ class _ScanScreenState extends State<ScanScreen> {
     // Trigger's actually held in RFID mode: collapse the toggle/status card
     // to a slim strip so the boxes landing in the queue below get the
     // screen, not a card that already did its job of picking the mode.
-    if (_inputMode == _InputMode.rfid && _rfidReading) {
+    if (c.scanInputMode == ScanInputMode.rfid && _rfidReading) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
@@ -411,7 +408,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           const SizedBox(height: 11),
-          _inputModeToggle(),
+          _inputModeToggle(c),
           const SizedBox(height: 11),
           // scan input — Enter (a scanner's trailing keystroke, or the
           // keyboard's "Go"/"Done" action) submits; no separate tap needed.
@@ -419,7 +416,7 @@ class _ScanScreenState extends State<ScanScreen> {
           // the queue through AppController._onReaderTag with nothing typed
           // here, so an operator reading tags gets a clean screen instead of
           // a text field they'll never use.
-          if (_inputMode == _InputMode.barcode)
+          if (c.scanInputMode == ScanInputMode.barcode)
             TextField(
               controller: _scanCtrl,
               focusNode: _scanFocus,
@@ -475,15 +472,15 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _inputModeToggle() {
-    Widget seg(_InputMode m, String label, IconData icon) {
-      final selected = _inputMode == m;
+  Widget _inputModeToggle(AppController c) {
+    Widget seg(ScanInputMode m, String label, IconData icon) {
+      final selected = c.scanInputMode == m;
       return Expanded(
         child: GestureDetector(
           onTap: () {
-            if (_inputMode == m) return;
-            setState(() => _inputMode = m);
-            if (m == _InputMode.barcode) {
+            if (c.scanInputMode == m) return;
+            c.setScanInputMode(m);
+            if (m == ScanInputMode.barcode) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _scanFocus.requestFocus());
             } else {
               // Nothing left on screen worth the keyboard's space.
@@ -518,8 +515,8 @@ class _ScanScreenState extends State<ScanScreen> {
       decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          seg(_InputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
-          seg(_InputMode.rfid, 'RFID', Icons.wifi_tethering),
+          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
     );

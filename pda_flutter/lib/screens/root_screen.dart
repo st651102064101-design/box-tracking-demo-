@@ -27,17 +27,22 @@ class RootScreen extends StatelessWidget {
     // InheritedWidget mechanism, so this repaints on a dark/light toggle even
     // though RootScreen itself never watches ThemeController directly.
     //
-    // canPop: false blocks the Android system back control entirely — the
-    // 3-button nav bar's ‹, and the edge-swipe gesture on gesture-nav
-    // devices — on every screen, not just this one: there's no Navigator
-    // stack under here for it to pop (screens are just AppController.screen
-    // swapping which const widget AnimatedSwitcher shows), so an unblocked
-    // back would either do nothing useful or exit the app outright mid-scan.
-    // In-app navigation is exclusively StickyHeader's own back arrow, which
-    // goes through AppController methods that know what "back" means for
-    // whatever screen is showing (see backToHome, goTrack, etc.).
+    // canPop: false stops the framework's own pop — the 3-button nav bar's
+    // ‹ and the edge-swipe gesture would otherwise exit the app outright
+    // mid-scan, since there's no Navigator stack under here for them to pop
+    // (screens are just AppController.screen swapping which widget
+    // AnimatedSwitcher shows). onPopInvokedWithResult still fires on every
+    // press even though the pop itself is blocked, which is what routes a
+    // hardware back press into the exact same in-app navigation each
+    // screen's own StickyHeader arrow already uses (see
+    // AppController.handleSystemBack) — back always goes somewhere, it
+    // just never leaves the app.
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        c.handleSystemBack();
+      },
       child: Scaffold(
         body: Center(
           child: ConstrainedBox(

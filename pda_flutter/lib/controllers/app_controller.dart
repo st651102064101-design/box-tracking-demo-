@@ -14,6 +14,15 @@ import '../services/rfid_service.dart';
 
 enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate }
 
+/// Which physical input a trigger pull means right now, on any screen that
+/// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
+/// step. Centralized (not per-screen local state) because the trigger
+/// itself is wired centrally too (AppController._onReaderTrigger is the
+/// only place a hardware trigger event turns into rfid.startInventory()) —
+/// a screen-local toggle that this dispatcher never saw was exactly how a
+/// "barcode mode" selection still silently started RFID reads and beeped.
+enum ScanInputMode { barcode, rfid }
+
 enum ResultKind { ok, err, warn, info }
 
 class ScanResult {
@@ -414,6 +423,34 @@ class AppController extends ChangeNotifier {
             : Screen.deviceSetup;
     lastResult = null;
     notifyListeners();
+  }
+
+  /// Non-default "what does the system back control do right now" override.
+  /// Every screen's back is exactly backToHome() — what handleSystemBack()
+  /// falls through to below when this is null — except
+  /// RfidLocateScreen's .locate step, whose back has to return to .pick,
+  /// not exit to Home; that's local widget state AppController otherwise
+  /// has no way to see. Set fresh every build by whichever screen needs it
+  /// (see RfidLocateScreen.build), so it's never stale after a navigation.
+  VoidCallback? systemBackOverride;
+
+  /// What the Android system back control (3-button nav / edge-swipe gesture)
+  /// does — always in-app navigation, never "exit the app". root_screen.dart
+  /// blocks the framework's own pop entirely (PopScope(canPop: false)) and
+  /// routes here instead, the same as every screen's own StickyHeader back
+  /// arrow already does, so a hardware press and an on-screen tap behave
+  /// identically. A no-op on deviceSetup with nothing configured yet (same
+  /// as that screen's StickyHeader passing onBack: null) and on the
+  /// screens that are themselves the top of the stack — there's nowhere
+  /// further back to go without exiting, which this must never do.
+  void handleSystemBack() {
+    if (systemBackOverride != null) {
+      systemBackOverride!();
+      return;
+    }
+    if (screen == Screen.deviceSetup && !deviceConfigured) return;
+    if (screen == Screen.home || screen == Screen.login || screen == Screen.boot) return;
+    backToHome();
   }
 
   // ═══════════════════════ operator identity ═══════════════════════════════
@@ -873,6 +910,19 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Session-only (not persisted) — starts each fresh entry into a
+  /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
+  ScanInputMode scanInputMode = ScanInputMode.barcode;
+  void setScanInputMode(ScanInputMode m) {
+    if (scanInputMode == m) return;
+    scanInputMode = m;
+    // Switching to barcode while the trigger is still physically held (or
+    // an inventory is running from before the switch) must not leave the
+    // reader sweeping in the background on a mode that just said "don't".
+    if (m == ScanInputMode.barcode) rfid.stopInventory();
+    notifyListeners();
+  }
+
   // ═══════════════════════ connectivity / commit ═══════════════════════════
   void toggleOnline() {
     online = !online;
@@ -1281,11 +1331,25 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidLocate) {
       return;
     }
-    // Gate scanning drives its own discrete ok/error tones from addScan()
-    // (see playTone calls below) — the reader's own dense per-read tick
-    // would double up with those. Every other RFID screen wants that raw
-    // per-read feedback, so it stays on there.
-    rfid.setAutoBeep(screen != Screen.scan);
+    // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger
+    // does nothing at all — no read, no beep, no vibration. Previously the
+    // toggle only hid the barcode field in the UI; the reader itself still
+    // started and beeped on every read because this dispatcher never knew
+    // which mode was selected. RfidLocateScreen forces scanInputMode back
+    // to rfid the moment a target is picked (its .locate step has no
+    // barcode alternative), so this only ever blocks its pick step.
+    if ((screen == Screen.scan || screen == Screen.track || screen == Screen.rfidLocate) &&
+        scanInputMode == ScanInputMode.barcode) {
+      return;
+    }
+    // Gate scanning and the box-locate sweep both drive their own feedback
+    // instead of the reader's dense per-read tick: Gate's is discrete
+    // ok/error tones from addScan() (see playTone calls below); locate's is
+    // haptic-only, gated to genuine target matches (see
+    // RfidLocateScreen._onBatch) — a beep on every stray read of a
+    // neighbouring pallet's tags was exactly the bug this fixes. Every
+    // other RFID screen still wants the raw per-read feedback.
+    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate);
     rfid.startInventory();
   }
 

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/employee.dart';
+import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../services/theme_controller.dart';
@@ -237,20 +239,61 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Lets an already-signed-in operator set (or replace) their own PIN —
-  /// the way in for whoever tapped "ข้าม / ไม่ตั้ง PIN" the first time and
-  /// changed their mind, or wants a new one. No old-PIN check: they're
-  /// already authenticated for this session, that's the whole point of
-  /// putting this here instead of only on the badge screen.
+  /// Lets an already-signed-in operator set (first time) or change (already
+  /// has one) their own PIN. A change now demands the *old* PIN first —
+  /// being signed into the session proves who's holding the device, not
+  /// that whoever's tapping this tile right now is that person; a PIN
+  /// exists specifically to stop someone else changing it out from under
+  /// them. First-time setup (no PIN on file yet) skips straight to picking
+  /// one, same as before. "ลืมรหัส?" on that old-PIN check reuses the same
+  /// email-OTP reset login_screen.dart's badge flow already has.
   Future<void> _setupPin(BuildContext context, AppController c) async {
     final e = c.emp;
     if (e == null) return;
+
+    if (e.hasPin) {
+      String? otpSentTo;
+      final verify = await showPinPad(
+        context,
+        title: 'ใส่รหัส PIN เดิมของ ${e.name}',
+        subtitle: 'ยืนยันตัวตนก่อนตั้งรหัสใหม่',
+        showForgot: true,
+        validate: (entered) async {
+          try {
+            final ok = await c.api.verifyEmployeePin(e.id, entered);
+            if (ok) c.prefs.cachePinHash(e.id, entered);
+            return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+          } catch (err) {
+            if (c.prefs.verifyPinOffline(e.id, entered)) return null;
+            return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
+          }
+        },
+        onForgot: () async {
+          try {
+            final req = await c.api.requestPinReset(e.id);
+            otpSentTo = req['sentTo']?.toString();
+            return null;
+          } catch (err) {
+            return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+          }
+        },
+      );
+      if (verify == null) return; // cancelled
+      if (verify.forgot) {
+        await _forgotPinFlow(context, c, e, otpSentTo);
+        return;
+      }
+      if (verify.pin == null) return;
+      if (!context.mounted) return;
+    }
+
     final first = await showPinPad(
       context,
       title: e.hasPin ? 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}' : 'ตั้งรหัส PIN สำหรับ ${e.name}',
       subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน',
     );
     if (first == null || first.pin == null) return;
+    if (!context.mounted) return;
     final confirm = await showPinPad(
       context,
       title: 'ยืนยันรหัส PIN อีกครั้ง',
@@ -267,7 +310,56 @@ class SettingsScreen extends StatelessWidget {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, first.pin!);
     c.toastMsg('ตั้งรหัส PIN แล้ว', '', ResultKind.ok);
+  }
+
+  /// Same email-OTP reset login_screen.dart's badge flow uses (see its
+  /// _forgotPin) — duplicated rather than shared across the two screens'
+  /// otherwise-unrelated widget trees, since a fully-independent flow here
+  /// keeps this screen's PIN change working even if the badge screen's PIN
+  /// pad ever changes shape.
+  Future<void> _forgotPinFlow(BuildContext context, AppController c, Employee e, String? sentTo) async {
+    c.toastMsg(
+      'ส่งรหัส OTP แล้ว',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      ResultKind.info,
+    );
+    if (!context.mounted) return;
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: sentTo != null ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)' : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!context.mounted) return;
+    final newPinResult = await showPinPad(context, title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}');
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!context.mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!context.mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!context.mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, newPin);
+    if (!context.mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
   }
 }
 
@@ -700,7 +792,35 @@ class _RangePicker extends StatelessWidget {
             onChanged: max <= 0 ? null : (v) => onChanged(v.round()),
           ),
         ),
+        // Both work, not one or the other: drag the slider to get in the
+        // ballpark fast, then nudge ±1 to land on an exact index — a slider
+        // alone can't reliably hit a specific single-digit value on a
+        // 200+-step range with a thumb sized for a fingertip.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _stepButton(Icons.remove, value > 0 ? () => onChanged(value - 1) : null),
+            const SizedBox(width: 14),
+            _stepButton(Icons.add, value < max ? () => onChanged(value + 1) : null),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _stepButton(IconData icon, VoidCallback? onTap) {
+    return Material(
+      color: onTap == null ? C.neutralBg2 : C.neutralBg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 19, color: onTap == null ? C.faint : C.ink2),
+        ),
+      ),
     );
   }
 }

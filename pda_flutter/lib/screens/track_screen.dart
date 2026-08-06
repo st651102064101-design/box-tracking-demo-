@@ -14,17 +14,9 @@ class TrackScreen extends StatefulWidget {
   State<TrackScreen> createState() => _TrackScreenState();
 }
 
-/// Same reasoning as scan_screen.dart's identical toggle: a barcode gun
-/// types into the text field, an RFID trigger pull resolves through
-/// AppController._onReaderTag regardless of what's rendered — this only
-/// controls what the screen shows, so someone only reading tags isn't
-/// staring at a barcode field they'll never touch.
-enum _InputMode { barcode, rfid }
-
 class _TrackScreenState extends State<TrackScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
-  _InputMode _inputMode = _InputMode.barcode;
 
   /// No submit button — typing already filters live (see trackSuggestions),
   /// and a scan should never need a tap either. Enter still resolves
@@ -95,12 +87,12 @@ class _TrackScreenState extends State<TrackScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
             children: [
-              _inputModeToggle(),
+              _inputModeToggle(c),
               const SizedBox(height: 11),
               // search box — hidden entirely in RFID mode (see the toggle
               // above): nothing to type when the reader resolves the scan
               // directly through AppController._onReaderTag.
-              if (_inputMode == _InputMode.barcode)
+              if (c.scanInputMode == ScanInputMode.barcode)
                 TextField(
                   controller: _ctrl,
                   focusNode: _focus,
@@ -178,15 +170,15 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _inputModeToggle() {
-    Widget seg(_InputMode m, String label, IconData icon) {
-      final selected = _inputMode == m;
+  Widget _inputModeToggle(AppController c) {
+    Widget seg(ScanInputMode m, String label, IconData icon) {
+      final selected = c.scanInputMode == m;
       return Expanded(
         child: GestureDetector(
           onTap: () {
-            if (_inputMode == m) return;
-            setState(() => _inputMode = m);
-            if (m == _InputMode.barcode) {
+            if (c.scanInputMode == m) return;
+            c.setScanInputMode(m);
+            if (m == ScanInputMode.barcode) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
             } else {
               _focus.unfocus();
@@ -220,8 +212,8 @@ class _TrackScreenState extends State<TrackScreen> {
       decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          seg(_InputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
-          seg(_InputMode.rfid, 'RFID', Icons.wifi_tethering),
+          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
     );

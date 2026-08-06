@@ -412,7 +412,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const _ConnectivityIcon(),
+              // Same manual online/offline toggle Home/Gate screens use
+              // (c.online, not the auto-detected c.connected) — it has to
+              // actually flip on every tap, including from online to
+              // offline, which the old retry-only icon here never did
+              // (tapping while genuinely connected just reconfirmed
+              // "online" every time). Real connectivity loss still gets its
+              // own one-shot alert regardless of this toggle's position —
+              // see root_screen.dart's _OfflineAlertListener.
+              OnlineChip(online: c.online, onTap: c.toggleOnline),
             ],
           ),
         ),
@@ -517,78 +525,6 @@ class _BadgePrompt extends StatelessWidget {
             field,
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Small header icon standing in for the old inline "เชื่อมต่อไม่ได้" banner.
-/// Shows live server reachability (green cloud = reachable, grey = not) and
-/// doubles as a manual retry button — tap it and it actually tries again
-/// (see AppController.retryConnection) instead of only ever finding out on
-/// the next unrelated network call. A retry that still fails is the one path
-/// left to "ตั้งค่าระบบ": an alert dialog, not a page the app jumps to on its
-/// own, since going offline is routine on a warehouse floor and shouldn't
-/// interrupt an operator who's just trying to badge in.
-class _ConnectivityIcon extends StatefulWidget {
-  const _ConnectivityIcon();
-  @override
-  State<_ConnectivityIcon> createState() => _ConnectivityIconState();
-}
-
-class _ConnectivityIconState extends State<_ConnectivityIcon> {
-  bool _checking = false;
-
-  Future<void> _tap(AppController c) async {
-    if (_checking) return;
-    setState(() => _checking = true);
-    final ok = await c.retryConnection();
-    if (!mounted) return;
-    setState(() => _checking = false);
-    if (ok) return;
-    showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('เชื่อมต่อระบบหลักไม่ได้'),
-        content: Text(c.connError ?? 'ตรวจสอบเครือข่ายหรือที่อยู่เซิร์ฟเวอร์ของเครื่องนี้'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('ปิด')),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogCtx).pop();
-              c.goDeviceSetup();
-            },
-            child: const Text('ตั้งค่าระบบ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.watch<AppController>();
-    final connected = c.connected;
-    return GestureDetector(
-      onTap: () => _tap(c),
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: connected ? C.limeBg : C.neutralBg,
-          shape: BoxShape.circle,
-          border: Border.all(color: connected ? C.limeBorder : C.border2),
-        ),
-        alignment: Alignment.center,
-        child: _checking
-            ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: connected ? C.limeText : C.muted),
-              )
-            : Icon(connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-                size: 19, color: connected ? C.limeText : C.muted),
       ),
     );
   }

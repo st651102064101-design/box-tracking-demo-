@@ -84,6 +84,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
   @override
   void dispose() {
+    // Clear rather than leave dangling: a stray system-back press after
+    // this screen is gone must not invoke a closure that calls setState on
+    // an unmounted State.
+    final c = context.read<AppController>();
+    if (identical(c.systemBackOverride, _handleBack)) c.systemBackOverride = null;
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
@@ -93,8 +98,18 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     super.dispose();
   }
 
+  /// Registered as AppController.systemBackOverride whenever this screen is
+  /// on the .locate step (see build) — the system back control has to land
+  /// on the same "back to picking a box" behavior the StickyHeader arrow
+  /// already uses there, not AppController's default backToHome().
+  void _handleBack() => _changeTarget(context.read<AppController>());
+
   void _onBatch(List<RfidTagRead> batch) {
-    if (_step != _Step.locate || _target == null) return;
+    if (_step == _Step.pick) {
+      _onPickBatch(batch);
+      return;
+    }
+    if (_target == null) return;
     final wantEpc = _target!.rfidEpc?.toUpperCase();
     final wantTid = _target!.rfidTid?.toUpperCase();
     if ((wantEpc == null || wantEpc.isEmpty) && (wantTid == null || wantTid.isEmpty)) return;
@@ -133,6 +148,26 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     }
   }
 
+  /// RFID-mode picking: a trigger pull on the pick step resolves straight to
+  /// a box the same way Track's scan-to-lookup does (AppController.
+  /// resolveTag already matches by rfidEpc/rfidTid, not just the barcode
+  /// key) — first box with a tag on file that answers wins.
+  void _onPickBatch(List<RfidTagRead> batch) {
+    final c = context.read<AppController>();
+    if (c.scanInputMode != ScanInputMode.rfid) return;
+    final s = c.S;
+    if (s == null) return;
+    for (final r in batch) {
+      final tag = c.resolveTag(r.epc);
+      final b = s.box(tag);
+      if (b == null) continue;
+      final hasTag = (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false);
+      if (!hasTag) continue;
+      _pick(c, b);
+      return;
+    }
+  }
+
   /// Runs off a timer, not off reads, because "no read arrived" is itself the
   /// signal the meter has to show (falling back to zero) — a stream listener
   /// alone only ever fires when something *was* seen.
@@ -159,7 +194,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     }
   }
 
-  void _pick(Box b) {
+  void _pick(AppController c, Box b) {
     setState(() {
       _target = b;
       _step = _Step.locate;
@@ -167,6 +202,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _lastHitAt = null;
       _hits = 0;
     });
+    // The sweep step has no barcode alternative — it only makes sense as an
+    // RFID proximity search — so it always needs the trigger to actually
+    // fire regardless of what the pick step's toggle was last set to.
+    c.setScanInputMode(ScanInputMode.rfid);
   }
 
   void _changeTarget(AppController c) {
@@ -183,6 +222,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    // Kept in sync every rebuild rather than only in initState/step
+    // transitions — cheap, and guarantees a system back press always
+    // matches whatever the StickyHeader arrow below would do right now.
+    c.systemBackOverride = _step == _Step.locate ? _handleBack : null;
     return Column(
       children: [
         StickyHeader(
@@ -212,37 +255,60 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
       children: [
-        TextField(
-          controller: _searchCtrl,
-          focusNode: _focus,
-          textCapitalization: TextCapitalization.characters,
-          autocorrect: false,
-          enableSuggestions: false,
-          onChanged: (_) => setState(() {}),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-          decoration: InputDecoration(
-            hintText: 'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01',
-            hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-            prefixIcon: Icon(Icons.search, color: C.muted),
-            isDense: true,
-            filled: true,
-            fillColor: C.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+        _inputModeToggle(c),
+        const SizedBox(height: 11),
+        if (c.scanInputMode == ScanInputMode.barcode)
+          TextField(
+            controller: _searchCtrl,
+            focusNode: _focus,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+            decoration: InputDecoration(
+              hintText: 'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01',
+              hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+              prefixIcon: Icon(Icons.search, color: C.muted),
+              isDense: true,
+              filled: true,
+              fillColor: C.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.ink, width: 1.5),
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
+          )
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            decoration: BoxDecoration(
+              color: C.surface,
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+              border: Border.all(color: C.fieldBorder, width: 1.5),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: C.ink, width: 1.5),
+            child: Column(
+              children: [
+                Icon(Icons.wifi_tethering, size: 22, color: C.muted),
+                const SizedBox(height: 6),
+                Text('เหนี่ยวไกยิงแท็กของกล่องที่จะหา',
+                    style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+              ],
             ),
           ),
-        ),
         const SizedBox(height: 14),
-        if (q.isEmpty)
+        if (c.scanInputMode != ScanInputMode.barcode)
+          const SizedBox.shrink()
+        else if (q.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
             child: Text('พิมพ์รหัสหรือประเภทกล่อง เพื่อค้นหากล่องที่จะตามหา',
@@ -269,7 +335,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 final hasTag = (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false);
                 final sm = StatusMeta.of(b.status);
                 return InkWell(
-                  onTap: hasTag ? () => _pick(b) : null,
+                  onTap: hasTag ? () => _pick(c, b) : null,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
@@ -448,6 +514,55 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     if (level > 0.55) return 'ใกล้แล้ว — เดินตามสัญญาณต่อ';
     if (level > 0.25) return 'กำลังมาถูกทาง';
     return 'ยังไกล — ลองเดินไปทางอื่น';
+  }
+
+  Widget _inputModeToggle(AppController c) {
+    Widget seg(ScanInputMode m, String label, IconData icon) {
+      final selected = c.scanInputMode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (c.scanInputMode == m) return;
+            c.setScanInputMode(m);
+            if (m == ScanInputMode.barcode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+            } else {
+              _focus.unfocus();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
+        ],
+      ),
+    );
   }
 }
 
