@@ -1207,6 +1207,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="row" style="gap:6px;">
           <button class="iconbtn sm" id="btnNotifSound" title="เสียงแจ้งเตือน" onclick="toggleNotifSound()"></button>
           <button class="btn ghost sm" onclick="clearNotifLog()">ล้างทั้งหมด</button>
+          <button class="iconbtn sm" title="ปิด" onclick="closeNotifPanel()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
         </div>
       </div>
       <div class="notif-panel-body" id="notifLogBody"><div class="notif-empty">ยังไม่มีการแจ้งเตือน</div></div>
@@ -12231,6 +12232,9 @@ function toggleNotifPanel(){
   var open=p.hidden;
   p.hidden=!open;
   if(open){ notifUnread=0; refreshNotifBadges(); renderNotifLog(); }
+}
+function closeNotifPanel(){
+  var p=$('#notifPanel'); if(p)p.hidden=true;
 }
 function closeNotifPanelAndGo(tag){
   var p=$('#notifPanel'); if(p)p.hidden=true;
