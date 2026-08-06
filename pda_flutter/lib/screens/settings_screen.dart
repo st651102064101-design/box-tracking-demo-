@@ -131,7 +131,7 @@ class SettingsScreen extends StatelessWidget {
                 _tile(
                   icon: Icons.router_outlined,
                   title: 'ตั้งค่าเครื่อง',
-                  sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
+                  sub: '${c.selWhName} · ประตู ${c.gate} · ที่อยู่เซิร์ฟเวอร์',
                   onTap: c.goDeviceSetup,
                 )
               else
