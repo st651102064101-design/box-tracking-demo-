@@ -44,8 +44,20 @@ class RfidBridge(private val context: Context, private val web: WebView) {
 
     @JavascriptInterface
     fun start() = exec.execute {
-        try { reader?.Actions?.Inventory?.perform() }
-        catch (e: Exception) { Log.w(TAG, "start failed${why(e)}", e); status("error", "เริ่มอ่านไม่ได้${why(e)}") }
+        try {
+            reader?.Actions?.Inventory?.perform()
+        } catch (e: Exception) {
+            // "already inventorying" is the expected answer to a second start
+            // — a trigger held while something else calls start(), or two
+            // trigger-press events for one pull. Painting a red error over a
+            // session that is reading perfectly well is worse than silence.
+            if (e is OperationFailureException && e.getResults() == RFIDResults.RFID_OPERATION_IN_PROGRESS) {
+                Log.d(TAG, "start ignored — inventory already running")
+                return@execute
+            }
+            Log.w(TAG, "start failed${why(e)}", e)
+            status("error", "เริ่มอ่านไม่ได้${why(e)}")
+        }
     }
 
     @JavascriptInterface
