@@ -26,6 +26,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _url;
   late final TextEditingController _account;
   late final TextEditingController _password;
+  late final TextEditingController _apiKey;
   bool _showAccount = false;
 
   @override
@@ -35,6 +36,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url = TextEditingController(text: c.prefs.baseUrl);
     _account = TextEditingController(text: c.prefs.username);
     _password = TextEditingController();
+    _apiKey = TextEditingController(text: c.prefs.apiKey);
     // Only one hardware profile is qualified today (see _kDeviceProfiles) —
     // making someone tap the one option they have no real choice about would
     // just be friction, so it's picked for them the moment this screen opens.
@@ -48,6 +50,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url.dispose();
     _account.dispose();
     _password.dispose();
+    _apiKey.dispose();
     super.dispose();
   }
 
@@ -156,6 +159,18 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                         loc.t('บัญชีนี้เป็นของเครื่อง ไม่ใช่ของพนักงาน — ตั้งครั้งเดียวตอนแจกเครื่อง'),
                         style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
                       ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _apiKey,
+                        autocorrect: false,
+                        obscureText: true,
+                        decoration: pdaInput(loc.t('API key (ถ้าเซิร์ฟเวอร์ตั้งไว้)')),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        loc.t('เว้นว่างได้ถ้าเซิร์ฟเวอร์ยังไม่ได้เปิดใช้ API key'),
+                        style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+                      ),
                     ],
                   ],
                 ),
@@ -181,6 +196,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                       baseUrl: _url.text,
                       username: _account.text,
                       password: _password.text,
+                      apiKey: _apiKey.text,
                     )
                 : null,
           ),

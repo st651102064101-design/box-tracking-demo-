@@ -6,6 +6,30 @@ import 'package:flutter/services.dart';
 /// Connection state reported by the native Zebra RFID plugin.
 enum RfidState { idle, connecting, connected, disconnected, error }
 
+/// One selectable beep sound — the id crosses the platform channel and is
+/// matched against RfidReaderController.playSoundIdBlocking's catalog on the
+/// Kotlin side (a mix of synthesized PCM waveforms and ToneGenerator system
+/// tones). Keep ids stable: they're what Prefs.rfidToneId persists.
+class RfidTone {
+  final String id;
+  final String label;
+  const RfidTone(this.id, this.label);
+}
+
+/// The beep catalog shown in Settings — every entry here must have a
+/// matching branch in RfidReaderController.kt's playSoundIdBlocking, or it
+/// silently falls back to the default there.
+const kRfidTones = [
+  RfidTone('html_tick', 'ติ๊กแบบ RFID HTML (ค่าเริ่มต้น)'),
+  RfidTone('soft_tick', 'ติ๊กนุ่ม'),
+  RfidTone('high_tick', 'ติ๊กแหลมสูง'),
+  RfidTone('low_tick', 'ติ๊กทุ้มต่ำ'),
+  RfidTone('ping', 'ปิ๊ง'),
+  RfidTone('double_tick', 'ติ๊กคู่'),
+  RfidTone('classic_beep', 'บี๊บคลาสสิก'),
+  RfidTone('classic_ack', 'ป๊อกคลาสสิก'),
+];
+
 class RfidStatus {
   final RfidState state;
   final String message;
@@ -252,25 +276,6 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// Switch the reader between its two read profiles.
-  ///
-  /// Fast (`false`, the default and what every screen but one runs): EPC and
-  /// RSSI only, no TagData attached to the read event, DPO off — the same
-  /// configuration rfid_html_app uses, which is the one measured at full reader
-  /// speed on this hardware.
-  ///
-  /// Detail (`true`): full field reporting plus an explicit TID access-read.
-  /// Only [Screen.rfidRegister] turns this on, and only while it is on top,
-  /// because that read stops and restarts inventory around every call. Binding
-  /// a box needs a TID and on this reader the inventory round never carries
-  /// one, so registration cannot work without paying for it.
-  Future<void> setDetailMode(bool enabled) async {
-    if (!supported) return;
-    try {
-      await _method.invokeMethod('setDetailMode', {'enabled': enabled});
-    } catch (_) {}
-  }
-
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
   /// Used only to restore the saved setting on connect — a percent can only
   /// ever land on ~101 of the reader's real power steps, so live dragging
@@ -303,13 +308,13 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// One explicit, app-driven tone: 'ok' for a genuinely new tag landing in
-  /// the queue, 'error' for a rejected/invalid scan. Silence (call nothing)
-  /// is the correct response to a duplicate read — see AppController.addScan.
-  ///
-  /// Fixed/unconfigurable — kind: 'ok' is legacy and no longer called from
-  /// this app (see [playSound] for the user-configurable replacement); kind:
-  /// 'error' is still exactly what it always was.
+  /// One explicit, app-driven tone: 'ok' for a genuinely new tag/barcode
+  /// landing in the queue, 'error' for a rejected/invalid scan. Both fixed
+  /// and unconfigurable — a barcode-sourced Gate detection always sounds
+  /// like this regardless of the operator's RFID tone choice; only a
+  /// trigger-pulled RFID detection uses that configurable sound instead
+  /// (see [playSound]). Silence (call nothing) is the correct response to
+  /// a duplicate read — see AppController.addScan.
   Future<void> playTone(String kind) async {
     if (!supported) return;
     try {
@@ -317,26 +322,49 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// Which sound id (see sound_catalog.dart) the reader's dense per-read tick
-  /// ([setAutoBeep]) plays. Pushed down whenever the RFID sound setting
-  /// changes and once the reader connects — the native side has to know this
-  /// itself because that tick fires from the SDK's read callback with no
-  /// per-tag round trip back into Dart.
-  Future<void> setRfidSoundId(String soundId) async {
+  /// Plays one sound id ([kRfidTones]) at [volumePercent] immediately, once
+  /// — how a barcode-vs-RFID-sourced Gate detection ends up sounding
+  /// different (AppController.addScan's `viaRfid`): an RFID trigger read
+  /// plays the operator's chosen tone via this, a typed/scanned barcode
+  /// always plays the fixed tone behind [playTone]('ok').
+  Future<void> playSound(String soundId, {int volumePercent = 100}) async {
     if (!supported) return;
     try {
-      await _method.invokeMethod('setRfidSoundId', {'soundId': soundId});
+      await _method.invokeMethod('playSound', {'soundId': soundId, 'volume': volumePercent});
     } catch (_) {}
   }
 
-  /// Plays one sound id immediately, once, regardless of any other setting —
-  /// the settings picker's instant preview, and how Dart plays the
-  /// currently-configured barcode/RFID "ok" tone for a detection it already
-  /// knows the source of (see AppController.addScan's `viaRfid`).
-  Future<void> playSound(String soundId) async {
+  /// Sets which tone id ([kRfidTones]) and volume (0-100) every subsequent
+  /// beep() (dense per-read tick) and playTone() call uses — a reader-side
+  /// setting that persists on the native side until this is called again,
+  /// same pattern as setPowerIndex/setAutoBeep. Call once on connect/prefs
+  /// load to restore a saved choice, and again immediately whenever the
+  /// operator picks a different tone/volume in Settings.
+  Future<void> setBeepStyle({required String toneId, required int volumePercent}) async {
     if (!supported) return;
     try {
-      await _method.invokeMethod('playSound', {'soundId': soundId});
+      await _method.invokeMethod('setBeepStyle', {'toneId': toneId, 'volume': volumePercent});
+    } catch (_) {}
+  }
+
+  /// Plays [toneId] once at [volumePercent] immediately — the live preview
+  /// behind Settings' tone picker ("เมื่อเลือกให้เล่นเสียงเลย"), independent of
+  /// whatever setBeepStyle last configured so trying a tone never leaves the
+  /// reader's standing style changed until the operator actually confirms it.
+  Future<void> previewTone({required String toneId, required int volumePercent}) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('previewTone', {'toneId': toneId, 'volume': volumePercent});
+    } catch (_) {}
+  }
+
+  /// Proximity beep for the locate/find-box screen: volume and pitch both
+  /// scale with [level] (0..1, same normalized value the on-screen gauge
+  /// uses) — a strong return beeps loud, a faint one barely ticks.
+  Future<void> playLocateBeep(double level) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('playLocateBeep', {'level': level});
     } catch (_) {}
   }
 

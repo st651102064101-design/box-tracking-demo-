@@ -8,7 +8,6 @@ import '../models/employee.dart';
 import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
-import '../services/sound_catalog.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -607,23 +606,52 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 14),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            const Text('เสียงเมื่อเจอแท็ก RFID', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const Text('เสียงบี๊บ', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
               'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที',
               style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
             ),
             const SizedBox(height: 10),
-            _SoundRow(
-              label: 'เสียงตอนอ่าน RFID',
-              soundId: c.prefs.rfidSoundId,
-              onTap: () => showSoundPickerSheet(
-                context,
-                title: 'เสียงตอนอ่าน RFID',
-                currentId: c.prefs.rfidSoundId,
-                onPreview: c.rfid.playSound,
-                onSelect: c.setRfidSoundId,
-              ),
+            _TonePicker(
+              value: c.prefs.rfidToneId,
+              onChanged: (id) {
+                setState(() => c.prefs.rfidToneId = id);
+                c.rfid.setBeepStyle(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
+                // Selecting a tone plays it immediately — the operator hears
+                // what they just picked without a separate "ทดสอบ" tap.
+                c.rfid.previewTone(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
+              },
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.volume_down, size: 16, color: C.muted),
+                Expanded(
+                  child: Slider(
+                    value: c.prefs.rfidVolumePercent.toDouble(),
+                    min: 1,
+                    max: 100,
+                    divisions: 99,
+                    activeColor: C.lime,
+                    label: '${c.prefs.rfidVolumePercent}%',
+                    onChanged: (v) => setState(() => c.prefs.rfidVolumePercent = v.round()),
+                    onChangeEnd: (v) {
+                      final vol = v.round();
+                      c.rfid.setBeepStyle(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                      c.rfid.previewTone(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                    },
+                  ),
+                ),
+                Icon(Icons.volume_up, size: 16, color: C.muted),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 36,
+                  child: Text('${c.prefs.rfidVolumePercent}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.ink2)),
+                ),
+              ],
             ),
           ],
           if (!c.rfid.supported)
@@ -697,6 +725,51 @@ class _RfidPanelState extends State<_RfidPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Beep sound picker (see rfid_service.dart's kRfidTones) — a row of chips
+/// rather than a dropdown since the whole catalog is short enough to lay
+/// out flat, and a chip tap doubles as the "listen to it" gesture (the
+/// caller plays a live preview onChanged, per the "เมื่อเลือกให้เล่นเสียงเลย" ask).
+class _TonePicker extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _TonePicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kRfidTones.map((t) {
+        final selected = t.id == value;
+        return GestureDetector(
+          onTap: () => onChanged(t.id),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : C.neutralBg,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: selected ? C.ink : C.border2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.volume_up : Icons.play_arrow,
+                    size: 14, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(t.label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -841,174 +914,6 @@ class _RangePicker extends StatelessWidget {
           width: 40,
           height: 40,
           child: Icon(icon, size: 19, color: onTap == null ? C.faint : C.ink2),
-        ),
-      ),
-    );
-  }
-}
-
-/// One "เสียงตอน…" row — current sound's name, tap to open the picker.
-class _SoundRow extends StatelessWidget {
-  final String label;
-  final String soundId;
-  final VoidCallback onTap;
-  const _SoundRow({required this.label, required this.soundId, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-        decoration: BoxDecoration(
-          color: C.neutralBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: C.border2),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.ink)),
-                  const SizedBox(height: 2),
-                  Text(soundNameFor(soundId), style: TextStyle(fontSize: 12, color: C.muted)),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 19, color: C.chevron),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Modal sound picker — every entry in [kSoundCatalog], tap one and it both
-/// plays immediately (via [onPreview]) and becomes the selection (via
-/// [onSelect]) in the same action. No separate "confirm" step: "เวลาเลือก
-/// ปุ๊บก็เล่นเสียงเลย" is a single tap, not preview-then-commit.
-Future<void> showSoundPickerSheet(
-  BuildContext context, {
-  required String title,
-  required String currentId,
-  required ValueChanged<String> onPreview,
-  required ValueChanged<String> onSelect,
-}) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) => _SoundPickerSheet(
-      title: title,
-      currentId: currentId,
-      onPreview: onPreview,
-      onSelect: onSelect,
-    ),
-  );
-}
-
-class _SoundPickerSheet extends StatefulWidget {
-  final String title;
-  final String currentId;
-  final ValueChanged<String> onPreview;
-  final ValueChanged<String> onSelect;
-  const _SoundPickerSheet({
-    required this.title,
-    required this.currentId,
-    required this.onPreview,
-    required this.onSelect,
-  });
-
-  @override
-  State<_SoundPickerSheet> createState() => _SoundPickerSheetState();
-}
-
-class _SoundPickerSheetState extends State<_SoundPickerSheet> {
-  late String _selected = widget.currentId;
-
-  void _pick(String id) {
-    setState(() => _selected = id);
-    widget.onPreview(id);
-    widget.onSelect(id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    return Container(
-      decoration: BoxDecoration(
-        color: C.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(widget.title,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.fromLTRB(10, 0, 10, bottom + 12),
-                itemCount: kSoundCatalog.length,
-                itemBuilder: (context, i) {
-                  final opt = kSoundCatalog[i];
-                  final selected = opt.id == _selected;
-                  return InkWell(
-                    onTap: () => _pick(opt.id),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-                      decoration: BoxDecoration(
-                        color: selected ? C.limeBg : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: selected ? C.limeBorder : Colors.transparent),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            selected ? Icons.volume_up : Icons.volume_up_outlined,
-                            size: 19,
-                            color: selected ? C.limeDeep : C.ink2,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              opt.name,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                                color: selected ? C.limeDeep : C.ink,
-                              ),
-                            ),
-                          ),
-                          if (selected) Icon(Icons.check, size: 18, color: C.limeDeep),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
         ),
       ),
     );

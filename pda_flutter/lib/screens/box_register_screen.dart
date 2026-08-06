@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/location.dart';
 import '../services/api_client.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
 enum _Step { create, label, rfid, putaway, success }
+
+enum _LocInputMode { scan, manual }
 
 /// One distinct tag the RFID sweep turned up — same shape/reasoning as
 /// RfidRegisterScreen's own _Candidate.
@@ -37,14 +40,33 @@ class BoxRegisterScreen extends StatefulWidget {
 class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   final _tagCtrl = TextEditingController();
   final _tagFocus = FocusNode();
-  final _zoneCtrl = TextEditingController();
-  final _rackCtrl = TextEditingController();
-  final _shelfCtrl = TextEditingController();
-  final _slotCtrl = TextEditingController();
+
+  // Putaway location — cascading Zone/Rack/Shelf/Slot picked from the
+  // Location Master, or filled in one shot by scanning a rack barcode.
+  // Same two-mode pattern as legacy.html's locPickerHtml().
+  _LocInputMode _locMode = _LocInputMode.scan;
+  final _rackScanCtrl = TextEditingController();
+  final _rackScanFocus = FocusNode();
+  String? _locZone;
+  String? _locRack;
+  String? _locShelf;
+  String? _locSlot;
+  String? _locScanError;
+  bool _locConfirmed = false;
 
   Timer? _autoSubmitTimer;
   static const _autoSubmitDelay = Duration(milliseconds: 180);
   static const _autoSubmitMinLen = 2;
+  // A hardware barcode scanner types its whole payload as a keyboard-wedge
+  // burst — every character lands within a few ms of the last. A human
+  // thumbing this in on the handheld's own keypad is nowhere near that fast
+  // even typing quickly. Tracking the gap between keystrokes (not just "did
+  // the field go quiet") is what actually tells the two apart — length/quiet
+  // alone auto-submitted a name someone was still typing the instant they
+  // paused. `null` means "no burst seen yet this field session".
+  static const _burstMaxGap = Duration(milliseconds: 40);
+  DateTime? _lastKeyAt;
+  bool _sawBurst = false;
 
   _Step _step = _Step.create;
   String? _selectedType;
@@ -90,17 +112,23 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     _tagCtrl.removeListener(_onTagChanged);
     _tagCtrl.dispose();
     _tagFocus.dispose();
-    _zoneCtrl.dispose();
-    _rackCtrl.dispose();
-    _shelfCtrl.dispose();
-    _slotCtrl.dispose();
+    _rackScanCtrl.dispose();
+    _rackScanFocus.dispose();
     super.dispose();
   }
 
   void _onTagChanged() {
     _autoSubmitTimer?.cancel();
+    final now = DateTime.now();
+    final prev = _lastKeyAt;
+    _lastKeyAt = now;
+    // Any single keystroke that lands within the burst window counts —
+    // that's already proof this edit wasn't a person tapping keys, so one
+    // fast gap is enough to arm auto-submit for the rest of this value.
+    if (prev != null && now.difference(prev) <= _burstMaxGap) _sawBurst = true;
+
     final text = _tagCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null) return;
+    if (!_sawBurst || text.length < _autoSubmitMinLen || _creating || _selectedType == null) return;
     _autoSubmitTimer = Timer(_autoSubmitDelay, () {
       if (!mounted || _creating || _tagCtrl.text.trim() != text) return;
       _submitCreate();
@@ -209,7 +237,45 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _step = _Step.putaway;
       _found.clear();
       _selectedEpc = null;
+      _locMode = _LocInputMode.scan;
+      _locZone = null;
+      _locRack = null;
+      _locShelf = null;
+      _locSlot = null;
+      _locScanError = null;
+      _locConfirmed = false;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _rackScanFocus.requestFocus());
+  }
+
+  LocationCascade get _locCascade => LocationCascade(_c.S?.locations ?? const {});
+
+  void _applyRackScan() {
+    final raw = _rackScanCtrl.text.trim();
+    if (raw.isEmpty) return;
+    final loc = _locCascade.resolveBarcode(raw, wh: _c.wh);
+    if (loc == null) {
+      setState(() => _locScanError = 'ไม่พบรหัสแร็ค "$raw" — ลองกรอกเองด้วยแท็บ "กรอกเอง"');
+      _rackScanCtrl.clear();
+      return;
+    }
+    setState(() {
+      _locZone = loc.zone.isEmpty ? null : loc.zone;
+      _locRack = loc.rack.isEmpty ? null : loc.rack;
+      _locShelf = loc.shelf.isEmpty ? null : loc.shelf;
+      _locSlot = loc.slot.isEmpty ? null : loc.slot;
+      _locScanError = null;
+      _locConfirmed = true;
+    });
+    _rackScanCtrl.clear();
+  }
+
+  void _resetLocPicker() {
+    setState(() {
+      _locConfirmed = false;
+      _locScanError = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _rackScanFocus.requestFocus());
   }
 
   Future<void> _rescan() async {
@@ -236,10 +302,10 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       await _c.api.putawayBox(
         tag,
         wh: _c.wh,
-        zone: _zoneCtrl.text.trim(),
-        rack: _rackCtrl.text.trim(),
-        shelf: _shelfCtrl.text.trim(),
-        slot: _slotCtrl.text.trim(),
+        zone: _locZone ?? '',
+        rack: _locRack ?? '',
+        shelf: _locShelf ?? '',
+        slot: _locSlot ?? '',
       );
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
       setState(() => _step = _Step.success);
@@ -267,12 +333,18 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _rfidError = null;
       _found.clear();
       _selectedEpc = null;
-      _zoneCtrl.clear();
-      _rackCtrl.clear();
-      _shelfCtrl.clear();
-      _slotCtrl.clear();
+      _locMode = _LocInputMode.scan;
+      _locZone = null;
+      _locRack = null;
+      _locShelf = null;
+      _locSlot = null;
+      _locScanError = null;
+      _locConfirmed = false;
     });
+    _rackScanCtrl.clear();
     _tagCtrl.clear();
+    _lastKeyAt = null;
+    _sawBurst = false;
     _tagFocus.requestFocus();
   }
 
@@ -351,6 +423,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
 
   Widget _createCard(AppController c) {
     final types = c.S?.boxtypes.values.whereType<Map>().toList() ?? const [];
+    final typeNames = {for (final t in types) (t['id'] ?? '').toString(): '${t['name'] ?? t['id']}'};
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -362,15 +435,25 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const FieldLabel('ประเภทกล่อง *'),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedType,
-            isExpanded: true,
-            decoration: pdaInput('— เลือกประเภทกล่อง —', radius: 12),
-            items: types.map((t) {
-              final id = (t['id'] ?? '').toString();
-              return DropdownMenuItem(value: id, child: Text('${t['name'] ?? id}', overflow: TextOverflow.ellipsis));
-            }).toList(),
+          AddableDropdown(
+            value: _selectedType,
+            options: typeNames.keys.toList(),
+            labelFor: (id) => typeNames[id] ?? id,
+            hint: '— เลือกประเภทกล่อง —',
             onChanged: (v) => setState(() => _selectedType = v),
+            onAdd: (typed) async {
+              final id = typed.toUpperCase().replaceAll(RegExp(r'\s+'), '_');
+              try {
+                await c.api.createBoxType(id, typed);
+                await c.refresh();
+                return id;
+              } catch (e) {
+                if (mounted) {
+                  c.toastMsg('เพิ่มประเภทกล่องไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
+                }
+                return null;
+              }
+            },
           ),
           const SizedBox(height: 12),
           const FieldLabel('บาร์โค้ดกล่องใหม่ *'),
@@ -580,6 +663,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   }
 
   Widget _putawayCard(AppController c) {
+    final cascade = _locCascade;
+    final hasLocations = cascade.locations.isNotEmpty;
+    final canSubmit = _locZone != null || _locRack != null || _locShelf != null || _locSlot != null;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -595,61 +681,26 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
           const SizedBox(height: 4),
           Text('จัดเก็บที่ ${c.selWhName}', style: TextStyle(fontSize: 12.5, color: C.muted)),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('โซน'),
-                    TextField(controller: _zoneCtrl, decoration: pdaInput('เช่น A', radius: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('แร็ค'),
-                    TextField(controller: _rackCtrl, decoration: pdaInput('เช่น 1', radius: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('ชั้น'),
-                    TextField(controller: _shelfCtrl, decoration: pdaInput('เช่น 2', radius: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('ช่อง'),
-                    TextField(controller: _slotCtrl, decoration: pdaInput('เช่น 3', radius: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          const FieldLabel('วิธีระบุตำแหน่ง'),
+          _locModeToggle(),
+          const SizedBox(height: 12),
+          if (_locMode == _LocInputMode.scan) _locScanArea() else _locManualArea(cascade),
+          if (!hasLocations)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text('ยังไม่มีข้อมูลผังชั้นวาง (Location Master) ในระบบ',
+                  style: TextStyle(fontSize: 11.5, color: C.muted)),
+            ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _puttingAway ? null : _submitPutaway,
+              onPressed: (_puttingAway || !canSubmit) ? null : _submitPutaway,
               style: FilledButton.styleFrom(
                 backgroundColor: C.lime,
                 foregroundColor: C.limeDeep,
+                disabledBackgroundColor: C.neutralBg,
+                disabledForegroundColor: C.faint,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
               ),
@@ -659,6 +710,202 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _locModeToggle() {
+    Widget seg(_LocInputMode m, String label, IconData icon) {
+      final selected = _locMode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (_locMode == m) return;
+            setState(() => _locMode = m);
+            if (m == _LocInputMode.scan) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _rackScanFocus.requestFocus());
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(_LocInputMode.scan, 'สแกนบาร์โค้ด', Icons.qr_code_scanner),
+          seg(_LocInputMode.manual, 'กรอกเอง', Icons.list_alt),
+        ],
+      ),
+    );
+  }
+
+  Widget _locScanArea() {
+    if (_locConfirmed) {
+      final label = [_locZone, _locRack, _locShelf, _locSlot].whereType<String>().join(' · ');
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: C.limeBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.limeBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle, size: 18, color: C.limeDeep),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+            ),
+            TextButton(
+              onPressed: _resetLocPicker,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+              child: Text('เปลี่ยน', style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _rackScanCtrl,
+          focusNode: _rackScanFocus,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.characters,
+          onSubmitted: (_) => _applyRackScan(),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+          decoration: pdaInput('สแกนบาร์โค้ดป้ายแร็ค เช่น A-R03-2-05', radius: 12).copyWith(
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.check),
+              onPressed: _applyRackScan,
+            ),
+          ),
+        ),
+        if (_locScanError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_locScanError!, style: TextStyle(fontSize: 12, color: C.red)),
+          ),
+      ],
+    );
+  }
+
+  Widget _locManualArea(LocationCascade cascade) {
+    final wh = _c.wh;
+    final zones = cascade.zones(wh);
+    final racks = cascade.racks(wh, _locZone);
+    final shelves = cascade.shelves(wh, _locZone, _locRack);
+    final slots = cascade.slots(wh, _locZone, _locRack, _locShelf);
+
+    // A new zone/rack/shelf/slot has to land in the Location Master as a
+    // real row (POST /api/masters/locations), not just a free-text value on
+    // this one box — otherwise it wouldn't show up as an option anywhere
+    // else that reads S.locations. The code is composed from whatever's
+    // already picked upstream plus the new value, same shape as the scan
+    // barcode format (zone-rack-shelf-slot) this screen already parses.
+    Future<String?> addLocationValue(String field, String typed) async {
+      final v = typed.toUpperCase();
+      final zone = field == 'zone' ? v : _locZone;
+      final rack = field == 'rack' ? v : _locRack;
+      final shelf = field == 'shelf' ? v : _locShelf;
+      final slot = field == 'slot' ? v : _locSlot;
+      final code = [zone, rack, shelf, slot].whereType<String>().where((s) => s.isNotEmpty).join('-');
+      if (code.isEmpty) return null;
+      try {
+        await _c.api.createLocation(code: code, wh: wh, zone: zone, rack: rack, shelf: shelf, slot: slot);
+        await _c.refresh();
+        return v;
+      } catch (e) {
+        if (mounted) {
+          _c.toastMsg('เพิ่มตำแหน่งไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
+        }
+        return null;
+      }
+    }
+
+    String? clampedValue(String? current, List<String> options) =>
+        (current != null && options.contains(current)) ? current : null;
+
+    Widget dropdown(String label, String field, String? value, List<String> options,
+        void Function(String?) onChanged) {
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FieldLabel(label),
+            AddableDropdown(
+              value: clampedValue(value, options),
+              options: options,
+              hint: '— ไม่ระบุ —',
+              onChanged: onChanged,
+              onAdd: (typed) => addLocationValue(field, typed),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            dropdown('โซน', 'zone', _locZone, zones, (v) {
+              setState(() {
+                _locZone = v;
+                _locRack = null;
+                _locShelf = null;
+                _locSlot = null;
+              });
+            }),
+            const SizedBox(width: 9),
+            dropdown('แร็ค', 'rack', _locRack, racks, (v) {
+              setState(() {
+                _locRack = v;
+                _locShelf = null;
+                _locSlot = null;
+              });
+            }),
+          ],
+        ),
+        const SizedBox(height: 11),
+        Row(
+          children: [
+            dropdown('ชั้น', 'shelf', _locShelf, shelves, (v) {
+              setState(() {
+                _locShelf = v;
+                _locSlot = null;
+              });
+            }),
+            const SizedBox(width: 9),
+            dropdown('ช่อง', 'slot', _locSlot, slots, (v) => setState(() => _locSlot = v)),
+          ],
+        ),
+      ],
     );
   }
 

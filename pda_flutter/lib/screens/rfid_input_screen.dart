@@ -164,12 +164,6 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
 
   @override
   void dispose() {
-    // Leaving detail mode on does nothing unless it's explicitly put back —
-    // it's a reader-side setting that persists until overwritten (same
-    // reasoning as RfidReaderController's own applyReadProfile comment) —
-    // so every other screen would silently inherit this one's slower
-    // profile if this didn't hand it back.
-    context.read<AppController>().rfid.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();

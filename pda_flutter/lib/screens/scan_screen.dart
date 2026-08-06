@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/api_client.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -214,16 +215,26 @@ class _ScanScreenState extends State<ScanScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const FieldLabel('ลูกค้าปลายทาง *'),
-          DropdownButtonFormField<String>(
+          AddableDropdown(
             value: c.outCustomer.isEmpty ? null : c.outCustomer,
-            isExpanded: true,
-            decoration: pdaInput('— เลือกลูกค้า —', radius: 12),
-            hint: Text('— เลือกลูกค้า —', style: TextStyle(color: C.faint)),
-            items: c.customerList.map((cust) {
-              final id = (cust['id'] ?? '').toString();
-              return DropdownMenuItem(value: id, child: Text('$id · ${cust['name'] ?? ''}', overflow: TextOverflow.ellipsis));
-            }).toList(),
+            options: c.customerList.map((cust) => (cust['id'] ?? '').toString()).toList(),
+            labelFor: (id) {
+              final cust = c.customerList.firstWhere((x) => (x['id'] ?? '').toString() == id, orElse: () => {});
+              return '$id · ${cust['name'] ?? ''}';
+            },
+            hint: '— เลือกลูกค้า —',
             onChanged: (v) => c.setOutCustomer(v ?? ''),
+            onAdd: (typed) async {
+              final id = typed.toUpperCase().replaceAll(RegExp(r'\s+'), '_');
+              try {
+                await c.api.createCustomer(id, typed);
+                await c.refresh();
+                return id;
+              } catch (e) {
+                c.toastMsg('เพิ่มลูกค้าไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
+                return null;
+              }
+            },
           ),
           const SizedBox(height: 11),
           Row(

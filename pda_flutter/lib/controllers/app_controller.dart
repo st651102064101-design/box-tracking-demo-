@@ -161,6 +161,7 @@ class AppController extends ChangeNotifier {
   Future<void> init() async {
     api.baseUrl = prefs.baseUrl;
     api.token = prefs.token;
+    api.apiKey = prefs.apiKey;
     api.reauthenticate = _deviceLogin;
 
     // Restore the last known warehouse state *before* touching the network:
@@ -190,9 +191,9 @@ class AppController extends ChangeNotifier {
       if (s.state == RfidState.connected) {
         rfid.setPowerPercent(prefs.rfidPowerPercent);
         // Same reasoning: the native read-callback tick has no way to ask
-        // Dart which sound to play per read, so it has to be told once here
-        // (and again on every change — see setRfidSoundId below).
-        rfid.setRfidSoundId(prefs.rfidSoundId);
+        // Dart which tone/volume to play per read, so it has to be told once
+        // here (and again on every change — see Settings' tone picker).
+        rfid.setBeepStyle(toneId: prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
       }
       notifyListeners();
     });
@@ -808,8 +809,7 @@ class AppController extends ChangeNotifier {
     addScan(scanVal);
   }
 
-  /// [viaRfid] says which of the two independently-configured "a box
-  /// landed" sounds to play (see prefs.rfidSoundId/barcodeSoundId) — true
+  /// [viaRfid] says which of the two "a box landed" sounds to play — true
   /// when this call came from a trigger-pulled RFID read (AppController's
   /// own _onReaderBatch/_onReaderTag), false for a typed/scanned barcode
   /// (ScanScreen's own _submit). It changes nothing else about how the scan
@@ -881,12 +881,12 @@ class AppController extends ChangeNotifier {
     // ticks instead of however many times the reader happened to see it.
     //
     // Barcode detections always get the same fixed tone — only the RFID
-    // channel is user-configurable (see prefs.rfidSoundId / setRfidSoundId).
+    // channel is user-configurable (see prefs.rfidToneId/rfidVolumePercent).
     // A trigger-pulled RFID read landing here still gets the operator's
     // chosen RFID sound rather than this fixed one, so an RFID detection
     // sounds the same everywhere it happens.
     if (viaRfid) {
-      rfid.playSound(prefs.rfidSoundId);
+      rfid.playSound(prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
     } else {
       rfid.playTone('ok');
     }
@@ -968,20 +968,6 @@ class AppController extends ChangeNotifier {
     // an inventory is running from before the switch) must not leave the
     // reader sweeping in the background on a mode that just said "don't".
     if (m == ScanInputMode.barcode) rfid.stopInventory();
-    notifyListeners();
-  }
-
-  // ═══════════════════════ detection sounds ════════════════════════════════
-  /// Sets which sound plays when the reader detects an RFID tag, both the
-  /// dense per-read tick on RFID-native screens and Gate's discrete
-  /// trigger-pulled "new box" tick. Persists, pushes the id down to native
-  /// immediately (see rfid_service.dart's setRfidSoundId for why native has
-  /// to be told rather than asked each time), and previews it — the
-  /// settings picker's whole point is "pick it, hear it, done" in one tap.
-  void setRfidSoundId(String id) {
-    prefs.rfidSoundId = id;
-    rfid.setRfidSoundId(id);
-    rfid.playSound(id);
     notifyListeners();
   }
 
@@ -1302,13 +1288,16 @@ class AppController extends ChangeNotifier {
     required String baseUrl,
     String? username,
     String? password,
+    String? apiKey,
   }) async {
     prefs.baseUrl = baseUrl.trim();
     if (username != null && username.trim().isNotEmpty) prefs.username = username.trim();
     if (password != null && password.isNotEmpty) prefs.password = password;
+    if (apiKey != null) prefs.apiKey = apiKey.trim();
     prefs.token = null;
     api
       ..baseUrl = prefs.baseUrl
+      ..apiKey = prefs.apiKey
       ..token = null;
     busy = true;
     connError = null;
@@ -1324,18 +1313,25 @@ class AppController extends ChangeNotifier {
   }
 
   /// The device-setup screen's single bottom button: connects with whatever
-  /// is currently in the form, then finishes setup automatically once that
-  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
-  /// then this button separately, which read as the button being broken when
-  /// really it was just gated on a connection nobody had triggered yet. Does
-  /// nothing further on failure — [applyConnection] already toasted why.
+  /// is currently in the form, then finishes setup regardless of whether
+  /// that connection attempt actually succeeded. The config (base URL,
+  /// device credentials) is already saved to prefs by [applyConnection]
+  /// before it even tries the network — a terminal being provisioned at a
+  /// site whose server happens to be down (or that isn't reachable from
+  /// wherever setup is being done) must not be stuck on this screen
+  /// forever; it should walk in offline, same as any other cold boot with a
+  /// server outage, and pick up the connection the moment the network/server
+  /// comes back (see AppController.init's cached-snapshot-first bootstrap
+  /// and _onRealtimeConnectivity's auto-reconnect). [applyConnection] has
+  /// already toasted success or failure, so no extra failure messaging here.
   Future<void> completeDeviceSetup({
     required String baseUrl,
     String? username,
     String? password,
+    String? apiKey,
   }) async {
-    await applyConnection(baseUrl: baseUrl, username: username, password: password);
-    if (connected) finishDeviceSetup();
+    await applyConnection(baseUrl: baseUrl, username: username, password: password, apiKey: apiKey);
+    finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
@@ -1396,11 +1392,17 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister) {
-      // A screen with no scanning purpose at all (Settings, Home, device
-      // setup, …). The antenna must not light up here — silently doing
-      // nothing left an operator assuming a broken trigger, not a screen
-      // that was never going to answer it.
-      toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', '', ResultKind.warn);
+      // A screen with no scanning purpose at all (Home, device setup, …).
+      // The antenna must not light up here — silently doing nothing left an
+      // operator assuming a broken trigger, not a screen that was never
+      // going to answer it. Settings is the one exception: its own
+      // test-fire button (settings_screen.dart's press-and-hold "กดค้างเพื่อ
+      // ทดสอบยิง") talks to the reader directly rather than through this
+      // dispatcher, precisely so a range check doesn't trip this same
+      // "wrong screen" alert.
+      if (screen != Screen.settings) {
+        toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', 'สลับไปหน้าที่ใช้งานได้ก่อน', ResultKind.warn);
+      }
       return;
     }
     // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger
