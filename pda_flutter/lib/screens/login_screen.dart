@@ -192,7 +192,23 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      // A device with no signal shouldn't strand someone at the badge screen
+      // just because they chose "set a PIN" over "ข้าม" — the shift still has
+      // to start. Treat it the same as skipping for now (server never saw
+      // this PIN, so there's nothing to verify against on another device) but
+      // still cache the hash locally so *this* device recognises it it next
+      // time, and let them in. They can set a real, synced PIN later from
+      // Settings once the terminal is back online.
+      if (err is! ApiException) {
+        c.prefs.cachePinHash(e.id, firstPin);
+        c.prefs.skipPin(e.id);
+        c.toastMsg('ออฟไลน์ — เข้าใช้งานได้ก่อน',
+            'รหัส PIN ยังไม่ถูกบันทึกที่เซิร์ฟเวอร์ ตั้งใหม่ได้จากหน้าตั้งค่าเมื่อออนไลน์', ResultKind.warn);
+        final err2 = c.identifyAs(e);
+        if (err2 != null) c.toastMsg(err2, '', ResultKind.err);
+        return;
+      }
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err.message, ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
