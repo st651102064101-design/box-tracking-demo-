@@ -31,20 +31,39 @@ class RfidReaderController(private val context: Context) :
 
     companion object {
         private const val TAG = "BoxTraceRFID"
+        private const val BEEP_MIN_GAP_MS = 150L
     }
 
     private val main = Handler(Looper.getMainLooper())
     // One short beep per read batch — not per tag, or a multi-tag inventory
-    // burst turns into a machine-gun of overlapping tones.
+    // burst turns into a machine-gun of overlapping tones. Rate-limited on top
+    // of that: while the trigger is held a batch can arrive several times a
+    // second, and queueing a 120 ms tone for each one both sounds like a buzz
+    // and keeps the audio path busy for longer than the gap between batches.
     private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }
+    @Volatile private var lastBeepAt = 0L
     private fun beep() {
-        try {
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
-        } catch (e: Exception) {
-            Log.w(TAG, "beep failed", e)
+        val now = System.currentTimeMillis()
+        if (now - lastBeepAt < BEEP_MIN_GAP_MS) return
+        lastBeepAt = now
+        // Never on the SDK's callback thread — that thread's only job is to
+        // drain tag reads, and ToneGenerator can stall on a busy audio path.
+        main.post {
+            try {
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 60)
+            } catch (e: Exception) {
+                Log.w(TAG, "beep failed", e)
+            }
         }
     }
+
+    // Control commands (connect/start/stop/power) get their own thread, kept
+    // deliberately free of anything slow. Access operations (the explicit TID
+    // read) run on a second one: `readWait` blocks for hundreds of ms, and
+    // when both shared a single executor a trigger pull queued behind an
+    // in-flight TID read — which is exactly what made the gun feel unresponsive.
     private val exec = Executors.newSingleThreadExecutor()
+    private val accessExec = Executors.newSingleThreadExecutor()
 
     private var readers: Readers? = null
     private var reader: RFIDReader? = null
@@ -72,6 +91,33 @@ class RfidReaderController(private val context: Context) :
     // decide whether to start it again afterwards.
     @Volatile private var triggerHeld = false
 
+    /**
+     * Whether a read that arrives without a TID should trigger the explicit
+     * TID access read. Off by default, and only the three screens that
+     * actually display or store a TID (register / live viewer / test sheet)
+     * turn it on.
+     *
+     * This gate is the fix for the gun feeling slow and refusing to read
+     * rapidly: [readTidExplicit] must stop the inventory to run an access
+     * operation, so with it always-on, aiming at a single box — the normal
+     * case, and precisely when `tags.size == 1` matches — tore the inventory
+     * down and rebuilt it on *every* batch. The scan, track and login screens
+     * never look at a TID, so they were paying that stall for nothing.
+     */
+    @Volatile private var tidLookup = false
+
+    /**
+     * Reads weaker than this (dBm, e.g. -55) are dropped before they ever
+     * reach Flutter. Null disables the filter.
+     *
+     * At full transmit power this reader happily inventories tags metres away
+     * and through boxes, so "hold the gun against the tag you mean" is not by
+     * itself enough to pick that tag — the room answers too. Registration
+     * pairs a low power setting with a strict floor here so only a tag within
+     * a few centimetres can win.
+     */
+    @Volatile private var rssiThreshold: Int? = null
+
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
@@ -98,6 +144,8 @@ class RfidReaderController(private val context: Context) :
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
+            "setTidLookup" -> { tidLookup = call.argument<Boolean>("enabled") == true; result.success(true) }
+            "setRssiThreshold" -> { rssiThreshold = call.argument<Int>("dbm"); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
@@ -126,6 +174,8 @@ class RfidReaderController(private val context: Context) :
         m["lastError"] = lastError
         m["tidFallbackAttempts"] = tidFallbackAttempts
         m["tidFallbackSuccesses"] = tidFallbackSuccesses
+        m["tidLookup"] = tidLookup
+        m["rssiThreshold"] = rssiThreshold
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -297,12 +347,18 @@ class RfidReaderController(private val context: Context) :
             cfg.setTari(0)
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
-            // Enable DPO (Dynamic Power Optimization) — Zebra's smart power management
-            // so near tags with strong signals respond first before ramping up power.
+            // DPO (Dynamic Power Optimization) OFF, deliberately. It was briefly
+            // switched on to try to make near tags win over far ones, but that
+            // is not what it does: DPO is a *battery* feature that quietly
+            // cycles transmit power down between inventory rounds, which shows
+            // up to an operator as the gun reading in bursts with dead gaps
+            // instead of continuously. Zebra also requires it off while access
+            // operations (our TID reads) run. Near-vs-far is handled properly
+            // by transmit power plus [rssiThreshold] instead.
             try {
-                rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE)
+                rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE)
             } catch (e: Exception) {
-                Log.w(TAG, "enabling DPO failed", e)
+                Log.w(TAG, "disabling DPO failed", e)
             }
 
             // singulation S0 / state A — read tags continuously while triggered
@@ -391,6 +447,8 @@ class RfidReaderController(private val context: Context) :
             readers?.Dispose()
             readers = null
             toneGen.release()
+            exec.shutdown()
+            accessExec.shutdown()
         } catch (e: Exception) {
             Log.w(TAG, "dispose failed", e)
         }
@@ -412,8 +470,12 @@ class RfidReaderController(private val context: Context) :
      * standard), so "this tag has no TID" is rarely the real story behind an
      * empty read; far more often the inventory round simply didn't carry it.
      *
+     * Only ever reached when a screen has asked for TIDs via [tidLookup] —
+     * see the call site for why running it unconditionally made the trigger
+     * feel broken.
+     *
      * Two hard constraints, both learned the painful way, both the reason
-     * this is scheduled onto [exec] rather than called inline:
+     * this is scheduled onto [accessExec] rather than called inline:
      *
      *  1. It must NOT run on the SDK's event-callback thread. `readWait`
      *     blocks until the access-operation response arrives, and that
@@ -463,16 +525,26 @@ class RfidReaderController(private val context: Context) :
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
-            val tags: Array<TagData>? = rd.Actions.getReadTags(100)
-            if (tags != null && tags.isNotEmpty()) {
+            val all: Array<TagData> = rd.Actions.getReadTags(100) ?: return
+            if (all.isEmpty()) return
+            // Drop everything below the caller's RSSI floor before anything
+            // else looks at it, so a distant tag can't win a race it should
+            // never have been entered into. Reads with no RSSI at all are
+            // kept — better a tag with unknown strength than a dropped one.
+            val floor = rssiThreshold
+            val tags = if (floor == null) all else all.filter { t ->
+                (num { t.getPeakRSSI().toInt() } ?: Int.MAX_VALUE) >= floor
+            }.toTypedArray()
+            if (tags.isNotEmpty()) {
                 beep()
-                // Sort tags by Peak RSSI descending so near tags (strongest signal) are emitted first
-                val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
+                // Strongest (nearest) first, so a consumer that takes the first
+                // read of a batch takes the tag the operator is aiming at.
+                val sortedTags = tags.sortedByDescending { num { it.getPeakRSSI().toInt() } ?: Int.MIN_VALUE }
                 for (t in sortedTags) {
                     tagCount++
                     val epc = t.getTagID()
                     lastEpc = epc
-                    lastRssi = t.getPeakRSSI().toInt()
+                    lastRssi = num { t.getPeakRSSI().toInt() }
                     // Whatever the inventory round happened to carry. Empty
                     // here does NOT mean the tag lacks a TID — see
                     // readTidExplicit for the fallback and why it can't run
@@ -482,7 +554,7 @@ class RfidReaderController(private val context: Context) :
                         "type" to "tag",
                         "epc" to epc,
                         "tid" to inventoryTid,
-                        "rssi" to t.getPeakRSSI().toInt(),
+                        "rssi" to num { t.getPeakRSSI().toInt() },
                         "pc" to num { t.getPC() },
                         "crc" to str { t.getStringCRC() },
                         "antenna" to num { t.getAntennaID().toInt() },
@@ -490,15 +562,20 @@ class RfidReaderController(private val context: Context) :
                         "phase" to num { t.getPhase().toInt() },
                         "seenCount" to num { t.getTagSeenCount() },
                     )
-                    if (inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
-                        // Single tag in front of the antenna (registration /
-                        // live-viewer) and no TID yet — go get it properly on
-                        // the worker thread, then emit once with the result,
-                        // so the UI sees one complete read instead of a
-                        // TID-less one followed by a correction. A bulk
-                        // multi-tag sweep skips this: those callers only need
-                        // the EPC and shouldn't pay per-tag access latency.
-                        exec.execute {
+                    if (tidLookup && inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
+                        // Single tag in front of the antenna and a screen that
+                        // genuinely needs a TID — go get it properly on the
+                        // access thread, then emit once with the result, so the
+                        // UI sees one complete read instead of a TID-less one
+                        // followed by a correction.
+                        //
+                        // Everything else (scan, track, login, and any bulk
+                        // multi-tag sweep) falls through to the plain emit
+                        // below: this call tears down the inventory to run an
+                        // access operation, and paying that on screens that
+                        // never read a TID is what stopped the trigger from
+                        // streaming continuously.
+                        accessExec.execute {
                             payload["tid"] = readTidExplicit(epc)
                             emit(payload)
                         }

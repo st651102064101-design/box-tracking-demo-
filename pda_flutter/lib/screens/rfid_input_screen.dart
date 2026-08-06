@@ -80,12 +80,21 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   StreamSubscription<bool>? _triggerSub;
   late RfidStatus _status;
   bool _reading = false;
+  /// Held so [dispose] can undo the TID-lookup opt-in without reaching for an
+  /// InheritedWidget through `context` that late in the lifecycle.
+  late final RfidService _rfid;
 
   @override
   void initState() {
     super.initState();
     final rfid = context.read<AppController>().rfid;
+    _rfid = rfid;
     _status = RfidStatus(rfid.state, '');
+    // This screen exists to show every field the SDK reports, TID included,
+    // so it opts into the explicit TID read that the streaming screens
+    // deliberately leave off (it stalls the inventory — see
+    // RfidService.setTidLookup). Turned back off in dispose.
+    rfid.setTidLookup(true);
     _tagSub = rfid.tagReads.listen((r) {
       setState(() => _reads.insert(0, _Read.fromTagRead(r, DateTime.now())));
     });
@@ -104,6 +113,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
+    _rfid.setTidLookup(false);
     _manualCtrl.dispose();
     super.dispose();
   }

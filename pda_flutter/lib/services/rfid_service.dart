@@ -185,6 +185,36 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Whether a read that arrives without a TID should trigger an explicit
+  /// TID access read on the native side.
+  ///
+  /// Off by default and worth keeping that way: the access read has to stop
+  /// the inventory to run, so leaving it on makes a held trigger stutter
+  /// instead of streaming. Only the screens that actually show or store a
+  /// TID (register, live viewer, test sheet) should switch it on — and switch
+  /// it back off when they leave.
+  Future<void> setTidLookup(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setTidLookup', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// Drop reads weaker than [dbm] (e.g. -55) natively, before they reach the
+  /// app; null clears the filter.
+  ///
+  /// Transmit power alone doesn't decide which tag wins — at anything above a
+  /// low setting the reader still hears tags across the room, and whichever
+  /// answers first is the one the app sees. Pairing a low power with a floor
+  /// here is what makes "hold the gun against the tag you mean" actually
+  /// select that tag.
+  Future<void> setRssiThreshold(int? dbm) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setRssiThreshold', {'dbm': dbm});
+    } catch (_) {}
+  }
+
   Future<bool> isConnected() async {
     if (!supported) return false;
     try {

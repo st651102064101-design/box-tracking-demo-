@@ -30,6 +30,25 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
 
+  /// Registration deliberately runs the antenna far below the operator's
+  /// normal ใกล้/ปานกลาง/ไกล setting. Binding a tag to a box is a write, and
+  /// the wrong tag bound to the wrong box is worse than a read that needs a
+  /// second pull: at full power this reader inventories tags metres away, so
+  /// "the tag I'm holding against the gun" has to be made true physically,
+  /// not just hoped for.
+  static const _registerPowerPercent = 30;
+
+  /// Reads weaker than this are discarded natively. A backstop for the case
+  /// the power drop alone doesn't cover — if the tag in hand isn't answering,
+  /// the right outcome is nothing happening, never a distant box getting
+  /// silently rebound.
+  static const _registerRssiFloor = -65;
+
+  /// How long to keep listening after the first accepted read before deciding
+  /// which tag the operator meant. Long enough for a second, nearer tag to
+  /// arrive, short enough to still feel instant in one-handed repetition.
+  static const _pickWindow = Duration(milliseconds: 450);
+
   _Step _step = _Step.waitingBarcode;
   String? _tag; // verified box barcode for the box currently in hand
   String? _error; // shown in the barcode card when verification fails
@@ -39,16 +58,51 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
 
+  /// Reads seen in the current [_pickWindow], strongest-wins. Binding the
+  /// first read to arrive was the bug behind "จ่อใกล้ ๆ ไม่เจอ เจอแต่ตัวไกล ๆ":
+  /// a far tag whose TID rode along with the inventory was emitted
+  /// immediately, while the near tag — the one that needs a follow-up TID
+  /// read — arrived a moment later and lost the race every time.
+  final List<RfidTagRead> _candidates = [];
+  Timer? _pickTimer;
+
   AppController get _c => context.read<AppController>();
+
+  /// Captured in [initState] because [dispose] has to put the reader back the
+  /// way it found it, and reaching for an InheritedWidget through `context`
+  /// that late is not allowed.
+  late final AppController _app;
 
   @override
   void initState() {
     super.initState();
+    _app = context.read<AppController>();
     final rfid = _c.rfid;
     _rfidStatus = RfidStatus(rfid.state, '');
-    _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
+    _statusSub = rfid.status.listen((s) {
+      if (mounted) setState(() => _rfidStatus = s);
+      // The reader comes up at full power on every (re)connect, so the
+      // registration-specific tuning has to be re-applied then, not only on
+      // entering the screen.
+      if (s.state == RfidState.connected) _applyRegisterTuning();
+    });
     _tagSub = rfid.tagReads.listen(_onTagRead);
-    if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
+    if (rfid.supported && rfid.state != RfidState.connected) {
+      rfid.connect();
+    } else {
+      _applyRegisterTuning();
+    }
+  }
+
+  /// Narrow the reader down to "the tag being held against it": low power, a
+  /// hard RSSI floor, and TID reads switched on (this is one of the few
+  /// screens that genuinely needs a TID, and the only reason to pay the
+  /// inventory stall the TID access read costs).
+  void _applyRegisterTuning() {
+    final rfid = _app.rfid;
+    rfid.setPowerPercent(_registerPowerPercent);
+    rfid.setRssiThreshold(_registerRssiFloor);
+    rfid.setTidLookup(true);
   }
 
   @override
@@ -56,6 +110,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
+    _pickTimer?.cancel();
+    // Hand the reader back exactly as the rest of the app expects it —
+    // operator's own power setting, no floor, and TID reads off so the scan
+    // and track screens stream continuously again.
+    final rfid = _app.rfid;
+    rfid.setTidLookup(false);
+    rfid.setRssiThreshold(null);
+    rfid.setPowerPercent(_app.prefs.rfidPowerPercent);
+    unawaited(rfid.stopInventory());
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
     super.dispose();
@@ -80,6 +143,11 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         return;
       }
       final resolvedTag = (box['tag'] as String?) ?? code;
+      // Anything picked up before this box was identified belongs to the
+      // previous one — never let it carry over into this binding.
+      _pickTimer?.cancel();
+      _pickTimer = null;
+      _candidates.clear();
       setState(() {
         _tag = resolvedTag;
         _step = _Step.waitingRfid;
@@ -105,11 +173,38 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.waitingRfid || _binding) return;
-    if (read.tid == null) {
-      setState(() => _rfidError = 'อ่าน TID จากแท็กไม่ได้ — ลองยิงใหม่อีกครั้ง (ต้องเป็นแท็กที่รองรับการอ่าน TID)');
+    // Collect rather than bind. A single pull can surface several tags, and
+    // the first one to arrive is not the one the operator is aiming at — see
+    // [_candidates]. The decision happens once in [_pickWinner].
+    _candidates.add(read);
+    _pickTimer ??= Timer(_pickWindow, _pickWinner);
+  }
+
+  /// Picks the strongest read of the window and binds it. Reads with no TID
+  /// are not usable for binding, but their presence still means a tag *was*
+  /// there — worth a different message than silence.
+  void _pickWinner() {
+    _pickTimer = null;
+    if (!mounted || _step != _Step.waitingRfid || _binding) {
+      _candidates.clear();
       return;
     }
-    _bind(read.tid!, read.epc);
+    final seen = List<RfidTagRead>.from(_candidates);
+    _candidates.clear();
+    if (seen.isEmpty) return;
+
+    final usable = seen.where((r) => r.tid != null).toList();
+    if (usable.isEmpty) {
+      setState(() => _rfidError =
+          'อ่าน TID จากแท็กไม่ได้ — ลองยิงใหม่อีกครั้ง (ต้องเป็นแท็กที่รองรับการอ่าน TID)');
+      return;
+    }
+    // Strongest signal wins = physically nearest. A read with no RSSI at all
+    // sorts last: it can still be bound if it's the only candidate, but it
+    // should never beat a tag we have a real measurement for.
+    usable.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+    final winner = usable.first;
+    _bind(winner.tid!, winner.epc);
   }
 
   Future<void> _bind(String tid, String epc) async {
@@ -130,6 +225,9 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       _successTimer?.cancel();
       _successTimer = Timer(const Duration(milliseconds: 1400), () {
         if (!mounted) return;
+        _pickTimer?.cancel();
+        _pickTimer = null;
+        _candidates.clear();
         setState(() {
           _step = _Step.waitingBarcode;
           _tag = null;

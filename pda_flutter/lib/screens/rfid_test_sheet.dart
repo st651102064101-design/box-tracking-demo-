@@ -33,11 +33,18 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
   final List<RfidTagRead> _reads = [];
   StreamSubscription? _sub;
   bool _reading = false;
+  /// Held for [dispose], which can't reach the provider through `context`.
+  late final RfidService _rfid;
 
   @override
   void initState() {
     super.initState();
     final rfid = context.read<AppController>().rfid;
+    _rfid = rfid;
+    // A diagnostics screen whose whole point is showing every reported field
+    // needs the explicit TID read; the streaming screens leave it off because
+    // it stalls the inventory (see RfidService.setTidLookup).
+    rfid.setTidLookup(true);
     _sub = rfid.rawTags.listen((r) {
       if (!mounted) return;
       setState(() => _reads.insert(0, r));
@@ -47,7 +54,8 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
   @override
   void dispose() {
     _sub?.cancel();
-    if (_reading) context.read<AppController>().rfid.stopInventory();
+    _rfid.setTidLookup(false);
+    if (_reading) _rfid.stopInventory();
     super.dispose();
   }
 
