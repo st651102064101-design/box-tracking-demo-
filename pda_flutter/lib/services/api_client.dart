@@ -184,15 +184,16 @@ class ApiClient {
   /// an already-registered box. Throws [ApiException] with code
   /// 'rfid_tid_in_use' or 'already_tagged' for the two conflict cases the
   /// caller may want to handle specially (see services/rfid.ts).
+  /// Binds one RFID code to a box. A box carries exactly one — the EPC, the
+  /// value the reader reports during a plain inventory sweep, so a gate scan
+  /// resolves at full trigger speed without stopping to run an access read.
   Future<Map<String, dynamic>> associateRfid(
     String tag, {
-    required String rfidTid,
-    required String rfidEpc,
+    required String rfid,
     bool replace = false,
   }) async {
     return await _send(() => http.post(_u('/api/boxes/$tag/rfid'),
-        headers: _headers,
-        body: jsonEncode({'rfidTid': rfidTid, 'rfidEpc': rfidEpc, 'replace': replace})))
+            headers: _headers, body: jsonEncode({'rfid': rfid, 'replace': replace})))
         as Map<String, dynamic>;
   }
 

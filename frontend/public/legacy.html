@@ -2656,19 +2656,27 @@ function dethaify(text){
   }
   return changed?out:text;
 }
-/* S.boxes is keyed by barcode tag only — an RFID EPC/TID reader is bound to a
-   box via box.rfidTid/box.rfidEpc, so a Gate scan of the physical tag never
-   matches a key directly and needs a lookup by value instead. Mirrors the
-   backend's resolveBoxesByCodes (services/rfid.ts), which resolves scans
-   against tag/rfid_epc/rfid_tid together. */
+/* S.boxes is keyed by barcode tag only — an RFID reader is bound to a box via
+   box.rfid, so a Gate scan of the physical tag never matches a key directly
+   and needs a lookup by value instead. Mirrors the backend's
+   resolveBoxesByCodes (services/rfid.ts), which resolves scans against
+   tag/rfid together, plus the older rfid_epc/rfid_tid pair for boxes
+   registered before a box carried a single code. */
+function boxRfidCodes(b){
+  if(!b)return [];
+  return [b.rfid,b.rfidEpc,b.rfidTid].filter(Boolean).map(function(v){return String(v).toLowerCase();});
+}
+/* The single code a box is bound by, or null when it has no tag yet. Reads the
+   legacy pair as a fallback so boxes registered before boxes.rfid existed
+   still count as tagged everywhere this is asked. */
+function boxRfid(b){
+  if(!b)return null;
+  return b.rfid||b.rfidEpc||b.rfidTid||null;
+}
 function tagForRfidCode(code){
   var target=String(code).toLowerCase();
   var found=Object.keys(S.boxes).find(function(k){
-    var b=S.boxes[k];
-    if(!b)return false;
-    var tid=b.rfidTid?String(b.rfidTid).toLowerCase():'';
-    var epc=b.rfidEpc?String(b.rfidEpc).toLowerCase():'';
-    return tid===target||epc===target;
+    return boxRfidCodes(S.boxes[k]).indexOf(target)>=0;
   });
   return found||null;
 }
@@ -3926,7 +3934,7 @@ function openBoxActionModal(tag){
   /* ผูก/เปลี่ยนแท็ก RFID ทำได้จาก PDA เท่านั้น (มีเครื่องอ่านจริง) — เว็บนี้ไม่มี
      ทางรับค่า TID/EPC ที่ถูกต้องได้นอกจากให้คนพิมพ์เดาเอง ซึ่งใช้งานจริงไม่ได้
      เว็บนี้จึงทำได้แค่ "ถอด" แท็กที่ผูกไว้แล้ว (ไม่ต้องพิมพ์อะไร) ไม่ใช่ "ผูก" ใหม่ */
-  if(b.rfidTid){
+  if(boxRfid(b)){
     actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M7 12h.01M11 12h6"/></svg></span> ถอดแท็ก RFID',cls:'btn ghost',fn:'closeModal();detachRfidTag(\''+esc(tag)+'\')'});
   }
   if(canRelocateBox(b)){
@@ -3956,7 +3964,7 @@ function openBoxActionModal(tag){
       +'<div class="ts-line"><span class="k">สถานะ</span><span class="v">'+statusPill(b.status,b)+'</span></div>'
       +'<div class="ts-line"><span class="k">ตำแหน่ง / ลูกค้า</span><span class="v">'+locOrCust+'</span></div>'
       +((b.lot||b.expiry)?'<div class="ts-line"><span class="k">Lot / หมดอายุ</span><span class="v">'+(b.lot?esc(b.lot):'<span class="muted">-</span>')+(b.expiry?' · '+esc(b.expiry)+' '+expiryPill(b):'')+'</span></div>':'')
-      +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+(b.rfidTid?'<span class="mono small">'+esc(b.rfidTid)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
+      +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+(boxRfid(b)?'<span class="mono small">'+esc(boxRfid(b))+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
       +'<div class="ts-line"><span class="k">เห็นล่าสุด</span><span class="v">'+fmtTs(b.lastSeenAt)+'</span></div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
@@ -3977,13 +3985,13 @@ window.openBoxActionModal=openBoxActionModal;
    reader at all, so that action stays here, reachable directly from the box
    action list (see openBoxActionModal) without a modal. */
 function detachRfidTag(tag){
-  var b=S.boxes[tag];if(!b||!b.rfidTid)return;
+  var b=S.boxes[tag];if(!b||!boxRfid(b))return;
   confirmA('ถอดแท็ก RFID?','กล่อง '+tag+' จะกลับไปค้นหาได้ด้วยบาร์โค้ดเท่านั้น จนกว่าจะผูกแท็กใหม่','ถอดแท็ก',true).then(function(ok){
     if(!ok)return;
     apiFetch('/api/boxes/'+encodeURIComponent(tag)+'/rfid',{method:'DELETE',headers:authHeaders()})
       .then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error(b.message||'ถอดแท็กไม่สำเร็จ');return b;});})
       .then(function(){
-        if(S.boxes[tag]){S.boxes[tag].rfidTid=null;S.boxes[tag].rfidEpc=null;}
+        if(S.boxes[tag]){S.boxes[tag].rfid=null;S.boxes[tag].rfidTid=null;S.boxes[tag].rfidEpc=null;}
         closeModal();renderAll();
         toast('ถอดแท็กแล้ว',tag,'ok');
       })
@@ -5105,8 +5113,8 @@ function statusPill(s,ctx){
    could easily miss at a glance. */
 function rfidBadge(b){
   if(!b||b.labeled===false)return '';
-  return b.rfidTid
-    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="TID '+esc(b.rfidTid)+'">RFID</span>'
+  return boxRfid(b)
+    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="RFID '+esc(boxRfid(b))+'">RFID</span>'
     : ' <span class="pill warn" style="font-size:10px;padding:1px 6px;">ไม่มี RFID</span>';
 }
 function journeyDots(s){var d1='<span class="jd '+(s==='warehouse'?'on-wh':'dim')+'"></span>';var d2='<span class="jd '+(s==='out'?'on-out':'dim')+'"></span>';var d3='<span class="jd '+(s==='lost'?'on-lost':'dim')+'"></span>';return '<span class="journey">'+d1+d2+d3+'</span>';}
@@ -8564,7 +8572,7 @@ function filteredInvBoxes() {
       /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
          badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
          labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
-      if (b.labeled === false || b.rfidTid) return false;
+      if (b.labeled === false || boxRfid(b)) return false;
     } else if (invStatusFilter === 'inboundQueue') {
       /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
          สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
@@ -8664,7 +8672,7 @@ function localStatusCounts() {
        flow board compute() ไปแล้ว ต้องแก้ที่นี่ด้วยเพราะเป็นคนละจุดกัน */
     if (b.status === 'pending' && b.labeled === true) c.pendingPutaway++;
     else if (c[b.status] !== undefined) c[b.status]++;
-    if (b.labeled !== false && !b.rfidTid) c.noRfid++;
+    if (b.labeled !== false && !boxRfid(b)) c.noRfid++;
     if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
   });
   return c;

@@ -176,6 +176,30 @@ export const boxes = pgTable(
      *   uniqueness that matters (one *active* box per EPC) is enforced by
      *   applying it through routes/rfid.ts, not by a blanket constraint.
      */
+    /**
+     * The box's single RFID identity, and the only value tag association
+     * writes going forward.
+     *
+     * This is the EPC — the value a reader reports for every tag during a
+     * plain inventory sweep, at full speed and from any reader. A TID is the
+     * more tamper-proof identifier, but most readers only surface one by
+     * running a separate access operation, and an access operation has to stop
+     * the inventory to run; storing an identifier the scanner can only obtain
+     * by stopping to ask for it would make rapid trigger-held scanning
+     * impossible. Uniqueness is instead guaranteed here, by the constraint
+     * below plus writing EPCs derived from the barcode (see lib/rfid.ts) —
+     * a duplicate is rejected at registration rather than discovered later.
+     *
+     * UNIQUE because one physical tag belongs to exactly one box; that
+     * constraint is what stops a tag being silently re-registered onto a
+     * second box.
+     *
+     * [rfidTid]/[rfidEpc] below are retained for rows written before this
+     * column existed and for the record of what was actually read; lookups
+     * still match against them (see services/rfid.ts) so nothing registered
+     * under the old scheme stops resolving.
+     */
+    rfid: text('rfid').unique(),
     rfidTid: text('rfid_tid').unique(),
     rfidEpc: text('rfid_epc'),
     location: jsonb('location').notNull().default({}),

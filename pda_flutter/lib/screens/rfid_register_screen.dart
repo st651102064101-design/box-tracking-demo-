@@ -94,15 +94,17 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     }
   }
 
-  /// Narrow the reader down to "the tag being held against it": low power, a
-  /// hard RSSI floor, and TID reads switched on (this is one of the few
-  /// screens that genuinely needs a TID, and the only reason to pay the
-  /// inventory stall the TID access read costs).
+  /// Narrow the reader down to "the tag being held against it": low power and
+  /// a hard RSSI floor.
+  ///
+  /// TID lookup stays off. What gets stored is the EPC, so there is nothing to
+  /// gain from the access read — and plenty to lose, since it stops the
+  /// inventory and would make registration read as slowly as the gun used to.
   void _applyRegisterTuning() {
     final rfid = _app.rfid;
     rfid.setPowerPercent(_registerPowerPercent);
     rfid.setRssiThreshold(_registerRssiFloor);
-    rfid.setTidLookup(true);
+    rfid.setTidLookup(false);
   }
 
   @override
@@ -180,9 +182,13 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _pickTimer ??= Timer(_pickWindow, _pickWinner);
   }
 
-  /// Picks the strongest read of the window and binds it. Reads with no TID
-  /// are not usable for binding, but their presence still means a tag *was*
-  /// there — worth a different message than silence.
+  /// Picks the strongest read of the window and binds its EPC.
+  ///
+  /// The EPC is deliberately the whole of it — a box stores exactly one RFID
+  /// code, and it has to be the one a reader reports during an ordinary
+  /// inventory sweep, or gate scanning would have to stop and run an access
+  /// read per tag to recognise anything. Binding used to insist on a TID,
+  /// which is why registration kept refusing tags outright.
   void _pickWinner() {
     _pickTimer = null;
     if (!mounted || _step != _Step.waitingRfid || _binding) {
@@ -191,23 +197,17 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     }
     final seen = List<RfidTagRead>.from(_candidates);
     _candidates.clear();
-    if (seen.isEmpty) return;
 
-    final usable = seen.where((r) => r.tid != null).toList();
-    if (usable.isEmpty) {
-      setState(() => _rfidError =
-          'อ่าน TID จากแท็กไม่ได้ — ลองยิงใหม่อีกครั้ง (ต้องเป็นแท็กที่รองรับการอ่าน TID)');
-      return;
-    }
+    final usable = seen.where((r) => r.epc.isNotEmpty).toList();
+    if (usable.isEmpty) return;
     // Strongest signal wins = physically nearest. A read with no RSSI at all
     // sorts last: it can still be bound if it's the only candidate, but it
     // should never beat a tag we have a real measurement for.
     usable.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
-    final winner = usable.first;
-    _bind(winner.tid!, winner.epc);
+    _bind(usable.first.epc);
   }
 
-  Future<void> _bind(String tid, String epc) async {
+  Future<void> _bind(String rfid) async {
     final tag = _tag;
     if (tag == null) return;
     setState(() {
@@ -216,7 +216,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     });
     unawaited(_c.rfid.stopInventory());
     try {
-      await _c.api.associateRfid(tag, rfidTid: tid, rfidEpc: epc, replace: true);
+      await _c.api.associateRfid(tag, rfid: rfid, replace: true);
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
       setState(() {
         _step = _Step.success;

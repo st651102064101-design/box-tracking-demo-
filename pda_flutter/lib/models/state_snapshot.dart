@@ -60,9 +60,12 @@ class StateSnapshot {
     for (final entry in boxesRaw.entries) {
       final v = entry.value;
       if (v is! Map) continue;
+      // `rfid` is the one code a box carries now; the older pair is still
+      // checked so boxes registered before the change keep resolving.
+      final rfid = v['rfid']?.toString().toLowerCase();
       final tid = v['rfidTid']?.toString().toLowerCase();
       final epc = v['rfidEpc']?.toString().toLowerCase();
-      if (tid == target || epc == target) return entry.key;
+      if (rfid == target || tid == target || epc == target) return entry.key;
     }
     return null;
   }

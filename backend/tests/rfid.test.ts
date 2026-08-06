@@ -48,20 +48,19 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D41' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBe('E200001122334455');
+    expect(res.body.rfid).toBe('000000000000424F582D41');
 
     const box = await request(ctx.app).get('/api/boxes/BOX-A').set(auth(ctx.token));
-    expect(box.body.rfidTid).toBe('E200001122334455');
-    expect(box.body.rfidEpc).toBe('000000000000424F582D41');
+    expect(box.body.rfid).toBe('000000000000424F582D41');
   });
 
-  it('rejects a TID that is already claimed by another box', async () => {
+  it('rejects a code that is already claimed by another box', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-B/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: 'AABBCCDDEEFF001122334455' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('rfid_tid_in_use');
   });
@@ -70,7 +69,7 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200009988776655', rfidEpc: 'AABBCCDDEEFF001122334455' });
+      .send({ rfid: 'AABBCCDDEEFF001122334455' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('already_tagged');
   });
@@ -79,37 +78,55 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200009988776655', rfidEpc: 'AABBCCDDEEFF001122334455', replace: true });
+      .send({ rfid: 'AABBCCDDEEFF001122334455', replace: true });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBe('E200009988776655');
+    expect(res.body.rfid).toBe('AABBCCDDEEFF001122334455');
   });
 
-  it('the old TID is free again after a replace and can go on another box', async () => {
+  it('the old code is free again after a replace and can go on another box', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-B/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D42' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(200);
+  });
+
+  /* A PDA or web client written against the older two-field payload must keep
+   * working; the EPC is the one that survives, since that is what a reader
+   * reports during the inventory sweeps these codes get scanned by. */
+  it('accepts the legacy {rfidTid, rfidEpc} payload and keeps the EPC', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-B/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D42', replace: true });
+    expect(res.status).toBe(200);
+    expect(res.body.rfid).toBe('000000000000424F582D42');
+
+    const found = await request(ctx.app).get('/api/boxes/000000000000424F582D42').set(auth(ctx.token));
+    expect(found.status).toBe(200);
+    expect(found.body.tag).toBe('BOX-B');
+  });
+
+  it('rejects a payload carrying no RFID value at all', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-A/rfid')
+      .set(auth(ctx.token))
+      .send({ replace: true });
+    expect(res.status).toBe(400);
   });
 
   it('404s for a box that does not exist', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/NOPE/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200000000000001', rfidEpc: '000000000000000000000001' });
+      .send({ rfid: '000000000000000000000001' });
     expect(res.status).toBe(404);
   });
 });
 
 describe('flexible scan resolution', () => {
-  it('GET /api/boxes/:code finds a box by its RFID EPC', async () => {
+  it('GET /api/boxes/:code finds a box by its RFID code', async () => {
     const res = await request(ctx.app).get('/api/boxes/AABBCCDDEEFF001122334455').set(auth(ctx.token));
-    expect(res.status).toBe(200);
-    expect(res.body.tag).toBe('BOX-A');
-  });
-
-  it('GET /api/boxes/:code finds a box by its RFID TID', async () => {
-    const res = await request(ctx.app).get('/api/boxes/E200009988776655').set(auth(ctx.token));
     expect(res.status).toBe(200);
     expect(res.body.tag).toBe('BOX-A');
   });

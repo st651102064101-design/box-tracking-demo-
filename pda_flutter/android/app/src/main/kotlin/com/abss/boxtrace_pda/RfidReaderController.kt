@@ -11,6 +11,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
+import kotlin.math.abs
 
 /**
  * Native bridge over the Zebra RFIDAPI3 SDK — a Kotlin distillation of the
@@ -32,6 +33,15 @@ class RfidReaderController(private val context: Context) :
     companion object {
         private const val TAG = "BoxTraceRFID"
         private const val BEEP_MIN_GAP_MS = 150L
+
+        /**
+         * The weakest transmit power the ใกล้ setting is allowed to pick, in
+         * 0.1 dBm units (15.0 dBm). Below roughly this the reader stops
+         * energising passive tags reliably at any distance, so mapping the
+         * picker below it produces a setting that simply doesn't work rather
+         * than one with a shorter range. See [setPower].
+         */
+        private const val MIN_USABLE_DBM_TENTHS = 150
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -426,14 +436,44 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
+    /**
+     * Sets antenna power from the ใกล้/ปานกลาง/ไกล picker's percentage.
+     *
+     * The percentage is mapped across a *usable dBm range*, not across the raw
+     * index range. The reader's power table starts at essentially no output,
+     * so the old `index = maxIndex * percent / 100` put "ใกล้" (30%) at around
+     * 9 dBm and "ปานกลาง" (65%) at around 19 dBm — far too weak to energise a
+     * passive tag at any useful distance, which is why both settings read
+     * nothing at all while only "ไกล" (100% = full power) worked.
+     *
+     * Anchoring the low end at [MIN_USABLE_DBM_TENTHS] instead means every
+     * setting transmits enough to actually read; the picker then controls
+     * range, which is what it claims to do.
+     */
     fun setPower(percent: Int) {
         exec.execute {
             try {
                 val rd = reader ?: return@execute
-                val idx = (maxPower * percent / 100).coerceIn(0, maxPower)
+                val values = rd.ReaderCapabilities.getTransmitPowerLevelValues()
+                if (values == null || values.isEmpty()) return@execute
+                // Power table units are 0.1 dBm. Don't assume it's sorted.
+                val maxVal = values.max()
+                val minVal = values.min()
+                val floor = MIN_USABLE_DBM_TENTHS.coerceIn(minVal, maxVal)
+                val pct = percent.coerceIn(0, 100)
+                val target = floor + (maxVal - floor) * pct / 100
+                // Nearest supported step to the target, since the table is
+                // coarse and rarely contains the exact value asked for.
+                var idx = 0
+                var bestDiff = Int.MAX_VALUE
+                for (i in values.indices) {
+                    val d = abs(values[i] - target)
+                    if (d < bestDiff) { bestDiff = d; idx = i }
+                }
                 val cfg = rd.Config.Antennas.getAntennaRfConfig(1)
                 cfg.setTransmitPowerIndex(idx)
                 rd.Config.Antennas.setAntennaRfConfig(1, cfg)
+                Log.i(TAG, "setPower $pct% -> ${values[idx] / 10.0} dBm (index $idx of ${values.size - 1})")
             } catch (e: Exception) {
                 Log.w(TAG, "setPower failed", e)
             }

@@ -102,14 +102,34 @@ export const gateOutSchema = z.object({
 
 /* ─── RFID tag association ─────────────────────────────────────────────────*/
 const HEX = /^[0-9A-Fa-f]+$/;
-export const rfidAssociateSchema = z.object({
-  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8),
-  rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
-  /** Must be set explicitly to overwrite a box that already carries a tag —
-   *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
-   *  no tag yet just associates normally. */
-  replace: z.boolean().optional().default(false),
-});
+/**
+ * A box carries exactly one RFID identifier (see `boxes.rfid` in
+ * db/schema.ts), so this takes exactly one value.
+ *
+ * The older `{ rfidTid, rfidEpc }` shape is still accepted from clients that
+ * haven't been updated. The EPC wins when both are sent: it is the value every
+ * reader reports during a plain inventory sweep, whereas a TID often has to be
+ * fetched with a separate access operation that stops the sweep. Whichever
+ * form arrives, the result is a single `rfid`.
+ */
+export const rfidAssociateSchema = z
+  .object({
+    rfid: z.string().regex(HEX, 'RFID ต้องเป็นเลขฐาน 16').min(8).optional(),
+    rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8).optional(),
+    rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8).optional(),
+    /** Must be set explicitly to overwrite a box that already carries a tag —
+     *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
+     *  no tag yet just associates normally. */
+    replace: z.boolean().optional().default(false),
+  })
+  .transform((v, ctx) => {
+    const rfid = v.rfid ?? v.rfidEpc ?? v.rfidTid;
+    if (!rfid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ต้องระบุค่า RFID', path: ['rfid'] });
+      return z.NEVER;
+    }
+    return { rfid, replace: v.replace };
+  });
 
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),

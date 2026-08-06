@@ -150,6 +150,20 @@ DO $$ BEGIN
 END $$;
 CREATE INDEX IF NOT EXISTS boxes_rfid_epc_idx ON boxes (rfid_epc);
 
+-- One RFID identity per box (see boxes.rfid in db/schema.ts). Backfilled
+-- preferring the EPC, since that is the value a reader reports during a plain
+-- inventory sweep and therefore the one a gate scan will actually arrive as.
+-- The old columns are intentionally left in place: they still carry the record
+-- of what was read, lookups keep matching them so nothing registered under the
+-- old scheme stops resolving, and dropping them would make this irreversible.
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS rfid TEXT;
+UPDATE boxes SET rfid = COALESCE(rfid_epc, rfid_tid) WHERE rfid IS NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'boxes_rfid_unique') THEN
+    ALTER TABLE boxes ADD CONSTRAINT boxes_rfid_unique UNIQUE (rfid);
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS vehicles (
   id         TEXT PRIMARY KEY,
   data       JSONB NOT NULL DEFAULT '{}'::jsonb,

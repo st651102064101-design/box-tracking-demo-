@@ -90,8 +90,7 @@ boxesRouter.post(
     const input = rfidAssociateSchema.parse(req.body);
     const result = await associateTag(getDb(), {
       tag: req.params.tag,
-      rfidTid: input.rfidTid.toUpperCase(),
-      rfidEpc: input.rfidEpc.toUpperCase(),
+      rfid: input.rfid.toUpperCase(),
       replace: input.replace,
       actor: req.user!.username,
     });

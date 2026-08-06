@@ -218,7 +218,11 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
         // POST /api/boxes/:tag/rfid has set them), so a full-state PUT after
         // that has to re-extract them into the typed columns too — otherwise
         // a save from the legacy UI would silently make the box unfindable
-        // by RFID again despite `data.rfidTid` still being right there.
+        // by RFID again despite `data.rfid` still being right there.
+        // The legacy pair is still read for rows written before `rfid`
+        // existed, so an old snapshot round-tripping through here keeps its
+        // tag identity instead of being dropped.
+        rfid: (b.rfid as string) ?? (b.rfidEpc as string) ?? (b.rfidTid as string) ?? null,
         rfidTid: (b.rfidTid as string) ?? null,
         rfidEpc: (b.rfidEpc as string) ?? null,
         location: (b.location as object) ?? {},
