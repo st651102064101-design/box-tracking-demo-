@@ -252,25 +252,6 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// Switch the reader between its two read profiles.
-  ///
-  /// Fast (`false`, the default and what every screen but one runs): EPC and
-  /// RSSI only, no TagData attached to the read event, DPO off — the same
-  /// configuration rfid_html_app uses, which is the one measured at full reader
-  /// speed on this hardware.
-  ///
-  /// Detail (`true`): full field reporting plus an explicit TID access-read.
-  /// Only [Screen.rfidRegister] turns this on, and only while it is on top,
-  /// because that read stops and restarts inventory around every call. Binding
-  /// a box needs a TID and on this reader the inventory round never carries
-  /// one, so registration cannot work without paying for it.
-  Future<void> setDetailMode(bool enabled) async {
-    if (!supported) return;
-    try {
-      await _method.invokeMethod('setDetailMode', {'enabled': enabled});
-    } catch (_) {}
-  }
-
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
   /// Used only to restore the saved setting on connect — a percent can only
   /// ever land on ~101 of the reader's real power steps, so live dragging

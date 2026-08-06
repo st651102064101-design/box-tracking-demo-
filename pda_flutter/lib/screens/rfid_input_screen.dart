@@ -139,16 +139,15 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
-    // Every screen but this one runs the reader's fast profile (EPC+RSSI
-    // only — see RfidReaderController's own doc comment on why) because
-    // nothing else reads the rest. This screen's whole purpose is showing
-    // everything the SDK can hand back per tag — TID, PC, CRC, antenna,
-    // channel, phase, seen count — so it's the one place detail mode is
-    // worth the read-rate cost. Whatever this reader genuinely can't
-    // supply for a given tag (its inventory round never carries a TID, see
-    // RfidReaderController.readTidExplicit's own comment on that) still
-    // shows through honestly as "—" in _field below, same as before.
-    rfid.setDetailMode(true);
+    // Detail mode (ALL_TAG_FIELDS) used to be turned on here so this screen
+    // could show TID/PC/CRC/antenna/channel/phase/seen-count per tag, but
+    // RfidReaderController's own applyReadProfile measured what that costs
+    // on this hardware: ~171 reads/sec drops to ~16/sec (10x), which is
+    // exactly the "reads slow and stutters the moment I open this screen"
+    // report. This screen now runs the same fast profile (EPC+RSSI only)
+    // every other screen uses; the extra fields fall back to their honest
+    // "—" in _field below, same as when the reader genuinely can't supply
+    // one (e.g. TID on this reader's inventory round, always).
   }
 
   void _resetStats() {
@@ -161,12 +160,6 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
 
   @override
   void dispose() {
-    // Leaving detail mode on does nothing unless it's explicitly put back —
-    // it's a reader-side setting that persists until overwritten (same
-    // reasoning as RfidReaderController's own applyReadProfile comment) —
-    // so every other screen would silently inherit this one's slower
-    // profile if this didn't hand it back.
-    context.read<AppController>().rfid.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
