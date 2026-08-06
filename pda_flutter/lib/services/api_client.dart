@@ -212,6 +212,15 @@ class ApiClient {
         headers: _headers, body: jsonEncode({'pin': pin})));
   }
 
+  /// PUT /api/employees/:id/last-post { wh, gate } — the warehouse/gate this
+  /// employee just confirmed, so their "ล่าสุด" shortcut follows them to
+  /// whichever terminal they badge into next instead of staying pinned to
+  /// this one device (see Employee.lastWh/lastGate).
+  Future<void> setEmployeeLastPost(String employeeId, {required String wh, required String gate}) async {
+    await _send(() => http.put(_u('/api/employees/$employeeId/last-post'),
+        headers: _headers, body: jsonEncode({'wh': wh, 'gate': gate})));
+  }
+
   /// POST /api/employees/:id/pin/verify { pin } -> { ok, noPinSet? }
   Future<bool> verifyEmployeePin(String employeeId, String pin) async {
     final body = await _send(() => http.post(_u('/api/employees/$employeeId/pin/verify'),

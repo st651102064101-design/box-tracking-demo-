@@ -21,8 +21,6 @@ class HomeScreen extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(18, top + 14, 18, 6),
           child: Row(
             children: [
-              const BrandMark(size: 40),
-              const SizedBox(width: 12),
               // The operator's name is the most important thing on this screen:
               // if the wrong person is signed in, it has to be noticeable
               // before a scan is committed — and fixable in one tap.
@@ -557,6 +555,10 @@ class _ActionCard extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
+    // Every card on this screen carries a blurred shadow — cheap one at a
+    // time, not cheap five deep on a screen that redraws on every
+    // notifyListeners(). Low power mode drops it to a flat border.
+    final lowPower = context.select<AppController, bool>((c) => c.lowPowerMode);
     final radius = small ? 20.0 : 22.0;
     final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
     final box = small ? 44.0 : 52.0;
@@ -570,14 +572,16 @@ class _ActionCard extends StatelessWidget {
           padding: pad,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            border: dark ? null : Border.all(color: C.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                blurRadius: dark ? 24 : (small ? 0 : 20),
-                offset: Offset(0, dark ? 8 : 6),
-              )
-            ],
+            border: (dark && !lowPower) ? null : Border.all(color: C.border),
+            boxShadow: lowPower
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
+                      blurRadius: dark ? 24 : (small ? 0 : 20),
+                      offset: Offset(0, dark ? 8 : 6),
+                    )
+                  ],
           ),
           child: Row(
             children: [

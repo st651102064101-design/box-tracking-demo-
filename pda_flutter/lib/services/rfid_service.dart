@@ -292,6 +292,27 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Toggles the reader's own dense per-read tick — on for every screen
+  /// that wants raw "how fast is this reading" feedback, off for Gate
+  /// scanning, which drives its own discrete tones via [playTone] instead
+  /// (see AppController._onReaderTrigger for where this gets flipped).
+  Future<void> setAutoBeep(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setAutoBeep', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// One explicit, app-driven tone: 'ok' for a genuinely new tag landing in
+  /// the queue, 'error' for a rejected/invalid scan. Silence (call nothing)
+  /// is the correct response to a duplicate read — see AppController.addScan.
+  Future<void> playTone(String kind) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('playTone', {'kind': kind});
+    } catch (_) {}
+  }
+
   Future<bool> isConnected() async {
     if (!supported) return false;
     try {

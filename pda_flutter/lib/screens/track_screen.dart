@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,9 +14,27 @@ class TrackScreen extends StatefulWidget {
   State<TrackScreen> createState() => _TrackScreenState();
 }
 
+/// Same reasoning as scan_screen.dart's identical toggle: a barcode gun
+/// types into the text field, an RFID trigger pull resolves through
+/// AppController._onReaderTag regardless of what's rendered — this only
+/// controls what the screen shows, so someone only reading tags isn't
+/// staring at a barcode field they'll never touch.
+enum _InputMode { barcode, rfid }
+
 class _TrackScreenState extends State<TrackScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
+  _InputMode _inputMode = _InputMode.barcode;
+
+  /// No submit button — typing already filters live (see trackSuggestions),
+  /// and a scan should never need a tap either. Enter still resolves
+  /// immediately when a scanner's trailing keystroke (or the keyboard's
+  /// Go/Done) sends it; this debounce is the fallback for scanners on this
+  /// terminal that don't send that trailing Enter (see the same pattern in
+  /// scan_screen.dart / rfid_register_screen.dart).
+  Timer? _autoSearchTimer;
+  static const _autoSearchDelay = Duration(milliseconds: 180);
+  static const _autoSearchMinLen = 3;
 
   @override
   void initState() {
@@ -24,14 +44,27 @@ class _TrackScreenState extends State<TrackScreen> {
 
   @override
   void dispose() {
+    _autoSearchTimer?.cancel();
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
   }
 
   void _search(AppController c) {
+    _autoSearchTimer?.cancel();
     c.onTrackChanged(_ctrl.text);
     c.doTrack();
+  }
+
+  void _onChanged(AppController c) {
+    c.onTrackChanged(_ctrl.text);
+    _autoSearchTimer?.cancel();
+    final text = _ctrl.text.trim();
+    if (text.length < _autoSearchMinLen) return;
+    _autoSearchTimer = Timer(_autoSearchDelay, () {
+      if (!mounted || _ctrl.text.trim() != text) return;
+      c.doTrack();
+    });
   }
 
   void _tapSuggestion(AppController c, String tag) {
@@ -62,43 +95,60 @@ class _TrackScreenState extends State<TrackScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
             children: [
-              // search box
-              TextField(
-                controller: _ctrl,
-                focusNode: _focus,
-                textCapitalization: TextCapitalization.characters,
-                autocorrect: false,
-                enableSuggestions: false,
-                onChanged: c.onTrackChanged,
-                onSubmitted: (_) => _search(c),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: 'รหัสกล่อง เช่น CRT-01',
-                  hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                  prefixIcon: Icon(Icons.search, color: C.muted),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.arrow_forward, color: C.onInk),
-                    style: IconButton.styleFrom(
-                        backgroundColor: C.ink, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    onPressed: () => _search(c),
+              _inputModeToggle(),
+              const SizedBox(height: 11),
+              // search box — hidden entirely in RFID mode (see the toggle
+              // above): nothing to type when the reader resolves the scan
+              // directly through AppController._onReaderTag.
+              if (_inputMode == _InputMode.barcode)
+                TextField(
+                  controller: _ctrl,
+                  focusNode: _focus,
+                  textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: (_) => _onChanged(c),
+                  onSubmitted: (_) => _search(c),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+                  decoration: InputDecoration(
+                    hintText: 'รหัสกล่อง เช่น CRT-01',
+                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                    prefixIcon: Icon(Icons.search, color: C.muted),
+                    isDense: true,
+                    filled: true,
+                    fillColor: C.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.ink, width: 1.5),
+                    ),
                   ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: C.surface,
-                  border: OutlineInputBorder(
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  decoration: BoxDecoration(
+                    color: C.surface,
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    border: Border.all(color: C.fieldBorder, width: 1.5),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.ink, width: 1.5),
+                  child: Column(
+                    children: [
+                      Icon(Icons.wifi_tethering, size: 22, color: C.muted),
+                      const SizedBox(height: 6),
+                      Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
+                          style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                    ],
                   ),
                 ),
-              ),
               const SizedBox(height: 14),
               // Live suggestions as soon as the first character lands —
               // scanning still works the same (a gun sends the full code +
@@ -125,6 +175,55 @@ class _TrackScreenState extends State<TrackScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _inputModeToggle() {
+    Widget seg(_InputMode m, String label, IconData icon) {
+      final selected = _inputMode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (_inputMode == m) return;
+            setState(() => _inputMode = m);
+            if (m == _InputMode.barcode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+            } else {
+              _focus.unfocus();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(_InputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(_InputMode.rfid, 'RFID', Icons.wifi_tethering),
+        ],
+      ),
     );
   }
 

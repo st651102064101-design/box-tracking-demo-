@@ -51,8 +51,18 @@ class RfidReaderController(private val context: Context) :
     private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
     private val beepExec = Executors.newSingleThreadExecutor()
     @Volatile private var beepInFlight = false
+    /**
+     * Off for the Gate scan screen (see AppController._onReaderTrigger),
+     * on everywhere else. The dense per-read tick below is right for a
+     * screen whose whole point is "how fast can this reader go" (RFID
+     * input/register/locate); it's wrong for Gate scanning, where the ask
+     * is "one distinct sound per box actually added, silence for a repeat
+     * read" — that discrete feedback is [playTone], driven from Dart once
+     * addScan() knows whether a read was new, a duplicate, or rejected.
+     */
+    @Volatile private var autoBeepEnabled = true
     private fun beep() {
-        if (beepInFlight) return
+        if (!autoBeepEnabled || beepInFlight) return
         beepInFlight = true
         beepExec.execute {
             try {
@@ -61,6 +71,22 @@ class RfidReaderController(private val context: Context) :
                 Log.w(TAG, "beep failed", e)
             } finally {
                 beepInFlight = false
+            }
+        }
+    }
+
+    /** Explicit, app-driven tone — "ok" (short tick, a genuinely new tag
+     *  landed) or "error" (longer low tone, scan rejected/invalid). */
+    private fun playTone(kind: String) {
+        beepExec.execute {
+            try {
+                if (kind == "error") {
+                    toneGen.startTone(ToneGenerator.TONE_CDMA_PIP, 220)
+                } else {
+                    toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 70)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "playTone failed", e)
             }
         }
     }
@@ -122,6 +148,8 @@ class RfidReaderController(private val context: Context) :
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
             "setPowerIndex" -> { setPowerIndex(call.argument<Int>("index") ?: maxPower); result.success(true) }
+            "setAutoBeep" -> { autoBeepEnabled = call.argument<Boolean>("enabled") ?: true; result.success(true) }
+            "playTone" -> { playTone(call.argument<String>("kind") ?: "ok"); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())

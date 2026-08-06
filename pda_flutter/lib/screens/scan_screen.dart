@@ -369,11 +369,19 @@ class _ScanScreenState extends State<ScanScreen> {
             : c.rfidStatus.state == RfidState.connecting
                 ? 'กำลังเชื่อมต่อ…'
                 : 'สแกนเนอร์ไม่พร้อม';
+    // This card repaints on every scan while the trigger's held — a
+    // gradient background is a per-frame cost that flat color isn't, and
+    // this is the one background in the app redrawing at scan speed rather
+    // than on a UI tap.
+    final lowPower = c.lowPowerMode;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFF3F3F5), Color(0xFFE7E7EA)]),
+        color: lowPower ? const Color(0xFFECEEEF) : null,
+        gradient: lowPower
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFF3F3F5), Color(0xFFE7E7EA)]),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: C.border2),
       ),

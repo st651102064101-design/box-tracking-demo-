@@ -87,6 +87,33 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              Panel(
+                padding: const EdgeInsets.all(16),
+                radius: 18,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('โหมดประหยัดพลังงาน',
+                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 3),
+                          Text('ลดกราฟฟิกและความถี่รีเฟรช เพื่อความเร็วบนเครื่อง',
+                              style: TextStyle(fontSize: 12, color: C.muted, height: 1.4)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: c.lowPowerMode,
+                      onChanged: c.setLowPowerMode,
+                      activeThumbColor: C.lime,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
               const _RfidPanel(),
               if (isAdminOrNull) ...[
                 const SizedBox(height: 10),
@@ -276,7 +303,10 @@ class _RfidPanelState extends State<_RfidPanel> {
     super.initState();
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    // Low power mode widens this — a diagnostics call every 2s adds up over
+    // a shift, and this screen isn't the one place a slow counter matters.
+    final lowPower = context.read<AppController>().lowPowerMode;
+    _poll = Timer.periodic(Duration(seconds: lowPower ? 5 : 2), (_) => _refresh());
   }
 
   @override
@@ -447,6 +477,40 @@ class _RfidPanelState extends State<_RfidPanel> {
                 'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้',
                 style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
               ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('กรองสัญญาณอ่อน (RSSI)', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                ),
+                Switch(
+                  value: c.prefs.rfidMinRssi != null,
+                  onChanged: (on) {
+                    setState(() {
+                      // -70 dBm: matches the "ไกล" boundary RfidLocateScreen
+                      // already uses as its own far-signal cutoff — a
+                      // reasonable first guess for "this is a stray read
+                      // from the next pallet over", tunable from here.
+                      c.prefs.rfidMinRssi = on ? -70 : null;
+                    });
+                  },
+                  activeThumbColor: C.lime,
+                ),
+              ],
+            ),
+            Text(
+              'ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ',
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+            ),
+            if (c.prefs.rfidMinRssi != null) ...[
+              const SizedBox(height: 10),
+              _RssiPicker(
+                value: c.prefs.rfidMinRssi!,
+                onChanged: (v) => setState(() => c.prefs.rfidMinRssi = v),
+              ),
+            ],
           ],
           if (!c.rfid.supported)
             Padding(
@@ -519,6 +583,58 @@ class _RfidPanelState extends State<_RfidPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Minimum-RSSI slider for the stray-read filter (see
+/// AppController._onReaderBatch / Prefs.rfidMinRssi) — -95 dBm (accept
+/// almost anything) to -25 dBm (only a tag right up against the antenna).
+/// Raw dBm, not a percent: this is compared directly against what the
+/// reader reports per read, so the number here has to mean the same thing.
+class _RssiPicker extends StatelessWidget {
+  static const _min = -95.0;
+  static const _max = -25.0;
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _RssiPicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(value <= -80 ? 'หลวม · รับเกือบทุกแท็ก' : value <= -55 ? 'ปานกลาง' : 'เข้ม · เฉพาะแท็กใกล้มาก',
+                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value dBm',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+          ),
+          child: Slider(
+            value: value.toDouble().clamp(_min, _max),
+            min: _min,
+            max: _max,
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
     );
   }
 }

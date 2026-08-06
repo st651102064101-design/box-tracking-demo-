@@ -8,7 +8,6 @@ import '../controllers/app_controller.dart';
 import '../models/employee.dart';
 import '../services/api_client.dart';
 import '../services/i18n.dart';
-import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
@@ -376,111 +375,99 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
-    final themeCtrl = context.watch<ThemeController>();
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    // A plain Column here forced the header + badge prompt to a fixed height
-    // and only let the employee list underneath scroll on its own — on the
-    // handheld's short screen that clipped everything below the fold with no
-    // way to reach it. One scroll view for the whole page instead, so the
-    // page scrolls as a unit whenever it doesn't fit.
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: bottom + 20),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
-            child: Row(
-              children: [
-                const BrandMark(size: 40),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Wordmark(),
-                      Text(
-                        !c.deviceConfigured
-                            ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
-                            : (c.wh.isNotEmpty && c.gate.isNotEmpty)
-                                ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
-                                : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: C.muted),
-                      ),
-                    ],
-                  ),
+    // Header is a fixed sibling of the scrolling body now, not the first
+    // child inside the same SingleChildScrollView — it used to scroll away
+    // with everything else despite a comment here claiming otherwise. th/en
+    // and light/dark are gone from it entirely (moved to Settings, which is
+    // the one place they're meant to live) — this screen only needs to say
+    // who's badging in and whether the terminal is configured/connected.
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(22, top + 26, 22, 12),
+          child: Row(
+            children: [
+              const BrandMark(size: 40),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Wordmark(),
+                    Text(
+                      !c.deviceConfigured
+                          ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
+                          : (c.wh.isNotEmpty && c.gate.isNotEmpty)
+                              ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+                              : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: C.muted),
+                    ),
+                  ],
                 ),
-                const _ConnectivityIcon(),
-                const SizedBox(width: 8),
-                LangToggleButton(loc: loc),
-                const SizedBox(width: 8),
-                ThemeToggleButton(ctrl: themeCtrl),
+              ),
+              const _ConnectivityIcon(),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottom + 20),
+            child: Column(
+              children: [
+                // No more inline "เชื่อมต่อไม่ได้" banner routing straight to
+                // device setup — that page is for changing the connection, not
+                // the first thing an offline terminal should shove in front of
+                // an operator who just wants to badge in. The badge flow
+                // already works fully offline (see AppController.employees,
+                // Prefs.verifyPinOffline); connectivity is now just the small
+                // icon in the header, and it only ever escalates to
+                // "ตั้งค่าระบบ" if an operator deliberately taps it and a
+                // retry still fails.
+                _BadgePrompt(field: _captureField(loc)),
+                if (people.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, color: C.faint),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                              style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                        ),
+                        ...people.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _EmployeeTile(
+                                emp: e,
+                                visiting: c.isVisiting(e),
+                                isLast: e.id == c.lastEmpId,
+                                onTap: () => _tapEmployee(e),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
-          // Everything below the header scrolls as one unit — the badge-scan
-          // card used to be pinned outside the list, which left it stuck in
-          // place (and could crowd out the employee list, or sit half-hidden
-          // behind the keyboard) on shorter screens. Now a scan/tap-name flow
-          // is one continuous scrollable column, header excepted.
-          // Plain Column, not a nested ListView+Expanded — Expanded needs a
-          // bounded height from a parent Flex, but this Column sits inside
-          // the page's SingleChildScrollView, which hands down unbounded
-          // height. That combination renders nothing below the header at
-          // all on web release builds (no visible error, just a blank page).
-          Column(
-            children: [
-              // No more inline "เชื่อมต่อไม่ได้" banner routing straight to
-              // device setup — that page is for changing the connection, not
-              // the first thing an offline terminal should shove in front of
-              // an operator who just wants to badge in. The badge flow
-              // already works fully offline (see AppController.employees,
-              // Prefs.verifyPinOffline); connectivity is now just the small
-              // icon in the header, and it only ever escalates to
-              // "ตั้งค่าระบบ" if an operator deliberately taps it and a
-              // retry still fails.
-              _BadgePrompt(field: _captureField(loc)),
-              if (people.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, color: C.faint),
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                            style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                      ),
-                      ...people.map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _EmployeeTile(
-                              emp: e,
-                              visiting: c.isVisiting(e),
-                              isLast: e.id == c.lastEmpId,
-                              onTap: () => _tapEmployee(e),
-                            ),
-                          )),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

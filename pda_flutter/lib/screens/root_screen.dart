@@ -46,7 +46,11 @@ class RootScreen extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
+                    // Cross-fade is the single most-run animation in the
+                    // app — every screen change plays it — so it's the
+                    // first thing low power mode cuts, straight to an
+                    // instant swap.
+                    duration: c.lowPowerMode ? Duration.zero : const Duration(milliseconds: 220),
                     child: _body(c),
                   ),
                 ),

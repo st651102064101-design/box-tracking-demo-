@@ -22,6 +22,11 @@ class _Read {
   final String? channel;
   final int? phase;
   final int? seenCount;
+  /// How many times this same EPC has come back this session. A tag under
+  /// a held trigger reads dozens of times a second — one growing row per
+  /// distinct tag reads like an inventory count; one new row per read reads
+  /// like a log nobody can scroll to the end of.
+  final int count;
   const _Read(
     this.epc,
     this.at, {
@@ -33,9 +38,10 @@ class _Read {
     this.channel,
     this.phase,
     this.seenCount,
+    this.count = 1,
   });
 
-  factory _Read.fromTagRead(RfidTagRead r, DateTime at) => _Read(
+  factory _Read.fromTagRead(RfidTagRead r, DateTime at, {int count = 1}) => _Read(
         r.epc,
         at,
         tid: r.tid,
@@ -46,6 +52,7 @@ class _Read {
         channel: r.channel,
         phase: r.phase,
         seenCount: r.seenCount,
+        count: count,
       );
 
   /// The EPC as the reader gives it (hex) converted to base-10 — a 24-hex-digit
@@ -110,7 +117,15 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
           _window.add(now);
         }
         _window.removeWhere((t) => t.isBefore(cut));
-        _reads.insertAll(0, batch.reversed.map((r) => _Read.fromTagRead(r, now)));
+        // Dedup by EPC: a repeat read updates that tag's row in place (moved
+        // to the top, count bumped, fields refreshed to the latest values)
+        // instead of appending a new row — see _Read.count.
+        for (final r in batch.reversed) {
+          final i = _reads.indexWhere((x) => x.epc == r.epc);
+          final prevCount = i >= 0 ? _reads[i].count : 0;
+          if (i >= 0) _reads.removeAt(i);
+          _reads.insert(0, _Read.fromTagRead(r, now, count: prevCount + 1));
+        }
         // A scroll-back, not a log — unbounded, every rebuild becomes
         // O(reads) and reintroduces the stall this screen is used to measure.
         if (_reads.length > 300) _reads.removeRange(300, _reads.length);
@@ -157,7 +172,12 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   void _addManual() {
     final v = _manualCtrl.text.trim();
     if (v.isEmpty) return;
-    setState(() => _reads.insert(0, _Read(v, DateTime.now())));
+    setState(() {
+      final i = _reads.indexWhere((x) => x.epc == v);
+      final prevCount = i >= 0 ? _reads[i].count : 0;
+      if (i >= 0) _reads.removeAt(i);
+      _reads.insert(0, _Read(v, DateTime.now(), count: prevCount + 1));
+    });
     _manualCtrl.clear();
   }
 
@@ -334,6 +354,19 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
                                     ],
                                   ),
                                 ),
+                                if (r.count > 1) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: C.limeBg,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text('×${r.count}',
+                                        style: TextStyle(
+                                            fontSize: 11.5, fontWeight: FontWeight.w800, color: C.limeText)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
                                 Text(_fmtTime(r.at), style: TextStyle(fontSize: 12, color: C.faint)),
                               ],
                             ),

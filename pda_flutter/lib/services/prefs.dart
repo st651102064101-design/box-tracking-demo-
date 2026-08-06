@@ -33,6 +33,8 @@ class Prefs {
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kLowPower = 'boxtrace_low_power';
+  static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
@@ -59,6 +61,31 @@ class Prefs {
 
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
+
+  /// Trims animations, gradients, shadows, and background polling intervals
+  /// across the app — the MC3390R visibly drops frames under the full
+  /// visual treatment (cross-fade screen transitions, gradient panels,
+  /// shadowed cards) once its battery is warm or several screens have
+  /// stacked up. Off by default: full graphics unless an operator asks for
+  /// speed over polish.
+  bool get lowPowerMode => _p.getBool(_kLowPower) ?? false;
+  set lowPowerMode(bool v) => _p.setBool(_kLowPower, v);
+
+  /// Minimum RSSI (dBm) a read has to clear to count at all — the "stray
+  /// read" filter: RFID punches through cardboard and thin stock easily
+  /// enough that a sweep aimed at pallet A can pick up pallet B sitting
+  /// right next to it. Null means off (every read counts, the original
+  /// behavior); set, it drops anything weaker before it ever reaches
+  /// addScan/doTrack/badge matching. A raw dBm number, not a percent — this
+  /// is what the reader itself reports per read, no conversion needed.
+  int? get rfidMinRssi => _p.containsKey(_kRfidMinRssi) ? _p.getInt(_kRfidMinRssi) : null;
+  set rfidMinRssi(int? v) {
+    if (v == null) {
+      _p.remove(_kRfidMinRssi);
+    } else {
+      _p.setInt(_kRfidMinRssi, v);
+    }
+  }
 
   /// Antenna transmit power as a percentage of the reader's max — the knob
   /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full
