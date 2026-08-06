@@ -53,6 +53,16 @@ tags-per-second / ระยะห่างระหว่างการอ่�
 แล้วเปิด `index.html` (ไฟล์ในเครื่อง หรือ serve จากที่ไหนก็ได้) — หน้าเว็บ
 ตรวจเองว่าไม่มี native bridge แล้วสลับไปโหมด keystroke อัตโนมัติ
 
+หน้านี้ serve ผ่าน docker อยู่แล้วที่ service `rfid-test` (nginx, พอร์ต 5200):
+
+```bash
+docker compose up -d rfid-test
+```
+
+เปิดจากเครื่อง MC3390R ที่ `http://<ip เครื่อง dev>:5200/` — ไฟล์ bind-mount
+แบบ read-only ไม่ได้ bake เข้า image แก้ `rfid_test/index.html` แล้ว refresh
+บนเครื่องได้เลย ไม่ต้อง rebuild
+
 ## หมายเหตุที่ตั้งใจตัดออก
 
 - **ไม่อ่าน TID** — การอ่าน TID ต้อง `Inventory.stop()` เพื่อรัน access
