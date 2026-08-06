@@ -10,7 +10,6 @@ import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
-import 'rfid_test_sheet.dart';
 
 /// In-shift settings: what the operator can see and do without leaving their
 /// session. Anything that changes what this terminal *is* — its address, its
@@ -92,16 +91,9 @@ class SettingsScreen extends StatelessWidget {
               if (isAdminOrNull) ...[
                 const SizedBox(height: 10),
                 _tile(
-                  icon: Icons.biotech_outlined,
-                  title: 'ทดสอบอ่านแท็ก RFID',
-                  sub: 'ดูค่าดิบที่เครื่องอ่านได้ — EPC, TID, PC, CRC, RSSI ฯลฯ',
-                  onTap: () => showRfidTestSheet(context),
-                ),
-                const SizedBox(height: 10),
-                _tile(
                   icon: Icons.nfc,
                   title: 'รับค่า RFID',
-                  sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ไว้ทดสอบเครื่องอ่าน',
+                  sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่',
                   onTap: () => c.go(Screen.rfidInput),
                 ),
               ],

@@ -38,12 +38,16 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   bool _binding = false;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
+  // Held so dispose() can stop the reader without reading it off a context
+  // that is already unmounting.
+  RfidService? _rfid;
   AppController get _c => context.read<AppController>();
 
   @override
   void initState() {
     super.initState();
     final rfid = _c.rfid;
+    _rfid = rfid;
     _rfidStatus = RfidStatus(rfid.state, '');
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
     _tagSub = rfid.tagReads.listen(_onTagRead);
@@ -57,6 +61,10 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   @override
   void dispose() {
+    // The reader is armed on this screen without anyone pressing anything, so
+    // it has to be disarmed the same way — a stray back-navigation must not
+    // leave it sweeping in the background.
+    _rfid?.stopInventory();
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
@@ -90,21 +98,17 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         _rfidError = null;
       });
       _barcodeCtrl.clear();
+      // Arm the reader the instant the barcode lands. The operator is holding
+      // a gun against a box they have already scanned; making them put a hand
+      // on the screen between the two halves of one action is the whole thing
+      // this flow was getting wrong. The trigger still works as before — this
+      // just means it isn't required.
+      unawaited(_c.rfid.startInventory());
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : 'ตรวจสอบบาร์โค้ดไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
-  }
-
-  /// On-screen fallback for devices/testers without a comfortable trigger
-  /// pull mid-flow — starts a short inventory burst, same shape as the
-  /// simulate button on the scan screen.
-  Future<void> _tapToRead() async {
-    if (_step != _Step.waitingRfid || !_c.rfid.supported) return;
-    await _c.rfid.startInventory();
-    await Future.delayed(const Duration(milliseconds: 600));
-    await _c.rfid.stopInventory();
   }
 
   void _onTagRead(RfidTagRead read) {
@@ -246,7 +250,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
       dot = _binding ? C.limeDeep : C.orange;
-      label = _binding ? 'กำลังผูกแท็ก…' : 'เหนี่ยวไกยิงแท็ก RFID';
+      label = _binding ? 'กำลังผูกแท็ก…' : 'กำลังอ่าน — จ่อแท็กได้เลย';
     }
     return Opacity(
       opacity: active ? 1 : 0.55,
@@ -267,17 +271,6 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                 Expanded(
                   child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                if (active && !_binding)
-                  OutlinedButton(
-                    onPressed: connected ? _tapToRead : null,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: C.ink,
-                      side: BorderSide(color: C.border2),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('ยิง RFID', style: TextStyle(fontSize: 12.5)),
-                  ),
               ],
             ),
             if (!connected)
@@ -311,7 +304,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         bg = C.orangeBg;
         fg = C.orange;
         border = C.orangeBorder;
-        text = '📢 คำแนะนำ: แปะแท็กแล้วกดปุ่มยิง RFID';
+        text = '📢 เครื่องอ่านพร้อมแล้ว — จ่อแท็กได้เลย';
         break;
       case _Step.success:
         bg = C.limeBg;

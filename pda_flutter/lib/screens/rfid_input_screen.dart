@@ -81,20 +81,40 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   late RfidStatus _status;
   bool _reading = false;
 
+  // Read-rate readout, mirroring the HTML test page so the two are directly
+  // comparable. This screen inherited it when the separate test-read sheet was
+  // removed — "it feels slow" isn't actionable, and a total on its own doesn't
+  // say whether the reader or the app is the limit.
+  int _total = 0;
+  final List<DateTime> _window = []; // read times in the trailing second
+  int? _gapMs; // since the previous read
+  DateTime? _lastAt;
+
   @override
   void initState() {
     super.initState();
     final rfid = context.read<AppController>().rfid;
     _status = RfidStatus(rfid.state, '');
-    // One setState per frame, not per tag — see the same change in
-    // rfid_test_sheet.dart for why the per-read listener capped the read rate.
+    // One setState per frame, not per tag: this list is rebuilt whole on every
+    // rebuild, so a listener firing per read would make the UI — not the
+    // reader — the thing deciding how fast reads can be taken.
     _tagSub = rfid.tagBatches.listen((batch) {
       if (!mounted) return;
       final now = DateTime.now();
-      setState(() => _reads.insertAll(
-            0,
-            batch.reversed.map((r) => _Read.fromTagRead(r, now)),
-          ));
+      final cut = now.subtract(const Duration(seconds: 1));
+      setState(() {
+        for (var i = 0; i < batch.length; i++) {
+          _total++;
+          if (_lastAt != null) _gapMs = now.difference(_lastAt!).inMilliseconds;
+          _lastAt = now;
+          _window.add(now);
+        }
+        _window.removeWhere((t) => t.isBefore(cut));
+        _reads.insertAll(0, batch.reversed.map((r) => _Read.fromTagRead(r, now)));
+        // A scroll-back, not a log — unbounded, every rebuild becomes
+        // O(reads) and reintroduces the stall this screen is used to measure.
+        if (_reads.length > 300) _reads.removeRange(300, _reads.length);
+      });
     });
     _statusSub = rfid.status.listen((s) => setState(() => _status = s));
     // The physical gun trigger drives start/stopInventory from AppController
@@ -104,6 +124,14 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
+  }
+
+  void _resetStats() {
+    _reads.clear();
+    _window.clear();
+    _total = 0;
+    _gapMs = null;
+    _lastAt = null;
   }
 
   @override
@@ -238,13 +266,23 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('อ่านได้ ${_reads.length} รายการ',
+                  Text('อ่านได้ $_total ครั้ง',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
                   if (_reads.isNotEmpty)
                     GestureDetector(
-                      onTap: () => setState(_reads.clear),
+                      onTap: () => setState(_resetStats),
                       child: Text('ล้างรายการ', style: TextStyle(fontSize: 12.5, color: C.muted)),
                     ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text('${_window.length} ครั้ง/วิ',
+                      style: TextStyle(fontSize: 12.5, color: C.muted)),
+                  const SizedBox(width: 14),
+                  Text('ห่าง ${_gapMs == null ? '—' : '$_gapMs'} ms',
+                      style: TextStyle(fontSize: 12.5, color: C.muted)),
                 ],
               ),
               const SizedBox(height: 8),
