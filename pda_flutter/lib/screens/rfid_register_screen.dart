@@ -40,6 +40,17 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
 
+  /// Debounce timer for auto-submitting the barcode field without a trailing
+  /// Enter/Tab keystroke. A barcode gun in HID/keyboard-wedge mode injects a
+  /// whole code in a handful of milliseconds — far faster than anyone types
+  /// by hand — so "the field went quiet" is itself a reliable "a scan just
+  /// finished" signal, no reader-suffix configuration required. onSubmitted
+  /// (Enter) still fires immediately when the terminal *is* configured with
+  /// a suffix key; this is only the fallback for when it isn't.
+  Timer? _autoSubmitTimer;
+  static const _autoSubmitDelay = Duration(milliseconds: 180);
+  static const _autoSubmitMinLen = 4;
+
   _Step _step = _Step.waitingBarcode;
   String? _tag; // verified box barcode for the box currently in hand
   String? _error; // shown in the barcode card when verification fails
@@ -73,6 +84,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     // every call, and on this reader it came back empty regardless, so every
     // read was rejected for having no TID. Binding on the EPC needs none of it.
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
+    _barcodeCtrl.addListener(_onBarcodeChanged);
   }
 
   @override
@@ -84,9 +96,23 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
+    _autoSubmitTimer?.cancel();
+    _barcodeCtrl.removeListener(_onBarcodeChanged);
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
     super.dispose();
+  }
+
+  void _onBarcodeChanged() {
+    _autoSubmitTimer?.cancel();
+    final text = _barcodeCtrl.text.trim();
+    if (text.length < _autoSubmitMinLen || _verifying) return;
+    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
+      // Field has to still hold exactly what triggered this timer — someone
+      // still typing by hand would otherwise get cut off mid-code.
+      if (!mounted || _verifying || _barcodeCtrl.text.trim() != text) return;
+      _submitBarcode();
+    });
   }
 
   String get _today {
@@ -97,6 +123,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   Future<void> _submitBarcode() async {
     final code = _barcodeCtrl.text.trim();
     if (code.isEmpty || _verifying) return;
+    _autoSubmitTimer?.cancel();
     setState(() {
       _verifying = true;
       _error = null;
