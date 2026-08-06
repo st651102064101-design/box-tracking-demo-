@@ -315,6 +315,11 @@ class AddableDropdown extends StatelessWidget {
   final String hint;
   final String addLabel;
   final double radius;
+  // Where the cursor should land once a real option is picked and the
+  // dropdown closes — the operator is filling in a form top-to-bottom and
+  // shouldn't have to tap the next field by hand every time. Not requested
+  // for the "+ เพิ่มใหม่" path, which opens its own dialog instead.
+  final FocusNode? nextFocus;
 
   const AddableDropdown({
     super.key,
@@ -326,6 +331,7 @@ class AddableDropdown extends StatelessWidget {
     this.hint = '— ไม่ระบุ —',
     this.addLabel = '+ เพิ่มใหม่…',
     this.radius = 12,
+    this.nextFocus,
   });
 
   static String _identity(String v) => v;
@@ -377,6 +383,13 @@ class AddableDropdown extends StatelessWidget {
           _promptAdd(context);
         } else {
           onChanged(v);
+          // The framework closes the dropdown's own menu before this
+          // callback fires, but focus needs to move after that teardown
+          // settles — otherwise the request loses to the dropdown reclaiming
+          // focus on its way out.
+          if (nextFocus != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => nextFocus!.requestFocus());
+          }
         }
       },
     );

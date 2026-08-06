@@ -440,6 +440,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
             options: typeNames.keys.toList(),
             labelFor: (id) => typeNames[id] ?? id,
             hint: '— เลือกประเภทกล่อง —',
+            nextFocus: _tagFocus,
             onChanged: (v) => setState(() => _selectedType = v),
             onAdd: (typed) async {
               final id = typed.toUpperCase().replaceAll(RegExp(r'\s+'), '_');

@@ -137,10 +137,11 @@ class Prefs {
     if (saved != null) return saved;
     if (_compiledBaseUrl.isNotEmpty) return _compiledBaseUrl;
     // 10.0.2.2 is the Android-emulator-only alias for the host machine — a
-    // real browser can never resolve it, so a fresh web visit with no saved
-    // setting would otherwise fail to connect before the operator ever gets
-    // a chance to open Settings. Android keeps the emulator-friendly default
-    // since kIsWeb is false there.
+    // real browser (or a real Zebra PDA) can never resolve it, so a fresh
+    // install with no saved setting would otherwise fail to connect before
+    // the operator ever gets a chance to open Settings. These devices are
+    // all real hardware on the warehouse LAN, so default straight to the
+    // known server address instead of the emulator alias.
     if (kIsWeb) {
       final b = Uri.base;
       // Served from the backend itself (same origin, default or API port) —
@@ -152,7 +153,7 @@ class Prefs {
       }
       return '${b.scheme}://${b.host}:4000';
     }
-    return 'http://10.0.2.2:4000';
+    return 'http://192.168.3.42:4000';
   }
 
   set baseUrl(String v) => _p.setString(_kBaseUrl, v);

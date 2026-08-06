@@ -27,6 +27,7 @@ class _ScanScreenState extends State<ScanScreen> {
   final _inDriverCtrl = TextEditingController();
   final _inVtypeOtherCtrl = TextEditingController();
   final _scanFocus = FocusNode();
+  final _plateFocus = FocusNode();
 
   /// Scan-then-details, same shape on both directions: the operator isn't
   /// looking at customer/vehicle fields before they've even started scanning
@@ -75,6 +76,7 @@ class _ScanScreenState extends State<ScanScreen> {
     _inDriverCtrl.dispose();
     _inVtypeOtherCtrl.dispose();
     _scanFocus.dispose();
+    _plateFocus.dispose();
     super.dispose();
   }
 
@@ -223,6 +225,7 @@ class _ScanScreenState extends State<ScanScreen> {
               return '$id · ${cust['name'] ?? ''}';
             },
             hint: '— เลือกลูกค้า —',
+            nextFocus: _plateFocus,
             onChanged: (v) => c.setOutCustomer(v ?? ''),
             onAdd: (typed) async {
               final id = typed.toUpperCase().replaceAll(RegExp(r'\s+'), '_');
@@ -244,7 +247,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const FieldLabel('ทะเบียนรถ *'),
-                    TextField(controller: _plateCtrl, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
+                    TextField(controller: _plateCtrl, focusNode: _plateFocus, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
                   ],
                 ),
               ),
