@@ -230,6 +230,16 @@ List<Widget> _confirmedBody(AppController c) {
       sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
       onTap: c.goTrack,
     ),
+    const SizedBox(height: 12),
+    _ActionCard(
+      small: true,
+      icon: Icons.nfc,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'หากล่อง / RFID',
+      sub: 'เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger',
+      onTap: c.goLocate,
+    ),
     if (c.outbox.isNotEmpty) ...[
       const SizedBox(height: 14),
       _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),

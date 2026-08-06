@@ -11,7 +11,7 @@ import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -643,6 +643,16 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
+  /// "Find this box" — Geiger-style RFID search (see RfidLocateScreen). Its
+  /// own screen state (which box, current RSSI) lives on the widget, not
+  /// here — this just gets the reader connected and the trigger unlocked for
+  /// it, same as every other RFID-reading screen.
+  void goLocate() {
+    screen = Screen.rfidLocate;
+    notifyListeners();
+    _connectReader();
+  }
+
   void onScanChanged(String v) {
     scanVal = v;
     notifyListeners();
@@ -1144,7 +1154,8 @@ class AppController extends ChangeNotifier {
         screen != Screen.track &&
         screen != Screen.login &&
         screen != Screen.rfidInput &&
-        screen != Screen.rfidRegister) {
+        screen != Screen.rfidRegister &&
+        screen != Screen.rfidLocate) {
       return;
     }
     rfid.startInventory();
