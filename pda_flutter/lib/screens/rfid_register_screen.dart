@@ -120,6 +120,25 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
+  /// Undoes a mis-scanned barcode without leaving the screen. Stops the
+  /// reader (it was armed the moment the barcode landed, see
+  /// [_submitBarcode]) and drops the RFID sweep so far — those reads were
+  /// against the wrong box and would otherwise sit in [_found] ready to bind
+  /// onto whatever gets scanned next.
+  void _changeBarcode() {
+    unawaited(_c.rfid.stopInventory());
+    setState(() {
+      _step = _Step.waitingBarcode;
+      _tag = null;
+      _error = null;
+      _rfidError = null;
+      _found.clear();
+      _selectedEpc = null;
+    });
+    _barcodeCtrl.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _barcodeFocus.requestFocus());
+  }
+
   Future<void> _submitBarcode() async {
     final code = _barcodeCtrl.text.trim();
     if (code.isEmpty || _verifying) return;
@@ -290,8 +309,33 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           ),
           const SizedBox(height: 10),
           if (verified)
-            Text(_tag ?? '',
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace'))
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(_tag ?? '',
+                      style: const TextStyle(
+                          fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+                ),
+                // Only while still waiting on the RFID read — once a tag is
+                // actually being bound or the success banner is showing,
+                // changing the barcode out from under it would be confusing,
+                // not helpful. Exists because scanning the wrong box's
+                // barcode used to mean backing all the way out of this
+                // screen and back in just to fix a mis-scan.
+                if (_step == _Step.waitingRfid)
+                  TextButton(
+                    onPressed: _changeBarcode,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text('เปลี่ยนบาร์โค้ด',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.orange)),
+                  ),
+              ],
+            )
           else
             TextField(
               controller: _barcodeCtrl,

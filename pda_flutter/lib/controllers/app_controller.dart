@@ -231,6 +231,22 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Explicit reconnect for the badge screen's small online/offline
+  /// indicator — tap it and it actually tries, instead of only ever
+  /// discovering connectivity changed on the next unrelated network call.
+  /// [_liveConnected] otherwise only ever goes true (see [refresh]); this is
+  /// the one place it's allowed back to false, so the indicator doesn't keep
+  /// showing "online" from an earlier session after a live probe just
+  /// failed. Returns the resulting [connected] state so the caller can
+  /// decide whether to say anything more (see login_screen's connectivity
+  /// icon, which surfaces a "ตั้งค่าระบบ" prompt only when this is false).
+  Future<bool> retryConnection() async {
+    await _ensureAuthAndState();
+    if (connError != null) _liveConnected = false;
+    notifyListeners();
+    return connected;
+  }
+
   Future<void> refresh() async {
     final json = await api.getState();
     S = StateSnapshot.fromJson(json);
