@@ -255,11 +255,20 @@ void _openHandover(BuildContext context, AppController c) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
+    // Default (isScrollControlled: false) caps the sheet at ~half the
+    // screen — fine on a phone, but this device's short/wide display left
+    // "เปลี่ยนคน / จบงาน" + up to two more action tiles with nowhere to go
+    // ("BOTTOM OVERFLOWED BY 81 PIXELS"). isScrollControlled lets it grow to
+    // fit its content up to the full screen height instead of a fixed cap;
+    // the SingleChildScrollView below is the fallback for whatever's left
+    // over on a screen too short even for that.
+    isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: const EdgeInsets.all(12),
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -305,6 +314,7 @@ void _openHandover(BuildContext context, AppController c) {
             ),
           ],
         ],
+        ),
       ),
     ),
   );
