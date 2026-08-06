@@ -353,7 +353,7 @@ class SettingsScreen extends StatelessWidget {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!context.mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', friendlyError(err), ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);

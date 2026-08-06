@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show SocketException;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -36,6 +37,24 @@ enum Screen {
 /// a screen-local toggle that this dispatcher never saw was exactly how a
 /// "barcode mode" selection still silently started RFID reads and beeped.
 enum ScanInputMode { barcode, rfid }
+
+/// Human-readable message for an arbitrary error, in Thai where the shape
+/// of the failure is common enough to name — a raw TimeoutException prints
+/// as "TimeoutException after 0:00:20.000000: Future not completed", which
+/// is what every toast/banner used to show verbatim on a dead connection.
+/// [ApiException]'s own `.message` is already meant for operators, so that
+/// passes straight through; everything else gets Dart's leading
+/// `SomethingException: ` stripped (matched only at the start, so
+/// `ClientException: Failed to fetch` doesn't get mangled into
+/// `ClientFailed`) as the last-resort fallback.
+String friendlyError(Object e) {
+  if (e is ApiException) return e.message;
+  if (e is TimeoutException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — หมดเวลารอ ตรวจสอบที่อยู่เซิร์ฟเวอร์และเครือข่าย';
+  if (e is SocketException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบที่อยู่เซิร์ฟเวอร์และเครือข่าย';
+  final s = e.toString();
+  final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
+  return m == null ? s : s.substring(m.end);
+}
 
 enum ResultKind { ok, err, warn, info }
 
@@ -262,6 +281,15 @@ class AppController extends ChangeNotifier {
   }
 
   /// Ensures the device is authenticated and the state snapshot is current.
+  ///
+  /// Every failure branch here used to leave [_liveConnected] (what actually
+  /// drives the header's online/offline icon) untouched — it only ever went
+  /// true, in [refresh]. That left a real, just-failed connection attempt
+  /// (a login or state fetch that timed out) showing a stale "online" icon
+  /// until the SSE stream's own, slower reconnect loop eventually noticed —
+  /// seconds behind what a REST call right here already knows for certain.
+  /// Now every path out of this method reconciles [_liveConnected] with
+  /// whether [connError] ended up set, the same instant it's known.
   Future<void> _ensureAuthAndState() async {
     try {
       if (api.token == null || api.token!.isEmpty) await _deviceLogin();
@@ -275,6 +303,7 @@ class AppController extends ChangeNotifier {
           await _deviceLogin();
           await refresh();
           connError = null;
+          _syncLiveConnected();
           return;
         } catch (e2) {
           connError = _msg(e2);
@@ -285,6 +314,20 @@ class AppController extends ChangeNotifier {
     } catch (e) {
       connError = _msg(e);
     }
+    _syncLiveConnected();
+  }
+
+  /// Reconciles [_liveConnected] with the [connError] that whatever just
+  /// called [_ensureAuthAndState] left behind — offline the moment a
+  /// connectivity failure is known, same [offlineEventId]/notify semantics
+  /// as [_onRealtimeConnectivity] going down, so the one-shot offline alert
+  /// still fires exactly once per real drop rather than being silent here
+  /// and only caught later by the SSE stream's own, slower detection.
+  void _syncLiveConnected() {
+    if (connError == null) return;
+    final wasConnected = _liveConnected;
+    _liveConnected = false;
+    if (wasConnected) offlineEventId++;
   }
 
   /// Explicit reconnect for the badge screen's small online/offline
@@ -297,8 +340,7 @@ class AppController extends ChangeNotifier {
   /// decide whether to say anything more (see login_screen's connectivity
   /// icon, which surfaces a "ตั้งค่าระบบ" prompt only when this is false).
   Future<bool> retryConnection() async {
-    await _ensureAuthAndState();
-    if (connError != null) _liveConnected = false;
+    await _ensureAuthAndState(); // reconciles _liveConnected itself now
     notifyListeners();
     return connected;
   }
@@ -357,15 +399,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Human-readable message for an arbitrary error. Strips the leading
-  /// `SomethingException: ` that Dart prepends — matching only at the start so
-  /// `ClientException: Failed to fetch` doesn't get mangled into `ClientFailed`.
-  String _msg(Object e) {
-    if (e is ApiException) return e.message;
-    final s = e.toString();
-    final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
-    return m == null ? s : s.substring(m.end);
-  }
+  String _msg(Object e) => friendlyError(e);
 
   @override
   void dispose() {
