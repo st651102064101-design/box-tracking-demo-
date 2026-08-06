@@ -8636,6 +8636,84 @@ function clearInvFilter() {
 }
 window.clearInvFilter = clearInvFilter;
 
+/* Warehouse-pill predicate, factored out of filteredInvBoxes() so
+   pickInvWhWithData() below can probe each pill's count without duplicating
+   this logic (ดู buildInvWhPills / setInvWh):
+     - '' (ทุกคลัง)  → เฉพาะกล่องที่อยู่ในคลังจริงและมีรหัสคลังที่ถูกต้อง (ไม่รวมกล่องนอกคลัง)
+     - 'OUTSIDE' (นอกคลัง) → กล่องที่ไม่ได้อยู่บนชั้นวางจริง: ออกกับลูกค้า/รอผูก Tag,
+       Hold/ชำรุด (พักไว้ ยังไม่ขึ้นชั้น), แจ้งหาย, หรือแม้สถานะ warehouse แต่ไม่มีรหัสคลัง
+     - รหัสคลังเฉพาะ → เดิม (เฉพาะกล่องที่ขึ้นชั้นในคลังนั้นจริง ๆ) */
+function invWhMatches(b, wf) {
+  if (wf === 'OUTSIDE') return !(b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
+  if (wf === '') return (b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
+  if (wf) return ((b.location || {}).wh === wf && b.status === 'warehouse');
+  return true;
+}
+/* Status-tab predicate, also factored out so pickInvWhWithData() can test
+   "would this status show anything under this warehouse pill" without a
+   second copy of every branch below. */
+function invStatusMatches(b, todayStr) {
+  if (invStatusFilter === 'unlocated') return (b.status === 'warehouse' && !(b.location || {}).wh);
+  if (invStatusFilter === 'putaway') return (b.status === 'warehouse' && isAtStaging(b));
+  if (invStatusFilter === 'pending') {
+    /* รอติดบาร์โค้ด: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
+       status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
+       statusPill) ไม่ใช่ "รอติดบาร์โค้ด" ให้ไปอยู่ในแท็บ pendingPutaway แทน
+       ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
+    return (b.status === 'pending' && b.labeled !== true);
+  }
+  if (invStatusFilter === 'pendingPutaway') {
+    /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
+       คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย
+       (ดู statusPill สำหรับ pill "รอ Putaway" ตัวเดียวกันนี้) */
+    return (b.status === 'pending' && b.labeled === true);
+  }
+  if (invStatusFilter === 'noRfid') {
+    /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
+       badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
+       labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
+    return !(b.labeled === false || b.rfidTid || b.rfidEpc);
+  }
+  if (invStatusFilter === 'inboundQueue') {
+    /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
+       สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
+       เพื่อไม่ให้แท็บ "ส่งลูกค้า" ติด active ทั้งที่ผู้ใช้กด "คิวรับเข้า" */
+    return b.status === 'out';
+  }
+  if (invStatusFilter === 'outboundQueue') {
+    /* คิวส่งออก (การ์ด outq): กล่องที่อยู่ในคลังจริง = พร้อมหยิบจ่ายออก
+       (ไม่รวม Hold/ชำรุด ซึ่งถูกกันออกจากการใช้งานไปแล้ว) */
+    return b.status === 'warehouse';
+  }
+  if (invStatusFilter === 'outToday') {
+    /* ออกวันนี้: boxes that have an 'out' history event today */
+    return (b.history || []).some(function(h){ return h.dir === 'out' && h.ts && h.ts.slice(0,10) === todayStr; });
+  }
+  if (invStatusFilter === 'overdue') return (b.status === 'out' && isOverdue(b));
+  /* รอคืน: out and still within its return window (not overdue yet) — distinct from the "overdue" bucket */
+  if (invStatusFilter === 'awaiting') return (b.status === 'out' && !isOverdue(b));
+  /* กล่องที่เคยออกและคืนกลับมา (cycles > 0) */
+  if (invStatusFilter === 'returned') return ((b.cycles || 0) > 0);
+  if (invStatusFilter) return b.status === invStatusFilter;
+  return true;
+}
+/* เลือก pill "แยกตามคลัง" ให้เองเวลาเปลี่ยนแท็บสถานะ — ไม่งั้นแท็บที่มีกล่องจริง
+   (เช่น "ชำรุด") จะโชว์ตารางว่างเปล่าถ้า pill เดิมค้างอยู่ที่ "ทุกคลัง" ในขณะที่
+   กล่องกลุ่มนั้นทั้งหมดอยู่ฝั่ง "นอกคลัง" — ทดสอบทีละ pill ตามลำดับที่ผู้ใช้เห็น
+   บนจอ (ทุกคลัง → รายคลัง → นอกคลัง) แล้วเลือกอันแรกที่มีข้อมูลจริง */
+function pickInvWhWithData() {
+  var todayStr = dstr(now());
+  var base = Object.values(S.boxes).filter(function(b) {
+    return invStatusMatches(b, todayStr) && (!invCustFilter || b.customer === invCustFilter);
+  });
+  var candidates = [''].concat(Object.keys(S.warehouses)).concat(['OUTSIDE']);
+  for (var i = 0; i < candidates.length; i++) {
+    if (base.some(function(b) { return invWhMatches(b, candidates[i]); })) return candidates[i];
+  }
+  return '';
+}
+window.pickInvWhWithData = pickInvWhWithData;
+
 /* ---- filter helper shared by both views ---- */
 function filteredInvBoxes() {
   var sb = (document.getElementById('schInv') ? document.getElementById('schInv').value : '').toLowerCase();
@@ -8654,64 +8732,9 @@ function filteredInvBoxes() {
       }
       return true;
     }
-    /* Filter by warehouse (ดู buildInvWhPills / setInvWh):
-       - '' (ทุกคลัง)  → เฉพาะกล่องที่อยู่ในคลังจริงและมีรหัสคลังที่ถูกต้อง (ไม่รวมกล่องนอกคลัง)
-       - 'OUTSIDE' (นอกคลัง) → กล่องที่ไม่ได้อยู่บนชั้นวางจริง: ออกกับลูกค้า/รอผูก Tag,
-         Hold/ชำรุด (พักไว้ ยังไม่ขึ้นชั้น), แจ้งหาย, หรือแม้สถานะ warehouse แต่ไม่มีรหัสคลัง
-       - รหัสคลังเฉพาะ → เดิม (เฉพาะกล่องที่ขึ้นชั้นในคลังนั้นจริง ๆ) */
-    if (invWhFilter === 'OUTSIDE') {
-      var whOk = (b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
-      if (whOk) return false;
-    } else if (invWhFilter === '') {
-      if (!(b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh])) return false;
-    } else if (invWhFilter) {
-      if (!((b.location || {}).wh === invWhFilter && b.status === 'warehouse')) return false;
-    }
+    if (!invWhMatches(b, invWhFilter)) return false;
     /* ── standard status filter ── */
-    if (invStatusFilter === 'unlocated') {
-      if (!(b.status === 'warehouse' && !(b.location || {}).wh)) return false;
-    } else if (invStatusFilter === 'putaway') {
-      if (!(b.status === 'warehouse' && isAtStaging(b))) return false;
-    } else if (invStatusFilter === 'pending') {
-      /* รอติดบาร์โค้ด: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
-         status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
-         statusPill) ไม่ใช่ "รอติดบาร์โค้ด" ให้ไปอยู่ในแท็บ pendingPutaway แทน
-         ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
-      if (!(b.status === 'pending' && b.labeled !== true)) return false;
-    } else if (invStatusFilter === 'pendingPutaway') {
-      /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
-         คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย
-         (ดู statusPill สำหรับ pill "รอ Putaway" ตัวเดียวกันนี้) */
-      if (!(b.status === 'pending' && b.labeled === true)) return false;
-    } else if (invStatusFilter === 'noRfid') {
-      /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
-         badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
-         labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
-      if (b.labeled === false || b.rfidTid || b.rfidEpc) return false;
-    } else if (invStatusFilter === 'inboundQueue') {
-      /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
-         สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
-         เพื่อไม่ให้แท็บ "ส่งลูกค้า" ติด active ทั้งที่ผู้ใช้กด "คิวรับเข้า" */
-      if (b.status !== 'out') return false;
-    } else if (invStatusFilter === 'outboundQueue') {
-      /* คิวส่งออก (การ์ด outq): กล่องที่อยู่ในคลังจริง = พร้อมหยิบจ่ายออก
-         (ไม่รวม Hold/ชำรุด ซึ่งถูกกันออกจากการใช้งานไปแล้ว) */
-      if (b.status !== 'warehouse') return false;
-    } else if (invStatusFilter === 'outToday') {
-      /* ออกวันนี้: boxes that have an 'out' history event today */
-      var outToday = (b.history || []).some(function(h){
-        return h.dir === 'out' && h.ts && h.ts.slice(0,10) === todayStr;
-      });
-      if (!outToday) return false;
-    } else if (invStatusFilter === 'overdue') {
-      if (!(b.status === 'out' && isOverdue(b))) return false;
-    } else if (invStatusFilter === 'awaiting') {
-      /* รอคืน: out and still within its return window (not overdue yet) — distinct from the "overdue" bucket */
-      if (!(b.status === 'out' && !isOverdue(b))) return false;
-    } else if (invStatusFilter === 'returned') {
-      /* กล่องที่เคยออกและคืนกลับมา (cycles > 0) */
-      if (!((b.cycles || 0) > 0)) return false;
-    } else if (invStatusFilter && b.status !== invStatusFilter) return false;
+    if (!invStatusMatches(b, todayStr)) return false;
     /* customer sub-filter */
     if (invCustFilter && b.customer !== invCustFilter) return false;
     if (!sb) return true;
@@ -8981,9 +9004,9 @@ $all('#invStatusSeg .sf-btn').forEach(function(btn) {
     $all('#invStatusSeg .sf-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     invStatusFilter = btn.dataset.st;
-    invCustFilter = ''; invWhFilter = ''; invDoFilter = '';
+    invCustFilter = ''; invDoFilter = '';
+    invWhFilter = pickInvWhWithData();
     var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
-    buildInvCustPills();
     renderInventory();
   });
 });
