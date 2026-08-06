@@ -29,6 +29,13 @@ class Employee {
   /// must be asked for on every other PDA too).
   final bool hasPin;
 
+  /// The warehouse/gate this employee most recently confirmed on a report
+  /// screen — anywhere, not just this device (see
+  /// ApiClient.setEmployeeLastPost / PUT /api/employees/:id/last-post).
+  /// Empty until they've confirmed a post at least once on any terminal.
+  final String lastWh;
+  final String lastGate;
+
   const Employee({
     required this.id,
     required this.name,
@@ -40,6 +47,8 @@ class Employee {
     this.access = 'operator',
     this.status = 'active',
     this.hasPin = false,
+    this.lastWh = '',
+    this.lastGate = '',
   });
 
   /// The web app writes '-' into several fields as its own placeholder for
@@ -61,6 +70,8 @@ class Employee {
         access: _s(j['access'], 'operator'),
         status: _s(j['status'], 'active'),
         hasPin: j['hasPin'] == true,
+        lastWh: _s(j['lastWh']),
+        lastGate: _s(j['lastGate']),
       );
 
   /// Employees on leave or off the payroll can't start a session. This is the

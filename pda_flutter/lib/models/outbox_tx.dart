@@ -25,6 +25,11 @@ class OutboxTx {
   // in-only
   final String? note;
 
+  /// in-only — tags the operator flagged 'hold' or 'damage' while scanning
+  /// this batch in (see ScanScreen's per-box condition dropdown). A tag
+  /// absent here just lands on 'warehouse' as normal.
+  final Map<String, String>? conditions;
+
   OutboxTx({
     required this.type,
     required this.tags,
@@ -38,6 +43,7 @@ class OutboxTx {
     this.driver,
     this.vehicleType,
     this.note,
+    this.conditions,
   });
 
   Map<String, dynamic> toJson() => {
@@ -53,6 +59,7 @@ class OutboxTx {
         if (driver != null) 'driver': driver,
         if (vehicleType != null) 'vehicleType': vehicleType,
         if (note != null) 'note': note,
+        if (conditions != null && conditions!.isNotEmpty) 'conditions': conditions,
       };
 
   factory OutboxTx.fromJson(Map<String, dynamic> j) => OutboxTx(
@@ -68,5 +75,6 @@ class OutboxTx {
         driver: j['driver']?.toString(),
         vehicleType: j['vehicleType']?.toString(),
         note: j['note']?.toString(),
+        conditions: (j['conditions'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())),
       );
 }

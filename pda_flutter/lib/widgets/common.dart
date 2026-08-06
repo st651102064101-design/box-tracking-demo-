@@ -231,9 +231,12 @@ class StickyHeader extends StatelessWidget {
   }
 }
 
-/// Online/offline chip. Green means "connected," gray means "not" — orange is
-/// reserved for warnings elsewhere in the app, so offline deliberately isn't
-/// that color even though it's a less-than-ideal state.
+/// Online/offline indicator — icon only, no label. Green means "connected,"
+/// gray means "not" — orange is reserved for warnings elsewhere in the app,
+/// so offline deliberately isn't that color even though it's a
+/// less-than-ideal state. Used in the Home/Gate headers where "ออนไลน์" /
+/// "ออฟไลน์" spelled out just crowded a row that already has the operator's
+/// name, warehouse, and gate competing for the same space.
 class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
@@ -243,26 +246,16 @@ class OnlineChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           color: online ? C.limeBg : C.neutralBg,
-          borderRadius: BorderRadius.circular(999),
+          shape: BoxShape.circle,
           border: Border.all(color: online ? C.limeBorder : C.border2),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: online ? C.limeText : C.muted, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Text(online ? 'ออนไลน์' : 'ออฟไลน์',
-                style: TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w600, color: online ? C.limeText : C.muted)),
-          ],
-        ),
+        alignment: Alignment.center,
+        child: Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+            size: 17, color: online ? C.limeText : C.muted),
       ),
     );
   }

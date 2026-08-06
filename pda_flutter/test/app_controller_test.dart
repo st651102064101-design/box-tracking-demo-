@@ -52,6 +52,7 @@ class FakeApi extends ApiClient {
     String? plate,
     String? driver,
     String? vehicleType,
+    Map<String, String>? conditions,
   }) async {
     if (throwOnGate != null) {
       final e = throwOnGate!;
@@ -359,15 +360,28 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
-    test('a commit without a plate posts nothing and keeps the queue', () async {
+    test('inbound commits fine without a plate — Gate In never requires one', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
       c.addScan('CRT-02');
       await c.doCommit();
 
-      expect(api.gateInCalls, isEmpty);
-      expect(c.queue, ['CRT-02']);
+      expect(api.gateInCalls, hasLength(1));
+      expect(api.gateInCalls.first['plate'], isEmpty);
+      expect(c.queue, isEmpty);
+    });
+
+    test('outbound without a plate posts nothing and keeps the queue', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.setOutCustomer('CUST-01');
+      c.addScan('CRT-01');
+      await c.doCommit();
+
+      expect(api.gateOutCalls, isEmpty);
+      expect(c.queue, ['CRT-01']);
       expect(c.toast!.title, 'กรอกทะเบียนรถก่อน');
     });
 

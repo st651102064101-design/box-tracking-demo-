@@ -9,6 +9,7 @@ import { sendMail } from '../lib/mailer.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
 import { writeAuditLog } from '../services/audit.js';
+import { bump } from '../lib/bus.js';
 
 /**
  * PDA PIN management — a 4-digit courtesy lock an employee sets on their own
@@ -214,6 +215,38 @@ employeePinRouter.put(
       after: { username },
     });
     res.json({ ok: true, username });
+  }),
+);
+
+const lastPostSchema = z.object({
+  wh: z.string().min(1, 'ต้องระบุคลัง'),
+  gate: z.union([z.string(), z.number()]).transform((v) => String(v)),
+});
+
+/**
+ * PUT /api/employees/:id/last-post — the warehouse/gate this employee most
+ * recently confirmed on a report screen, so the badge/post-picker on
+ * whichever terminal they use next (this PDA, another PDA, the web app) can
+ * default to it instead of asking every single shift. Was PDA-local
+ * (Prefs.lastWh/lastGate, keyed to the *device*) — that meant the same
+ * person re-picked their post from scratch on every other terminal. Merged
+ * into the employee's own `data` JSON (read-modify-write, not a raw jsonb
+ * patch) rather than routed through PUT /api/state: that endpoint requires
+ * admin/staff and replaces the *entire* snapshot, which is both a role this
+ * device may not have and a wildly heavier, race-prone tool for updating
+ * two fields on one row.
+ */
+employeePinRouter.put(
+  '/:id/last-post',
+  asyncHandler(async (req, res) => {
+    const { wh, gate } = lastPostSchema.parse(req.body);
+    const db = getDb();
+    const rows = await db.select({ data: employees.data }).from(employees).where(eq(employees.id, req.params.id));
+    if (!rows.length) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+    const data = { ...((rows[0].data as Record<string, unknown>) ?? {}), lastWh: wh, lastGate: gate };
+    await db.update(employees).set({ data, updatedAt: new Date() }).where(eq(employees.id, req.params.id));
+    bump(req.get('X-Client-Id'));
+    res.json({ ok: true, lastWh: wh, lastGate: gate });
   }),
 );
 

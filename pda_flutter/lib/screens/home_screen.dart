@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/box.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -21,8 +22,6 @@ class HomeScreen extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(18, top + 14, 18, 6),
           child: Row(
             children: [
-              const BrandMark(size: 40),
-              const SizedBox(width: 12),
               // The operator's name is the most important thing on this screen:
               // if the wrong person is signed in, it has to be noticeable
               // before a scan is committed — and fixable in one tap.
@@ -87,7 +86,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              ...(c.postConfirmed ? _confirmedBody(c) : _postPickerBody(c)),
+              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c)),
             ],
           ),
         ),
@@ -171,15 +170,34 @@ List<Widget> _postPickerBody(AppController c) {
 }
 
 /// คลัง/ประตูยืนยันแล้ว — สถิติ + "งานหลัก" ตามปกติ
-List<Widget> _confirmedBody(AppController c) {
+List<Widget> _confirmedBody(BuildContext context, AppController c) {
   return [
     Row(
       children: [
-        Expanded(child: _Stat(value: '${c.warehouseCount}', label: 'ในคลัง')),
+        Expanded(
+          child: _Stat(
+            value: '${c.warehouseCount}',
+            label: 'ในคลัง',
+            onTap: () => _showBoxListSheet(context, c, title: 'กล่องในคลัง', status: 'warehouse'),
+          ),
+        ),
         const SizedBox(width: 9),
-        Expanded(child: _Stat(value: '${c.outCount}', label: 'ออกอยู่', valueColor: C.orange)),
+        Expanded(
+          child: _Stat(
+            value: '${c.outCount}',
+            label: 'ออกอยู่',
+            valueColor: C.orange,
+            onTap: () => _showBoxListSheet(context, c, title: 'กล่องที่ออกอยู่', status: 'out'),
+          ),
+        ),
         const SizedBox(width: 9),
-        Expanded(child: _TodayStat(inN: c.todayIn, outN: c.todayOut)),
+        Expanded(
+          child: _TodayStat(
+            inN: c.todayIn,
+            outN: c.todayOut,
+            onTap: () => _showTodayEventsSheet(context, c),
+          ),
+        ),
       ],
     ),
     if (c.emp != null && c.isVisiting(c.emp!))
@@ -196,6 +214,17 @@ List<Widget> _confirmedBody(AppController c) {
     const SizedBox(height: 16),
     const Caption('งานหลัก'),
     const SizedBox(height: 10),
+    if (c.canScan) ...[
+      _ActionCard(
+        icon: Icons.add_box,
+        iconColor: C.limeDeep,
+        iconBg: C.limeBg,
+        title: 'ลงทะเบียนกล่อง',
+        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
+        onTap: c.goBoxRegister,
+      ),
+      const SizedBox(height: 12),
+    ],
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'out') ...[
@@ -221,6 +250,30 @@ List<Widget> _confirmedBody(AppController c) {
       ),
       const SizedBox(height: 12),
     ],
+    // Moved here from Settings — commissioning a tag is a routine
+    // warehouse-floor action alongside Gate In/Out, not device config.
+    if (c.canScan) ...[
+      _ActionCard(
+        small: true,
+        icon: Icons.qr_code_scanner,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ลงทะเบียนแท็ก RFID',
+        sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
+        onTap: c.goRfidRegister,
+      ),
+      const SizedBox(height: 12),
+    ],
+    _ActionCard(
+      small: true,
+      icon: Icons.nfc,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'หากล่อง / RFID',
+      sub: 'เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger',
+      onTap: c.goLocate,
+    ),
+    const SizedBox(height: 12),
     _ActionCard(
       small: true,
       icon: Icons.search,
@@ -237,6 +290,146 @@ List<Widget> _confirmedBody(AppController c) {
   ];
 }
 
+/// Shared shell every detail sheet on this screen uses — drag handle,
+/// scroll-capped growth, safe-area bottom padding. Kept as one function so
+/// a screen too short for the full list (see the earlier "BOTTOM
+/// OVERFLOWED" fix on the handover sheet) is fixed everywhere at once.
+void _showDetailSheet(BuildContext context, {required String title, required List<Widget> children}) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetCtx) => Container(
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Flexible(child: SingleChildScrollView(child: Column(children: children))),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _detailRow({required String title, required String subtitle, Widget? trailing}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: C.neutralBg,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: C.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: C.muted)),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
+    ),
+  );
+}
+
+/// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
+/// number, not just the count. [status] matches Box.status directly.
+void _showBoxListSheet(BuildContext context, AppController c, {required String title, required String status}) {
+  final S = c.S;
+  final boxes = (S?.boxes ?? const <Box>[]).where((b) => b.status == status).toList()
+    ..sort((a, b) => a.tag.compareTo(b.tag));
+  _showDetailSheet(
+    context,
+    title: '$title (${boxes.length})',
+    children: boxes.isEmpty
+        ? [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('ไม่มีกล่อง', style: TextStyle(fontSize: 13, color: C.faint))),
+            ),
+          ]
+        : boxes.map((b) {
+            final sub = status == 'out'
+                ? S!.custName(b.customer)
+                : [
+                    S!.whName(b.location['wh']?.toString()),
+                    if ((b.location['zone'] ?? '').toString().isNotEmpty) 'โซน ${b.location['zone']}',
+                  ].join(' · ');
+            return _detailRow(
+              title: b.tag,
+              subtitle: '${S.typeName(b.type)} · $sub',
+            );
+          }).toList(),
+  );
+}
+
+/// "วันนี้" stat tap — every in/out event from today, newest first.
+void _showTodayEventsSheet(BuildContext context, AppController c) {
+  final events = (c.S?.events ?? const [])
+      .whereType<Map>()
+      .where((e) {
+        final dir = e['dir'];
+        if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
+        final ts = e['ts']?.toString();
+        if (ts == null) return false;
+        final d = DateTime.tryParse(ts)?.toLocal();
+        if (d == null) return false;
+        final n = DateTime.now();
+        return d.year == n.year && d.month == n.month && d.day == n.day;
+      })
+      .toList()
+    ..sort((a, b) => (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
+  _showDetailSheet(
+    context,
+    title: 'วันนี้ (${events.length})',
+    children: events.isEmpty
+        ? [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('ยังไม่มีรายการวันนี้', style: TextStyle(fontSize: 13, color: C.faint))),
+            ),
+          ]
+        : events.map((e) {
+            final dir = e['dir'];
+            final isOut = dir == 'out';
+            final ts = DateTime.tryParse(e['ts']?.toString() ?? '')?.toLocal();
+            final time = ts == null
+                ? ''
+                : '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+            final who = (e['recorder'] ?? '').toString();
+            return _detailRow(
+              title: (e['tag'] ?? '').toString(),
+              subtitle: [time, if (who.isNotEmpty) who].join(' · '),
+              trailing: Pill(isOut ? 'ออก' : 'เข้า',
+                  color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
+            );
+          }).toList(),
+  );
+}
+
 /// Handover sheet: end this person's session, or hand the device to the next
 /// one. Both do the same thing — return to the badge screen — because a
 /// handover *is* the sign-out. The device itself stays signed in and stationed
@@ -245,14 +438,35 @@ void _openHandover(BuildContext context, AppController c) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
+    // Default (isScrollControlled: false) caps the sheet at ~half the
+    // screen — fine on a phone, but this device's short/wide display left
+    // "เปลี่ยนคน / จบงาน" + up to two more action tiles with nowhere to go
+    // ("BOTTOM OVERFLOWED BY 81 PIXELS"). isScrollControlled lets it grow to
+    // fit its content up to the full screen height instead of a fixed cap;
+    // the SingleChildScrollView below is the fallback for whatever's left
+    // over on a screen too short even for that.
+    isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(18),
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
       decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Same drag-handle bar the PIN pad sheet uses — this sheet drags
+          // down to dismiss same as any modal sheet, but with padding.all
+          // the same on every edge there was nothing visually marking that
+          // affordance the way iOS's own sheets always do.
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
           Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           Text(
             [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
@@ -282,19 +496,8 @@ void _openHandover(BuildContext context, AppController c) {
               },
             ),
           ],
-          if (c.canConfigureDevice) ...[
-            const SizedBox(height: 10),
-            _SheetAction(
-              icon: Icons.settings_outlined,
-              label: 'ตั้งค่าเครื่อง',
-              sub: 'เปลี่ยนคลัง/ประตูที่เครื่องนี้ประจำ',
-              onTap: () {
-                Navigator.of(sheetCtx).pop();
-                c.goDeviceSetup();
-              },
-            ),
-          ],
         ],
+        ),
       ),
     ),
   );
@@ -462,24 +665,32 @@ String _gateDirSuffix(String dir) {
 class _Stat extends StatelessWidget {
   final String value, label;
   final Color? valueColor;
-  const _Stat({required this.value, required this.label, this.valueColor});
+  final VoidCallback? onTap;
+  const _Stat({required this.value, required this.label, this.valueColor, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Panel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(value,
-              style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                  color: valueColor ?? C.ink,
-                  fontFeatures: const [FontFeature.tabularFigures()])),
-          Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
-        ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                      color: valueColor ?? C.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+              Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -487,19 +698,27 @@ class _Stat extends StatelessWidget {
 
 class _TodayStat extends StatelessWidget {
   final int inN, outN;
-  const _TodayStat({required this.inN, required this.outN});
+  final VoidCallback? onTap;
+  const _TodayStat({required this.inN, required this.outN, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Panel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 5),
-          Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
-          Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
-        ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 5),
+              Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
+              Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -523,6 +742,10 @@ class _ActionCard extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
+    // Every card on this screen carries a blurred shadow — cheap one at a
+    // time, not cheap five deep on a screen that redraws on every
+    // notifyListeners(). Low power mode drops it to a flat border.
+    final lowPower = context.select<AppController, bool>((c) => c.lowPowerMode);
     final radius = small ? 20.0 : 22.0;
     final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
     final box = small ? 44.0 : 52.0;
@@ -536,14 +759,16 @@ class _ActionCard extends StatelessWidget {
           padding: pad,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            border: dark ? null : Border.all(color: C.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                blurRadius: dark ? 24 : (small ? 0 : 20),
-                offset: Offset(0, dark ? 8 : 6),
-              )
-            ],
+            border: (dark && !lowPower) ? null : Border.all(color: C.border),
+            boxShadow: lowPower
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
+                      blurRadius: dark ? 24 : (small ? 0 : 20),
+                      offset: Offset(0, dark ? 8 : 6),
+                    )
+                  ],
           ),
           child: Row(
             children: [

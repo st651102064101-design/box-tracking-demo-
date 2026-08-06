@@ -123,4 +123,9 @@ export const gateInSchema = z.object({
   plate: z.string().optional(),
   driver: z.string().optional(),
   vehicleType: z.string().optional(),
+  /** Per-tag condition an operator flagged while scanning this batch in —
+   *  a box marked here lands on 'hold' or 'damage' instead of 'warehouse',
+   *  same statuses legacy.html's own box list already filters by. Any tag
+   *  not present here is assumed fine and goes straight to 'warehouse'. */
+  conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
 });
