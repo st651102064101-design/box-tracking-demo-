@@ -197,6 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, firstPin);
     // Backend now has the PIN, but the cached employee list won't say
     // `hasPin: true` until the next `/api/state` fetch — patch it locally so
     // a lock/re-badge later in this same session doesn't ask to set it again.
@@ -216,9 +217,18 @@ class _LoginScreenState extends State<LoginScreen> {
       validate: (entered) async {
         try {
           final ok = await c.api.verifyEmployeePin(e.id, entered);
+          // The server just answered authoritatively — refresh (or don't)
+          // the offline fallback to match, so a PIN changed elsewhere isn't
+          // still accepted offline here after this device saw the change.
+          if (ok) c.prefs.cachePinHash(e.id, entered);
           return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
         } catch (err) {
-          return 'ตรวจสอบรหัสไม่สำเร็จ — เช็คการเชื่อมต่อแล้วลองใหม่';
+          // The server never actually answered (offline, timeout, gate
+          // unreachable) — not the same as it rejecting the PIN. Fall back
+          // to the last PIN it confirmed for this employee on this device
+          // (see Prefs.verifyPinOffline) rather than stranding them.
+          if (c.prefs.verifyPinOffline(e.id, entered)) return null;
+          return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
         }
       },
       onForgot: () async {
@@ -295,6 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, newPin);
     if (!mounted) return;
     c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
     final err = c.identifyAs(e);

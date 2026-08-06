@@ -121,6 +121,7 @@ class RfidReaderController(private val context: Context) :
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
+            "setPowerIndex" -> { setPowerIndex(call.argument<Int>("index") ?: maxPower); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
@@ -466,6 +467,28 @@ class RfidReaderController(private val context: Context) :
                 rd.Config.Antennas.setAntennaRfConfig(1, cfg)
             } catch (e: Exception) {
                 Log.w(TAG, "setPower failed", e)
+            }
+        }
+    }
+
+    /**
+     * Same knob as [setPower], but takes the reader's own power index
+     * directly instead of a 0-100 percent. A percent can only ever land on
+     * ~101 of the reader's real steps (this hardware's index range runs well
+     * past 100), so a settings slider driven by percent skips most of what
+     * the antenna can actually do. This is what lets the slider cover every
+     * index the reader has, 0 through [maxPower].
+     */
+    fun setPowerIndex(index: Int) {
+        exec.execute {
+            try {
+                val rd = reader ?: return@execute
+                val idx = index.coerceIn(0, maxPower)
+                val cfg = rd.Config.Antennas.getAntennaRfConfig(1)
+                cfg.setTransmitPowerIndex(idx)
+                rd.Config.Antennas.setAntennaRfConfig(1, cfg)
+            } catch (e: Exception) {
+                Log.w(TAG, "setPowerIndex failed", e)
             }
         }
     }

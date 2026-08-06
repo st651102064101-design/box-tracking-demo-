@@ -272,10 +272,23 @@ class RfidService {
   }
 
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
+  /// Used only to restore the saved setting on connect — a percent can only
+  /// ever land on ~101 of the reader's real power steps, so live dragging
+  /// uses [setPowerIndex] instead (see settings_screen.dart's range slider).
   Future<void> setPowerPercent(int percent) async {
     if (!supported) return;
     try {
       await _method.invokeMethod('setPower', {'percent': percent});
+    } catch (_) {}
+  }
+
+  /// Set the antenna transmit power as a raw index into the reader's own
+  /// power table (0..[RfidReaderController.maxPower]) — every step the
+  /// hardware actually has, not just the ~101 a percentage can reach.
+  Future<void> setPowerIndex(int index) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setPowerIndex', {'index': index});
     } catch (_) {}
   }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -221,5 +222,36 @@ class Prefs {
   void clearPinSkip(String id) {
     final sk = _skipped..remove(id);
     _p.setString(_kPinSkipped, jsonEncode(sk));
+  }
+
+  // ── offline PIN fallback ──────────────────────────────────────────────
+  // The PIN itself is verified server-side (see `pinSkipped` above) — that's
+  // the authority whenever the server is reachable. But a PDA gate has to
+  // keep working when it isn't, and an employee with a PIN set couldn't badge
+  // in at all if `verifyEmployeePin`'s network call was the only path in.
+  // What's cached here is never the PIN itself, only a hash of it salted with
+  // the employee id — enough to recognise "this is the same PIN the server
+  // last confirmed for this person on this device", not enough to recover the
+  // PIN from a lost or stolen terminal. Refreshed on every successful online
+  // verify/set, so offline access is never more than one online sign-in stale.
+  static const _kPinHashPrefix = 'boxtrace_pin_hash_';
+
+  static String _pinHash(String employeeId, String pin) =>
+      sha256.convert(utf8.encode('$employeeId:$pin')).toString();
+
+  /// Record that the server just confirmed [pin] is correct for [employeeId]
+  /// (or that it was just set to [pin]) — call right after any successful
+  /// setEmployeePin/verifyEmployeePin/confirmPinReset.
+  void cachePinHash(String employeeId, String pin) {
+    _p.setString('$_kPinHashPrefix$employeeId', _pinHash(employeeId, pin));
+  }
+
+  /// True if [pin] matches the last PIN the server confirmed for
+  /// [employeeId] on this device. The fallback [showPinPad]'s `validate`
+  /// reaches for only when `verifyEmployeePin` itself couldn't be reached —
+  /// a wrong PIN the server actually answered is never routed here.
+  bool verifyPinOffline(String employeeId, String pin) {
+    final cached = _p.getString('$_kPinHashPrefix$employeeId');
+    return cached != null && cached == _pinHash(employeeId, pin);
   }
 }

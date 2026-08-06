@@ -261,12 +261,14 @@ class _RfidPanel extends StatefulWidget {
 class _RfidPanelState extends State<_RfidPanel> {
   Map<String, dynamic> _d = const {};
   Timer? _poll;
-  late int _rangePercent;
+  /// Raw power index the slider is showing, once the operator has actually
+  /// dragged it this session. Null means "not touched yet" — the slider
+  /// falls back to whatever the reader itself last reported.
+  int? _rangeIndex;
 
   @override
   void initState() {
     super.initState();
-    _rangePercent = context.read<AppController>().prefs.rfidPowerPercent;
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
     _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
@@ -365,14 +367,34 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 12),
             const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            _RangePicker(
-              value: _rangePercent,
-              onChanged: (v) {
-                setState(() => _rangePercent = v);
-                c.prefs.rfidPowerPercent = v;
-                c.rfid.setPowerPercent(v);
-              },
-            ),
+            // The slider needs the reader's own max index to cover every
+            // step it actually has (see RfidService.setPowerIndex) — that
+            // number only exists once the reader has answered a diagnostics
+            // call, so there's honestly nothing precise to show before then.
+            if (_d['powerMaxIndex'] is int)
+              Builder(builder: (context) {
+                final maxIdx = _d['powerMaxIndex'] as int;
+                final current = (_rangeIndex ?? (_d['powerIndex'] as int?) ?? maxIdx).clamp(0, maxIdx);
+                return _RangePicker(
+                  value: current,
+                  max: maxIdx,
+                  onChanged: (v) {
+                    setState(() => _rangeIndex = v);
+                    // Percent is still what's persisted (and what
+                    // AppController re-applies on the next connect, see
+                    // rfid.setPowerPercent) — it's the one unit that still
+                    // means something if this device is swapped for a
+                    // reader with a different index range.
+                    c.prefs.rfidPowerPercent = maxIdx == 0 ? 100 : ((v / maxIdx) * 100).round();
+                    c.rfid.setPowerIndex(v);
+                  },
+                );
+              })
+            else
+              Text(
+                'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้',
+                style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
+              ),
           ],
           if (!c.rfid.supported)
             Padding(
@@ -449,23 +471,27 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 }
 
-/// Fine-grained transmit-power slider — 0-100% in single-percent steps.
-/// Used to be three fixed presets (ใกล้/ปานกลาง/ไกล), but a preset can't be
-/// tuned to the actual gap between reader and rack on site; this drags to
-/// whatever value cuts out cross-talk from the next aisle over.
-/// [RfidReaderController.setPower] converts the percentage into the reader's
-/// real power index.
+/// Fine-grained transmit-power slider — every raw index the reader actually
+/// has, 0 through [max]. Used to be three fixed presets (ใกล้/ปานกลาง/ไกล),
+/// then a 0-100% slider; a percent still only reaches ~101 of the reader's
+/// real steps because its index range runs well past 100 on this hardware.
+/// [RfidReaderController.setPowerIndex] sets that exact index directly —
+/// no percent math, no skipped steps.
 class _RangePicker extends StatelessWidget {
   final int value;
+  final int max;
   final ValueChanged<int> onChanged;
-  const _RangePicker({required this.value, required this.onChanged});
+  const _RangePicker({required this.value, required this.max, required this.onChanged});
 
-  /// A raw percentage tells an operator nothing about physical range — this
-  /// is the same ใกล้/ปานกลาง/ไกล vocabulary the old preset picker used,
-  /// just derived from the slider's position instead of snapping to it.
+  /// The index range varies by reader model, so classification has to be
+  /// relative to [max] — this is the same ใกล้/ปานกลาง/ไกล vocabulary the
+  /// original preset picker used, now derived from position instead of
+  /// snapped to it.
   String _label(int v) {
-    if (v <= 40) return 'ใกล้ · ~30 ซม.';
-    if (v <= 75) return 'ปานกลาง · ~1-2 ม.';
+    if (max <= 0) return '';
+    final pct = v / max * 100;
+    if (pct <= 40) return 'ใกล้ · ~30 ซม.';
+    if (pct <= 75) return 'ปานกลาง · ~1-2 ม.';
     return 'ไกล · สุดกำลังเครื่อง';
   }
 
@@ -478,7 +504,7 @@ class _RangePicker extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(_label(value), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-            Text('$value%',
+            Text('$value / $max',
                 style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
@@ -496,14 +522,14 @@ class _RangePicker extends StatelessWidget {
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
           child: Slider(
-            value: value.toDouble(),
+            value: value.toDouble().clamp(0, max.toDouble()),
             min: 0,
-            max: 100,
+            max: max <= 0 ? 1 : max.toDouble(),
             // No `divisions` — a stepped slider snaps to fixed ticks, which
             // is the same "only a few presets" limitation this replaced.
-            // Continuous drag reports every whole percent as `value` is
-            // already an int-backed round-trip through onChanged.
-            onChanged: (v) => onChanged(v.round()),
+            // Continuous drag reports every index the reader has, exactly
+            // as [RfidReaderController.setPowerIndex] expects it.
+            onChanged: max <= 0 ? null : (v) => onChanged(v.round()),
           ),
         ),
       ],

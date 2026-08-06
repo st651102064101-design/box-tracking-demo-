@@ -44,6 +44,14 @@ class _ScanScreenState extends State<ScanScreen> {
   bool _detailsStep = false;
   _InputMode _inputMode = _InputMode.barcode;
 
+  /// True while the reader's trigger is actually held down. In RFID mode
+  /// this collapses the toggle/status card down to a slim "กำลังอ่าน…"
+  /// strip — the operator pulled the trigger to watch boxes land in the
+  /// queue, not to keep looking at a card that already told them RFID mode
+  /// is selected.
+  bool _rfidReading = false;
+  StreamSubscription<bool>? _triggerSub;
+
   /// Debounce auto-submit for the scan field, same reasoning as
   /// RfidRegisterScreen's barcode field: this terminal doesn't reliably send
   /// a trailing Enter after a scan, so waiting for the field to go quiet is
@@ -57,11 +65,15 @@ class _ScanScreenState extends State<ScanScreen> {
   void initState() {
     super.initState();
     _scanCtrl.addListener(_onScanChanged);
+    _triggerSub = context.read<AppController>().rfid.triggers.listen((pressed) {
+      if (mounted) setState(() => _rfidReading = pressed);
+    });
   }
 
   @override
   void dispose() {
     _autoSubmitTimer?.cancel();
+    _triggerSub?.cancel();
     _scanCtrl.removeListener(_onScanChanged);
     _scanCtrl.dispose();
     _plateCtrl.dispose();
@@ -168,31 +180,33 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
         ),
-        Container(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [C.bg, Color(0x00F5F5F7)],
-              stops: [0.68, 1],
+        // Nothing scanned yet: no "ถัดไป" to press, so there's no button to
+        // show — a disabled button still invites a tap and a "why won't this
+        // work" moment before the first scan has even landed.
+        if (c.queue.isNotEmpty)
+          Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [C.bg, Color(0x00F5F5F7)],
+                stops: [0.68, 1],
+              ),
+            ),
+            child: PrimaryButton(
+              label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง'),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                    color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
+                child: Text('${c.queue.length}',
+                    style: TextStyle(
+                        fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
+              ),
+              onTap: (canCommit && !c.busy) ? () => _onPrimary(c) : null,
             ),
           ),
-          child: PrimaryButton(
-            label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง'),
-            trailing: c.queue.isEmpty
-                ? null
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
-                    child: Text('${c.queue.length}',
-                        style: TextStyle(
-                            fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
-                  ),
-            onTap: (canCommit && !c.busy) ? () => _onPrimary(c) : null,
-          ),
-        ),
       ],
     );
   }
@@ -322,6 +336,31 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Widget _scannerPanel(AppController c) {
+    // Trigger's actually held in RFID mode: collapse the toggle/status card
+    // to a slim strip so the boxes landing in the queue below get the
+    // screen, not a card that already did its job of picking the mode.
+    if (_inputMode == _InputMode.rfid && _rfidReading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: C.limeBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.limeBorder),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 15,
+              height: 15,
+              child: CircularProgressIndicator(strokeWidth: 2.2, color: C.limeDeep),
+            ),
+            const SizedBox(width: 11),
+            Text('กำลังอ่านแท็ก RFID…',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.limeDeep)),
+          ],
+        ),
+      );
+    }
     final connected = c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
     final readyText = !c.rfid.supported
         ? 'โหมดจำลอง'
