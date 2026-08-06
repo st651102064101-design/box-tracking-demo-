@@ -97,11 +97,20 @@ class RfidService {
       if (event is! Map) return;
       final type = event['type']?.toString();
       switch (type) {
-        case 'tag':
-          final epc = event['epc']?.toString();
-          if (epc != null && epc.isNotEmpty) {
+        // One message carries a whole SDK read event. The native side stopped
+        // sending a message per tag because each one cost an event-loop turn
+        // on this isolate, which is what capped the read rate on a held
+        // trigger — see RfidReaderController.eventReadNotify.
+        case 'tags':
+          final list = event['tags'];
+          if (list is! List) break;
+          final at = DateTime.now();
+          for (final raw in list) {
+            if (raw is! Map) continue;
+            final epc = raw['epc']?.toString();
+            if (epc == null || epc.isEmpty) continue;
             _tagCtrl.add(epc);
-            _rawTagCtrl.add(RfidTagRead.fromEvent(event, DateTime.now()));
+            _rawTagCtrl.add(RfidTagRead.fromEvent(raw, at));
           }
           break;
         case 'trigger':
@@ -174,6 +183,22 @@ class RfidService {
     if (!supported) return;
     try {
       await _method.invokeMethod('stopInventory');
+    } catch (_) {}
+  }
+
+  /// Ask the reader to chase a missing TID with an explicit access read.
+  ///
+  /// Off everywhere by default. That read has to stop inventory, block on the
+  /// tag, and start inventory again, which opens a hole of tens of milliseconds
+  /// between reads — fine on a screen holding one tag still in front of the
+  /// antenna, ruinous on one sweeping a pallet. Only the screens that actually
+  /// display or store a TID turn it on, and only while they are on top:
+  /// registration (which cannot bind a box without one), the RFID input screen,
+  /// and the test-read sheet.
+  Future<void> setDetailMode(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setDetailMode', {'enabled': enabled});
     } catch (_) {}
   }
 

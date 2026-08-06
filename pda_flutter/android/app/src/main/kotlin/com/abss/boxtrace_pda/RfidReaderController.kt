@@ -34,18 +34,34 @@ class RfidReaderController(private val context: Context) :
     }
 
     private val main = Handler(Looper.getMainLooper())
-    // One tick per tag read (not once per batch) — dense, continuous feedback
-    // while the trigger is held on a tag, matching Zebra's own 123RFID Mobile
-    // reference app. STREAM_MUSIC (not STREAM_NOTIFICATION) so it isn't
-    // silenced by a device's "silent notifications" policy, and a short 40ms
-    // tone so back-to-back reads produce distinct ticks instead of one tone
-    // cutting the next one off.
+    // Dense, continuous feedback while the trigger is held, matching Zebra's own
+    // 123RFID Mobile reference app. STREAM_MUSIC (not STREAM_NOTIFICATION) so it
+    // isn't silenced by a device's "silent notifications" policy, and a short
+    // 40ms tone so back-to-back reads produce distinct ticks rather than one
+    // tone cutting the next one off.
+    //
+    // Runs on its own thread and never from [EventHandler.eventReadNotify]:
+    // `startTone` is a binder round-trip into AudioFlinger, and doing it inline
+    // serialises tone latency against the SDK's read callback — the thread that
+    // would otherwise be draining the next batch of tags. `beepInFlight` drops
+    // ticks rather than queueing them, because a reader running at ~180 tags/s
+    // can enqueue tones far faster than a 40ms tone can play, and an unbounded
+    // queue turns into a beep that keeps going long after the trigger is
+    // released.
     private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
+    private val beepExec = Executors.newSingleThreadExecutor()
+    @Volatile private var beepInFlight = false
     private fun beep() {
-        try {
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
-        } catch (e: Exception) {
-            Log.w(TAG, "beep failed", e)
+        if (beepInFlight) return
+        beepInFlight = true
+        beepExec.execute {
+            try {
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
+            } catch (e: Exception) {
+                Log.w(TAG, "beep failed", e)
+            } finally {
+                beepInFlight = false
+            }
         }
     }
     private val exec = Executors.newSingleThreadExecutor()
@@ -76,6 +92,26 @@ class RfidReaderController(private val context: Context) :
     // decide whether to start it again afterwards.
     @Volatile private var triggerHeld = false
 
+    /**
+     * Whether to chase a missing TID with an explicit access read (see
+     * [readTidExplicit]).
+     *
+     * Off by default, and that default is the whole point: the fallback has to
+     * stop inventory, run a blocking `readWait`, and start inventory again,
+     * which opens a hole of tens of milliseconds between reads. On a screen
+     * that sweeps — scan, track, login — that hole is the difference between
+     * a continuous stream at reader speed and a stutter, so those screens pay
+     * nothing for a field they never look at.
+     *
+     * The screens that genuinely need a TID turn this on for as long as they
+     * are on top: registration cannot bind a box without one
+     * (`rfid_register_screen.dart` refuses the read outright), and the RFID
+     * input / test-read screens exist to show every field the SDK has. Those
+     * are all "one tag in front of the antenna, look at it closely" screens,
+     * where the latency buys something.
+     */
+    @Volatile private var detailMode = false
+
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
@@ -102,6 +138,7 @@ class RfidReaderController(private val context: Context) :
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
+            "setDetailMode" -> { detailMode = call.argument<Boolean>("enabled") == true; result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
@@ -358,11 +395,36 @@ class RfidReaderController(private val context: Context) :
                 Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
                 reader?.Actions?.Inventory?.perform()
             } catch (e: Exception) {
-                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
-                Log.w(TAG, "startInventory failed$detail", e)
+                // "already inventorying" is the expected answer to a second
+                // start — a held trigger while a screen also calls
+                // startInventory(), or two press events for one pull. It is
+                // not a failure and must not surface as one.
+                if (e is OperationFailureException &&
+                    e.getResults() == RFIDResults.RFID_OPERATION_IN_PROGRESS) {
+                    Log.d(TAG, "startInventory ignored — inventory already running")
+                    return@execute
+                }
+                Log.w(TAG, "startInventory failed${why(e)}", e)
+                // Surfaced, not just logged: the MC3390R answers
+                // RFID_CHARGING_COMMAND_NOT_ALLOWED to every inventory command
+                // while the battery is charging, so a terminal sitting in its
+                // cradle looks exactly like a broken app. Without the reason on
+                // screen there is nothing to tell an operator to take it off
+                // the charger.
+                status("error", "เริ่มอ่านไม่ได้${why(e)}")
             }
         }
     }
+
+    /**
+     * `OperationFailureException.toString()` carries no message at all, so an
+     * unadorned log line is a class name and a stack trace — enough to know the
+     * command failed, nothing to say why. The result code is the only thing
+     * that tells "charging, command refused" apart from "region not configured"
+     * or "another app owns the reader".
+     */
+    private fun why(e: Exception): String =
+        if (e is OperationFailureException) " (${e.getResults()}: ${e.getVendorMessage()})" else ""
 
     fun stopInventory() {
         exec.execute {
@@ -468,49 +530,58 @@ class RfidReaderController(private val context: Context) :
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
             val tags: Array<TagData>? = rd.Actions.getReadTags(100)
-            if (tags != null && tags.isNotEmpty()) {
-                // Sort tags by Peak RSSI descending so near tags (strongest signal) are emitted first
-                val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
-                for (t in sortedTags) {
-                    beep()
-                    tagCount++
-                    val epc = t.getTagID()
-                    lastEpc = epc
-                    lastRssi = t.getPeakRSSI().toInt()
-                    // Whatever the inventory round happened to carry. Empty
-                    // here does NOT mean the tag lacks a TID — see
-                    // readTidExplicit for the fallback and why it can't run
-                    // inline on this thread.
-                    val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
-                    val payload = mutableMapOf<String, Any?>(
-                        "type" to "tag",
-                        "epc" to epc,
-                        "tid" to inventoryTid,
-                        "rssi" to t.getPeakRSSI().toInt(),
-                        "pc" to num { t.getPC() },
-                        "crc" to str { t.getStringCRC() },
-                        "antenna" to num { t.getAntennaID().toInt() },
-                        "channel" to str { t.getChannel() },
-                        "phase" to num { t.getPhase().toInt() },
-                        "seenCount" to num { t.getTagSeenCount() },
-                    )
-                    if (inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
-                        // Single tag in front of the antenna (registration /
-                        // live-viewer) and no TID yet — go get it properly on
-                        // the worker thread, then emit once with the result,
-                        // so the UI sees one complete read instead of a
-                        // TID-less one followed by a correction. A bulk
-                        // multi-tag sweep skips this: those callers only need
-                        // the EPC and shouldn't pay per-tag access latency.
-                        exec.execute {
-                            payload["tid"] = readTidExplicit(epc)
-                            emit(payload)
-                        }
-                    } else {
-                        emit(payload)
+            if (tags == null || tags.isEmpty()) return
+
+            // Sort by peak RSSI descending so near tags (strongest signal) come first.
+            val sortedTags = tags.sortedByDescending { it.getPeakRSSI().toInt() }
+
+            // One tick for the whole event rather than one per tag. At reader
+            // speed the difference is inaudible — tones this close together
+            // merge anyway — but it keeps the beep from being the thing that
+            // paces the read loop.
+            beep()
+
+            val batch = ArrayList<Map<String, Any?>>(sortedTags.size)
+            for (t in sortedTags) {
+                tagCount++
+                val epc = t.getTagID()
+                lastEpc = epc
+                lastRssi = t.getPeakRSSI().toInt()
+                // Whatever the inventory round happened to carry. Empty here
+                // does NOT mean the tag lacks a TID — see readTidExplicit for
+                // the fallback and why it can't run inline on this thread.
+                val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
+                val payload = mutableMapOf<String, Any?>(
+                    "epc" to epc,
+                    "tid" to inventoryTid,
+                    "rssi" to t.getPeakRSSI().toInt(),
+                    "pc" to num { t.getPC() },
+                    "crc" to str { t.getStringCRC() },
+                    "antenna" to num { t.getAntennaID().toInt() },
+                    "channel" to str { t.getChannel() },
+                    "phase" to num { t.getPhase().toInt() },
+                    "seenCount" to num { t.getTagSeenCount() },
+                )
+                if (detailMode && inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
+                    // Single tag in front of the antenna on a screen that needs
+                    // the TID — go get it properly on the worker thread, then
+                    // emit on its own so the UI sees one complete read instead
+                    // of a TID-less one followed by a correction. Never on a
+                    // sweep: see [detailMode] for what this costs.
+                    exec.execute {
+                        payload["tid"] = readTidExplicit(epc)
+                        emit(mapOf("type" to "tags", "tags" to listOf(payload)))
                     }
+                } else {
+                    batch.add(payload)
                 }
             }
+
+            // The whole read event crosses the platform channel as one message.
+            // A channel hop per tag was costing an event-loop turn each, so a
+            // 50-tag burst woke the Dart isolate 50 times to deliver reads that
+            // the UI coalesces into a single frame regardless.
+            if (batch.isNotEmpty()) emit(mapOf("type" to "tags", "tags" to batch))
         }
 
         override fun eventStatusNotify(e: RfidStatusEvents?) {
