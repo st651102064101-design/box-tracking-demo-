@@ -243,7 +243,20 @@ class _LoginScreenState extends State<LoginScreen> {
           // to the last PIN it confirmed for this employee on this device
           // (see Prefs.verifyPinOffline) rather than stranding them.
           if (c.prefs.verifyPinOffline(e.id, entered)) return null;
-          return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
+          // No reference cached here yet (this employee has never verified
+          // on this exact device while online) — there is nothing to check
+          // a mistyped entry against, and refusing entry outright just
+          // strands a shift start over a PDA with no signal. Let them in on
+          // whatever they typed and cache it as this device's new
+          // reference; a wrong PIN typed by mistake self-corrects the
+          // moment they're online and re-verify against the real one.
+          // "ลืมรหัส PIN?" stays out of reach here regardless — that flow
+          // needs a live OTP email round trip no offline fallback can fake.
+          if (!c.prefs.hasCachedPin(e.id)) {
+            c.prefs.cachePinHash(e.id, entered);
+            return null;
+          }
+          return 'ออฟไลน์ และรหัสไม่ตรงกับที่เคยยืนยันไว้บนเครื่องนี้';
         }
       },
       onForgot: () async {

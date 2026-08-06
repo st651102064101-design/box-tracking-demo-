@@ -315,6 +315,13 @@ class Prefs {
     _p.setString('$_kPinHashPrefix$employeeId', _pinHash(employeeId, pin));
   }
 
+  /// True once *some* PIN has been cached for [employeeId] on this device —
+  /// i.e. there's a reference to check a mistyped offline entry against at
+  /// all. False the first time this employee ever badges into this specific
+  /// device while it has no signal, which [login_screen.dart] treats as "no
+  /// reference to fail against" rather than "wrong PIN".
+  bool hasCachedPin(String employeeId) => _p.getString('$_kPinHashPrefix$employeeId') != null;
+
   /// True if [pin] matches the last PIN the server confirmed for
   /// [employeeId] on this device. The fallback [showPinPad]'s `validate`
   /// reaches for only when `verifyEmployeePin` itself couldn't be reached —
