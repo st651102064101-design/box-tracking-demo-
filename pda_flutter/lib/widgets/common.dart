@@ -294,6 +294,95 @@ InputDecoration pdaInput(String hint, {double radius = 13}) => InputDecoration(
       ),
     );
 
+/// A dropdown that can add its own new option, instead of every screen
+/// needing a separate "manage X" admin flow before a genuinely new zone,
+/// box type, or customer can be picked at all. The "+ เพิ่มใหม่" action is
+/// pinned as the very first row so it's visible without scrolling the list
+/// no matter how many real options exist — see the ask this was built for:
+/// every dropdown in the app should let the operator add a missing value
+/// right there, not send them somewhere else first.
+///
+/// [onAdd] is given whatever text the operator typed in the prompt and
+/// returns the value to select once added (typically after an API call
+/// that persists it) — return null to cancel without changing the
+/// selection. [value]/[options]/[onChanged] behave like a normal dropdown.
+class AddableDropdown extends StatelessWidget {
+  final String? value;
+  final List<String> options;
+  final String Function(String value) labelFor;
+  final ValueChanged<String?> onChanged;
+  final Future<String?> Function(String typed) onAdd;
+  final String hint;
+  final String addLabel;
+  final double radius;
+
+  const AddableDropdown({
+    super.key,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.onAdd,
+    this.labelFor = _identity,
+    this.hint = '— ไม่ระบุ —',
+    this.addLabel = '+ เพิ่มใหม่…',
+    this.radius = 12,
+  });
+
+  static String _identity(String v) => v;
+
+  static const _addSentinel = ' __add_new__';
+
+  Future<void> _promptAdd(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('เพิ่มรายการใหม่'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: pdaInput('พิมพ์ค่าใหม่'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ยกเลิก')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('เพิ่ม'),
+          ),
+        ],
+      ),
+    );
+    if (typed == null || typed.isEmpty || !context.mounted) return;
+    final added = await onAdd(typed);
+    if (added != null) onChanged(added);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: (value != null && options.contains(value)) ? value : null,
+      isExpanded: true,
+      decoration: pdaInput(hint, radius: radius),
+      items: [
+        DropdownMenuItem(
+          value: _addSentinel,
+          child: Text(addLabel, style: TextStyle(color: C.limeText, fontWeight: FontWeight.w700)),
+        ),
+        ...options.map((v) => DropdownMenuItem(value: v, child: Text(labelFor(v), overflow: TextOverflow.ellipsis))),
+      ],
+      onChanged: (v) {
+        if (v == _addSentinel) {
+          _promptAdd(context);
+        } else {
+          onChanged(v);
+        }
+      },
+    );
+  }
+}
+
 /// Uppercase muted section caption.
 class Caption extends StatelessWidget {
   final String text;

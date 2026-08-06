@@ -603,6 +603,51 @@ class _RfidPanelState extends State<_RfidPanel> {
                 onChanged: (v) => setState(() => c.prefs.rfidMinRssi = v),
               ),
             ],
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            const Text('เสียงบี๊บ', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            _TonePicker(
+              value: c.prefs.rfidToneId,
+              onChanged: (id) {
+                setState(() => c.prefs.rfidToneId = id);
+                c.rfid.setBeepStyle(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
+                // Selecting a tone plays it immediately — the operator hears
+                // what they just picked without a separate "ทดสอบ" tap.
+                c.rfid.previewTone(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
+              },
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.volume_down, size: 16, color: C.muted),
+                Expanded(
+                  child: Slider(
+                    value: c.prefs.rfidVolumePercent.toDouble(),
+                    min: 1,
+                    max: 100,
+                    divisions: 99,
+                    activeColor: C.lime,
+                    label: '${c.prefs.rfidVolumePercent}%',
+                    onChanged: (v) => setState(() => c.prefs.rfidVolumePercent = v.round()),
+                    onChangeEnd: (v) {
+                      final vol = v.round();
+                      c.rfid.setBeepStyle(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                      c.rfid.previewTone(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                    },
+                  ),
+                ),
+                Icon(Icons.volume_up, size: 16, color: C.muted),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 36,
+                  child: Text('${c.prefs.rfidVolumePercent}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.ink2)),
+                ),
+              ],
+            ),
           ],
           if (!c.rfid.supported)
             Padding(
@@ -675,6 +720,51 @@ class _RfidPanelState extends State<_RfidPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Beep sound picker (see rfid_service.dart's kRfidTones) — a row of chips
+/// rather than a dropdown since the whole catalog is short enough to lay
+/// out flat, and a chip tap doubles as the "listen to it" gesture (the
+/// caller plays a live preview onChanged, per the "เมื่อเลือกให้เล่นเสียงเลย" ask).
+class _TonePicker extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _TonePicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kRfidTones.map((t) {
+        final selected = t.id == value;
+        return GestureDetector(
+          onTap: () => onChanged(t.id),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : C.neutralBg,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: selected ? C.ink : C.border2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.volume_up : Icons.play_arrow,
+                    size: 14, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(t.label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

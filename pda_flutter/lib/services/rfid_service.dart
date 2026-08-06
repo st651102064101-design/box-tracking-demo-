@@ -6,6 +6,27 @@ import 'package:flutter/services.dart';
 /// Connection state reported by the native Zebra RFID plugin.
 enum RfidState { idle, connecting, connected, disconnected, error }
 
+/// One selectable beep sound — the id crosses the platform channel and is
+/// matched against a fixed set of android.media.ToneGenerator constants on
+/// the Kotlin side (RfidReaderController.applyBeepStyle). Keep ids stable:
+/// they're what Prefs.rfidToneId persists.
+class RfidTone {
+  final String id;
+  final String label;
+  const RfidTone(this.id, this.label);
+}
+
+/// The beep catalog shown in Settings — every entry here must have a
+/// matching branch in RfidReaderController.kt's tone-id switch, or it
+/// silently falls back to the default there.
+const kRfidTones = [
+  RfidTone('beep', 'บี๊บสั้น (ค่าเริ่มต้น)'),
+  RfidTone('click', 'คลิกแหลม'),
+  RfidTone('ack', 'ป๊อกนุ่ม'),
+  RfidTone('dtmf', 'โทนคู่ (DTMF)'),
+  RfidTone('ring', 'กระดิ่งสั้น'),
+];
+
 class RfidStatus {
   final RfidState state;
   final String message;
@@ -291,6 +312,30 @@ class RfidService {
     if (!supported) return;
     try {
       await _method.invokeMethod('playTone', {'kind': kind});
+    } catch (_) {}
+  }
+
+  /// Sets which tone id ([kRfidTones]) and volume (0-100) every subsequent
+  /// beep() (dense per-read tick) and playTone() call uses — a reader-side
+  /// setting that persists on the native side until this is called again,
+  /// same pattern as setPowerIndex/setAutoBeep. Call once on connect/prefs
+  /// load to restore a saved choice, and again immediately whenever the
+  /// operator picks a different tone/volume in Settings.
+  Future<void> setBeepStyle({required String toneId, required int volumePercent}) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setBeepStyle', {'toneId': toneId, 'volume': volumePercent});
+    } catch (_) {}
+  }
+
+  /// Plays [toneId] once at [volumePercent] immediately — the live preview
+  /// behind Settings' tone picker ("เมื่อเลือกให้เล่นเสียงเลย"), independent of
+  /// whatever setBeepStyle last configured so trying a tone never leaves the
+  /// reader's standing style changed until the operator actually confirms it.
+  Future<void> previewTone({required String toneId, required int volumePercent}) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('previewTone', {'toneId': toneId, 'volume': volumePercent});
     } catch (_) {}
   }
 

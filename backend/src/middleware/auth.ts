@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, type JwtPayload } from '../lib/jwt.js';
+import { env } from '../env.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -23,6 +24,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   } catch {
     return res.status(401).json({ error: 'invalid_token', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
   }
+}
+
+/**
+ * Requires the `X-API-Key` header to match `env.apiKey` — a second,
+ * independent factor on top of the JWT so a leaked bearer token alone
+ * still can't call the API. A no-op when `env.apiKey` is unset (the
+ * default), so this doesn't break the legacy.html web client, which has no
+ * way to be handed a PDA-specific key today; set API_KEY to actually
+ * enforce it once every real client has been given the value out of band.
+ */
+export function requireApiKey(req: Request, res: Response, next: NextFunction) {
+  if (!env.apiKey) return next();
+  const key = req.headers['x-api-key'];
+  if (key !== env.apiKey) {
+    return res.status(401).json({ error: 'invalid_api_key', message: 'ไม่ผ่านการตรวจสอบ API key' });
+  }
+  next();
 }
 
 /** Requires `req.user.role` to be one of `roles`. Must run after `requireAuth`. */

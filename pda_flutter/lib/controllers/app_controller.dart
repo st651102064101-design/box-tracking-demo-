@@ -161,6 +161,7 @@ class AppController extends ChangeNotifier {
   Future<void> init() async {
     api.baseUrl = prefs.baseUrl;
     api.token = prefs.token;
+    api.apiKey = prefs.apiKey;
     api.reauthenticate = _deviceLogin;
 
     // Restore the last known warehouse state *before* touching the network:
@@ -189,6 +190,7 @@ class AppController extends ChangeNotifier {
       // just when the operator changes it in settings.
       if (s.state == RfidState.connected) {
         rfid.setPowerPercent(prefs.rfidPowerPercent);
+        rfid.setBeepStyle(toneId: prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
       }
       notifyListeners();
     });
@@ -1268,13 +1270,16 @@ class AppController extends ChangeNotifier {
     required String baseUrl,
     String? username,
     String? password,
+    String? apiKey,
   }) async {
     prefs.baseUrl = baseUrl.trim();
     if (username != null && username.trim().isNotEmpty) prefs.username = username.trim();
     if (password != null && password.isNotEmpty) prefs.password = password;
+    if (apiKey != null) prefs.apiKey = apiKey.trim();
     prefs.token = null;
     api
       ..baseUrl = prefs.baseUrl
+      ..apiKey = prefs.apiKey
       ..token = null;
     busy = true;
     connError = null;
@@ -1290,18 +1295,25 @@ class AppController extends ChangeNotifier {
   }
 
   /// The device-setup screen's single bottom button: connects with whatever
-  /// is currently in the form, then finishes setup automatically once that
-  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
-  /// then this button separately, which read as the button being broken when
-  /// really it was just gated on a connection nobody had triggered yet. Does
-  /// nothing further on failure — [applyConnection] already toasted why.
+  /// is currently in the form, then finishes setup regardless of whether
+  /// that connection attempt actually succeeded. The config (base URL,
+  /// device credentials) is already saved to prefs by [applyConnection]
+  /// before it even tries the network — a terminal being provisioned at a
+  /// site whose server happens to be down (or that isn't reachable from
+  /// wherever setup is being done) must not be stuck on this screen
+  /// forever; it should walk in offline, same as any other cold boot with a
+  /// server outage, and pick up the connection the moment the network/server
+  /// comes back (see AppController.init's cached-snapshot-first bootstrap
+  /// and _onRealtimeConnectivity's auto-reconnect). [applyConnection] has
+  /// already toasted success or failure, so no extra failure messaging here.
   Future<void> completeDeviceSetup({
     required String baseUrl,
     String? username,
     String? password,
+    String? apiKey,
   }) async {
-    await applyConnection(baseUrl: baseUrl, username: username, password: password);
-    if (connected) finishDeviceSetup();
+    await applyConnection(baseUrl: baseUrl, username: username, password: password, apiKey: apiKey);
+    finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
@@ -1362,6 +1374,13 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister) {
+      // Settings is deliberately silent here — its own test-fire button
+      // (settings_screen.dart's press-and-hold "กดค้างเพื่อทดสอบยิง") talks to
+      // the reader directly rather than through this dispatcher, precisely
+      // so a range check doesn't trip this same "wrong screen" alert.
+      if (screen != Screen.settings) {
+        toastMsg('หน้านี้ไม่รองรับ RFID', 'สลับไปหน้าที่ใช้งานได้ก่อน', ResultKind.warn);
+      }
       return;
     }
     // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger

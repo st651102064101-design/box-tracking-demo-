@@ -22,6 +22,7 @@ class Prefs {
   static const _kUsername = 'boxtrace_username';
   static const _kPassword = 'boxtrace_password';
   static const _kToken = 'boxtrace_token';
+  static const _kApiKey = 'boxtrace_api_key';
 
   // this device's fixed post (warehouse + gate) and behaviour
   static const _kDeviceWh = 'boxtrace_device_wh';
@@ -38,6 +39,8 @@ class Prefs {
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
+  static const _kRfidToneId = 'boxtrace_rfid_tone_id';
+  static const _kRfidVolumePercent = 'boxtrace_rfid_volume_percent';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -92,6 +95,19 @@ class Prefs {
   /// power (ไกล) since that's what the reader itself defaults to on connect.
   int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
   set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
+
+  /// Which of RfidService.rfidTones the reader plays for a read/scan beep —
+  /// an id, not an index, so adding/reordering the catalog later can't
+  /// silently repoint a saved choice at the wrong sound. Defaults to the
+  /// tone this app always used before this became configurable.
+  String get rfidToneId => _p.getString(_kRfidToneId) ?? 'beep';
+  set rfidToneId(String v) => _p.setString(_kRfidToneId, v);
+
+  /// Beep loudness as a percentage — independent of the locate screen's own
+  /// proximity-scaled volume (playLocateBeep), which still multiplies this
+  /// as its ceiling rather than ignoring it.
+  int get rfidVolumePercent => _p.getInt(_kRfidVolumePercent) ?? 100;
+  set rfidVolumePercent(int v) => _p.setInt(_kRfidVolumePercent, v);
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than
@@ -151,6 +167,14 @@ class Prefs {
 
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
+
+  /// Optional X-API-Key sent alongside the JWT (see backend's requireApiKey)
+  /// — blank by default, and harmless against a backend that hasn't set
+  /// API_KEY. Set once per device, same section of device setup as the
+  /// service account, since it's also a credential nobody but an admin
+  /// provisioning the terminal should be typing in.
+  String get apiKey => _p.getString(_kApiKey) ?? '';
+  set apiKey(String v) => _p.setString(_kApiKey, v);
 
   /// Legacy fixed-post fields from before warehouse/gate moved to a per-visit
   /// pick (see lastWh/lastGate below) — kept only so an old install's saved

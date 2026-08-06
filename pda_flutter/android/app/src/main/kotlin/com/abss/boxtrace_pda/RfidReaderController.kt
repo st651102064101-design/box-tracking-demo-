@@ -48,9 +48,17 @@ class RfidReaderController(private val context: Context) :
     // can enqueue tones far faster than a 40ms tone can play, and an unbounded
     // queue turns into a beep that keeps going long after the trigger is
     // released.
-    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
+    //
+    // [toneGen]'s volume is fixed at construction (ToneGenerator has no
+    // per-call volume knob), so choosing a different volume in Settings
+    // means rebuilding it — see [applyBeepStyle]. Guarded by [beepStyleLock]
+    // since beepExec's background thread reads it while the main thread
+    // (Settings' volume slider) can call applyBeepStyle at any time.
+    private val beepStyleLock = Any()
+    private var toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME)
     private val beepExec = Executors.newSingleThreadExecutor()
     @Volatile private var beepInFlight = false
+    @Volatile private var beepToneId = "beep"
     /**
      * Off for the Gate scan screen (see AppController._onReaderTrigger),
      * on everywhere else. The dense per-read tick below is right for a
@@ -61,12 +69,49 @@ class RfidReaderController(private val context: Context) :
      * addScan() knows whether a read was new, a duplicate, or rejected.
      */
     @Volatile private var autoBeepEnabled = true
+
+    /**
+     * Maps a Dart-side [RfidTone] id (see rfid_service.dart's kRfidTones) to
+     * one of ToneGenerator's fixed tones. Unknown ids fall back to the
+     * default rather than throwing, so an app build that adds a catalog
+     * entry ahead of this native mapping degrades to the old sound instead
+     * of crashing the reader thread.
+     */
+    private fun toneFor(id: String): Int = when (id) {
+        "click" -> ToneGenerator.TONE_PROP_ACK
+        "ack" -> ToneGenerator.TONE_PROP_NACK
+        "dtmf" -> ToneGenerator.TONE_DTMF_1
+        "ring" -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+        else -> ToneGenerator.TONE_PROP_BEEP
+    }
+
+    /**
+     * Rebuilds [toneGen] at the given volume (0-100 -> ToneGenerator's own
+     * 0-100 scale) and remembers [toneId] for [beep]/[playTone] to look up
+     * per call. Called once on connect to restore the operator's saved
+     * choice, and again immediately whenever they pick a different
+     * tone/volume in Settings (setBeepStyle) — never from the read-callback
+     * thread, so this can safely block briefly on beepStyleLock.
+     */
+    private fun applyBeepStyle(toneId: String, volumePercent: Int) {
+        val vol = volumePercent.coerceIn(1, 100)
+        synchronized(beepStyleLock) {
+            beepToneId = toneId
+            try {
+                toneGen.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "release old toneGen failed", e)
+            }
+            toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, vol)
+        }
+    }
+
     private fun beep() {
         if (!autoBeepEnabled || beepInFlight) return
         beepInFlight = true
         beepExec.execute {
             try {
-                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
+                synchronized(beepStyleLock) { toneGen.startTone(toneFor(beepToneId), 40) }
             } catch (e: Exception) {
                 Log.w(TAG, "beep failed", e)
             } finally {
@@ -75,18 +120,42 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
-    /** Explicit, app-driven tone — "ok" (short tick, a genuinely new tag
-     *  landed) or "error" (longer low tone, scan rejected/invalid). */
+    /** Explicit, app-driven tone — "ok" (the operator's chosen tone) or
+     *  "error" (always a longer, low tone, regardless of the chosen sound,
+     *  so a rejected/invalid scan never sounds the same as success no
+     *  matter what the operator picked for the ordinary beep). */
     private fun playTone(kind: String) {
         beepExec.execute {
             try {
                 if (kind == "error") {
-                    toneGen.startTone(ToneGenerator.TONE_CDMA_PIP, 220)
+                    synchronized(beepStyleLock) { toneGen.startTone(ToneGenerator.TONE_CDMA_PIP, 220) }
                 } else {
-                    toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 70)
+                    synchronized(beepStyleLock) { toneGen.startTone(toneFor(beepToneId), 70) }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "playTone failed", e)
+            }
+        }
+    }
+
+    /**
+     * Plays [toneId] once at [volumePercent] immediately, independent of
+     * [toneGen]/[beepToneId] — the live preview behind Settings' tone
+     * picker. Uses its own throwaway ToneGenerator (same reasoning as
+     * [playLocateBeep]) so trying a sound never touches the reader's
+     * standing beep style until the operator actually confirms it via
+     * [applyBeepStyle].
+     */
+    private fun previewTone(toneId: String, volumePercent: Int) {
+        beepExec.execute {
+            var gen: ToneGenerator? = null
+            try {
+                gen = ToneGenerator(AudioManager.STREAM_MUSIC, volumePercent.coerceIn(1, 100))
+                gen.startTone(toneFor(toneId), 180)
+            } catch (e: Exception) {
+                Log.w(TAG, "previewTone failed", e)
+            } finally {
+                main.postDelayed({ try { gen?.release() } catch (_: Exception) {} }, 260)
             }
         }
     }
@@ -178,6 +247,14 @@ class RfidReaderController(private val context: Context) :
             "setAutoBeep" -> { autoBeepEnabled = call.argument<Boolean>("enabled") ?: true; result.success(true) }
             "playTone" -> { playTone(call.argument<String>("kind") ?: "ok"); result.success(true) }
             "playLocateBeep" -> { playLocateBeep(call.argument<Double>("level") ?: 0.0); result.success(true) }
+            "setBeepStyle" -> {
+                applyBeepStyle(call.argument<String>("toneId") ?: "beep", call.argument<Int>("volume") ?: 100)
+                result.success(true)
+            }
+            "previewTone" -> {
+                previewTone(call.argument<String>("toneId") ?: "beep", call.argument<Int>("volume") ?: 100)
+                result.success(true)
+            }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()

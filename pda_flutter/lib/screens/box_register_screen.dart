@@ -57,6 +57,16 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   Timer? _autoSubmitTimer;
   static const _autoSubmitDelay = Duration(milliseconds: 180);
   static const _autoSubmitMinLen = 2;
+  // A hardware barcode scanner types its whole payload as a keyboard-wedge
+  // burst — every character lands within a few ms of the last. A human
+  // thumbing this in on the handheld's own keypad is nowhere near that fast
+  // even typing quickly. Tracking the gap between keystrokes (not just "did
+  // the field go quiet") is what actually tells the two apart — length/quiet
+  // alone auto-submitted a name someone was still typing the instant they
+  // paused. `null` means "no burst seen yet this field session".
+  static const _burstMaxGap = Duration(milliseconds: 40);
+  DateTime? _lastKeyAt;
+  bool _sawBurst = false;
 
   _Step _step = _Step.create;
   String? _selectedType;
@@ -109,8 +119,16 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
 
   void _onTagChanged() {
     _autoSubmitTimer?.cancel();
+    final now = DateTime.now();
+    final prev = _lastKeyAt;
+    _lastKeyAt = now;
+    // Any single keystroke that lands within the burst window counts —
+    // that's already proof this edit wasn't a person tapping keys, so one
+    // fast gap is enough to arm auto-submit for the rest of this value.
+    if (prev != null && now.difference(prev) <= _burstMaxGap) _sawBurst = true;
+
     final text = _tagCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null) return;
+    if (!_sawBurst || text.length < _autoSubmitMinLen || _creating || _selectedType == null) return;
     _autoSubmitTimer = Timer(_autoSubmitDelay, () {
       if (!mounted || _creating || _tagCtrl.text.trim() != text) return;
       _submitCreate();
@@ -325,6 +343,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     });
     _rackScanCtrl.clear();
     _tagCtrl.clear();
+    _lastKeyAt = null;
+    _sawBurst = false;
     _tagFocus.requestFocus();
   }
 
@@ -403,6 +423,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
 
   Widget _createCard(AppController c) {
     final types = c.S?.boxtypes.values.whereType<Map>().toList() ?? const [];
+    final typeNames = {for (final t in types) (t['id'] ?? '').toString(): '${t['name'] ?? t['id']}'};
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -414,15 +435,25 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const FieldLabel('ประเภทกล่อง *'),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedType,
-            isExpanded: true,
-            decoration: pdaInput('— เลือกประเภทกล่อง —', radius: 12),
-            items: types.map((t) {
-              final id = (t['id'] ?? '').toString();
-              return DropdownMenuItem(value: id, child: Text('${t['name'] ?? id}', overflow: TextOverflow.ellipsis));
-            }).toList(),
+          AddableDropdown(
+            value: _selectedType,
+            options: typeNames.keys.toList(),
+            labelFor: (id) => typeNames[id] ?? id,
+            hint: '— เลือกประเภทกล่อง —',
             onChanged: (v) => setState(() => _selectedType = v),
+            onAdd: (typed) async {
+              final id = typed.toUpperCase().replaceAll(RegExp(r'\s+'), '_');
+              try {
+                await c.api.createBoxType(id, typed);
+                await c.refresh();
+                return id;
+              } catch (e) {
+                if (mounted) {
+                  c.toastMsg('เพิ่มประเภทกล่องไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
+                }
+                return null;
+              }
+            },
           ),
           const SizedBox(height: 12),
           const FieldLabel('บาร์โค้ดกล่องใหม่ *'),
@@ -790,23 +821,48 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     final shelves = cascade.shelves(wh, _locZone, _locRack);
     final slots = cascade.slots(wh, _locZone, _locRack, _locShelf);
 
+    // A new zone/rack/shelf/slot has to land in the Location Master as a
+    // real row (POST /api/masters/locations), not just a free-text value on
+    // this one box — otherwise it wouldn't show up as an option anywhere
+    // else that reads S.locations. The code is composed from whatever's
+    // already picked upstream plus the new value, same shape as the scan
+    // barcode format (zone-rack-shelf-slot) this screen already parses.
+    Future<String?> addLocationValue(String field, String typed) async {
+      final v = typed.toUpperCase();
+      final zone = field == 'zone' ? v : _locZone;
+      final rack = field == 'rack' ? v : _locRack;
+      final shelf = field == 'shelf' ? v : _locShelf;
+      final slot = field == 'slot' ? v : _locSlot;
+      final code = [zone, rack, shelf, slot].whereType<String>().where((s) => s.isNotEmpty).join('-');
+      if (code.isEmpty) return null;
+      try {
+        await _c.api.createLocation(code: code, wh: wh, zone: zone, rack: rack, shelf: shelf, slot: slot);
+        await _c.refresh();
+        return v;
+      } catch (e) {
+        if (mounted) {
+          _c.toastMsg('เพิ่มตำแหน่งไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
+        }
+        return null;
+      }
+    }
+
     String? clampedValue(String? current, List<String> options) =>
         (current != null && options.contains(current)) ? current : null;
 
-    Widget dropdown(String label, String? value, List<String> options, void Function(String?) onChanged) {
+    Widget dropdown(String label, String field, String? value, List<String> options,
+        void Function(String?) onChanged) {
       return Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             FieldLabel(label),
-            DropdownButtonFormField<String>(
-              initialValue: clampedValue(value, options),
-              isExpanded: true,
-              decoration: pdaInput('— ไม่ระบุ —', radius: 12),
-              items: options
-                  .map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis)))
-                  .toList(),
+            AddableDropdown(
+              value: clampedValue(value, options),
+              options: options,
+              hint: '— ไม่ระบุ —',
               onChanged: onChanged,
+              onAdd: (typed) => addLocationValue(field, typed),
             ),
           ],
         ),
@@ -818,7 +874,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       children: [
         Row(
           children: [
-            dropdown('โซน', _locZone, zones, (v) {
+            dropdown('โซน', 'zone', _locZone, zones, (v) {
               setState(() {
                 _locZone = v;
                 _locRack = null;
@@ -827,7 +883,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               });
             }),
             const SizedBox(width: 9),
-            dropdown('แร็ค', _locRack, racks, (v) {
+            dropdown('แร็ค', 'rack', _locRack, racks, (v) {
               setState(() {
                 _locRack = v;
                 _locShelf = null;
@@ -839,14 +895,14 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         const SizedBox(height: 11),
         Row(
           children: [
-            dropdown('ชั้น', _locShelf, shelves, (v) {
+            dropdown('ชั้น', 'shelf', _locShelf, shelves, (v) {
               setState(() {
                 _locShelf = v;
                 _locSlot = null;
               });
             }),
             const SizedBox(width: 9),
-            dropdown('ช่อง', _locSlot, slots, (v) => setState(() => _locSlot = v)),
+            dropdown('ช่อง', 'slot', _locSlot, slots, (v) => setState(() => _locSlot = v)),
           ],
         ),
       ],

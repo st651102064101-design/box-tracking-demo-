@@ -25,12 +25,18 @@ class ApiClient {
   String baseUrl;
   String? token;
 
+  /// Second, independent factor the backend can require alongside the JWT
+  /// (see backend/src/middleware/auth.ts's requireApiKey) — sent whenever
+  /// non-empty, harmless to leave blank against a backend that hasn't set
+  /// API_KEY (the header is simply ignored there).
+  String? apiKey;
+
   /// Re-authenticates with the device's own service credentials and stores the
   /// new token on this client. Returns true when a usable token was obtained.
   /// Wired up by AppController; left null in tests that don't need it.
   Future<bool> Function()? reauthenticate;
 
-  ApiClient({required this.baseUrl, this.token});
+  ApiClient({required this.baseUrl, this.token, this.apiKey});
 
   Uri _u(String path) {
     final b = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
@@ -40,6 +46,7 @@ class ApiClient {
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+        if (apiKey != null && apiKey!.isNotEmpty) 'X-API-Key': apiKey!,
       };
 
   dynamic _decode(http.Response r) {
@@ -279,5 +286,45 @@ class ApiClient {
   Future<void> confirmPinReset(String employeeId, {required String otp, required String pin}) async {
     await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
         headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
+  }
+
+  /// POST /api/masters/box-types { id, name } — adds a new box type on the
+  /// fly from the "+ เพิ่มใหม่" option in a dropdown, rather than requiring a
+  /// separate admin screen first. Throws with code 'duplicate' if [id] is
+  /// already in use.
+  Future<Map<String, dynamic>> createBoxType(String id, String name) async {
+    return await _send(() => http.post(_u('/api/masters/box-types'),
+        headers: _headers, body: jsonEncode({'id': id, 'name': name}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/masters/customers { id, name } — same "add on the fly" path
+  /// as [createBoxType], for the customer picker on Gate Out.
+  Future<Map<String, dynamic>> createCustomer(String id, String name) async {
+    return await _send(() => http.post(_u('/api/masters/customers'),
+        headers: _headers, body: jsonEncode({'id': id, 'name': name}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/masters/locations { code, wh?, zone?, rack?, shelf?, slot? } —
+  /// registers a new Location Master row so a zone/rack/shelf/slot value
+  /// typed via a dropdown's "+ เพิ่มใหม่" becomes a real, reusable option
+  /// everywhere else that reads the Location Master, not just this one box.
+  Future<Map<String, dynamic>> createLocation({
+    required String code,
+    String? wh,
+    String? zone,
+    String? rack,
+    String? shelf,
+    String? slot,
+  }) async {
+    return await _send(() => http.post(_u('/api/masters/locations'),
+        headers: _headers,
+        body: jsonEncode({
+          'code': code,
+          if (wh != null && wh.isNotEmpty) 'wh': wh,
+          if (zone != null && zone.isNotEmpty) 'zone': zone,
+          if (rack != null && rack.isNotEmpty) 'rack': rack,
+          if (shelf != null && shelf.isNotEmpty) 'shelf': shelf,
+          if (slot != null && slot.isNotEmpty) 'slot': slot,
+        }))) as Map<String, dynamic>;
   }
 }

@@ -85,6 +85,20 @@ export const customerSchema = z.object({
   returnDays: z.number().int().nonnegative().nullish(),
 });
 
+/** One row of the Location Master — `code` is the primary key (see
+ *  db/schema.ts's `locations` table); zone/rack/shelf/slot are each
+ *  optional so a partial location (e.g. zone-only) can still be recorded. */
+export const locationSchema = z.object({
+  code: z.string().min(1),
+  wh: z.string().nullish(),
+  zone: z.string().nullish(),
+  rack: z.string().nullish(),
+  shelf: z.string().nullish(),
+  slot: z.string().nullish(),
+  type: z.string().nullish(),
+  note: z.string().nullish(),
+});
+
 /* ─── gate operations ──────────────────────────────────────────────────────*/
 export const gateOutSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
