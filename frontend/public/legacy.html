@@ -850,6 +850,30 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
 @keyframes toastIn{from{opacity:0;transform:translateY(34px) scale(.92);}to{opacity:1;transform:none;}}
 @keyframes toastOut{to{opacity:0;transform:translateY(22px) scale(.95);}}
 
+/* PDA realtime notifications */
+.pda-toast-zone{position:fixed;top:calc(76px + env(safe-area-inset-top));right:16px;display:flex;flex-direction:column;
+  align-items:flex-end;gap:10px;z-index:500;pointer-events:none;max-width:min(360px,90vw);}
+.pda-toast-zone .toast{min-width:0;width:100%;}
+.notif-wrap{position:relative;}
+.notif-bell-badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;}
+.nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;}
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;max-width:90vw;max-height:70vh;
+  background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:.5px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:401;}
+.notif-panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:.5px solid var(--line);}
+.notif-panel-body{overflow-y:auto;padding:6px;}
+.notif-empty{padding:24px 10px;text-align:center;color:var(--muted);font-size:13px;}
+.notif-item{display:flex;gap:10px;padding:10px;border-radius:10px;cursor:pointer;}
+.notif-item:hover{background:var(--bg);}
+.notif-item .ti{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:0 0 auto;color:#fff;font-weight:700;}
+.notif-item.ok .ti{background:var(--pos);color:var(--posInk);} .notif-item.warn .ti{background:var(--warn);}
+.notif-item .tt{font-size:13.5px;font-weight:600;} .notif-item .ts{font-size:11.5px;color:var(--muted);margin-top:2px;}
+.notif-item .tm{font-size:10.5px;color:var(--muted);margin-left:auto;white-space:nowrap;}
+@keyframes rowFlash{from{background:color-mix(in srgb,var(--accent) 35%,transparent);}to{background:transparent;}}
+tr.row-flash{animation:rowFlash 3s ease-out;}
+
 /* modal */
 .modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:22px;}
 .modal.show{display:flex;}
@@ -1172,6 +1196,22 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
     <div class="who-menu" id="whoMenu" hidden></div>
   </div>
+  <div class="notif-wrap no-print" id="notifWrap">
+    <button class="iconbtn" id="btnNotif" title="การแจ้งเตือน" onclick="toggleNotifPanel()">
+      <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 4.5 1.5 6 2 6.5H4c.5-.5 2-2 2-6.5Z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg></span>
+      <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+    </button>
+    <div class="notif-panel" id="notifPanel" hidden>
+      <div class="notif-panel-head">
+        <b>การแจ้งเตือน</b>
+        <div class="row" style="gap:6px;">
+          <button class="iconbtn sm" id="btnNotifSound" title="เสียงแจ้งเตือน" onclick="toggleNotifSound()"></button>
+          <button class="btn ghost sm" onclick="clearNotifLog()">ล้างทั้งหมด</button>
+        </div>
+      </div>
+      <div class="notif-panel-body" id="notifLogBody"><div class="notif-empty">ยังไม่มีการแจ้งเตือน</div></div>
+    </div>
+  </div>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
@@ -1182,7 +1222,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
-  <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังสินค้า</span></button>
+  <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span><span class="nav-badge" id="navBadgeInventory" hidden>0</span></span><span class="navlbl">คลังสินค้า</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
@@ -2039,9 +2079,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
         <div class="field"><label>สิทธิ์การใช้งาน</label>
           <select id="eAccess">
-            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ (ยิง Gate)</option>
-            <option value="supervisor" title="สิทธิ์เท่าพนักงานปฏิบัติการ — เป็นแค่ตำแหน่งงาน ไม่ได้เพิ่มสิทธิ์พิเศษในระบบ">หัวหน้างาน</option>
-            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ (Master)</option>
+            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ</option>
+            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ</option>
             <option value="viewer" title="ดูข้อมูลได้อย่างเดียว — ยิง Gate, แก้ไขข้อมูลหลัก, หรือบันทึกอะไรไม่ได้เลย">ผู้ชมอย่างเดียว</option>
           </select>
         </div>
@@ -2053,10 +2092,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
       <p class="desc" style="margin-top:10px;">
-        <b>สิทธิ์การใช้งานทำอะไรได้บ้าง:</b>
-        <b>ผู้ดูแลระบบ</b> — ยิง Gate, แก้ไขข้อมูลหลัก, และเพิ่ม/แก้ไข/ลบพนักงานได้ทั้งหมด ·
-        <b>พนักงานปฏิบัติการ / หัวหน้างาน</b> — ยิง Gate และแก้ไขข้อมูลหลักได้ แต่จัดการพนักงานคนอื่นไม่ได้ (หัวหน้างานเป็นแค่ตำแหน่ง ไม่ได้เพิ่มสิทธิ์) ·
-        <b>ผู้ชมอย่างเดียว</b> — ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย
+        สิทธิ์การใช้งาน: <b>ผู้ดูแลระบบ</b> (จัดการได้ทั้งหมด) · <b>พนักงานปฏิบัติการ/หัวหน้างาน</b> (ยิง Gate และแก้ไขข้อมูลหลักได้) · <b>ผู้ชมอย่างเดียว</b> (ดูข้อมูลได้อย่างเดียว)
       </p>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddEmp">บันทึกพนักงาน</button>
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -2281,6 +2317,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 </main>
 
 <div class="toast-zone" id="toastZone"></div>
+<div class="pda-toast-zone" id="pdaToastZone"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
 
@@ -11994,6 +12031,169 @@ const DAY=86400000;
    1 · DATA — ใช้ state S ของแอปเดิม (legacy-sync.js sync กับ PostgreSQL อยู่แล้ว)
        + poll GET /api/state เพื่อรับความเปลี่ยนแปลงจากเครื่องอื่น / PDA
    ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   PDA REALTIME NOTIFICATIONS — bell/badge/toast/row-flash/sound
+   Runs entirely off the diff between the box snapshot already on screen
+   and the one just pulled from /api/state or nudged by SSE — the bus
+   (backend/src/lib/bus.ts) only carries a version bump, no payload, so
+   "what changed" has to be reconstructed client-side from the two snapshots.
+   ══════════════════════════════════════════════════════════════ */
+const NOTIF_LOG_KEY='boxtrace_notif_log', NOTIF_SOUND_KEY='boxtrace_notif_sound', NOTIF_LOG_MAX=50;
+let notifLog=[]; let notifUnread=0;
+try{ notifLog=JSON.parse(localStorage.getItem(NOTIF_LOG_KEY)||'[]'); }catch(_){ notifLog=[]; }
+let notifSoundOn=true;
+try{ notifSoundOn=localStorage.getItem(NOTIF_SOUND_KEY)!=='0'; }catch(_){}
+let pdaFlashTags=[];
+
+const NOTIF_KIND={
+  newBox:{label:'ลงทะเบียนกล่องใหม่',kind:'ok',priority:false},
+  pendingPutaway:{label:'รอ Putaway',kind:'ok',priority:false},
+  noRfid:{label:'ไม่มี RFID',kind:'warn',priority:false},
+  pendingLabel:{label:'รอติดบาร์โค้ด',kind:'warn',priority:true}
+};
+
+function detectPdaEvents(oldBoxes,newBoxes){
+  var events=[];
+  Object.keys(newBoxes).forEach(function(tag){
+    var nb=newBoxes[tag], ob=oldBoxes[tag];
+    if(!ob){
+      events.push({type:'newBox',tag:tag,box:nb});
+      if(nb.status==='pending'&&nb.labeled!==true)events.push({type:'pendingLabel',tag:tag,box:nb});
+      return;
+    }
+    if(nb.status==='pending'&&nb.labeled===true&&!(ob.status==='pending'&&ob.labeled===true)){
+      events.push({type:'pendingPutaway',tag:tag,box:nb});
+    }
+    var hadRfid=!!(ob.rfidTid||ob.rfidEpc), hasRfid=!!(nb.rfidTid||nb.rfidEpc);
+    if(nb.labeled!==false&&!hasRfid&&!hadRfid&&ob.status!==nb.status){
+      events.push({type:'noRfid',tag:tag,box:nb});
+    }
+  });
+  if(!events.length)return;
+  pdaFlashTags=events.map(function(e){return e.tag;});
+  events.forEach(pushNotif);
+  refreshNotifBadges();
+}
+
+function pushNotif(ev){
+  var meta=NOTIF_KIND[ev.type]||{label:ev.type,kind:'info',priority:false};
+  var entry={id:(Date.now()+'-'+ev.tag+'-'+ev.type),tag:ev.tag,type:ev.type,label:meta.label,
+    kind:meta.kind,time:Date.now(),read:false};
+  notifLog.unshift(entry);
+  if(notifLog.length>NOTIF_LOG_MAX)notifLog.length=NOTIF_LOG_MAX;
+  try{localStorage.setItem(NOTIF_LOG_KEY,JSON.stringify(notifLog));}catch(_){}
+  notifUnread++;
+  pdaToast(ev.tag,meta.label,meta.kind);
+  if(meta.priority&&notifSoundOn)playNotifChime();
+  renderNotifLog();
+}
+
+function pdaToast(tag,label,kind){
+  var z=$('#pdaToastZone'); if(!z)return;
+  var t=document.createElement('div');
+  t.className='toast '+(kind==='warn'?'warn':'ok');
+  var ic=kind==='warn'?IC('warn','tick'):IC('check','tick');
+  t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(tag)+'</div><div class="sub">'+esc(label)+'</div></div>';
+  z.appendChild(t);
+  setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},4200);
+}
+
+function flashPdaRows(){
+  if(!pdaFlashTags.length)return;
+  var tags=pdaFlashTags; pdaFlashTags=[];
+  requestAnimationFrame(function(){
+    tags.forEach(function(tag){
+      var row=document.querySelector('tr[data-tag="'+CSS.escape(tag)+'"]');
+      if(!row)return;
+      row.classList.remove('row-flash'); void row.offsetWidth; row.classList.add('row-flash');
+      setTimeout(function(){row.classList.remove('row-flash');},3000);
+    });
+  });
+}
+
+function refreshNotifBadges(){
+  var bell=$('#notifBellBadge'), nav=$('#navBadgeInventory');
+  if(bell){ if(notifUnread>0){bell.hidden=false;bell.textContent=notifUnread>99?'99+':String(notifUnread);} else bell.hidden=true; }
+  if(nav){
+    var pending=(typeof localStatusCounts==='function')?
+      (function(){var c=localStatusCounts();return (c.pending||0)+(c.pendingPutaway||0)+(c.noRfid||0);})():0;
+    if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);} else nav.hidden=true;
+  }
+}
+
+function renderNotifLog(){
+  var body=$('#notifLogBody'); if(!body)return;
+  if(!notifLog.length){ body.innerHTML='<div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>'; return; }
+  body.innerHTML=notifLog.map(function(n){
+    return '<div class="notif-item '+esc(n.kind)+'" onclick="closeNotifPanelAndGo(\''+esc(n.tag)+'\')">'
+      +'<div class="ti">'+(n.kind==='warn'?IC('warn','tick'):IC('check','tick'))+'</div>'
+      +'<div><div class="tt">'+esc(n.tag)+'</div><div class="ts">'+esc(n.label)+'</div></div>'
+      +'<div class="tm">'+relTime(n.time)+'</div></div>';
+  }).join('');
+}
+function relTime(ts){
+  var s=Math.round((Date.now()-ts)/1000);
+  if(s<60)return 'เมื่อครู่';
+  if(s<3600)return Math.floor(s/60)+' นาทีที่แล้ว';
+  if(s<86400)return Math.floor(s/3600)+' ชม.ที่แล้ว';
+  return Math.floor(s/86400)+' วันที่แล้ว';
+}
+function toggleNotifPanel(){
+  var p=$('#notifPanel'); if(!p)return;
+  var open=p.hidden;
+  p.hidden=!open;
+  if(open){ notifUnread=0; refreshNotifBadges(); renderNotifLog(); }
+}
+function closeNotifPanelAndGo(tag){
+  var p=$('#notifPanel'); if(p)p.hidden=true;
+  if(typeof switchTab==='function')switchTab('inventory');
+  setTimeout(function(){
+    var row=document.querySelector('tr[data-tag="'+CSS.escape(tag)+'"]');
+    if(row){ row.scrollIntoView({block:'center',behavior:'smooth'}); row.classList.add('row-flash'); setTimeout(function(){row.classList.remove('row-flash');},3000); }
+  },80);
+}
+function clearNotifLog(){
+  notifLog=[]; notifUnread=0;
+  try{localStorage.setItem(NOTIF_LOG_KEY,'[]');}catch(_){}
+  renderNotifLog(); refreshNotifBadges();
+}
+function toggleNotifSound(){
+  notifSoundOn=!notifSoundOn;
+  try{localStorage.setItem(NOTIF_SOUND_KEY,notifSoundOn?'1':'0');}catch(_){}
+  paintNotifSoundBtn();
+}
+function paintNotifSoundBtn(){
+  var b=$('#btnNotifSound'); if(!b)return;
+  b.innerHTML='<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true">'+
+    (notifSoundOn?'<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>':
+      '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 9l5 6M21 9l-5 6"/>')+
+    '</svg></span>';
+  b.title=notifSoundOn?'ปิดเสียงแจ้งเตือน':'เปิดเสียงแจ้งเตือน';
+}
+let notifAudioCtx=null;
+function playNotifChime(){
+  try{
+    notifAudioCtx=notifAudioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    var ctx=notifAudioCtx, t0=ctx.currentTime;
+    [880,1320].forEach(function(freq,i){
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,t0+i*0.12);
+      g.gain.linearRampToValueAtTime(0.12,t0+i*0.12+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+i*0.12+0.28);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0+i*0.12); o.stop(t0+i*0.12+0.3);
+    });
+  }catch(_){}
+}
+document.addEventListener('click',function(e){
+  var wrap=$('#notifWrap'), panel=$('#notifPanel');
+  if(!wrap||!panel||panel.hidden)return;
+  if(!wrap.contains(e.target))panel.hidden=true;
+});
+document.addEventListener('DOMContentLoaded',function(){ paintNotifSoundBtn(); renderNotifLog(); refreshNotifBadges(); });
+if(document.readyState!=='loading'){ paintNotifSoundBtn(); renderNotifLog(); refreshNotifBadges(); }
+
 const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
 let live=true;
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
@@ -12010,6 +12210,10 @@ async function pullState(){
 }
 /* เซิร์ฟเวอร์เป็น source of truth — โหลดเข้าแอปด้วยกลไกเดิม (load + renderAll) */
 function adoptServerState(st){
+  /* diff against what's on screen *before* it gets overwritten below —
+     this is the only point that sees both the old and new box snapshot,
+     so PDA-notification detection has to happen right here */
+  try{ detectPdaEvents(S.boxes||{}, st.boxes||{}); }catch(e){console.warn('pda notif diff',e);}
   /* mirror it for the next reload, but mark it as already-synced so the
      persistence bridge does not PUT the server's own snapshot back at it */
   const snap=JSON.stringify(st);
@@ -12029,6 +12233,7 @@ function adoptServerState(st){
     else redraw();
   }catch(e){console.warn('w3d adopt',e);}
   scheduleBuild();
+  flashPdaRows();
 }
 /* helper ของแอป — ถ้ามีให้ใช้ของแอป ไม่มีค่อย fallback */
 const isOverdue=b=>!!(Wn.isOverdue?Wn.isOverdue(b):(b&&b.status==='out'&&b.dueAt&&+new Date(b.dueAt)<Date.now()));
