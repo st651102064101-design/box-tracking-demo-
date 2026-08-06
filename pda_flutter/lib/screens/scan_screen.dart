@@ -142,7 +142,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           subtitle: Text('${c.selWhName} · ประตู ${c.gate}'),
-          actions: [OnlineChip(online: c.online, onTap: c.toggleOnline)],
+          actions: [OnlineChip(online: c.connected, onTap: c.retryOrConfigure)],
         ),
         Expanded(
           child: ListView(

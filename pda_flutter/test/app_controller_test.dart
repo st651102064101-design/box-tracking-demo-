@@ -425,7 +425,7 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
       expect(api.gateInCalls, isEmpty);
@@ -441,15 +441,13 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
       // Handover: someone else takes the device before connectivity returns.
       c.lock();
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0002'));
-      c.toggleOnline();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await c.syncNow();
 
       expect(api.gateInCalls, hasLength(1));
       expect(api.gateInCalls.first['employeeId'], 'EMP-0001');
@@ -462,12 +460,10 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
-      c.toggleOnline();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await c.syncNow();
 
       expect(api.gateInCalls, hasLength(1));
       expect(c.outbox, isEmpty);

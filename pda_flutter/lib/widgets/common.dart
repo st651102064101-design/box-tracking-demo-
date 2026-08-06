@@ -231,12 +231,21 @@ class StickyHeader extends StatelessWidget {
   }
 }
 
-/// Online/offline indicator — icon only, no label. Green means "connected,"
-/// gray means "not" — orange is reserved for warnings elsewhere in the app,
-/// so offline deliberately isn't that color even though it's a
-/// less-than-ideal state. Used in the Home/Gate headers where "ออนไลน์" /
-/// "ออฟไลน์" spelled out just crowded a row that already has the operator's
-/// name, warehouse, and gate competing for the same space.
+/// Online/offline indicator — one real, auto-detected state (see
+/// AppController.connected, kept live by RealtimeService's SSE heartbeat)
+/// used identically everywhere it appears (badge screen, Home, Gate) so the
+/// app never shows two different answers to "am I online?" at once. Green
+/// means "connected," gray means "not" — orange is reserved for warnings
+/// elsewhere in the app, so offline deliberately isn't that color even
+/// though it's a less-than-ideal state.
+///
+/// Labeled (not icon-only) since a bare cloud glyph reads as decoration —
+/// spelling out "Online"/"Offline" is what makes it legible as a status at
+/// a glance. There is deliberately no way to force this to say "online"
+/// (tapping while offline can only retry the real connection, never fake
+/// it) and no way to force it to "offline" either — that used to be a
+/// separate manual toggle, which is exactly what let this chip disagree
+/// with the actual connection state.
 class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
@@ -246,16 +255,25 @@ class OnlineChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 34,
         height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
           color: online ? C.limeBg : C.neutralBg,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(17),
           border: Border.all(color: online ? C.limeBorder : C.border2),
         ),
         alignment: Alignment.center,
-        child: Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-            size: 17, color: online ? C.limeText : C.muted),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                size: 16, color: online ? C.limeText : C.muted),
+            const SizedBox(width: 6),
+            Text(online ? 'Online' : 'Offline',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: online ? C.limeText : C.muted)),
+          ],
+        ),
       ),
     );
   }

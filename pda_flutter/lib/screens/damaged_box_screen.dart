@@ -8,11 +8,22 @@ import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// Flags a box as damaged: scan its barcode, sweep the RFID batch on/around
-/// it, save. Works fully offline by design (see AppController.addDamagedFlag)
-/// — unlike box registration this menu item is never hidden when the
-/// terminal has no signal, and nothing on this screen makes a network call
-/// until AppController.flushDamagedFlags gets a chance to sync later.
+enum _IdMode { barcode, rfid }
+
+/// Quick-tap guides for the free-text damage note — there's no backend enum
+/// of damage reasons to source these from yet (POST /api/boxes/:tag/damage
+/// itself doesn't exist server-side yet, see ApiClient.flagDamage), so this
+/// is a reasonable starting set an operator can tap instead of typing every
+/// time, not a fixed status. Swap this for a real config-driven list (and
+/// send a reason code instead of free text) once that endpoint exists.
+const _kDamageReasons = ['กล่องบุบ', 'กล่องแตก/ฉีกขาด', 'เปียกน้ำ', 'ฝา/ล็อกชำรุด', 'สติกเกอร์ฉีกขาด', 'แท็ก RFID หลุด/เสียหาย'];
+
+/// Flags a box as damaged: pick barcode or RFID as how this box gets
+/// identified, then save. Works fully offline by design (see
+/// AppController.addDamagedFlag) — unlike box registration this menu item is
+/// never hidden when the terminal has no signal, and nothing on this screen
+/// makes a network call until AppController.flushDamagedFlags gets a chance
+/// to sync later.
 class DamagedBoxScreen extends StatefulWidget {
   const DamagedBoxScreen({super.key});
   @override
@@ -34,7 +45,15 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
   DateTime? _lastKeyAt;
   bool _sawBurst = false;
 
+  // A damaged box's barcode sticker is itself sometimes the thing that's
+  // torn or unreadable — forcing barcode-first (the old design) meant that
+  // exact box could never be reported at all. The operator picks whichever
+  // identifier is actually still legible; the other stays available as an
+  // optional add-on (a barcode scan still arms the RFID sweep, and an RFID
+  // pick can still have a barcode typed in afterwards).
+  _IdMode _mode = _IdMode.barcode;
   String? _barcode; // confirmed once the field auto-submits or Enter fires
+  String? _selectedEpc; // the tag picked as this box's identifier, RFID mode
   final List<String> _epcs = []; // distinct EPCs the sweep has turned up
 
   StreamSubscription<RfidTagRead>? _tagSub;
@@ -43,6 +62,8 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
   RfidService? _rfid;
 
   AppController get _c => context.read<AppController>();
+
+  bool get _identified => _mode == _IdMode.barcode ? _barcode != null : _selectedEpc != null;
 
   @override
   void initState() {
@@ -70,6 +91,27 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
     super.dispose();
   }
 
+  void _setMode(_IdMode m) {
+    if (_mode == m) return;
+    unawaited(_c.rfid.stopInventory());
+    setState(() {
+      _mode = m;
+      _barcode = null;
+      _selectedEpc = null;
+      _epcs.clear();
+    });
+    _barcodeCtrl.clear();
+    _lastKeyAt = null;
+    _sawBurst = false;
+    if (m == _IdMode.barcode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _barcodeFocus.requestFocus());
+    } else {
+      // RFID mode needs no prior scan to arm — that was exactly the old,
+      // wrong sequencing. Sweep starts the moment this mode is picked.
+      unawaited(_c.rfid.startInventory());
+    }
+  }
+
   void _onBarcodeChanged() {
     _autoSubmitTimer?.cancel();
     final now = DateTime.now();
@@ -91,7 +133,8 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
     setState(() => _barcode = code);
     // Arm the reader the instant the barcode lands, same reasoning as
     // rfid_register_screen.dart — the operator is already holding the gun
-    // against the box in question.
+    // against the box in question. Still optional in this mode: saving
+    // works with zero EPCs swept.
     unawaited(_c.rfid.startInventory());
   }
 
@@ -108,14 +151,33 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
   }
 
   void _onTagRead(RfidTagRead read) {
-    if (_barcode == null || read.epc.isEmpty) return;
+    if (read.epc.isEmpty) return;
+    if (_mode == _IdMode.barcode && _barcode == null) return; // not armed yet
     if (_epcs.contains(read.epc)) return;
     setState(() => _epcs.add(read.epc));
   }
 
+  void _rescan() {
+    setState(() {
+      _epcs.clear();
+      _selectedEpc = null;
+    });
+    unawaited(_c.rfid.startInventory());
+  }
+
+  void _appendReason(String reason) {
+    final cur = _noteCtrl.text.trim();
+    _noteCtrl.text = cur.isEmpty ? reason : '$cur, $reason';
+    _noteCtrl.selection = TextSelection.collapsed(offset: _noteCtrl.text.length);
+  }
+
   void _save() {
-    final barcode = _barcode;
-    if (barcode == null) return;
+    if (!_identified) return;
+    // In RFID mode there's no separate barcode scan — the picked EPC is
+    // itself this record's identifier, alongside the rest of the swept
+    // batch (including that same EPC, so "which tag actually IDs the box"
+    // isn't lost once it's just one entry among several).
+    final barcode = _mode == _IdMode.barcode ? _barcode! : _selectedEpc!;
     _c.addDamagedFlag(barcode: barcode, rfidEpcs: List<String>.from(_epcs), note: _noteCtrl.text.trim());
     unawaited(_c.rfid.stopInventory());
     _c.toastMsg(
@@ -125,13 +187,14 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
     );
     setState(() {
       _barcode = null;
+      _selectedEpc = null;
       _epcs.clear();
     });
     _barcodeCtrl.clear();
     _noteCtrl.clear();
     _lastKeyAt = null;
     _sawBurst = false;
-    _barcodeFocus.requestFocus();
+    if (_mode == _IdMode.barcode) _barcodeFocus.requestFocus();
   }
 
   @override
@@ -181,16 +244,22 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
                     ),
                   ),
                 ),
-              _barcodeCard(),
+              const FieldLabel('วิธีระบุกล่อง'),
+              _modeToggle(),
               const SizedBox(height: 12),
-              _rfidCard(),
+              if (_mode == _IdMode.barcode) ...[
+                _barcodeCard(),
+                const SizedBox(height: 12),
+                _rfidCard(optional: true),
+              ] else
+                _rfidCard(optional: false),
               const SizedBox(height: 12),
               _noteCard(),
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _barcode == null ? null : _save,
+                  onPressed: _identified ? _save : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: C.red,
                     foregroundColor: Colors.white,
@@ -207,6 +276,45 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _modeToggle() {
+    Widget seg(_IdMode m, String label, IconData icon) {
+      final selected = _mode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => _setMode(m),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(_IdMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(_IdMode.rfid, 'RFID', Icons.nfc),
+        ],
+      ),
     );
   }
 
@@ -276,8 +384,12 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
     );
   }
 
-  Widget _rfidCard() {
-    final active = _barcode != null;
+  /// [optional] is true only in barcode mode, where this card is an
+  /// additive batch sweep on top of an already-identified box. In RFID
+  /// mode this card *is* the identification step — picking a candidate is
+  /// what makes [_identified] true.
+  Widget _rfidCard({required bool optional}) {
+    final active = optional ? _barcode != null : true;
     final connected = _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
     return Opacity(
       opacity: active ? 1 : 0.55,
@@ -297,7 +409,11 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    active ? 'สแกน RFID batch (ไม่บังคับ)' : 'ยิงบาร์โค้ดก่อนเพื่อเริ่มสแกน RFID',
+                    !active
+                        ? 'ยิงบาร์โค้ดก่อนเพื่อสแกน RFID เพิ่ม (ไม่บังคับ)'
+                        : optional
+                            ? 'สแกน RFID batch เพิ่ม (ไม่บังคับ)'
+                            : 'ยิงแท็ก RFID แล้วเลือกใบที่จะใช้ระบุกล่อง',
                     style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -318,7 +434,7 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
               if (_epcs.isEmpty)
                 Text('เหนี่ยวไกเพื่อกวาดหาแท็กที่ติดอยู่กับกล่อง/พาเลทนี้',
                     style: TextStyle(fontSize: 12.5, color: C.faint))
-              else
+              else if (optional)
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -332,7 +448,55 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
                                     fontSize: 11, fontFamily: 'monospace', color: C.ink2)),
                           ))
                       .toList(),
+                )
+              else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('พบ ${_epcs.length} แท็ก — เลือกใบที่จะใช้ระบุกล่อง',
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                    ),
+                    GestureDetector(
+                      onTap: _rescan,
+                      child: Text('ยิงใหม่', style: TextStyle(fontSize: 12.5, color: C.orange)),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                RadioGroup<String>(
+                  groupValue: _selectedEpc,
+                  onChanged: (v) => setState(() => _selectedEpc = v),
+                  child: Column(
+                    children: _epcs
+                        .map((epc) => InkWell(
+                              onTap: () => setState(() => _selectedEpc = epc),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Radio<String>(
+                                      value: epc,
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(epc,
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              fontFamily: 'monospace',
+                                              fontWeight: _selectedEpc == epc ? FontWeight.w800 : FontWeight.w600,
+                                              color: _selectedEpc == epc ? C.ink : C.ink2)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -352,10 +516,29 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const FieldLabel('รายละเอียดความเสียหาย (ไม่บังคับ)'),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _kDamageReasons
+                .map((r) => GestureDetector(
+                      onTap: () => _appendReason(r),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: C.neutralBg,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: C.border2),
+                        ),
+                        child: Text(r, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: C.ink2)),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _noteCtrl,
             maxLines: 2,
-            decoration: pdaInput('เช่น มุมกล่องบุบ กันชื้นฉีกขาด'),
+            decoration: pdaInput('แตะข้อความด้านบน หรือพิมพ์เอง'),
           ),
         ],
       ),

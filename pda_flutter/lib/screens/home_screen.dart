@@ -6,18 +6,6 @@ import '../models/box.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// Tap-to-retry for the header's connectivity icon. One attempt against the
-/// live backend right now; if that still fails, hands off to the same
-/// server-address screen device setup uses rather than inventing a second
-/// "edit connection" surface — one place in the app owns that config.
-Future<void> _retryOrConfigure(BuildContext context, AppController c) async {
-  if (c.connected) return; // already up — nothing to retry
-  final ok = await c.retryConnection();
-  if (ok || !context.mounted) return;
-  c.toastMsg('ยังเชื่อมต่อไม่ได้', 'เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้แล้ว', ResultKind.warn);
-  c.goDeviceSetup();
-}
-
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -72,16 +60,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              // Reflects real, auto-detected server reachability (c.connected —
-              // kept current by RealtimeService's SSE heartbeat, see
-              // AppController._onRealtimeConnectivity), not the operator's own
-              // manual "force offline" toggle (c.online, still used by the
-              // outbox banner's own sync button below). Tapping it while
-              // offline is the retry-then-configure affordance requirement:
-              // try once right now, and if that still fails, open the same
-              // server-address screen device setup already uses instead of a
-              // second modal.
-              OnlineChip(online: c.connected, onTap: () => _retryOrConfigure(context, c)),
+              // Reflects real, auto-detected server reachability everywhere
+              // this chip appears (badge screen, here, Gate) — see
+              // AppController.connected/retryOrConfigure.
+              OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
               const SizedBox(width: 8),
               RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
             ],
@@ -235,23 +217,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     const SizedBox(height: 16),
     const Caption('งานหลัก'),
     const SizedBox(height: 10),
-    // Box registration writes a brand-new box row the moment it's tapped
-    // (see BoxRegisterScreen._submitCreate) — there's no local outbox path
-    // for that the way gate scans have, so starting it offline would just
-    // strand the operator mid-flow. Hidden entirely rather than shown
-    // disabled: a menu item that's there but won't work invites exactly the
-    // tap that fails.
-    if (c.canScan && c.connected) ...[
-      _ActionCard(
-        icon: Icons.add_box,
-        iconColor: C.limeDeep,
-        iconBg: C.limeBg,
-        title: 'ลงทะเบียนกล่อง',
-        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
-        onTap: c.goBoxRegister,
-      ),
-      const SizedBox(height: 12),
-    ],
+    // Gate In/Out first — the day-to-day traffic through this screen, far
+    // more often than receiving a brand-new box off a supplier truck.
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'out') ...[
@@ -277,6 +244,23 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
       const SizedBox(height: 12),
     ],
+    // Box registration writes a brand-new box row the moment it's tapped
+    // (see BoxRegisterScreen._submitCreate) — there's no local outbox path
+    // for that the way gate scans have, so starting it offline would just
+    // strand the operator mid-flow. Hidden entirely rather than shown
+    // disabled: a menu item that's there but won't work invites exactly the
+    // tap that fails.
+    if (c.canScan && c.connected) ...[
+      _ActionCard(
+        icon: Icons.add_box,
+        iconColor: C.limeDeep,
+        iconBg: C.limeBg,
+        title: 'ลงทะเบียนกล่อง',
+        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
+        onTap: c.goBoxRegister,
+      ),
+      const SizedBox(height: 12),
+    ],
     // Damage flagging is intentionally never gated on c.connected (unlike
     // box registration above) — it writes only to the local queue until
     // AppController.flushDamagedFlags gets a chance to sync, so there's no
@@ -289,8 +273,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         iconBg: C.orangeBg,
         title: 'แจ้งกล่องเสียหาย',
         sub: c.damagedFlags.any((f) => !f.synced)
-            ? 'สแกนบาร์โค้ด + RFID batch — รอซิงค์ ${c.damagedFlags.where((f) => !f.synced).length} รายการ'
-            : 'สแกนบาร์โค้ด + RFID batch แล้วบันทึกได้แม้ออฟไลน์',
+            ? 'เลือกบาร์โค้ดหรือ RFID — รอซิงค์ ${c.damagedFlags.where((f) => !f.synced).length} รายการ'
+            : 'เลือกบาร์โค้ดหรือ RFID แล้วบันทึกได้แม้ออฟไลน์',
         onTap: c.goDamagedBox,
       ),
       const SizedBox(height: 12),
@@ -328,9 +312,9 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
       onTap: c.goTrack,
     ),
-    if (c.outbox.isNotEmpty) ...[
+    if (c.outbox.isNotEmpty || c.damagedFlags.any((f) => !f.synced)) ...[
       const SizedBox(height: 14),
-      _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
+      _OutboxBanner(c: c, onSync: c.syncNow),
     ],
   ];
 }
@@ -851,50 +835,100 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
+/// What actually happened while this terminal had no signal — every queued
+/// gate scan and damage report, in one plain-language list, so "did that
+/// receipt actually go through?" has an answer on the device right now
+/// instead of only once someone checks the web app after it syncs.
+class _PendingItem {
+  final DateTime at;
+  final String title;
+  final String subtitle;
+  const _PendingItem(this.at, this.title, this.subtitle);
+}
+
+List<_PendingItem> _pendingItems(AppController c) {
+  final items = <_PendingItem>[
+    ...c.outbox.map((tx) {
+      final at = DateTime.tryParse(tx.ts) ?? DateTime.now();
+      final title = tx.type == 'in' ? 'รับเข้า ${tx.tags.length} กล่อง' : 'ส่งออก ${tx.tags.length} กล่อง';
+      final who = c.S?.custName(tx.customer ?? '') ?? tx.customer;
+      final subtitle = [
+        if (tx.type == 'out' && (who ?? '').isNotEmpty) '→ $who',
+        'ประตู ${tx.gate}',
+        tx.recorder,
+      ].join(' · ');
+      return _PendingItem(at, title, subtitle);
+    }),
+    ...c.damagedFlags.where((f) => !f.synced).map(
+          (f) => _PendingItem(f.createdAt, 'แจ้งเสียหาย ${f.barcode}',
+              f.rfidEpcs.isEmpty ? 'ไม่มี RFID' : '${f.rfidEpcs.length} แท็ก RFID'),
+        ),
+  ];
+  items.sort((a, b) => b.at.compareTo(a.at)); // newest first
+  return items;
+}
+
+String _fmtHm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
 class _OutboxBanner extends StatelessWidget {
-  final int count;
+  final AppController c;
   final VoidCallback onSync;
-  const _OutboxBanner({required this.count, required this.onSync});
+  const _OutboxBanner({required this.c, required this.onSync});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      decoration: BoxDecoration(
-        color: C.neutralBg,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: C.border2),
+    final items = _pendingItems(c);
+    return GestureDetector(
+      onTap: () => _showDetailSheet(
+        context,
+        title: 'รอซิงก์ (${items.length})',
+        children: items.isEmpty
+            ? [Text('ไม่มีรายการค้าง', style: TextStyle(fontSize: 13, color: C.faint))]
+            : items
+                .map((i) => _detailRow(
+                      title: i.title,
+                      subtitle: '${i.subtitle} · ${_fmtHm(i.at)}',
+                    ))
+                .toList(),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
-            alignment: Alignment.center,
-            child: Text('$count',
-                style: TextStyle(
-                    color: C.onInk,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    fontFeatures: [FontFeature.tabularFigures()])),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Text('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์',
-                style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: onSync,
-            style: FilledButton.styleFrom(
-              backgroundColor: C.ink,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: Size.zero,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(
+          color: C.neutralBg,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: C.border2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
+              alignment: Alignment.center,
+              child: Text('${items.length}',
+                  style: TextStyle(
+                      color: C.onInk,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFeatures: [FontFeature.tabularFigures()])),
             ),
-            child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-          ),
-        ],
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text('รายการค้าง sync (ออฟไลน์) — แตะเพื่อดูว่าทำอะไรไปแล้วบ้าง',
+                  style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: onSync,
+              style: FilledButton.styleFrom(
+                backgroundColor: C.ink,
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                minimumSize: Size.zero,
+              ),
+              child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       ),
     );
   }

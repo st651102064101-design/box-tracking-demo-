@@ -150,7 +150,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        loc.t('เว้นว่างได้ถ้าเซิร์ฟเวอร์ยังไม่ได้เปิดใช้ API key'),
+                        // Backend requires this only when it's been given
+                        // an API_KEY env var of its own (see
+                        // middleware/auth.ts's requireApiKey — a no-op
+                        // otherwise); on a server that hasn't set one,
+                        // leaving this blank is correct, not incomplete.
+                        loc.t('เว้นว่างไว้ได้ถ้าเซิร์ฟเวอร์ไม่ได้ตั้งค่า API_KEY — ส่วนใหญ่ไม่จำเป็นต้องกรอก'),
                         style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
                       ),
                     ],

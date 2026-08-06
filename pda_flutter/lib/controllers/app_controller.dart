@@ -170,7 +170,6 @@ class AppController extends ChangeNotifier {
   String inVehicleTypeOther = '';
 
   // ── connectivity / offline ──────────────────────────────────────────────
-  bool online = true;
   final List<OutboxTx> outbox = [];
   final List<DamagedFlag> damagedFlags = [];
 
@@ -1026,14 +1025,36 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ connectivity / commit ═══════════════════════════
-  void toggleOnline() {
-    online = !online;
-    notifyListeners();
-    if (online) {
-      flushOutbox();
-    } else {
-      toastMsg('โหมดออฟไลน์', 'การยืนยันจะถูกพักคิวไว้', ResultKind.info);
+  /// Tap-to-retry for the online/offline chip, wherever it appears (badge
+  /// screen, Home, Gate) — one real attempt against the backend right now;
+  /// if that still fails, hands off to the same server-address screen
+  /// device setup uses instead of a second "edit connection" surface.
+  /// There is deliberately no way to force [connected] to either value from
+  /// here or anywhere else in the UI — it used to be a separate manual
+  /// toggle, which is exactly what let the chip disagree with whether the
+  /// terminal could actually reach the server.
+  Future<void> retryOrConfigure() async {
+    if (connected) return;
+    final ok = await retryConnection();
+    if (ok) return;
+    toastMsg('ยังเชื่อมต่อไม่ได้', 'เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้แล้ว', ResultKind.warn);
+    goDeviceSetup();
+  }
+
+  /// The outbox banner's own "ซิงก์เลย" button — an explicit nudge for an
+  /// operator who knows signal just came back and doesn't want to wait for
+  /// the SSE stream's own backoff to notice. Reconnecting alone doesn't
+  /// flush ([_onRealtimeConnectivity]'s up-edge is the only place that does
+  /// today), so this does both: retry, then flush whatever's queued if that
+  /// retry actually landed.
+  Future<void> syncNow() async {
+    final ok = await retryConnection();
+    if (!ok) {
+      toastMsg('ยังออฟไลน์อยู่', connError ?? '', ResultKind.warn);
+      return;
     }
+    if (outbox.isNotEmpty) await flushOutbox();
+    if (damagedFlags.any((f) => !f.synced)) await flushDamagedFlags();
   }
 
   void _saveOutbox() => prefs.outbox = outbox.map((e) => e.toJson()).toList();
@@ -1241,7 +1262,10 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    if (!online) {
+    // Real connectivity, not a manual toggle — queuing while this says
+    // "connected" but a request still fails is covered by the catch block
+    // below, which falls back to the same outbox.
+    if (!connected) {
       outbox.add(tx);
       _saveOutbox();
       _resetAfterCommit();
@@ -1539,6 +1563,15 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;
+
+  /// Test-only way to force [connected] without a real network round trip —
+  /// production code has exactly one legitimate way to change this
+  /// (_syncLiveConnected/_onRealtimeConnectivity, both driven by an actual
+  /// server response), which is the whole point of removing the old manual
+  /// toggle. Tests still need to simulate "offline" deterministically
+  /// without waiting on FakeApi timing.
+  @visibleForTesting
+  set connectedForTest(bool v) => _liveConnected = v;
   int get boxCount => S?.boxCount ?? 0;
   String get selWhName => S?.whName(wh) ?? wh;
 

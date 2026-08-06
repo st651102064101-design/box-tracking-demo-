@@ -441,15 +441,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              // Same manual online/offline toggle Home/Gate screens use
-              // (c.online, not the auto-detected c.connected) — it has to
-              // actually flip on every tap, including from online to
-              // offline, which the old retry-only icon here never did
-              // (tapping while genuinely connected just reconfirmed
-              // "online" every time). Real connectivity loss still gets its
-              // own one-shot alert regardless of this toggle's position —
-              // see root_screen.dart's _OfflineAlertListener.
-              OnlineChip(online: c.online, onTap: c.toggleOnline),
+              // Same real, auto-detected state (and same retry-or-configure
+              // tap behaviour) as every other OnlineChip in the app — see
+              // AppController.connected/retryOrConfigure.
+              OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
             ],
           ),
         ),
