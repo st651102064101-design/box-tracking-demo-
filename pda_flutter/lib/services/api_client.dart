@@ -119,7 +119,10 @@ class ApiClient {
     await _send(() => http.put(_u('/api/state'), headers: _headers, body: jsonEncode(state)));
   }
 
-  /// POST /api/gate/in { tags, gate, employeeId, recorder, plate?, driver?, vehicleType? }
+  /// POST /api/gate/in { tags, gate, employeeId, recorder, plate?, driver?,
+  /// vehicleType?, conditions? } — [conditions] flags individual tags as
+  /// 'hold' or 'damage' instead of landing on 'warehouse' (see the queue's
+  /// per-box condition dropdown in ScanScreen).
   Future<Map<String, dynamic>> gateIn({
     required List<String> tags,
     required int gate,
@@ -128,6 +131,7 @@ class ApiClient {
     String? plate,
     String? driver,
     String? vehicleType,
+    Map<String, String>? conditions,
   }) async {
     return await _send(() => http.post(_u('/api/gate/in'),
         headers: _headers,
@@ -139,6 +143,7 @@ class ApiClient {
           if (plate != null && plate.isNotEmpty) 'plate': plate,
           if (driver != null && driver.isNotEmpty) 'driver': driver,
           if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
+          if (conditions != null && conditions.isNotEmpty) 'conditions': conditions,
         }))) as Map<String, dynamic>;
   }
 
@@ -202,6 +207,39 @@ class ApiClient {
           'rfidEpc': rfidEpc,
           'replace': replace,
         }))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/boxes { tag, type } — registers a brand-new box straight off
+  /// a supplier delivery (status 'pending', not yet labeled). Throws
+  /// [ApiException] with code 'tag_taken' if the barcode is already in use,
+  /// or 'unknown_box_type' if [type] isn't a box type on file.
+  Future<Map<String, dynamic>> createBox(String tag, {required String type}) async {
+    return await _send(() => http.post(_u('/api/boxes'),
+        headers: _headers, body: jsonEncode({'tag': tag, 'type': type}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/boxes/:tag/label — confirms the physical barcode sticker is
+  /// actually on the box. Throws with code 'already_labeled' if it's
+  /// already been confirmed once.
+  Future<Map<String, dynamic>> labelBox(String tag) async {
+    return await _send(() => http.post(_u('/api/boxes/$tag/label'), headers: _headers)) as Map<String, dynamic>;
+  }
+
+  /// POST /api/boxes/:tag/putaway { wh, zone?, rack?, shelf?, slot? } —
+  /// places a labeled box on an actual shelf position, moving it to
+  /// 'warehouse'. Throws with code 'not_labeled' if [labelBox] hasn't run
+  /// yet, or 'box_out' if the box is currently out with a customer.
+  Future<Map<String, dynamic>> putawayBox(
+    String tag, {
+    required String wh,
+    String zone = '',
+    String rack = '',
+    String shelf = '',
+    String slot = '',
+  }) async {
+    return await _send(() => http.post(_u('/api/boxes/$tag/putaway'),
+        headers: _headers,
+        body: jsonEncode({'wh': wh, 'zone': zone, 'rack': rack, 'shelf': shelf, 'slot': slot}))) as Map<String, dynamic>;
   }
 
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN

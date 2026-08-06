@@ -214,6 +214,17 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     const SizedBox(height: 16),
     const Caption('งานหลัก'),
     const SizedBox(height: 10),
+    if (c.canScan) ...[
+      _ActionCard(
+        icon: Icons.add_box,
+        iconColor: C.limeDeep,
+        iconBg: C.limeBg,
+        title: 'ลงทะเบียนกล่อง',
+        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
+        onTap: c.goBoxRegister,
+      ),
+      const SizedBox(height: 12),
+    ],
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'out') ...[

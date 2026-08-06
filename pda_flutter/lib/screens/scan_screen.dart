@@ -617,6 +617,7 @@ class _ScanScreenState extends State<ScanScreen> {
         bc = C.ink2;
         bbg = C.neutralBg;
       }
+      final condition = c.queueConditions[t];
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Container(
@@ -624,43 +625,104 @@ class _ScanScreenState extends State<ScanScreen> {
           decoration: BoxDecoration(
             color: C.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: C.border),
+            border: Border.all(color: condition != null ? C.orangeBorder : C.border),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(9)),
-                child: Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(9)),
+                    child: Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(t,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.4)),
+                        Text(S?.typeName(b?.type) ?? '-',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: C.muted)),
+                      ],
+                    ),
+                  ),
+                  Pill(badge, color: bc, bg: bbg),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => c.removeFromQueue(t),
+                    child: SizedBox(
+                        width: 28, height: 28, child: Icon(Icons.close, size: 17, color: C.chevron)),
+                  ),
+                ],
               ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(t,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.4)),
-                    Text(S?.typeName(b?.type) ?? '-',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: C.muted)),
-                  ],
+              // เฉพาะรับเข้า/รับคืน — กล่องชำรุดจ่ายออกไม่ได้อยู่แล้ว
+              // (backend ปฏิเสธ) ตัวเลือกนี้จึงไม่มีความหมายฝั่งส่งออก
+              if (c.mode == 'in') ...[
+                const SizedBox(height: 8),
+                _ConditionPicker(
+                  value: condition,
+                  onChanged: (v) => c.setQueueCondition(t, v),
                 ),
-              ),
-              Pill(badge, color: bc, bg: bbg),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () => c.removeFromQueue(t),
-                child: SizedBox(
-                    width: 28, height: 28, child: Icon(Icons.close, size: 17, color: C.chevron)),
-              ),
+              ],
             ],
           ),
         ),
       );
     }).toList();
+  }
+}
+
+/// Lets the operator flag a box as damaged or on-hold right as it's scanned
+/// into the Gate In queue, mirroring the status the web dashboard's own box
+/// list already filters by (ชำรุด/Hold) — copied here since receiving is
+/// exactly where damage is first noticed, not after it's already back on a
+/// shelf.
+class _ConditionPicker extends StatelessWidget {
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  const _ConditionPicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(String? v, String label, Color c, Color bg) {
+      final selected = value == v;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(selected ? null : v),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? bg : C.neutralBg,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: selected ? c : C.border),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? c : C.muted)),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        chip(null, 'ปกติ', C.limeText, C.limeBg),
+        const SizedBox(width: 6),
+        chip('damage', 'ชำรุด', C.red, C.redBg),
+        const SizedBox(width: 6),
+        chip('hold', 'พัก (Hold)', C.orange, C.orangeBg),
+      ],
+    );
   }
 }

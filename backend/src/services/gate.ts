@@ -222,6 +222,9 @@ export interface GateInInput {
   plate?: string;
   driver?: string;
   vehicleType?: string;
+  /** Per-tag condition (see gateInSchema), keyed by whatever canonical tag
+   *  resolveBoxesByCodes resolves the operator's scan to. */
+  conditions?: Record<string, 'hold' | 'damage'>;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
 }
@@ -233,6 +236,7 @@ export async function gateIn(db: DB, input: GateInInput) {
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
   const vehicleType = input.vehicleType ?? '';
+  const conditions = input.conditions ?? {};
   const wh = await warehouseOfGate(db, gate);
   const inTs = iso();
   const { resolved, missing } = await resolveBoxesByCodes(db, tags);
@@ -249,7 +253,13 @@ export async function gateIn(db: DB, input: GateInInput) {
       const row = found.get(tag)!;
       const b = { ...(row.data as Record<string, unknown>) };
       const wasOut = b.status === 'out';
-      b.status = 'warehouse';
+      // A box the operator flagged while scanning it in lands on 'hold' or
+      // 'damage' instead of 'warehouse' — same statuses the box list already
+      // filters by (see legacy.html's filtBoxStatus) — so it can't ship back
+      // out (gateOut's NOT_SHIPPABLE map) until someone clears the flag.
+      const condition = conditions[tag];
+      const status = condition ?? 'warehouse';
+      b.status = status;
       b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
       b.lastSeenAt = inTs;
       b.plate = plate;
@@ -278,13 +288,14 @@ export async function gateIn(db: DB, input: GateInInput) {
         plate,
         driver,
         vehicleType,
+        ...(condition ? { condition } : {}),
       });
       b.history = history;
 
       await tx
         .update(boxes)
         .set({
-          status: 'warehouse',
+          status,
           cycles: (row.cycles ?? 0) + (wasOut ? 1 : 0),
           lastSeenAt: new Date(inTs),
           customer: null,
@@ -316,6 +327,7 @@ export async function gateIn(db: DB, input: GateInInput) {
           plate,
           driver,
           vehicleType,
+          ...(condition ? { condition } : {}),
         },
       });
       received.push(tag);

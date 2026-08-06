@@ -14,6 +14,7 @@ beforeAll(async () => {
         'BTX-1': { tag: 'BTX-1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: true, history: [], location: {} },
       },
       customers: { 'CUST-001': { id: 'CUST-001', name: 'ลูกค้า ก', returnDays: 10 } },
+      boxtypes: { 'BT-001': { id: 'BT-001', name: 'ลังพลาสติก', value: 450 } },
       warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
       gates: { '5': 'WH-001' },
       employees: {
@@ -116,5 +117,71 @@ describe('operator attribution', () => {
 
     const box = await request(ctx.app).get('/api/boxes/BTX-1').set(auth(ctx.token));
     expect(box.body.history.at(-1).recorder).toBe('conveyor-reader');
+  });
+});
+
+/**
+ * Covers the PDA Gate In queue's per-box condition dropdown (ปกติ/เสีย/พัก
+ * ใช้งาน) — a box flagged while scanning it back in lands on 'hold' or
+ * 'damage' instead of 'warehouse', same as marking it damaged from the web.
+ */
+describe('gate/in per-tag conditions', () => {
+  /** Creates a box, ships it straight out to CUST-001 so it's in an
+   *  'out' state ready to be gated back in by the test itself — avoids a
+   *  wholesale PUT /api/state that would clobber the shared warehouse/gate
+   *  seed every other test in this file relies on. */
+  async function seedOutboundBox(tag: string) {
+    await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag, type: 'BT-001' });
+    await request(ctx.app).post(`/api/boxes/${tag}/label`).set(auth(ctx.token));
+    await request(ctx.app).post(`/api/boxes/${tag}/putaway`).set(auth(ctx.token)).send({ wh: 'WH-001' });
+    await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: [tag], customer: 'CUST-001', gate: 5 });
+  }
+
+  it('a box flagged damage lands on status damage, not warehouse, and cannot ship', async () => {
+    await seedOutboundBox('BTX-COND-1');
+    const res = await request(ctx.app)
+      .post('/api/gate/in')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-COND-1'], gate: 5, recorder: 'tester', conditions: { 'BTX-COND-1': 'damage' } });
+    expect(res.status).toBe(200);
+    expect(res.body.received).toEqual(['BTX-COND-1']);
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-COND-1').set(auth(ctx.token));
+    expect(box.body.status).toBe('damage');
+    expect(box.body.history.at(-1).condition).toBe('damage');
+
+    const ship = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-COND-1'], customer: 'CUST-001', gate: 5 });
+    expect(ship.status).toBe(409);
+  });
+
+  it('a box flagged hold lands on status hold', async () => {
+    await seedOutboundBox('BTX-COND-2');
+    const res = await request(ctx.app)
+      .post('/api/gate/in')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-COND-2'], gate: 5, recorder: 'tester', conditions: { 'BTX-COND-2': 'hold' } });
+    expect(res.status).toBe(200);
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-COND-2').set(auth(ctx.token));
+    expect(box.body.status).toBe('hold');
+  });
+
+  it('a tag not present in conditions still lands on warehouse as normal', async () => {
+    await seedOutboundBox('BTX-COND-3');
+    const res = await request(ctx.app)
+      .post('/api/gate/in')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-COND-3'], gate: 5, recorder: 'tester' });
+    expect(res.status).toBe(200);
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-COND-3').set(auth(ctx.token));
+    expect(box.body.status).toBe('warehouse');
+    expect(box.body.history.at(-1).condition).toBeUndefined();
   });
 });

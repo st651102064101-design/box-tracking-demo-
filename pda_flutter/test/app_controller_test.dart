@@ -52,6 +52,7 @@ class FakeApi extends ApiClient {
     String? plate,
     String? driver,
     String? vehicleType,
+    Map<String, String>? conditions,
   }) async {
     if (throwOnGate != null) {
       final e = throwOnGate!;

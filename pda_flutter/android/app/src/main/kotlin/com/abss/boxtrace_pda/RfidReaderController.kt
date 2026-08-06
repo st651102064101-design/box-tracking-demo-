@@ -367,24 +367,27 @@ class RfidReaderController(private val context: Context) :
      * because these are reader-side settings that persist until overwritten —
      * leaving detail mode does nothing unless the fast values are pushed back.
      *
-     * **Fast (default, every screen but registration)** — what the terminal
-     * does 99% of the time: sweep a pallet and collect EPCs. It matches
-     * rfid_html_app's configuration exactly, which is the only configuration
-     * measured at full reader speed on this hardware:
+     * **Fast (default, every screen but rfid_input_screen)** — what the
+     * terminal does 99% of the time: sweep a pallet and collect EPCs. It
+     * matches rfid_html_app's configuration exactly, which is the only
+     * configuration measured at full reader speed on this hardware:
      *
      *  - `setAttachTagDataWithReadEvent(false)` — no TagData rides along on the
      *    event; the read loop pulls the EPC and nothing else.
      *  - Tag fields cut to PEAK_RSSI alone. `ALL_TAG_FIELDS` makes the reader
      *    report TID/PC/CRC/XPC/phase/channel/timestamps for every tag on every
-     *    round, and none of that is looked at outside registration.
-     *  - DPO off. Dynamic Power Optimization exists to trade read performance
-     *    for battery life; on a screen whose whole job is read rate that is the
-     *    wrong side of the trade.
+     *    round, and nothing outside the RFID test screen looks at any of it.
      *
-     * **Detail (registration only)** — one tag held still in front of the
-     * antenna, and a TID is mandatory to bind it, so full reporting and DPO go
-     * back on and [readTidExplicit] is allowed to chase a TID the inventory
-     * round did not carry.
+     * **Detail (rfid_input_screen only)** — that screen's whole purpose is
+     * showing every field the SDK can report per tag, so `ALL_TAG_FIELDS`
+     * goes on. DPO stays off regardless — see setDPOState's own comment
+     * below on why detail mode no longer has a reason to want it on.
+     * Deliberately does *not* chase a TID with an explicit per-tag
+     * access-read the way an earlier version of this file did: that call
+     * stops and restarts inventory around every tag, and cost this exact
+     * screen its read rate the one time it was wired up (171/sec ->
+     * ~16/sec) for a field ([tidCount] confirms) this reader's inventory
+     * round never carries anyway.
      */
     private fun applyReadProfile(rd: RFIDReader) {
         val detail = detailMode
@@ -406,13 +409,20 @@ class RfidReaderController(private val context: Context) :
             Log.w(TAG, "tag-field reporting config failed", e)
         }
         try {
-            rd.Config.setDPOState(
-                if (detail) DYNAMIC_POWER_OPTIMIZATION.ENABLE else DYNAMIC_POWER_OPTIMIZATION.DISABLE
-            )
+            // Always off now, detail mode included. DPO trades read *rate*
+            // for battery, which only ever made sense back when detail mode
+            // also meant "one tag held still, chase its TID with an explicit
+            // access-read" — a slow, deliberate operation DPO's overhead
+            // didn't add much to. That explicit-TID path is gone (see
+            // eventReadNotify's comment on why); every current use of
+            // detail mode is rfid_input_screen sweeping tags for the rest
+            // of their fields as fast as it can, which is exactly the read
+            // rate DPO would trade away.
+            rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE)
         } catch (e: Exception) {
             Log.w(TAG, "DPO config failed", e)
         }
-        Log.i(TAG, "read profile: ${if (detail) "detail (TID, all fields, DPO on)" else "fast (EPC+RSSI, DPO off)"}")
+        Log.i(TAG, "read profile: ${if (detail) "detail (all fields, DPO off)" else "fast (EPC+RSSI, DPO off)"}")
     }
 
     fun disconnect() {
@@ -542,53 +552,6 @@ class RfidReaderController(private val context: Context) :
         status("disconnected", "เครื่องอ่านหลุดการเชื่อมต่อ")
     }
 
-    /**
-     * Explicit, targeted read of one tag's TID memory bank — the fallback for
-     * when the inventory round comes back without one, which on this reader is
-     * every round: measured on the terminal, the piggybacked TID is always
-     * empty, so this call is the only way a TID is ever obtained at all.
-     *
-     * Reached only from registration (see [detailMode]), because of what it
-     * costs: an access operation cannot run while an inventory is in flight, so
-     * inventory is stopped first and started again afterwards if the trigger is
-     * still held. That stop/start is a hole of tens of milliseconds between
-     * reads, which is why no sweeping screen may touch it.
-     *
-     * It must also not run on the SDK's event-callback thread: `readWait`
-     * blocks until the access response arrives, and that response is delivered
-     * by the very thread `eventReadNotify` runs on — calling it inline blocks
-     * the thread that would unblock it. Hence [exec].
-     */
-    private fun readTidExplicit(epc: String): String? {
-        val rd = reader ?: return null
-        return try {
-            try { rd.Actions.Inventory.stop() } catch (_: Exception) { /* wasn't running */ }
-            val tagAccess = rd.Actions.TagAccess
-            // ReadAccessParams is a Java inner (non-static) class — Kotlin
-            // constructs it off an instance of the enclosing TagAccess.
-            val params = tagAccess.ReadAccessParams()
-            params.setMemoryBank(MEMORY_BANK.MEMORY_BANK_TID)
-            params.setOffset(0)
-            params.setCount(6) // words — 96 bits, the mandatory Gen2 TID length
-            params.setAccessPassword(0)
-            val result = tagAccess.readWait(epc, params, AntennaInfo())
-            // A TID-bank read lands in getMemoryBankData() on this SDK;
-            // getTID() is only populated when the *inventory* carried it.
-            val tid = str { result?.getTID() }?.takeIf { it.isNotEmpty() }
-                ?: str { result?.getMemoryBankData() }?.takeIf { it.isNotEmpty() }
-            if (tid != null) tidCount++
-            tid
-        } catch (ex: Exception) {
-            Log.w(TAG, "explicit TID read failed for $epc", ex)
-            null
-        } finally {
-            // Put the reader back the way the operator left it.
-            if (triggerHeld) {
-                try { rd.Actions.Inventory.perform() } catch (_: Exception) {}
-            }
-        }
-    }
-
     // ── SDK read/status callbacks ─────────────────────────────────────────
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
@@ -623,32 +586,32 @@ class RfidReaderController(private val context: Context) :
                     continue
                 }
 
+                // Every field ALL_TAG_FIELDS attaches "for free" alongside the
+                // inventory round — no extra SDK call, just more of the same
+                // struct already in hand. TID deliberately is NOT chased with
+                // an explicit access-read here anymore: that call stops
+                // inventory, runs a full access transaction, then restarts it
+                // per tag, which cost a screen using detail mode ~10x its read
+                // rate the one time it was wired up here (171/sec -> ~16/sec,
+                // same drop the fast/detail profile split further up this file
+                // measured). TID stays whatever the inventory round itself
+                // carried — null on this reader, always, per that same
+                // measurement — and shows through honestly as "—" in the UI.
                 val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
                 if (inventoryTid != null) tidCount++
-                val payload = mutableMapOf<String, Any?>(
-                    "epc" to epc,
-                    "tid" to inventoryTid,
-                    "rssi" to lastRssi,
-                    "pc" to num { t.getPC() },
-                    "crc" to str { t.getStringCRC() },
-                    "antenna" to num { t.getAntennaID().toInt() },
-                    "channel" to str { t.getChannel() },
-                    "phase" to num { t.getPhase().toInt() },
-                    "seenCount" to num { t.getTagSeenCount() },
+                batch.add(
+                    mapOf(
+                        "epc" to epc,
+                        "tid" to inventoryTid,
+                        "rssi" to lastRssi,
+                        "pc" to num { t.getPC() },
+                        "crc" to str { t.getStringCRC() },
+                        "antenna" to num { t.getAntennaID().toInt() },
+                        "channel" to str { t.getChannel() },
+                        "phase" to num { t.getPhase().toInt() },
+                        "seenCount" to num { t.getTagSeenCount() },
+                    )
                 )
-                if (inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
-                    // Registration, one tag in front of the antenna, no TID in
-                    // the inventory round — go get it properly off the read
-                    // thread and emit once complete. This is the call that
-                    // stops and restarts inventory, which is exactly why it is
-                    // confined to this screen.
-                    exec.execute {
-                        payload["tid"] = readTidExplicit(epc)
-                        emit(mapOf("type" to "tags", "tags" to listOf(payload)))
-                    }
-                } else {
-                    batch.add(payload)
-                }
             }
 
             // The whole read event crosses the platform channel as one message.

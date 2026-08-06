@@ -12,7 +12,7 @@ import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate, boxRegister }
 
 /// Which physical input a trigger pull means right now, on any screen that
 /// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
@@ -104,6 +104,21 @@ class AppController extends ChangeNotifier {
   // ── scanning ────────────────────────────────────────────────────────────
   String mode = 'in'; // 'in' | 'out'
   final List<String> queue = [];
+
+  /// Per-tag condition flagged on the Gate In queue — 'hold' or 'damage'
+  /// instead of the default 'warehouse' landing spot. Gate Out never reads
+  /// this (a damaged box can't ship — the server already refuses that), it
+  /// only ever applies to [doCommit]'s 'in' branch.
+  final Map<String, String> queueConditions = {};
+
+  void setQueueCondition(String tag, String? condition) {
+    if (condition == null) {
+      queueConditions.remove(tag);
+    } else {
+      queueConditions[tag] = condition;
+    }
+    notifyListeners();
+  }
   String scanVal = '';
   ScanResult? lastResult;
 
@@ -542,6 +557,7 @@ class AppController extends ChangeNotifier {
   void lock() {
     emp = null;
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     _clearForms();
     screen = Screen.login;
@@ -683,6 +699,7 @@ class AppController extends ChangeNotifier {
     mode = m;
     screen = Screen.scan;
     queue.clear();
+    queueConditions.clear();
     scanVal = '';
     lastResult = null;
     _clearForms();
@@ -765,6 +782,15 @@ class AppController extends ChangeNotifier {
   /// it's a routine warehouse-floor action, not device configuration.
   void goRfidRegister() {
     screen = Screen.rfidRegister;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// Receiving flow: create -> label -> tag -> putaway (see
+  /// BoxRegisterScreen), copied from legacy.html's own box-registration +
+  /// putaway handlers.
+  void goBoxRegister() {
+    screen = Screen.boxRegister;
     notifyListeners();
     _connectReader();
   }
@@ -865,11 +891,13 @@ class AppController extends ChangeNotifier {
 
   void removeFromQueue(String tag) {
     queue.remove(tag);
+    queueConditions.remove(tag);
     notifyListeners();
   }
 
   void clearQueue() {
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     notifyListeners();
   }
@@ -995,6 +1023,7 @@ class AppController extends ChangeNotifier {
         plate: tx.plate,
         driver: tx.driver,
         vehicleType: tx.vehicleType,
+        conditions: tx.conditions,
       );
     }
     return api.gateOut(
@@ -1057,6 +1086,7 @@ class AppController extends ChangeNotifier {
             plate: inPlate,
             driver: inDriver,
             vehicleType: effInVType,
+            conditions: Map.of(queueConditions),
           )
         : OutboxTx(
             type: 'out',
@@ -1102,6 +1132,7 @@ class AppController extends ChangeNotifier {
           plate: inPlate,
           driver: inDriver,
           vehicleType: effInVType,
+          conditions: queueConditions,
         );
       } else {
         await api.gateOut(
@@ -1152,6 +1183,7 @@ class AppController extends ChangeNotifier {
 
   void _resetAfterCommit() {
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     _clearForms();
     if (mode == 'out' && customerList.length == 1) {
@@ -1328,7 +1360,8 @@ class AppController extends ChangeNotifier {
         screen != Screen.login &&
         screen != Screen.rfidInput &&
         screen != Screen.rfidRegister &&
-        screen != Screen.rfidLocate) {
+        screen != Screen.rfidLocate &&
+        screen != Screen.boxRegister) {
       return;
     }
     // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger

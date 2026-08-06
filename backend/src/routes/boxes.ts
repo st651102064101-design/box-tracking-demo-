@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes } from '../db/schema.js';
+import { boxes, boxTypes } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
+import { writeAuditLog } from '../services/audit.js';
 import { bump } from '../lib/bus.js';
 
 /** Read-only box queries (real reporting API alongside the state bridge). */
@@ -61,6 +63,175 @@ boxesRouter.get(
       .limit(limit);
 
     res.json({ count: rows.length, items: rows.map((r) => r.data) });
+  }),
+);
+
+const createBoxSchema = z.object({
+  tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
+  type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),
+});
+
+/**
+ * Registers a brand-new box straight off a supplier delivery — the PDA
+ * counterpart to legacy.html's "ลงทะเบียนกล่อง" tab (single-box path; the
+ * web's own bulk-prefix generator is a desktop-only workflow this doesn't
+ * try to replicate). Starts the same lifecycle legacy.html's own
+ * `$('#btnAddBox').onclick` does: status 'pending', labeled false, an empty
+ * location, and a `history: [{dir:'reg', ...}]` entry — a box is only really
+ * "in the warehouse" after label + putaway (see the two routes below).
+ *
+ * `data` is built to the exact shape legacy.html's own `S.boxes[tag]`
+ * object has, not just the typed columns, because GET /api/state only ever
+ * surfaces `data` to the frontend (see composeState in services/state.ts) —
+ * a box created here with the typed columns right but `data` wrong would
+ * look correct in this API's own responses and simply not exist on the web
+ * dashboard.
+ */
+boxesRouter.post(
+  '/',
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const input = createBoxSchema.parse(req.body);
+    const db = getDb();
+    const tag = input.tag.toUpperCase();
+
+    const existing = await db.select({ tag: boxes.tag }).from(boxes).where(eq(boxes.tag, tag));
+    if (existing.length) throw httpError(409, `มีกล่องรหัส ${tag} อยู่แล้ว`, 'tag_taken');
+
+    const [bt] = await db.select().from(boxTypes).where(eq(boxTypes.id, input.type));
+    if (!bt) throw httpError(400, 'ไม่พบประเภทกล่องนี้ในระบบ', 'unknown_box_type');
+    const value = bt.value == null ? null : Number(bt.value);
+
+    const now = new Date();
+    const ts = now.toISOString();
+    const location = { wh: '', zone: '', rack: '', shelf: '', slot: '', gate: null, ts };
+    const history = [{ dir: 'reg', ts, recorder: req.user!.username }];
+    const data = {
+      tag,
+      type: input.type,
+      value,
+      status: 'pending',
+      cycles: 0,
+      customer: '',
+      do: '',
+      po: '',
+      outGate: null,
+      outWh: '',
+      outAt: null,
+      dueAt: null,
+      location,
+      lastSeenAt: ts,
+      labeled: false,
+      history,
+    };
+    await db.insert(boxes).values({
+      tag,
+      type: input.type,
+      value: value == null ? null : String(value),
+      status: 'pending',
+      cycles: 0,
+      labeled: false,
+      location,
+      history,
+      data,
+      updatedAt: now,
+    });
+    await writeAuditLog(db, {
+      action: 'CREATE',
+      actor: req.user!.username,
+      itemId: tag,
+      itemName: bt.name ?? tag,
+      before: null,
+      after: data,
+    });
+    bump(req.get('X-Client-Id'));
+    res.json(data);
+  }),
+);
+
+/**
+ * Confirms the physical barcode sticker is actually on the box — a
+ * distinct step from creating the row (which can happen before the label's
+ * printed) and from Putaway (which can't happen before this: an unlabeled
+ * box has no barcode a gate scan could ever resolve again). Mirrors
+ * legacy.html's "ยืนยันติดป้ายเสร็จแล้ว" button.
+ */
+boxesRouter.post(
+  '/:tag/label',
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
+    if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
+    if (box.labeled) throw httpError(409, `กล่อง ${box.tag} ติดป้ายไปแล้ว`, 'already_labeled');
+
+    const ts = new Date().toISOString();
+    const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
+    const history = [...prevHistory, { dir: 'label', ts, recorder: req.user!.username }];
+    const data = {
+      ...(box.data as Record<string, unknown>),
+      labeled: true,
+      labeledAt: ts,
+      labeledBy: req.user!.username,
+      history,
+    };
+    await db
+      .update(boxes)
+      .set({ labeled: true, history, data, updatedAt: new Date() })
+      .where(eq(boxes.tag, req.params.tag));
+    bump(req.get('X-Client-Id'));
+    res.json(data);
+  }),
+);
+
+const putawaySchema = z.object({
+  wh: z.string().trim().min(1, 'ต้องระบุคลัง'),
+  zone: z.string().trim().optional().default(''),
+  rack: z.string().trim().optional().default(''),
+  shelf: z.string().trim().optional().default(''),
+  slot: z.string().trim().optional().default(''),
+});
+
+/**
+ * Places a labeled box on an actual shelf position — the last step of
+ * receiving from a supplier, and also how a box already in the warehouse
+ * gets relocated. Mirrors legacy.html's putaway modal (`wasPendingPutaway`
+ * in that file's own handler), including the same distinction it draws: a
+ * box moving out of 'pending' for the first time logs `dir:'putaway'`,
+ * anything already 'warehouse' being moved again logs `dir:'relocate'`.
+ */
+boxesRouter.post(
+  '/:tag/putaway',
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const input = putawaySchema.parse(req.body);
+    const db = getDb();
+    const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
+    if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
+    if (!box.labeled) throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
+    if (box.status === 'out') throw httpError(409, `กล่อง ${box.tag} ออกอยู่กับลูกค้า ย้ายตำแหน่งไม่ได้`, 'box_out');
+
+    const wasPending = box.status === 'pending';
+    const ts = new Date().toISOString();
+    const location = { wh: input.wh, zone: input.zone, rack: input.rack, shelf: input.shelf, slot: input.slot, gate: null, ts };
+    const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
+    const history = [
+      ...prevHistory,
+      { dir: wasPending ? 'putaway' : 'relocate', ts, wh: input.wh, loc: location, recorder: req.user!.username },
+    ];
+    const data = {
+      ...(box.data as Record<string, unknown>),
+      status: 'warehouse',
+      location,
+      lastSeenAt: ts,
+      history,
+    };
+    await db
+      .update(boxes)
+      .set({ status: 'warehouse', location, history, lastSeenAt: new Date(), data, updatedAt: new Date() })
+      .where(eq(boxes.tag, req.params.tag));
+    bump(req.get('X-Client-Id'));
+    res.json(data);
   }),
 );
 
