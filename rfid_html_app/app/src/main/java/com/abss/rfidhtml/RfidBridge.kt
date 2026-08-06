@@ -45,14 +45,23 @@ class RfidBridge(private val context: Context, private val web: WebView) {
     @JavascriptInterface
     fun start() = exec.execute {
         try { reader?.Actions?.Inventory?.perform() }
-        catch (e: Exception) { Log.w(TAG, "start failed", e) }
+        catch (e: Exception) { Log.w(TAG, "start failed${why(e)}", e); status("error", "เริ่มอ่านไม่ได้${why(e)}") }
     }
 
     @JavascriptInterface
     fun stop() = exec.execute {
         try { reader?.Actions?.Inventory?.stop() }
-        catch (e: Exception) { Log.w(TAG, "stop failed", e) }
+        catch (e: Exception) { Log.w(TAG, "stop failed${why(e)}", e) }
     }
+
+    /**
+     * `OperationFailureException.toString()` carries no message at all, so an
+     * unadorned log line is just a stack trace and a class name — useless for
+     * telling "another app owns the reader" apart from "region not configured".
+     * The result code is the only thing that distinguishes them.
+     */
+    private fun why(e: Exception): String =
+        if (e is OperationFailureException) " (${e.getResults()}: ${e.getVendorMessage()})" else ""
 
     // ── native → JS ───────────────────────────────────────────────────────
     private fun status(state: String, message: String) {
