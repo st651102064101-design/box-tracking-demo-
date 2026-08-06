@@ -74,6 +74,19 @@ export const customerSchema = z.object({
     contact: z.string().nullish(),
     returnDays: z.number().int().nonnegative().nullish(),
 });
+/** One row of the Location Master — `code` is the primary key (see
+ *  db/schema.ts's `locations` table); zone/rack/shelf/slot are each
+ *  optional so a partial location (e.g. zone-only) can still be recorded. */
+export const locationSchema = z.object({
+    code: z.string().min(1),
+    wh: z.string().nullish(),
+    zone: z.string().nullish(),
+    rack: z.string().nullish(),
+    shelf: z.string().nullish(),
+    slot: z.string().nullish(),
+    type: z.string().nullish(),
+    note: z.string().nullish(),
+});
 /* ─── gate operations ──────────────────────────────────────────────────────*/
 export const gateOutSchema = z.object({
     tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
@@ -91,7 +104,10 @@ export const gateOutSchema = z.object({
 /* ─── RFID tag association ─────────────────────────────────────────────────*/
 const HEX = /^[0-9A-Fa-f]+$/;
 export const rfidAssociateSchema = z.object({
-    rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8),
+    /** Optional: the MC3390R never reports a TID during inventory, and reading
+     *  one explicitly means halting the inventory, so the PDA commissions tags
+     *  by EPC alone. Still accepted from any client that does have one. */
+    rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8).optional(),
     rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
     /** Must be set explicitly to overwrite a box that already carries a tag —
      *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
@@ -107,5 +123,10 @@ export const gateInSchema = z.object({
     plate: z.string().optional(),
     driver: z.string().optional(),
     vehicleType: z.string().optional(),
+    /** Per-tag condition an operator flagged while scanning this batch in —
+     *  a box marked here lands on 'hold' or 'damage' instead of 'warehouse',
+     *  same statuses legacy.html's own box list already filters by. Any tag
+     *  not present here is assumed fine and goes straight to 'warehouse'. */
+    conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
 });
 //# sourceMappingURL=schemas.js.map

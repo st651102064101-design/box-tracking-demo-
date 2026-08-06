@@ -248,6 +248,21 @@ export async function gateIn(db: DB, input: GateInInput) {
   // they actually shot), not a canonical tag that was never resolved.
   const unknown: string[] = missing;
 
+  /* A box that never left is already accounted for — scanning it in again
+   * (a mis-scan, or someone repeating a receipt that already went through)
+   * must not silently re-stamp lastSeenAt and log a second "received" event
+   * as if a shipment had actually just come off a truck. Mirrors gateOut's
+   * NOT_SHIPPABLE guard: reject the whole batch up front, before any row is
+   * touched, rather than partially applying some tags and not others. Only
+   * 'warehouse' is checked here — pending/hold/damage/lost boxes are exactly
+   * what receiving is *for* (clearing a flag, or completing labeling), so
+   * those still proceed as before. */
+  const alreadyIn = canonicalTags.map((tag) => found.get(tag)!).filter((row) => row.status === 'warehouse');
+  if (alreadyIn.length) {
+    const detail = alreadyIn.map((row) => `${row.tag} (อยู่ในคลังอยู่แล้ว)`).join(', ');
+    throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
+  }
+
   await db.transaction(async (tx) => {
     for (const tag of canonicalTags) {
       const row = found.get(tag)!;

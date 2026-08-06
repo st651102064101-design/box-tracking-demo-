@@ -61,6 +61,63 @@ describe('gate operations', () => {
       .send({ tags: ['NOPE'], customer: 'CUST-001', gate: 5 });
     expect(res.status).toBe(404);
   });
+
+  it('rejects scanning in a box that is already in the warehouse', async () => {
+    // BTX-1 is back to 'warehouse' from the earlier "receives the box back"
+    // test in this same describe block — scanning it in again (a mis-scan,
+    // or someone re-running a receipt that already went through) must not
+    // silently re-stamp it as just-arrived.
+    const res = await request(ctx.app)
+      .post('/api/gate/in')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-1'], gate: 5, recorder: 'tester' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('box_already_in_warehouse');
+    expect(res.body.message).toContain('BTX-1');
+
+    // Rejected outright — not just reported, but state must be untouched.
+    const box = await request(ctx.app).get('/api/boxes/BTX-1').set(auth(ctx.token));
+    expect(box.body.status).toBe('warehouse');
+    expect(box.body.cycles).toBe(1);
+  });
+
+  it('rejects shipping a box that is already out with a customer, to any customer', async () => {
+    await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag: 'BTX-OUT-1', type: 'BT-001' });
+    await request(ctx.app).post('/api/boxes/BTX-OUT-1/label').set(auth(ctx.token));
+    await request(ctx.app).post('/api/boxes/BTX-OUT-1/putaway').set(auth(ctx.token)).send({ wh: 'WH-001' });
+    await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-OUT-1'], customer: 'CUST-001', gate: 5 });
+
+    // Same customer again — still refused; the box hasn't come back through
+    // Gate In, so it isn't sitting in this (or any) warehouse to ship.
+    const sameCustomer = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-OUT-1'], customer: 'CUST-001', gate: 5 });
+    expect(sameCustomer.status).toBe(409);
+    expect(sameCustomer.body.error).toBe('box_not_shippable');
+    expect(sameCustomer.body.message).toContain('BTX-OUT-1');
+
+    // A different customer — same rejection, for the same reason. Added via
+    // the additive masters endpoint, not PUT /api/state (a wholesale
+    // replace that would wipe every other seeded table in this file).
+    await request(ctx.app)
+      .post('/api/masters/customers')
+      .set(auth(ctx.token))
+      .send({ id: 'CUST-002', name: 'ลูกค้า ข', returnDays: 10 });
+    const otherCustomer = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-OUT-1'], customer: 'CUST-002', gate: 5 });
+    expect(otherCustomer.status).toBe(409);
+    expect(otherCustomer.body.error).toBe('box_not_shippable');
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-OUT-1').set(auth(ctx.token));
+    expect(box.body.status).toBe('out');
+    expect(box.body.customer).toBe('CUST-001');
+  });
 });
 
 /**
