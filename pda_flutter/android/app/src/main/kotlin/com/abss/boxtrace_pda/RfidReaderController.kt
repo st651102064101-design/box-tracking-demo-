@@ -90,6 +90,37 @@ class RfidReaderController(private val context: Context) :
             }
         }
     }
+
+    /**
+     * Proximity beep for the RFID locate/find-box screen: volume AND pitch
+     * both track [level] (0..1, same normalized RSSI the on-screen gauge
+     * animates against), so a faint return sounds like a faint tick and a
+     * strong one sounds loud and sharp — a true Geiger-counter tone, not a
+     * fixed click that just repeats faster.
+     *
+     * A fresh single-shot [ToneGenerator] is used per call rather than the
+     * shared [toneGen]: `ToneGenerator`'s volume is fixed at construction,
+     * so this is the only way to vary loudness call-to-call. It's disposed
+     * immediately after its tone completes — cheap relative to the ~200ms+
+     * gap this is throttled to on the Dart side.
+     */
+    private fun playLocateBeep(level: Double) {
+        beepExec.execute {
+            var gen: ToneGenerator? = null
+            try {
+                val clamped = level.coerceIn(0.0, 1.0)
+                val volume = (15 + clamped * 85).toInt().coerceIn(1, 100)
+                val durationMs = (30 + clamped * 40).toInt()
+                val tone = if (clamped > 0.75) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_BEEP
+                gen = ToneGenerator(AudioManager.STREAM_MUSIC, volume)
+                gen.startTone(tone, durationMs)
+            } catch (e: Exception) {
+                Log.w(TAG, "playLocateBeep failed", e)
+            } finally {
+                main.postDelayed({ try { gen?.release() } catch (_: Exception) {} }, 120)
+            }
+        }
+    }
     private val exec = Executors.newSingleThreadExecutor()
 
     private var readers: Readers? = null
@@ -150,6 +181,7 @@ class RfidReaderController(private val context: Context) :
             "setPowerIndex" -> { setPowerIndex(call.argument<Int>("index") ?: maxPower); result.success(true) }
             "setAutoBeep" -> { autoBeepEnabled = call.argument<Boolean>("enabled") ?: true; result.success(true) }
             "playTone" -> { playTone(call.argument<String>("kind") ?: "ok"); result.success(true) }
+            "playLocateBeep" -> { playLocateBeep(call.argument<Double>("level") ?: 0.0); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())

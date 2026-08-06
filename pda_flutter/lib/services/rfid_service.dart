@@ -313,6 +313,16 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Proximity beep for the locate/find-box screen: volume and pitch both
+  /// scale with [level] (0..1, same normalized value the on-screen gauge
+  /// uses) — a strong return beeps loud, a faint one barely ticks.
+  Future<void> playLocateBeep(double level) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('playLocateBeep', {'level': level});
+    } catch (_) {}
+  }
+
   Future<bool> isConnected() async {
     if (!supported) return false;
     try {
