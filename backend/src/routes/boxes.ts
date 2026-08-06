@@ -6,6 +6,7 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
+import { bump } from '../lib/bus.js';
 
 /** Read-only box queries (real reporting API alongside the state bridge). */
 export const boxesRouter = Router();
@@ -95,6 +96,10 @@ boxesRouter.post(
       replace: input.replace,
       actor: req.user!.username,
     });
+    /* A PDA tag bind never goes through PUT /api/state, so the dashboard's
+       SSE stream (see gate.ts for the same reasoning) has to be told here
+       too — otherwise the web only picks it up on its next manual refresh. */
+    bump(req.get('X-Client-Id'));
     res.json(result);
   }),
 );
@@ -105,6 +110,7 @@ boxesRouter.delete(
   canWrite,
   asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user!.username);
+    bump(req.get('X-Client-Id'));
     res.json(result);
   }),
 );
