@@ -97,13 +97,6 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => c.go(Screen.rfidInput),
                 ),
               ],
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.qr_code_scanner,
-                title: 'ลงทะเบียนแท็ก RFID',
-                sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
-                onTap: () => c.go(Screen.rfidRegister),
-              ),
               const SizedBox(height: 16),
               if (c.canConfigureDevice)
                 _tile(

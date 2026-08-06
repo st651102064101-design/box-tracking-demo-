@@ -653,6 +653,15 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
+  /// Fast-path box commissioning (see RfidRegisterScreen). Lived under
+  /// Settings before — moved next to the Gate In/Out cards on Home since
+  /// it's a routine warehouse-floor action, not device configuration.
+  void goRfidRegister() {
+    screen = Screen.rfidRegister;
+    notifyListeners();
+    _connectReader();
+  }
+
   void onScanChanged(String v) {
     scanVal = v;
     notifyListeners();
@@ -874,8 +883,10 @@ class AppController extends ChangeNotifier {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
-    final plate = mode == 'in' ? inPlate : outPlate;
-    if (plate.trim().isEmpty) {
+    // ทะเบียนรถ is mandatory only on the way out — the server's gateInSchema
+    // already takes it as optional (see backend/src/validators/schemas.ts),
+    // this just stopped matching that on the Gate In side of the app.
+    if (mode == 'out' && outPlate.trim().isEmpty) {
       toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
       return;
     }

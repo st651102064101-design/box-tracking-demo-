@@ -221,6 +221,20 @@ List<Widget> _confirmedBody(AppController c) {
       ),
       const SizedBox(height: 12),
     ],
+    // Moved here from Settings — commissioning a tag is a routine
+    // warehouse-floor action alongside Gate In/Out, not device config.
+    if (c.canScan) ...[
+      _ActionCard(
+        small: true,
+        icon: Icons.qr_code_scanner,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ลงทะเบียนแท็ก RFID',
+        sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
+        onTap: c.goRfidRegister,
+      ),
+      const SizedBox(height: 12),
+    ],
     _ActionCard(
       small: true,
       icon: Icons.search,

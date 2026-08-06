@@ -25,6 +25,12 @@ class _ScanScreenState extends State<ScanScreen> {
   final _inVtypeOtherCtrl = TextEditingController();
   final _scanFocus = FocusNode();
 
+  /// Gate In only: scan-then-details, so the operator isn't looking at three
+  /// vehicle fields before they've even started scanning boxes. "ถัดไป"
+  /// reveals the form; the actual commit only happens from there. Gate Out
+  /// keeps its form up front (it already gates on picking a customer first).
+  bool _inDetailsStep = false;
+
   @override
   void dispose() {
     _scanCtrl.dispose();
@@ -46,12 +52,33 @@ class _ScanScreenState extends State<ScanScreen> {
     _scanFocus.requestFocus();
   }
 
+  /// What the bottom button does depends on mode and step: Gate Out commits
+  /// directly (form's already on screen); Gate In's first tap just reveals
+  /// the vehicle form, and only the second tap — now labelled "ยืนยันรับเข้าคลัง"
+  /// — actually commits. A failed commit leaves the queue non-empty, which is
+  /// the signal to stay on the details step for a retry rather than snapping
+  /// back to an empty scan screen.
+  Future<void> _onPrimary(AppController c) async {
+    if (c.mode == 'out') {
+      c.doCommit();
+      return;
+    }
+    if (!_inDetailsStep) {
+      setState(() => _inDetailsStep = true);
+      return;
+    }
+    await c.doCommit();
+    if (!mounted) return;
+    if (c.queue.isEmpty) setState(() => _inDetailsStep = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final isOut = c.mode == 'out';
-    final plateOk = (isOut ? c.outPlate : c.inPlate).trim().isNotEmpty;
+    // ทะเบียนรถ is only mandatory on the way out — Gate In doesn't require it.
+    final plateOk = !isOut || c.outPlate.trim().isNotEmpty;
     final vtypeOk = isOut
         ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
@@ -77,7 +104,25 @@ class _ScanScreenState extends State<ScanScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
             children: [
-              if (isOut) _outForm(c) else _inForm(c),
+              if (isOut)
+                _outForm(c)
+              else if (_inDetailsStep) ...[
+                GestureDetector(
+                  onTap: () => setState(() => _inDetailsStep = false),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chevron_left, size: 17, color: C.muted),
+                        Text('กลับไปสแกนกล่องเพิ่ม',
+                            style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+                _inForm(c),
+              ],
               const SizedBox(height: 13),
               _scannerPanel(c),
               const SizedBox(height: 13),
@@ -98,7 +143,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
           child: PrimaryButton(
-            label: isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง',
+            label: isOut ? 'ยืนยันส่งออก' : (_inDetailsStep ? 'ยืนยันรับเข้าคลัง' : 'ถัดไป'),
             trailing: c.queue.isEmpty
                 ? null
                 : Container(
@@ -109,7 +154,7 @@ class _ScanScreenState extends State<ScanScreen> {
                         style: TextStyle(
                             fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
                   ),
-            onTap: (canCommit && !c.busy) ? c.doCommit : null,
+            onTap: (canCommit && !c.busy) ? () => _onPrimary(c) : null,
           ),
         ),
       ],
@@ -194,7 +239,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('ทะเบียนรถ *'),
+                    const FieldLabel('ทะเบียนรถ'),
                     TextField(
                         controller: _inPlateCtrl,
                         onChanged: c.setInPlate,
