@@ -91,33 +91,6 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              Panel(
-                padding: const EdgeInsets.all(16),
-                radius: 18,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(loc.t('โหมดประหยัดพลังงาน'),
-                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 3),
-                          Text(loc.t('ลดกราฟฟิกและความถี่รีเฟรช เพื่อความเร็วบนเครื่อง'),
-                              style: TextStyle(fontSize: 12, color: C.muted, height: 1.4)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: c.lowPowerMode,
-                      onChanged: c.setLowPowerMode,
-                      activeThumbColor: C.lime,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
               const _RfidPanel(),
               if (isAdminOrNull) ...[
                 const SizedBox(height: 10),

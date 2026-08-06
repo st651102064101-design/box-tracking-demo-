@@ -1005,11 +1005,14 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get lowPowerMode => prefs.lowPowerMode;
-  void setLowPowerMode(bool v) {
-    prefs.lowPowerMode = v;
-    notifyListeners();
-  }
+  /// Always on — the leaner animation/refresh behaviour every screen already
+  /// branches on by this flag (zero-duration transitions, longer background
+  /// polling, …) reads as smoother and less janky, not as a compromise, so
+  /// there is no reason it should ever have been optional. Kept as a getter
+  /// (rather than inlining `true` at every call site) purely so those call
+  /// sites don't have to change if a real per-device toggle is ever needed
+  /// again.
+  bool get lowPowerMode => true;
 
   /// Session-only (not persisted) — starts each fresh entry into a
   /// scan/track/locate screen on บาร์โค้ด, same as before this existed.

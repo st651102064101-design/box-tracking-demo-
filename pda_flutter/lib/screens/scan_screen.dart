@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import '../services/api_client.dart';
 import '../services/rfid_service.dart';
+import '../services/scan_speed_detector.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -45,14 +46,18 @@ class _ScanScreenState extends State<ScanScreen> {
   bool _rfidReading = false;
   StreamSubscription<bool>? _triggerSub;
 
-  /// Debounce auto-submit for the scan field, same reasoning as
-  /// RfidRegisterScreen's barcode field: this terminal doesn't reliably send
-  /// a trailing Enter after a scan, so waiting for the field to go quiet is
-  /// the fallback that makes dropping the "+" button here safe. onSubmitted
-  /// (Enter) still fires immediately when a suffix key *is* configured.
-  Timer? _autoSubmitTimer;
-  static const _autoSubmitDelay = Duration(milliseconds: 180);
-  static const _autoSubmitMinLen = 4;
+  /// Auto-submits the scan field without a trailing Enter, from keystroke
+  /// timing rather than a flat "quiet for 180ms" debounce — a flat debounce
+  /// fired mid-entry on any operator who paused typing "box-..." by hand
+  /// longer than that (a very ordinary pause), submitting an incomplete
+  /// code. ScanSpeedAutoSubmit only arms once it's actually observed a
+  /// scan-speed gap, so manual typing can never trip it early; a genuine
+  /// scanner (or the "+" button, or Enter, both still work) still submits
+  /// instantly. See its own doc for the full reasoning.
+  late final _scanAutoSubmit = ScanSpeedAutoSubmit(onAutoSubmit: () {
+    if (!mounted) return;
+    _submit(context.read<AppController>());
+  }, minLen: 4);
 
   @override
   void initState() {
@@ -65,7 +70,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   @override
   void dispose() {
-    _autoSubmitTimer?.cancel();
+    _scanAutoSubmit.dispose();
     _triggerSub?.cancel();
     _scanCtrl.removeListener(_onScanChanged);
     _scanCtrl.dispose();
@@ -80,18 +85,10 @@ class _ScanScreenState extends State<ScanScreen> {
     super.dispose();
   }
 
-  void _onScanChanged() {
-    _autoSubmitTimer?.cancel();
-    final text = _scanCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen) return;
-    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
-      if (!mounted || _scanCtrl.text.trim() != text) return;
-      _submit(context.read<AppController>());
-    });
-  }
+  void _onScanChanged() => _scanAutoSubmit.onChanged(_scanCtrl.text.trim());
 
   void _submit(AppController c) {
-    _autoSubmitTimer?.cancel();
+    _scanAutoSubmit.reset();
     final v = _scanCtrl.text.trim();
     if (v.isEmpty) return;
     c.addScan(v);
@@ -444,6 +441,10 @@ class _ScanScreenState extends State<ScanScreen> {
               decoration: InputDecoration(
                 hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัส',
                 hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                // Auto-submit (ScanSpeedAutoSubmit above) and Enter both
+                // still work — this is the explicit tap for whoever is
+                // typing by hand and doesn't reach for either.
+                suffixIcon: SubmitArrowButton(onTap: () => _submit(c)),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
                 filled: true,

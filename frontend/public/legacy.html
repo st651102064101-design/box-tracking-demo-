@@ -1214,7 +1214,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
-  <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span><span class="nav-badge" id="navBadgeInventory" hidden>0</span></span><span class="navlbl">คลังสินค้า</span></button>
+  <button data-tab="inventory" title="สต็อกกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span><span class="nav-badge" id="navBadgeInventory" hidden>0</span></span><span class="navlbl">สต็อกกล่อง</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
@@ -1904,7 +1904,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th>ลูกค้า</th><th>คลัง</th><th>บันทึกล่าสุด</th><th></th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th>บันทึกล่าสุด</th><th></th></tr></thead>
         <tbody id="boxBody"></tbody></table></div>
       <div class="bulkbar" id="bulkBox" style="display:none;">
         <span class="bcnt" id="bulkBoxCnt"></span>
@@ -2871,14 +2871,6 @@ function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">ยังไ
   return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
 /* ปุ่มลัดวันหมดอายุ — กรอกวันที่เองทีละหลักช้าและพลาดง่ายบนมือถือ/สแกนเนอร์
    ปุ่ม +N วันคำนวณจากวันนี้ให้เลย ส่วน "ไม่มีวันหมดอายุ" ล้างค่าทิ้ง */
-/* กด cell รหัส (บาร์โค้ด/ประเภท/ลูกค้า/คลัง) ในตารางกล่องเพื่อสลับแสดง
-   ค่าอีกแบบหนึ่ง — ไม่ต้องเปิดขยายแถวหรือเพิ่มคอลัมน์ถาวรเกินจำเป็น */
-function toggleIdCell(td){
-  var cur=td.textContent;var alt=td.getAttribute('data-alt');var bc=td.getAttribute('data-barcode');
-  var other=cur===bc?alt:bc;
-  td.innerHTML='<b>'+esc(other)+'</b>';
-}
-window.toggleIdCell=toggleIdCell;
 /* กดปุ่มลัดซ้ำ ๆ ให้บวกสะสมต่อจากวันที่ตั้งไว้แล้ว ไม่ใช่รีเซ็ตกลับมา "วันนี้+N"
    ทุกครั้ง — กด +30 วัน สองครั้งติดกันควรได้ +60 วันจากวันนี้ ไม่ใช่ +30 วันเท่าเดิม */
 function setExpiryQuick(days){var el=$('#bExpiry');if(!el)return;
@@ -4208,6 +4200,22 @@ function openMasterRowActions(kind,id,title,canDelete){
   );
 }
 window.openMasterRowActions=openMasterRowActions;
+
+/* หน้า "กล่องที่ลงทะเบียน" (Setup) — เดิมมีปุ่มแก้ไข/ลบแปะลอยอยู่ท้ายทุกแถว
+   ย้ายมาเป็น modal เดียวกับรูปแบบตาราง master data อื่น (btype/wh/cust/emp,
+   ดู openMasterRowActions) กดที่แถวเพื่อเปิด แทนที่จะมีปุ่มค้างอยู่ตลอดทุกแถว */
+function openBoxRowModal(tag){
+  var b=S.boxes[tag];if(!b)return;
+  openModal(
+    '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody"><div style="display:flex;flex-direction:column;gap:8px;">'
+      +'<button class="btn ghost" style="width:100%;justify-content:flex-start;" onclick="closeModal();editBox(\''+esc(tag)+'\')">แก้ไข</button>'
+      +'<button class="btn red" style="width:100%;justify-content:flex-start;" onclick="closeModal();delBox(\''+esc(tag)+'\')">ลบ</button>'
+    +'</div></div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+  );
+}
+window.openBoxRowModal=openBoxRowModal;
 
 function markLost(tag){
   var b=S.boxes[tag];if(!b||b.status==='pending')return;
@@ -5740,6 +5748,24 @@ function saveOutbound(){
   if(damagedInQueue.length&&custKind!=='supplier'){
     return toast('จ่ายออกไม่ได้','กล่องชำรุด '+damagedInQueue.join(', ')+' ส่งออกได้เฉพาะปลายทาง Supplier เท่านั้น','err');
   }
+  /* scanOut() กันสถานะที่จ่ายออกไม่ได้ตอนยิงเข้าคิว แต่ระหว่างที่ยังค้างอยู่ใน
+     คิว (ยังไม่กดยืนยัน) สถานะจริงอาจเปลี่ยนไปแล้ว — เช่นอุปกรณ์/แท็บอื่นจ่าย
+     กล่องใบเดียวกันออกไปก่อน ต้องเช็คซ้ำตอนกดยืนยันจริง ไม่ใช่เชื่อคิวเก่าเฉย ๆ
+     ไม่งั้นจะจ่ายซ้ำ/ทับข้อมูลลูกค้า-DO เดิม — mirror ของ gateOut() ฝั่ง backend
+     (NOT_SHIPPABLE) ที่ปฏิเสธทั้งชุดถ้ามีใบใดใบหนึ่งไม่อยู่ในสถานะ 'warehouse'
+     (ยกเว้นชำรุดที่กำลังส่งไป supplier ซึ่งเพิ่งอนุญาตไปข้างบน) */
+  var notShippable=pendingOut.filter(function(t){
+    var b=S.boxes[t];if(!b)return true;
+    if(b.status==='warehouse')return false;
+    if(b.status==='damage'&&custKind==='supplier')return false;
+    return true;
+  });
+  if(notShippable.length){
+    pendingOut=pendingOut.filter(function(t){return notShippable.indexOf(t)<0;});
+    notShippable.forEach(function(t){delete outConditionMap[t];});
+    renderOutResult();
+    return toast('มีกล่องจ่ายออกไม่ได้แล้ว','สถานะเปลี่ยนไประหว่างรอยืนยัน: '+notShippable.join(', ')+' — เอาออกจากคิวแล้ว กดยืนยันอีกครั้งสำหรับใบที่เหลือ','err');
+  }
   /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
      history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
      แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
@@ -5845,6 +5871,18 @@ $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','in
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
+  /* scanIn() กันกล่อง status='warehouse' ไม่ให้เข้าคิวได้ตอนยิง แต่ระหว่างที่
+     กล่องยังค้างอยู่ในคิว (ยังไม่กดยืนยัน) สถานะอาจเปลี่ยนไปแล้วจริง ๆ — เช่น
+     อุปกรณ์/แท็บอื่นรับกล่องใบเดียวกันเข้าไปก่อน ต้องเช็คซ้ำที่นี่ (ตอนกดยืนยันจริง)
+     ไม่ใช่เชื่อคิวเก่าเฉย ๆ ไม่งั้นจะรับซ้ำ ทับตำแหน่ง/รอบใช้งานผิด — mirror ของ
+     gateIn() ฝั่ง backend (box_already_in_warehouse) ที่ปฏิเสธทั้งชุดถ้ามีใบใด
+     ใบหนึ่งอยู่ในคลังแล้ว */
+  var alreadyIn=pendingIn.filter(function(t){var b=S.boxes[t];return b&&b.status==='warehouse';});
+  if(alreadyIn.length){
+    pendingIn=pendingIn.filter(function(t){return alreadyIn.indexOf(t)<0;});
+    renderInResult();
+    return toast('มีกล่องอยู่ในคลังอยู่แล้ว',alreadyIn.join(', ')+' — เอาออกจากคิวแล้ว กดยืนยันอีกครั้งสำหรับใบที่เหลือ','err');
+  }
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
   var partner=val('inPartner');
   if(!val('inRecorder'))setv('inRecorder',USER);
@@ -6473,17 +6511,12 @@ function renderSetup(){
        (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
        เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
     var lastTs=b.lastSeenAt||b.regAt||'';
-    return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
-      +'<td class="mono id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc(b.type||'-')+'" onclick="toggleIdCell(this)" title="กดสลับ บาร์โค้ด / รหัสประเภท"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
+    return '<tr class="row-click" data-tag="'+esc(b.tag)+'" onclick="if(event.target.type!==\'checkbox\')openBoxRowModal(\''+esc(b.tag)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
+      +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
-      +'<td class="id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc(b.customer?custName(b.customer):'-')+'" onclick="toggleIdCell(this)" title="กดสลับ ชื่อลูกค้า / บาร์โค้ด"><b>'+esc(b.customer?custName(b.customer):'-')+'</b></td>'
-      +'<td class="id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc((b.location||{}).wh?whName((b.location||{}).wh):'-')+'" onclick="toggleIdCell(this)" title="กดสลับ ชื่อคลัง / บาร์โค้ด"><b>'+esc((b.location||{}).wh?whName((b.location||{}).wh):'-')+'</b></td>'
       +'<td class="mono small">'+(lastTs?esc(fmtTs(lastTs)):'-')+'</td>'
-      +'<td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
-      +'</div></td></tr>';
-  }).join(''):emptyRow(12,'ยังไม่มีกล่อง');
+      +'<td class="c muted">›</td></tr>';
+  }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
   /* ติดป้ายแล้วรอ Putaway = อยู่ในคลังแล้ว นับรวมในยอด "ในคลัง" ไม่ใช่ "รอติดบาร์โค้ด" */
   var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending'&&b.labeled!==true;}).length;
@@ -8491,8 +8524,13 @@ function goInventory(opts) {
   /* reset all filters first */
   invStatusFilter = opts.status || '';
   invCustFilter   = opts.cust   || '';
-  invWhFilter     = opts.wh     || '';
   invDoFilter     = opts.doNo   || '';
+  /* กล่องที่นับในการ์ด/โหนดผังงาน (เช่น "อยู่กับลูกค้า"/"เกินกำหนดคืน") มักไม่เคยอยู่
+     บนแร็คเลย ('out'/pending ฯลฯ) — ปล่อยให้ wh pill ค้างที่ "ทุกคลัง" แบบเดิมจะทำให้
+     ตารางว่างเปล่าทั้งที่การ์ดขึ้นจำนวนไว้ ใช้ตัวเดียวกับตอนกดแท็บสถานะ (ดู
+     pickInvWhWithData ด้านล่าง) เลือก pill ที่มีข้อมูลจริงให้เอง เว้นแต่ผู้เรียก
+     ระบุ wh มาตรง ๆ */
+  invWhFilter     = ('wh' in opts) ? opts.wh : pickInvWhWithData();
   /* sync status seg UI */
   $all('#invStatusSeg .sf-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.st === invStatusFilter);
@@ -11881,7 +11919,7 @@ function openColumnMapModal(opts){
     "ยังไม่กลับเข้าคลัง":"Not yet returned","ตัวเลขสำคัญ":"Key figures","กล่องทั้งหมดในระบบ":"Total boxes in system",
     "ออกไปแล้ว (ยังไม่คืน)":"Out (not returned)","รับคืนสะสม (ครั้ง)":"Returns (times)","เกินกำหนดคืน":"Overdue",
     "รอบหมุนเวียนรวม":"Total cycles","มูลค่าสูญหาย (บาท)":"Loss value (THB)","พิมพ์ภาพรวม":"Print overview",
-    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory",
+    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory","สต็อกกล่อง":"Inventory",
     "ติดตามกล่อง":"Track Box","ตั้งค่า (Master)":"Setup (Master)",
     "สลับโหมดสว่าง/มืด":"Toggle light/dark","ใส่ข้อมูลตัวอย่าง":"Load sample data","เมนู":"Menu",
     "รอ Putaway":"Awaiting putaway",
