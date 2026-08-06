@@ -144,7 +144,9 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       if (existing >= 0) {
         // Same tag seen again — keep the best signal it ever showed and count
         // the hits, both of which help tell the tag in hand apart from one on
-        // the next shelf.
+        // the next shelf. Updated in place: a tag answering 170 times a second
+        // is "most recent" on every one of them, and re-sorting on that would
+        // make the list churn under the operator's thumb mid-tap.
         final c = _found[existing];
         _found[existing] = _Candidate(
           epc: c.epc,
@@ -152,12 +154,11 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           hits: c.hits + 1,
         );
       } else {
-        _found.add(_Candidate(epc: read.epc, rssi: read.rssi, hits: 1));
+        // Newly discovered tags go on top, so the tag just brought into range
+        // is the one the operator sees first. Order is by discovery, never
+        // re-sorted afterwards — and nothing is preselected either way.
+        _found.insert(0, _Candidate(epc: read.epc, rssi: read.rssi, hits: 1));
       }
-      // Strongest first: the tag being held against the reader is almost always
-      // the loudest, so the likely answer sits under the operator's thumb — but
-      // it is still only pre-sorted, never pre-selected.
-      _found.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
       _rfidError = null;
     });
   }

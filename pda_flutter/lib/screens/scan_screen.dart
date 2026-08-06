@@ -443,7 +443,11 @@ class _ScanScreenState extends State<ScanScreen> {
       ];
     }
     final S = c.S;
-    return c.queue.map((t) {
+    // Newest scan on top. Reversed at render rather than by inserting at the
+    // head of `queue`, because the queue itself is submitted to the gate and
+    // reused by simBurst/removeFromQueue — display order is a display concern
+    // and shouldn't quietly change what gets sent.
+    return c.queue.reversed.map((t) {
       final b = S?.box(t);
       final isRet = b?.everShipped ?? false;
       late String badge;
