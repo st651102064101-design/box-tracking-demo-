@@ -668,6 +668,38 @@ void main() {
       expect(c.screen, Screen.home);
     });
 
+    /* Requiring a live connection here used to strand a terminal provisioned
+       with no signal on this screen forever — nothing else ever retries a
+       login that has never once succeeded. completeDeviceSetup now saves
+       and finishes regardless, trusting the background retry it starts (see
+       _scheduleAuthRetry) to pick the connection up once it exists. */
+    test('completeDeviceSetup finishes even when the connection attempt fails', () async {
+      final api = FakeApi();
+      final c = await freshDevice(api); // primes state before the fake goes offline
+      expect(c.deviceConfigured, isFalse);
+
+      api.throwOnState = Exception('Failed to fetch');
+      await c.completeDeviceSetup(baseUrl: 'http://unreachable:4000');
+
+      expect(c.deviceConfigured, isTrue,
+          reason: 'saved and finished, not stuck waiting on connectivity');
+      expect(c.connected, isFalse, reason: 'the connection genuinely never succeeded');
+      expect(c.connError, isNotNull);
+      expect(c.toast!.title, 'บันทึกแล้ว — ยังไม่เชื่อมต่อ',
+          reason: 'told honestly, not reported as if it had connected');
+    });
+
+    test('completeDeviceSetup finishes normally when the connection succeeds', () async {
+      final api = FakeApi();
+      final c = await freshDevice(api);
+
+      await c.completeDeviceSetup(baseUrl: 'http://test');
+
+      expect(c.deviceConfigured, isTrue);
+      expect(c.connected, isTrue);
+      expect(c.toast!.title, 'ตั้งค่าเครื่องแล้ว');
+    });
+
     test('picking a warehouse with a single gate fills it in', () async {
       final api = FakeApi()
         ..state = {

@@ -219,6 +219,7 @@ class AppController extends ChangeNotifier {
       if (api.token == null || api.token!.isEmpty) await _deviceLogin();
       await refresh();
       connError = null;
+      _stopAuthRetry();
     } on ApiException catch (e) {
       // A stale token normally self-heals inside ApiClient; this covers the
       // case where the *stored* token was rejected before any retry could run.
@@ -227,6 +228,7 @@ class AppController extends ChangeNotifier {
           await _deviceLogin();
           await refresh();
           connError = null;
+          _stopAuthRetry();
           return;
         } catch (e2) {
           connError = _msg(e2);
@@ -234,9 +236,52 @@ class AppController extends ChangeNotifier {
       } else {
         connError = e.message;
       }
+      // A failed attempt means whatever [connected] said before is no longer
+      // trustworthy — a device that connected once and later drops (or, here,
+      // a retry that finds it's still not back) has to say so again, not keep
+      // reporting the last success it happened to have.
+      _liveConnected = false;
+      _scheduleAuthRetry();
     } catch (e) {
       connError = _msg(e);
+      _liveConnected = false;
+      _scheduleAuthRetry();
     }
+  }
+
+  // ── background reconnect ──────────────────────────────────────────────
+  Timer? _authRetryTimer;
+  int _authRetryAttempt = 0;
+  // Same shape as RealtimeService's own backoff: short at first, capped at a
+  // minute, and — deliberately — never given up on. A terminal provisioned
+  // with no signal yet, or one that's carried out of range mid-shift, has no
+  // other way back to a working connection: nothing else in this app retries
+  // a login that has never once succeeded (see [RealtimeService._run], which
+  // only ever *checks* for a token — it never fetches one).
+  static const _authRetryDelays = [5, 10, 20, 30, 45, 60];
+
+  /// Keeps retrying [_ensureAuthAndState] in the background for as long as it
+  /// keeps failing, so a device that's offline right now — at first boot, at
+  /// setup, or mid-shift — starts working the moment connectivity actually
+  /// returns, with nobody having to notice and go poke Settings. Every screen
+  /// that depends on [S] already renders from the cached snapshot in the
+  /// meantime (see [init]), so this is purely about closing the gap silently
+  /// once the network is back.
+  void _scheduleAuthRetry() {
+    _authRetryTimer?.cancel();
+    final delay = _authRetryDelays[_authRetryAttempt.clamp(0, _authRetryDelays.length - 1)];
+    if (_authRetryAttempt < _authRetryDelays.length - 1) _authRetryAttempt++;
+    _authRetryTimer = Timer(Duration(seconds: delay), () {
+      // _ensureAuthAndState reschedules itself again on failure, or calls
+      // _stopAuthRetry on success — this timer's job ends the moment it fires.
+      unawaited(_ensureAuthAndState().then((_) => notifyListeners()));
+    });
+  }
+
+  void _stopAuthRetry() {
+    _authRetryTimer?.cancel();
+    _authRetryTimer = null;
+    _authRetryAttempt = 0;
   }
 
   Future<void> refresh() async {
@@ -275,6 +320,7 @@ class AppController extends ChangeNotifier {
     _trigSub?.cancel();
     _statusSub?.cancel();
     _realtimeDebounce?.cancel();
+    _authRetryTimer?.cancel();
     _realtime.dispose();
     super.dispose();
   }
@@ -555,16 +601,28 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The last step of device_setup_screen.dart's bottom button, enabled once
-  /// [connected] is true. Warehouse/gate are no longer fixed at setup time —
-  /// they're picked per-visit instead (see pickWh/pickGate/confirmPost) — so
-  /// "configured" now just means this terminal has a working connection and
-  /// has been through setup once.
+  /// The last step of device_setup_screen.dart's bottom button. Warehouse/
+  /// gate are no longer fixed at setup time — they're picked per-visit
+  /// instead (see pickWh/pickGate/confirmPost) — so "configured" just means
+  /// this terminal has a server address saved and has been through setup
+  /// once; it does not require [connected] to be true (see
+  /// [completeDeviceSetup] for why).
+  ///
+  /// The toast deliberately overwrites whatever [applyConnection] just
+  /// showed, with a message that tells the truth about which case this is —
+  /// silently replacing "เชื่อมต่อไม่สำเร็จ" with an unqualified "ตั้งค่า
+  /// เครื่องแล้ว" would read as the problem having resolved itself when it
+  /// hasn't; the device is saved and will keep trying in the background
+  /// (see [_scheduleAuthRetry]), not already working.
   void finishDeviceSetup() {
     prefs.deviceConfigured = true;
     screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
-    toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
+    if (connected) {
+      toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
+    } else {
+      toastMsg('บันทึกแล้ว — ยังไม่เชื่อมต่อ', 'ระบบจะเชื่อมต่อให้อัตโนมัติเมื่อมีสัญญาณ', ResultKind.warn);
+    }
     _connectReader();
   }
 
@@ -1130,19 +1188,25 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The device-setup screen's single bottom button: connects with whatever
-  /// is currently in the form, then finishes setup automatically once that
-  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
-  /// then this button separately, which read as the button being broken when
-  /// really it was just gated on a connection nobody had triggered yet. Does
-  /// nothing further on failure — [applyConnection] already toasted why.
+  /// The device-setup screen's single bottom button: saves the form and
+  /// finishes setup, whether or not the connection attempt just now
+  /// succeeded.
+  ///
+  /// Requiring a live connection here used to strand a terminal provisioned
+  /// anywhere without signal — a warehouse basement, a site before the
+  /// router's up — on this screen forever, since nothing else would ever
+  /// retry a login that had never once succeeded. [applyConnection] already
+  /// starts that background retry on failure (see [_scheduleAuthRetry]), so
+  /// the honest thing to do is save now and let the device catch up on its
+  /// own the moment it has signal — not block the person standing here
+  /// holding it. [finishDeviceSetup] surfaces the right toast either way.
   Future<void> completeDeviceSetup({
     required String baseUrl,
     String? username,
     String? password,
   }) async {
     await applyConnection(baseUrl: baseUrl, username: username, password: password);
-    if (connected) finishDeviceSetup();
+    finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
