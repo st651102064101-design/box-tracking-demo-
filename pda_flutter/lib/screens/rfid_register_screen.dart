@@ -11,6 +11,16 @@ import '../widgets/common.dart';
 
 enum _Step { waitingBarcode, waitingRfid, success }
 
+/// One distinct tag the sweep turned up, with the best signal it showed and how
+/// many times it answered — the two things that tell "the tag in my hand" apart
+/// from "a tag on the next shelf" when several come back at once.
+class _Candidate {
+  final String epc;
+  final int? rssi;
+  final int hits;
+  const _Candidate({required this.epc, this.rssi, required this.hits});
+}
+
 /// Dedicated fast-path for commissioning new boxes: scan the barcode, pull
 /// the trigger to read a blank tag's TID/EPC, done — the screen clears
 /// itself and is ready for the next box immediately. Deliberately narrower
@@ -36,6 +46,12 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   String? _rfidError; // shown in the RFID card when a read can't be used
   bool _verifying = false;
   bool _binding = false;
+  /// Distinct tags this sweep has turned up, strongest signal first.
+  final List<_Candidate> _found = [];
+  /// The one the operator ticked. Never set by the app — an auto-selection is
+  /// indistinguishable on screen from a deliberate one, and this is the step
+  /// that decides which physical box a tag belongs to from here on.
+  String? _selectedEpc;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
   // Held so dispose() can stop the reader without reading it off a context
@@ -96,6 +112,10 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         _tag = resolvedTag;
         _step = _Step.waitingRfid;
         _rfidError = null;
+        // A fresh box gets a fresh list — carrying the previous box's reads
+        // over is how the wrong tag gets bound.
+        _found.clear();
+        _selectedEpc = null;
       });
       _barcodeCtrl.clear();
       // Arm the reader the instant the barcode lands. The operator is holding
@@ -111,15 +131,41 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     }
   }
 
+  /// Collects what the sweep finds. It does **not** bind: a trigger pull in a
+  /// rack picks up every tag in range, and binding the first read would attach
+  /// whichever box happened to answer first — including a neighbouring box that
+  /// was already commissioned. The operator picks the right one; the screen's
+  /// job is only to show the choice honestly.
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.waitingRfid || _binding) return;
     if (read.epc.isEmpty) return;
-    _bind(read.epc);
+    setState(() {
+      final existing = _found.indexWhere((c) => c.epc == read.epc);
+      if (existing >= 0) {
+        // Same tag seen again — keep the best signal it ever showed and count
+        // the hits, both of which help tell the tag in hand apart from one on
+        // the next shelf.
+        final c = _found[existing];
+        _found[existing] = _Candidate(
+          epc: c.epc,
+          rssi: (read.rssi ?? -999) > (c.rssi ?? -999) ? read.rssi : c.rssi,
+          hits: c.hits + 1,
+        );
+      } else {
+        _found.add(_Candidate(epc: read.epc, rssi: read.rssi, hits: 1));
+      }
+      // Strongest first: the tag being held against the reader is almost always
+      // the loudest, so the likely answer sits under the operator's thumb — but
+      // it is still only pre-sorted, never pre-selected.
+      _found.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+      _rfidError = null;
+    });
   }
 
-  Future<void> _bind(String epc) async {
+  Future<void> _bindSelected() async {
     final tag = _tag;
-    if (tag == null) return;
+    final epc = _selectedEpc;
+    if (tag == null || epc == null || _binding) return;
     setState(() {
       _binding = true;
       _rfidError = null;
@@ -138,6 +184,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         setState(() {
           _step = _Step.waitingBarcode;
           _tag = null;
+          _found.clear();
+          _selectedEpc = null;
         });
         _barcodeFocus.requestFocus();
       });
@@ -146,6 +194,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     } finally {
       if (mounted) setState(() => _binding = false);
     }
+  }
+
+  Future<void> _rescan() async {
+    setState(() {
+      _found.clear();
+      _selectedEpc = null;
+      _rfidError = null;
+    });
+    await _c.rfid.startInventory();
   }
 
   @override
@@ -250,7 +307,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
       dot = _binding ? C.limeDeep : C.orange;
-      label = _binding ? 'กำลังผูกแท็ก…' : 'กำลังอ่าน — จ่อแท็กได้เลย';
+      label = _binding ? 'กำลังผูกแท็ก…' : 'กำลังอ่านแท็ก';
     }
     return Opacity(
       opacity: active ? 1 : 0.55,
@@ -284,6 +341,100 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(_rfidError!, style: TextStyle(fontSize: 12.5, color: C.red)),
               ),
+            if (active && !_binding) ...[
+              const SizedBox(height: 12),
+              if (_found.isEmpty)
+                Text('ยังไม่พบแท็ก — เหนี่ยวไกหรือจ่อแท็กเข้าใกล้เครื่องอ่าน',
+                    style: TextStyle(fontSize: 12.5, color: C.faint))
+              else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('พบ ${_found.length} แท็ก — เลือกใบที่จะผูก',
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                    ),
+                    GestureDetector(
+                      onTap: _rescan,
+                      child: Text('ยิงใหม่', style: TextStyle(fontSize: 12.5, color: C.orange)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // A plain list, not a scroll view: a sweep that turns up so many
+                // tags that this needs scrolling is a sweep that was pointed at
+                // a rack rather than a box, and "ยิงใหม่" from closer in is the
+                // right answer to that, not more scrolling.
+                // RadioGroup owns the selection for the whole list; Radio's own
+                // groupValue/onChanged are deprecated in this Flutter version.
+                RadioGroup<String>(
+                  groupValue: _selectedEpc,
+                  onChanged: (v) => setState(() => _selectedEpc = v),
+                  child: Column(children: _found.map(_candidateRow).toList()),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    // Stays disabled until something is ticked. Binding is the
+                    // irreversible half of this screen — it rewrites which
+                    // physical box that tag means from here on — so it takes a
+                    // deliberate press, never a default.
+                    onPressed: _selectedEpc == null ? null : _bindSelected,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: C.lime,
+                      foregroundColor: C.limeDeep,
+                      disabledBackgroundColor: C.neutralBg,
+                      disabledForegroundColor: C.faint,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                    ),
+                    child: Text(
+                      _selectedEpc == null ? 'เลือกแท็กที่จะผูก' : 'ผูกกับ ${_tag ?? ''}',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _candidateRow(_Candidate c) {
+    final selected = _selectedEpc == c.epc;
+    return InkWell(
+      onTap: () => setState(() => _selectedEpc = c.epc),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Radio<String>(
+              value: c.epc,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    c.epc,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? C.ink : C.ink2,
+                    ),
+                  ),
+                  Text('สัญญาณ ${c.rssi ?? '—'} · อ่านได้ ${c.hits} ครั้ง',
+                      style: TextStyle(fontSize: 11.5, color: C.faint)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -304,7 +455,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         bg = C.orangeBg;
         fg = C.orange;
         border = C.orangeBorder;
-        text = '📢 เครื่องอ่านพร้อมแล้ว — จ่อแท็กได้เลย';
+        text = '📢 ยิงแท็ก แล้วเลือกใบที่จะผูกจากรายการ';
         break;
       case _Step.success:
         bg = C.limeBg;
