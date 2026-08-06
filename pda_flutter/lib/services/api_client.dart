@@ -232,6 +232,26 @@ class ApiClient {
     return await _send(() => http.post(_u('/api/boxes/$tag/label'), headers: _headers)) as Map<String, dynamic>;
   }
 
+  /// POST /api/boxes/:tag/damage — files a damage report captured offline
+  /// (see [DamagedFlag] / DamagedBoxScreen), synced once connectivity comes
+  /// back (see AppController.flushDamagedFlags).
+  ///
+  /// NOTE: this route doesn't exist on the backend yet — the client and
+  /// local queue are ready, but someone still has to add the matching
+  /// Express handler (persist a damage record against [tag], accept
+  /// [rfidEpcs] as the batch that was swept alongside it) before a sync
+  /// actually lands anywhere. Until then, flushDamagedFlags's calls here
+  /// fail like any other unreachable endpoint and simply retry next sync.
+  Future<Map<String, dynamic>> flagDamage(
+    String tag, {
+    required List<String> rfidEpcs,
+    required String note,
+  }) async {
+    return await _send(() => http.post(_u('/api/boxes/$tag/damage'),
+        headers: _headers,
+        body: jsonEncode({'rfidEpcs': rfidEpcs, 'note': note}))) as Map<String, dynamic>;
+  }
+
   /// POST /api/boxes/:tag/putaway { wh, zone?, rack?, shelf?, slot? } —
   /// places a labeled box on an actual shelf position, moving it to
   /// 'warehouse'. Throws with code 'not_labeled' if [labelBox] hasn't run

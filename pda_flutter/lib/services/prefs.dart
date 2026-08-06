@@ -32,6 +32,7 @@ class Prefs {
 
   static const _kStateCache = 'boxtrace_state_cache';
   static const _kOutbox = 'boxtrace_pda_outbox';
+  static const _kDamagedFlags = 'boxtrace_pda_damaged_flags';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
   static const _kLowPower = 'boxtrace_low_power';
@@ -244,6 +245,22 @@ class Prefs {
   }
 
   set outbox(List<dynamic> v) => _p.setString(_kOutbox, jsonEncode(v));
+
+  /// Damaged-box reports (see [DamagedFlag]) — stored exactly like [outbox]
+  /// (JSON blob in SharedPreferences, not a real database) since the record
+  /// shape and volume here are the same order of magnitude: a handful of
+  /// small entries per shift, never the bulk data a stock count would be.
+  List<dynamic> get damagedFlags {
+    final s = _p.getString(_kDamagedFlags);
+    if (s == null) return [];
+    try {
+      return List<dynamic>.from(jsonDecode(s));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  set damagedFlags(List<dynamic> v) => _p.setString(_kDamagedFlags, jsonEncode(v));
 
   /// The PIN itself lives on the backend now (bcrypt-hashed, see
   /// `Employee.hasPin` / `ApiClient.setEmployeePin`/`verifyEmployeePin`) —

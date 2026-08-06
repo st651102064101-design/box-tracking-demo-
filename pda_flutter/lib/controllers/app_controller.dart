@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../models/box.dart';
+import '../models/damaged_flag.dart';
 import '../models/employee.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
@@ -12,7 +13,20 @@ import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate, boxRegister }
+enum Screen {
+  boot,
+  deviceSetup,
+  login,
+  home,
+  scan,
+  track,
+  settings,
+  rfidInput,
+  rfidRegister,
+  rfidLocate,
+  boxRegister,
+  damagedBox,
+}
 
 /// Which physical input a trigger pull means right now, on any screen that
 /// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
@@ -139,6 +153,7 @@ class AppController extends ChangeNotifier {
   // ── connectivity / offline ──────────────────────────────────────────────
   bool online = true;
   final List<OutboxTx> outbox = [];
+  final List<DamagedFlag> damagedFlags = [];
 
   // ── track ───────────────────────────────────────────────────────────────
   String trackVal = '';
@@ -174,6 +189,10 @@ class AppController extends ChangeNotifier {
     outbox
       ..clear()
       ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
+
+    damagedFlags
+      ..clear()
+      ..addAll(prefs.damagedFlags.map((e) => DamagedFlag.fromJson(Map<String, dynamic>.from(e))));
 
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
@@ -327,6 +346,7 @@ class AppController extends ChangeNotifier {
       // this isn't the very first connect of the session (nothing to flush
       // yet either way, and it would race the boot-time refresh()).
       if (!wasConnected && outbox.isNotEmpty) flushOutbox();
+      if (!wasConnected && damagedFlags.any((f) => !f.synced)) flushDamagedFlags();
     } else {
       // Deliberately left null when nothing more specific is known — the
       // dialog and the reconnect sheet both have their own wording for
@@ -1031,6 +1051,61 @@ class AppController extends ChangeNotifier {
       toastMsg('ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
     }
     notifyListeners();
+  }
+
+  void _saveDamagedFlags() => prefs.damagedFlags = damagedFlags.map((e) => e.toJson()).toList();
+
+  /// Records a damage report captured on [DamagedBoxScreen], entirely local —
+  /// no network call on this path at all, so it works exactly the same
+  /// whether the terminal is online or not. [flushDamagedFlags] is what
+  /// eventually gets it to the server.
+  void addDamagedFlag({required String barcode, required List<String> rfidEpcs, String note = ''}) {
+    damagedFlags.insert(
+      0,
+      DamagedFlag(
+        id: '${DateTime.now().microsecondsSinceEpoch}-${_rnd.nextInt(1 << 32)}',
+        barcode: barcode,
+        rfidEpcs: rfidEpcs,
+        note: note,
+        createdAt: DateTime.now(),
+      ),
+    );
+    _saveDamagedFlags();
+    notifyListeners();
+  }
+
+  /// Same shape as [flushOutbox]: try every unsynced report, keep whatever
+  /// still fails queued for next time, toast the outcome. Synced entries
+  /// stay in the list (marked synced) rather than being removed — the
+  /// operator's own "แจ้งแล้ว" history on this device shouldn't disappear
+  /// the moment it reaches the server.
+  Future<void> flushDamagedFlags() async {
+    final pending = damagedFlags.where((f) => !f.synced).toList();
+    if (pending.isEmpty) return;
+    int done = 0;
+    for (final flag in pending) {
+      try {
+        await api.flagDamage(flag.barcode, rfidEpcs: flag.rfidEpcs, note: flag.note);
+        final i = damagedFlags.indexWhere((f) => f.id == flag.id);
+        if (i >= 0) damagedFlags[i] = damagedFlags[i].copyWith(synced: true);
+        done++;
+      } catch (_) {
+        // Left unsynced — the next connectivity-restore or manual retry
+        // (see the outbox banner's own "sync now") tries it again.
+      }
+    }
+    _saveDamagedFlags();
+    if (done > 0) toastMsg('ซิงก์รายงานความเสียหายแล้ว', '$done รายการ', ResultKind.ok);
+    notifyListeners();
+  }
+
+  /// Damage flagging works offline by design (see [addDamagedFlag]), so
+  /// unlike box registration this menu item is never hidden or guarded —
+  /// there's nothing here that requires a live connection to complete.
+  void goDamagedBox() {
+    screen = Screen.damagedBox;
+    notifyListeners();
+    _connectReader();
   }
 
   Future<Map<String, dynamic>> _postTx(OutboxTx tx) {

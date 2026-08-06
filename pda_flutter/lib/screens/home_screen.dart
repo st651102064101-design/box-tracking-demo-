@@ -6,6 +6,18 @@ import '../models/box.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
+/// Tap-to-retry for the header's connectivity icon. One attempt against the
+/// live backend right now; if that still fails, hands off to the same
+/// server-address screen device setup uses rather than inventing a second
+/// "edit connection" surface — one place in the app owns that config.
+Future<void> _retryOrConfigure(BuildContext context, AppController c) async {
+  if (c.connected) return; // already up — nothing to retry
+  final ok = await c.retryConnection();
+  if (ok || !context.mounted) return;
+  c.toastMsg('ยังเชื่อมต่อไม่ได้', 'เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้แล้ว', ResultKind.warn);
+  c.goDeviceSetup();
+}
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -60,7 +72,16 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              OnlineChip(online: c.online, onTap: c.toggleOnline),
+              // Reflects real, auto-detected server reachability (c.connected —
+              // kept current by RealtimeService's SSE heartbeat, see
+              // AppController._onRealtimeConnectivity), not the operator's own
+              // manual "force offline" toggle (c.online, still used by the
+              // outbox banner's own sync button below). Tapping it while
+              // offline is the retry-then-configure affordance requirement:
+              // try once right now, and if that still fails, open the same
+              // server-address screen device setup already uses instead of a
+              // second modal.
+              OnlineChip(online: c.connected, onTap: () => _retryOrConfigure(context, c)),
               const SizedBox(width: 8),
               RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
             ],
@@ -214,7 +235,13 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     const SizedBox(height: 16),
     const Caption('งานหลัก'),
     const SizedBox(height: 10),
-    if (c.canScan) ...[
+    // Box registration writes a brand-new box row the moment it's tapped
+    // (see BoxRegisterScreen._submitCreate) — there's no local outbox path
+    // for that the way gate scans have, so starting it offline would just
+    // strand the operator mid-flow. Hidden entirely rather than shown
+    // disabled: a menu item that's there but won't work invites exactly the
+    // tap that fails.
+    if (c.canScan && c.connected) ...[
       _ActionCard(
         icon: Icons.add_box,
         iconColor: C.limeDeep,
@@ -247,6 +274,24 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         title: 'ส่งออก',
         sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
         onTap: c.goScanOut,
+      ),
+      const SizedBox(height: 12),
+    ],
+    // Damage flagging is intentionally never gated on c.connected (unlike
+    // box registration above) — it writes only to the local queue until
+    // AppController.flushDamagedFlags gets a chance to sync, so there's no
+    // reason to hide it just because the terminal is offline right now.
+    if (c.canScan) ...[
+      _ActionCard(
+        small: true,
+        icon: Icons.report_gmailerrorred,
+        iconColor: C.red,
+        iconBg: C.orangeBg,
+        title: 'แจ้งกล่องเสียหาย',
+        sub: c.damagedFlags.any((f) => !f.synced)
+            ? 'สแกนบาร์โค้ด + RFID batch — รอซิงค์ ${c.damagedFlags.where((f) => !f.synced).length} รายการ'
+            : 'สแกนบาร์โค้ด + RFID batch แล้วบันทึกได้แม้ออฟไลน์',
+        onTap: c.goDamagedBox,
       ),
       const SizedBox(height: 12),
     ],

@@ -68,6 +68,13 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   DateTime? _lastKeyAt;
   bool _sawBurst = false;
 
+  // Route guard: this whole flow (create/label/rfid/putaway) writes straight
+  // to the server step by step with no offline queue behind it — losing the
+  // connection mid-flow has to bail out immediately, not fail silently on
+  // whichever button gets tapped next. Latched so the toast+redirect fires
+  // once per drop, not on every rebuild while already on the way out.
+  bool _leftForOffline = false;
+
   _Step _step = _Step.create;
   String? _selectedType;
   String? _tag; // confirmed once created
@@ -353,6 +360,19 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     final c = context.watch<AppController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final today = _c.prefs.rfidRegisteredToday(_today);
+
+    // The success card is already-committed work with nothing left to send —
+    // let its own timer finish the reset instead of yanking the screen away
+    // mid-celebration. Every earlier step still has a pending server call
+    // ahead of it, so those redirect the moment the connection drops.
+    if (!c.connected && _step != _Step.success && !_leftForOffline) {
+      _leftForOffline = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        c.toastMsg('หลุดการเชื่อมต่อ', 'ลงทะเบียนกล่องต้องใช้อินเทอร์เน็ต — กลับหน้าหลักแล้ว', ResultKind.err);
+        c.backToHome();
+      });
+    }
 
     return Column(
       children: [
