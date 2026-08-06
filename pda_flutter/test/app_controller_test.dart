@@ -359,15 +359,34 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
-    test('a commit without a plate posts nothing and keeps the queue', () async {
+    /* A return often arrives without a vehicle worth naming — someone walks
+       a box back in. Blocking that only taught operators to type a fake
+       plate, so inbound accepts an empty one. */
+    test('inbound commits without a plate', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
       c.addScan('CRT-02');
       await c.doCommit();
 
-      expect(api.gateInCalls, isEmpty);
-      expect(c.queue, ['CRT-02']);
+      expect(api.gateInCalls, hasLength(1));
+      expect(api.gateInCalls.first['tags'], ['CRT-02']);
+      expect(api.gateInCalls.first['plate'], '');
+      expect(c.queue, isEmpty);
+    });
+
+    /* Outbound still requires one: that record is how a box in a customer's
+       hands gets traced back. */
+    test('an outbound commit without a plate posts nothing and keeps the queue', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.setOutCustomer('CUST-01');
+      c.addScan('CRT-01');
+      await c.doCommit();
+
+      expect(api.gateOutCalls, isEmpty);
+      expect(c.queue, ['CRT-01']);
       expect(c.toast!.title, 'กรอกทะเบียนรถก่อน');
     });
 

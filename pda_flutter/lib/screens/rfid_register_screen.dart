@@ -97,14 +97,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   /// Narrow the reader down to "the tag being held against it": low power and
   /// a hard RSSI floor.
   ///
-  /// TID lookup stays off. What gets stored is the EPC, so there is nothing to
-  /// gain from the access read — and plenty to lose, since it stops the
-  /// inventory and would make registration read as slowly as the gun used to.
+  /// Detailed mode stays off. What gets stored is the EPC, so there is nothing
+  /// to gain from the extra fields or the TID access read — and plenty to
+  /// lose, since the access read stops the inventory and would make
+  /// registration read as slowly as the gun used to.
   void _applyRegisterTuning() {
     final rfid = _app.rfid;
     rfid.setPowerPercent(_registerPowerPercent);
     rfid.setRssiThreshold(_registerRssiFloor);
-    rfid.setTidLookup(false);
+    rfid.setDetailed(false);
   }
 
   @override
@@ -114,10 +115,10 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _successTimer?.cancel();
     _pickTimer?.cancel();
     // Hand the reader back exactly as the rest of the app expects it —
-    // operator's own power setting, no floor, and TID reads off so the scan
-    // and track screens stream continuously again.
+    // operator's own power setting, no floor, and detailed mode off so the
+    // scan and track screens stream at full rate again.
     final rfid = _app.rfid;
-    rfid.setTidLookup(false);
+    rfid.setDetailed(false);
     rfid.setRssiThreshold(null);
     rfid.setPowerPercent(_app.prefs.rfidPowerPercent);
     unawaited(rfid.stopInventory());

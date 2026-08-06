@@ -97,11 +97,19 @@ class RfidService {
       if (event is! Map) return;
       final type = event['type']?.toString();
       switch (type) {
-        case 'tag':
-          final epc = event['epc']?.toString();
-          if (epc != null && epc.isNotEmpty) {
+        // The native side reports a whole drained batch in one message rather
+        // than one message per tag — at the rates the reader is capable of, a
+        // platform-channel hop per tag is its own bottleneck.
+        case 'tags':
+          final list = event['tags'];
+          if (list is! List) break;
+          final now = DateTime.now();
+          for (final item in list) {
+            if (item is! Map) continue;
+            final epc = item['epc']?.toString();
+            if (epc == null || epc.isEmpty) continue;
             _tagCtrl.add(epc);
-            _rawTagCtrl.add(RfidTagRead.fromEvent(event, DateTime.now()));
+            _rawTagCtrl.add(RfidTagRead.fromEvent(item, now));
           }
           break;
         case 'trigger':
@@ -185,18 +193,18 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// Whether a read that arrives without a TID should trigger an explicit
-  /// TID access read on the native side.
+  /// Diagnostic mode: report every tag field the SDK has, and chase a missing
+  /// TID with an explicit access read.
   ///
-  /// Off by default and worth keeping that way: the access read has to stop
-  /// the inventory to run, so leaving it on makes a held trigger stutter
-  /// instead of streaming. Only the screens that actually show or store a
-  /// TID (register, live viewer, test sheet) should switch it on — and switch
-  /// it back off when they leave.
-  Future<void> setTidLookup(bool enabled) async {
+  /// Off by default and worth keeping that way. The access read stops the
+  /// inventory to run, and the full field set costs air time per tag, so
+  /// leaving this on caps the read rate well below what the reader can do.
+  /// Only the RFID tag-reader screen turns it on — and turns it back off when
+  /// it leaves.
+  Future<void> setDetailed(bool enabled) async {
     if (!supported) return;
     try {
-      await _method.invokeMethod('setTidLookup', {'enabled': enabled});
+      await _method.invokeMethod('setDetailed', {'enabled': enabled});
     } catch (_) {}
   }
 

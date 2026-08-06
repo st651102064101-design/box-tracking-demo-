@@ -873,8 +873,11 @@ class AppController extends ChangeNotifier {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
-    final plate = mode == 'in' ? inPlate : outPlate;
-    if (plate.trim().isEmpty) {
+    // Only shipping out insists on a plate: that record is what a box in a
+    // customer's hands is traced back through. Receiving is often a walk-in
+    // return with no vehicle to name, and blocking the operator there just
+    // taught them to type something false into the field.
+    if (mode == 'out' && outPlate.trim().isEmpty) {
       toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
       return;
     }

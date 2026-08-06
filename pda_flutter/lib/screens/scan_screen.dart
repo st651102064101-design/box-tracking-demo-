@@ -194,7 +194,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('ทะเบียนรถ *'),
+                    const FieldLabel('ทะเบียนรถ'),
                     TextField(
                         controller: _inPlateCtrl,
                         onChanged: c.setInPlate,
