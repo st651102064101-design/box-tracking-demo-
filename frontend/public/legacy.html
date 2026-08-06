@@ -1871,7 +1871,15 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
           <div class="hint">ประกอบจาก วันที่ผลิต · รหัสคลัง · กะการทำงาน (คำนวณจากเวลาปัจจุบัน) · ลำดับชุด — กด "แก้เอง" ถ้าต้องการระบุเอง</div>
         </div>
-        <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date"></div>
+        <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date">
+          <div class="auto-tag-row" style="margin-top:6px;flex-wrap:wrap;">
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(30)">+30 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(90)">+90 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(180)">+180 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(365)">+1 ปี</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(0)">ไม่มีวันหมดอายุ</button>
+          </div>
+        </div>
         <div class="field" style="align-self:end;"><div class="tag" style="margin:0;">มี "วันหมดอายุ" ระบบจะจ่ายออกแบบ <b>FEFO</b> (หมดอายุก่อน–ออกก่อน) อัตโนมัติ</div></div>
       </div>
 
@@ -1892,12 +1900,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <option value="out">ออกไปแล้ว</option>
           <option value="lost">สูญหาย</option>
         </select>
+        <select id="filtBoxCust" style="width:auto;"><option value="">ทุกลูกค้า</option></select>
+        <select id="filtBoxSup" style="width:auto;"><option value="">ทุกซัพพลายเออร์</option></select>
+        <span class="field" style="width:auto;flex-direction:row;align-items:center;gap:4px;margin:0;">
+          <input id="filtBoxValMin" type="number" placeholder="มูลค่าต่ำสุด" style="width:110px;">
+          <span class="muted small">–</span>
+          <input id="filtBoxValMax" type="number" placeholder="มูลค่าสูงสุด" style="width:110px;">
+        </span>
         <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
         <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
         <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th>ลูกค้า</th><th>คลัง</th><th>บันทึกล่าสุด</th><th></th></tr></thead>
         <tbody id="boxBody"></tbody></table></div>
       <div class="bulkbar" id="bulkBox" style="display:none;">
         <span class="bcnt" id="bulkBoxCnt"></span>
@@ -2839,6 +2854,21 @@ function gateOptions(sel){var gs=allGateNums();if(!gs.length)return '<option val
 function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">ยังไม่ระบุตำแหน่ง</span>';
   var tail=[loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
   return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
+/* ปุ่มลัดวันหมดอายุ — กรอกวันที่เองทีละหลักช้าและพลาดง่ายบนมือถือ/สแกนเนอร์
+   ปุ่ม +N วันคำนวณจากวันนี้ให้เลย ส่วน "ไม่มีวันหมดอายุ" ล้างค่าทิ้ง */
+/* กด cell รหัส (บาร์โค้ด/ประเภท/ลูกค้า/คลัง) ในตารางกล่องเพื่อสลับแสดง
+   ค่าอีกแบบหนึ่ง — ไม่ต้องเปิดขยายแถวหรือเพิ่มคอลัมน์ถาวรเกินจำเป็น */
+function toggleIdCell(td){
+  var cur=td.textContent;var alt=td.getAttribute('data-alt');var bc=td.getAttribute('data-barcode');
+  var other=cur===bc?alt:bc;
+  td.innerHTML='<b>'+esc(other)+'</b>';
+}
+window.toggleIdCell=toggleIdCell;
+function setExpiryQuick(days){var el=$('#bExpiry');if(!el)return;
+  if(!days){el.value='';return;}
+  var d=now();d.setDate(d.getDate()+days);
+  el.value=d.toISOString().slice(0,10);}
+window.setExpiryQuick=setExpiryQuick;
 
 /* ===== toast / confirm / modal ===== */
 function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=document.createElement('div');
@@ -6323,8 +6353,17 @@ function renderSetup(){
   /* ซัพพลายเออร์สำหรับหน้าลงทะเบียนกล่อง — ไม่บังคับ เพราะกล่องที่มีอยู่เดิม
      ก่อนเริ่มใช้ระบบก็ไม่มีใครจำได้แล้วว่าซื้อมาจากไหน */
   var bSupSel=$('#bSupplier'),bSupHint=$('#bSupplierHint');
-  var hasSup=Object.values(S.customers).some(isSupplierKind);
-  if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
+  var supList=Object.values(S.customers).filter(isSupplierKind);
+  var hasSup=supList.length>0;
+  if(bSupSel){
+    var keepS=bSupSel.value;
+    bSupSel.innerHTML=hasSup?(supplierOptions(keepS)+'<option value="__addsupplier__">+ เพิ่มซัพพลายเออร์ที่ส่งกล่องมา</option>'):'';
+    if(keepS)bSupSel.value=keepS;
+    /* มีซัพพลายเออร์ให้เลือกจริงแค่รายเดียว — เลือกให้เลยเหมือน doCustomer ด้านบน */
+    else if(supList.length===1)bSupSel.value=supList[0].id;
+    bSupSel.style.display=hasSup?'':'none';
+    if(!bSupSel._addBound){bSupSel._addBound=true;bSupSel.addEventListener('change',function(){if(bSupSel.value==='__addsupplier__'){bSupSel.value=keepS&&keepS!=='__addsupplier__'?keepS:'';goSetup('cust');}});}
+  }
   if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
   var inPartnerSel=$('#inPartner');
   if(inPartnerSel){
@@ -6342,9 +6381,22 @@ function renderSetup(){
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
   // box table
+  var filtBoxCustSel=$('#filtBoxCust'),filtBoxSupSel=$('#filtBoxSup');
+  if(filtBoxCustSel){var keepFc=filtBoxCustSel.value;
+    filtBoxCustSel.innerHTML='<option value="">ทุกลูกค้า</option>'+Object.values(S.customers).filter(isCustomerKind).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');
+    filtBoxCustSel.value=keepFc;}
+  if(filtBoxSupSel){var keepFs=filtBoxSupSel.value;
+    filtBoxSupSel.innerHTML='<option value="">ทุกซัพพลายเออร์</option>'+Object.values(S.customers).filter(isSupplierKind).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');
+    filtBoxSupSel.value=keepFs;}
   var sb=val('schBox').toLowerCase();var fs=val('filtBoxStatus');
+  var fc=val('filtBoxCust');var fsup=val('filtBoxSup');
+  var fvMin=val('filtBoxValMin');var fvMax=val('filtBoxValMax');
   var bx=Object.values(S.boxes).filter(function(b){
     if(fs&&b.status!==fs)return false;
+    if(fc&&b.customer!==fc)return false;
+    if(fsup&&b.supplier!==fsup)return false;
+    if(fvMin!==''&&Number(b.value||0)<Number(fvMin))return false;
+    if(fvMax!==''&&Number(b.value||0)>Number(fvMax))return false;
     return !sb||(b.tag+typeName(b.type)+custName(b.customer)).toLowerCase().indexOf(sb)>=0;
   }).sort(function(a,b){
     if(uiSort.box==='az'||uiSort.box==='za'){var m=uiSort.box==='za'?-1:1;return m*String(a.tag||'').localeCompare(String(b.tag||''),undefined,{numeric:true,sensitivity:'base'});}
@@ -6358,14 +6410,18 @@ function renderSetup(){
     /* CRUD only here (แก้ไข/ลบ) — ทุกอย่างที่เป็น lifecycle จริงของกล่อง
        (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
        เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
+    var lastTs=b.lastSeenAt||b.regAt||'';
     return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
-      +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
+      +'<td class="mono id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc(b.type||'-')+'" onclick="toggleIdCell(this)" title="กดสลับ บาร์โค้ด / รหัสประเภท"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
+      +'<td class="mono id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc(b.customer||'-')+'" onclick="toggleIdCell(this)" title="กดสลับ รหัสลูกค้า / บาร์โค้ด"><b>'+esc(b.customer||'-')+'</b></td>'
+      +'<td class="mono id-toggle" data-barcode="'+esc(b.tag)+'" data-alt="'+esc((b.location||{}).wh||'-')+'" onclick="toggleIdCell(this)" title="กดสลับ รหัสคลัง / บาร์โค้ด"><b>'+esc((b.location||{}).wh||'-')+'</b></td>'
+      +'<td class="mono small">'+(lastTs?esc(fmtTs(lastTs)):'-')+'</td>'
       +'<td class="c"><div class="row-actions">'
       +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
       +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
       +'</div></td></tr>';
-  }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
+  }).join(''):emptyRow(12,'ยังไม่มีกล่อง');
   var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติดบาร์โค้ด '+totalPending+'</span>':'');
@@ -6467,6 +6523,10 @@ function renderSetup(){
 }
 $('#schBox').addEventListener('input',renderSetup);
 $('#filtBoxStatus').addEventListener('change',renderSetup);
+$('#filtBoxCust').addEventListener('change',renderSetup);
+$('#filtBoxSup').addEventListener('change',renderSetup);
+$('#filtBoxValMin').addEventListener('input',renderSetup);
+$('#filtBoxValMax').addEventListener('input',renderSetup);
 /* box-type search â works by typing OR by scanning a barcode of the type code.
    autoScanBind runs the scanner-Thai auto-fix (autoFixScannerThai) before filtering,
    so a scanner firing while the OS keyboard is in Thai mode still finds the right row. */
