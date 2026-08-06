@@ -37,6 +37,14 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
   // that is already being unmounted.
   RfidService? _rfid;
 
+  // Read-rate readout, mirroring the HTML test page so the two are directly
+  // comparable — "it feels slow" is not something you can act on, and a total
+  // alone doesn't say whether the reader or the app is the limit.
+  int _total = 0;
+  final List<DateTime> _window = []; // read times in the trailing second
+  int? _gapMs; // since the previous read
+  DateTime? _lastAt;
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +55,22 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
     // the thing that decides how fast reads can be taken.
     _sub = rfid.tagBatches.listen((batch) {
       if (!mounted) return;
-      setState(() => _reads.insertAll(0, batch.reversed));
+      final now = DateTime.now();
+      final cut = now.subtract(const Duration(seconds: 1));
+      setState(() {
+        for (var i = 0; i < batch.length; i++) {
+          _total++;
+          if (_lastAt != null) _gapMs = now.difference(_lastAt!).inMilliseconds;
+          _lastAt = now;
+          _window.add(now);
+        }
+        _window.removeWhere((t) => t.isBefore(cut));
+        _reads.insertAll(0, batch.reversed);
+        // The list is a scroll-back, not a log — an unbounded one turns every
+        // rebuild into O(reads) and would reintroduce the stall this screen
+        // exists to measure.
+        if (_reads.length > 300) _reads.removeRange(300, _reads.length);
+      });
     });
   }
 
@@ -56,6 +79,14 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
     _sub?.cancel();
     if (_reading) _rfid?.stopInventory();
     super.dispose();
+  }
+
+  void _resetStats() {
+    _reads.clear();
+    _window.clear();
+    _total = 0;
+    _gapMs = null;
+    _lastAt = null;
   }
 
   Future<void> _toggle() async {
@@ -97,7 +128,7 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
                         children: [
                           const Text('ทดสอบอ่านแท็ก RFID',
                               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                          Text('อ่านค่าดิบทุกฟิลด์ที่ SDK รายงาน — EPC, TID, PC, CRC, RSSI ฯลฯ',
+                          Text('วัดความเร็วอ่าน — EPC + RSSI (โหมดเร็ว เหมือนแอป RFID HTML)',
                               style: TextStyle(fontSize: 12, color: C.muted)),
                         ],
                       ),
@@ -128,7 +159,7 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: _reads.isEmpty ? null : () => setState(_reads.clear),
+                      onPressed: _reads.isEmpty ? null : () => setState(_resetStats),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: C.ink,
                         side: BorderSide(color: C.border2),
@@ -153,7 +184,10 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Text('อ่านได้ ${_reads.length} ครั้ง', style: TextStyle(fontSize: 12, color: C.muted)),
+                    Expanded(child: Text('อ่านได้ $_total ครั้ง', style: TextStyle(fontSize: 12, color: C.muted))),
+                    Text('${_window.length} ครั้ง/วิ', style: TextStyle(fontSize: 12, color: C.muted)),
+                    const SizedBox(width: 12),
+                    Text('ห่าง ${_gapMs == null ? '—' : '$_gapMs'} ms', style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
               ),
