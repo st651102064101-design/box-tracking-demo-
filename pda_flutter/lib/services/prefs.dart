@@ -37,7 +37,6 @@ class Prefs {
   static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidSoundId = 'boxtrace_rfid_sound_id';
-  static const _kBarcodeSoundId = 'boxtrace_barcode_sound_id';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
 
@@ -103,13 +102,6 @@ class Prefs {
   /// speed measurement in this app was made against.
   String get rfidSoundId => _p.getString(_kRfidSoundId) ?? 'html_tick';
   set rfidSoundId(String v) => _p.setString(_kRfidSoundId, v);
-
-  /// Same, for a box landing in Gate's queue via a *typed* barcode. Defaults
-  /// to 'classic_ack' — the exact tone every barcode scan already made before
-  /// this setting existed, so nobody's workflow changes sound unless they
-  /// pick a new one on purpose.
-  String get barcodeSoundId => _p.getString(_kBarcodeSoundId) ?? 'classic_ack';
-  set barcodeSoundId(String v) => _p.setString(_kBarcodeSoundId, v);
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than

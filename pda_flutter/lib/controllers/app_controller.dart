@@ -879,11 +879,17 @@ class AppController extends ChangeNotifier {
     // times a second — those land in _reject's ResultKind.info branch
     // below, silently, which is what keeps a 5-tag pallet at exactly 5
     // ticks instead of however many times the reader happened to see it.
-    // Which of the two independently-configured sounds plays follows
-    // [viaRfid] — a barcode gun and an RFID trigger pull landing the same
-    // box in the queue are still two different channels to the operator's
-    // ear, on purpose (see prefs.rfidSoundId/barcodeSoundId).
-    rfid.playSound(viaRfid ? prefs.rfidSoundId : prefs.barcodeSoundId);
+    //
+    // Barcode detections always get the same fixed tone — only the RFID
+    // channel is user-configurable (see prefs.rfidSoundId / setRfidSoundId).
+    // A trigger-pulled RFID read landing here still gets the operator's
+    // chosen RFID sound rather than this fixed one, so an RFID detection
+    // sounds the same everywhere it happens.
+    if (viaRfid) {
+      rfid.playSound(prefs.rfidSoundId);
+    } else {
+      rfid.playTone('ok');
+    }
     notifyListeners();
   }
 
@@ -975,15 +981,6 @@ class AppController extends ChangeNotifier {
   void setRfidSoundId(String id) {
     prefs.rfidSoundId = id;
     rfid.setRfidSoundId(id);
-    rfid.playSound(id);
-    notifyListeners();
-  }
-
-  /// Same, for a box landing in Gate's queue via a typed/scanned barcode.
-  /// No native push needed — Dart already knows a barcode detection just
-  /// happened (see addScan's `viaRfid: false`) and calls playSound directly.
-  void setBarcodeSoundId(String id) {
-    prefs.barcodeSoundId = id;
     rfid.playSound(id);
     notifyListeners();
   }

@@ -14,11 +14,18 @@ enum _Step { waitingBarcode, waitingRfid, success }
 /// One distinct tag the sweep turned up, with the best signal it showed and how
 /// many times it answered — the two things that tell "the tag in my hand" apart
 /// from "a tag on the next shelf" when several come back at once.
+///
+/// [claimedByTag] starts null (not checked yet) and is filled in once the
+/// server answers whether this EPC already belongs to some other box — see
+/// _checkClaimed. A tag showing up here already tagged is not rare: sweeping
+/// near a box that was tagged earlier reads its neighbour's tag right along
+/// with the blank one actually in hand.
 class _Candidate {
   final String epc;
   final int? rssi;
   final int hits;
-  const _Candidate({required this.epc, this.rssi, required this.hits});
+  final String? claimedByTag;
+  const _Candidate({required this.epc, this.rssi, required this.hits, this.claimedByTag});
 }
 
 /// Dedicated fast-path for commissioning new boxes: scan the barcode, pull
@@ -39,6 +46,17 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
+
+  /// Debounce timer for auto-submitting the barcode field without a trailing
+  /// Enter/Tab keystroke. A barcode gun in HID/keyboard-wedge mode injects a
+  /// whole code in a handful of milliseconds — far faster than anyone types
+  /// by hand — so "the field went quiet" is itself a reliable "a scan just
+  /// finished" signal, no reader-suffix configuration required. onSubmitted
+  /// (Enter) still fires immediately when the terminal *is* configured with
+  /// a suffix key; this is only the fallback for when it isn't.
+  Timer? _autoSubmitTimer;
+  static const _autoSubmitDelay = Duration(milliseconds: 180);
+  static const _autoSubmitMinLen = 4;
 
   _Step _step = _Step.waitingBarcode;
   String? _tag; // verified box barcode for the box currently in hand
@@ -73,6 +91,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     // every call, and on this reader it came back empty regardless, so every
     // read was rejected for having no TID. Binding on the EPC needs none of it.
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
+    _barcodeCtrl.addListener(_onBarcodeChanged);
   }
 
   @override
@@ -84,9 +103,23 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
+    _autoSubmitTimer?.cancel();
+    _barcodeCtrl.removeListener(_onBarcodeChanged);
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
     super.dispose();
+  }
+
+  void _onBarcodeChanged() {
+    _autoSubmitTimer?.cancel();
+    final text = _barcodeCtrl.text.trim();
+    if (text.length < _autoSubmitMinLen || _verifying) return;
+    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
+      // Field has to still hold exactly what triggered this timer — someone
+      // still typing by hand would otherwise get cut off mid-code.
+      if (!mounted || _verifying || _barcodeCtrl.text.trim() != text) return;
+      _submitBarcode();
+    });
   }
 
   String get _today {
@@ -94,9 +127,29 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
+  /// Undoes a mis-scanned barcode without leaving the screen. Stops the
+  /// reader (it was armed the moment the barcode landed, see
+  /// [_submitBarcode]) and drops the RFID sweep so far — those reads were
+  /// against the wrong box and would otherwise sit in [_found] ready to bind
+  /// onto whatever gets scanned next.
+  void _changeBarcode() {
+    unawaited(_c.rfid.stopInventory());
+    setState(() {
+      _step = _Step.waitingBarcode;
+      _tag = null;
+      _error = null;
+      _rfidError = null;
+      _found.clear();
+      _selectedEpc = null;
+    });
+    _barcodeCtrl.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _barcodeFocus.requestFocus());
+  }
+
   Future<void> _submitBarcode() async {
     final code = _barcodeCtrl.text.trim();
     if (code.isEmpty || _verifying) return;
+    _autoSubmitTimer?.cancel();
     setState(() {
       _verifying = true;
       _error = null;
@@ -139,6 +192,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.waitingRfid || _binding) return;
     if (read.epc.isEmpty) return;
+    var isNew = false;
     setState(() {
       final existing = _found.indexWhere((c) => c.epc == read.epc);
       if (existing >= 0) {
@@ -152,14 +206,46 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           epc: c.epc,
           rssi: (read.rssi ?? -999) > (c.rssi ?? -999) ? read.rssi : c.rssi,
           hits: c.hits + 1,
+          claimedByTag: c.claimedByTag, // carried forward — see _checkClaimed
         );
       } else {
         // Newly discovered tags go on top, so the tag just brought into range
         // is the one the operator sees first. Order is by discovery, never
         // re-sorted afterwards — and nothing is preselected either way.
         _found.insert(0, _Candidate(epc: read.epc, rssi: read.rssi, hits: 1));
+        isNew = true;
       }
       _rfidError = null;
+    });
+    // Only checked once per EPC — a repeat read of the same tag (the common
+    // case, at reader speed) has no reason to ask the server the same
+    // question again.
+    if (isNew) _checkClaimed(read.epc);
+  }
+
+  /// Asks whether [epc] is already bound to some other box, and marks the
+  /// matching candidate if so. Best-effort: a failed lookup just leaves the
+  /// candidate looking free, same as before this existed — [_bindSelected]
+  /// still has the server's own rejection as a backstop either way.
+  Future<void> _checkClaimed(String epc) async {
+    Map<String, dynamic>? box;
+    try {
+      box = await _c.api.getBox(epc);
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    final owner = box?['tag'] as String?;
+    if (owner == null) return; // free — the expected, common case
+    final i = _found.indexWhere((c) => c.epc == epc);
+    if (i < 0) return; // rescanned away in the meantime
+    setState(() {
+      final c = _found[i];
+      _found[i] = _Candidate(epc: c.epc, rssi: c.rssi, hits: c.hits, claimedByTag: owner);
+      // Can't stay ticked if it just turned out to belong to another box —
+      // the button would otherwise read "ผูกกับ …" over a selection that
+      // is no longer legal to submit.
+      if (_selectedEpc == epc) _selectedEpc = null;
     });
   }
 
@@ -263,8 +349,33 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           ),
           const SizedBox(height: 10),
           if (verified)
-            Text(_tag ?? '',
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace'))
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(_tag ?? '',
+                      style: const TextStyle(
+                          fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+                ),
+                // Only while still waiting on the RFID read — once a tag is
+                // actually being bound or the success banner is showing,
+                // changing the barcode out from under it would be confusing,
+                // not helpful. Exists because scanning the wrong box's
+                // barcode used to mean backing all the way out of this
+                // screen and back in just to fix a mis-scan.
+                if (_step == _Step.waitingRfid)
+                  TextButton(
+                    onPressed: _changeBarcode,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text('เปลี่ยนบาร์โค้ด',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.orange)),
+                  ),
+              ],
+            )
           else
             TextField(
               controller: _barcodeCtrl,
@@ -404,6 +515,35 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   }
 
   Widget _candidateRow(_Candidate c) {
+    // Already bound to a different box: shown, not selectable. No Radio at
+    // all here rather than a disabled one — that's what makes it genuinely
+    // impossible to tick regardless of Flutter's Radio/RadioGroup version,
+    // not just visually discouraged.
+    if (c.claimedByTag != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            Icon(Icons.block, size: 17, color: C.faint),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.epc,
+                      style: TextStyle(
+                          fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: C.faint)),
+                  Text('ผูกกับกล่อง ${c.claimedByTag} อยู่แล้ว',
+                      style: TextStyle(fontSize: 11.5, color: C.red, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final selected = _selectedEpc == c.epc;
     return InkWell(
       onTap: () => setState(() => _selectedEpc = c.epc),
