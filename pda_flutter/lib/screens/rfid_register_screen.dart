@@ -38,9 +38,6 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   bool _binding = false;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
-  // Held so dispose() can clear detail mode — reading it off the context there
-  // is not safe once the element is being unmounted.
-  RfidService? _rfid;
 
   AppController get _c => context.read<AppController>();
 
@@ -48,20 +45,14 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   void initState() {
     super.initState();
     final rfid = _c.rfid;
-    _rfid = rfid;
     _rfidStatus = RfidStatus(rfid.state, '');
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
     _tagSub = rfid.tagReads.listen(_onTagRead);
-    // Binding a box needs the TID and refuses the read without one (see
-    // _onTagRead), so this screen pays for the explicit read-back — and only
-    // this screen, for as long as it is on top.
-    rfid.setDetailMode(true);
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
   }
 
   @override
   void dispose() {
-    _rfid?.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
@@ -115,7 +106,12 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.waitingRfid || _binding) return;
     if (read.tid == null) {
-      setState(() => _rfidError = 'อ่าน TID จากแท็กไม่ได้ — ลองยิงใหม่อีกครั้ง (ต้องเป็นแท็กที่รองรับการอ่าน TID)');
+      // Accurate about *why* it is missing: the reader no longer leaves the
+      // read loop to fetch a TID (that meant stopping inventory), so the only
+      // TID available is the one the inventory round itself carried. A retry
+      // genuinely can succeed — whether the TID rides along varies read to
+      // read — so say that rather than blaming the tag.
+      setState(() => _rfidError = 'รอบอ่านนี้ไม่มี TID ติดมา — ยิงค้างไว้อีกครั้งให้ใกล้แท็กขึ้น');
       return;
     }
     _bind(read.tid!, read.epc);

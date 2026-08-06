@@ -80,37 +80,14 @@ class RfidReaderController(private val context: Context) :
     private var tagCount = 0L
     private var lastEpc: String? = null
     private var lastRssi: Int? = null
-    // How often the inventory-time TID piggyback came back empty and the
-    // explicit fallback read (readTidExplicit) had to run instead, and how
-    // often that fallback actually recovered a TID — see eventReadNotify.
-    // Surfaced in diagnostics() so "TID keeps failing" can be told apart from
-    // "the piggyback path never works on this reader/firmware" at a glance.
-    private var tidFallbackAttempts = 0L
-    private var tidFallbackSuccesses = 0L
-    // Whether the physical gun trigger is currently held — readTidExplicit
-    // has to stop inventory to run an access operation, and uses this to
-    // decide whether to start it again afterwards.
+    // How many reads arrived with a TID already attached by the inventory
+    // round. That piggyback is now the only source of a TID — the explicit
+    // access-read fallback is gone, because it had to stop and restart
+    // inventory around every call — so this is what tells "these tags don't
+    // report a TID during inventory" apart from "the reader isn't reading".
+    private var tidCount = 0L
+    // Whether the physical gun trigger is currently held.
     @Volatile private var triggerHeld = false
-
-    /**
-     * Whether to chase a missing TID with an explicit access read (see
-     * [readTidExplicit]).
-     *
-     * Off by default, and that default is the whole point: the fallback has to
-     * stop inventory, run a blocking `readWait`, and start inventory again,
-     * which opens a hole of tens of milliseconds between reads. On a screen
-     * that sweeps — scan, track, login — that hole is the difference between
-     * a continuous stream at reader speed and a stutter, so those screens pay
-     * nothing for a field they never look at.
-     *
-     * The screens that genuinely need a TID turn this on for as long as they
-     * are on top: registration cannot bind a box without one
-     * (`rfid_register_screen.dart` refuses the read outright), and the RFID
-     * input / test-read screens exist to show every field the SDK has. Those
-     * are all "one tag in front of the antenna, look at it closely" screens,
-     * where the latency buys something.
-     */
-    @Volatile private var detailMode = false
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -138,7 +115,6 @@ class RfidReaderController(private val context: Context) :
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
-            "setDetailMode" -> { detailMode = call.argument<Boolean>("enabled") == true; result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
@@ -165,8 +141,7 @@ class RfidReaderController(private val context: Context) :
         m["lastEpc"] = lastEpc
         m["lastRssi"] = lastRssi
         m["lastError"] = lastError
-        m["tidFallbackAttempts"] = tidFallbackAttempts
-        m["tidFallbackSuccesses"] = tidFallbackSuccesses
+        m["tidCount"] = tidCount
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -471,60 +446,6 @@ class RfidReaderController(private val context: Context) :
         status("disconnected", "เครื่องอ่านหลุดการเชื่อมต่อ")
     }
 
-    /**
-     * Explicit, targeted read of a specific tag's TID memory bank — fallback
-     * for when the inventory-time report comes back without one. Nearly every
-     * EPC Gen2 tag has a TID baked in at the factory (it's mandatory in the
-     * standard), so "this tag has no TID" is rarely the real story behind an
-     * empty read; far more often the inventory round simply didn't carry it.
-     *
-     * Two hard constraints, both learned the painful way, both the reason
-     * this is scheduled onto [exec] rather than called inline:
-     *
-     *  1. It must NOT run on the SDK's event-callback thread. `readWait`
-     *     blocks until the access-operation response arrives, and that
-     *     response is delivered by `Events$ReadDataAndFireEventThread` — the
-     *     very thread `eventReadNotify` runs on. Calling it there blocks the
-     *     thread that would unblock it, and every call died with a bare
-     *     `OperationFailureException`.
-     *  2. An access operation can't run while an inventory is in flight, so
-     *     inventory is stopped first and restarted afterwards if the trigger
-     *     is still held (see [triggerHeld]) — otherwise a held trigger would
-     *     go dead after the first tag.
-     */
-    private fun readTidExplicit(epc: String): String? {
-        val rd = reader ?: return null
-        return try {
-            tidFallbackAttempts++
-            try { rd.Actions.Inventory.stop() } catch (_: Exception) { /* wasn't running */ }
-            val tagAccess = rd.Actions.TagAccess
-            // ReadAccessParams is a Java inner (non-static) class — Kotlin
-            // constructs it off an instance of the enclosing TagAccess, not
-            // as a free-standing constructor call.
-            val params = tagAccess.ReadAccessParams()
-            params.setMemoryBank(MEMORY_BANK.MEMORY_BANK_TID)
-            params.setOffset(0)
-            params.setCount(6) // words — 96 bits, the mandatory Gen2 TID length
-            params.setAccessPassword(0)
-            val result = tagAccess.readWait(epc, params, AntennaInfo())
-            // A TID-bank read lands in getMemoryBankData() on this SDK;
-            // getTID() is only populated when the *inventory* carried it.
-            // Take whichever actually came back.
-            val tid = str { result?.getTID() }?.takeIf { it.isNotEmpty() }
-                ?: str { result?.getMemoryBankData() }?.takeIf { it.isNotEmpty() }
-            if (tid != null) tidFallbackSuccesses++
-            tid
-        } catch (ex: Exception) {
-            Log.w(TAG, "explicit TID read failed for $epc", ex)
-            null
-        } finally {
-            // Put the reader back the way the operator left it.
-            if (triggerHeld) {
-                try { rd.Actions.Inventory.perform() } catch (_: Exception) {}
-            }
-        }
-    }
-
     // ── SDK read/status callbacks ─────────────────────────────────────────
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
@@ -547,10 +468,14 @@ class RfidReaderController(private val context: Context) :
                 val epc = t.getTagID()
                 lastEpc = epc
                 lastRssi = t.getPeakRSSI().toInt()
-                // Whatever the inventory round happened to carry. Empty here
-                // does NOT mean the tag lacks a TID — see readTidExplicit for
-                // the fallback and why it can't run inline on this thread.
+                // Whatever the inventory round carried, and the only TID any
+                // caller now gets: nothing here ever leaves the read loop to
+                // go fetch one, because doing that means stopping inventory.
+                // Full tag-field reporting is still on (see configureReader),
+                // so on tags that report a TID during inventory it rides along
+                // for free.
                 val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
+                if (inventoryTid != null) tidCount++
                 val payload = mutableMapOf<String, Any?>(
                     "epc" to epc,
                     "tid" to inventoryTid,
@@ -562,19 +487,7 @@ class RfidReaderController(private val context: Context) :
                     "phase" to num { t.getPhase().toInt() },
                     "seenCount" to num { t.getTagSeenCount() },
                 )
-                if (detailMode && inventoryTid == null && !epc.isNullOrEmpty() && tags.size == 1) {
-                    // Single tag in front of the antenna on a screen that needs
-                    // the TID — go get it properly on the worker thread, then
-                    // emit on its own so the UI sees one complete read instead
-                    // of a TID-less one followed by a correction. Never on a
-                    // sweep: see [detailMode] for what this costs.
-                    exec.execute {
-                        payload["tid"] = readTidExplicit(epc)
-                        emit(mapOf("type" to "tags", "tags" to listOf(payload)))
-                    }
-                } else {
-                    batch.add(payload)
-                }
+                batch.add(payload)
             }
 
             // The whole read event crosses the platform channel as one message.

@@ -80,15 +80,11 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
   StreamSubscription<bool>? _triggerSub;
   late RfidStatus _status;
   bool _reading = false;
-  // Held so dispose() can clear detail mode — reading it off the context there
-  // is not safe once the element is being unmounted.
-  RfidService? _rfid;
 
   @override
   void initState() {
     super.initState();
     final rfid = context.read<AppController>().rfid;
-    _rfid = rfid;
     _status = RfidStatus(rfid.state, '');
     _tagSub = rfid.tagReads.listen((r) {
       setState(() => _reads.insert(0, _Read.fromTagRead(r, DateTime.now())));
@@ -98,10 +94,6 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     // (see _onReaderTrigger) — mirror that here so the on-screen button stays
     // in sync whether the read was started by a tap or a trigger pull.
     _triggerSub = rfid.triggers.listen((pressed) => setState(() => _reading = pressed));
-    // This screen exists to show every field the SDK has, TID included, so it
-    // opts into the explicit TID read-back — and turns it off again on the way
-    // out so sweeping screens keep reading at full reader speed.
-    rfid.setDetailMode(true);
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
@@ -109,7 +101,6 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
 
   @override
   void dispose() {
-    _rfid?.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();

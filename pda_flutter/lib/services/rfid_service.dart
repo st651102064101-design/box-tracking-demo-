@@ -186,22 +186,6 @@ class RfidService {
     } catch (_) {}
   }
 
-  /// Ask the reader to chase a missing TID with an explicit access read.
-  ///
-  /// Off everywhere by default. That read has to stop inventory, block on the
-  /// tag, and start inventory again, which opens a hole of tens of milliseconds
-  /// between reads — fine on a screen holding one tag still in front of the
-  /// antenna, ruinous on one sweeping a pallet. Only the screens that actually
-  /// display or store a TID turn it on, and only while they are on top:
-  /// registration (which cannot bind a box without one), the RFID input screen,
-  /// and the test-read sheet.
-  Future<void> setDetailMode(bool enabled) async {
-    if (!supported) return;
-    try {
-      await _method.invokeMethod('setDetailMode', {'enabled': enabled});
-    } catch (_) {}
-  }
-
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
   Future<void> setPowerPercent(int percent) async {
     if (!supported) return;

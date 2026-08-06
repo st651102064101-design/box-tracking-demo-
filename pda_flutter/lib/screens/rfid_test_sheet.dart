@@ -33,8 +33,8 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
   final List<RfidTagRead> _reads = [];
   StreamSubscription? _sub;
   bool _reading = false;
-  // Held so dispose() can clear detail mode and stop the reader without
-  // reading it off a context that is already being unmounted.
+  // Held so dispose() can stop the reader without reading it off a context
+  // that is already being unmounted.
   RfidService? _rfid;
 
   @override
@@ -46,15 +46,11 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
       if (!mounted) return;
       setState(() => _reads.insert(0, r));
     });
-    // The whole point of this sheet is to show what the SDK reports for one
-    // tag, TID included — worth the access-read latency here, nowhere else.
-    rfid.setDetailMode(true);
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    _rfid?.setDetailMode(false);
     if (_reading) _rfid?.stopInventory();
     super.dispose();
   }
