@@ -249,6 +249,21 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             hintText: 'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01',
             hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
             prefixIcon: Icon(Icons.search, color: C.muted),
+            // Results already filter live as you type — this exists for
+            // whoever doesn't reach for Enter (or a scanner without a
+            // trailing keystroke): one unambiguous, taggable match jumps
+            // straight to it, same as tapping that row would; otherwise it
+            // just drops the keyboard so the list underneath is visible.
+            suffixIcon: SubmitArrowButton(onTap: () {
+              final taggable = results
+                  .where((b) => (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false))
+                  .toList();
+              if (taggable.length == 1) {
+                _pick(c, taggable.first);
+              } else {
+                _focus.unfocus();
+              }
+            }),
             isDense: true,
             filled: true,
             fillColor: C.surface,

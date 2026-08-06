@@ -6248,7 +6248,7 @@ function renderOverview(){
   // occupancy by warehouse
   var whs=Object.values(S.warehouses);
   $('#ovOccupancy').innerHTML=whs.length?whs.map(function(w){
-    var inWh=all.filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+    var inWh=all.filter(function(b){return isRackedBox(b)&&(b.location||{}).wh===w.id;}).length;
     var pct=wh?Math.round(inWh/wh*100):0;
     return '<div class="occ-card" style="cursor:pointer;" data-wh-id="'+esc(w.id)+'" data-wh-name="'+esc(w.name)+'" onclick="occCardClick(this)" title="ดูกล่องในคลัง '+esc(w.name)+'">'
       +'<div class="ocw-name">'+esc(w.name)+'</div><div class="ocw-sub">ประตู '+(w.gates&&w.gates.length?w.gates[0]+'–'+w.gates[w.gates.length-1]:'-')+'</div>'
@@ -6447,7 +6447,7 @@ function renderSetup(){
   }):Object.values(S.warehouses);
   var whs=sortTable(whsAll,uiSort.wh,'name');
   var gtColors={'both':'var(--ink)','in':'var(--pos)','out':'var(--neg)'};
-  $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+  $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return isRackedBox(b)&&(b.location||{}).wh===w.id;}).length;
     var pendingPutaway=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id&&isStagingLoc(b.location);}).length;
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
@@ -8643,10 +8643,18 @@ window.clearInvFilter = clearInvFilter;
      - 'OUTSIDE' (นอกคลัง) → กล่องที่ไม่ได้อยู่บนชั้นวางจริง: ออกกับลูกค้า/รอผูก Tag,
        Hold/ชำรุด (พักไว้ ยังไม่ขึ้นชั้น), แจ้งหาย, หรือแม้สถานะ warehouse แต่ไม่มีรหัสคลัง
      - รหัสคลังเฉพาะ → เดิม (เฉพาะกล่องที่ขึ้นชั้นในคลังนั้นจริง ๆ) */
+/* กล่อง Hold/ชำรุด ไม่ได้ถูกย้ายออกจากตำแหน่งเดิม (ดู markHold/markDamage — ทั้งคู่
+   ไม่แตะ b.location เลย) ยังอยู่บนแร็คเดิมจริง ๆ เพียงแต่ถูกกันไม่ให้จ่ายออก จึงนับ
+   เป็น "ในคลัง"/อยู่ที่คลังนั้นได้เหมือนกล่อง warehouse ปกติ — ต่างจากกล่องที่ status
+   เป็น warehouse แต่ไม่มีรหัสคลัง (เพิ่งรับเข้ายังไม่ Putaway) ซึ่งยังนับเป็นนอกคลังอยู่ */
+function isRackedBox(b) {
+  return (b.status === 'warehouse' || b.status === 'hold' || b.status === 'damage')
+    && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh];
+}
 function invWhMatches(b, wf) {
-  if (wf === 'OUTSIDE') return !(b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
-  if (wf === '') return (b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
-  if (wf) return ((b.location || {}).wh === wf && b.status === 'warehouse');
+  if (wf === 'OUTSIDE') return !isRackedBox(b);
+  if (wf === '') return isRackedBox(b);
+  if (wf) return ((b.location || {}).wh === wf && isRackedBox(b));
   return true;
 }
 /* Status-tab predicate, also factored out so pickInvWhWithData() can test
@@ -8759,13 +8767,14 @@ function buildInvWhPills() {
   whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
   var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
   whs.forEach(function(w) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
+    var cnt = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location||{}).wh === w.id; }).length;
     html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
-  /* นอกคลัง — กล่องที่ไม่ได้ขึ้นชั้นวางในคลังจริง: ออกกับลูกค้า/รอผูก Tag,
-     Hold/ชำรุด, แจ้งหาย, หรือ warehouse ที่ไม่มีรหัสคลัง */
+  /* นอกคลัง — กล่องที่ไม่ได้อยู่บนแร็คในคลังจริง: ออกกับลูกค้า/รอผูก Tag/รอ Putaway,
+     แจ้งหาย, หรือ warehouse ที่ไม่มีรหัสคลัง — Hold/ชำรุดที่ยังมีตำแหน่งเดิมอยู่
+     (isRackedBox) ไม่ถือเป็นนอกคลังแล้ว ดูหมายเหตุที่ isRackedBox */
   var outsideCnt = Object.values(S.boxes).filter(function(b) {
-    return !(b.status === 'warehouse' && !!(b.location||{}).wh && !!S.warehouses[(b.location||{}).wh]);
+    return !isRackedBox(b);
   }).length;
   html += '<button class="icr-pill' + (invWhFilter === 'OUTSIDE' ? ' active' : '') + '" onclick="setInvWh(\'OUTSIDE\')">นอกคลัง <span style="opacity:.55;font-size:11px;">('+outsideCnt+')</span></button>';
   pillsEl.innerHTML = html;
@@ -10102,7 +10111,7 @@ function exportWhExcel() {
   var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
   var rows = whs.map(function(w) {
     var gs = (w.gates || []).slice().sort(function(a, b) { return a - b; });
-    var stored = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location || {}).wh === w.id; }).length;
+    var stored = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location || {}).wh === w.id; }).length;
     return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
   });
   downloadXLS('warehouses-' + dstr() + '.xls', headers, rows);

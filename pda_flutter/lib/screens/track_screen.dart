@@ -106,6 +106,7 @@ class _TrackScreenState extends State<TrackScreen> {
                     hintText: 'รหัสกล่อง เช่น CRT-01',
                     hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                     prefixIcon: Icon(Icons.search, color: C.muted),
+                    suffixIcon: SubmitArrowButton(onTap: () => _search(c)),
                     isDense: true,
                     filled: true,
                     fillColor: C.surface,

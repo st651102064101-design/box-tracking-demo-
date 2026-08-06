@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import '../services/api_client.dart';
 import '../services/rfid_service.dart';
+import '../services/scan_speed_detector.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -47,16 +48,18 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
 
-  /// Debounce timer for auto-submitting the barcode field without a trailing
-  /// Enter/Tab keystroke. A barcode gun in HID/keyboard-wedge mode injects a
-  /// whole code in a handful of milliseconds — far faster than anyone types
-  /// by hand — so "the field went quiet" is itself a reliable "a scan just
-  /// finished" signal, no reader-suffix configuration required. onSubmitted
-  /// (Enter) still fires immediately when the terminal *is* configured with
-  /// a suffix key; this is only the fallback for when it isn't.
-  Timer? _autoSubmitTimer;
-  static const _autoSubmitDelay = Duration(milliseconds: 180);
-  static const _autoSubmitMinLen = 4;
+  /// Auto-submits the barcode field without a trailing Enter/Tab keystroke,
+  /// from keystroke timing rather than a flat "quiet for Nms" debounce — a
+  /// flat debounce fired mid-entry on any human who paused typing longer
+  /// than its own delay (a very ordinary pause), cutting the code off short.
+  /// See ScanSpeedAutoSubmit's own doc for why this has to observe an actual
+  /// scan-speed gap before ever arming a timer. onSubmitted (Enter) still
+  /// fires immediately when the terminal *is* configured with a suffix key;
+  /// this is only the fallback for when it isn't.
+  late final _barcodeAutoSubmit = ScanSpeedAutoSubmit(onAutoSubmit: () {
+    if (!mounted || _verifying) return;
+    _submitBarcode();
+  }, minLen: 4);
 
   _Step _step = _Step.waitingBarcode;
   String? _tag; // verified box barcode for the box currently in hand
@@ -103,7 +106,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
-    _autoSubmitTimer?.cancel();
+    _barcodeAutoSubmit.dispose();
     _barcodeCtrl.removeListener(_onBarcodeChanged);
     _barcodeCtrl.dispose();
     _barcodeFocus.dispose();
@@ -111,15 +114,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   }
 
   void _onBarcodeChanged() {
-    _autoSubmitTimer?.cancel();
-    final text = _barcodeCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _verifying) return;
-    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
-      // Field has to still hold exactly what triggered this timer — someone
-      // still typing by hand would otherwise get cut off mid-code.
-      if (!mounted || _verifying || _barcodeCtrl.text.trim() != text) return;
-      _submitBarcode();
-    });
+    if (_verifying) return;
+    _barcodeAutoSubmit.onChanged(_barcodeCtrl.text.trim());
   }
 
   String get _today {
@@ -149,7 +145,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   Future<void> _submitBarcode() async {
     final code = _barcodeCtrl.text.trim();
     if (code.isEmpty || _verifying) return;
-    _autoSubmitTimer?.cancel();
+    _barcodeAutoSubmit.reset();
     setState(() {
       _verifying = true;
       _error = null;
@@ -400,7 +396,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                         padding: EdgeInsets.all(12),
                         child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                       )
-                    : IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _submitBarcode),
+                    : SubmitArrowButton(onTap: _submitBarcode),
               ),
             ),
           if (_error != null) ...[

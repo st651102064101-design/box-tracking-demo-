@@ -138,7 +138,7 @@ class _ScanScreenState extends State<ScanScreen> {
               Pill(isOut ? 'ออก' : 'เข้า',
                   color: isOut ? C.orange : C.limeText, bg: isOut ? C.orangeBg : C.limeBg),
               const SizedBox(width: 7),
-              Text(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน'),
+              Text(isOut ? 'ส่งออก' : 'รับคืน'),
             ],
           ),
           subtitle: Text('${c.selWhName} · ประตู ${c.gate}'),
@@ -195,7 +195,7 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             ),
             child: PrimaryButton(
-              label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง'),
+              label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับคืน'),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 decoration: BoxDecoration(

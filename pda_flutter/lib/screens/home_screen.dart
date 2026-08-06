@@ -227,7 +227,7 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         icon: Icons.south,
         iconColor: C.lime,
         iconBg: C.onInk.withValues(alpha: 0.12),
-        title: 'รับเข้า / รับคืน',
+        title: 'รับคืน',
         sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
         onTap: c.goScanIn,
       ),
@@ -857,7 +857,7 @@ List<_PendingItem> _pendingItems(AppController c) {
   final items = <_PendingItem>[
     ...c.outbox.map((tx) {
       final at = DateTime.tryParse(tx.ts) ?? DateTime.now();
-      final title = tx.type == 'in' ? 'รับเข้า ${tx.tags.length} กล่อง' : 'ส่งออก ${tx.tags.length} กล่อง';
+      final title = tx.type == 'in' ? 'รับคืน ${tx.tags.length} กล่อง' : 'ส่งออก ${tx.tags.length} กล่อง';
       final who = c.S?.custName(tx.customer ?? '') ?? tx.customer;
       final subtitle = [
         if (tx.type == 'out' && (who ?? '').isNotEmpty) '→ $who',

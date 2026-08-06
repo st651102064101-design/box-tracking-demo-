@@ -1304,7 +1304,7 @@ class AppController extends ChangeNotifier {
       _resetAfterCommit();
       await refresh();
       if (mode == 'in') {
-        toastMsg('รับเข้าสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
+        toastMsg('รับคืนสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
       } else {
         toastMsg('ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
       }

@@ -165,6 +165,37 @@ class RoundIconButton extends StatelessWidget {
   }
 }
 
+/// Lime submit-arrow button meant for a `TextField`'s `suffixIcon` — a
+/// scanner in keyboard-wedge mode types a trailing Enter, but a human typing
+/// the code by hand on this handheld often doesn't reach for it (or the
+/// on-screen keyboard's own Enter/Go key never fires `onSubmitted` the way
+/// the MC3390R's own trigger does). Every free-text lookup field (track,
+/// RFID find/register, barcode/RFID scan-or-type) needs an explicit tap
+/// target that does exactly what Enter already does, so nobody has to guess.
+class SubmitArrowButton extends StatelessWidget {
+  final VoidCallback? onTap;
+  const SubmitArrowButton({super.key, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Material(
+        color: C.limeDeep,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: const SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.black),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Small pill/badge.
 class Pill extends StatelessWidget {
   final String text;
