@@ -103,7 +103,10 @@ export const gateOutSchema = z.object({
 /* ─── RFID tag association ─────────────────────────────────────────────────*/
 const HEX = /^[0-9A-Fa-f]+$/;
 export const rfidAssociateSchema = z.object({
-  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8),
+  /** Optional: the MC3390R never reports a TID during inventory, and reading
+   *  one explicitly means halting the inventory, so the PDA commissions tags
+   *  by EPC alone. Still accepted from any client that does have one. */
+  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8).optional(),
   rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
   /** Must be set explicitly to overwrite a box that already carries a tag —
    *  the "damaged tag, put on a new one" flow. Omitted/false on a box with

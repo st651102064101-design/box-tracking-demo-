@@ -57,7 +57,9 @@ export async function resolveBoxByCode(db: DB, code: string): Promise<BoxRow | u
 
 export interface AssociateInput {
   tag: string;
-  rfidTid: string;
+  /** Null when the commissioning device can't read one — see the note on
+   *  `rfidAssociateSchema`. The EPC then carries the tag's identity alone. */
+  rfidTid: string | null;
   rfidEpc: string;
   replace: boolean;
   actor: string;
@@ -84,10 +86,15 @@ export async function associateTag(db: DB, input: AssociateInput) {
     const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
 
-    const [claimedBy] = await tx
-      .select()
-      .from(boxes)
-      .where(and(eq(boxes.rfidTid, rfidTid), ne(boxes.tag, tag)));
+    // "Is this physical tag already on another box?" — asked against whichever
+    // identifiers we were given. With a TID that's the factory serial; without
+    // one the EPC is the only identity the tag has, so it has to carry the same
+    // guard, otherwise the same tag could be commissioned onto two boxes and
+    // every later scan would resolve ambiguously.
+    const identity = rfidTid
+      ? or(eq(boxes.rfidTid, rfidTid), eq(boxes.rfidEpc, rfidEpc))!
+      : eq(boxes.rfidEpc, rfidEpc);
+    const [claimedBy] = await tx.select().from(boxes).where(and(identity, ne(boxes.tag, tag)));
     if (claimedBy) {
       throw httpError(
         409,
@@ -96,10 +103,15 @@ export async function associateTag(db: DB, input: AssociateInput) {
       );
     }
 
-    if (box.rfidTid && box.rfidTid !== rfidTid && !replace) {
+    // Same rule as before, but keyed on whatever this box actually carries: a
+    // box commissioned by EPC alone has no TID to compare against, and gating
+    // on TID would let a second scan silently overwrite its tag.
+    const carries = box.rfidTid ?? box.rfidEpc;
+    const incomingMatches = box.rfidTid ? box.rfidTid === rfidTid : box.rfidEpc === rfidEpc;
+    if (carries && !incomingMatches && !replace) {
       throw httpError(
         409,
-        `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${box.rfidTid}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`,
+        `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${carries}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`,
         'already_tagged',
       );
     }
@@ -134,7 +146,11 @@ export async function detachTag(db: DB, tag: string, actor: string) {
   return db.transaction(async (tx) => {
     const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
-    if (!box.rfidTid) throw httpError(409, `กล่อง ${tag} ไม่มีแท็ก RFID ผูกอยู่`, 'not_tagged');
+    // Either identifier counts as "tagged" — a box commissioned by EPC alone
+    // has no TID, and gating on TID would make its tag undetachable.
+    if (!box.rfidTid && !box.rfidEpc) {
+      throw httpError(409, `กล่อง ${tag} ไม่มีแท็ก RFID ผูกอยู่`, 'not_tagged');
+    }
 
     const before = { rfidTid: box.rfidTid, rfidEpc: box.rfidEpc };
     const data = { ...(box.data as Record<string, unknown>), rfidTid: null, rfidEpc: null };

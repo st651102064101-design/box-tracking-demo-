@@ -38,29 +38,25 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   bool _binding = false;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   Timer? _successTimer;
-  // Held so dispose() can put the reader back into the fast profile — reading
-  // it off the context there is not safe once the element is unmounting, and
-  // leaving the reader in detail mode would slow down every other screen.
-  RfidService? _rfid;
-
   AppController get _c => context.read<AppController>();
 
   @override
   void initState() {
     super.initState();
     final rfid = _c.rfid;
-    _rfid = rfid;
     _rfidStatus = RfidStatus(rfid.state, '');
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
     _tagSub = rfid.tagReads.listen(_onTagRead);
-    // The one screen that needs a TID, and the only one that pays for it.
-    rfid.setDetailMode(true);
+    // Reads in the same fast profile as every other screen. This screen used
+    // to switch the reader into detail mode to chase a TID, and that is what
+    // stopped it reading at all: the TID access-read halts inventory around
+    // every call, and on this reader it came back empty regardless, so every
+    // read was rejected for having no TID. Binding on the EPC needs none of it.
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
   }
 
   @override
   void dispose() {
-    _rfid?.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
@@ -113,19 +109,11 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.waitingRfid || _binding) return;
-    if (read.tid == null) {
-      // Accurate about *why* it is missing: the reader no longer leaves the
-      // read loop to fetch a TID (that meant stopping inventory), so the only
-      // TID available is the one the inventory round itself carried. A retry
-      // genuinely can succeed — whether the TID rides along varies read to
-      // read — so say that rather than blaming the tag.
-      setState(() => _rfidError = 'รอบอ่านนี้ไม่มี TID ติดมา — ยิงค้างไว้อีกครั้งให้ใกล้แท็กขึ้น');
-      return;
-    }
-    _bind(read.tid!, read.epc);
+    if (read.epc.isEmpty) return;
+    _bind(read.epc);
   }
 
-  Future<void> _bind(String tid, String epc) async {
+  Future<void> _bind(String epc) async {
     final tag = _tag;
     if (tag == null) return;
     setState(() {
@@ -134,7 +122,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     });
     unawaited(_c.rfid.stopInventory());
     try {
-      await _c.api.associateRfid(tag, rfidTid: tid, rfidEpc: epc, replace: true);
+      await _c.api.associateRfid(tag, rfidEpc: epc, replace: true);
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
       setState(() {
         _step = _Step.success;

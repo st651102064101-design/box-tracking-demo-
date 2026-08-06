@@ -168,3 +168,68 @@ describe('DELETE /api/boxes/:tag/rfid', () => {
     expect(res.body.error).toBe('not_tagged');
   });
 });
+
+// The MC3390R reports no TID during inventory, and the access-read that could
+// fetch one has to halt the inventory — so the PDA commissions tags by EPC
+// alone. The EPC then *is* the tag's identity and carries every guard the TID
+// used to.
+describe('POST /api/boxes/:tag/rfid — EPC-only commissioning', () => {
+  beforeAll(async () => {
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({
+        boxes: {
+          'BOX-E1': { tag: 'BOX-E1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+          'BOX-E2': { tag: 'BOX-E2', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+        },
+        customers: { 'CUST-X': { id: 'CUST-X', name: 'ลูกค้า X', returnDays: 10 } },
+        warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
+        gates: { '5': 'WH-001' },
+        cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
+      });
+  });
+
+  it('attaches a tag with no TID at all', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-E1/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidEpc: 'E280691500007006A375143E' });
+    expect(res.status).toBe(200);
+    expect(res.body.rfidTid).toBeNull();
+    expect(res.body.rfidEpc).toBe('E280691500007006A375143E');
+  });
+
+  it('resolves a later scan of that EPC back to the box', async () => {
+    const box = await request(ctx.app)
+      .get('/api/boxes/E280691500007006A375143E')
+      .set(auth(ctx.token));
+    expect(box.status).toBe(200);
+    expect(box.body.tag).toBe('BOX-E1');
+  });
+
+  it('rejects the same EPC on a second box — without a TID it is the only identity the tag has', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-E2/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidEpc: 'E280691500007006A375143E' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('rfid_tid_in_use');
+  });
+
+  it('still refuses to overwrite an EPC-commissioned box without replace:true', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-E1/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidEpc: 'AAAA111122223333BBBB4444' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('already_tagged');
+  });
+
+  it('detaches a tag that was commissioned by EPC alone', async () => {
+    const res = await request(ctx.app).delete('/api/boxes/BOX-E1/rfid').set(auth(ctx.token));
+    expect(res.status).toBe(200);
+    const box = await request(ctx.app).get('/api/boxes/BOX-E1').set(auth(ctx.token));
+    expect(box.body.rfidEpc).toBeNull();
+  });
+});

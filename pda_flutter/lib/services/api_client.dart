@@ -184,16 +184,24 @@ class ApiClient {
   /// an already-registered box. Throws [ApiException] with code
   /// 'rfid_tid_in_use' or 'already_tagged' for the two conflict cases the
   /// caller may want to handle specially (see services/rfid.ts).
+  /// [rfidTid] is optional because the MC3390R's inventory rounds never carry
+  /// a TID, and the access-read that could fetch one has to stop and restart
+  /// inventory — which is what stopped registration reading tags at all. The
+  /// EPC alone identifies the tag; the server treats whichever identifiers it
+  /// is given as the tag's identity.
   Future<Map<String, dynamic>> associateRfid(
     String tag, {
-    required String rfidTid,
     required String rfidEpc,
+    String? rfidTid,
     bool replace = false,
   }) async {
     return await _send(() => http.post(_u('/api/boxes/$tag/rfid'),
         headers: _headers,
-        body: jsonEncode({'rfidTid': rfidTid, 'rfidEpc': rfidEpc, 'replace': replace})))
-        as Map<String, dynamic>;
+        body: jsonEncode({
+          if (rfidTid != null) 'rfidTid': rfidTid,
+          'rfidEpc': rfidEpc,
+          'replace': replace,
+        }))) as Map<String, dynamic>;
   }
 
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN
