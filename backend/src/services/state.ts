@@ -10,7 +10,7 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc } from 'drizzle-orm';
+import { asc, desc, sql } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import {
   boxes,
@@ -130,6 +130,21 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
 export async function replaceState(db: DB, s: StatePayload): Promise<void> {
   await db.transaction(async (tx) => {
+    // The legacy web UI calls this on essentially every edit (see the
+    // frequent PUT /api/state traffic in the logs), and this whole
+    // function is delete-everything-then-reinsert — two of those firing
+    // close together (a double-click, two tabs, an autosave racing a
+    // manual save) is exactly what produced a live 500: TX A deletes and
+    // starts inserting 'BOX-007'; TX B, mid-flight against the same
+    // pre-delete snapshot, inserts its own 'BOX-007' row right into the
+    // gap, and one of them hits `boxes_pkey` on a table it just wiped in
+    // its own transaction. A session-scoped advisory lock serializes
+    // concurrent replaceState calls so the second one simply waits for the
+    // first to finish (and see its result) instead of interleaving with
+    // it — cheap (released automatically at commit/rollback) and doesn't
+    // touch any table's own row-level locking.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(727001)`);
+
     // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
     // own web-app login (username/passwordHash) never round-trip through the
     // legacy `S.employees` payload — the frontend that calls PUT /api/state

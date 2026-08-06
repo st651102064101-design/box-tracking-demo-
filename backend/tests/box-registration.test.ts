@@ -55,6 +55,26 @@ describe('POST /api/boxes — create', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('unknown_box_type');
   });
+
+  it('accepts optional lot/expiry and round-trips them through the state bridge', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes')
+      .set(auth(ctx.token))
+      .send({ tag: 'NEW-003', type: 'BT-001', lot: 'LOT-2026-08', expiry: '2027-01-15' });
+    expect(res.status).toBe(200);
+    expect(res.body.lot).toBe('LOT-2026-08');
+    expect(res.body.expiry).toBe('2027-01-15');
+
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['NEW-003']).toMatchObject({ lot: 'LOT-2026-08', expiry: '2027-01-15' });
+  });
+
+  it('omits lot/expiry entirely when not given, rather than storing empty strings', async () => {
+    const res = await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag: 'NEW-004', type: 'BT-001' });
+    expect(res.status).toBe(200);
+    expect(res.body.lot).toBeUndefined();
+    expect(res.body.expiry).toBeUndefined();
+  });
 });
 
 describe('POST /api/boxes/:tag/label + /putaway', () => {

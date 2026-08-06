@@ -216,13 +216,22 @@ class ApiClient {
         }))) as Map<String, dynamic>;
   }
 
-  /// POST /api/boxes { tag, type } — registers a brand-new box straight off
-  /// a supplier delivery (status 'pending', not yet labeled). Throws
-  /// [ApiException] with code 'tag_taken' if the barcode is already in use,
-  /// or 'unknown_box_type' if [type] isn't a box type on file.
-  Future<Map<String, dynamic>> createBox(String tag, {required String type}) async {
+  /// POST /api/boxes { tag, type, lot?, expiry? } — registers a brand-new box
+  /// straight off a supplier delivery (status 'pending', not yet labeled).
+  /// [lot]/[expiry] are optional free text (scanned or typed) that round-trip
+  /// straight into the box's data — the web app's print-label flow already
+  /// renders them when present. Throws [ApiException] with code 'tag_taken'
+  /// if the barcode is already in use, or 'unknown_box_type' if [type] isn't
+  /// a box type on file.
+  Future<Map<String, dynamic>> createBox(String tag, {required String type, String? lot, String? expiry}) async {
     return await _send(() => http.post(_u('/api/boxes'),
-        headers: _headers, body: jsonEncode({'tag': tag, 'type': type}))) as Map<String, dynamic>;
+        headers: _headers,
+        body: jsonEncode({
+          'tag': tag,
+          'type': type,
+          if (lot != null && lot.isNotEmpty) 'lot': lot,
+          if (expiry != null && expiry.isNotEmpty) 'expiry': expiry,
+        }))) as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/label — confirms the physical barcode sticker is

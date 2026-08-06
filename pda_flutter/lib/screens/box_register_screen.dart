@@ -41,6 +41,15 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   final _tagCtrl = TextEditingController();
   final _tagFocus = FocusNode();
 
+  // Lot code and expiry date — both optional, both scan-or-type. Neither
+  // auto-submits the box (unlike _tagCtrl's burst detection above): a
+  // supplier's lot/expiry barcode landing here mid-typing-the-box-code
+  // would be exactly the wrong field to treat as "the box is confirmed
+  // now", so these just sit in the form until the operator's own barcode
+  // scan/Enter on _tagCtrl actually creates the box.
+  final _lotCtrl = TextEditingController();
+  final _expiryCtrl = TextEditingController();
+
   // Putaway location — cascading Zone/Rack/Shelf/Slot picked from the
   // Location Master, or filled in one shot by scanning a rack barcode.
   // Same two-mode pattern as legacy.html's locPickerHtml().
@@ -119,6 +128,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     _tagCtrl.removeListener(_onTagChanged);
     _tagCtrl.dispose();
     _tagFocus.dispose();
+    _lotCtrl.dispose();
+    _expiryCtrl.dispose();
     _rackScanCtrl.dispose();
     _rackScanFocus.dispose();
     super.dispose();
@@ -159,11 +170,18 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _error = null;
     });
     try {
-      final box = await _c.api.createBox(tag, type: type);
+      final box = await _c.api.createBox(
+        tag,
+        type: type,
+        lot: _lotCtrl.text.trim(),
+        expiry: _expiryCtrl.text.trim(),
+      );
       setState(() {
         _tag = box['tag'] as String? ?? tag.toUpperCase();
         _step = _Step.label;
       });
+      _lotCtrl.clear();
+      _expiryCtrl.clear();
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : 'สร้างกล่องไม่สำเร็จ');
     } finally {
@@ -292,6 +310,20 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _rfidError = null;
     });
     await _c.rfid.startInventory();
+  }
+
+  /// "ข้ามไปก่อน" — same request _submitPutaway already sends when nothing's
+  /// picked, just reached without the location cascade blocking the tap.
+  /// Clears whatever was partially selected first so a half-picked zone
+  /// doesn't get sent alongside three empty fields.
+  Future<void> _skipPutaway() async {
+    setState(() {
+      _locZone = null;
+      _locRack = null;
+      _locShelf = null;
+      _locSlot = null;
+    });
+    await _submitPutaway();
   }
 
   Future<void> _submitPutaway() async {
@@ -507,6 +539,46 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
           const SizedBox(height: 8),
           Text('เริ่มจากสร้างข้อมูลกล่อง — ยังไม่ใช่การจ่ายบาร์โค้ดจริง แค่บันทึกว่ากล่องนี้เข้าระบบแล้ว',
               style: TextStyle(fontSize: 11.5, color: C.muted, height: 1.4)),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const FieldLabel('Lot (ไม่บังคับ)'),
+                    TextField(
+                      controller: _lotCtrl,
+                      enabled: !_creating,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textCapitalization: TextCapitalization.characters,
+                      style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
+                      decoration: pdaInput('ยิงหรือพิมพ์ lot', radius: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const FieldLabel('วันหมดอายุ (ไม่บังคับ)'),
+                    TextField(
+                      controller: _expiryCtrl,
+                      enabled: !_creating,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
+                      decoration: pdaInput('YYYY-MM-DD', radius: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -727,6 +799,21 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               ),
               child: Text(_puttingAway ? 'กำลังบันทึก…' : 'จัดเก็บขึ้นแร็ค (Putaway)',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Backend's own putaway endpoint already accepts an empty
+          // zone/rack/shelf/slot (only `wh` is required) — a box left this
+          // way just lands on 'warehouse' with no shelf position yet, the
+          // same "รอ Putaway" state the web app's own box list already
+          // filters for. This just stops the PDA UI itself from being the
+          // thing forcing a location pick that isn't actually required.
+          Center(
+            child: TextButton(
+              onPressed: _puttingAway ? null : _skipPutaway,
+              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+              child: Text('ข้ามไปก่อน — จัดเก็บทีหลัง',
+                  style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w700)),
             ),
           ),
         ],

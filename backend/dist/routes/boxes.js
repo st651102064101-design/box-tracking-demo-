@@ -60,6 +60,15 @@ boxesRouter.get('/', asyncHandler(async (req, res) => {
 const createBoxSchema = z.object({
     tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
     type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),
+    // Both optional and both free text — scanned off a supplier's own lot/
+    // expiry barcode where one exists, typed where it doesn't. Round-trip
+    // straight through `data` (see composeState in services/state.ts, which
+    // returns a box's `data` column verbatim) so the print-label templates
+    // that already read b.lot/b.expiry (frontend/public/legacy.html's
+    // finLabelHtml/labelToPNG/labelPrintCardHtml) start actually finding
+    // something to render instead of always getting undefined.
+    lot: z.string().trim().optional(),
+    expiry: z.string().trim().optional(),
 });
 /**
  * Registers a brand-new box straight off a supplier delivery — the PDA
@@ -109,6 +118,8 @@ boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
         lastSeenAt: ts,
         labeled: false,
         history,
+        ...(input.lot ? { lot: input.lot } : {}),
+        ...(input.expiry ? { expiry: input.expiry } : {}),
     };
     await db.insert(boxes).values({
         tag,
