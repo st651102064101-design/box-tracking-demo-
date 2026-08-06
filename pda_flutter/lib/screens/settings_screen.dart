@@ -387,10 +387,21 @@ class _RfidPanelState extends State<_RfidPanel> {
   /// falls back to whatever the reader itself last reported.
   int? _rangeIndex;
 
-  /// True while the on-screen "แตะเพื่อทดสอบยิง" test-fire toggle is on —
-  /// tap starts inventory, tap again stops it, so a range just set on the
-  /// slider can be checked without reaching for the physical trigger.
+  /// True while a test fire is in progress — either the on-screen "แตะเพื่อ
+  /// ทดสอบยิง" toggle was tapped, or the physical MC3390R trigger is being
+  /// held (see _trigSub below). Either source lights up the same button, so
+  /// a range just set on the slider can be checked with whichever is handy.
   bool _testFiring = false;
+
+  /// Mirrors the physical trigger onto this screen's own test-fire toggle.
+  /// AppController._onReaderTrigger deliberately no-ops on Screen.settings
+  /// (comment there: "settings' own test-fire button talks to the reader
+  /// directly") so a range check here never collides with barcode-mode/
+  /// wrong-screen warnings meant for the scan/track/RFID screens — but that
+  /// left the physical trigger doing nothing at all while this screen was
+  /// open. Subscribing here instead is what actually makes the hardware
+  /// trigger and the on-screen button fire the same sweep and stay in sync.
+  StreamSubscription<bool>? _trigSub;
 
   @override
   void initState() {
@@ -401,11 +412,28 @@ class _RfidPanelState extends State<_RfidPanel> {
     // a shift, and this screen isn't the one place a slow counter matters.
     final lowPower = context.read<AppController>().lowPowerMode;
     _poll = Timer.periodic(Duration(seconds: lowPower ? 5 : 2), (_) => _refresh());
+    _trigSub = context.read<AppController>().rfid.triggers.listen(_onHardwareTrigger);
+  }
+
+  void _onHardwareTrigger(bool pressed) {
+    final c = context.read<AppController>();
+    if (pressed) {
+      if (_testFiring) return;
+      setState(() => _testFiring = true);
+      c.rfid.startInventory();
+    } else {
+      // Always safe to stop, even if this screen didn't start it (e.g. the
+      // on-screen toggle already stopped it) — matches the "always safe"
+      // stop-on-release rule AppController._onReaderTrigger itself follows.
+      setState(() => _testFiring = false);
+      c.rfid.stopInventory();
+    }
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _trigSub?.cancel();
     // A stray finger-up outside the button (or navigating away mid-press)
     // must not leave the reader sweeping in the background.
     if (_testFiring) context.read<AppController>().rfid.stopInventory();
