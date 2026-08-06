@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -25,14 +27,33 @@ class _ScanScreenState extends State<ScanScreen> {
   final _inVtypeOtherCtrl = TextEditingController();
   final _scanFocus = FocusNode();
 
-  /// Gate In only: scan-then-details, so the operator isn't looking at three
-  /// vehicle fields before they've even started scanning boxes. "ถัดไป"
-  /// reveals the form; the actual commit only happens from there. Gate Out
-  /// keeps its form up front (it already gates on picking a customer first).
-  bool _inDetailsStep = false;
+  /// Scan-then-details, same shape on both directions: the operator isn't
+  /// looking at customer/vehicle fields before they've even started scanning
+  /// boxes. "ถัดไป" reveals the form; the actual commit only happens from
+  /// there. Reset is implicit — setMode() always routes through a fresh
+  /// ScanScreen instance (see root_screen.dart's ValueKey), so this never
+  /// needs to be cleared by hand between Gate In and Gate Out.
+  bool _detailsStep = false;
+
+  /// Debounce auto-submit for the scan field, same reasoning as
+  /// RfidRegisterScreen's barcode field: this terminal doesn't reliably send
+  /// a trailing Enter after a scan, so waiting for the field to go quiet is
+  /// the fallback that makes dropping the "+" button here safe. onSubmitted
+  /// (Enter) still fires immediately when a suffix key *is* configured.
+  Timer? _autoSubmitTimer;
+  static const _autoSubmitDelay = Duration(milliseconds: 180);
+  static const _autoSubmitMinLen = 4;
+
+  @override
+  void initState() {
+    super.initState();
+    _scanCtrl.addListener(_onScanChanged);
+  }
 
   @override
   void dispose() {
+    _autoSubmitTimer?.cancel();
+    _scanCtrl.removeListener(_onScanChanged);
     _scanCtrl.dispose();
     _plateCtrl.dispose();
     _driverCtrl.dispose();
@@ -44,7 +65,18 @@ class _ScanScreenState extends State<ScanScreen> {
     super.dispose();
   }
 
+  void _onScanChanged() {
+    _autoSubmitTimer?.cancel();
+    final text = _scanCtrl.text.trim();
+    if (text.length < _autoSubmitMinLen) return;
+    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
+      if (!mounted || _scanCtrl.text.trim() != text) return;
+      _submit(context.read<AppController>());
+    });
+  }
+
   void _submit(AppController c) {
+    _autoSubmitTimer?.cancel();
     final v = _scanCtrl.text.trim();
     if (v.isEmpty) return;
     c.addScan(v);
@@ -52,24 +84,19 @@ class _ScanScreenState extends State<ScanScreen> {
     _scanFocus.requestFocus();
   }
 
-  /// What the bottom button does depends on mode and step: Gate Out commits
-  /// directly (form's already on screen); Gate In's first tap just reveals
-  /// the vehicle form, and only the second tap — now labelled "ยืนยันรับเข้าคลัง"
-  /// — actually commits. A failed commit leaves the queue non-empty, which is
-  /// the signal to stay on the details step for a retry rather than snapping
+  /// First tap just reveals the customer/vehicle form (label becomes
+  /// "ยืนยันรับเข้าคลัง"/"ยืนยันส่งออก" at that point); the second tap actually
+  /// commits. A failed commit leaves the queue non-empty, which is the
+  /// signal to stay on the details step for a retry rather than snapping
   /// back to an empty scan screen.
   Future<void> _onPrimary(AppController c) async {
-    if (c.mode == 'out') {
-      c.doCommit();
-      return;
-    }
-    if (!_inDetailsStep) {
-      setState(() => _inDetailsStep = true);
+    if (!_detailsStep) {
+      setState(() => _detailsStep = true);
       return;
     }
     await c.doCommit();
     if (!mounted) return;
-    if (c.queue.isEmpty) setState(() => _inDetailsStep = false);
+    if (c.queue.isEmpty) setState(() => _detailsStep = false);
   }
 
   @override
@@ -82,8 +109,10 @@ class _ScanScreenState extends State<ScanScreen> {
     final vtypeOk = isOut
         ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
-    final canCommit =
-        c.queue.isNotEmpty && (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
+    // The form itself is hidden until the details step, so its fields can't
+    // block "ถัดไป" — only the actual commit tap needs them valid.
+    final formValid = (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
+    final canCommit = c.queue.isNotEmpty && (!_detailsStep || formValid);
 
     return Column(
       children: [
@@ -104,11 +133,9 @@ class _ScanScreenState extends State<ScanScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
             children: [
-              if (isOut)
-                _outForm(c)
-              else if (_inDetailsStep) ...[
+              if (_detailsStep) ...[
                 GestureDetector(
-                  onTap: () => setState(() => _inDetailsStep = false),
+                  onTap: () => setState(() => _detailsStep = false),
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 9),
                     child: Row(
@@ -121,7 +148,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     ),
                   ),
                 ),
-                _inForm(c),
+                isOut ? _outForm(c) : _inForm(c),
               ],
               const SizedBox(height: 13),
               _scannerPanel(c),
@@ -143,7 +170,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
           child: PrimaryButton(
-            label: isOut ? 'ยืนยันส่งออก' : (_inDetailsStep ? 'ยืนยันรับเข้าคลัง' : 'ถัดไป'),
+            label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง'),
             trailing: c.queue.isEmpty
                 ? null
                 : Container(
@@ -328,57 +355,38 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           const SizedBox(height: 11),
-          // scan input
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _scanCtrl,
-                  focusNode: _scanFocus,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.characters,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  onSubmitted: (_) => _submit(c),
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
-                  decoration: InputDecoration(
-                    hintText: 'ยิงบาร์โค้ด / RFID หรือพิมพ์รหัส',
-                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
-                    filled: true,
-                    fillColor: C.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.ink, width: 1.5),
-                    ),
-                  ),
-                ),
+          // scan input — Enter (a scanner's trailing keystroke, or the
+          // keyboard's "Go"/"Done" action) submits; no separate tap needed.
+          TextField(
+            controller: _scanCtrl,
+            focusNode: _scanFocus,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            onSubmitted: (_) => _submit(c),
+            style: const TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
+            decoration: InputDecoration(
+              hintText: 'ยิงบาร์โค้ด / RFID หรือพิมพ์รหัส',
+              hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+              filled: true,
+              fillColor: C.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 44,
-                height: 52,
-                child: FilledButton(
-                  onPressed: () => _submit(c),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: C.ink,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Icon(Icons.add, size: 22),
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
               ),
-            ],
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.ink, width: 1.5),
+              ),
+            ),
           ),
           if (c.lastResult != null) _resultChip(c.lastResult!),
         ],
