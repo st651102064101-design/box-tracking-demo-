@@ -154,7 +154,7 @@ class Prefs {
       }
       return '${b.scheme}://${b.host}:4000';
     }
-    return 'http://192.168.3.42:4000';
+    return 'http://192.168.1.149:4000';
   }
 
   set baseUrl(String v) => _p.setString(_kBaseUrl, v);
