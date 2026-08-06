@@ -336,41 +336,10 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           if (c.lastResult != null) _resultChip(c.lastResult!),
-          const SizedBox(height: 12),
-          // trigger + simulator
-          Row(
-            children: [
-              Expanded(
-                child: _sim('ยิง / อ่านครั้งเดียว', () async {
-                  if (c.rfid.supported && c.rfidStatus.state == RfidState.connected) {
-                    await c.rfid.startInventory();
-                    await Future.delayed(const Duration(milliseconds: 600));
-                    await c.rfid.stopInventory();
-                  } else {
-                    c.simOne();
-                  }
-                }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: _sim('จำลอง RFID 5 ใบ', () => c.simBurst(5))),
-            ],
-          ),
         ],
       ),
     );
   }
-
-  Widget _sim(String label, VoidCallback onTap) => OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: C.ink3,
-          backgroundColor: Colors.black.withOpacity(0.05),
-          side: BorderSide(color: Colors.black.withOpacity(0.1)),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-      );
 
   Widget _resultChip(ScanResult r) {
     late Color col, bg, bd;
