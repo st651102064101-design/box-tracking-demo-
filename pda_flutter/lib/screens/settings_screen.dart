@@ -385,9 +385,9 @@ class _RfidPanelState extends State<_RfidPanel> {
   /// falls back to whatever the reader itself last reported.
   int? _rangeIndex;
 
-  /// True while the on-screen "กดค้างเพื่อทดสอบยิง" button is held —
-  /// mirrors the physical trigger so a range just set on the slider can be
-  /// checked without reaching for the gun.
+  /// True while the on-screen "แตะเพื่อทดสอบยิง" test-fire toggle is on —
+  /// tap starts inventory, tap again stops it, so a range just set on the
+  /// slider can be checked without reaching for the physical trigger.
   bool _testFiring = false;
 
   @override
@@ -484,18 +484,23 @@ class _RfidPanelState extends State<_RfidPanel> {
                 child: Text(_label(c),
                     style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
               ),
-              OutlinedButton(
-                onPressed: () async {
-                  await c.rfid.connect();
-                  await _refresh();
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: C.ink,
-                  side: BorderSide(color: C.border2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+              // Nothing to reconnect once already connected — the button
+              // only makes sense as a recovery action for connecting/error/
+              // disconnected/idle, and showing it regardless read as "this
+              // needs attention" even while the reader was already fine.
+              if (c.rfidStatus.state != RfidState.connected)
+                OutlinedButton(
+                  onPressed: () async {
+                    await c.rfid.connect();
+                    await _refresh();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.ink,
+                    side: BorderSide(color: C.border2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                  ),
+                  child: const Text('เชื่อมต่อใหม่'),
                 ),
-                child: const Text('เชื่อมต่อใหม่'),
-              ),
             ],
           ),
           if (c.rfidStatus.message.isNotEmpty)
@@ -533,14 +538,16 @@ class _RfidPanelState extends State<_RfidPanel> {
                 );
               }),
               const SizedBox(height: 12),
-              // Press-and-hold does the same thing the physical trigger
-              // does — starts/stops inventory — so a range just dragged on
-              // the slider can be checked immediately without setting the
-              // handheld down to reach for the gun.
+              // Tap to toggle — same start/stop the physical trigger does,
+              // so a range just dragged on the slider can be checked
+              // immediately without reaching for the gun. Was press-and-hold
+              // (mirroring how the *hardware* trigger behaves), but that
+              // made this the one button on the whole screen that worked
+              // differently from every other tap target in the app — a tap
+              // here now starts inventory and a second tap stops it, exactly
+              // like every other on/off control on screen.
               GestureDetector(
-                onTapDown: (_) => _startTest(c),
-                onTapUp: (_) => _stopTest(c),
-                onTapCancel: () => _stopTest(c),
+                onTap: () => _testFiring ? _stopTest(c) : _startTest(c),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 13),
@@ -555,7 +562,7 @@ class _RfidPanelState extends State<_RfidPanel> {
                     children: [
                       Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeDeep : C.ink2),
                       const SizedBox(width: 8),
-                      Text(_testFiring ? 'กำลังยิงทดสอบ… ปล่อยนิ้วเพื่อหยุด' : 'กดค้างเพื่อทดสอบยิง',
+                      Text(_testFiring ? 'กำลังยิงทดสอบ… แตะเพื่อหยุด' : 'แตะเพื่อทดสอบยิง',
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -609,7 +616,7 @@ class _RfidPanelState extends State<_RfidPanel> {
             const Text('เสียงบี๊บ', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-              'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที',
+              'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที — เสียงนี้ใช้เฉพาะตอนยิงแท็ก RFID เท่านั้น ไม่มีผลกับเสียงอื่นของเครื่อง (เช่น เสียงยิงบาร์โค้ด)',
               style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
             ),
             const SizedBox(height: 10),

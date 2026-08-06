@@ -4695,7 +4695,12 @@ function code128Modules(data){
 }
 function code128SVG(data,h){h=h||90;var mods=code128Modules(data),x=0,bars='';
   mods.forEach(function(m){if(m.bar)bars+='<rect x="'+x+'" y="0" width="'+m.w+'" height="'+h+'"/>';x+=m.w;});
-  return '<svg viewBox="0 0 '+x+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" style="display:block;width:100%;" xmlns="http://www.w3.org/2000/svg" fill="#000">'+bars+'</svg>';}
+  /* shape-rendering=crispEdges (same fix already applied to qrCodeSVG above)
+     stops the browser antialiasing bar edges when the viewBox's module
+     units get scaled to an arbitrary container pixel width — without it,
+     thin 1-module bars blur/waver at non-integer scale factors, which is
+     exactly what a barcode scanner reads bar *width* to decode. */
+  return '<svg viewBox="0 0 '+x+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" shape-rendering="crispEdges" style="display:block;width:100%;" xmlns="http://www.w3.org/2000/svg" fill="#000">'+bars+'</svg>';}
 
 /* ============================================================
    QR Code — 100% offline, no external library.
@@ -4837,16 +4842,11 @@ function finLabelHtml(tag,typeId,typeNm,lot,expiry){
   return '<div class="rfid-fin-card">'
     +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>Barcode Label</div>'
     +'<div class="rfid-fin-wrap"><div class="finlabel">'
-      +'<div class="fl-head"><div><div class="fl-brand">BOXTRACE</div><div class="fl-cap">BARCODE</div></div>'
-      +'<div style="display:flex;align-items:center;gap:10px;">'
-        +(typeId?'<div class="fl-type">'+esc(String(typeId).toUpperCase())+'</div>':'')
-        +'<div style="width:82px;height:82px;flex:0 0 auto;" title="QR code of RFID tag">'+qrCodeSVG(tag,82)+'</div>'
-      +'</div></div>'
+      +'<div class="fl-head"><div><div class="fl-brand">BOXTRACE</div><div class="fl-cap">BARCODE</div></div></div>'
       +'<div class="fl-div"></div>'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#666;margin-bottom:2px;">Item Number</div>'
       +'<div class="fl-bc">'+code128SVG(tag,150)+'</div>'
       +'<div class="fl-code">'+esc(tag)+'</div>'
-      +(lot?finLabelRow('Batch/Lot',lot):'')
       +(expiry?finLabelRow('Expiry Date',expiry):'')
     +'</div></div>'
     +'<div class="muted small" style="text-align:center;">'+esc(typeNm)+'</div>'
@@ -4854,14 +4854,12 @@ function finLabelHtml(tag,typeId,typeNm,lot,expiry){
 }
 /* draw the same label onto a canvas → PNG data URL (offline download) */
 function labelToPNG(tag,typeId,typeNm,lot,expiry){
-  var extraRows=(lot?1:0)+(expiry?1:0);
+  var extraRows=expiry?1:0;
   var W=1000,H=520+extraRows*110,c=document.createElement('canvas');c.width=W;c.height=H;var g=c.getContext('2d');
   g.fillStyle='#fff';g.fillRect(0,0,W,H);
   g.textBaseline='alphabetic';g.fillStyle='#000';
   g.font='800 40px -apple-system,Arial,sans-serif';g.fillText('BOXTRACE',32,56);
   g.fillStyle='#333';g.font='700 22px -apple-system,Arial,sans-serif';g.fillText('BARCODE',32,88);
-  if(typeId){g.fillStyle='#000';g.font='800 28px -apple-system,Arial,sans-serif';g.textAlign='right';g.fillText(String(typeId).toUpperCase(),W-116,52);g.textAlign='left';}
-  drawQRToCanvas(g,tag,W-96,10,86); // QR code of the RFID tag, top-right corner
   g.fillStyle='#000';g.fillRect(32,106,W-64,3);
   g.font='700 20px -apple-system,Arial,sans-serif';g.fillStyle='#666';g.fillText('ITEM NUMBER',32,132);
   var mods=code128Modules(tag),total=0;mods.forEach(function(m){total+=m.w;});
@@ -4880,7 +4878,6 @@ function labelToPNG(tag,typeId,typeNm,lot,expiry){
     g.textAlign='right';g.font='700 20px monospace';g.fillStyle='#000';g.fillText(String(val),W-32,rowY+34);g.textAlign='left';
     rowY+=110;
   }
-  if(lot)drawRow('Batch/Lot',lot);
   if(expiry)drawRow('Expiry Date',expiry);
   return c.toDataURL('image/png');
 }
@@ -4897,17 +4894,12 @@ function labelPrintCardHtml(b){
     +'</div>';
   }
   return '<div class="lbl-card">'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
-      +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">BOXTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
-      +'<div style="display:flex;align-items:center;gap:10px;">'
-        +(b.type?'<div style="font-size:16px;font-weight:800;">'+xmlEsc(String(b.type).toUpperCase())+'</div>':'')
-        +'<div style="width:76px;height:76px;flex:0 0 auto;">'+qrCodeSVG(b.tag,76)+'</div>'
-      +'</div></div>'
+    +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">BOXTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
     +'<div style="height:2px;background:#111;margin:8px 0 10px;"></div>'
     +'<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#666;margin-bottom:2px;">Item Number</div>'
     +'<div>'+code128SVG(b.tag,90)+'</div>'
     +'<div style="text-align:center;font-family:monospace;font-weight:800;font-size:26px;letter-spacing:.08em;margin-top:4px;">'+xmlEsc(b.tag)+'</div>'
-    +(lot?row('Batch/Lot',lot):'')+(expiry?row('Expiry Date',expiry):'')
+    +(expiry?row('Expiry Date',expiry):'')
     +'<div style="text-align:center;color:#888;font-size:11px;margin-top:8px;">'+xmlEsc(typeNm||'')+'</div>'
   +'</div>';
 }
@@ -4979,7 +4971,7 @@ function printLabels(tags){if(!tags||!tags.length)return;
   openModal(
     '<div class="mhead"><h3>พิมพ์ป้ายบาร์โค้ด ('+boxes.length+' ใบ)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
     +'<div class="mbody" id="zplPreviewBody" style="background:var(--bg);"><div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;padding:6px;">'+cards+'</div>'+putawaySection+'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
+    +'<div class="mfoot">'
       +'<button class="btn ghost" id="btnZplDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PNG</button>'
       +'<button class="btn ghost" id="btnPdfDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PDF (พร้อมพิมพ์)</button>'
       +'<button class="btn accent" id="btnConfirmTagged"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg></span> ยืนยันติดป้ายเสร็จแล้ว</button></div>'

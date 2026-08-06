@@ -662,13 +662,21 @@ class RfidReaderController(private val context: Context) :
                     return@execute
                 }
                 Log.w(TAG, "startInventory failed${why(e)}", e)
-                // Surfaced, not just logged: the MC3390R answers
-                // RFID_CHARGING_COMMAND_NOT_ALLOWED to every inventory command
-                // while the battery is charging, so a terminal sitting in its
-                // cradle looks exactly like a broken app. Without the reason on
-                // screen there is nothing to tell an operator to take it off
-                // the charger.
-                status("error", "เริ่มอ่านไม่ได้${why(e)}")
+                // The MC3390R answers RFID_CHARGING_COMMAND_NOT_ALLOWED to
+                // every inventory command while the battery is charging, so a
+                // terminal sitting in its cradle looks exactly like a broken
+                // app. That's a known, actionable hardware state — tell the
+                // operator what to actually do about it in Thai, not the raw
+                // SDK result code/vendor string (e.g.
+                // "rfid_charging_command_not_allowed: charging in progress -
+                // command not allowed"), which is what used to reach the
+                // screen verbatim.
+                if (e is OperationFailureException &&
+                    e.getResults() == RFIDResults.RFID_CHARGING_COMMAND_NOT_ALLOWED) {
+                    status("error", "อ่าน RFID ไม่ได้ขณะกำลังชาร์จแบตเตอรี่ — ถอดเครื่องออกจากแท่นชาร์จก่อนแล้วลองใหม่")
+                } else {
+                    status("error", "เริ่มอ่านไม่ได้${why(e)}")
+                }
             }
         }
     }
