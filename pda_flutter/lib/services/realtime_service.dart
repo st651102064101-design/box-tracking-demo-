@@ -29,28 +29,37 @@ class RealtimeService {
   /// call cancels whatever attempt/backoff was in flight and starts fresh,
   /// which is what a "device just got a new token" or "settings changed the
   /// server URL" moment needs.
+  ///
+  /// [onConnectivity], if given, fires true the moment the stream is
+  /// actually open (proof the server answered) and false the moment it's
+  /// lost — an SSE connection dies within moments of the server going away
+  /// (or immediately on the next heartbeat gap), which makes this a genuine
+  /// realtime up/down signal for AppController.connected rather than
+  /// something that only ever finds out on the next unrelated REST call.
   void connect({
     required String Function() baseUrl,
     required String? Function() token,
     required void Function() onStateChanged,
+    void Function(bool connected)? onConnectivity,
   }) {
     if (_disposed) return;
     _retryTimer?.cancel();
     _sub?.cancel();
     _attempt = 0;
-    unawaited(_run(baseUrl, token, onStateChanged));
+    unawaited(_run(baseUrl, token, onStateChanged, onConnectivity));
   }
 
   Future<void> _run(
     String Function() baseUrl,
     String? Function() token,
     void Function() onStateChanged,
+    void Function(bool connected)? onConnectivity,
   ) async {
     if (_disposed) return;
     final t = token();
     final base = baseUrl();
     if (t == null || t.isEmpty || base.isEmpty) {
-      _scheduleRetry(baseUrl, token, onStateChanged);
+      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
       return;
     }
     try {
@@ -59,9 +68,10 @@ class RealtimeService {
       req.headers['Authorization'] = 'Bearer $t';
       final res = await _client.send(req).timeout(const Duration(seconds: 15));
       if (res.statusCode != 200) {
-        _scheduleRetry(baseUrl, token, onStateChanged);
+        _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
         return;
       }
+      onConnectivity?.call(true);
       String? currentEvent;
       _sub = res.stream.transform(utf8.decoder).transform(const LineSplitter()).listen(
         (line) {
@@ -81,12 +91,12 @@ class RealtimeService {
             currentEvent = null;
           }
         },
-        onError: (_) => _scheduleRetry(baseUrl, token, onStateChanged),
-        onDone: () => _scheduleRetry(baseUrl, token, onStateChanged),
+        onError: (_) => _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
+        onDone: () => _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
         cancelOnError: true,
       );
     } catch (_) {
-      _scheduleRetry(baseUrl, token, onStateChanged);
+      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
     }
   }
 
@@ -94,12 +104,14 @@ class RealtimeService {
     String Function() baseUrl,
     String? Function() token,
     void Function() onStateChanged,
+    void Function(bool connected)? onConnectivity,
   ) {
     if (_disposed) return;
+    onConnectivity?.call(false);
     final delay = Duration(seconds: _retryDelays[_attempt]);
     if (_attempt < _retryDelays.length - 1) _attempt++;
     _retryTimer?.cancel();
-    _retryTimer = Timer(delay, () => unawaited(_run(baseUrl, token, onStateChanged)));
+    _retryTimer = Timer(delay, () => unawaited(_run(baseUrl, token, onStateChanged, onConnectivity)));
   }
 
   void dispose() {

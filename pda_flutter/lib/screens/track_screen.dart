@@ -105,9 +105,14 @@ class _TrackScreenState extends State<TrackScreen> {
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (box == null && c.trackSuggestions.isNotEmpty)
-                _suggestions(c)
-              else if (c.trackTried && box == null)
+              if (box == null && c.trackSuggestions.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text('พบ ${c.trackSuggestions.length} กล่อง',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                ),
+                _suggestions(c),
+              ] else if (c.trackTried && box == null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
@@ -123,52 +128,70 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
+  /// A search can genuinely match a hundred-plus boxes (see
+  /// AppController.trackSuggestions, uncapped on purpose) — a vertical list
+  /// of a hundred rows means a hundred rows of scrolling before the operator
+  /// even sees whether their box is in there. A grid of small ID cards puts
+  /// far more of the result set on screen at once; column count adapts to
+  /// the available width but stays clamped 3-10 so cards on a wide screen
+  /// don't shrink to unreadable and cards on a narrow one don't get crushed
+  /// three-to-a-row when only three fit anyway.
   Widget _suggestions(AppController c) {
     final tags = c.trackSuggestions;
     final S = c.S;
-    return Container(
-      decoration: BoxDecoration(
-        color: C.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: C.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(tags.length, (i) {
-          final tag = tags[i];
-          final b = S?.box(tag);
-          return InkWell(
-            onTap: () => _tapSuggestion(c, tag),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                border: i == tags.length - 1 ? null : Border(bottom: BorderSide(color: C.border)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = (constraints.maxWidth / 92).floor().clamp(3, 10);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: tags.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.86,
+          ),
+          itemBuilder: (context, i) {
+            final tag = tags[i];
+            final b = S?.box(tag);
+            final sm = b != null ? StatusMeta.of(b.status) : null;
+            return InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _tapSuggestion(c, tag),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                decoration: BoxDecoration(
+                  color: C.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: sm?.color.withValues(alpha: 0.35) ?? C.border),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 17, color: C.muted),
+                    const SizedBox(height: 6),
+                    Text(tag,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                    if (sm != null) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(color: sm.color, shape: BoxShape.circle),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(tag,
-                            style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
-                        if (b != null)
-                          Text(S!.typeName(b.type), style: TextStyle(fontSize: 12, color: C.muted)),
-                      ],
-                    ),
-                  ),
-                  if (b != null) Pill(StatusMeta.of(b.status).label, color: StatusMeta.of(b.status).color, bg: StatusMeta.of(b.status).bg, fontSize: 11),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 

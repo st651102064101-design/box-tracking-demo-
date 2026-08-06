@@ -175,7 +175,12 @@ class AppController extends ChangeNotifier {
     // as the web app already does over the same /api/stream channel. Its own
     // retry loop handles "no token yet" / "backend unreachable at boot" —
     // safe to call before [loading] settles.
-    _realtime.connect(baseUrl: () => api.baseUrl, token: () => api.token, onStateChanged: _onRealtimeStateChanged);
+    _realtime.connect(
+      baseUrl: () => api.baseUrl,
+      token: () => api.token,
+      onStateChanged: _onRealtimeStateChanged,
+      onConnectivity: _onRealtimeConnectivity,
+    );
     await Future.delayed(const Duration(milliseconds: 420));
 
     // No operator is ever restored: a shift always starts with a badge scan,
@@ -264,6 +269,34 @@ class AppController extends ChangeNotifier {
       // local action's own refresh()) — nothing else depends on it landing.
       refresh().catchError((_) {});
     });
+  }
+
+  /// Bumped exactly when live connectivity transitions from up to down —
+  /// never on a routine retry attempt, never on any other notifyListeners()
+  /// call. root_screen.dart's _OfflineAlertListener watches this via
+  /// context.select to show a one-shot offline AlertDialog regardless of
+  /// which screen is on top, so a Wi-Fi blip surfaces once, not on every
+  /// heartbeat the SSE stream misses while it reconnects.
+  int offlineEventId = 0;
+
+  /// Realtime up/down signal from the SSE stream (see RealtimeService) —
+  /// the connection to the backend dying is usually known within moments,
+  /// not only whenever the next unrelated REST call happens to fail. This is
+  /// the one place [_liveConnected] is allowed back to false; [refresh]
+  /// itself only ever sets it true.
+  void _onRealtimeConnectivity(bool up) {
+    final wasConnected = _liveConnected;
+    _liveConnected = up;
+    if (up) {
+      connError = null;
+    } else {
+      // Deliberately left null when nothing more specific is known — the
+      // dialog and the reconnect sheet both have their own wording for
+      // "just offline", and echoing a generic string here only made the
+      // alert repeat its own title back as the body.
+      if (wasConnected) offlineEventId++;
+    }
+    notifyListeners();
   }
 
   /// Human-readable message for an arbitrary error. Strips the leading
@@ -1061,6 +1094,11 @@ class AppController extends ChangeNotifier {
   // ═══════════════════════ track ═══════════════════════════════════════════
   void onTrackChanged(String v) {
     trackVal = v;
+    // Live suggestions (see trackSuggestions) are a getter evaluated at
+    // build time — nothing rebuilds TrackScreen to re-read it without this.
+    // Was missing entirely, which meant the "as soon as the first character
+    // lands" typeahead this method exists for had never actually fired.
+    notifyListeners();
   }
 
   void doTrack() {
@@ -1086,8 +1124,10 @@ class AppController extends ChangeNotifier {
     final s = S;
     final q = trackVal.trim().toLowerCase();
     if (s == null || q.isEmpty) return const [];
-    final matches = s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
-    return matches.take(20).toList();
+    // No cap — a search for a short/common substring can genuinely match a
+    // hundred boxes, and the grid this feeds (see TrackScreen._suggestions)
+    // is built to show all of them rather than silently truncating to 20.
+    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
   }
 
   void selectTrackSuggestion(String tag) {

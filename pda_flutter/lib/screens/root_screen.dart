@@ -26,20 +26,34 @@ class RootScreen extends StatelessWidget {
     // rather than hardcoding C.bg here — Theme propagates via its own
     // InheritedWidget mechanism, so this repaints on a dark/light toggle even
     // though RootScreen itself never watches ThemeController directly.
-    return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _body(c),
+    //
+    // canPop: false blocks the Android system back control entirely — the
+    // 3-button nav bar's ‹, and the edge-swipe gesture on gesture-nav
+    // devices — on every screen, not just this one: there's no Navigator
+    // stack under here for it to pop (screens are just AppController.screen
+    // swapping which const widget AnimatedSwitcher shows), so an unblocked
+    // back would either do nothing useful or exit the app outright mid-scan.
+    // In-app navigation is exclusively StickyHeader's own back arrow, which
+    // goes through AppController methods that know what "back" means for
+    // whatever screen is showing (see backToHome, goTrack, etc.).
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: _body(c),
+                  ),
                 ),
-              ),
-              const ToastOverlay(),
-            ],
+                const ToastOverlay(),
+                const _OfflineAlertListener(),
+              ],
+            ),
           ),
         ),
       ),
@@ -69,5 +83,63 @@ class RootScreen extends StatelessWidget {
       case Screen.rfidLocate:
         return const RfidLocateScreen(key: ValueKey('rfidLocate'));
     }
+  }
+}
+
+/// Invisible — its only job is to pop a one-shot AlertDialog whenever
+/// AppController.offlineEventId ticks (a realtime SSE-detected connectivity
+/// drop, see AppController._onRealtimeConnectivity), regardless of which
+/// screen happens to be on top. A plain `context.watch` in build() would
+/// refire on every unrelated notifyListeners() call across the whole app;
+/// comparing against the last-seen id here is what keeps this to exactly
+/// one dialog per actual drop.
+class _OfflineAlertListener extends StatefulWidget {
+  const _OfflineAlertListener();
+  @override
+  State<_OfflineAlertListener> createState() => _OfflineAlertListenerState();
+}
+
+class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
+  int? _lastSeen;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = context.select<AppController, int>((c) => c.offlineEventId);
+    if (_lastSeen == null) {
+      // First build: this is the app's starting state, not a drop that just
+      // happened — nothing to alert about yet.
+      _lastSeen = id;
+    } else if (id != _lastSeen) {
+      _lastSeen = id;
+      final c = context.read<AppController>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('ขาดการเชื่อมต่อกับระบบหลัก'),
+            content: Text(
+              c.connError ?? 'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('รับทราบ')),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  c.goDeviceSetup();
+                },
+                child: const Text('ตั้งค่าระบบ'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
+    // Must be Positioned, not a bare SizedBox: a Stack sizes itself to its
+    // largest *non*-positioned child, so an unpositioned 0x0 widget here
+    // collapses the whole Stack to 0x0 — and then the Positioned.fill
+    // holding the actual screen fills nothing, rendering the app black with
+    // no error anywhere. Same reason ToastOverlay returns a Positioned.
+    return const Positioned(width: 0, height: 0, child: SizedBox.shrink());
   }
 }

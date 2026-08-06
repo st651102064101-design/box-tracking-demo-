@@ -266,6 +266,11 @@ class _RfidPanelState extends State<_RfidPanel> {
   /// falls back to whatever the reader itself last reported.
   int? _rangeIndex;
 
+  /// True while the on-screen "กดค้างเพื่อทดสอบยิง" button is held —
+  /// mirrors the physical trigger so a range just set on the slider can be
+  /// checked without reaching for the gun.
+  bool _testFiring = false;
+
   @override
   void initState() {
     super.initState();
@@ -277,7 +282,22 @@ class _RfidPanelState extends State<_RfidPanel> {
   @override
   void dispose() {
     _poll?.cancel();
+    // A stray finger-up outside the button (or navigating away mid-press)
+    // must not leave the reader sweeping in the background.
+    if (_testFiring) context.read<AppController>().rfid.stopInventory();
     super.dispose();
+  }
+
+  Future<void> _startTest(AppController c) async {
+    if (_testFiring) return;
+    setState(() => _testFiring = true);
+    await c.rfid.startInventory();
+  }
+
+  Future<void> _stopTest(AppController c) async {
+    if (!_testFiring) return;
+    setState(() => _testFiring = false);
+    await c.rfid.stopInventory();
   }
 
   Future<void> _refresh() async {
@@ -371,7 +391,7 @@ class _RfidPanelState extends State<_RfidPanel> {
             // step it actually has (see RfidService.setPowerIndex) — that
             // number only exists once the reader has answered a diagnostics
             // call, so there's honestly nothing precise to show before then.
-            if (_d['powerMaxIndex'] is int)
+            if (_d['powerMaxIndex'] is int) ...[
               Builder(builder: (context) {
                 final maxIdx = _d['powerMaxIndex'] as int;
                 final current = (_rangeIndex ?? (_d['powerIndex'] as int?) ?? maxIdx).clamp(0, maxIdx);
@@ -389,8 +409,40 @@ class _RfidPanelState extends State<_RfidPanel> {
                     c.rfid.setPowerIndex(v);
                   },
                 );
-              })
-            else
+              }),
+              const SizedBox(height: 12),
+              // Press-and-hold does the same thing the physical trigger
+              // does — starts/stops inventory — so a range just dragged on
+              // the slider can be checked immediately without setting the
+              // handheld down to reach for the gun.
+              GestureDetector(
+                onTapDown: (_) => _startTest(c),
+                onTapUp: (_) => _stopTest(c),
+                onTapCancel: () => _stopTest(c),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                    color: _testFiring ? C.limeBg : C.neutralBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _testFiring ? C.limeBorder : C.border2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeDeep : C.ink2),
+                      const SizedBox(width: 8),
+                      Text(_testFiring ? 'กำลังยิงทดสอบ… ปล่อยนิ้วเพื่อหยุด' : 'กดค้างเพื่อทดสอบยิง',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _testFiring ? C.limeDeep : C.ink2)),
+                    ],
+                  ),
+                ),
+              ),
+            ] else
               Text(
                 'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้',
                 style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
