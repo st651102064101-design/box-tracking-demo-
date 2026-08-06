@@ -202,12 +202,25 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   }
 
   /// "สร้างรหัสใหม่" — only meaningful in auto mode; a manually-typed/scanned
-  /// override has nothing to regenerate.
+  /// override has nothing to regenerate. Shows the locally-computed guess
+  /// instantly (no flash of an empty field), then corrects it against the
+  /// server's live count once that answers — this device's own boxesRaw
+  /// cache can be stale if another device just registered a box under the
+  /// same type prefix since this one last synced.
+  bool _fetchingNextTag = false;
   void _regenerateTag() {
     if (_tagOverride) return;
+    final type = _selectedType;
     setState(() {
-      _tagCtrl.text = _nextTagForType(_selectedType);
+      _tagCtrl.text = _nextTagForType(type);
       _tagError = null;
+    });
+    if (type == null || type.isEmpty || _fetchingNextTag) return;
+    _fetchingNextTag = true;
+    _c.api.nextBoxTag(type).then((tag) {
+      _fetchingNextTag = false;
+      if (!mounted || tag == null || _tagOverride || _selectedType != type) return;
+      setState(() => _tagCtrl.text = tag);
     });
   }
 
@@ -218,9 +231,12 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     setState(() {
       _tagOverride = !_tagOverride;
       _tagError = null;
-      if (!_tagOverride) _tagCtrl.text = _nextTagForType(_selectedType);
     });
-    if (_tagOverride) WidgetsBinding.instance.addPostFrameCallback((_) => _tagFocus.requestFocus());
+    if (_tagOverride) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tagFocus.requestFocus());
+    } else {
+      _regenerateTag();
+    }
   }
 
   Widget _iconBtn(IconData icon, String tooltip, VoidCallback onTap) {
@@ -804,6 +820,25 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          // Auto mode's barcode field (above) is read-only and already
+          // pre-filled the moment a type is picked — _regenerateTag() ran
+          // inside the dropdown's own onChanged — so there is nothing left
+          // for the operator to type or scan there. Without this button,
+          // auto mode had literally no way to move on: the arrow_forward
+          // submit icon only exists inside the manual-entry TextField
+          // branch above, which auto mode never renders. This button covers
+          // both modes — _submitCreate()/_validateCreate() already accept
+          // whatever's sitting in _tagCtrl either way.
+          PrimaryButton(
+            label: 'ถัดไป',
+            icon: Icons.arrow_forward,
+            trailing: _creating
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : null,
+            onTap: (_selectedType == null || _creating) ? null : _submitCreate,
           ),
         ],
       ),

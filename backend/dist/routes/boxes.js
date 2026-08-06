@@ -57,6 +57,39 @@ boxesRouter.get('/', asyncHandler(async (req, res) => {
         .limit(limit);
     res.json({ count: rows.length, items: rows.map((r) => r.data) });
 }));
+/**
+ * Suggests the next tag for a box type, counted from the highest tag
+ * actually in the DB right now under that type's prefix — not from
+ * whatever a client's own locally-cached box list happens to hold. A
+ * second device (or a second tab) that hasn't refreshed since another one
+ * just registered a box would otherwise suggest a tag that's already
+ * taken; asking the DB directly, right before showing the suggestion, is
+ * what "count from the latest code in the DB" actually means. Mirrors
+ * legacy.html's tagPrefixForType()/nextTagForType() exactly, so the web
+ * and the PDA app suggest the same tag for the same type. This is only a
+ * *suggestion* — POST / above still rejects a genuine duplicate tag with
+ * 409 regardless of where it came from, which is the real uniqueness
+ * guarantee.
+ */
+boxesRouter.get('/next-tag', asyncHandler(async (req, res) => {
+    const typeId = typeof req.query.type === 'string' ? req.query.type : '';
+    const prefix = typeId ? typeId.toUpperCase().replace(/[^A-Z0-9]/g, '') + '-' : '';
+    if (!prefix)
+        return res.json({ tag: null });
+    const db = getDb();
+    const rows = await db
+        .select({ tag: boxes.tag })
+        .from(boxes)
+        .where(sql `${boxes.tag} LIKE ${prefix + '%'}`);
+    let max = 0;
+    const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+    for (const row of rows) {
+        const m = re.exec(row.tag);
+        if (m)
+            max = Math.max(max, parseInt(m[1], 10));
+    }
+    res.json({ tag: `${prefix}${max + 1}` });
+}));
 const createBoxSchema = z.object({
     tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
     type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),
@@ -200,6 +233,12 @@ boxesRouter.post('/:tag/putaway', canWrite, asyncHandler(async (req, res) => {
         throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
     if (box.status === 'out')
         throw httpError(409, `กล่อง ${box.tag} ออกอยู่กับลูกค้า ย้ายตำแหน่งไม่ได้`, 'box_out');
+    // Hold/Damage boxes don't get a normal shelf position — Gate In already
+    // parks them in quarantine (see gateIn in services/gate.ts). Moving them
+    // here instead would silently promote a flagged box back to 'warehouse'
+    // and make it look like ordinary shippable stock again.
+    if (box.status === 'hold' || box.status === 'damage')
+        throw httpError(409, `กล่อง ${box.tag} ถูกพักไว้ (${box.status === 'hold' ? 'Hold' : 'ชำรุด'}) — ปลดสถานะก่อนจึง Putaway ขึ้นชั้นวางปกติได้`, 'box_on_hold');
     const wasPending = box.status === 'pending';
     const ts = new Date().toISOString();
     const location = { wh: input.wh, zone: input.zone, rack: input.rack, shelf: input.shelf, slot: input.slot, gate: null, ts };

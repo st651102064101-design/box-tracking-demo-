@@ -66,6 +66,41 @@ boxesRouter.get(
   }),
 );
 
+/**
+ * Suggests the next tag for a box type, counted from the highest tag
+ * actually in the DB right now under that type's prefix — not from
+ * whatever a client's own locally-cached box list happens to hold. A
+ * second device (or a second tab) that hasn't refreshed since another one
+ * just registered a box would otherwise suggest a tag that's already
+ * taken; asking the DB directly, right before showing the suggestion, is
+ * what "count from the latest code in the DB" actually means. Mirrors
+ * legacy.html's tagPrefixForType()/nextTagForType() exactly, so the web
+ * and the PDA app suggest the same tag for the same type. This is only a
+ * *suggestion* — POST / above still rejects a genuine duplicate tag with
+ * 409 regardless of where it came from, which is the real uniqueness
+ * guarantee.
+ */
+boxesRouter.get(
+  '/next-tag',
+  asyncHandler(async (req, res) => {
+    const typeId = typeof req.query.type === 'string' ? req.query.type : '';
+    const prefix = typeId ? typeId.toUpperCase().replace(/[^A-Z0-9]/g, '') + '-' : '';
+    if (!prefix) return res.json({ tag: null });
+    const db = getDb();
+    const rows = await db
+      .select({ tag: boxes.tag })
+      .from(boxes)
+      .where(sql`${boxes.tag} LIKE ${prefix + '%'}`);
+    let max = 0;
+    const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+    for (const row of rows) {
+      const m = re.exec(row.tag);
+      if (m) max = Math.max(max, parseInt(m[1]!, 10));
+    }
+    res.json({ tag: `${prefix}${max + 1}` });
+  }),
+);
+
 const createBoxSchema = z.object({
   tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
   type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),

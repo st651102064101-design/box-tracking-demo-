@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
-import { boxTypes, customers, locations } from '../db/schema.js';
+import { boxTypes, customers, locations, warehouses, employees } from '../db/schema.js';
 import { boxTypeSchema, customerSchema, locationSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -15,6 +15,60 @@ export const mastersRouter = Router();
 mastersRouter.use(requireAuth);
 /** 'viewer' may only GET; writes require 'admin' or 'staff'. */
 const canWrite = requireRole('admin', 'staff');
+
+/**
+ * Suggests the next sequential id for a master-data table, counted from
+ * whatever the highest existing id in the DB actually is right now — not
+ * from whatever a client's own locally-cached copy of the table happens to
+ * hold. A client computing "next" from a stale snapshot (its last GET
+ * /api/state, possibly seconds or minutes old on a second device) risks
+ * suggesting an id another device already claimed in the meantime; asking
+ * the DB directly, right before showing the suggestion, is what makes "count
+ * from the latest code in the DB" (rather than "in whatever I last saw")
+ * actually true. This is a *suggestion* only — the create endpoints below
+ * still reject a genuine duplicate id with 409 regardless of where it came
+ * from, which is the actual uniqueness guarantee.
+ */
+function nextSeqIdFrom(ids: Array<string | null>, prefix: string): string {
+  let max = 0;
+  const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+  for (const id of ids) {
+    const m = id ? re.exec(id) : null;
+    if (m) max = Math.max(max, parseInt(m[1]!, 10));
+  }
+  return prefix + String(max + 1).padStart(3, '0');
+}
+
+mastersRouter.get(
+  '/next-id',
+  asyncHandler(async (req, res) => {
+    const kind = String(req.query.kind ?? '');
+    const db = getDb();
+    let ids: Array<string | null>;
+    let prefix: string;
+    switch (kind) {
+      case 'boxtype':
+        prefix = 'BT-';
+        ids = (await db.select({ id: boxTypes.id }).from(boxTypes)).map((r) => r.id);
+        break;
+      case 'warehouse':
+        prefix = 'WH-';
+        ids = (await db.select({ id: warehouses.id }).from(warehouses)).map((r) => r.id);
+        break;
+      case 'customer':
+        prefix = 'CUST-';
+        ids = (await db.select({ id: customers.id }).from(customers)).map((r) => r.id);
+        break;
+      case 'employee':
+        prefix = 'EMP-';
+        ids = (await db.select({ id: employees.id }).from(employees)).map((r) => r.id);
+        break;
+      default:
+        throw httpError(400, 'kind ต้องเป็น boxtype/warehouse/customer/employee', 'invalid_kind');
+    }
+    res.json({ id: nextSeqIdFrom(ids, prefix) });
+  }),
+);
 
 /* ─── box types ────────────────────────────────────────────────────────────*/
 mastersRouter.get(

@@ -1931,7 +1931,15 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label><input id="btDim" placeholder="600x400x320" title="Format: กว้างxยาวxสูง เช่น 600x400x320"></div>
+        <div class="field"><label>ขนาด (มม.)</label>
+          <div class="row" style="gap:6px;">
+            <input id="btDimW" type="number" min="0" inputmode="numeric" placeholder="กว้าง" title="กว้าง (มม.)" style="width:0;flex:1;">
+            <span class="muted" style="align-self:center;">×</span>
+            <input id="btDimL" type="number" min="0" inputmode="numeric" placeholder="ยาว" title="ยาว (มม.)" style="width:0;flex:1;">
+            <span class="muted" style="align-self:center;">×</span>
+            <input id="btDimH" type="number" min="0" inputmode="numeric" placeholder="สูง" title="สูง (มม.)" style="width:0;flex:1;">
+          </div>
+        </div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -2140,8 +2148,18 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <select id="locRack" onchange="toggleLocTypeOther('locRack','locRackOther');locAutoCode();"></select>
             <input id="locRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locAutoCode()">
           </div>
-          <div class="field"><label>ชั้น (Shelf)</label><input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()"></div>
-          <div class="field"><label>ช่อง (Slot)</label><input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()"></div>
+          <div class="field"><label>ชั้น (Shelf)</label>
+            <div class="auto-tag-row">
+              <input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="addLocFieldValue('locShelf')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
+          <div class="field"><label>ช่อง (Slot)</label>
+            <div class="auto-tag-row">
+              <input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="addLocFieldValue('locSlot')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
           <div class="field"><label>ประเภทแร็ค</label>
             <select id="locType" onchange="toggleLocTypeOther('locType','locTypeOther')">
               <option value="Selective">Selective (ทั่วไป)</option>
@@ -2861,10 +2879,14 @@ function toggleIdCell(td){
   td.innerHTML='<b>'+esc(other)+'</b>';
 }
 window.toggleIdCell=toggleIdCell;
+/* กดปุ่มลัดซ้ำ ๆ ให้บวกสะสมต่อจากวันที่ตั้งไว้แล้ว ไม่ใช่รีเซ็ตกลับมา "วันนี้+N"
+   ทุกครั้ง — กด +30 วัน สองครั้งติดกันควรได้ +60 วันจากวันนี้ ไม่ใช่ +30 วันเท่าเดิม */
 function setExpiryQuick(days){var el=$('#bExpiry');if(!el)return;
   if(!days){el.value='';return;}
-  var d=now();d.setDate(d.getDate()+days);
-  el.value=d.toISOString().slice(0,10);}
+  var base=el.value?new Date(el.value+'T00:00:00'):now();
+  if(isNaN(base.getTime()))base=now();
+  base.setDate(base.getDate()+days);
+  el.value=base.toISOString().slice(0,10);}
 window.setExpiryQuick=setExpiryQuick;
 
 /* ===== toast / confirm / modal ===== */
@@ -2966,9 +2988,42 @@ function nextSeqId(prefix,existingIds){
    showing that suggestion, "แก้เอง" unlocks manual typing (rename), and
    "สร้างรหัสใหม่" always snaps back to a fresh auto id regardless of any
    override in progress. */
-function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, computeAutoFn) {
+/* ขอเลข id ถัดไปจากเซิร์ฟเวอร์ (นับจากรหัสล่าสุดจริงใน DB ตอนนี้ ไม่ใช่จาก
+   snapshot ที่โหลดไว้ในเครื่อง ซึ่งอาจตกรุ่นถ้าอุปกรณ์/แท็บอื่นเพิ่งสร้างไปก่อน) —
+   ใช้เป็นแค่ "คำแนะนำ" ที่แม่นกว่าเดิม การกันชนกันจริงยังอยู่ที่ฝั่งเซิร์ฟเวอร์
+   (create endpoint ปฏิเสธ id ซ้ำด้วย 409 เสมอ ไม่ว่าเลขจะมาจากไหน) */
+function fetchNextId(kind){
+  return apiFetch('/api/masters/next-id?kind='+encodeURIComponent(kind),{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){return d&&d.id||null;})
+    .catch(function(){return null;});
+}
+function fetchNextTag(typeId){
+  if(!typeId)return Promise.resolve(null);
+  return apiFetch('/api/boxes/next-tag?type='+encodeURIComponent(typeId),{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){return d&&d.tag||null;})
+    .catch(function(){return null;});
+}
+function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, computeAutoFn, serverKind) {
   var t = $('#'+inputId), ob = $('#'+overrideBtnId);
-  function refresh(){ if (t && !t._override) t.value = computeAutoFn(); }
+  function refresh(){
+    if (!t || t._override) return;
+    t.value = computeAutoFn();
+    /* renderSetup() calls refresh() on every re-render (any state change),
+       so a fetch has to be de-duped or a busy screen would fire one request
+       per field per render — one in-flight request at a time is enough,
+       since it always resolves to "the latest as of right now" anyway. */
+    if (serverKind && !t._fetchingNextId) {
+      t._fetchingNextId = true;
+      fetchNextId(serverKind).then(function(id){
+        t._fetchingNextId = false;
+        /* ผู้ใช้อาจสลับไปพิมพ์เองหรือกดปุ่มอื่นระหว่างรอเซิร์ฟเวอร์ตอบ — อัปเดต
+           ทับได้เฉพาะตอนที่ยังอยู่โหมด auto เท่านั้น */
+        if (id && t && !t._override) t.value = id;
+      });
+    }
+  }
   function resetToAuto(){
     if (!t) return;
     t._override=false; t.readOnly=true; t.style.opacity='';
@@ -2998,10 +3053,10 @@ function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, comput
   refresh();
   return {refresh:refresh, reset:resetToAuto, edit:editExisting};
 }
-var btIdAuto = wireAutoCodeField('btId','btnRegenBtId','btnCopyBtId','btnOverrideBtId', function(){return nextSeqId('BT-',Object.keys(S.boxtypes));});
-var whIdAuto = wireAutoCodeField('whId','btnRegenWhId','btnCopyWhId','btnOverrideWhId', function(){return nextSeqId('WH-',Object.keys(S.warehouses));});
-var cIdAuto  = wireAutoCodeField('cId','btnRegenCId','btnCopyCId','btnOverrideCId', function(){return nextSeqId('CUST-',Object.keys(S.customers));});
-var eIdAuto  = wireAutoCodeField('eId','btnRegenEId','btnCopyEId','btnOverrideEId', function(){return nextSeqId('EMP-',Object.keys(S.employees));});
+var btIdAuto = wireAutoCodeField('btId','btnRegenBtId','btnCopyBtId','btnOverrideBtId', function(){return nextSeqId('BT-',Object.keys(S.boxtypes));}, 'boxtype');
+var whIdAuto = wireAutoCodeField('whId','btnRegenWhId','btnCopyWhId','btnOverrideWhId', function(){return nextSeqId('WH-',Object.keys(S.warehouses));}, 'warehouse');
+var cIdAuto  = wireAutoCodeField('cId','btnRegenCId','btnCopyCId','btnOverrideCId', function(){return nextSeqId('CUST-',Object.keys(S.customers));}, 'customer');
+var eIdAuto  = wireAutoCodeField('eId','btnRegenEId','btnCopyEId','btnOverrideEId', function(){return nextSeqId('EMP-',Object.keys(S.employees));}, 'employee');
 /* Lot/Batch auto-code: {YYYYMMDD}-{PLANT}-{SHIFT}-{SEQ}, the standard
    manufacturing lot-number shape (production date · plant/line code · shift ·
    running sequence within that day+plant+shift). All four segments come from
@@ -3058,7 +3113,18 @@ function nextTagForType(typeId){
   });
   return prefix+String(max+1);
 }
-function refreshTagId(){var t=$('#bTag');if(t&&!t._override)t.value=nextTagForType(val('bType'));}
+function refreshTagId(){
+  var t=$('#bTag');if(!t||t._override)return;
+  var type=val('bType');
+  t.value=nextTagForType(type);
+  if(type&&!t._fetchingNextTag){
+    t._fetchingNextTag=true;
+    fetchNextTag(type).then(function(tag){
+      t._fetchingNextTag=false;
+      if(tag&&t&&!t._override&&val('bType')===type)t.value=tag;
+    });
+  }
+}
 setTimeout(function(){refreshTagId();
   var bTypeSel=$('#bType');if(bTypeSel)bTypeSel.addEventListener('change',refreshTagId);
   var br=$('#btnRegenTag');if(br)br.addEventListener('click',function(){var t=$('#bTag');t._override=false;t.readOnly=true;t.style.opacity='';refreshTagId();toast('สร้างรหัสใหม่แล้ว',val('bTag'),'info');});
@@ -3256,37 +3322,31 @@ $('#btnAddBtype').onclick=function(){
   }
   var before=editingBtype?Object.assign({},S.boxtypes[editingBtype]):null;
   if(editingBtype&&editingBtype!==id)delete S.boxtypes[editingBtype];
-  var dimClean = val('btDim').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x'); var dimParts = dimClean.split('x'); if(dimParts.length>3) dimClean=dimParts.slice(0,3).join('x');
+  var dimClean = dimFromFields();
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:dimClean};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();
+  ['btName','btUnit','btValue','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();
   toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
-function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
+  ['btName','btUnit','btValue','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);dimToFields(t.dim);
   $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
-(function(){
-  var el = document.getElementById('btDim');
-  if (el) {
-    el.addEventListener('input', function() {
-      var v = this.value;
-      v = v.replace(/\s+/g, '');
-      v = v.replace(/[X×]/g, 'x');
-      v = v.replace(/[^0-9x]/g, '');
-      v = v.replace(/^x+/, '');
-      v = v.replace(/x{2,}/g, 'x');
-      var parts = v.split('x');
-      if (parts.length > 3) {
-        v = parts.slice(0, 3).join('x');
-      }
-      this.value = v;
-    });
-  }
-})();
+/* กว้าง/ยาว/สูง แยกเป็น 3 ช่องแทนช่องข้อความเดียว — พิมพ์ตัวเลขล้วน ไม่ต้องมานั่ง
+   จำ format "600x400x320" เอง แต่ยังเก็บ/อ่านเป็นสตริง "WxLxH" เดิมทุกที่ที่ใช้
+   t.dim อยู่แล้ว (ป้ายพิมพ์บาร์โค้ด, PDA, ฯลฯ) เพื่อไม่ต้องแก้ schema/ที่อื่น */
+function dimFromFields(){
+  var w=val('btDimW').trim(),l=val('btDimL').trim(),h=val('btDimH').trim();
+  if(!w&&!l&&!h)return '';
+  return [w||'0',l||'0',h||'0'].join('x');
+}
+function dimToFields(dim){
+  var parts=String(dim||'').split(/[x×X]/);
+  setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
+}
 
 /* ===== SETUP: warehouse/gate CRUD ===== */
 var editingWh=null;
@@ -5741,10 +5801,13 @@ function clearGateOut(){
 window.clearGateOut=clearGateOut;
 
 /* ===== GATE IN ===== */
+/* เดโมยิงเร็วต้องเป็นกล่องที่ "ไม่ได้อยู่ในคลัง" เท่านั้น — Gate In หน้านี้รับแค่
+   ของคืนจากลูกค้า (status 'out') ไม่รับกล่อง pending/hold/damage/lost ซึ่งไม่มี
+   ทางถูกยิงเข้า Gate In จริง ๆ */
 function buildQuickIn(){
   var out=Object.values(S.boxes).filter(function(b){return b.status==='out';}).slice(0,6);
   $('#quickIn').innerHTML=out.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
-    out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
+    out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(typeName(b.type))+'<div class="tag" style="margin-top:2px;font-size:10px;">'+esc(b.tag)+'</div></button>';}).join('')):'';
 }
 function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
   var b=S.boxes[tag];
@@ -6576,6 +6639,18 @@ function locTypeValue(selId, otherId) {
   return sel ? sel.value : '';
 }
 window.locTypeValue = locTypeValue;
+
+/* ชั้น/ช่อง เป็น input + datalist อยู่แล้ว (พิมพ์ค่าใหม่ได้อิสระ ไม่ใช่ select
+   ปิดตายแบบโซน/แร็ค) — ปุ่ม "+" นี้แค่ล้างค่าเดิม โฟกัส และเปิด picker ให้เห็นตัวเลือก
+   ที่มีอยู่ทันที ให้ชัดเจนว่าเพิ่มค่าใหม่ได้ตรงนี้เลย ไม่ต้องเดา */
+function addLocFieldValue(inputId) {
+  var el = $('#'+inputId); if (!el) return;
+  el.value = '';
+  el.focus();
+  if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (e) {} }
+  locAutoCode();
+}
+window.addLocFieldValue = addLocFieldValue;
 
 /* ── heal Location Master rows that boxes reference but were never registered ──
    The 3D warehouse view and box records themselves fall back to a box's own

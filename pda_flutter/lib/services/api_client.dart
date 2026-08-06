@@ -191,6 +191,25 @@ class ApiClient {
     return _decode(r) as Map<String, dynamic>;
   }
 
+  /// GET /api/boxes/next-tag?type=<id> — the next box tag for this type,
+  /// counted from the highest tag actually in the DB right now, not from
+  /// this device's own locally-cached box list (which may be stale if
+  /// another device just registered one). Only a suggestion for the
+  /// auto-generated tag field — [createBox] still rejects a genuine
+  /// duplicate with 'tag_taken' regardless of where the tag came from, and
+  /// callers should keep their own local fallback for the instant the
+  /// field first renders. Returns null on any failure, or if the server
+  /// found nothing suggestable (e.g. no type given).
+  Future<String?> nextBoxTag(String type) async {
+    try {
+      final r = await http.get(_u('/api/boxes/next-tag?type=${Uri.encodeQueryComponent(type)}'), headers: _headers).timeout(_timeout);
+      final d = _decode(r) as Map<String, dynamic>;
+      return d['tag'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// POST /api/boxes/:tag/rfid { rfidTid, rfidEpc, replace? } — attach (or,
   /// with replace:true, re-attach after a damaged tag swap) an RFID tag to
   /// an already-registered box. Throws [ApiException] with code
