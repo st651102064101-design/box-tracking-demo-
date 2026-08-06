@@ -136,7 +136,7 @@ class _ScanScreenState extends State<ScanScreen> {
           title: Row(
             children: [
               Pill(isOut ? 'ออก' : 'เข้า',
-                  color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
+                  color: isOut ? C.orange : C.limeText, bg: isOut ? C.orangeBg : C.limeBg),
               const SizedBox(width: 7),
               Text(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน'),
             ],
@@ -363,11 +363,11 @@ class _ScanScreenState extends State<ScanScreen> {
             SizedBox(
               width: 15,
               height: 15,
-              child: CircularProgressIndicator(strokeWidth: 2.2, color: C.limeDeep),
+              child: CircularProgressIndicator(strokeWidth: 2.2, color: C.limeText),
             ),
             const SizedBox(width: 11),
             Text('กำลังอ่านแท็ก RFID…',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.limeDeep)),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.limeText)),
           ],
         ),
       );
@@ -540,7 +540,7 @@ class _ScanScreenState extends State<ScanScreen> {
     late Color col, bg, bd;
     switch (r.kind) {
       case ResultKind.ok:
-        col = C.limeDeep;
+        col = C.limeText;
         bg = C.limeBg;
         bd = C.limeBorder;
         break;

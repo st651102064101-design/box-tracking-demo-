@@ -279,14 +279,26 @@ class OnlineChip extends StatelessWidget {
   }
 }
 
-/// Field label above an input.
+/// Field label above an input. [error], when set, appends the validation
+/// message inline in red right after the label — one place a form field's
+/// "what's wrong with this" lives, instead of every screen inventing its own
+/// red-text-somewhere-nearby convention.
 class FieldLabel extends StatelessWidget {
   final String text;
-  const FieldLabel(this.text, {super.key});
+  final String? error;
+  const FieldLabel(this.text, {super.key, this.error});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3),
+            children: [
+              TextSpan(text: text),
+              if (error != null) TextSpan(text: '  ·  $error', style: TextStyle(color: C.red)),
+            ],
+          ),
+        ),
       );
 }
 
@@ -338,6 +350,9 @@ class AddableDropdown extends StatelessWidget {
   // shouldn't have to tap the next field by hand every time. Not requested
   // for the "+ เพิ่มใหม่" path, which opens its own dialog instead.
   final FocusNode? nextFocus;
+  /// Validation message — red border + red text below, same as any other
+  /// PDA form field. Null (the default) renders exactly as before.
+  final String? errorText;
 
   const AddableDropdown({
     super.key,
@@ -350,6 +365,7 @@ class AddableDropdown extends StatelessWidget {
     this.addLabel = '+ เพิ่มใหม่…',
     this.radius = 12,
     this.nextFocus,
+    this.errorText,
   });
 
   static String _identity(String v) => v;
@@ -388,7 +404,7 @@ class AddableDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: (value != null && options.contains(value)) ? value : null,
       isExpanded: true,
-      decoration: pdaInput(hint, radius: radius),
+      decoration: pdaInput(hint, radius: radius).copyWith(errorText: errorText, errorMaxLines: 2),
       items: [
         DropdownMenuItem(
           value: _addSentinel,

@@ -563,13 +563,13 @@ class _RfidPanelState extends State<_RfidPanel> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeDeep : C.ink2),
+                      Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeText : C.ink2),
                       const SizedBox(width: 8),
                       Text(_testFiring ? loc.t('กำลังยิงทดสอบ… แตะเพื่อหยุด') : loc.t('แตะเพื่อทดสอบยิง'),
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: _testFiring ? C.limeDeep : C.ink2)),
+                              color: _testFiring ? C.limeText : C.ink2)),
                     ],
                   ),
                 ),

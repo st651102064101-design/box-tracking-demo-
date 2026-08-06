@@ -249,8 +249,13 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
               const SizedBox(height: 12),
               if (_mode == _IdMode.barcode) ...[
                 _barcodeCard(),
-                const SizedBox(height: 12),
-                _rfidCard(optional: true),
+                // Nothing useful to show here until the barcode's actually
+                // confirmed — a dimmed "scan the barcode first" card added
+                // a step with no content of its own, not a helpful hint.
+                if (_barcode != null) ...[
+                  const SizedBox(height: 12),
+                  _rfidCard(optional: true),
+                ],
               ] else
                 _rfidCard(optional: false),
               const SizedBox(height: 12),
@@ -333,7 +338,7 @@ class _DamagedBoxScreenState extends State<DamagedBoxScreen> {
           Row(
             children: [
               Icon(verified ? Icons.check_circle : Icons.circle_outlined,
-                  color: verified ? C.limeDeep : C.red, size: 18),
+                  color: verified ? C.limeText : C.red, size: 18),
               const SizedBox(width: 8),
               Text(verified ? 'บาร์โค้ดกล่อง' : 'ยิงบาร์โค้ดกล่องที่เสียหาย',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),

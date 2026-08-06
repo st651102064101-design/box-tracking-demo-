@@ -253,7 +253,7 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     if (c.canScan && c.connected) ...[
       _ActionCard(
         icon: Icons.add_box,
-        iconColor: C.limeDeep,
+        iconColor: C.limeText,
         iconBg: C.limeBg,
         title: 'ลงทะเบียนกล่อง',
         sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
@@ -453,7 +453,7 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
               title: (e['tag'] ?? '').toString(),
               subtitle: [time, if (who.isNotEmpty) who].join(' · '),
               trailing: Pill(isOut ? 'ออก' : 'เข้า',
-                  color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
+                  color: isOut ? C.orange : C.limeText, bg: isOut ? C.orangeBg : C.limeBg),
             );
           }).toList(),
   );
@@ -541,8 +541,15 @@ class _WhPickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = tag != null;
+    // heroBg/onHero (not ink/onInk) — this tile is meant to always look like
+    // a dark accent card with a lime badge on it, in both themes. ink/onInk
+    // invert with the theme (correctly, for actual body text), so using them
+    // here meant this tile flipped to a near-white card with a barely-visible
+    // lime-on-light-gray badge the moment dark mode was on — exactly the
+    // "badge สีเทา ข้อความสีเขียว" contrast bug this fixes. See theme.dart's
+    // own note on heroBg for the same lesson learned elsewhere already.
     return Material(
-      color: highlighted ? C.ink : C.neutralBg,
+      color: highlighted ? C.heroBg : C.neutralBg,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -560,13 +567,13 @@ class _WhPickTile extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w600,
-                        color: highlighted ? C.onInk : null)),
+                        color: highlighted ? C.onHero : null)),
               ),
               if (tag != null) ...[
-                Pill(tag!, color: C.lime, bg: C.onInk.withValues(alpha: 0.14)),
+                Pill(tag!, color: C.lime, bg: C.onHero.withValues(alpha: 0.14)),
                 const SizedBox(width: 8),
               ],
-              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onInk.withValues(alpha: 0.5) : C.chevron),
+              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onHero.withValues(alpha: 0.5) : C.chevron),
             ],
           ),
         ),

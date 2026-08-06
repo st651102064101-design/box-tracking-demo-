@@ -341,7 +341,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           Row(
             children: [
               Icon(verified ? Icons.check_circle : Icons.circle_outlined,
-                  color: verified ? C.limeDeep : C.red, size: 18),
+                  color: verified ? C.limeText : C.red, size: 18),
               const SizedBox(width: 8),
               Text(verified ? 'บาร์โค้ดถูกต้อง' : 'รอสแกนบาร์โค้ดกล่อง',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
@@ -418,7 +418,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     Color dot = C.border2;
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
-      dot = _binding ? C.limeDeep : C.orange;
+      dot = _binding ? C.limeText : C.orange;
       label = _binding ? 'กำลังผูกแท็ก…' : 'กำลังอ่านแท็ก';
     }
     return Opacity(
@@ -600,7 +600,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         break;
       case _Step.success:
         bg = C.limeBg;
-        fg = C.limeDeep;
+        fg = C.limeText;
         border = C.limeBorder;
         text = '🎉 สำเร็จ! ผูก ${_tag ?? ''} เรียบร้อยแล้ว';
         break;
