@@ -6078,14 +6078,16 @@ function renderOverview(){
   applyAutoLost();
   renderMdHealthBanner();
   var all=Object.values(S.boxes);
-  var wh=all.filter(function(b){return b.status==='warehouse';}).length;
+  /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค นับเป็น "ในคลัง" แล้ว (แค่ยังไม่ Putaway)
+     — ดูหมายเหตุเดียวกันใน localStatusCounts() */
+  var wh=all.filter(function(b){return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);}).length;
   var out=all.filter(function(b){return b.status==='out';}).length;
   var lost=all.filter(function(b){return b.status==='lost';}).length;
   var outToday=S.events.filter(function(e){return e.dir==='out'&&dstr(new Date(e.ts))===dstr();}).length;
   var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dstr(new Date(e.ts))===dstr();}).length;
   var overdueCount=all.filter(function(b){return b.status==='out'&&isOverdue(b);}).length;
   var awaitingCount=all.filter(function(b){return b.status==='out'&&!isOverdue(b);}).length;
-  var putawayCount=all.filter(function(b){return b.status==='warehouse'&&isAtStaging(b);}).length;
+  var putawayCount=all.filter(function(b){return (b.status==='warehouse'&&isAtStaging(b))||(b.status==='pending'&&b.labeled===true);}).length;
   var inEv=S.events.filter(function(e){return e.dir==='in';}).length;
   var outEv=S.events.filter(function(e){return e.dir==='out';}).length;
   /* feed the live isometric hero scene with real occupancy + traffic */
@@ -6431,8 +6433,9 @@ function renderSetup(){
       +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
       +'</div></td></tr>';
   }).join(''):emptyRow(12,'ยังไม่มีกล่อง');
-  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
-  var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
+  /* ติดป้ายแล้วรอ Putaway = อยู่ในคลังแล้ว นับรวมในยอด "ในคลัง" ไม่ใช่ "รอติดบาร์โค้ด" */
+  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);}).length;
+  var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending'&&b.labeled!==true;}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติดบาร์โค้ด '+totalPending+'</span>':'');
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
 
@@ -8786,7 +8789,10 @@ function localStatusCounts() {
     /* 'pending' บาดจ์ (รอติดบาร์โค้ด) ต้องไม่รวมกล่องที่ labeled=true — พวกนั้น
        คือ "รอ Putaway" (นับแยกไว้ที่ pendingPutaway) เดียวกับบั๊กที่แก้ใน
        flow board compute() ไปแล้ว ต้องแก้ที่นี่ด้วยเพราะเป็นคนละจุดกัน */
-    if (b.status === 'pending' && b.labeled === true) c.pendingPutaway++;
+    /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค = อยู่ในคลังแล้วจริง ๆ เพียงแต่ยังไม่ได้
+       Putaway จึงต้องนับรวมอยู่ใน "ในคลัง" ด้วย (ไม่ใช่แค่แท็บ "รอ Putaway"
+       แยกต่างหาก) — status ในข้อมูลยังคงเป็น 'pending' เหมือนเดิม แก้แค่การนับสรุป */
+    if (b.status === 'pending' && b.labeled === true) { c.pendingPutaway++; c.warehouse++; }
     else if (c[b.status] !== undefined) c[b.status]++;
     if (b.labeled !== false && !b.rfidTid && !b.rfidEpc) c.noRfid++;
     if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
