@@ -221,6 +221,16 @@ boxesRouter.post(
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
     if (!box.labeled) throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
     if (box.status === 'out') throw httpError(409, `กล่อง ${box.tag} ออกอยู่กับลูกค้า ย้ายตำแหน่งไม่ได้`, 'box_out');
+    // Hold/Damage boxes don't get a normal shelf position — Gate In already
+    // parks them in quarantine (see gateIn in services/gate.ts). Moving them
+    // here instead would silently promote a flagged box back to 'warehouse'
+    // and make it look like ordinary shippable stock again.
+    if (box.status === 'hold' || box.status === 'damage')
+      throw httpError(
+        409,
+        `กล่อง ${box.tag} ถูกพักไว้ (${box.status === 'hold' ? 'Hold' : 'ชำรุด'}) — ปลดสถานะก่อนจึง Putaway ขึ้นชั้นวางปกติได้`,
+        'box_on_hold',
+      );
 
     const wasPending = box.status === 'pending';
     const ts = new Date().toISOString();

@@ -5578,7 +5578,10 @@ function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);i
   if(b.status==='lost'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' ถูกตีเป็นสูญหาย</div>';setv('scanOut','');return;}
   if(b.status==='pending'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง (สแกนเข้าครั้งแรกก่อน)</div>';setv('scanOut','');return;}
   if(b.status==='hold'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้</div>';setv('scanOut','');return;}
-  if(b.status==='damage'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' สถานะชำรุด (Damage) — จ่ายออกไม่ได้</div>';setv('scanOut','');return;}
+  /* Damage is not blocked at scan time — the destination (ลูกค้าปกติ vs
+     Supplier) isn't chosen yet at this point in the flow. saveOutbound()
+     below does the real check once a customer is selected: a damaged box
+     may only ship back to a Supplier-kind destination, never a customer. */
   if(pendingOut.indexOf(tag)<0)pendingOut.push(tag);
   setv('scanOut','');renderOutResult();$('#scanOut').focus();
 }
@@ -5642,6 +5645,14 @@ function saveOutbound(){
   if(requireCustomerSetup())return;
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
+  /* กล่องชำรุด (damage) จ่ายออกได้เฉพาะปลายทางที่เป็น Supplier (ส่งคืนผู้จำหน่าย)
+     เท่านั้น — ปลายทางเป็นลูกค้าปกติต้องปลดสถานะ/ซ่อมก่อนจึงส่งออกได้ ตรงกับ
+     กติกาเดียวกันที่ backend บังคับซ้ำใน gateOut() (services/gate.ts) */
+  var custKind=(S.customers[cust]||{}).kind||'customer';
+  var damagedInQueue=pendingOut.filter(function(t){return (S.boxes[t]||{}).status==='damage';});
+  if(damagedInQueue.length&&custKind!=='supplier'){
+    return toast('จ่ายออกไม่ได้','กล่องชำรุด '+damagedInQueue.join(', ')+' ส่งออกได้เฉพาะปลายทาง Supplier เท่านั้น','err');
+  }
   /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
      history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
      แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
@@ -8569,8 +8580,17 @@ function filteredInvBoxes() {
       }
       return true;
     }
-    /* Filter by warehouse */
-    if (invWhFilter) {
+    /* Filter by warehouse (ดู buildInvWhPills / setInvWh):
+       - '' (ทุกคลัง)  → เฉพาะกล่องที่อยู่ในคลังจริงและมีรหัสคลังที่ถูกต้อง (ไม่รวมกล่องนอกคลัง)
+       - 'OUTSIDE' (นอกคลัง) → กล่องที่ไม่ได้อยู่บนชั้นวางจริง: ออกกับลูกค้า/รอผูก Tag,
+         Hold/ชำรุด (พักไว้ ยังไม่ขึ้นชั้น), แจ้งหาย, หรือแม้สถานะ warehouse แต่ไม่มีรหัสคลัง
+       - รหัสคลังเฉพาะ → เดิม (เฉพาะกล่องที่ขึ้นชั้นในคลังนั้นจริง ๆ) */
+    if (invWhFilter === 'OUTSIDE') {
+      var whOk = (b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh]);
+      if (whOk) return false;
+    } else if (invWhFilter === '') {
+      if (!(b.status === 'warehouse' && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh])) return false;
+    } else if (invWhFilter) {
       if (!((b.location || {}).wh === invWhFilter && b.status === 'warehouse')) return false;
     }
     /* ── standard status filter ── */
@@ -8645,6 +8665,12 @@ function buildInvWhPills() {
     var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
     html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
+  /* นอกคลัง — กล่องที่ไม่ได้ขึ้นชั้นวางในคลังจริง: ออกกับลูกค้า/รอผูก Tag,
+     Hold/ชำรุด, แจ้งหาย, หรือ warehouse ที่ไม่มีรหัสคลัง */
+  var outsideCnt = Object.values(S.boxes).filter(function(b) {
+    return !(b.status === 'warehouse' && !!(b.location||{}).wh && !!S.warehouses[(b.location||{}).wh]);
+  }).length;
+  html += '<button class="icr-pill' + (invWhFilter === 'OUTSIDE' ? ' active' : '') + '" onclick="setInvWh(\'OUTSIDE\')">นอกคลัง <span style="opacity:.55;font-size:11px;">('+outsideCnt+')</span></button>';
   pillsEl.innerHTML = html;
 }
 function setInvWh(id) {
@@ -10672,7 +10698,9 @@ function openColumnMapModal(opts){
     if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
     if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
     if(b.status==='hold')return {ok:false,code:'hold',tag:tag,reason:'ถูกพักการใช้งาน (Hold)'};
-    if(b.status==='damage')return {ok:false,code:'damage',tag:tag,reason:'สถานะชำรุด (Damage)'};
+    /* damage is NOT rejected here — same reason as scanOut(): the destination
+       (customer vs Supplier) isn't known per-row until saveOutbound() checks
+       the whole queue against the single DO customer selected for this batch */
     return {ok:true,tag:tag,type:typeName(b.type)};
   }
 
