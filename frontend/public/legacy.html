@@ -1204,23 +1204,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
     <div class="who-menu" id="whoMenu" hidden></div>
   </div>
-  <div class="notif-wrap no-print" id="notifWrap">
-    <button class="iconbtn" id="btnNotif" title="การแจ้งเตือน" onclick="toggleNotifPanel()">
-      <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 4.5 1.5 6 2 6.5H4c.5-.5 2-2 2-6.5Z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg></span>
-      <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
-    </button>
-    <div class="notif-panel" id="notifPanel" hidden>
-      <div class="notif-panel-head">
-        <b>การแจ้งเตือน</b>
-        <div class="row" style="gap:6px;">
-          <button class="iconbtn sm" id="btnNotifSound" title="เสียงแจ้งเตือน" onclick="toggleNotifSound()"></button>
-          <button class="btn ghost sm" onclick="clearNotifLog()">ล้างทั้งหมด</button>
-          <button class="iconbtn sm" title="ปิด" onclick="closeNotifPanel()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>
-        </div>
-      </div>
-      <div class="notif-panel-body" id="notifLogBody"><div class="notif-empty">ยังไม่มีการแจ้งเตือน</div></div>
-    </div>
-  </div>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
@@ -12160,9 +12143,8 @@ const DAY=86400000;
    (backend/src/lib/bus.ts) only carries a version bump, no payload, so
    "what changed" has to be reconstructed client-side from the two snapshots.
    ══════════════════════════════════════════════════════════════ */
-const NOTIF_LOG_KEY='boxtrace_notif_log', NOTIF_SOUND_KEY='boxtrace_notif_sound', NOTIF_LOG_MAX=50;
-let notifLog=[]; let notifUnread=0;
-try{ notifLog=JSON.parse(localStorage.getItem(NOTIF_LOG_KEY)||'[]'); }catch(_){ notifLog=[]; }
+const NOTIF_SOUND_KEY='boxtrace_notif_sound';
+let notifUnread=0;
 let notifSoundOn=true;
 try{ notifSoundOn=localStorage.getItem(NOTIF_SOUND_KEY)!=='0'; }catch(_){}
 let pdaFlashTags=[];
@@ -12199,15 +12181,9 @@ function detectPdaEvents(oldBoxes,newBoxes){
 
 function pushNotif(ev){
   var meta=NOTIF_KIND[ev.type]||{label:ev.type,kind:'info',priority:false};
-  var entry={id:(Date.now()+'-'+ev.tag+'-'+ev.type),tag:ev.tag,type:ev.type,label:meta.label,
-    kind:meta.kind,time:Date.now(),read:false};
-  notifLog.unshift(entry);
-  if(notifLog.length>NOTIF_LOG_MAX)notifLog.length=NOTIF_LOG_MAX;
-  try{localStorage.setItem(NOTIF_LOG_KEY,JSON.stringify(notifLog));}catch(_){}
   notifUnread++;
   pdaToast(ev.tag,meta.label,meta.kind);
   if(meta.priority&&notifSoundOn)playNotifChime();
-  renderNotifLog();
 }
 
 function pdaToast(tag,label,kind){
@@ -12233,67 +12209,14 @@ function flashPdaRows(){
   });
 }
 
+/* กระดิ่งแจ้งเตือน (#notifWrap/#notifPanel) ถูกลบออกจาก header แล้ว — เหลือแค่
+   badge นับค้างที่เมนู Inventory (#navBadgeInventory) กับ toast/row-flash ซึ่ง
+   เป็นคนละกลไกกัน ไม่ต้องมี panel ก็แจ้งเตือนได้ */
 function refreshNotifBadges(){
-  var bell=$('#notifBellBadge'), nav=$('#navBadgeInventory');
-  if(bell){ if(notifUnread>0){bell.hidden=false;bell.textContent=notifUnread>99?'99+':String(notifUnread);} else bell.hidden=true; }
-  if(nav){
-    var pending=(typeof localStatusCounts==='function')?
-      (function(){var c=localStatusCounts();return (c.pending||0)+(c.pendingPutaway||0)+(c.noRfid||0);})():0;
-    if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);} else nav.hidden=true;
-  }
-}
-
-function renderNotifLog(){
-  var body=$('#notifLogBody'); if(!body)return;
-  if(!notifLog.length){ body.innerHTML='<div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>'; return; }
-  body.innerHTML=notifLog.map(function(n){
-    return '<div class="notif-item '+esc(n.kind)+'" onclick="closeNotifPanelAndGo(\''+esc(n.tag)+'\')">'
-      +'<div class="ti">'+(n.kind==='warn'?IC('warn','tick'):IC('check','tick'))+'</div>'
-      +'<div><div class="tt">'+esc(n.tag)+'</div><div class="ts">'+esc(n.label)+'</div></div>'
-      +'<div class="tm">'+relTime(n.time)+'</div></div>';
-  }).join('');
-}
-function relTime(ts){
-  var s=Math.round((Date.now()-ts)/1000);
-  if(s<60)return 'เมื่อครู่';
-  if(s<3600)return Math.floor(s/60)+' นาทีที่แล้ว';
-  if(s<86400)return Math.floor(s/3600)+' ชม.ที่แล้ว';
-  return Math.floor(s/86400)+' วันที่แล้ว';
-}
-function toggleNotifPanel(){
-  var p=$('#notifPanel'); if(!p)return;
-  var open=p.hidden;
-  p.hidden=!open;
-  if(open){ notifUnread=0; refreshNotifBadges(); renderNotifLog(); }
-}
-function closeNotifPanel(){
-  var p=$('#notifPanel'); if(p)p.hidden=true;
-}
-function closeNotifPanelAndGo(tag){
-  var p=$('#notifPanel'); if(p)p.hidden=true;
-  if(typeof switchTab==='function')switchTab('inventory');
-  setTimeout(function(){
-    var row=document.querySelector('tr[data-tag="'+CSS.escape(tag)+'"]');
-    if(row){ row.scrollIntoView({block:'center',behavior:'smooth'}); row.classList.add('row-flash'); setTimeout(function(){row.classList.remove('row-flash');},3000); }
-  },80);
-}
-function clearNotifLog(){
-  notifLog=[]; notifUnread=0;
-  try{localStorage.setItem(NOTIF_LOG_KEY,'[]');}catch(_){}
-  renderNotifLog(); refreshNotifBadges();
-}
-function toggleNotifSound(){
-  notifSoundOn=!notifSoundOn;
-  try{localStorage.setItem(NOTIF_SOUND_KEY,notifSoundOn?'1':'0');}catch(_){}
-  paintNotifSoundBtn();
-}
-function paintNotifSoundBtn(){
-  var b=$('#btnNotifSound'); if(!b)return;
-  b.innerHTML='<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true">'+
-    (notifSoundOn?'<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>':
-      '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 9l5 6M21 9l-5 6"/>')+
-    '</svg></span>';
-  b.title=notifSoundOn?'ปิดเสียงแจ้งเตือน':'เปิดเสียงแจ้งเตือน';
+  var nav=$('#navBadgeInventory'); if(!nav)return;
+  var pending=(typeof localStatusCounts==='function')?
+    (function(){var c=localStatusCounts();return (c.pending||0)+(c.pendingPutaway||0)+(c.noRfid||0);})():0;
+  if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);} else nav.hidden=true;
 }
 let notifAudioCtx=null;
 function playNotifChime(){
@@ -12311,13 +12234,8 @@ function playNotifChime(){
     });
   }catch(_){}
 }
-document.addEventListener('click',function(e){
-  var wrap=$('#notifWrap'), panel=$('#notifPanel');
-  if(!wrap||!panel||panel.hidden)return;
-  if(!wrap.contains(e.target))panel.hidden=true;
-});
-document.addEventListener('DOMContentLoaded',function(){ paintNotifSoundBtn(); renderNotifLog(); refreshNotifBadges(); });
-if(document.readyState!=='loading'){ paintNotifSoundBtn(); renderNotifLog(); refreshNotifBadges(); }
+document.addEventListener('DOMContentLoaded',function(){ refreshNotifBadges(); });
+if(document.readyState!=='loading'){ refreshNotifBadges(); }
 
 const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
 let live=true;
