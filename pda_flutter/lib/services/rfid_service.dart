@@ -272,10 +272,71 @@ class RfidService {
   }
 
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
+  /// Used only to restore the saved setting on connect — a percent can only
+  /// ever land on ~101 of the reader's real power steps, so live dragging
+  /// uses [setPowerIndex] instead (see settings_screen.dart's range slider).
   Future<void> setPowerPercent(int percent) async {
     if (!supported) return;
     try {
       await _method.invokeMethod('setPower', {'percent': percent});
+    } catch (_) {}
+  }
+
+  /// Set the antenna transmit power as a raw index into the reader's own
+  /// power table (0..[RfidReaderController.maxPower]) — every step the
+  /// hardware actually has, not just the ~101 a percentage can reach.
+  Future<void> setPowerIndex(int index) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setPowerIndex', {'index': index});
+    } catch (_) {}
+  }
+
+  /// Toggles the reader's own dense per-read tick — on for every screen
+  /// that wants raw "how fast is this reading" feedback, off for Gate
+  /// scanning, which drives its own discrete tones via [playTone] instead
+  /// (see AppController._onReaderTrigger for where this gets flipped).
+  Future<void> setAutoBeep(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setAutoBeep', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// One explicit, app-driven tone: 'ok' for a genuinely new tag landing in
+  /// the queue, 'error' for a rejected/invalid scan. Silence (call nothing)
+  /// is the correct response to a duplicate read — see AppController.addScan.
+  ///
+  /// Fixed/unconfigurable — kind: 'ok' is legacy and no longer called from
+  /// this app (see [playSound] for the user-configurable replacement); kind:
+  /// 'error' is still exactly what it always was.
+  Future<void> playTone(String kind) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('playTone', {'kind': kind});
+    } catch (_) {}
+  }
+
+  /// Which sound id (see sound_catalog.dart) the reader's dense per-read tick
+  /// ([setAutoBeep]) plays. Pushed down whenever the RFID sound setting
+  /// changes and once the reader connects — the native side has to know this
+  /// itself because that tick fires from the SDK's read callback with no
+  /// per-tag round trip back into Dart.
+  Future<void> setRfidSoundId(String soundId) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setRfidSoundId', {'soundId': soundId});
+    } catch (_) {}
+  }
+
+  /// Plays one sound id immediately, once, regardless of any other setting —
+  /// the settings picker's instant preview, and how Dart plays the
+  /// currently-configured barcode/RFID "ok" tone for a detection it already
+  /// knows the source of (see AppController.addScan's `viaRfid`).
+  Future<void> playSound(String soundId) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('playSound', {'soundId': soundId});
     } catch (_) {}
   }
 

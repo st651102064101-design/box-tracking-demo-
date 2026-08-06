@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,7 +33,11 @@ class Prefs {
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kLowPower = 'boxtrace_low_power';
+  static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
+  static const _kRfidSoundId = 'boxtrace_rfid_sound_id';
+  static const _kBarcodeSoundId = 'boxtrace_barcode_sound_id';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
 
@@ -59,11 +64,52 @@ class Prefs {
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
 
+  /// Trims animations, gradients, shadows, and background polling intervals
+  /// across the app — the MC3390R visibly drops frames under the full
+  /// visual treatment (cross-fade screen transitions, gradient panels,
+  /// shadowed cards) once its battery is warm or several screens have
+  /// stacked up. Off by default: full graphics unless an operator asks for
+  /// speed over polish.
+  bool get lowPowerMode => _p.getBool(_kLowPower) ?? false;
+  set lowPowerMode(bool v) => _p.setBool(_kLowPower, v);
+
+  /// Minimum RSSI (dBm) a read has to clear to count at all — the "stray
+  /// read" filter: RFID punches through cardboard and thin stock easily
+  /// enough that a sweep aimed at pallet A can pick up pallet B sitting
+  /// right next to it. Null means off (every read counts, the original
+  /// behavior); set, it drops anything weaker before it ever reaches
+  /// addScan/doTrack/badge matching. A raw dBm number, not a percent — this
+  /// is what the reader itself reports per read, no conversion needed.
+  int? get rfidMinRssi => _p.containsKey(_kRfidMinRssi) ? _p.getInt(_kRfidMinRssi) : null;
+  set rfidMinRssi(int? v) {
+    if (v == null) {
+      _p.remove(_kRfidMinRssi);
+    } else {
+      _p.setInt(_kRfidMinRssi, v);
+    }
+  }
+
   /// Antenna transmit power as a percentage of the reader's max — the knob
   /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full
   /// power (ไกล) since that's what the reader itself defaults to on connect.
   int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
   set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
+
+  /// Which sound (see sound_catalog.dart) plays when the reader detects an
+  /// RFID tag — the dense per-read tick on RFID-native screens, and Gate's
+  /// discrete "new box" tick when it arrived via a trigger pull rather than a
+  /// typed barcode. Defaults to the RFID HTML test page's own tone: the one
+  /// sound guaranteed to already be familiar, since it's what every reader
+  /// speed measurement in this app was made against.
+  String get rfidSoundId => _p.getString(_kRfidSoundId) ?? 'html_tick';
+  set rfidSoundId(String v) => _p.setString(_kRfidSoundId, v);
+
+  /// Same, for a box landing in Gate's queue via a *typed* barcode. Defaults
+  /// to 'classic_ack' — the exact tone every barcode scan already made before
+  /// this setting existed, so nobody's workflow changes sound unless they
+  /// pick a new one on purpose.
+  String get barcodeSoundId => _p.getString(_kBarcodeSoundId) ?? 'classic_ack';
+  set barcodeSoundId(String v) => _p.setString(_kBarcodeSoundId, v);
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than
@@ -221,5 +267,36 @@ class Prefs {
   void clearPinSkip(String id) {
     final sk = _skipped..remove(id);
     _p.setString(_kPinSkipped, jsonEncode(sk));
+  }
+
+  // ── offline PIN fallback ──────────────────────────────────────────────
+  // The PIN itself is verified server-side (see `pinSkipped` above) — that's
+  // the authority whenever the server is reachable. But a PDA gate has to
+  // keep working when it isn't, and an employee with a PIN set couldn't badge
+  // in at all if `verifyEmployeePin`'s network call was the only path in.
+  // What's cached here is never the PIN itself, only a hash of it salted with
+  // the employee id — enough to recognise "this is the same PIN the server
+  // last confirmed for this person on this device", not enough to recover the
+  // PIN from a lost or stolen terminal. Refreshed on every successful online
+  // verify/set, so offline access is never more than one online sign-in stale.
+  static const _kPinHashPrefix = 'boxtrace_pin_hash_';
+
+  static String _pinHash(String employeeId, String pin) =>
+      sha256.convert(utf8.encode('$employeeId:$pin')).toString();
+
+  /// Record that the server just confirmed [pin] is correct for [employeeId]
+  /// (or that it was just set to [pin]) — call right after any successful
+  /// setEmployeePin/verifyEmployeePin/confirmPinReset.
+  void cachePinHash(String employeeId, String pin) {
+    _p.setString('$_kPinHashPrefix$employeeId', _pinHash(employeeId, pin));
+  }
+
+  /// True if [pin] matches the last PIN the server confirmed for
+  /// [employeeId] on this device. The fallback [showPinPad]'s `validate`
+  /// reaches for only when `verifyEmployeePin` itself couldn't be reached —
+  /// a wrong PIN the server actually answered is never routed here.
+  bool verifyPinOffline(String employeeId, String pin) {
+    final cached = _p.getString('$_kPinHashPrefix$employeeId');
+    return cached != null && cached == _pinHash(employeeId, pin);
   }
 }

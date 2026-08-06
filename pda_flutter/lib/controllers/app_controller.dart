@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../models/box.dart';
 import '../models/employee.dart';
@@ -11,7 +12,16 @@ import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister }
+enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate, boxRegister }
+
+/// Which physical input a trigger pull means right now, on any screen that
+/// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
+/// step. Centralized (not per-screen local state) because the trigger
+/// itself is wired centrally too (AppController._onReaderTrigger is the
+/// only place a hardware trigger event turns into rfid.startInventory()) —
+/// a screen-local toggle that this dispatcher never saw was exactly how a
+/// "barcode mode" selection still silently started RFID reads and beeped.
+enum ScanInputMode { barcode, rfid }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -94,6 +104,21 @@ class AppController extends ChangeNotifier {
   // ── scanning ────────────────────────────────────────────────────────────
   String mode = 'in'; // 'in' | 'out'
   final List<String> queue = [];
+
+  /// Per-tag condition flagged on the Gate In queue — 'hold' or 'damage'
+  /// instead of the default 'warehouse' landing spot. Gate Out never reads
+  /// this (a damaged box can't ship — the server already refuses that), it
+  /// only ever applies to [doCommit]'s 'in' branch.
+  final Map<String, String> queueConditions = {};
+
+  void setQueueCondition(String tag, String? condition) {
+    if (condition == null) {
+      queueConditions.remove(tag);
+    } else {
+      queueConditions[tag] = condition;
+    }
+    notifyListeners();
+  }
   String scanVal = '';
   ScanResult? lastResult;
 
@@ -152,8 +177,10 @@ class AppController extends ChangeNotifier {
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
 
-    // wire the Zebra reader
-    _tagSub = rfid.tags.listen(_onReaderTag);
+    // wire the Zebra reader — tagBatches (not the plain-epc tags stream)
+    // because the stray-read RSSI filter (see _onReaderBatch) needs each
+    // read's signal strength, which only the raw stream carries.
+    _tagSub = rfid.tagBatches.listen(_onReaderBatch);
     _trigSub = rfid.triggers.listen(_onReaderTrigger);
     _statusSub = rfid.status.listen((s) {
       rfidStatus = s;
@@ -162,6 +189,10 @@ class AppController extends ChangeNotifier {
       // just when the operator changes it in settings.
       if (s.state == RfidState.connected) {
         rfid.setPowerPercent(prefs.rfidPowerPercent);
+        // Same reasoning: the native read-callback tick has no way to ask
+        // Dart which sound to play per read, so it has to be told once here
+        // (and again on every change — see setRfidSoundId below).
+        rfid.setRfidSoundId(prefs.rfidSoundId);
       }
       notifyListeners();
     });
@@ -175,7 +206,12 @@ class AppController extends ChangeNotifier {
     // as the web app already does over the same /api/stream channel. Its own
     // retry loop handles "no token yet" / "backend unreachable at boot" —
     // safe to call before [loading] settles.
-    _realtime.connect(baseUrl: () => api.baseUrl, token: () => api.token, onStateChanged: _onRealtimeStateChanged);
+    _realtime.connect(
+      baseUrl: () => api.baseUrl,
+      token: () => api.token,
+      onStateChanged: _onRealtimeStateChanged,
+      onConnectivity: _onRealtimeConnectivity,
+    );
     await Future.delayed(const Duration(milliseconds: 420));
 
     // No operator is ever restored: a shift always starts with a badge scan,
@@ -231,6 +267,22 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Explicit reconnect for the badge screen's small online/offline
+  /// indicator — tap it and it actually tries, instead of only ever
+  /// discovering connectivity changed on the next unrelated network call.
+  /// [_liveConnected] otherwise only ever goes true (see [refresh]); this is
+  /// the one place it's allowed back to false, so the indicator doesn't keep
+  /// showing "online" from an earlier session after a live probe just
+  /// failed. Returns the resulting [connected] state so the caller can
+  /// decide whether to say anything more (see login_screen's connectivity
+  /// icon, which surfaces a "ตั้งค่าระบบ" prompt only when this is false).
+  Future<bool> retryConnection() async {
+    await _ensureAuthAndState();
+    if (connError != null) _liveConnected = false;
+    notifyListeners();
+    return connected;
+  }
+
   Future<void> refresh() async {
     final json = await api.getState();
     S = StateSnapshot.fromJson(json);
@@ -248,6 +300,40 @@ class AppController extends ChangeNotifier {
       // local action's own refresh()) — nothing else depends on it landing.
       refresh().catchError((_) {});
     });
+  }
+
+  /// Bumped exactly when live connectivity transitions from up to down —
+  /// never on a routine retry attempt, never on any other notifyListeners()
+  /// call. root_screen.dart's _OfflineAlertListener watches this via
+  /// context.select to show a one-shot offline AlertDialog regardless of
+  /// which screen is on top, so a Wi-Fi blip surfaces once, not on every
+  /// heartbeat the SSE stream misses while it reconnects.
+  int offlineEventId = 0;
+
+  /// Realtime up/down signal from the SSE stream (see RealtimeService) —
+  /// the connection to the backend dying is usually known within moments,
+  /// not only whenever the next unrelated REST call happens to fail. This is
+  /// the one place [_liveConnected] is allowed back to false; [refresh]
+  /// itself only ever sets it true.
+  void _onRealtimeConnectivity(bool up) {
+    final wasConnected = _liveConnected;
+    _liveConnected = up;
+    if (up) {
+      connError = null;
+      // Walked back into signal after queuing scans in a dead zone: sync
+      // straight to the server in the background, no operator action
+      // needed. Only worth trying if there's actually something queued and
+      // this isn't the very first connect of the session (nothing to flush
+      // yet either way, and it would race the boot-time refresh()).
+      if (!wasConnected && outbox.isNotEmpty) flushOutbox();
+    } else {
+      // Deliberately left null when nothing more specific is known — the
+      // dialog and the reconnect sheet both have their own wording for
+      // "just offline", and echoing a generic string here only made the
+      // alert repeat its own title back as the body.
+      if (wasConnected) offlineEventId++;
+    }
+    notifyListeners();
   }
 
   /// Human-readable message for an arbitrary error. Strips the leading
@@ -358,6 +444,34 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Non-default "what does the system back control do right now" override.
+  /// Every screen's back is exactly backToHome() — what handleSystemBack()
+  /// falls through to below when this is null — except
+  /// RfidLocateScreen's .locate step, whose back has to return to .pick,
+  /// not exit to Home; that's local widget state AppController otherwise
+  /// has no way to see. Set fresh every build by whichever screen needs it
+  /// (see RfidLocateScreen.build), so it's never stale after a navigation.
+  VoidCallback? systemBackOverride;
+
+  /// What the Android system back control (3-button nav / edge-swipe gesture)
+  /// does — always in-app navigation, never "exit the app". root_screen.dart
+  /// blocks the framework's own pop entirely (PopScope(canPop: false)) and
+  /// routes here instead, the same as every screen's own StickyHeader back
+  /// arrow already does, so a hardware press and an on-screen tap behave
+  /// identically. A no-op on deviceSetup with nothing configured yet (same
+  /// as that screen's StickyHeader passing onBack: null) and on the
+  /// screens that are themselves the top of the stack — there's nowhere
+  /// further back to go without exiting, which this must never do.
+  void handleSystemBack() {
+    if (systemBackOverride != null) {
+      systemBackOverride!();
+      return;
+    }
+    if (screen == Screen.deviceSetup && !deviceConfigured) return;
+    if (screen == Screen.home || screen == Screen.login || screen == Screen.boot) return;
+    backToHome();
+  }
+
   // ═══════════════════════ operator identity ═══════════════════════════════
   /// Everyone on the employee master who is fit to work, with the crew
   /// stationed at this device's warehouse listed first. People assigned
@@ -447,6 +561,7 @@ class AppController extends ChangeNotifier {
   void lock() {
     emp = null;
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     _clearForms();
     screen = Screen.login;
@@ -588,6 +703,7 @@ class AppController extends ChangeNotifier {
     mode = m;
     screen = Screen.scan;
     queue.clear();
+    queueConditions.clear();
     scanVal = '';
     lastResult = null;
     _clearForms();
@@ -610,17 +726,29 @@ class AppController extends ChangeNotifier {
   void _rememberLastPost() {
     prefs.lastWh = wh;
     prefs.lastGate = gate;
+    // Best-effort — the device-local prefs above are already the fallback
+    // if this never lands (offline, server hiccup), and a shift is already
+    // underway by the time this fires, so nothing here should block or
+    // retry; the next confirmPost() on any terminal tries again anyway.
+    final e = emp;
+    if (e != null) {
+      api.setEmployeeLastPost(e.id, wh: wh, gate: gate).catchError((_) {});
+    }
   }
 
-  bool get hasLastSelection => prefs.lastWh.isNotEmpty && prefs.lastGate.isNotEmpty;
-  String get lastWh => prefs.lastWh;
-  String get lastWhName => S?.whName(prefs.lastWh) ?? prefs.lastWh;
-  String get lastGate => prefs.lastGate;
+  /// The server-side value (this employee's last post on *any* terminal)
+  /// wins when it's known; device-local prefs are the fallback for a badge
+  /// screen that hasn't fetched fresh employee data yet, or an employee who
+  /// has only ever worked this one PDA.
+  bool get hasLastSelection => lastWh.isNotEmpty && lastGate.isNotEmpty;
+  String get lastWh => emp?.lastWh.isNotEmpty == true ? emp!.lastWh : prefs.lastWh;
+  String get lastWhName => S?.whName(lastWh) ?? lastWh;
+  String get lastGate => emp?.lastGate.isNotEmpty == true ? emp!.lastGate : prefs.lastGate;
 
   /// ยืนยันคลัง/ประตูล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
   /// คลังและประตูนั้นยังมีอยู่จริงตอนนี้ (กันกรณีถูกลบ/ย้ายไปหลังจากบันทึกไว้)
   void useLastPost() {
-    final w = prefs.lastWh, g = prefs.lastGate;
+    final w = lastWh, g = lastGate;
     if (w.isEmpty || g.isEmpty) return;
     if (!warehouseList.any((x) => (x['id'] ?? '').toString() == w)) {
       toastMsg('ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
@@ -643,6 +771,34 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
+  /// "Find this box" — Geiger-style RFID search (see RfidLocateScreen). Its
+  /// own screen state (which box, current RSSI) lives on the widget, not
+  /// here — this just gets the reader connected and the trigger unlocked for
+  /// it, same as every other RFID-reading screen.
+  void goLocate() {
+    screen = Screen.rfidLocate;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// Fast-path box commissioning (see RfidRegisterScreen). Lived under
+  /// Settings before — moved next to the Gate In/Out cards on Home since
+  /// it's a routine warehouse-floor action, not device configuration.
+  void goRfidRegister() {
+    screen = Screen.rfidRegister;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// Receiving flow: create -> label -> tag -> putaway (see
+  /// BoxRegisterScreen), copied from legacy.html's own box-registration +
+  /// putaway handlers.
+  void goBoxRegister() {
+    screen = Screen.boxRegister;
+    notifyListeners();
+    _connectReader();
+  }
+
   void onScanChanged(String v) {
     scanVal = v;
     notifyListeners();
@@ -652,7 +808,13 @@ class AppController extends ChangeNotifier {
     addScan(scanVal);
   }
 
-  void addScan(String raw) {
+  /// [viaRfid] says which of the two independently-configured "a box
+  /// landed" sounds to play (see prefs.rfidSoundId/barcodeSoundId) — true
+  /// when this call came from a trigger-pulled RFID read (AppController's
+  /// own _onReaderBatch/_onReaderTag), false for a typed/scanned barcode
+  /// (ScanScreen's own _submit). It changes nothing else about how the scan
+  /// is processed.
+  void addScan(String raw, {bool viaRfid = false}) {
     raw = raw.trim();
     if (raw.isEmpty) return;
     final s = S;
@@ -712,22 +874,44 @@ class AppController extends ChangeNotifier {
     queue.add(tag);
     scanVal = '';
     lastResult = ScanResult(ResultKind.ok, tag, msg);
+    // The one sound a Gate scan makes per box: a tag read for the first
+    // time this session. A held trigger can re-read the same tag dozens of
+    // times a second — those land in _reject's ResultKind.info branch
+    // below, silently, which is what keeps a 5-tag pallet at exactly 5
+    // ticks instead of however many times the reader happened to see it.
+    // Which of the two independently-configured sounds plays follows
+    // [viaRfid] — a barcode gun and an RFID trigger pull landing the same
+    // box in the queue are still two different channels to the operator's
+    // ear, on purpose (see prefs.rfidSoundId/barcodeSoundId).
+    rfid.playSound(viaRfid ? prefs.rfidSoundId : prefs.barcodeSoundId);
     notifyListeners();
   }
 
   void _reject(String tag, ResultKind kind, String msg) {
     scanVal = '';
     lastResult = ScanResult(kind, tag, msg);
+    // A duplicate read of a tag already in the queue (ResultKind.info) is
+    // silent by design — a held trigger re-reads the same box constantly,
+    // and a beep for every one of those is exactly the noise this was
+    // asked to stop making. A genuine rejection (wrong status, unknown
+    // tag) is the "this isn't right" case: an error tone plus a vibration,
+    // so it's felt as well as heard on a warehouse floor.
+    if (kind != ResultKind.info) {
+      rfid.playTone('error');
+      HapticFeedback.vibrate();
+    }
     notifyListeners();
   }
 
   void removeFromQueue(String tag) {
     queue.remove(tag);
+    queueConditions.remove(tag);
     notifyListeners();
   }
 
   void clearQueue() {
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     notifyListeners();
   }
@@ -759,6 +943,48 @@ class AppController extends ChangeNotifier {
     final pick = e.take(min(n, e.length)).toList();
     queue.addAll(pick.map((b) => b.tag));
     lastResult = ScanResult(ResultKind.ok, 'RFID', 'อ่านรวด ${pick.length} ใบ');
+    notifyListeners();
+  }
+
+  bool get lowPowerMode => prefs.lowPowerMode;
+  void setLowPowerMode(bool v) {
+    prefs.lowPowerMode = v;
+    notifyListeners();
+  }
+
+  /// Session-only (not persisted) — starts each fresh entry into a
+  /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
+  ScanInputMode scanInputMode = ScanInputMode.barcode;
+  void setScanInputMode(ScanInputMode m) {
+    if (scanInputMode == m) return;
+    scanInputMode = m;
+    // Switching to barcode while the trigger is still physically held (or
+    // an inventory is running from before the switch) must not leave the
+    // reader sweeping in the background on a mode that just said "don't".
+    if (m == ScanInputMode.barcode) rfid.stopInventory();
+    notifyListeners();
+  }
+
+  // ═══════════════════════ detection sounds ════════════════════════════════
+  /// Sets which sound plays when the reader detects an RFID tag, both the
+  /// dense per-read tick on RFID-native screens and Gate's discrete
+  /// trigger-pulled "new box" tick. Persists, pushes the id down to native
+  /// immediately (see rfid_service.dart's setRfidSoundId for why native has
+  /// to be told rather than asked each time), and previews it — the
+  /// settings picker's whole point is "pick it, hear it, done" in one tap.
+  void setRfidSoundId(String id) {
+    prefs.rfidSoundId = id;
+    rfid.setRfidSoundId(id);
+    rfid.playSound(id);
+    notifyListeners();
+  }
+
+  /// Same, for a box landing in Gate's queue via a typed/scanned barcode.
+  /// No native push needed — Dart already knows a barcode detection just
+  /// happened (see addScan's `viaRfid: false`) and calls playSound directly.
+  void setBarcodeSoundId(String id) {
+    prefs.barcodeSoundId = id;
+    rfid.playSound(id);
     notifyListeners();
   }
 
@@ -834,6 +1060,7 @@ class AppController extends ChangeNotifier {
         plate: tx.plate,
         driver: tx.driver,
         vehicleType: tx.vehicleType,
+        conditions: tx.conditions,
       );
     }
     return api.gateOut(
@@ -864,8 +1091,10 @@ class AppController extends ChangeNotifier {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
-    final plate = mode == 'in' ? inPlate : outPlate;
-    if (plate.trim().isEmpty) {
+    // ทะเบียนรถ is mandatory only on the way out — the server's gateInSchema
+    // already takes it as optional (see backend/src/validators/schemas.ts),
+    // this just stopped matching that on the Gate In side of the app.
+    if (mode == 'out' && outPlate.trim().isEmpty) {
       toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
       return;
     }
@@ -894,6 +1123,7 @@ class AppController extends ChangeNotifier {
             plate: inPlate,
             driver: inDriver,
             vehicleType: effInVType,
+            conditions: Map.of(queueConditions),
           )
         : OutboxTx(
             type: 'out',
@@ -939,6 +1169,7 @@ class AppController extends ChangeNotifier {
           plate: inPlate,
           driver: inDriver,
           vehicleType: effInVType,
+          conditions: queueConditions,
         );
       } else {
         await api.gateOut(
@@ -989,6 +1220,7 @@ class AppController extends ChangeNotifier {
 
   void _resetAfterCommit() {
     queue.clear();
+    queueConditions.clear();
     lastResult = null;
     _clearForms();
     if (mode == 'out' && customerList.length == 1) {
@@ -1024,6 +1256,11 @@ class AppController extends ChangeNotifier {
   // ═══════════════════════ track ═══════════════════════════════════════════
   void onTrackChanged(String v) {
     trackVal = v;
+    // Live suggestions (see trackSuggestions) are a getter evaluated at
+    // build time — nothing rebuilds TrackScreen to re-read it without this.
+    // Was missing entirely, which meant the "as soon as the first character
+    // lands" typeahead this method exists for had never actually fired.
+    notifyListeners();
   }
 
   void doTrack() {
@@ -1049,8 +1286,10 @@ class AppController extends ChangeNotifier {
     final s = S;
     final q = trackVal.trim().toLowerCase();
     if (s == null || q.isEmpty) return const [];
-    final matches = s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
-    return matches.take(20).toList();
+    // No cap — a search for a short/common substring can genuinely match a
+    // hundred boxes, and the grid this feeds (see TrackScreen._suggestions)
+    // is built to show all of them rather than silently truncating to 20.
+    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
   }
 
   void selectTrackSuggestion(String tag) {
@@ -1111,10 +1350,23 @@ class AppController extends ChangeNotifier {
     rfid.connect();
   }
 
+  /// Stray-read filter: RFID reads through cardboard and thin stock easily
+  /// enough that a sweep aimed at one pallet picks up tags on the pallet
+  /// next to it. When Prefs.rfidMinRssi is set, a read weaker than that
+  /// threshold never reaches addScan/doTrack/badge matching at all — the
+  /// same knob a Settings-screen slider drives (see settings_screen.dart).
+  void _onReaderBatch(List<RfidTagRead> batch) {
+    final minRssi = prefs.rfidMinRssi;
+    for (final r in batch) {
+      if (minRssi != null && r.rssi != null && r.rssi! < minRssi) continue;
+      _onReaderTag(r.epc);
+    }
+  }
+
   void _onReaderTag(String epc) {
     switch (screen) {
       case Screen.scan:
-        addScan(epc);
+        addScan(epc, viaRfid: true);
         break;
       case Screen.track:
         trackVal = epc;
@@ -1144,9 +1396,36 @@ class AppController extends ChangeNotifier {
         screen != Screen.track &&
         screen != Screen.login &&
         screen != Screen.rfidInput &&
-        screen != Screen.rfidRegister) {
+        screen != Screen.rfidRegister &&
+        screen != Screen.rfidLocate &&
+        screen != Screen.boxRegister) {
+      // A screen with no scanning purpose at all (Settings, Home, device
+      // setup, …). The antenna must not light up here — silently doing
+      // nothing left an operator assuming a broken trigger, not a screen
+      // that was never going to answer it.
+      toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', '', ResultKind.warn);
       return;
     }
+    // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger
+    // does nothing at all — no read, no beep, no vibration. Previously the
+    // toggle only hid the barcode field in the UI; the reader itself still
+    // started and beeped on every read because this dispatcher never knew
+    // which mode was selected. RfidLocateScreen forces scanInputMode back
+    // to rfid the moment a target is picked (its .locate step has no
+    // barcode alternative), so this only ever blocks its pick step.
+    if ((screen == Screen.scan || screen == Screen.track || screen == Screen.rfidLocate) &&
+        scanInputMode == ScanInputMode.barcode) {
+      toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
+      return;
+    }
+    // Gate scanning and the box-locate sweep both drive their own feedback
+    // instead of the reader's dense per-read tick: Gate's is discrete
+    // ok/error tones from addScan() (see playTone calls below); locate's is
+    // haptic-only, gated to genuine target matches (see
+    // RfidLocateScreen._onBatch) — a beep on every stray read of a
+    // neighbouring pallet's tags was exactly the bug this fixes. Every
+    // other RFID screen still wants the raw per-read feedback.
+    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate);
     rfid.startInventory();
   }
 

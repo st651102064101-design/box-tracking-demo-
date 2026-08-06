@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/employee.dart';
+import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
+import '../services/sound_catalog.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -87,6 +90,33 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              Panel(
+                padding: const EdgeInsets.all(16),
+                radius: 18,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('โหมดประหยัดพลังงาน',
+                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 3),
+                          Text('ลดกราฟฟิกและความถี่รีเฟรช เพื่อความเร็วบนเครื่อง',
+                              style: TextStyle(fontSize: 12, color: C.muted, height: 1.4)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: c.lowPowerMode,
+                      onChanged: c.setLowPowerMode,
+                      activeThumbColor: C.lime,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
               const _RfidPanel(),
               if (isAdminOrNull) ...[
                 const SizedBox(height: 10),
@@ -97,13 +127,6 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => c.go(Screen.rfidInput),
                 ),
               ],
-              const SizedBox(height: 10),
-              _tile(
-                icon: Icons.qr_code_scanner,
-                title: 'ลงทะเบียนแท็ก RFID',
-                sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
-                onTap: () => c.go(Screen.rfidRegister),
-              ),
               const SizedBox(height: 16),
               if (c.canConfigureDevice)
                 _tile(
@@ -217,20 +240,61 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Lets an already-signed-in operator set (or replace) their own PIN —
-  /// the way in for whoever tapped "ข้าม / ไม่ตั้ง PIN" the first time and
-  /// changed their mind, or wants a new one. No old-PIN check: they're
-  /// already authenticated for this session, that's the whole point of
-  /// putting this here instead of only on the badge screen.
+  /// Lets an already-signed-in operator set (first time) or change (already
+  /// has one) their own PIN. A change now demands the *old* PIN first —
+  /// being signed into the session proves who's holding the device, not
+  /// that whoever's tapping this tile right now is that person; a PIN
+  /// exists specifically to stop someone else changing it out from under
+  /// them. First-time setup (no PIN on file yet) skips straight to picking
+  /// one, same as before. "ลืมรหัส?" on that old-PIN check reuses the same
+  /// email-OTP reset login_screen.dart's badge flow already has.
   Future<void> _setupPin(BuildContext context, AppController c) async {
     final e = c.emp;
     if (e == null) return;
+
+    if (e.hasPin) {
+      String? otpSentTo;
+      final verify = await showPinPad(
+        context,
+        title: 'ใส่รหัส PIN เดิมของ ${e.name}',
+        subtitle: 'ยืนยันตัวตนก่อนตั้งรหัสใหม่',
+        showForgot: true,
+        validate: (entered) async {
+          try {
+            final ok = await c.api.verifyEmployeePin(e.id, entered);
+            if (ok) c.prefs.cachePinHash(e.id, entered);
+            return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+          } catch (err) {
+            if (c.prefs.verifyPinOffline(e.id, entered)) return null;
+            return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
+          }
+        },
+        onForgot: () async {
+          try {
+            final req = await c.api.requestPinReset(e.id);
+            otpSentTo = req['sentTo']?.toString();
+            return null;
+          } catch (err) {
+            return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+          }
+        },
+      );
+      if (verify == null) return; // cancelled
+      if (verify.forgot) {
+        await _forgotPinFlow(context, c, e, otpSentTo);
+        return;
+      }
+      if (verify.pin == null) return;
+      if (!context.mounted) return;
+    }
+
     final first = await showPinPad(
       context,
       title: e.hasPin ? 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}' : 'ตั้งรหัส PIN สำหรับ ${e.name}',
       subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน',
     );
     if (first == null || first.pin == null) return;
+    if (!context.mounted) return;
     final confirm = await showPinPad(
       context,
       title: 'ยืนยันรหัส PIN อีกครั้ง',
@@ -247,7 +311,56 @@ class SettingsScreen extends StatelessWidget {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, first.pin!);
     c.toastMsg('ตั้งรหัส PIN แล้ว', '', ResultKind.ok);
+  }
+
+  /// Same email-OTP reset login_screen.dart's badge flow uses (see its
+  /// _forgotPin) — duplicated rather than shared across the two screens'
+  /// otherwise-unrelated widget trees, since a fully-independent flow here
+  /// keeps this screen's PIN change working even if the badge screen's PIN
+  /// pad ever changes shape.
+  Future<void> _forgotPinFlow(BuildContext context, AppController c, Employee e, String? sentTo) async {
+    c.toastMsg(
+      'ส่งรหัส OTP แล้ว',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      ResultKind.info,
+    );
+    if (!context.mounted) return;
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: sentTo != null ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)' : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!context.mounted) return;
+    final newPinResult = await showPinPad(context, title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}');
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!context.mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!context.mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!context.mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, newPin);
+    if (!context.mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
   }
 }
 
@@ -268,21 +381,46 @@ class _RfidPanel extends StatefulWidget {
 class _RfidPanelState extends State<_RfidPanel> {
   Map<String, dynamic> _d = const {};
   Timer? _poll;
-  late int _rangePercent;
+  /// Raw power index the slider is showing, once the operator has actually
+  /// dragged it this session. Null means "not touched yet" — the slider
+  /// falls back to whatever the reader itself last reported.
+  int? _rangeIndex;
+
+  /// True while the on-screen "กดค้างเพื่อทดสอบยิง" button is held —
+  /// mirrors the physical trigger so a range just set on the slider can be
+  /// checked without reaching for the gun.
+  bool _testFiring = false;
 
   @override
   void initState() {
     super.initState();
-    _rangePercent = context.read<AppController>().prefs.rfidPowerPercent;
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    // Low power mode widens this — a diagnostics call every 2s adds up over
+    // a shift, and this screen isn't the one place a slow counter matters.
+    final lowPower = context.read<AppController>().lowPowerMode;
+    _poll = Timer.periodic(Duration(seconds: lowPower ? 5 : 2), (_) => _refresh());
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    // A stray finger-up outside the button (or navigating away mid-press)
+    // must not leave the reader sweeping in the background.
+    if (_testFiring) context.read<AppController>().rfid.stopInventory();
     super.dispose();
+  }
+
+  Future<void> _startTest(AppController c) async {
+    if (_testFiring) return;
+    setState(() => _testFiring = true);
+    await c.rfid.startInventory();
+  }
+
+  Future<void> _stopTest(AppController c) async {
+    if (!_testFiring) return;
+    setState(() => _testFiring = false);
+    await c.rfid.stopInventory();
   }
 
   Future<void> _refresh() async {
@@ -372,13 +510,132 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 12),
             const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            _RangePicker(
-              value: _rangePercent,
-              onChanged: (v) {
-                setState(() => _rangePercent = v);
-                c.prefs.rfidPowerPercent = v;
-                c.rfid.setPowerPercent(v);
-              },
+            // The slider needs the reader's own max index to cover every
+            // step it actually has (see RfidService.setPowerIndex) — that
+            // number only exists once the reader has answered a diagnostics
+            // call, so there's honestly nothing precise to show before then.
+            if (_d['powerMaxIndex'] is int) ...[
+              Builder(builder: (context) {
+                final maxIdx = _d['powerMaxIndex'] as int;
+                final current = (_rangeIndex ?? (_d['powerIndex'] as int?) ?? maxIdx).clamp(0, maxIdx);
+                return _RangePicker(
+                  value: current,
+                  max: maxIdx,
+                  onChanged: (v) {
+                    setState(() => _rangeIndex = v);
+                    // Percent is still what's persisted (and what
+                    // AppController re-applies on the next connect, see
+                    // rfid.setPowerPercent) — it's the one unit that still
+                    // means something if this device is swapped for a
+                    // reader with a different index range.
+                    c.prefs.rfidPowerPercent = maxIdx == 0 ? 100 : ((v / maxIdx) * 100).round();
+                    c.rfid.setPowerIndex(v);
+                  },
+                );
+              }),
+              const SizedBox(height: 12),
+              // Press-and-hold does the same thing the physical trigger
+              // does — starts/stops inventory — so a range just dragged on
+              // the slider can be checked immediately without setting the
+              // handheld down to reach for the gun.
+              GestureDetector(
+                onTapDown: (_) => _startTest(c),
+                onTapUp: (_) => _stopTest(c),
+                onTapCancel: () => _stopTest(c),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                    color: _testFiring ? C.limeBg : C.neutralBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _testFiring ? C.limeBorder : C.border2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeDeep : C.ink2),
+                      const SizedBox(width: 8),
+                      Text(_testFiring ? 'กำลังยิงทดสอบ… ปล่อยนิ้วเพื่อหยุด' : 'กดค้างเพื่อทดสอบยิง',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _testFiring ? C.limeDeep : C.ink2)),
+                    ],
+                  ),
+                ),
+              ),
+            ] else
+              Text(
+                'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้',
+                style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
+              ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('กรองสัญญาณอ่อน (RSSI)', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                ),
+                Switch(
+                  value: c.prefs.rfidMinRssi != null,
+                  onChanged: (on) {
+                    setState(() {
+                      // -70 dBm: matches the "ไกล" boundary RfidLocateScreen
+                      // already uses as its own far-signal cutoff — a
+                      // reasonable first guess for "this is a stray read
+                      // from the next pallet over", tunable from here.
+                      c.prefs.rfidMinRssi = on ? -70 : null;
+                    });
+                  },
+                  activeThumbColor: C.lime,
+                ),
+              ],
+            ),
+            Text(
+              'ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ',
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+            ),
+            if (c.prefs.rfidMinRssi != null) ...[
+              const SizedBox(height: 10),
+              _RssiPicker(
+                value: c.prefs.rfidMinRssi!,
+                onChanged: (v) => setState(() => c.prefs.rfidMinRssi = v),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            const Text('เสียงเมื่อเจอแท็ก/บาร์โค้ด', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'ตั้งแยกกันได้ — RFID กับบาร์โค้ดใช้เสียงคนละแบบ แตะเพื่อฟังตัวอย่างแล้วเลือกทันที',
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            _SoundRow(
+              label: 'เสียงตอนอ่าน RFID',
+              soundId: c.prefs.rfidSoundId,
+              onTap: () => showSoundPickerSheet(
+                context,
+                title: 'เสียงตอนอ่าน RFID',
+                currentId: c.prefs.rfidSoundId,
+                onPreview: c.rfid.playSound,
+                onSelect: c.setRfidSoundId,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _SoundRow(
+              label: 'เสียงตอนยิงบาร์โค้ด',
+              soundId: c.prefs.barcodeSoundId,
+              onTap: () => showSoundPickerSheet(
+                context,
+                title: 'เสียงตอนยิงบาร์โค้ด',
+                currentId: c.prefs.barcodeSoundId,
+                onPreview: c.rfid.playSound,
+                onSelect: c.setBarcodeSoundId,
+              ),
             ),
           ],
           if (!c.rfid.supported)
@@ -456,63 +713,316 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 }
 
-/// ใกล้ / ปานกลาง / ไกล — a friendlier face on antenna transmit power than a
-/// raw index, since "power 190/270" means nothing to an operator but "อ่าน
-/// เฉพาะกล่องใกล้ตัว" does. Maps to a percentage of the reader's max power;
-/// [RfidReaderController.setPower] converts that into an actual index.
-class _RangePicker extends StatelessWidget {
-  static const _steps = [
-    (label: 'ใกล้', sub: '~30 ซม.', percent: 30),
-    (label: 'ปานกลาง', sub: '~1-2 ม.', percent: 65),
-    (label: 'ไกล', sub: 'สุดกำลังเครื่อง', percent: 100),
-  ];
+/// Minimum-RSSI slider for the stray-read filter (see
+/// AppController._onReaderBatch / Prefs.rfidMinRssi) — -95 dBm (accept
+/// almost anything) to -25 dBm (only a tag right up against the antenna).
+/// Raw dBm, not a percent: this is compared directly against what the
+/// reader reports per read, so the number here has to mean the same thing.
+class _RssiPicker extends StatelessWidget {
+  static const _min = -95.0;
+  static const _max = -25.0;
 
   final int value;
   final ValueChanged<int> onChanged;
-  const _RangePicker({required this.value, required this.onChanged});
+  const _RssiPicker({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    // Snap to the nearest step so a value saved by an older build (or typed
-    // via some future settings-import feature) still highlights sensibly
-    // instead of leaving every option unselected.
-    final nearest = _steps.reduce(
-      (a, b) => (value - a.percent).abs() <= (value - b.percent).abs() ? a : b,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(value <= -80 ? 'หลวม · รับเกือบทุกแท็ก' : value <= -55 ? 'ปานกลาง' : 'เข้ม · เฉพาะแท็กใกล้มาก',
+                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value dBm',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+          ),
+          child: Slider(
+            value: value.toDouble().clamp(_min, _max),
+            min: _min,
+            max: _max,
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
     );
-    return Row(
-      children: _steps.map((s) {
-        final selected = s == nearest;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: s == _steps.last ? 0 : 8),
-            child: GestureDetector(
-              onTap: () => onChanged(s.percent),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected ? C.ink : C.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: selected ? C.ink : C.border2),
-                ),
-                child: Column(
-                  children: [
-                    Text(s.label,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? C.surface : C.ink)),
-                    const SizedBox(height: 2),
-                    Text(s.sub,
-                        style: TextStyle(
-                            fontSize: 10.5,
-                            color: selected ? C.surface.withOpacity(0.7) : C.muted)),
-                  ],
-                ),
+  }
+}
+
+/// Fine-grained transmit-power slider — every raw index the reader actually
+/// has, 0 through [max]. Used to be three fixed presets (ใกล้/ปานกลาง/ไกล),
+/// then a 0-100% slider; a percent still only reaches ~101 of the reader's
+/// real steps because its index range runs well past 100 on this hardware.
+/// [RfidReaderController.setPowerIndex] sets that exact index directly —
+/// no percent math, no skipped steps.
+class _RangePicker extends StatelessWidget {
+  final int value;
+  final int max;
+  final ValueChanged<int> onChanged;
+  const _RangePicker({required this.value, required this.max, required this.onChanged});
+
+  /// The index range varies by reader model, so classification has to be
+  /// relative to [max] — this is the same ใกล้/ปานกลาง/ไกล vocabulary the
+  /// original preset picker used, now derived from position instead of
+  /// snapped to it.
+  String _label(int v) {
+    if (max <= 0) return '';
+    final pct = v / max * 100;
+    if (pct <= 40) return 'ใกล้ · ~30 ซม.';
+    if (pct <= 75) return 'ปานกลาง · ~1-2 ม.';
+    return 'ไกล · สุดกำลังเครื่อง';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(_label(value), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value / $max',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+          ),
+          child: Slider(
+            value: value.toDouble().clamp(0, max.toDouble()),
+            min: 0,
+            max: max <= 0 ? 1 : max.toDouble(),
+            // No `divisions` — a stepped slider snaps to fixed ticks, which
+            // is the same "only a few presets" limitation this replaced.
+            // Continuous drag reports every index the reader has, exactly
+            // as [RfidReaderController.setPowerIndex] expects it.
+            onChanged: max <= 0 ? null : (v) => onChanged(v.round()),
+          ),
+        ),
+        // Both work, not one or the other: drag the slider to get in the
+        // ballpark fast, then nudge ±1 to land on an exact index — a slider
+        // alone can't reliably hit a specific single-digit value on a
+        // 200+-step range with a thumb sized for a fingertip.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _stepButton(Icons.remove, value > 0 ? () => onChanged(value - 1) : null),
+            const SizedBox(width: 14),
+            _stepButton(Icons.add, value < max ? () => onChanged(value + 1) : null),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _stepButton(IconData icon, VoidCallback? onTap) {
+    return Material(
+      color: onTap == null ? C.neutralBg2 : C.neutralBg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 19, color: onTap == null ? C.faint : C.ink2),
+        ),
+      ),
+    );
+  }
+}
+
+/// One "เสียงตอน…" row — current sound's name, tap to open the picker.
+class _SoundRow extends StatelessWidget {
+  final String label;
+  final String soundId;
+  final VoidCallback onTap;
+  const _SoundRow({required this.label, required this.soundId, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+        decoration: BoxDecoration(
+          color: C.neutralBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.border2),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.ink)),
+                  const SizedBox(height: 2),
+                  Text(soundNameFor(soundId), style: TextStyle(fontSize: 12, color: C.muted)),
+                ],
               ),
             ),
-          ),
-        );
-      }).toList(),
+            Icon(Icons.chevron_right, size: 19, color: C.chevron),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Modal sound picker — every entry in [kSoundCatalog], tap one and it both
+/// plays immediately (via [onPreview]) and becomes the selection (via
+/// [onSelect]) in the same action. No separate "confirm" step: "เวลาเลือก
+/// ปุ๊บก็เล่นเสียงเลย" is a single tap, not preview-then-commit.
+Future<void> showSoundPickerSheet(
+  BuildContext context, {
+  required String title,
+  required String currentId,
+  required ValueChanged<String> onPreview,
+  required ValueChanged<String> onSelect,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => _SoundPickerSheet(
+      title: title,
+      currentId: currentId,
+      onPreview: onPreview,
+      onSelect: onSelect,
+    ),
+  );
+}
+
+class _SoundPickerSheet extends StatefulWidget {
+  final String title;
+  final String currentId;
+  final ValueChanged<String> onPreview;
+  final ValueChanged<String> onSelect;
+  const _SoundPickerSheet({
+    required this.title,
+    required this.currentId,
+    required this.onPreview,
+    required this.onSelect,
+  });
+
+  @override
+  State<_SoundPickerSheet> createState() => _SoundPickerSheetState();
+}
+
+class _SoundPickerSheetState extends State<_SoundPickerSheet> {
+  late String _selected = widget.currentId;
+
+  void _pick(String id) {
+    setState(() => _selected = id);
+    widget.onPreview(id);
+    widget.onSelect(id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      decoration: BoxDecoration(
+        color: C.bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(widget.title,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.fromLTRB(10, 0, 10, bottom + 12),
+                itemCount: kSoundCatalog.length,
+                itemBuilder: (context, i) {
+                  final opt = kSoundCatalog[i];
+                  final selected = opt.id == _selected;
+                  return InkWell(
+                    onTap: () => _pick(opt.id),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                      decoration: BoxDecoration(
+                        color: selected ? C.limeBg : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: selected ? C.limeBorder : Colors.transparent),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selected ? Icons.volume_up : Icons.volume_up_outlined,
+                            size: 19,
+                            color: selected ? C.limeDeep : C.ink2,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              opt.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                                color: selected ? C.limeDeep : C.ink,
+                              ),
+                            ),
+                          ),
+                          if (selected) Icon(Icons.check, size: 18, color: C.limeDeep),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
