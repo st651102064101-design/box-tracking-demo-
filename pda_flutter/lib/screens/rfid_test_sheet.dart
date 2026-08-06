@@ -42,9 +42,12 @@ class _RfidTestSheetState extends State<_RfidTestSheet> {
     super.initState();
     final rfid = context.read<AppController>().rfid;
     _rfid = rfid;
-    _sub = rfid.rawTags.listen((r) {
+    // One setState per frame, not per tag: this list is rebuilt whole on every
+    // rebuild, so a listener firing per read makes the UI — not the reader —
+    // the thing that decides how fast reads can be taken.
+    _sub = rfid.tagBatches.listen((batch) {
       if (!mounted) return;
-      setState(() => _reads.insert(0, r));
+      setState(() => _reads.insertAll(0, batch.reversed));
     });
   }
 

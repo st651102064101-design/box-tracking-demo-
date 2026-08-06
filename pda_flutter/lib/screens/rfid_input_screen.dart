@@ -75,7 +75,7 @@ class RfidInputScreen extends StatefulWidget {
 class _RfidInputScreenState extends State<RfidInputScreen> {
   final _manualCtrl = TextEditingController();
   final _reads = <_Read>[];
-  StreamSubscription<RfidTagRead>? _tagSub;
+  StreamSubscription<List<RfidTagRead>>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
   StreamSubscription<bool>? _triggerSub;
   late RfidStatus _status;
@@ -86,8 +86,15 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     super.initState();
     final rfid = context.read<AppController>().rfid;
     _status = RfidStatus(rfid.state, '');
-    _tagSub = rfid.tagReads.listen((r) {
-      setState(() => _reads.insert(0, _Read.fromTagRead(r, DateTime.now())));
+    // One setState per frame, not per tag — see the same change in
+    // rfid_test_sheet.dart for why the per-read listener capped the read rate.
+    _tagSub = rfid.tagBatches.listen((batch) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      setState(() => _reads.insertAll(
+            0,
+            batch.reversed.map((r) => _Read.fromTagRead(r, now)),
+          ));
     });
     _statusSub = rfid.status.listen((s) => setState(() => _status = s));
     // The physical gun trigger drives start/stopInventory from AppController

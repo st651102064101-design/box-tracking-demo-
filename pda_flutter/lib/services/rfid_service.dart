@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 /// Connection state reported by the native Zebra RFID plugin.
@@ -74,6 +75,7 @@ class RfidService {
 
   final _tagCtrl = StreamController<String>.broadcast();
   final _rawTagCtrl = StreamController<RfidTagRead>.broadcast();
+  final _batchCtrl = StreamController<List<RfidTagRead>>.broadcast();
   final _triggerCtrl = StreamController<bool>.broadcast();
   final _statusCtrl = StreamController<RfidStatus>.broadcast();
 
@@ -81,12 +83,32 @@ class RfidService {
   RfidState _state = RfidState.idle;
   RfidState get state => _state;
 
+  // ── Read buffer ────────────────────────────────────────────────────────
+  // Reads land here as the raw maps the platform channel delivered, and
+  // nothing else happens on that code path: no RfidTagRead built, no listener
+  // run, no setState. Parsing and delivery wait for the next frame.
+  //
+  // The reason is that everything downstream of a read is per-read work that
+  // the UI collapses anyway — a listener that inserts into a list and calls
+  // setState rebuilds the whole list once per tag, and at reader speed that
+  // rebuild is slower than the reads arriving. The buffer stops the read path
+  // from being paced by whatever the slowest listener does with it.
+  final List<Map> _buffer = [];
+  DateTime? _bufferedAt;
+  bool _flushScheduled = false;
+
   Stream<String> get tags => _tagCtrl.stream;
   /// Same tag reads as [tags], but with every raw SDK field attached — for the
   /// RFID test-read, register, and input screens, not for normal scan flows.
   Stream<RfidTagRead> get rawTags => _rawTagCtrl.stream;
   /// Alias of [rawTags] kept for screens written against the older name.
   Stream<RfidTagRead> get tagReads => _rawTagCtrl.stream;
+  /// Every read buffered since the last frame, delivered as one list.
+  ///
+  /// Prefer this over [rawTags] on any screen that accumulates reads into a
+  /// list: one event per frame means one `setState` per frame no matter how
+  /// fast the reader is going, instead of one per tag.
+  Stream<List<RfidTagRead>> get tagBatches => _batchCtrl.stream;
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
 
@@ -104,14 +126,11 @@ class RfidService {
         case 'tags':
           final list = event['tags'];
           if (list is! List) break;
-          final at = DateTime.now();
-          for (final raw in list) {
-            if (raw is! Map) continue;
-            final epc = raw['epc']?.toString();
-            if (epc == null || epc.isEmpty) continue;
-            _tagCtrl.add(epc);
-            _rawTagCtrl.add(RfidTagRead.fromEvent(raw, at));
-          }
+          // Buffer the raw maps and stop. Converting them to RfidTagRead and
+          // waking listeners is deferred to _flush — see [_buffer].
+          _buffer.addAll(list.whereType<Map>());
+          _bufferedAt ??= DateTime.now();
+          _scheduleFlush();
           break;
         case 'trigger':
           _triggerCtrl.add(event['pressed'] == true);
@@ -125,6 +144,53 @@ class RfidService {
       _state = RfidState.error;
       _statusCtrl.add(RfidStatus(RfidState.error, '$e'));
     });
+  }
+
+  /// Ask for one flush on the next frame, however many reads arrive before it.
+  ///
+  /// A post-frame callback (plus an explicit [SchedulerBinding.scheduleFrame],
+  /// since an idle app schedules no frames of its own and the buffer would
+  /// otherwise sit there until something else repainted) is the Flutter
+  /// equivalent of `requestAnimationFrame`, and gives the same guarantee the
+  /// HTML test page relies on: rendering happens at most once per frame no
+  /// matter how fast reads land.
+  void _scheduleFlush() {
+    if (_flushScheduled) return;
+    _flushScheduled = true;
+    final binding = SchedulerBinding.instance;
+    binding.addPostFrameCallback((_) {
+      _flushScheduled = false;
+      _flush();
+    });
+    binding.scheduleFrame();
+  }
+
+  /// Convert everything buffered since the last frame and deliver it once.
+  void _flush() {
+    if (_buffer.isEmpty) return;
+    // Take the buffer out from under any read that lands mid-flush, so a tag
+    // arriving while listeners run is kept for the next frame rather than
+    // dropped or delivered twice.
+    final pending = List<Map>.from(_buffer);
+    final at = _bufferedAt ?? DateTime.now();
+    _buffer.clear();
+    _bufferedAt = null;
+
+    final reads = <RfidTagRead>[];
+    for (final raw in pending) {
+      final epc = raw['epc']?.toString();
+      if (epc == null || epc.isEmpty) continue;
+      reads.add(RfidTagRead.fromEvent(raw, at));
+    }
+    if (reads.isEmpty) return;
+
+    // The batch first, so a screen listening to it has the whole frame's worth
+    // in hand before the per-tag streams start firing for the same reads.
+    if (_batchCtrl.hasListener) _batchCtrl.add(reads);
+    for (final r in reads) {
+      _tagCtrl.add(r.epc);
+      _rawTagCtrl.add(r);
+    }
   }
 
   RfidState _parseState(String? s) {
@@ -221,8 +287,10 @@ class RfidService {
 
   void dispose() {
     _sub?.cancel();
+    _buffer.clear();
     _tagCtrl.close();
     _rawTagCtrl.close();
+    _batchCtrl.close();
     _triggerCtrl.close();
     _statusCtrl.close();
   }

@@ -102,7 +102,9 @@
 
 <footer>
   <label><input type="checkbox" id="optUnique"> ซ้ำไม่นับ</label>
-  <label><input type="checkbox" id="optBeep"> เสียง</label>
+  <!-- Beep on by default: the whole point of this page is to confirm reads are
+       landing, and a tick per read says so without looking at the screen. -->
+  <label><input type="checkbox" id="optBeep" checked> เสียง</label>
   <button id="btnClear">ล้าง</button>
 </footer>
 
@@ -184,15 +186,31 @@
   }
 
   // ── Beep (WebAudio — no <audio> element decode latency) ──────────────────
-  var actx = null;
+  var actx = null, lastBeepAt = 0;
   function beep() {
     try {
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      // A context created before any user gesture starts suspended on some
+      // builds; without this the page looks like it is beeping and is silent.
+      if (actx.state === 'suspended') actx.resume();
+
+      // At reader speed a tick per read would be one continuous tone rather
+      // than distinct ticks, and hundreds of oscillators a second is real work
+      // on this hardware. 60ms apart is fast enough to sound continuous while
+      // the trigger is held, and still clearly separate for single reads.
+      var now = actx.currentTime;
+      if (now - lastBeepAt < 0.06) return;
+      lastBeepAt = now;
+
       var o = actx.createOscillator(), g = actx.createGain();
-      o.frequency.value = 2000;
-      g.gain.value = 0.08;
+      o.type = 'square';          // carries over ambient noise better than a sine
+      o.frequency.value = 2700;   // near the ear's most sensitive band
+      // Shaped rather than gated: a bare on/off gain clicks audibly.
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.35, now + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
       o.connect(g); g.connect(actx.destination);
-      o.start(); o.stop(actx.currentTime + 0.02);
+      o.start(now); o.stop(now + 0.05);
     } catch (e) { /* audio unavailable — reads still count */ }
   }
 
