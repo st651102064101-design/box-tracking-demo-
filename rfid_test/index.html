@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>RFID Rapid Input — MC3390R</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a23;
+    --line: #223040;
+    --text: #e8eef6;
+    --dim: #8ea0b5;
+    --ok: #35d07f;
+    --warn: #ffb020;
+    --err: #ff5c5c;
+    --accent: #4da3ff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  header {
+    padding: 10px 12px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+  .dot.on  { background: var(--ok);  box-shadow: 0 0 8px var(--ok); }
+  .dot.err { background: var(--err); }
+  #mode { font-size: 13px; color: var(--dim); flex: 1 1 auto; }
+  header button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px;
+  }
+  header button:active { background: var(--accent); border-color: var(--accent); }
+
+  /* The one input. Big, always focused, never shows a soft keyboard. */
+  #tag {
+    flex: 0 0 auto; width: 100%; border: 0; border-bottom: 2px solid var(--accent);
+    background: var(--panel); color: var(--text);
+    font: 700 26px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 1px; padding: 16px 12px; outline: none;
+  }
+
+  #stats {
+    flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--line);
+  }
+  .stat { flex: 1 1 0; padding: 8px 12px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat b { display: block; font: 700 20px/1.1 ui-monospace, Menlo, monospace; }
+  .stat span { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+
+  #log { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+  .row {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 6px 12px; border-bottom: 1px solid #182230;
+    font: 13px/1.3 ui-monospace, Menlo, monospace;
+  }
+  .row .n { color: var(--dim); min-width: 44px; }
+  .row .epc { flex: 1 1 auto; word-break: break-all; }
+  .row .rssi { color: var(--warn); }
+  .row.dup .epc { color: var(--dim); }
+  .row:nth-child(1) { background: #16202c; }
+
+  footer {
+    flex: 0 0 auto; display: flex; gap: 8px; padding: 8px 12px;
+    border-top: 1px solid var(--line); align-items: center;
+  }
+  footer label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
+  footer button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-left: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="dot"></div>
+  <div id="mode">กำลังตรวจหาโหมดอ่าน…</div>
+  <button id="btnConnect" hidden>เชื่อมต่อ</button>
+</header>
+
+<!-- The single input the whole page is about. inputmode=none keeps the soft
+     keyboard off the screen while still accepting hardware keystrokes, so a
+     DataWedge keystroke-output profile types straight into it. -->
+<input id="tag" autocomplete="off" autocorrect="off" autocapitalize="off"
+       spellcheck="false" inputmode="none" placeholder="เหนี่ยวไกเพื่อยิง…">
+
+<div id="stats">
+  <div class="stat"><b id="sTotal">0</b><span>reads</span></div>
+  <div class="stat"><b id="sUniq">0</b><span>unique</span></div>
+  <div class="stat"><b id="sRate">0</b><span>tags/s</span></div>
+  <div class="stat"><b id="sGap">—</b><span>gap ms</span></div>
+</div>
+
+<div id="log"></div>
+
+<footer>
+  <label><input type="checkbox" id="optUnique"> ซ้ำไม่นับ</label>
+  <label><input type="checkbox" id="optBeep"> เสียง</label>
+  <button id="btnClear">ล้าง</button>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $('tag'), log = $('log'), dot = $('dot'), modeEl = $('mode');
+
+  // ── State ───────────────────────────────────────────────────────────────
+  var total = 0, seen = new Set(), lastAt = 0, gap = '—';
+  var rateWindow = [];          // timestamps, trimmed to the last second
+  var pending = [];             // reads awaiting a paint — see flush()
+  var painting = false;
+  var MAX_ROWS = 300;           // keep the DOM bounded under a long burst
+
+  // ── The hot path ────────────────────────────────────────────────────────
+  // Called once per tag read. Everything that must be immediate (counters,
+  // the input's own value, the beep) happens here, synchronously, with no
+  // timer of any kind in the way — a held trigger streaming hundreds of
+  // reads a second must never be throttled, debounced, or de-duplicated on
+  // a timeout. Only the *rendering* of the scroll-back list is deferred to
+  // the next animation frame, because appending a DOM node per read is what
+  // actually stalls the page at high read rates — and a stalled page drops
+  // reads. The input and the counters are always current regardless.
+  function onTag(epc, rssi) {
+    if (!epc) return;
+    var now = performance.now();
+
+    var dup = seen.has(epc);
+    if (dup && $('optUnique').checked) return;
+
+    total++;
+    seen.add(epc);
+    gap = lastAt ? Math.round(now - lastAt) : '—';
+    lastAt = now;
+
+    rateWindow.push(now);
+
+    input.value = epc;
+    if ($('optBeep').checked) beep();
+
+    pending.push({ epc: epc, rssi: rssi, dup: dup, n: total });
+    if (!painting) { painting = true; requestAnimationFrame(flush); }
+  }
+
+  function flush() {
+    painting = false;
+
+    // Trim the rate window to the trailing second, then read counters once.
+    var cut = performance.now() - 1000;
+    while (rateWindow.length && rateWindow[0] < cut) rateWindow.shift();
+
+    $('sTotal').textContent = total;
+    $('sUniq').textContent = seen.size;
+    $('sRate').textContent = rateWindow.length;
+    $('sGap').textContent = gap;
+
+    if (!pending.length) return;
+
+    // One fragment for the whole frame's worth of reads, prepended in a
+    // single DOM write, so a 200-tag burst costs one reflow instead of 200.
+    var frag = document.createDocumentFragment();
+    for (var i = pending.length - 1; i >= 0; i--) {
+      var t = pending[i];
+      var row = document.createElement('div');
+      row.className = 'row' + (t.dup ? ' dup' : '');
+      row.innerHTML =
+        '<span class="n">#' + t.n + '</span>' +
+        '<span class="epc"></span>' +
+        '<span class="rssi">' + (t.rssi == null ? '' : t.rssi) + '</span>';
+      row.children[1].textContent = t.epc;
+      frag.appendChild(row);
+    }
+    pending.length = 0;
+    log.insertBefore(frag, log.firstChild);
+    while (log.childElementCount > MAX_ROWS) log.removeChild(log.lastChild);
+  }
+
+  // ── Beep (WebAudio — no <audio> element decode latency) ──────────────────
+  var actx = null;
+  function beep() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = 2000;
+      g.gain.value = 0.08;
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + 0.02);
+    } catch (e) { /* audio unavailable — reads still count */ }
+  }
+
+  // ── Mode A: native bridge (the WebView app in rfid_html_app/) ────────────
+  // The Kotlin side calls window.__rfid.push([...]) once per SDK read event,
+  // handing over every tag in that event at once.
+  window.__rfid = {
+    push: function (tags) {
+      for (var i = 0; i < tags.length; i++) onTag(tags[i].epc, tags[i].rssi);
+    },
+    status: function (state, message) {
+      dot.className = 'dot' + (state === 'connected' ? ' on' : state === 'error' ? ' err' : '');
+      modeEl.textContent = message;
+      $('btnConnect').hidden = (state === 'connected' || state === 'connecting');
+    }
+  };
+
+  var native = typeof window.AndroidRfid !== 'undefined';
+  if (native) {
+    modeEl.textContent = 'โหมด SDK (native)';
+    $('btnConnect').onclick = function () { window.AndroidRfid.connect(); };
+    window.AndroidRfid.connect();
+  } else {
+    // ── Mode B: DataWedge keystroke output into the input ──────────────────
+    // A plain browser page cannot reach the Zebra RFID SDK at all, so here
+    // the reads arrive as typed characters. The only thing separating one
+    // read from the next is the terminator DataWedge appends (Enter), so
+    // that keydown is the commit point — no idle timer, which would put a
+    // fixed delay between every tag and cap the rate.
+    dot.className = 'dot on';
+    modeEl.textContent = 'โหมด DataWedge (keystroke)';
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== 'Tab') return;
+      e.preventDefault();
+      var v = input.value.trim();
+      input.value = '';        // cleared synchronously — the next read's
+      if (v) onTag(v, null);   // characters land in an empty field
+    });
+  }
+
+  // ── Keep the one input focused, always ───────────────────────────────────
+  // A blurred input silently swallows every keystroke-mode read, and there
+  // is nothing on screen to tell you that is what happened.
+  function refocus() { input.focus({ preventScroll: true }); }
+  input.addEventListener('blur', function () { setTimeout(refocus, 0); });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refocus();
+  });
+  document.addEventListener('click', refocus);
+  refocus();
+
+  $('btnClear').onclick = function () {
+    total = 0; seen.clear(); lastAt = 0; gap = '—';
+    rateWindow.length = 0; pending.length = 0;
+    log.innerHTML = ''; input.value = '';
+    flush(); refocus();
+  };
+})();
+</script>
+</body>
+</html>
