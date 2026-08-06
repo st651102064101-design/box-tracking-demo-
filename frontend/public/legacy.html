@@ -2660,7 +2660,12 @@ function normalizeState(d){
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
 }
-/** Loads S from the DB at boot. Returns a promise so init can await it. */
+/** Loads S from the DB at boot. Returns a promise so init can await it.
+    Resolves to true on a confirmed successful load, false otherwise — the
+    caller needs this to tell "server confirmed no employees exist yet" apart
+    from "we couldn't reach the server", since the latter must never trigger
+    the first-user registration wizard on top of data that's actually there
+    (see loadFromServer's caller below). */
 function loadFromServer(){
   return apiFetch('/api/state',{headers:authHeaders()})
     .then(function(r){
@@ -2668,8 +2673,8 @@ function loadFromServer(){
       if(!r.ok)throw new Error('HTTP '+r.status);
       return r.json();
     })
-    .then(function(d){ if(d) S=normalizeState(d); })
-    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);});
+    .then(function(d){ if(d){S=normalizeState(d);return true;} return false; })
+    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);return false;});
 }
 /* Swap in a snapshot the caller already holds, with the same normalisation
    loadFromServer() applies but without a second round-trip. The live-update
@@ -8298,14 +8303,28 @@ window.seedDemo=seedDemo;
    the (empty) default S, or a render would flash empty before real data
    arrives. An empty account stays empty — seedDemo() is opt-in only, via
    "ใส่ข้อมูลตัวอย่าง" in the ⋯ menu, never automatic. */
-loadFromServer().then(function(){
-  if(backfillLocationsFromBoxes())save();
-  renderAll();
-  hydrateIcons(document);
-  /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
-  if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
-  setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
-});
+/* โหลดล้มเหลว (เช่น network สะดุด/เซิร์ฟเวอร์ 500 ชั่วคราว) ต้องไม่ถูกอ่านผิดเป็น
+   "ยังไม่มีพนักงานในระบบ" — ไม่งั้นจะไปโผล่หน้า "ลงทะเบียนผู้ใช้งานคนแรก" ทับข้อมูล
+   จริงที่มีอยู่แล้วใน DB (จะได้ EMP ซ้ำ/สับสนสิทธิ์ Admin) จึงต้อง retry จนกว่าจะ
+   โหลดสำเร็จจริง ก่อนตัดสินใจว่าจะเปิด modal นี้หรือไม่ */
+function bootLoad(attempt){
+  loadFromServer().then(function(ok){
+    if(!ok){
+      var retryIn=Math.min(1000*Math.pow(2,attempt||0),8000);
+      toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้','กำลังลองใหม่…','err');
+      setTimeout(function(){bootLoad((attempt||0)+1);},retryIn);
+      return;
+    }
+    if(backfillLocationsFromBoxes())save();
+    renderAll();
+    hydrateIcons(document);
+    /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้)
+       — มาถึงบรรทัดนี้ได้เฉพาะตอนโหลดจากเซิร์ฟเวอร์สำเร็จจริงเท่านั้น */
+    if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
+    setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
+  });
+}
+bootLoad(0);
 
 /* ===== INVENTORY CRUD ===== */
 S.inventory = S.inventory || {};
