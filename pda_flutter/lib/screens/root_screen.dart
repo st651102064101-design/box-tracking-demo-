@@ -9,11 +9,13 @@ import 'device_setup_screen.dart';
 import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'track_screen.dart';
+import 'relocate_screen.dart';
 import 'settings_screen.dart';
 import 'rfid_input_screen.dart';
 import 'rfid_register_screen.dart';
 import 'rfid_locate_screen.dart';
 import 'box_register_screen.dart';
+import 'cycle_count_screen.dart';
 import 'damaged_box_screen.dart';
 import 'toast_overlay.dart';
 
@@ -98,6 +100,10 @@ class RootScreen extends StatelessWidget {
         return const BoxRegisterScreen(key: ValueKey('boxRegister'));
       case Screen.damagedBox:
         return const DamagedBoxScreen(key: ValueKey('damagedBox'));
+      case Screen.relocate:
+        return const RelocateScreen(key: ValueKey('relocate'));
+      case Screen.cycleCount:
+        return const CycleCountScreen(key: ValueKey('cycleCount'));
     }
   }
 }

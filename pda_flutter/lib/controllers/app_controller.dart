@@ -27,6 +27,8 @@ enum Screen {
   rfidLocate,
   boxRegister,
   damagedBox,
+  relocate,
+  cycleCount,
 }
 
 /// Which physical input a trigger pull means right now, on any screen that
@@ -182,13 +184,17 @@ class AppController extends ChangeNotifier {
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
+  /// Terminal is docked on its charging cradle, where the MC3390R firmware
+  /// refuses every inventory command. Screens that arm the reader use this to
+  /// explain a dead trigger instead of appearing broken.
+  bool rfidCharging = false;
   String? connError;
   bool busy = false;
 
   Toast? toast;
   Timer? _toastTimer;
   final _rnd = Random();
-  StreamSubscription? _tagSub, _trigSub, _statusSub;
+  StreamSubscription? _tagSub, _trigSub, _statusSub, _chargingSub;
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
 
@@ -233,6 +239,24 @@ class AppController extends ChangeNotifier {
         // Dart which tone/volume to play per read, so it has to be told once
         // here (and again on every change — see Settings' tone picker).
         rfid.setBeepStyle(toneId: prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
+      }
+      notifyListeners();
+    });
+    // Docking/undocking is the one reader state change that happens without
+    // anybody touching the app, and it silently disables every trigger on
+    // the device (see RfidReaderController.startInventory's charging guard).
+    // It has to announce itself on whatever screen is open, both ways.
+    _chargingSub = rfid.chargingStates.listen((isCharging) {
+      final was = rfidCharging;
+      rfidCharging = isCharging;
+      // The very first event just reports the state at startup — an operator
+      // who has not moved the terminal has nothing to be told about.
+      if (was != isCharging) {
+        if (isCharging) {
+          toastMsg('วางบนแท่นชาร์จ', 'เครื่องอ่าน RFID ปิดชั่วคราวขณะชาร์จ — ยกออกจากแท่นเพื่อยิงแท็ก', ResultKind.warn);
+        } else {
+          toastMsg('ถอดออกจากแท่นชาร์จ', 'กำลังเปิดเครื่องอ่าน RFID อีกครั้ง…', ResultKind.ok);
+        }
       }
       notifyListeners();
     });
@@ -408,6 +432,7 @@ class AppController extends ChangeNotifier {
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
+    _chargingSub?.cancel();
     _realtimeDebounce?.cancel();
     _realtime.dispose();
     super.dispose();
@@ -854,6 +879,23 @@ class AppController extends ChangeNotifier {
   /// putaway handlers.
   void goBoxRegister() {
     screen = Screen.boxRegister;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// Internal move: same POST /api/boxes/:tag/putaway the receiving flow
+  /// ends on — "relocate" and "put away" are the same write to the WMS, the
+  /// difference is only whether the box had a shelf position before.
+  void goRelocate() {
+    screen = Screen.relocate;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// Cycle count (stock take). Read-only against the live snapshot — see
+  /// CycleCountScreen for why it files nothing on its own.
+  void goCycleCount() {
+    screen = Screen.cycleCount;
     notifyListeners();
     _connectReader();
   }
@@ -1591,7 +1633,12 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidInput &&
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
-        screen != Screen.boxRegister) {
+        screen != Screen.boxRegister &&
+        // Damage reporting identifies a box by RFID when its barcode label is
+        // the thing that's torn — the trigger has to actually fire there. It
+        // was missing from this list, so the one screen whose whole RFID mode
+        // depends on a trigger pull answered it with "หน้านี้ไม่รองรับ".
+        screen != Screen.damagedBox) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // The antenna must not light up here — silently doing nothing left an
       // operator assuming a broken trigger, not a screen that was never

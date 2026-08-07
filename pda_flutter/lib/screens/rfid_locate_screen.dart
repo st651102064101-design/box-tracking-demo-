@@ -51,6 +51,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   Timer? _decayTimer;
   DateTime? _lastBeepAt;
 
+  // Saved so the operator's own range/filter settings survive a visit here —
+  // see _enterFullPower / _restorePower.
+  bool _powerBoosted = false;
+  int? _savedPowerPercent;
+  int? _savedMinRssi;
+
   // Reader's realistic dBm range on this hardware (see rfid_input_screen /
   // the RFID test sheet for raw values on the terminal) — clamps the meter
   // to something that actually moves across a room instead of pinning at the
@@ -88,6 +94,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // an unmounted State.
     final c = context.read<AppController>();
     if (identical(c.systemBackOverride, _handleBack)) c.systemBackOverride = null;
+    // Backing out of the screen is the common exit, not the "เปลี่ยนกล่อง"
+    // button — the boost has to be undone here too or it outlives the search.
+    _restorePower(c);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
@@ -188,10 +197,46 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // RFID proximity search — so it always needs the trigger to actually
     // fire regardless of what the pick step's toggle was last set to.
     c.setScanInputMode(ScanInputMode.rfid);
+    _enterFullPower(c);
+  }
+
+  /// A find-the-box sweep is the one job on this device that wants the
+  /// antenna wide open. Every other screen benefits from a throttled range
+  /// (it keeps a Gate scan from reading the next pallet over), but here a
+  /// short range is indistinguishable from "the box isn't in this aisle" —
+  /// the operator walks past it and the meter never moves. So: full power on
+  /// entry, restore the operator's saved range on the way out.
+  ///
+  /// The stray-read RSSI floor is off here for the same reason. Note this
+  /// screen already bypasses AppController's own filter by listening to
+  /// rfid.tagBatches directly (see _onBatch) — clearing the pref too is what
+  /// stops a weak-but-real return from being dropped anywhere else in the
+  /// chain while the search is running.
+  void _enterFullPower(AppController c) {
+    if (!c.rfid.supported || _powerBoosted) return;
+    _powerBoosted = true;
+    _savedPowerPercent = c.prefs.rfidPowerPercent;
+    _savedMinRssi = c.prefs.rfidMinRssi;
+    c.prefs.rfidMinRssi = null;
+    unawaited(c.rfid.setPowerPercent(100));
+    c.toastMsg('เปิดกำลังส่งสูงสุด', 'ปิดตัวกรองสัญญาณอ่อนชั่วคราวเพื่อให้หากล่องเจอไกลที่สุด', ResultKind.info);
+  }
+
+  /// Undoes [_enterFullPower]. Runs on leaving the locate step *and* from
+  /// dispose, because backing out of the screen entirely is the more common
+  /// exit — leaving the reader at full power and unfiltered after that would
+  /// silently change how every Gate scan behaves for the rest of the shift.
+  void _restorePower(AppController c) {
+    if (!_powerBoosted) return;
+    _powerBoosted = false;
+    c.prefs.rfidMinRssi = _savedMinRssi;
+    final saved = _savedPowerPercent;
+    if (saved != null) unawaited(c.rfid.setPowerPercent(saved));
   }
 
   void _changeTarget(AppController c) {
     c.rfid.stopInventory();
+    _restorePower(c);
     setState(() {
       _step = _Step.pick;
       _target = null;
@@ -466,6 +511,29 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             ],
           ),
         ),
+        if (_powerBoosted) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: C.limeBg,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: C.limeBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.wifi_tethering, size: 17, color: C.limeText),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'กำลังส่งสูงสุด · ปิดตัวกรองสัญญาณอ่อน — ค่าเดิมจะคืนอัตโนมัติเมื่อออกจากหน้านี้',
+                    style: TextStyle(fontSize: 12, color: C.limeText, height: 1.4, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),

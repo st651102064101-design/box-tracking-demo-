@@ -102,10 +102,18 @@ class RfidService {
   final _batchCtrl = StreamController<List<RfidTagRead>>.broadcast();
   final _triggerCtrl = StreamController<bool>.broadcast();
   final _statusCtrl = StreamController<RfidStatus>.broadcast();
+  final _chargingCtrl = StreamController<bool>.broadcast();
 
   StreamSubscription? _sub;
   RfidState _state = RfidState.idle;
   RfidState get state => _state;
+
+  /// True while the terminal is on its charging cradle. The MC3390R firmware
+  /// refuses every inventory command in that state, so this is not a battery
+  /// readout — it is "the reader cannot fire right now, and here is why".
+  /// Screens that arm the reader should say so rather than look broken.
+  bool _charging = false;
+  bool get charging => _charging;
 
   // ── Read buffer ────────────────────────────────────────────────────────
   // Reads land here as the raw maps the platform channel delivered, and
@@ -135,6 +143,8 @@ class RfidService {
   Stream<List<RfidTagRead>> get tagBatches => _batchCtrl.stream;
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
+  /// Emits on every cradle dock/undock (and once with the state at startup).
+  Stream<bool> get chargingStates => _chargingCtrl.stream;
 
   bool get supported => defaultTargetPlatform == TargetPlatform.android;
 
@@ -162,6 +172,10 @@ class RfidService {
         case 'status':
           _state = _parseState(event['state']?.toString());
           _statusCtrl.add(RfidStatus(_state, event['message']?.toString() ?? ''));
+          break;
+        case 'charging':
+          _charging = event['charging'] == true;
+          _chargingCtrl.add(_charging);
           break;
       }
     }, onError: (e) {
@@ -401,5 +415,6 @@ class RfidService {
     _batchCtrl.close();
     _triggerCtrl.close();
     _statusCtrl.close();
+    _chargingCtrl.close();
   }
 }

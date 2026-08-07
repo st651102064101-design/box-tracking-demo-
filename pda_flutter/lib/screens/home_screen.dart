@@ -215,108 +215,300 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
       ),
     const SizedBox(height: 16),
-    const Caption('งานหลัก'),
-    const SizedBox(height: 10),
-    // Gate In/Out first — the day-to-day traffic through this screen, far
-    // more often than receiving a brand-new box off a supplier truck.
-    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
-    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
-    if (c.canScan && c.currentGateType != 'out') ...[
-      _ActionCard(
-        dark: true,
-        icon: Icons.south,
-        iconColor: C.lime,
-        iconBg: C.onInk.withValues(alpha: 0.12),
-        title: 'รับคืน',
-        sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
-        onTap: c.goScanIn,
-      ),
-      const SizedBox(height: 12),
-    ],
-    if (c.canScan && c.currentGateType != 'in') ...[
-      _ActionCard(
-        icon: Icons.north,
-        iconColor: C.orange,
-        iconBg: C.orangeBg,
-        title: 'ส่งออก',
-        sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
-        onTap: c.goScanOut,
-      ),
-      const SizedBox(height: 12),
-    ],
-    // Box registration writes a brand-new box row the moment it's tapped
-    // (see BoxRegisterScreen._submitCreate) — there's no local outbox path
-    // for that the way gate scans have, so starting it offline would just
-    // strand the operator mid-flow. Hidden entirely rather than shown
-    // disabled: a menu item that's there but won't work invites exactly the
-    // tap that fails.
-    if (c.canScan && c.connected) ...[
-      _ActionCard(
-        icon: Icons.add_box,
-        iconColor: C.limeText,
-        iconBg: C.limeBg,
-        title: 'ลงทะเบียนกล่อง',
-        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
-        onTap: c.goBoxRegister,
-      ),
-      const SizedBox(height: 12),
-    ],
-    // Damage flagging is intentionally never gated on c.connected (unlike
-    // box registration above) — it writes only to the local queue until
-    // AppController.flushDamagedFlags gets a chance to sync, so there's no
-    // reason to hide it just because the terminal is offline right now.
-    if (c.canScan) ...[
-      _ActionCard(
-        small: true,
-        icon: Icons.report_gmailerrorred,
-        iconColor: C.red,
-        iconBg: C.orangeBg,
-        title: 'แจ้งกล่องเสียหาย',
-        sub: c.damagedFlags.any((f) => !f.synced)
-            ? 'เลือกบาร์โค้ดหรือ RFID — รอซิงค์ ${c.damagedFlags.where((f) => !f.synced).length} รายการ'
-            : 'เลือกบาร์โค้ดหรือ RFID แล้วบันทึกได้แม้ออฟไลน์',
-        onTap: c.goDamagedBox,
-      ),
-      const SizedBox(height: 12),
-    ],
-    // Moved here from Settings — commissioning a tag is a routine
-    // warehouse-floor action alongside Gate In/Out, not device config.
-    if (c.canScan) ...[
-      _ActionCard(
-        small: true,
-        icon: Icons.qr_code_scanner,
-        iconColor: C.ink2,
-        iconBg: C.neutralBg,
-        title: 'ลงทะเบียนแท็ก RFID',
-        sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
-        onTap: c.goRfidRegister,
-      ),
-      const SizedBox(height: 12),
-    ],
-    _ActionCard(
-      small: true,
-      icon: Icons.nfc,
-      iconColor: C.ink2,
-      iconBg: C.neutralBg,
-      title: 'หากล่อง / RFID',
-      sub: 'เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger',
-      onTap: c.goLocate,
-    ),
-    const SizedBox(height: 12),
-    _ActionCard(
-      small: true,
-      icon: Icons.search,
-      iconColor: C.ink2,
-      iconBg: C.neutralBg,
-      title: 'ค้นหา / ตรวจสอบกล่อง',
-      sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
-      onTap: c.goTrack,
-    ),
+    // Grouped by where a box is in its life, not by which screen happens to
+    // exist: Inbound -> Internal -> Outbound -> Audit/Exception. An operator
+    // walking to the dock knows which of those four they are doing before
+    // they pick up the terminal, so that is the first decision the menu asks
+    // for. Routine groups are open; the ones that are occasional start
+    // collapsed so the daily path stays a single screen with no scrolling.
+    ..._menuGroups(c),
     if (c.outbox.isNotEmpty || c.damagedFlags.any((f) => !f.synced)) ...[
       const SizedBox(height: 14),
       _OutboxBanner(c: c, onSync: c.syncNow),
     ],
   ];
+}
+
+/// The four WMS stages, in the order a box moves through them. Each group is
+/// one collapsible section; the items inside are the screens that actually do
+/// that stage's work.
+///
+/// Gate direction still filters what shows: a door configured IN-only never
+/// offers Gate Out, and vice versa. Permission (`canScan`) and connectivity
+/// gate individual items exactly as before — a menu entry that cannot work is
+/// hidden rather than shown disabled, because a dead tap is worse than an
+/// absent one on a handheld.
+List<Widget> _menuGroups(AppController c) {
+  final pendingDamage = c.damagedFlags.where((f) => !f.synced).length;
+
+  final inbound = <Widget>[
+    // Receiving writes a brand-new box row the moment it's tapped and has no
+    // local outbox path, so starting it offline would strand the operator.
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.add_box,
+        iconColor: C.limeText,
+        iconBg: C.limeBg,
+        title: 'รับกล่องใหม่จาก Supplier',
+        sub: 'สร้างกล่อง → ติดป้าย → ผูก RFID → Putaway',
+        onTap: c.goBoxRegister,
+      ),
+    if (c.canScan && c.currentGateType != 'out')
+      _MenuItem(
+        icon: Icons.south,
+        iconColor: C.lime,
+        iconBg: C.limeBg,
+        title: 'รับคืนกล่อง',
+        sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
+        onTap: c.goScanIn,
+      ),
+    // Standalone tag commissioning: nested here rather than sitting on the
+    // top level, because binding a tag outside of receiving is the exception
+    // (a label that fell off), not a daily task.
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.qr_code_scanner,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ลงทะเบียนแท็ก RFID',
+        sub: 'ผูกแท็กให้กล่องที่มีอยู่แล้ว (แท็กหลุด/เปลี่ยนใหม่)',
+        onTap: c.goRfidRegister,
+      ),
+  ];
+
+  final outbound = <Widget>[
+    if (c.canScan && c.currentGateType != 'in')
+      _MenuItem(
+        icon: Icons.north,
+        iconColor: C.orange,
+        iconBg: C.orangeBg,
+        title: 'จ่ายกล่องออกให้ลูกค้า',
+        sub: 'Gate Out — ยิงกล่องออกจากคลัง',
+        onTap: c.goScanOut,
+      ),
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.swap_horiz,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ย้ายตำแหน่งจัดเก็บ',
+        sub: 'Relocate — ย้ายกล่องไปโซน/แร็คอื่นในคลัง',
+        onTap: c.goRelocate,
+      ),
+  ];
+
+  final search = <Widget>[
+    _MenuItem(
+      icon: Icons.search,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'ค้นหาตำแหน่ง / ประวัติกล่อง',
+      sub: 'Track — สถานะ ตำแหน่งล่าสุด ประวัติเข้า-ออก',
+      onTap: c.goTrack,
+    ),
+    _MenuItem(
+      icon: Icons.nfc,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'เรดาร์หากล่องด้วย RFID',
+      sub: 'Geiger — เดินกวาดหากล่องที่หาไม่เจอบนแร็ค',
+      onTap: c.goLocate,
+    ),
+  ];
+
+  final audit = <Widget>[
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.fact_check_outlined,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ตรวจนับสต็อก',
+        sub: 'Cycle Count — กวาดทั้งโซน/แร็ค แล้วเทียบกับระบบ',
+        onTap: c.goCycleCount,
+      ),
+    // Never gated on connectivity: this writes to the local queue and syncs
+    // later, so hiding it offline would remove the one report an operator
+    // most needs when the network is down.
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.report_gmailerrorred,
+        iconColor: C.red,
+        iconBg: C.orangeBg,
+        title: 'แจ้งกล่องชำรุด / สูญหาย',
+        sub: pendingDamage > 0
+            ? 'บันทึกได้แม้ออฟไลน์ — รอซิงค์ $pendingDamage รายการ'
+            : 'บันทึกได้แม้ออฟไลน์ — จะซิงค์อัตโนมัติ',
+        onTap: c.goDamagedBox,
+      ),
+  ];
+
+  final groups = <Widget>[
+    if (inbound.isNotEmpty)
+      _MenuGroup(
+        emoji: '📦',
+        title: 'รับกล่องเข้า',
+        subtitle: 'Inbound / Return',
+        initiallyOpen: true,
+        children: inbound,
+      ),
+    if (outbound.isNotEmpty)
+      _MenuGroup(
+        emoji: '🚚',
+        title: 'จ่ายกล่องออก',
+        subtitle: 'Outbound / Transfer',
+        initiallyOpen: true,
+        children: outbound,
+      ),
+    _MenuGroup(
+      emoji: '🔍',
+      title: 'ค้นหา & ติดตาม',
+      subtitle: 'Search & Audit',
+      children: search,
+    ),
+    if (audit.isNotEmpty)
+      _MenuGroup(
+        emoji: '📋',
+        title: 'ตรวจนับ & แจ้งปัญหา',
+        subtitle: 'Count & Issues',
+        badge: pendingDamage > 0 ? '$pendingDamage' : null,
+        children: audit,
+      ),
+  ];
+
+  return [
+    for (var i = 0; i < groups.length; i++) ...[
+      if (i > 0) const SizedBox(height: 10),
+      groups[i],
+    ],
+  ];
+}
+
+/// One collapsible stage of the menu. Stateful only so each group remembers
+/// its own open/closed state as the operator works — the rest of this screen
+/// is stateless and rebuilds on every notifyListeners().
+class _MenuGroup extends StatefulWidget {
+  final String emoji, title, subtitle;
+  final String? badge;
+  final bool initiallyOpen;
+  final List<Widget> children;
+  const _MenuGroup({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.children,
+    this.badge,
+    this.initiallyOpen = false,
+  });
+
+  @override
+  State<_MenuGroup> createState() => _MenuGroupState();
+}
+
+class _MenuGroupState extends State<_MenuGroup> {
+  late bool _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Text(widget.emoji, style: const TextStyle(fontSize: 19)),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(widget.title,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        Text(widget.subtitle, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                      ],
+                    ),
+                  ),
+                  if (widget.badge != null) ...[
+                    Pill(widget.badge!, color: C.orange, bg: C.orangeBg, fontSize: 11),
+                    const SizedBox(width: 8),
+                  ],
+                  Icon(_open ? Icons.expand_less : Icons.expand_more, size: 22, color: C.chevron),
+                ],
+              ),
+            ),
+          ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(children: widget.children),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A leaf action inside a [_MenuGroup]. Flatter than the old top-level
+/// _ActionCard on purpose — the group card already supplies the frame, and
+/// nesting two bordered cards reads as clutter on a 4" screen.
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor, iconBg;
+  final String title, sub;
+  final VoidCallback onTap;
+  const _MenuItem({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.sub,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                    Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 19, color: C.chevron),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Shared shell every detail sheet on this screen uses — drag handle,
@@ -760,90 +952,6 @@ class _TodayStat extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  final bool dark, small;
-  final IconData icon;
-  final Color iconColor, iconBg;
-  final String title, sub;
-  final VoidCallback onTap;
-  const _ActionCard({
-    this.dark = false,
-    this.small = false,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    // Every card on this screen carries a blurred shadow — cheap one at a
-    // time, not cheap five deep on a screen that redraws on every
-    // notifyListeners(). C.shadow() (see theme.dart) drops it to a flat
-    // border, now permanently since C.lowGraphics is a const true.
-    final radius = small ? 20.0 : 22.0;
-    final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
-    final box = small ? 44.0 : 52.0;
-    return Material(
-      color: dark ? C.ink : C.surface,
-      borderRadius: BorderRadius.circular(radius),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(radius),
-        onTap: onTap,
-        child: Container(
-          padding: pad,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            border: dark ? null : Border.all(color: C.border),
-            boxShadow: C.shadow([
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                blurRadius: dark ? 24 : (small ? 0 : 20),
-                offset: Offset(0, dark ? 8 : 6),
-              )
-            ]),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: box,
-                height: box,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(box * 0.29)),
-                child: Icon(icon, color: iconColor, size: small ? 23 : 27),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: small ? 16.5 : 19,
-                            fontWeight: FontWeight.w700,
-                            color: dark ? C.onInk : C.ink)),
-                    Text(sub,
-                        style: TextStyle(
-                            fontSize: small ? 12.5 : 13,
-                            color: dark ? C.onInk.withValues(alpha: 0.62) : C.muted)),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right,
-                  color: dark ? C.onInk.withValues(alpha: 0.5) : C.chevron, size: small ? 20 : 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// What actually happened while this terminal had no signal — every queued
-/// gate scan and damage report, in one plain-language list, so "did that
-/// receipt actually go through?" has an answer on the device right now
-/// instead of only once someone checks the web app after it syncs.
 class _PendingItem {
   final DateTime at;
   final String title;

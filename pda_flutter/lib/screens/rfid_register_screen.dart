@@ -26,7 +26,24 @@ class _Candidate {
   final int? rssi;
   final int hits;
   final String? claimedByTag;
-  const _Candidate({required this.epc, this.rssi, required this.hits, this.claimedByTag});
+
+  /// Whether the "is this tag already bound?" lookup has come back yet.
+  /// Without this, `claimedByTag == null` means both "free" and "we haven't
+  /// asked yet" — and the screen showed the optimistic one, so a tag that was
+  /// about to turn out to belong to another box read as bindable for as long
+  /// as the round trip took. The operator has to be able to tell "ยังไม่เคยผูก"
+  /// from "กำลังตรวจสอบ" before deciding.
+  final bool checked;
+
+  const _Candidate({
+    required this.epc,
+    this.rssi,
+    required this.hits,
+    this.claimedByTag,
+    this.checked = false,
+  });
+
+  bool get isFree => checked && claimedByTag == null;
 }
 
 /// Dedicated fast-path for commissioning new boxes: scan the barcode, pull
@@ -47,6 +64,11 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
+  StreamSubscription<bool>? _triggerSub;
+
+  /// True only while a sweep the operator asked for is running. The reader is
+  /// never armed on this screen without a trigger pull or a tap.
+  bool _sweeping = false;
 
   /// Auto-submits the barcode field without a trailing Enter/Tab keystroke,
   /// from keystroke timing rather than a flat "quiet for Nms" debounce — a
@@ -88,6 +110,9 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _rfidStatus = RfidStatus(rfid.state, '');
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
     _tagSub = rfid.tagReads.listen(_onTagRead);
+    _triggerSub = rfid.triggers.listen((pressed) {
+      if (mounted) setState(() => _sweeping = pressed);
+    });
     // Reads in the same fast profile as every other screen. This screen used
     // to switch the reader into detail mode to chase a TID, and that is what
     // stopped it reading at all: the TID access-read halts inventory around
@@ -105,6 +130,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _rfid?.stopInventory();
     _tagSub?.cancel();
     _statusSub?.cancel();
+    _triggerSub?.cancel();
     _successTimer?.cancel();
     _barcodeAutoSubmit.dispose();
     _barcodeCtrl.removeListener(_onBarcodeChanged);
@@ -167,12 +193,11 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         _selectedEpc = null;
       });
       _barcodeCtrl.clear();
-      // Arm the reader the instant the barcode lands. The operator is holding
-      // a gun against a box they have already scanned; making them put a hand
-      // on the screen between the two halves of one action is the whole thing
-      // this flow was getting wrong. The trigger still works as before — this
-      // just means it isn't required.
-      unawaited(_c.rfid.startInventory());
+      // The reader is deliberately NOT armed here. Binding rewrites which
+      // physical box a tag means, and a sweep that starts on its own — while
+      // the operator is still turning the box around to find a clear face —
+      // fills the candidate list with whatever else is on the shelf. The
+      // operator pulls the trigger when the gun is actually aimed.
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : 'ตรวจสอบบาร์โค้ดไม่สำเร็จ');
     } finally {
@@ -203,6 +228,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           rssi: (read.rssi ?? -999) > (c.rssi ?? -999) ? read.rssi : c.rssi,
           hits: c.hits + 1,
           claimedByTag: c.claimedByTag, // carried forward — see _checkClaimed
+          checked: c.checked,
         );
       } else {
         // Newly discovered tags go on top, so the tag just brought into range
@@ -228,20 +254,31 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     try {
       box = await _c.api.getBox(epc);
     } catch (_) {
+      // Offline or the lookup failed: leave it unchecked rather than claiming
+      // it's free. The row stays "กำลังตรวจสอบ…" and _bindSelected's server-side
+      // rejection is still the backstop.
       return;
     }
     if (!mounted) return;
     final owner = box?['tag'] as String?;
-    if (owner == null) return; // free — the expected, common case
     final i = _found.indexWhere((c) => c.epc == epc);
     if (i < 0) return; // rescanned away in the meantime
     setState(() {
       final c = _found[i];
-      _found[i] = _Candidate(epc: c.epc, rssi: c.rssi, hits: c.hits, claimedByTag: owner);
+      // Recorded either way now — a confirmed-free tag is what the operator
+      // is looking for, and it has to be visibly distinct from one whose
+      // lookup simply hasn't landed yet.
+      _found[i] = _Candidate(
+        epc: c.epc,
+        rssi: c.rssi,
+        hits: c.hits,
+        claimedByTag: owner,
+        checked: true,
+      );
       // Can't stay ticked if it just turned out to belong to another box —
       // the button would otherwise read "ผูกกับ …" over a selection that
       // is no longer legal to submit.
-      if (_selectedEpc == epc) _selectedEpc = null;
+      if (owner != null && _selectedEpc == epc) _selectedEpc = null;
     });
   }
 
@@ -285,7 +322,24 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       _selectedEpc = null;
       _rfidError = null;
     });
-    await _c.rfid.startInventory();
+    await _toggleSweep(force: true);
+  }
+
+  /// Starts/stops a sweep on demand — the on-screen twin of the trigger.
+  Future<void> _toggleSweep({bool force = false}) async {
+    final c = _c;
+    if (!c.rfid.supported) return;
+    if (_sweeping && !force) {
+      setState(() => _sweeping = false);
+      await c.rfid.stopInventory();
+      return;
+    }
+    if (c.rfidCharging) {
+      c.toastMsg('ยิงแท็กไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน', ResultKind.warn);
+      return;
+    }
+    setState(() => _sweeping = true);
+    await c.rfid.startInventory();
   }
 
   @override
@@ -415,7 +469,14 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
       dot = _binding ? C.limeText : C.orange;
-      label = _binding ? 'กำลังผูกแท็ก…' : 'กำลังอ่านแท็ก';
+      // "กำลังอ่านแท็ก" used to show the moment a barcode landed, while the
+      // reader was in fact idle — the screen claimed to be reading when
+      // nothing had been triggered yet. It now reflects the actual sweep.
+      label = _binding
+          ? 'กำลังผูกแท็ก…'
+          : _sweeping
+              ? 'กำลังอ่านแท็ก…'
+              : 'พร้อมอ่าน — เหนี่ยวไกเพื่อเริ่ม';
     }
     return Opacity(
       opacity: active ? 1 : 0.55,
@@ -451,14 +512,34 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               ),
             if (active && !_binding) ...[
               const SizedBox(height: 12),
+              // Explicit twin of the trigger. Present from the moment the
+              // barcode lands, because that is exactly when the reader is
+              // *not* running any more and the operator needs a way to start.
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _c.rfid.supported ? () => _toggleSweep() : null,
+                  icon: Icon(_sweeping ? Icons.stop : Icons.wifi_tethering, size: 18),
+                  label: Text(_sweeping ? 'กำลังยิง… แตะเพื่อหยุด' : 'ยิงแท็ก (หรือเหนี่ยวไก)',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _sweeping ? C.red : C.ink,
+                    backgroundColor: _sweeping ? C.orangeBg : null,
+                    side: BorderSide(color: _sweeping ? C.orangeBorder : C.border2),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               if (_found.isEmpty)
-                Text('ยังไม่พบแท็ก — เหนี่ยวไกหรือจ่อแท็กเข้าใกล้เครื่องอ่าน',
+                Text('ยังไม่พบแท็ก — เหนี่ยวไกหรือแตะปุ่มด้านบน โดยจ่อไปที่แท็กของกล่องนี้',
                     style: TextStyle(fontSize: 12.5, color: C.faint))
               else ...[
                 Row(
                   children: [
                     Expanded(
-                      child: Text('พบ ${_found.length} แท็ก — เลือกใบที่จะผูก',
+                      child: Text(_foundSummary(),
                           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
                     ),
                     GestureDetector(
@@ -510,6 +591,18 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     );
   }
 
+  /// "พบ N แท็ก · ว่าง X · ผูกแล้ว Y" — the split is the whole point of a
+  /// sweep in a rack: the operator needs to know at a glance how many of the
+  /// tags that just answered are actually available to bind.
+  String _foundSummary() {
+    final free = _found.where((c) => c.isFree).length;
+    final claimed = _found.where((c) => c.claimedByTag != null).length;
+    final parts = <String>['พบ ${_found.length} แท็ก'];
+    if (free > 0) parts.add('ยังไม่เคยผูก $free');
+    if (claimed > 0) parts.add('ผูกแล้ว $claimed');
+    return parts.join(' · ');
+  }
+
   Widget _candidateRow(_Candidate c) {
     // Already bound to a different box: shown, not selectable. No Radio at
     // all here rather than a disabled one — that's what makes it genuinely
@@ -527,9 +620,21 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(c.epc,
-                      style: TextStyle(
-                          fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: C.faint)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(c.epc,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w600,
+                                color: C.faint)),
+                      ),
+                      const SizedBox(width: 7),
+                      Pill('ผูกแล้ว', color: C.red, bg: C.redBg, fontSize: 10),
+                    ],
+                  ),
                   Text('ผูกกับกล่อง ${c.claimedByTag} อยู่แล้ว',
                       style: TextStyle(fontSize: 11.5, color: C.red, fontWeight: FontWeight.w600)),
                 ],
@@ -558,14 +663,31 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    c.epc,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? C.ink : C.ink2,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          c.epc,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontFamily: 'monospace',
+                            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                            color: selected ? C.ink : C.ink2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      // The verdict, stated on the row itself. A blank tag is
+                      // what this screen exists to bind, so "ยังไม่เคยผูก" has
+                      // to be affirmative rather than merely the absence of a
+                      // warning — and an unfinished lookup says so plainly
+                      // instead of passing for free.
+                      if (c.isFree)
+                        Pill('ยังไม่เคยผูก', color: C.limeText, bg: C.limeBg, fontSize: 10)
+                      else
+                        Pill('กำลังตรวจสอบ…', color: C.muted, bg: C.neutralBg, fontSize: 10),
+                    ],
                   ),
                   Text('สัญญาณ ${c.rssi ?? '—'} · อ่านได้ ${c.hits} ครั้ง',
                       style: TextStyle(fontSize: 11.5, color: C.faint)),
@@ -592,7 +714,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         bg = C.orangeBg;
         fg = C.orange;
         border = C.orangeBorder;
-        text = '📢 ยิงแท็ก แล้วเลือกใบที่จะผูกจากรายการ';
+        text = '📢 เหนี่ยวไกเพื่ออ่านแท็ก แล้วเลือกใบที่ "ยังไม่เคยผูก"';
         break;
       case _Step.success:
         bg = C.limeBg;

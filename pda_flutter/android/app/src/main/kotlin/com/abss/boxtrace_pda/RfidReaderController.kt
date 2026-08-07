@@ -1,11 +1,15 @@
 package com.abss.boxtrace_pda
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.ToneGenerator
+import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -352,6 +356,73 @@ class RfidReaderController(private val context: Context) :
         emit(mapOf("type" to "status", "state" to state, "message" to message))
     }
 
+    // ── Charging state ────────────────────────────────────────────────────
+    //
+    // The MC3390R firmware refuses *every* inventory command while the battery
+    // is charging (RFID_CHARGING_COMMAND_NOT_ALLOWED, see startInventory). On a
+    // terminal sitting in its cradle that is indistinguishable from a broken
+    // app: the trigger does nothing, the Settings test-fire button does
+    // nothing, and the only clue is a one-off error status that never clears
+    // itself once the terminal is picked back up.
+    //
+    // Watching the charger explicitly is what turns that into a state the UI
+    // can explain and — more importantly — recover from on its own. Undocking
+    // re-runs connect() because the reader has to be re-initialised after the
+    // firmware refused commands for the whole charging window; without it the
+    // operator has to find the "เชื่อมต่อใหม่" button in Settings by hand,
+    // which is exactly the complaint this fixes.
+    @Volatile private var charging = false
+    private var chargerWatchStarted = false
+
+    private val chargingReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_POWER_CONNECTED -> applyCharging(true)
+                Intent.ACTION_POWER_DISCONNECTED -> applyCharging(false)
+            }
+        }
+    }
+
+    private fun applyCharging(nowCharging: Boolean) {
+        if (charging == nowCharging) return
+        charging = nowCharging
+        emit(mapOf("type" to "charging", "charging" to nowCharging))
+        if (nowCharging) {
+            // Say it before the operator pulls a trigger that cannot work,
+            // rather than after — this is the whole point of watching.
+            status("error", "อยู่บนแท่นชาร์จ — เครื่องอ่าน RFID ถูกปิดชั่วคราวขณะชาร์จ ถอดออกจากแท่นเพื่อใช้งาน")
+        } else {
+            status("connecting", "ถอดออกจากแท่นชาร์จแล้ว — กำลังเปิดเครื่องอ่านอีกครั้ง…")
+            connect()
+        }
+    }
+
+    /** Sticky ACTION_BATTERY_CHANGED gives the state at startup, before any transition. */
+    private fun readInitialCharging(): Boolean = try {
+        val i = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val plugged = i?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        plugged != 0
+    } catch (e: Exception) {
+        Log.w(TAG, "readInitialCharging failed", e)
+        false
+    }
+
+    private fun startWatchingCharger() {
+        try {
+            context.registerReceiver(
+                chargingReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_POWER_CONNECTED)
+                    addAction(Intent.ACTION_POWER_DISCONNECTED)
+                },
+            )
+            charging = readInitialCharging()
+            emit(mapOf("type" to "charging", "charging" to charging))
+        } catch (e: Exception) {
+            Log.w(TAG, "startWatchingCharger failed", e)
+        }
+    }
+
     // ── MethodChannel.MethodCallHandler ───────────────────────────────────
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -409,6 +480,7 @@ class RfidReaderController(private val context: Context) :
         m["lastRssi"] = lastRssi
         m["lastError"] = lastError
         m["tidCount"] = tidCount
+        m["charging"] = charging
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -435,6 +507,13 @@ class RfidReaderController(private val context: Context) :
 
     // ── connect / configure ───────────────────────────────────────────────
     fun connect() {
+        // Idempotent, and cheap enough to just call on every connect() rather
+        // than needing its own init hook — the app has exactly one path that
+        // brings the reader up, so this is where the charger watch belongs.
+        if (!chargerWatchStarted) {
+            chargerWatchStarted = true
+            startWatchingCharger()
+        }
         if (isConnected()) {
             status("connected", "เชื่อมต่อแล้ว")
             return
@@ -651,6 +730,14 @@ class RfidReaderController(private val context: Context) :
     }
 
     fun startInventory() {
+        // Answer before the SDK does. The firmware would refuse this anyway
+        // (RFID_CHARGING_COMMAND_NOT_ALLOWED below), but only after a round
+        // trip that surfaces as "nothing happened" — this is what makes a
+        // trigger pull or a Settings test-fire on a cradled terminal say why.
+        if (charging) {
+            status("error", "อยู่บนแท่นชาร์จ — เครื่องอ่าน RFID ถูกปิดชั่วคราวขณะชาร์จ ถอดออกจากแท่นเพื่อใช้งาน")
+            return
+        }
         exec.execute {
             try {
                 Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
@@ -743,6 +830,14 @@ class RfidReaderController(private val context: Context) :
 
     fun dispose() {
         try {
+            if (chargerWatchStarted) {
+                chargerWatchStarted = false
+                try {
+                    context.unregisterReceiver(chargingReceiver)
+                } catch (e: Exception) {
+                    Log.w(TAG, "unregisterReceiver failed", e)
+                }
+            }
             disconnect()
             reader = null
             readers?.Dispose()
@@ -792,6 +887,7 @@ class RfidReaderController(private val context: Context) :
                 lastEpc = epc
                 lastRssi = t.getPeakRSSI().toInt()
                 batch.add(mapOf("epc" to epc, "rssi" to lastRssi))
+            }
 
             // The whole read event crosses the platform channel as one message.
             // A channel hop per tag was costing an event-loop turn each, so a

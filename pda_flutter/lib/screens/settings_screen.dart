@@ -392,6 +392,13 @@ class _RfidPanelState extends State<_RfidPanel> {
     final c = context.read<AppController>();
     if (pressed) {
       if (_testFiring) return;
+      // A cradled terminal refuses inventory at the firmware level, so
+      // lighting the button up here would claim a sweep that never starts —
+      // which is exactly what made this look broken. Say why instead.
+      if (c.rfidCharging) {
+        c.toastMsg('ยิงทดสอบไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน แล้วลองอีกครั้ง', ResultKind.warn);
+        return;
+      }
       setState(() => _testFiring = true);
       c.rfid.startInventory();
     } else {
@@ -415,6 +422,10 @@ class _RfidPanelState extends State<_RfidPanel> {
 
   Future<void> _startTest(AppController c) async {
     if (_testFiring) return;
+    if (c.rfidCharging) {
+      c.toastMsg('ยิงทดสอบไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน แล้วลองอีกครั้ง', ResultKind.warn);
+      return;
+    }
     setState(() => _testFiring = true);
     await c.rfid.startInventory();
   }
@@ -445,6 +456,10 @@ class _RfidPanelState extends State<_RfidPanel> {
 
   String _label(AppController c, LocaleController loc) {
     if (!c.rfid.supported) return loc.t('ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra');
+    // Outranks the connection state: while cradled the reader may well be
+    // "connected" and still refuse every command, and an operator reading
+    // "เชื่อมต่อเครื่องอ่านแล้ว" next to a dead trigger learns nothing.
+    if (c.rfidCharging) return loc.t('อยู่บนแท่นชาร์จ — ยิงแท็กไม่ได้ขณะชาร์จ');
     switch (c.rfidStatus.state) {
       case RfidState.connected:
         return loc.t('เชื่อมต่อเครื่องอ่านแล้ว');
@@ -481,7 +496,8 @@ class _RfidPanelState extends State<_RfidPanel> {
               Container(
                 width: 11,
                 height: 11,
-                decoration: BoxDecoration(color: _colorFor(c.rfidStatus.state), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                    color: c.rfidCharging ? C.orange : _colorFor(c.rfidStatus.state), shape: BoxShape.circle),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -492,7 +508,13 @@ class _RfidPanelState extends State<_RfidPanel> {
               // only makes sense as a recovery action for connecting/error/
               // disconnected/idle, and showing it regardless read as "this
               // needs attention" even while the reader was already fine.
-              if (c.rfidStatus.state != RfidState.connected)
+              // Hidden while cradled: reconnecting cannot fix a firmware
+              // refusal, and offering it there sends the operator round a
+              // loop that always fails instead of at the one thing that
+              // works — lifting the terminal off the charger, which now
+              // recovers on its own (see the charging watch in
+              // RfidReaderController).
+              if (c.rfidStatus.state != RfidState.connected && !c.rfidCharging)
                 OutlinedButton(
                   onPressed: () async {
                     await c.rfid.connect();
@@ -556,21 +578,48 @@ class _RfidPanelState extends State<_RfidPanel> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
-                    color: _testFiring ? C.limeBg : C.neutralBg,
+                    color: c.rfidCharging
+                        ? C.orangeBg
+                        : _testFiring
+                            ? C.limeBg
+                            : C.neutralBg,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _testFiring ? C.limeBorder : C.border2),
+                    border: Border.all(
+                        color: c.rfidCharging
+                            ? C.orangeBorder
+                            : _testFiring
+                                ? C.limeBorder
+                                : C.border2),
                   ),
                   alignment: Alignment.center,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeText : C.ink2),
+                      Icon(c.rfidCharging ? Icons.battery_charging_full : Icons.wifi_tethering,
+                          size: 17,
+                          color: c.rfidCharging
+                              ? C.orange
+                              : _testFiring
+                                  ? C.limeText
+                                  : C.ink2),
                       const SizedBox(width: 8),
-                      Text(_testFiring ? loc.t('กำลังยิงทดสอบ… แตะเพื่อหยุด') : loc.t('แตะเพื่อทดสอบยิง'),
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: _testFiring ? C.limeText : C.ink2)),
+                      Flexible(
+                        child: Text(
+                            c.rfidCharging
+                                ? loc.t('ยิงทดสอบไม่ได้ขณะชาร์จ — ยกออกจากแท่นก่อน')
+                                : _testFiring
+                                    ? loc.t('กำลังยิงทดสอบ… แตะเพื่อหยุด')
+                                    : loc.t('แตะเพื่อทดสอบยิง'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: c.rfidCharging
+                                    ? C.orange
+                                    : _testFiring
+                                        ? C.limeText
+                                        : C.ink2)),
+                      ),
                     ],
                   ),
                 ),
