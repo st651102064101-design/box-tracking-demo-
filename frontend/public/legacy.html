@@ -114,7 +114,11 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 /* ============================================================ NAV ============================================================ */
 .chrome{position:sticky;top:0;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
   backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--line);
-  padding:env(safe-area-inset-top) 0 0;}
+  padding:env(safe-area-inset-top) 0 0;transition:transform .28s var(--ease);}
+/* hide the top navbar+tabs on scroll-down, reveal on scroll-up — only in the
+   horizontal "top" layout; the sidebar layout's nav is vertical and stays put */
+html:not([data-layout="sidebar"]).nav-hidden .chrome,
+html:not([data-layout="sidebar"]).nav-hidden .navwrap{transform:translateY(-100%);}
 .chrome-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:13px 22px;}
 .brand{display:flex;align-items:center;gap:12px;cursor:pointer;}
 .brand .mark{width:30px;height:30px;border-radius:8px;background:var(--ink);color:var(--bg);
@@ -163,7 +167,7 @@ html[data-layout="sidebar"] .who-menu{position:fixed;top:0;right:0;left:auto;bot
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
 .iconbtn:active{transform:scale(.9);}
 
-.navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;
+.navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;transition:transform .28s var(--ease);
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border-bottom:.5px solid var(--line);}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
@@ -1614,7 +1618,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <span class="iss-ic">⊟</span>
     <input id="invScan" placeholder="สแกนบาร์โค้ด / บาร์โค้ด เพื่อค้นหาด่วน แล้วกด Enter" autocomplete="off">
     <button class="btn accent sm" id="btnInvScan">ค้นหา</button>
-    
+    <button class="btn pos sm" id="btnInvAddBox" onclick="openBoxRegModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ลงทะเบียนกล่องใหม่</button>
   </div>
 
   <div class="invtoolbar reveal d2">
@@ -1767,105 +1771,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row no-print reveal" style="margin-bottom:22px;">
     <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
-    <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
     <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค<span class="sf-badge" data-stab-badge="loc"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
-  </div>
-
-  <div class="ssec" id="ssec-box" style="display:none;">
-    <div class="card hover">
-      <h3>ลงทะเบียนกล่อง (Barcode)</h3>
-      <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "ในคลัง" พร้อมใช้งาน</p>
-
-      <!-- Mode Selector -->
-      <div class="inv-view-sw" id="boxModeSw" style="margin-bottom:20px;">
-        <button class="ivs-btn active" data-mode="single" id="bModeBtn_single"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg></span> เพิ่มทีละใบ</button>
-        <button class="ivs-btn" data-mode="batch" id="bModeBtn_batch">⧉ สร้างเป็นชุด</button>
-      </div>
-
-      <!-- Single Mode: บาร์โค้ด + Box Type -->
-      <div id="boxSingleWrap">
-        <div class="grid g3">
-          <div class="field">
-            <label>บาร์โค้ด (สร้างอัตโนมัติ) <span class="req">*</span></label>
-            <div class="auto-tag-row">
-              <input id="bTag" placeholder="BTX-..." readonly>
-              <button type="button" class="iconbtn" id="btnRegenTag" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
-              <button type="button" class="iconbtn" id="btnCopyTag" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
-              <button type="button" class="btn ghost sm" id="btnOverrideTag">แก้เอง</button>
-            </div>
-            <div class="tag" style="margin-top:5px;">กด <span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> เพื่อสร้างใหม่ · กด "แก้เอง" ถ้าต้องการระบุรหัสเอง</div>
-          </div>
-          <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bType"></select><div id="bTypeEmpty" style="display:none;margin-top:6px;"></div></div>
-        </div>
-      </div>
-
-      <!-- Batch Mode: Box Type + Prefix + Start + Qty -->
-      <div id="boxBatchWrap" style="display:none;">
-        <div class="grid g3" style="margin-bottom:0;">
-          <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bTypeBatch"></select></div>
-          <div class="field"><label>สร้างเป็นชุด — Prefix <span class="req">*</span></label>
-            <input id="bPrefix" list="dl-prefix" placeholder="CRT-" autocomplete="off">
-            <datalist id="dl-prefix"></datalist>
-            <div class="tag" style="margin-top:5px;" id="bPrefixHint"></div>
-          </div>
-          <div class="field"><label>เริ่มเลขที่</label><input id="bStart" type="number" min="1" value="1"></div>
-          <div class="field"><label>จำนวน <span class="req">*</span></label><input id="bQty" type="number" min="1" placeholder="5"></div>
-        </div>
-      </div>
-
-      <!-- Lot / Batch + Expiry (optional — enables FEFO allocation) -->
-      <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select><div id="bSupplierHint" style="display:none;"></div>
-          <div class="hint">ผังงานเริ่มที่ "Supplier ส่งกล่องมาใหม่" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร</div></div>
-        <div class="field">
-          <label>Lot / Batch (สร้างอัตโนมัติ)</label>
-          <div class="auto-tag-row">
-            <input id="bLot" placeholder="วันที่-คลัง-กะ-ลำดับ" readonly>
-            <button type="button" class="iconbtn" id="btnRegenLot" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
-            <button type="button" class="iconbtn" id="btnCopyLot" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
-            <button type="button" class="btn ghost sm" id="btnOverrideLot">แก้เอง</button>
-          </div>
-          <div class="hint">ประกอบจาก วันที่ผลิต · รหัสคลัง · กะการทำงาน (คำนวณจากเวลาปัจจุบัน) · ลำดับชุด — กด "แก้เอง" ถ้าต้องการระบุเอง</div>
-        </div>
-        <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date"></div>
-        <div class="field" style="align-self:end;"><div class="tag" style="margin:0;">มี "วันหมดอายุ" ระบบจะจ่ายออกแบบ <b>FEFO</b> (หมดอายุก่อน–ออกก่อน) อัตโนมัติ</div></div>
-      </div>
-
-      <div class="row" style="margin-top:20px;">
-        <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
-        <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
-        <button class="btn gray" id="btnCancelBox" style="display:none;">ยกเลิกแก้ไข</button>
-      </div>
-    </div>
-    <div class="tablecard">
-      <div class="tablehead"><h4>กล่องที่ลงทะเบียน</h4><span class="tag" id="cntBox"></span><div class="spacer"></div>
-        <select id="filtBoxStatus" style="width:auto;">
-          <option value="">ทุกสถานะ</option>
-          <option value="pending">รอติดบาร์โค้ด</option>
-          <option value="warehouse">ในคลัง</option>
-          <option value="hold">พักใช้งาน (Hold)</option>
-          <option value="damage">ชำรุด (Damage)</option>
-          <option value="out">ออกไปแล้ว</option>
-          <option value="lost">สูญหาย</option>
-        </select>
-        <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
-        <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
-        <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-        <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
-        <tbody id="boxBody"></tbody></table></div>
-      <div class="bulkbar" id="bulkBox" style="display:none;">
-        <span class="bcnt" id="bulkBoxCnt"></span>
-        <button class="btn sm ghost" id="bulkBoxLabel">พิมพ์ฉลาก</button>
-        <button class="btn sm red" id="bulkBoxDel">ลบที่เลือก</button>
-        <button class="btn sm gray" id="bulkBoxClear">ยกเลิก</button>
-      </div>
-    </div>
   </div>
 
   <div class="ssec" id="ssec-btype">
@@ -2282,6 +2192,112 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
 <div class="toast-zone" id="toastZone"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
+
+<!-- Box registration — reachable from the green button on Inventory; kept out
+     of Setup/Master data entirely (not just hidden) per the "no box
+     registration under master data" rule. Lives in its own modal (not the
+     shared #modal, whose sheet is rebuilt via innerHTML by other dialogs)
+     so this form's DOM nodes and event bindings stay put across opens. -->
+<div class="modal" id="boxRegModal">
+  <div class="backdrop" data-close></div>
+  <div class="sheet" style="width:900px;">
+    <div class="mhead"><h3>ลงทะเบียนกล่องใหม่</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>
+    <div class="mbody">
+      <div id="ssec-box">
+        <div class="card hover">
+          <h3>ลงทะเบียนกล่อง (Barcode)</h3>
+          <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "ในคลัง" พร้อมใช้งาน</p>
+
+          <!-- Mode Selector -->
+          <div class="inv-view-sw" id="boxModeSw" style="margin-bottom:20px;">
+            <button class="ivs-btn active" data-mode="single" id="bModeBtn_single"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg></span> เพิ่มทีละใบ</button>
+            <button class="ivs-btn" data-mode="batch" id="bModeBtn_batch">⧉ สร้างเป็นชุด</button>
+          </div>
+
+          <!-- Single Mode: บาร์โค้ด + Box Type -->
+          <div id="boxSingleWrap">
+            <div class="grid g3">
+              <div class="field">
+                <label>บาร์โค้ด (สร้างอัตโนมัติ) <span class="req">*</span></label>
+                <div class="auto-tag-row">
+                  <input id="bTag" placeholder="BTX-..." readonly>
+                  <button type="button" class="iconbtn" id="btnRegenTag" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+                  <button type="button" class="iconbtn" id="btnCopyTag" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+                  <button type="button" class="btn ghost sm" id="btnOverrideTag">แก้เอง</button>
+                </div>
+                <div class="tag" style="margin-top:5px;">กด <span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> เพื่อสร้างใหม่ · กด "แก้เอง" ถ้าต้องการระบุรหัสเอง</div>
+              </div>
+              <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bType"></select><div id="bTypeEmpty" style="display:none;margin-top:6px;"></div></div>
+            </div>
+          </div>
+
+          <!-- Batch Mode: Box Type + Prefix + Start + Qty -->
+          <div id="boxBatchWrap" style="display:none;">
+            <div class="grid g3" style="margin-bottom:0;">
+              <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bTypeBatch"></select></div>
+              <div class="field"><label>สร้างเป็นชุด — Prefix <span class="req">*</span></label>
+                <input id="bPrefix" list="dl-prefix" placeholder="CRT-" autocomplete="off">
+                <datalist id="dl-prefix"></datalist>
+                <div class="tag" style="margin-top:5px;" id="bPrefixHint"></div>
+              </div>
+              <div class="field"><label>เริ่มเลขที่</label><input id="bStart" type="number" min="1" value="1"></div>
+              <div class="field"><label>จำนวน <span class="req">*</span></label><input id="bQty" type="number" min="1" placeholder="5"></div>
+            </div>
+          </div>
+
+          <!-- Lot / Batch + Expiry (optional — enables FEFO allocation) -->
+          <div class="grid g3" style="margin-top:14px;">
+            <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select><div id="bSupplierHint" style="display:none;"></div>
+              <div class="hint">ผังงานเริ่มที่ "Supplier ส่งกล่องมาใหม่" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร</div></div>
+            <div class="field">
+              <label>Lot / Batch (สร้างอัตโนมัติ)</label>
+              <div class="auto-tag-row">
+                <input id="bLot" placeholder="วันที่-คลัง-กะ-ลำดับ" readonly>
+                <button type="button" class="iconbtn" id="btnRegenLot" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+                <button type="button" class="iconbtn" id="btnCopyLot" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+                <button type="button" class="btn ghost sm" id="btnOverrideLot">แก้เอง</button>
+              </div>
+              <div class="hint">ประกอบจาก วันที่ผลิต · รหัสคลัง · กะการทำงาน (คำนวณจากเวลาปัจจุบัน) · ลำดับชุด — กด "แก้เอง" ถ้าต้องการระบุเอง</div>
+            </div>
+            <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date"></div>
+            <div class="field" style="align-self:end;"><div class="tag" style="margin:0;">มี "วันหมดอายุ" ระบบจะจ่ายออกแบบ <b>FEFO</b> (หมดอายุก่อน–ออกก่อน) อัตโนมัติ</div></div>
+          </div>
+
+          <div class="row" style="margin-top:20px;">
+            <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
+            <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
+            <button class="btn gray" id="btnCancelBox" style="display:none;">ยกเลิกแก้ไข</button>
+          </div>
+        </div>
+        <div class="tablecard">
+          <div class="tablehead"><h4>กล่องที่ลงทะเบียน</h4><span class="tag" id="cntBox"></span><div class="spacer"></div>
+            <select id="filtBoxStatus" style="width:auto;">
+              <option value="">ทุกสถานะ</option>
+              <option value="pending">รอติดบาร์โค้ด</option>
+              <option value="warehouse">ในคลัง</option>
+              <option value="hold">พักใช้งาน (Hold)</option>
+              <option value="damage">ชำรุด (Damage)</option>
+              <option value="out">ออกไปแล้ว</option>
+              <option value="lost">สูญหาย</option>
+            </select>
+            <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
+            <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
+            <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
+            <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+          </div>
+          <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
+            <tbody id="boxBody"></tbody></table></div>
+          <div class="bulkbar" id="bulkBox" style="display:none;">
+            <span class="bcnt" id="bulkBoxCnt"></span>
+            <button class="btn sm ghost" id="bulkBoxLabel">พิมพ์ฉลาก</button>
+            <button class="btn sm red" id="bulkBoxDel">ลบที่เลือก</button>
+            <button class="btn sm gray" id="bulkBoxClear">ยกเลิก</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
 
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
@@ -2824,6 +2840,10 @@ function confirmA(title,body,okLabel,danger){return new Promise(function(res){va
 function openModal(h){$('#modalSheet').innerHTML=h;$('#modal').classList.add('show');renderLocDatalist();}
 function closeModal(){$('#modal').classList.remove('show');}
 $('#modal').addEventListener('click',function(e){if(e.target.closest('[data-close]'))closeModal();});
+function openBoxRegModal(){$('#boxRegModal').classList.add('show');if(typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');}
+function closeBoxRegModal(){$('#boxRegModal').classList.remove('show');}
+window.openBoxRegModal=openBoxRegModal;
+$('#boxRegModal').addEventListener('click',function(e){if(e.target.closest('[data-close]'))closeBoxRegModal();});
 /* ===== forced (non-dismissible) modal =====
    Used when a Gate screen can't function at all (no warehouse/gate configured
    yet) — the person MUST go set one up before the modal will let go, so they
@@ -2881,6 +2901,22 @@ function goSetup(stab){
 }
 window.goSetup=goSetup;
 $all('#nav button[data-tab]').forEach(function(b){b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
+/* hide navbar on scroll-down, reveal on scroll-up — ignores tiny jitters
+   (<6px) and stays visible near the very top so the header doesn't vanish
+   before the page has actually scrolled. */
+(function(){
+  var lastY=window.scrollY||0,ticking=false;
+  function onScroll(){
+    var y=window.scrollY||0,dy=y-lastY;
+    if(y<80){document.documentElement.classList.remove('nav-hidden');}
+    else if(dy>6){document.documentElement.classList.add('nav-hidden');}
+    else if(dy<-6){document.documentElement.classList.remove('nav-hidden');}
+    lastY=y;ticking=false;
+  }
+  window.addEventListener('scroll',function(){
+    if(!ticking){requestAnimationFrame(onScroll);ticking=true;}
+  },{passive:true});
+})();
 window.addEventListener('resize',function(){
   /* re-evaluate the sidebar<->top threshold and keep the vertical nav offset in sync */
   var eff=effectiveLayout();
@@ -2891,7 +2927,6 @@ window.addEventListener('resize',function(){
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
   $all('.stab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});$('#ssec-'+b.dataset.stab).style.display='block';
-  if(b.dataset.stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
     if(b.dataset.stab==='loc'){renderLocMaster();suggestSingleZone();suggestSingleRack();}
 });});
 
@@ -3923,6 +3958,7 @@ function openBoxActionModal(tag){
     :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
     :b.status==='pending'&&b.labeled===true?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>'
     :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
+    :b.status==='hold'&&!(b.location&&b.location.wh)?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></span>จุดพักสินค้า (Hold Area) — รอตรวจสอบ</span>'
     :locShort(b.location);
 
   var actions=[];
@@ -8258,6 +8294,12 @@ function invLocText(b) {
   if (b.status === 'pending' && b.labeled === true) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>';
   if (b.status === 'pending') return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
   var loc = b.location || {};
+  /* กล่อง Hold ที่ยังไม่ถูกจัดเก็บขึ้นแร็ค (เช่น รับคืนจากลูกค้าแล้วพักไว้ตรวจสอบ)
+     ไม่ควรขึ้น "ยังไม่ระบุตำแหน่ง" เหมือนกล่องที่ยังไม่เคย Gate In — ตามมาตรฐาน WMS
+     กล่องเหล่านี้อยู่ที่ Hold/Quarantine Area จริง ๆ ไม่ใช่ตำแหน่งที่ไม่รู้จัก */
+  if (b.status === 'hold' && !loc.wh) {
+    return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></span>จุดพักสินค้า (Hold Area) — รอตรวจสอบ</span>';
+  }
   if (!loc.wh) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง</span>';
   if (isStagingLoc(loc)) {
     return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>' + stagingLabel(loc) + ' — รอ Putaway</span>';
