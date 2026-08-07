@@ -67,37 +67,88 @@ boxesRouter.get(
 );
 
 /**
- * Suggests the next tag for a box type, counted from the highest tag
- * actually in the DB right now under that type's prefix — not from
- * whatever a client's own locally-cached box list happens to hold. A
- * second device (or a second tab) that hasn't refreshed since another one
- * just registered a box would otherwise suggest a tag that's already
- * taken; asking the DB directly, right before showing the suggestion, is
- * what "count from the latest code in the DB" actually means. Mirrors
- * legacy.html's tagPrefixForType()/nextTagForType() exactly, so the web
- * and the PDA app suggest the same tag for the same type. This is only a
- * *suggestion* — POST / above still rejects a genuine duplicate tag with
- * 409 regardless of where it came from, which is the real uniqueness
- * guarantee.
+ * Suggests the next box tag, continuing the barcode series that is actually
+ * in the DB right now — not one derived from the box type's id, and not one
+ * counted off whatever a client's locally-cached box list happens to hold. A
+ * second device (or tab) that hasn't refreshed since another one registered a
+ * box would otherwise suggest a tag that's already taken.
+ *
+ * Deriving the prefix from the type id (BT-001 -> "BT001-") was wrong: a real
+ * warehouse already runs its own barcode series (BOX-001, BOX-002, ...), and
+ * inventing a second parallel series off the type id is not what "count from
+ * the latest code in the DB" means to the person looking at the screen.
+ *
+ * Mirrors legacy.html's tagSeriesFor()/nextTagForType() rule exactly, so the
+ * web and the PDA suggest the same tag:
+ *   - group tags by their non-numeric prefix, case-insensitively (BOX-010 and
+ *     box-010 are one series, not two)
+ *   - prefer the series this type already uses; fall back to the whole DB when
+ *     the type has no boxes yet
+ *   - pick the most-USED series, not the most recent, so a handful of stray
+ *     test tags can't drag the whole warehouse onto a new series; ties break
+ *     on recency
+ *   - the next number counts across every type sharing that prefix (one
+ *     barcode series per warehouse), and the zero-padding width comes from the
+ *     highest existing tag, so BOX-009 -> BOX-010, never BOX-10
+ *
+ * Still only a *suggestion* — POST / above rejects a genuine duplicate with
+ * 409 regardless of where the tag came from; that's the real guarantee.
  */
 boxesRouter.get(
   '/next-tag',
   asyncHandler(async (req, res) => {
     const typeId = typeof req.query.type === 'string' ? req.query.type : '';
-    const prefix = typeId ? typeId.toUpperCase().replace(/[^A-Z0-9]/g, '') + '-' : '';
-    if (!prefix) return res.json({ tag: null });
+    if (!typeId) return res.json({ tag: null });
     const db = getDb();
-    const rows = await db
-      .select({ tag: boxes.tag })
-      .from(boxes)
-      .where(sql`${boxes.tag} LIKE ${prefix + '%'}`);
-    let max = 0;
-    const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+    const rows = await db.select({ tag: boxes.tag, type: boxes.type, updatedAt: boxes.updatedAt }).from(boxes);
+
+    type Series = {
+      variants: Map<string, number>;
+      count: number;
+      typeCount: number;
+      max: number;
+      width: number;
+      ts: number;
+    };
+    const all = new Map<string, Series>();
     for (const row of rows) {
-      const m = re.exec(row.tag);
-      if (m) max = Math.max(max, parseInt(m[1]!, 10));
+      const m = /^(.*\D)(\d+)$/.exec(row.tag ?? '');
+      if (!m) continue;
+      const pre = m[1]!;
+      const digits = m[2]!;
+      const key = pre.toLowerCase();
+      let e = all.get(key);
+      if (!e) {
+        e = { variants: new Map(), count: 0, typeCount: 0, max: 0, width: digits.length, ts: 0 };
+        all.set(key, e);
+      }
+      e.variants.set(pre, (e.variants.get(pre) ?? 0) + 1);
+      e.count++;
+      if (row.type === typeId) e.typeCount++;
+      const n = parseInt(digits, 10);
+      if (n > e.max) {
+        e.max = n;
+        e.width = digits.length;
+      }
+      const ts = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+      if (ts > e.ts) e.ts = ts;
     }
-    res.json({ tag: `${prefix}${max + 1}` });
+
+    const list = [...all.values()];
+    if (!list.length) {
+      // Empty DB — nothing to learn from, so seed a series off the type id.
+      const seed = typeId.toUpperCase().replace(/[^A-Z0-9]/g, '') + '-';
+      return res.json({ tag: `${seed}1` });
+    }
+    const scoped = list.filter((e) => e.typeCount > 0);
+    const useScoped = scoped.length > 0;
+    const pick = (useScoped ? scoped : list).sort((a, b) => {
+      const ka = useScoped ? a.typeCount : a.count;
+      const kb = useScoped ? b.typeCount : b.count;
+      return kb - ka || b.ts - a.ts;
+    })[0]!;
+    const prefix = [...pick.variants.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+    res.json({ tag: `${prefix}${String(pick.max + 1).padStart(pick.width, '0')}` });
   }),
 );
 

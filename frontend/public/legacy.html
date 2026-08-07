@@ -3200,17 +3200,59 @@ function genTagId(){var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';var d=new Date(
 /* Unified numbering: single-add and batch-add must produce tags in the SAME sequence
    for a given box type (e.g. BT002-05 from a batch, then BT002-06 from single-add next) —
    both derive the same prefix from the type id and continue the same running counter. */
+/* ใช้เป็น "ชุดตั้งต้น" เท่านั้น — ตอนที่ยังไม่มีกล่องใน DB ให้เรียนรู้เลยสักใบ */
 function tagPrefixForType(typeId){return typeId?typeId.toUpperCase().replace(/[^A-Z0-9]/g,'')+'-':'';}
+
+/* ===== ชุดเลขบาร์โค้ดกล่อง — อ่านจากของจริงใน DB ไม่ปั้นจากรหัสประเภทกล่อง =====
+   คลังที่ใช้งานจริงมีชุดเลขบาร์โค้ดของตัวเองอยู่แล้ว (BOX-001, BOX-002, …) การเดา
+   prefix จากรหัสประเภท (BT-001 → "BT001-") จะแตกชุดเลขใหม่ซ้อนขึ้นมาอีกชุด ทั้งที่
+   ผู้ใช้คาดว่าระบบจะนับต่อจากเลขล่าสุดที่มีอยู่จริง
+
+   เลือก prefix ที่ "ใช้มากที่สุด" ไม่ใช่ "ใช้ล่าสุด" — กล่องทดสอบไม่กี่ใบที่ยิงผิดชุด
+   เข้ามาจะได้ไม่ลากชุดเลขของทั้งคลังเปลี่ยนตาม เท่ากันค่อยตัดสินด้วยเวลาล่าสุด
+
+   เลขถัดไปนับข้ามทุกประเภทที่ใช้ prefix เดียวกัน เพราะบาร์โค้ดเป็นชุดเดียวของทั้งคลัง
+   ไม่ได้แยกตามประเภทกล่อง (BOX-010 เป็นลังเหล็ก ก็ยังกินเลข 010 ของชุด BOX- อยู่ดี)
+   และเทียบแบบไม่สนตัวพิมพ์เล็ก-ใหญ่ ไม่งั้น box-010 กับ BOX-010 จะถูกนับเป็นคนละชุด
+   แล้วระบบจะแนะนำเลขที่มีคนใช้ไปแล้ว
+   ความกว้างของเลขอ่านจากใบที่เลขสูงสุด: BOX-009 → BOX-010 ไม่ใช่ BOX-10 */
+function tagSeriesFor(typeId){
+  var all={};
+  Object.values(S.boxes).forEach(function(b){
+    var m=String(b.tag||'').match(/^(.*\D)(\d+)$/);
+    if(!m)return;
+    var pre=m[1],k=pre.toLowerCase(),n=parseInt(m[2],10),ts=b.regAt||'';
+    var e=all[k]||(all[k]={variants:{},count:0,typeCount:0,max:0,width:m[2].length,ts:''});
+    e.variants[pre]=(e.variants[pre]||0)+1;
+    e.count++;
+    if(typeId&&b.type===typeId)e.typeCount++;
+    if(n>e.max){e.max=n;e.width=m[2].length;}
+    if(ts>e.ts)e.ts=ts;
+  });
+  var list=Object.keys(all).map(function(k){return all[k];});
+  if(!list.length)return null;
+  /* ชุดที่กล่องประเภทนี้ใช้อยู่มาก่อน ถ้าประเภทนี้ยังไม่เคยมีกล่องเลยค่อยดูทั้งระบบ */
+  var scoped=list.filter(function(e){return e.typeCount>0;});
+  var useScoped=scoped.length>0;
+  var pick=(useScoped?scoped:list).sort(function(a,b){
+    var ka=useScoped?a.typeCount:a.count, kb=useScoped?b.typeCount:b.count;
+    return kb-ka||(a.ts<b.ts?1:(a.ts>b.ts?-1:0));
+  })[0];
+  /* ตัวสะกด prefix เอาแบบที่ใช้บ่อยที่สุดในชุด (BOX- ชนะ box- ที่พิมพ์ผิดมาใบเดียว) */
+  pick.pre=Object.keys(pick.variants).sort(function(a,b){return pick.variants[b]-pick.variants[a];})[0];
+  return pick;
+}
+window.tagSeriesFor=tagSeriesFor;
+/* prefix + ความกว้างเลข ที่ควรใช้กับกล่องประเภทนี้ (มีของใน DB ให้เรียนก็ใช้ของจริง) */
+function tagSeriesPrefix(typeId){var s=tagSeriesFor(typeId);return s?s.pre:tagPrefixForType(typeId);}
+function tagSeriesWidth(typeId){var s=tagSeriesFor(typeId);return s?s.width:0;}
+function tagSeriesNextNum(typeId){var s=tagSeriesFor(typeId);return s?s.max+1:1;}
+window.tagSeriesPrefix=tagSeriesPrefix;window.tagSeriesWidth=tagSeriesWidth;window.tagSeriesNextNum=tagSeriesNextNum;
 function nextTagForType(typeId){
   if(!typeId)return genTagId();
-  var prefix=tagPrefixForType(typeId);
-  var max=0;
-  Object.keys(S.boxes).forEach(function(id){
-    if(id.indexOf(prefix)!==0)return;
-    var m=id.slice(prefix.length).match(/^(\d+)$/);
-    if(m){var n=parseInt(m[1],10);if(n>max)max=n;}
-  });
-  return prefix+String(max+1);
+  var s=tagSeriesFor(typeId);
+  if(!s)return tagPrefixForType(typeId)+'1';   /* DB ยังว่าง — เริ่มชุดใหม่จากรหัสประเภท */
+  return s.pre+pad(s.max+1,s.width);
 }
 function refreshTagId(){
   var t=$('#bTag');if(!t||t._override)return;
@@ -3334,7 +3376,7 @@ $('#btnAddBox').onclick = function() {
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
     var r = createBoxes({mode:'batch',type:type,prefix:val('bPrefix')||'BOX-',start:num('bStart')||1,qty:num('bQty')||0,
-      lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
+      width:tagSeriesWidth(type),lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
     if (!r.ok) return toast('สร้างไม่สำเร็จ', r.err, 'err');
     toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + r.tags.length + ' ใบ · รอติดบาร์โค้ด'
       + (r.dup ? (' · ข้าม ' + r.dup + ' ใบ (บาร์โค้ดซ้ำ)') : '')); renderPrefixDatalist(); renderAll();
@@ -3375,9 +3417,13 @@ function createBoxes(o){
     var pre=o.prefix||'BOX-', start=o.start||1, qty=o.qty||0;
     if(qty<=0)return {ok:false,err:'ยังไม่ได้ระบุจำนวน'};
     if(qty>2000)return {ok:false,err:'จำนวนมากเกินไป — สูงสุด 2000 ใบต่อครั้ง'};
-    for(var i=0;i<qty;i++)mk(pre+String(start+i),'สร้างเป็นชุด');
+    /* เติมศูนย์หน้าเลขให้เท่าชุดเดิม ไม่งั้นจะได้ BOX-11 มาต่อท้าย BOX-010 ซึ่งเรียง
+       ผิดลำดับทั้งในตารางและบนสติกเกอร์ (width=0 = ไม่เติม รักษาพฤติกรรมเดิม) */
+    var w=o.width||0;
+    var fmt=function(n){return w?pad(n,w):String(n);};
+    for(var i=0;i<qty;i++)mk(pre+fmt(start+i),'สร้างเป็นชุด');
     if(!tags.length)return {ok:false,err:'บาร์โค้ดในช่วงนี้มีอยู่ในระบบครบแล้วทุกใบ'};
-    auditEntry('CREATE',USER,pre+String(start)+'…'+pre+String(start+qty-1),'สร้างเป็นชุด · '+typeName(type),null,
+    auditEntry('CREATE',USER,pre+fmt(start)+'…'+pre+fmt(start+qty-1),'สร้างเป็นชุด · '+typeName(type),null,
       {type:type,value:value,qty:tags.length,supplier:sup,tags:tags});
   }else{
     if(!o.tag)return {ok:false,err:'ยังไม่ได้กรอกบาร์โค้ด'};
@@ -3521,10 +3567,10 @@ function wzBody1(){
       +'<button class="ivs-btn'+(single?'':' active')+'" onclick="wzSetMode(\'batch\')">⧉ สร้างเป็นชุด</button>'
     +'</div>'
     +(single
-      ?'<div class="field"><label>บาร์โค้ด <span class="req">*</span></label><input id="wzTag" value="'+esc(nextTagForType(t))+'"><div class="hint">สร้างจากรหัสประเภทกล่อง + ลำดับถัดไป — แก้เองได้</div></div>'
+      ?'<div class="field"><label>บาร์โค้ด <span class="req">*</span></label><input id="wzTag" value="'+esc(nextTagForType(t))+'"><div class="hint">นับต่อจากบาร์โค้ดล่าสุดในระบบ — แก้เองได้</div></div>'
       :'<div class="grid g3">'
-        +'<div class="field"><label>Prefix <span class="req">*</span></label><input id="wzPrefix" value="'+esc(tagPrefixForType(t))+'"></div>'
-        +'<div class="field"><label>เริ่มเลขที่</label><input id="wzStart" type="number" min="1" value="'+esc(wzNextStart(t))+'"></div>'
+        +'<div class="field"><label>Prefix <span class="req">*</span></label><input id="wzPrefix" value="'+esc(tagSeriesPrefix(t))+'"></div>'
+        +'<div class="field"><label>เริ่มเลขที่</label><input id="wzStart" type="number" min="1" value="'+esc(tagSeriesNextNum(t))+'"></div>'
         +'<div class="field"><label>จำนวน <span class="req">*</span></label><input id="wzQty" type="number" min="1" placeholder="10"></div>'
       +'</div><div class="tag" id="wzBatchHint" style="margin-top:2px;"></div>')
     +'<div class="grid g3" style="margin-top:16px;">'
@@ -3534,7 +3580,6 @@ function wzBody1(){
     +'</div>'
   +'</div>';
 }
-function wzNextStart(t){var nx=nextTagForType(t),p=tagPrefixForType(t);var m=nx.slice(p.length).match(/^(\d+)$/);return m?parseInt(m[1],10):1;}
 function wzSetMode(m){wzCapture1();WZ.mode=m;renderWz();}
 window.wzSetMode=wzSetMode;
 /* เก็บค่าที่พิมพ์ไว้ก่อน re-render จะได้ไม่หายตอนสลับโหมด/เปลี่ยนประเภท */
@@ -3558,8 +3603,9 @@ function wzBind1(){
 }
 function wzBatchHint(){
   var h=$('#wzBatchHint');if(!h)return;
-  var p=val('wzPrefix'),s=num('wzStart')||1,q=num('wzQty')||0;
-  h.textContent=(!p||q<=0)?'':(q===1?('จะสร้าง: '+p+s):('จะสร้าง: '+p+s+' … '+p+(s+q-1)+' ('+q+' ใบ)'));
+  var p=val('wzPrefix'),s=num('wzStart')||1,q=num('wzQty')||0,w=tagSeriesWidth(WZ.type);
+  var f=function(n){return w?pad(n,w):String(n);};
+  h.textContent=(!p||q<=0)?'':(q===1?('จะสร้าง: '+p+f(s)):('จะสร้าง: '+p+f(s)+' … '+p+f(s+q-1)+' ('+q+' ใบ)'));
 }
 function wzFoot1(){
   return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ยกเลิก</button><div class="spacer"></div>'
@@ -3569,7 +3615,7 @@ function wzDo1(){
   wzCapture1();
   var o={type:WZ.type,wh:WZ.wh,supplier:WZ.supplier||'',lot:WZ.lot||'',expiry:WZ.expiry||''};
   if(WZ.mode==='single'){o.mode='single';o.tag=val('wzTag');}
-  else{o.mode='batch';o.prefix=val('wzPrefix');o.start=num('wzStart')||1;o.qty=num('wzQty')||0;}
+  else{o.mode='batch';o.prefix=val('wzPrefix');o.start=num('wzStart')||1;o.qty=num('wzQty')||0;o.width=tagSeriesWidth(WZ.type);}
   var r=createBoxes(o);
   if(!r.ok)return toast('สร้างกล่องไม่สำเร็จ',r.err,'err');
   WZ.tags=r.tags;WZ.step=2;
@@ -3758,7 +3804,8 @@ function updateBatchPreview(){
   var pre=val('bPrefix');var start=num('bStart')||1;var qty=num('bQty')||0;
   var hint=document.getElementById('bPrefixHint');if(!hint)return;
   if(!pre||qty<=0){hint.textContent='';return;}
-  var first=pre+String(start);var last=pre+String(start+qty-1);
+  var w=tagSeriesWidth(val('bTypeBatch'));var f=function(n){return w?pad(n,w):String(n);};
+  var first=pre+f(start);var last=pre+f(start+qty-1);
   hint.textContent=qty===1?('จะสร้าง: '+first):('จะสร้าง: '+first+' … '+last+' ('+qty+' ใบ)');
 }
 
@@ -3767,10 +3814,10 @@ function syncPrefixFromBatchType(){
   if(!bTypeBatch||!bPrefix)return;
   var typeId=bTypeBatch.value;
   if(typeId){
-    bPrefix.value=tagPrefixForType(typeId);
+    bPrefix.value=tagSeriesPrefix(typeId);
     /* continue the same running number the single-add mode would use next,
        so batch and single-add for this type never collide/diverge */
-    if(bStart){var nextTag=nextTagForType(typeId);var m=nextTag.slice(bPrefix.value.length).match(/^(\d+)$/);if(m)bStart.value=parseInt(m[1],10);}
+    if(bStart)bStart.value=tagSeriesNextNum(typeId);
   }
   updateBatchPreview();
 }
@@ -11075,24 +11122,24 @@ function openColumnMapModal(opts){
       return id;
     };
   }
-  /* Box tags aren't a flat sequence — they're per-type-prefix counters
-     (nextTagForType scans live S.boxes for TYPEPREFIX-NN). Import can't
+  /* Box tags aren't a flat sequence — they're prefix counters. Import can't
      write rows into S.boxes mid-preview, so this keeps its own counters,
-     seeded from S.boxes once, mirroring tagPrefixForType's exact prefix
-     rule and pad(...,2) width so the sequence a batch import produces
-     continues seamlessly from — and into — manual single/batch add. */
+     seeded once from tagSeriesFor() (the same "learn the series that's
+     actually in the DB" rule single/batch add uses) so the sequence a batch
+     import produces continues seamlessly from — and into — manual add.
+     Counters are keyed case-insensitively for the same reason tagSeriesFor
+     is: BOX-010 and box-010 are one series, not two. */
   function makeBoxTagGen(){
     var counters={};
-    Object.keys(S.boxes).forEach(function(id){
-      var m=id.match(/^([A-Z0-9]+-)(\d+)$/);
-      if(m){var p=m[1],n=parseInt(m[2],10);if(!counters[p]||n>counters[p])counters[p]=n;}
-    });
     return function(typeId){
       if(!typeId)return genTagId();
-      var prefix=tagPrefixForType(typeId);
-      var next=(counters[prefix]||0)+1;
-      counters[prefix]=next;
-      return prefix+pad(next,2);
+      var s=tagSeriesFor(typeId);
+      var prefix=s?s.pre:tagPrefixForType(typeId);
+      var width=s?s.width:2;
+      var k=prefix.toLowerCase();
+      if(counters[k]===undefined)counters[k]=s?s.max:0;
+      var next=++counters[k];
+      return prefix+pad(next,width);
     };
   }
 
