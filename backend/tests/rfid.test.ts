@@ -213,8 +213,7 @@ describe('POST /api/boxes/:tag/rfid — EPC-only commissioning', () => {
       .set(auth(ctx.token))
       .send({ rfidEpc: 'E280691500007006A375143E' });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBeNull();
-    expect(res.body.rfidEpc).toBe('E280691500007006A375143E');
+    expect(res.body.rfid).toBe('E280691500007006A375143E');
   });
 
   it('resolves a later scan of that EPC back to the box', async () => {
