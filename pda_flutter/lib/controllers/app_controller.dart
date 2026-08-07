@@ -1358,7 +1358,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setOutPlate(String v) => outPlate = v;
+  void setOutPlate(String v) {
+    outPlate = v;
+    notifyListeners();
+  }
+
   void setOutDriver(String v) => outDriver = v;
   void setOutVehicleType(String v) {
     outVehicleType = v;
@@ -1367,7 +1371,11 @@ class AppController extends ChangeNotifier {
   }
 
   void setOutVehicleTypeOther(String v) => outVehicleTypeOther = v;
-  void setInPlate(String v) => inPlate = v;
+  void setInPlate(String v) {
+    inPlate = v;
+    notifyListeners();
+  }
+
   void setInDriver(String v) => inDriver = v;
   void setInVehicleType(String v) {
     inVehicleType = v;
