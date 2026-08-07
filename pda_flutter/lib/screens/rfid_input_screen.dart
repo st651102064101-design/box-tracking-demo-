@@ -151,7 +151,9 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     // as "—" now (TID already always did — this reader's inventory round
     // never carries one regardless of profile, see RfidReaderController's
     // own comment on that) — full-field detail always was the trade being
-    // made here, just against the wrong thing to trade it for.
+    // made here, just against the wrong thing to trade it for. (An older
+    // branch's `rfid.setTidEnrichment(true)` here is exactly the regression
+    // this comment documents — deliberately not restored by this merge.)
   }
 
   void _resetStats() {

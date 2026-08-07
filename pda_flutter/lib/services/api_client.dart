@@ -185,10 +185,18 @@ class ApiClient {
 
   /// GET /api/boxes/:code — code may be a barcode or an RFID EPC/TID; the
   /// backend resolves whichever it turns out to be (see services/rfid.ts).
+  /// Routed through [_send] like every other authenticated call so a token
+  /// that expired mid-shift gets one silent reauth-and-retry instead of
+  /// surfacing as a bogus "not found" — this used to bypass [_send] entirely
+  /// and go straight to a single raw request.
   Future<Map<String, dynamic>?> getBox(String code) async {
-    final r = await http.get(_u('/api/boxes/$code'), headers: _headers).timeout(_timeout);
-    if (r.statusCode == 404) return null;
-    return _decode(r) as Map<String, dynamic>;
+    try {
+      return await _send(() => http.get(_u('/api/boxes/$code'), headers: _headers))
+          as Map<String, dynamic>;
+    } on ApiException catch (e) {
+      if (e.status == 404) return null;
+      rethrow;
+    }
   }
 
   /// GET /api/boxes/next-tag?type=<id> — the next box tag for this type,

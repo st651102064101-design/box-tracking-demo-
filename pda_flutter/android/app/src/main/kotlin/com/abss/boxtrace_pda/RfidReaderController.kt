@@ -331,9 +331,7 @@ class RfidReaderController(private val context: Context) :
     // inventory around every call — so this is what tells "these tags don't
     // report a TID during inventory" apart from "the reader isn't reading".
     private var tidCount = 0L
-    // Whether the physical gun trigger is currently held — readTidExplicit
-    // stops inventory to run an access operation and uses this to decide
-    // whether to start it again afterwards.
+    // Whether the physical gun trigger is currently held.
     @Volatile private var triggerHeld = false
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
@@ -378,6 +376,12 @@ class RfidReaderController(private val context: Context) :
                 previewTone(call.argument<String>("toneId") ?: "beep", call.argument<Int>("volume") ?: 100)
                 result.success(true)
             }
+            // setTidEnrichment (from an older branch) intentionally NOT restored —
+            // a later commit already on this branch (see PROGRESS.md history)
+            // found TID "detail mode" costs ~10x throughput on this reader for a
+            // field that never actually arrives that way regardless, and removed
+            // the concept end-to-end. Bringing the toggle back would reintroduce
+            // exactly that regression.
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             else -> result.notImplemented()
@@ -788,7 +792,6 @@ class RfidReaderController(private val context: Context) :
                 lastEpc = epc
                 lastRssi = t.getPeakRSSI().toInt()
                 batch.add(mapOf("epc" to epc, "rssi" to lastRssi))
-            }
 
             // The whole read event crosses the platform channel as one message.
             // A channel hop per tag was costing an event-loop turn each, so a
@@ -805,10 +808,22 @@ class RfidReaderController(private val context: Context) :
                     when (evt) {
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED -> {
                             triggerHeld = true
+                            // Start inventory right here instead of waiting for
+                            // AppController to come back through the
+                            // MethodChannel — that round trip (native → Dart
+                            // isolate → back to native) was enough added
+                            // latency that a quick single-tag point-and-shoot
+                            // could release the trigger before Inventory.perform()
+                            // ever got called. AppController's own startInventory()
+                            // call on the "pressed" event below still arrives
+                            // shortly after; it's a harmless redundant call on an
+                            // already-running inventory.
+                            startInventory()
                             emit(mapOf("type" to "trigger", "pressed" to true))
                         }
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED -> {
                             triggerHeld = false
+                            stopInventory()
                             emit(mapOf("type" to "trigger", "pressed" to false))
                         }
                         else -> {}

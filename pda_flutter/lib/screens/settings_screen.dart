@@ -59,9 +59,9 @@ class SettingsScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: c.connected ? C.lime : C.red,
                             shape: BoxShape.circle,
-                            boxShadow: [
+                            boxShadow: C.shadow([
                               BoxShadow(color: c.connected ? C.limeBg : C.redBg, spreadRadius: 3)
-                            ],
+                            ]),
                           ),
                         ),
                         const SizedBox(width: 11),

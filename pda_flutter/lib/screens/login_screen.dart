@@ -583,9 +583,9 @@ class _EmployeeTile extends StatelessWidget {
             // top; the accent border is what makes that visible at a glance
             // rather than looking like an arbitrary sort order.
             border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
-            boxShadow: [
+            boxShadow: C.shadow([
               BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
-            ],
+            ]),
           ),
           child: Row(
             children: [

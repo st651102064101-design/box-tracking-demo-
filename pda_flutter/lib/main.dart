@@ -31,7 +31,12 @@ class BoxTraceApp extends StatelessWidget {
   final AppController controller;
   final LocaleController locale;
   final ThemeController themeCtrl;
-  const BoxTraceApp({super.key, required this.controller, required this.locale, required this.themeCtrl});
+  const BoxTraceApp({
+    super.key,
+    required this.controller,
+    required this.locale,
+    required this.themeCtrl,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +48,9 @@ class BoxTraceApp extends StatelessWidget {
       ],
       child: Builder(
         // Needs its own context (below MultiProvider) so watching ThemeController
-        // rebuilds MaterialApp — and re-invokes buildTheme() — on every toggle.
+        // rebuilds MaterialApp on every toggle — see theme.dart's C.shadow/C.anim,
+        // read at each call site's own build. C.lowGraphics is now a permanent
+        // const (see theme.dart), so it needs no controller/watch of its own.
         builder: (context) {
           context.watch<ThemeController>();
           return MaterialApp(

@@ -780,8 +780,8 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Every card on this screen carries a blurred shadow — cheap one at a
     // time, not cheap five deep on a screen that redraws on every
-    // notifyListeners(). Low power mode drops it to a flat border.
-    final lowPower = context.select<AppController, bool>((c) => c.lowPowerMode);
+    // notifyListeners(). C.shadow() (see theme.dart) drops it to a flat
+    // border, now permanently since C.lowGraphics is a const true.
     final radius = small ? 20.0 : 22.0;
     final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
     final box = small ? 44.0 : 52.0;
@@ -795,16 +795,14 @@ class _ActionCard extends StatelessWidget {
           padding: pad,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            border: (dark && !lowPower) ? null : Border.all(color: C.border),
-            boxShadow: lowPower
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                      blurRadius: dark ? 24 : (small ? 0 : 20),
-                      offset: Offset(0, dark ? 8 : 6),
-                    )
-                  ],
+            border: dark ? null : Border.all(color: C.border),
+            boxShadow: C.shadow([
+              BoxShadow(
+                color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
+                blurRadius: dark ? 24 : (small ? 0 : 20),
+                offset: Offset(0, dark ? 8 : 6),
+              )
+            ]),
           ),
           child: Row(
             children: [

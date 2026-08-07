@@ -148,7 +148,12 @@ class _TrackScreenState extends State<TrackScreen> {
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (box == null && c.trackSuggestions.isNotEmpty) ...[
+              if (c.trackSearching)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                )
+              else if (box == null && c.trackSuggestions.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 8),
                   child: Text('พบ ${c.trackSuggestions.length} กล่อง',
@@ -159,7 +164,7 @@ class _TrackScreenState extends State<TrackScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
-                    child: Text('ไม่พบกล่อง "${c.trackVal}" ในระบบ',
+                    child: Text(c.trackError ?? 'ไม่พบกล่อง "${c.trackVal}" ในระบบ',
                         style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -329,7 +334,7 @@ class _TrackScreenState extends State<TrackScreen> {
         color: C.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: C.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))],
+        boxShadow: C.shadow([BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))]),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

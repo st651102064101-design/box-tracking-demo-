@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../theme.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
 import 'device_setup_screen.dart';
@@ -55,9 +56,9 @@ class RootScreen extends StatelessWidget {
                   child: AnimatedSwitcher(
                     // Cross-fade is the single most-run animation in the
                     // app — every screen change plays it — so it's the
-                    // first thing low power mode cuts, straight to an
+                    // first thing low graphics mode cuts, straight to an
                     // instant swap.
-                    duration: c.lowPowerMode ? Duration.zero : const Duration(milliseconds: 220),
+                    duration: C.anim(const Duration(milliseconds: 220)),
                     child: _body(c),
                   ),
                 ),
