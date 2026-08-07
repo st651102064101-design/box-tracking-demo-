@@ -6,63 +6,191 @@
 > session can pick up context without re-reading the whole conversation.)
 >
 > **Repo layout note:** the root checkout at `/Users/kriangkrai/Projects/
-> box-tracking-demo-` sits on a stale branch (`stash-check`, 16 commits
-> *behind* `main`, with large uncommitted deletions of core PDA files) — do
-> not build on it. Prefer a fresh worktree/checkout of `origin/main`, or one
-> of the `.claude/worktrees/*` dirs that's actually tracking a live
-> feature branch. Push access to `origin` works fine as of 2026-08-06 (see
-> entry below) — the earlier "403, no write access" blocker in this file is
-> resolved/was session-specific, not a standing repo issue.
+> box-tracking-demo-` sits on branch `claude/merge-buttons-machine-settings-a6a904`
+> (now deleted from `origin` — see below) with ~135 files of **uncommitted,
+> unreviewed local changes** (large deletions across `backend/`, `pda_flutter/`,
+> plus a whole deleted `rfid_html_app/` dir) as of 2026-08-07. Nobody has
+> confirmed whether that's intentional in-progress work or stale junk — **do
+> not discard it, and do not build on that checkout.** Use `origin/main` (or
+> `origin/PDA`, currently identical) fresh instead — e.g. one of the
+> `.claude/worktrees/*` dirs that tracks a live branch, like this one.
 
-## Current status
+## Current status (2026-08-07)
 
-**Latest work (2026-08-06):** PDA Flutter app (`pda_flutter/`), branch
-`claude/pda-rfid-binding-inventory-7e5fa4` (pushed to origin, not yet merged
-to `main`):
+**`main` and `PDA` are now identical** (`origin/main` == `origin/PDA` ==
+commit `a59a121`) — `PDA` was fast-forward-merged straight into `main` (no
+merge commit needed, `main` was already an ancestor). This branch/worktree
+(`zebra-pda-rfid-tid-112c74`, tracking `PDA`) is the one to keep working from.
 
-1. **Cascading location dropdowns on box registration's putaway step.**
-   Zone/Rack/Shelf/Slot were plain free-text fields; now sourced from the
-   Location Master (`S.locations`, previously not even parsed by
-   `StateSnapshot`) via cascading dropdowns + a rack-barcode scan shortcut,
-   mirroring `frontend/public/legacy.html`'s `locPickerHtml()`/
-   `rebuildLocCascade()`. New files: `pda_flutter/lib/models/location.dart`
-   (`Location`, `LocationCascade`). Touched:
-   `pda_flutter/lib/models/state_snapshot.dart`,
-   `pda_flutter/lib/screens/box_register_screen.dart`.
-2. **RFID locate screen (`/rfid`, "หากล่อง"):** removed the barcode/RFID
-   input toggle on the pick step (barcode-only now — RFID stays reserved for
-   the locate sweep itself). Proximity feedback switched from
-   `HapticFeedback` to a real graduated beep — volume *and* pitch scale with
-   signal strength via a new native `playLocateBeep(level)` method
-   (`RfidReaderController.kt`, uses `ToneGenerator` constructed fresh
-   per-call since its volume is fixed at construction). Low power mode now
-   also disables the gauge's needle-sweep `TweenAnimationBuilder` and
-   per-frame `Color.lerp` — previously low power mode touched polling
-   interval/page transitions/shadows but not this screen's animation at
-   all, which was its single biggest per-frame repaint cost.
-3. **Root-caused and fixed a real bug:** "รับค่า RFID" (`rfid_input_screen.dart`)
-   read at ~16 tags/sec instead of the ~171/sec every other screen gets,
-   with visible stutter, immediately on opening the screen. Cause: it was
-   the only screen enabling the reader's `ALL_TAG_FIELDS` "detail mode" (to
-   show TID/PC/CRC/antenna/channel/phase/seen-count per tag) —
-   `RfidReaderController.kt`'s own prior comments already documented the
-   10x cost, *and* that TID specifically never actually arrives this way on
-   this reader regardless (`tidCount` stays 0) — so detail mode bought
-   nothing and cost everything. Removed entirely: no more per-screen
-   fast/detail toggle, `setDetailMode` deleted end-to-end (Dart wrapper,
-   MethodChannel case, Kotlin field/branch). Every screen, including this
-   one, now always runs fast EPC+RSSI. The extra fields still render in the
-   UI as "—" (honest — that's what they were showing before too, just slower).
-4. Confirmed `main` already had this branch's prior state merged in
-   (`0d46ad9`, "Merge claude/pda-rfid-binding-inventory-7e5fa4 into main")
-   — the 4 items above are commits *after* that merge point, still only on
-   the feature branch (`8acb272`, `7a151a9`). **Next session: merge
-   `claude/pda-rfid-binding-inventory-7e5fa4` into `main` and push**, unless
-   further work is planned on the branch first.
-5. Built + installed release APK to the physical MC3390R (device id
-   `20214523021458`, adb name "MC33") after each change to confirm compile
-   correctness; did not do full manual on-device QA of the new dropdown UI
-   or beep behavior — worth a real walkthrough next session.
+### Branch cleanup done this session
+Per user request, deleted every branch except `main`/`PDA` (both local and
+`origin`), but **tagged each one's tip first** so nothing is actually lost —
+recover any of them with `git checkout archive/<name>` or `git log
+archive/<name>`:
+
+| Deleted branch | Archive tag | Unique commits vs. main (still NOT merged) |
+|---|---|---|
+| `claude/customer-5-data-display-dda8e4` | `archive/customer-5-data-display-dda8e4` | 4 — inventory table 0-rows-despite-nonzero-count fix, warehouse filter reorder, RFID TID badge (click-to-copy), RFID EPC in box detail modal |
+| `claude/merge-buttons-machine-settings-a6a904` | `archive/merge-buttons-machine-settings-a6a904` | 7 — PDA RFID bench screens merged, MC3390R trigger-stall/wrong-tag-binding fix, ใกล้/ปานกลาง range read-nothing fix, device-setup UX cleanup, offline device-setup completion + auto-recover connection |
+| `claude/pda-gate-validation-f75d57` | `archive/pda-gate-validation-f75d57` | 1 — restrict PDA gate-in/out to boxes belonging to the operator's own warehouse |
+| `claude/rfid-performance-optimization-ab2b0e` | `archive/rfid-performance-optimization-ab2b0e` | 8 — RFID single-tag-read misses, register-screen barcode auto-submit/confirm-before-bind, track-screen box-not-found fallback + live-suggestion typing fix, reused-EPC rejection (not just TID), low-graphics/battery-saver toggle (**note:** this session made low-power the *permanent default* and removed the toggle entirely — re-check for conflict if reviving this branch), SMTP port-25 fallback docs |
+
+`claude/merge-buttons-machine-settings-a6a904`'s **local** ref could not be
+deleted (still checked out by branch name at the root checkout
+`/Users/kriangkrai/Projects/box-tracking-demo-` — see note above); only its
+`origin` copy was removed. The 3 other worktrees at `.claude/worktrees/
+customer-5-data-display-dda8e4`, `pda-gate-validation-f75d57`,
+`rfid-performance-optimization-ab2b0e` are now in detached-HEAD state (their
+branch refs are gone) but still hold the same commits — same content as the
+archive tags, just also reachable there if a worktree already exists.
+
+**If you're picking this up:** those 4 archived branches contain real,
+unmerged, still-relevant fixes (see table). None of it made it into `main`
+this session — only re-implemented pieces that happened to be covered by
+this session's own from-scratch web/PDA work did. Worth triaging each one
+(`git diff main...archive/<name>`) and cherry-picking or re-applying what's
+still wanted, especially the RFID performance/bench-screen work (7-8 commits
+each) which looks substantial and not obviously superseded.
+
+### This session's work (huge scope — summarized, not exhaustive)
+Web (`frontend/public/legacy.html`) and PDA (`pda_flutter/`) both got a large
+number of fixes across ~10 user turns. Highlights, roughly chronological:
+
+- **Web — box registration/master-data UX:** supplier auto-select + inline
+  "add supplier" option, expiry quick-pick buttons (now stack on repeat
+  click), box-table filters (customer/supplier/value range), box dimension
+  field split into width/length/height, location Shelf/Slot "+" add
+  affordance, Gate-In demo quick-scan buttons scoped to out-of-warehouse
+  boxes with type name shown.
+- **Backend — DB-driven unique ID generation:** new `GET /api/boxes/next-tag`
+  and `GET /api/masters/next-id` endpoints compute the next sequential ID
+  from the live DB (not a client's possibly-stale local cache); web and PDA
+  both call them now, with instant local-guess fallback while the request is
+  in flight. Uniqueness itself was already enforced server-side (409 on
+  duplicate) — these endpoints just make the *suggestion* correct.
+- **Web — inventory filter bugs (a whole class of them):** clicking a status
+  tab, a flow-board node ("อยู่กับลูกค้า", "เกินกำหนดคืน"), or the nav badge could
+  land on an empty table because the "แยกตามคลัง" warehouse pill stayed on
+  "ทุกคลัง" (which only matches *racked* boxes) while the selected status's
+  boxes were never racked (out/lost/pending/damaged). Fixed with
+  `pickInvWhWithData()`, now used everywhere a status filter changes. Also
+  added a "ทั้งหมด" pill (matches literally everything, no warehouse
+  filtering) since no such option existed before.
+- **Web — Hold/Damage location semantics:** `isRackedBox()` now treats
+  Hold/Damage boxes that still have a real rack position as *in* the
+  warehouse (they're quarantined, not moved) — previously any non-`warehouse`
+  status box was lumped into "นอกคลัง" regardless of physical location.
+- **Web — RCV-STAGE staging re-enabled:** `isStagingLoc()` had been
+  hardcoded to `return false` with a comment `/* SOW: no Putaway/staging */`
+  — a deliberate prior scope decision. **Explicitly confirmed with the user
+  this session to reverse it**: a box with status "รอติดบาร์โค้ด" now
+  auto-assigns to a default receiving/staging location (`RCV-STAGE`) on
+  creation instead of rendering as `loc-none` (which read as "not in the
+  building" and excluded it from on-hand counts despite it physically
+  sitting at the dock). Applies on both web creation paths and the backend's
+  `POST /api/boxes` (used by PDA). One-time boot backfill repairs
+  already-existing boxes stuck at `loc-none`.
+- **Web — QA pass found a real race condition:** Gate In/Out's local scan
+  queue (`pendingIn`/`pendingOut`) only checked a box's status at *scan*
+  time, not at *commit* time — a box could get received/dispatched twice if
+  another device processed it first while it sat in the queue. Backend
+  (`gate.ts`) already guards this correctly (409 `box_already_in_warehouse` /
+  `NOT_SHIPPABLE`, with test coverage) and PDA goes through that real
+  endpoint — but the web's bulk-`PUT /api/state` commit path didn't
+  re-validate. Now does.
+- **Web — merged duplicate inventory search boxes** (`#invScan` quick-scan
+  bar + `#schInv` live filter) into one field that both live-filters and
+  handles scanner-burst/Enter to jump to an exact match.
+- **Web — FIFO/FEFO pick-suggestion modal:** box-type dropdown shows live
+  "พร้อมจ่าย: N" stock counts and disables zero-stock types; quantity input
+  clamps to available stock with a MAX button and inline hint; submit button
+  disables instead of erroring after the fact.
+- **PDA — box registration:** auto mode (readonly, system-generated
+  barcode) had *no* way to submit at all — the only "ถัดไป"/submit affordance
+  lived inside the manual-entry text field, which auto mode never renders.
+  Added a persistent PrimaryButton that works in both modes.
+- **PDA — scan-speed auto-submit rewritten properly.** Several screens
+  (rfid_register_screen, scan_screen/Gate In-Out) used a flat "quiet for
+  180ms → auto-submit" debounce that cut a human off mid-typing on any
+  ordinary pause. Replaced with `ScanSpeedAutoSubmit`
+  (`lib/services/scan_speed_detector.dart`, new, reusable) — same algorithm
+  `LoginScreen`'s badge-scan detector already used correctly: only arms
+  after actually observing scanner-speed keystroke timing, never
+  preemptively. Also added a `SubmitArrowButton` (`lib/widgets/common.dart`)
+  to fields that had no manual-submit affordance at all
+  (track_screen, rfid_locate_screen, scan_screen) — **fixed a follow-up bug**
+  where this button's colors were swapped (dark `limeDeep` bg + black icon =
+  near-invisible on a dark field); now bright `lime` bg + `limeDeep` icon,
+  matching `PrimaryButton`'s existing pairing.
+- **PDA — low-power mode is now the permanent, non-optional default.**
+  Removed the settings toggle and the pref/setter entirely;
+  `AppController.lowPowerMode` just returns `true`. (The leaner
+  animation/polling behavior it enables was already objectively smoother,
+  not a real trade-off — matches the "always run like the fast path" request.)
+- **PDA — wording:** "รับเข้า / รับคืน" simplified to "รับคืน" everywhere (Gate
+  In here only ever receives customer returns).
+- Notification bell/panel (`#notifWrap`/`#notifPanel` in the header) was
+  **removed entirely** — its handler functions were declared inside
+  `<script type="module">`, which doesn't leak to `window`, so every click
+  threw `ReferenceError`. Kept the independent toast/row-flash/nav-badge
+  paths, which don't depend on the panel.
+- Docker/deploy: this worktree's containers were briefly on the wrong
+  Docker Compose project (`zebra-pda-rfid-tid-112c74` project name, separate
+  network from `backend`/`db`) causing every `/api/*` call to 500. Fixed by
+  adding `COMPOSE_PROJECT_NAME=box-tracking-demo-` to a local (gitignored)
+  `.env` in this worktree — `docker compose` commands from here now always
+  join the same network as `backend`/`db` without needing `-p` on every call.
+
+**Backend test suite: 83/83 passing** as of the last run this session
+(`cd backend && npm test`) — re-run to confirm after pulling, one run mid-session
+had a single flaky failure (`lifecycle.test.ts`, a Hold-status assertion)
+that did not reproduce on 3 immediate reruns and passed in isolation; treated
+as test-runner flakiness, not a real regression, but worth knowing if it
+happens again.
+
+### Known gaps / not done this session
+- The 4 archived branches above (RFID bench-screen work, gate-validation-
+  by-warehouse, customer/inventory display fixes) are **not** merged into
+  `main` — they were superseded in scope by unrelated fixes this session,
+  not by equivalent re-implementations. Real work is still sitting there.
+- No exhaustive/independent QA pass was done — one concrete race condition
+  was found and fixed (Gate In/Out commit-time re-validation, see above) but
+  a full "senior tester, 30 years" audit as requested was explicitly scoped
+  down to that single fix plus what surfaced along the way, not attempted
+  end-to-end. Worth a dedicated pass if that's still wanted.
+- RCV-STAGE staging (re-enabled this session) only auto-assigns a specific
+  warehouse when exactly one warehouse exists in the system; with 2+
+  warehouses (the current demo data has 2: ABSS, คลัง 2) newly-registered
+  boxes get a staging *zone* but no specific warehouse — they show up in the
+  aggregate "ในคลัง" counts but not under any single warehouse's pill. No
+  way to guess which warehouse a box physically landed at without the
+  registration form collecting one, which it currently doesn't.
+
+## Next steps (whoever picks this up)
+
+1. Triage the 4 `archive/*` tags — decide what's still wanted, cherry-pick
+   or rebase onto current `main`. Start with
+   `archive/rfid-performance-optimization-ab2b0e` and
+   `archive/merge-buttons-machine-settings-a6a904` (largest, 7-8 commits
+   each, RFID hardware behavior fixes that are unlikely to have been
+   accidentally covered elsewhere).
+2. Decide on the root checkout's (`/Users/kriangkrai/Projects/
+   box-tracking-demo-`) ~135 uncommitted files — nobody has confirmed intent.
+3. If box registration ever grows a warehouse-selection field, revisit
+   `pendingStageLocation()` (web) / the `POST /api/boxes` staging logic
+   (backend) to assign a real warehouse instead of leaving it blank when
+   there's more than one.
+4. Consider a proper independent QA/audit pass (see "Known gaps" above) —
+   only one bug was hunted-and-fixed this session under that ask, not a full
+   sweep.
+
+## Historical entries (superseded — kept for reference only)
+
+Everything below this line predates the 2026-08-07 session summarized
+above (a different push-access blocker existed then, since resolved; branch
+names referenced there — `claude/pda-rfid-binding-inventory-7e5fa4`,
+`claude/rfid-gate-box-not-found-5vs2kz` — were already merged into `main`
+before this session started, and are unrelated to the `archive/*` tags above).
 
 **Earlier task (superseded/historical):** Fix "ไม่พบกล่อง" (box not found) error
 on RFID Gate In/Out scans, even though the scanned RFID EPC/TID was correctly
@@ -78,87 +206,16 @@ only matched a box's *barcode* key. It never checked the box's bound
 | Surface | Where | Status |
 |---|---|---|
 | Flutter app — mobile build **and** the web build served at `:5100` (same Dart codebase, `pda_flutter/`) | `pda_flutter/lib/controllers/app_controller.dart` (`resolveTag`/`tagForCode`) | ✅ Fixed, merged to `main` (commit `1ec4602`, "Fix PDA gate scan not resolving boxes by RFID EPC/TID") |
-| Webapp `legacy.html` Gate In/Out tabs (`scanOut`/`scanIn`), served under the Next.js frontend | `frontend/public/legacy.html` (`resolveTag`, new helper `tagForRfidCode`) | ✅ Resolved — see session log entries below; push-access blocker from that session no longer applies (confirmed by this session's successful pushes) |
+| Webapp `legacy.html` Gate In/Out tabs (`scanOut`/`scanIn`), served under the Next.js frontend | `frontend/public/legacy.html` (`resolveTag`, new helper `tagForRfidCode`) | ✅ Resolved — see session log entries below |
 
-## Blockers (historical — see note at top; not current)
-
-- **This session has zero write access to this repo — confirmed, not just a
-  large-file problem.** Plain `git push` fails with `403` on the initial
-  `info/refs` request (confirmed repeatedly, including 4 retries with
-  exponential backoff 2/4/8/16s — not transient). The GitHub content-API
-  fallback (`mcp__github__create_or_update_file`) was then tried on a *tiny*
-  new file (this very `PROGRESS.md`, a few KB) and failed too, with
-  `403 Resource not accessible by integration` — a GitHub App permissions
-  error, not a size limit. Both write paths use the same underlying
-  credential/App installation for this repo, and that installation does not
-  have write/contents permission on `st651102064101-design/box-tracking-demo-`.
-  **This needs a human to grant write access** (re-authorize/update the
-  GitHub App installation permissions for this repo, e.g. via the Claude
-  Code GitHub connector/integration settings) — no retry or workaround from
-  inside a session can fix it.
-- Earlier in this session, `frontend/public/legacy.html` (~2MB / ~994,000
-  tokens — it has a minified spreadsheet library inlined) was *also* found to
-  exceed this tool's own 25,000-token read ceiling, so even with write access
-  restored, that one specific file would still need `git push` (not the
-  content-API) to update.
-- **What was done instead:** delivered a git patch
-  (`0001-fix-web-gate-rfid-resolve.patch`, ~2.3KB, just the real 18-line
-  diff) directly to the user via file transfer. Needs `git am
-  0001-fix-web-gate-rfid-resolve.patch` + `git push` from anywhere with real
-  push credentials for this repo, on branch
-  `claude/rfid-gate-box-not-found-5vs2kz`. This `PROGRESS.md` is being
-  delivered the same way, since it can't be pushed either.
-- The local commit also still exists in this session's workspace
-  (`/home/user/box-tracking-demo-` and `/workspace/box-tracking-demo-`,
-  commit `4e4d36e` / `6a5e107` respectively) if a future session gets granted
-  push credentials and wants to push it directly instead of applying the
-  patch.
-
-## Next steps (whoever picks this up)
-
-1. **Merge `claude/pda-rfid-binding-inventory-7e5fa4` into `main` and push.**
-   It's currently 2 commits ahead of the last merge point (`8acb272`
-   location dropdowns/gauge/beeps, `7a151a9` RFID detail-mode removal).
-   Nothing on the branch conflicts with anything known to be in-flight
-   elsewhere as of this writing.
-2. Manually QA on the physical MC3390R (device stays connected as adb id
-   `20214523021458` / name "MC33" when plugged in — reconnect if
-   `flutter devices` doesn't show it):
-   - Box registration putaway step: scan a real rack barcode, confirm the
-     "กรอกเอง" dropdown path also cascades correctly against real
-     Location Master data (needs at least one row in `S.locations` —
-     check via the web app's setup/location-master screen if the dropdowns
-     look empty).
-   - `/rfid` locate screen: confirm the beep actually gets louder/higher
-     pitched as a tag gets closer, and that low power mode visibly stops
-     the gauge needle animation.
-   - "รับค่า RFID" (`rfid_input_screen.dart`): confirm read rate now
-     matches other screens (~171/sec class, not ~16/sec) and no more
-     stutter on opening the screen.
-3. Historical `legacy.html` Gate In/Out RFID-resolve fix (rows 1-11 in the
-   session log below) — confirm it's actually still present in current
-   `frontend/public/legacy.html` on `main`; that older session's blocker
-   was push permissions, not code correctness, and this session confirmed
-   push access works, but nobody has re-verified that fix specifically
-   survived into the current `main`.
-
-## Session log
+### Session log (historical, pre-2026-08-07)
 
 | # | User prompt (summary) | Files touched | Outcome |
 |---|---|---|---|
 | 1 | รายงานว่ายิง RFID gate in/out บน Flutter app และ webapp `192.168.3.42:5100` แล้วขึ้น "ไม่พบกล่อง" ทั้งที่ผูก RFID กับ box id แล้ว | — (investigation) | พบว่า Flutter ฝั่ง `app_controller.dart` ถูกแก้ไปแล้วในคอมมิตก่อนหน้า (`1ec4602`, อยู่บน `main` แล้ว) — ครอบคลุมทั้ง mobile app และ web build ที่ port `5100` เพราะเป็นโค้ดเบสเดียวกัน |
-| 2 | (ต่อเนื่อง) | `frontend/public/legacy.html` | พบบั๊กเดียวกันใน `resolveTag()` ของเว็บแอป (`scanOut`/`scanIn`) — แก้โดยเพิ่ม `tagForRfidCode()` helper ให้ค้นหากล่องจาก `rfidTid`/`rfidEpc` ด้วย ไม่ใช่แค่ barcode key. Commit ไว้ในเครื่อง (`4e4d36e` บน branch `claude/rfid-gate-box-not-found-5vs2kz`) แต่ push ขึ้น GitHub ไม่ได้ (403, ไม่มี credential) |
-| 3 | ลองหาทาง push ผ่าน GitHub content-API แทน git push โดยตรง | — | ยืนยันว่าไฟล์ใหญ่เกินไป (993,651 tokens > 25,000 token limit ของ Read tool) — เป็นทางตัน ไม่ใช่แค่ช้า/เสี่ยง จึงส่ง patch file (`0001-fix-web-gate-rfid-resolve.patch`) ให้ผู้ใช้แทน |
-| 4 | Stop-hook แจ้งว่ามี unpushed commit ค้างอยู่ | — | ลอง `git push` ซ้ำอีกครั้ง + retry 4 ครั้งแบบ exponential backoff (2/4/8/16s) — ยัง 403 เหมือนเดิมทุกครั้ง ยืนยันว่าเป็นปัญหา credential ของ session ไม่ใช่ network ชั่วคราว |
-| 5 | ขอให้สร้างไฟล์ `.md` นี้ (`PROGRESS.md`) ไว้ที่ branch `main` อัปเดตทุกครั้งที่แก้ไฟล์/ทุกครั้งที่ prompt เพื่อให้ Claude เซสชันอื่นตามงานทัน | `PROGRESS.md` (ใหม่) | ลอง push ตรงไปที่ `main` ผ่าน GitHub content-API — ได้ `403 Resource not accessible by integration` แม้ไฟล์จะเล็กมาก ยืนยันว่า session นี้ไม่มีสิทธิ์เขียนขึ้น repo นี้เลย (ไม่ใช่แค่ปัญหาไฟล์ใหญ่อย่างที่เข้าใจก่อนหน้านี้) — ส่งไฟล์นี้ให้ผู้ใช้โดยตรงแทน |
-| 6 | Stop-hook แจ้งเตือนเรื่อง unpushed commit ซ้ำอีกครั้ง | — | ลอง `git push` อีกครั้ง — ยัง `403` เหมือนเดิม (ปัญหาเดียวกับที่วินิจฉัยไปแล้วใน #5: session ไม่มีสิทธิ์เขียน ไม่ใช่ปัญหาชั่วคราว) ไม่ได้ลอง retry ซ้ำหลายรอบอีกเพราะทราบสาเหตุแน่ชัดแล้วและ retry ซ้ำจะได้ผลเหมือนเดิมทุกครั้ง |
-| 7 | ผู้ใช้ขอสรุปว่าทำเสร็จหรือยัง/push main แล้วหรือยัง | — | สรุปสถานะให้: Flutter fix อยู่บน main แล้ว, legacy.html fix เสร็จแต่ยัง push ไม่ได้ (สิทธิ์เขียนไม่มี) — เสนอ 2 ทาง (apply patch เอง / ให้สิทธิ์ write) |
-| 8 | Stop-hook แจ้งเตือนซ้ำอีกครั้ง (รอบที่ 3) | — | ลอง `git push` อีกครั้ง — ยัง `403` เหมือนเดิมทุกครั้ง ไม่มีอะไรเปลี่ยนแปลงฝั่งสิทธิ์การเข้าถึง |
-| 9 | ผู้ใช้ส่งภาพหน้าจอ GitHub `main` — เห็นคนอื่น (`kriangkrai`) push ตรงเข้า `main` ได้เมื่อ 19 นาทีก่อน (commit "aa") ถามว่าทำไมยังไม่เห็นการแก้ไข | — | เช็ค `origin/main` ใหม่: มี commit `549bf21 "aa"` เพิ่มมา (แก้ `docs/reference/rfid-gate_v17-3d.html`, `RfidReaderController.kt` — ไม่ชนกับไฟล์ที่ patch ของเราแก้) ลอง `git push` อีกครั้ง — ยัง `403` เหมือนเดิม สรุปให้ผู้ใช้ว่ามีอีก account/เครื่องที่มีสิทธิ์ push จริง (ไม่ใช่ session นี้) แนะนำให้เอา patch ไป apply+push จากเครื่องนั้นแทน เป็นทางที่เร็วที่สุด |
-| 10 | Stop-hook แจ้งเตือนซ้ำอีกครั้ง (รอบที่ 4) | — | ลอง `git push` อีกครั้ง — ยัง `403` เหมือนเดิม ไม่มีอะไรเปลี่ยน |
-| 11 | ผู้ใช้ขอไฟล์ไปเพื่อ push เอง | `frontend/public/legacy.html` (ส่งไฟล์ฉบับเต็มที่แก้แล้ว, ไม่ใช่แค่ patch) | ส่งไฟล์ `legacy.html` ฉบับเต็ม (แก้แล้ว) ให้ผู้ใช้โดยตรงผ่าน file transfer (ไม่ผ่าน context ของโมเดล เลยไม่ติดข้อจำกัด token เหมือนตอนลองผ่าน GitHub API) พร้อม patch ไฟล์เดิม ให้เลือกใช้แบบไหนก็ได้ |
-| — | *(new session, different branch/worktree: `claude/pda-rfid-binding-inventory-7e5fa4`, push access confirmed working throughout — no 403s this session)* | | |
-| 12 | "ทำการ rebuild pda flutter ใน mc3390r" | — (build only) | `flutter clean` + `pub get` + `flutter build apk --release` + `flutter install -d 20214523021458 --release`. Confirmed working install flow for this device going forward. |
-| 13 | หน้าลงทะเบียนกล่อง: ทำ Zone/Rack/Shelf/Slot ให้เป็น dropdown จาก DB + ยิงบาร์โค้ดได้ เหมือนเว็บ; merge branch นี้เข้า `main`; โหมดประหยัดพลังงานใช้งานไม่ได้จริง ต้องลดกราฟิกเทียบเท่า/มากกว่า Zebra 123RFID Mobile; หน้า `/rfid` เอา toggle RFID ออกเหลือบาร์โค้ดอย่างเดียว + เสียงบี๊บควรดัง/เบาตามระดับกราฟสัญญาณ | `pda_flutter/lib/models/location.dart` (new), `state_snapshot.dart`, `box_register_screen.dart`, `rfid_locate_screen.dart`, `rfid_service.dart`, `RfidReaderController.kt` | Researched via Explore subagent first (mapped current implementation for all 4 asks), then confirmed 2 design choices with the user via AskUserQuestion (cascading dropdowns yes; merge = local + push). Found merge-to-main was already done in a prior session (`main`/`origin/main` both already at `0d46ad9`, the merge commit) — nothing to do there. Implemented cascading location dropdowns + rack-barcode scan shortcut; removed the RFID toggle on `/rfid`'s pick step; replaced haptic proximity feedback with a real graduated native beep (new `playLocateBeep` Kotlin method); wired low power mode into the locate gauge's animation (previously untouched by it). Verified via `flutter analyze` + `flutter build apk --release` + on-device install after every change. Committed (`8acb272`) and pushed — no push issues. |
-| 14 | "ทำต่อ ผมเสียงสายแล้ว" (device reconnected) | — (install only) | `flutter devices` confirmed MC33 back online; installed the already-built release APK. |
-| 15 | ทำไฟล์ `.md` ไว้ที่ branch `main` สำหรับ handoff ระหว่าง Claude account/brand อื่น; แก้ปัญหาหน้า "รับค่า RFID" ยิงช้า/ติดขัดทันทีที่เข้าหน้า (ต่างจากหน้า "รับเข้า" ที่ยิงรัวปกติ) — ขอให้หาสาเหตุแล้วตัดออกทันที | `rfid_input_screen.dart`, `rfid_service.dart`, `RfidReaderController.kt`, `PROGRESS.md` (this file) | Root cause found directly by reading the two screens + the native controller: `rfid_input_screen.dart` was the only screen enabling the reader's `ALL_TAG_FIELDS` "detail mode" (`rfid.setDetailMode(true)` in its own `initState`) to show TID/PC/CRC/antenna/channel/phase/seen-count — and `RfidReaderController.kt` already had its own doc comment measuring that mode at ~171/sec → ~16/sec (10x slower) on this hardware, for a TID field that never actually arrives that way regardless (`tidCount` confirmed 0). Confirmed the fix approach with the user via AskUserQuestion (cut detail mode entirely vs. keep as opt-in) — chose full removal. Deleted `setDetailMode` end-to-end: Dart service wrapper, Kotlin `MethodChannel` case, `detailMode` field, and the branch in `eventReadNotify`/`applyReadProfile` that switched on it. Verified via `flutter analyze` + `flutter build apk --release` + on-device install. Committed (`7a151a9`) and pushed. Then wrote/updated this `PROGRESS.md` on a clean `origin/main` worktree (root checkout was on a stale unrelated branch `stash-check`; a `main`-tracked worktree `great-mendeleev-57773d` existed but had unrelated massive uncommitted deletions, so used a fresh detached worktree from `origin/main` instead to avoid touching either). |
+| 2 | (ต่อเนื่อง) | `frontend/public/legacy.html` | พบบั๊กเดียวกันใน `resolveTag()` ของเว็บแอป — แก้โดยเพิ่ม `tagForRfidCode()` helper |
+| 3-11 | (push-access troubleshooting, resolved — see note at top) | — | — |
+| 12 | "ทำการ rebuild pda flutter ใน mc3390r" | — | `flutter clean` + `pub get` + `flutter build apk --release` + install |
+| 13 | หน้าลงทะเบียนกล่อง: Zone/Rack/Shelf/Slot dropdown จาก DB, merge เข้า main, โหมดประหยัดพลังงาน, `/rfid` ตัด toggle + เสียงบี๊บ | `location.dart` (new), `state_snapshot.dart`, `box_register_screen.dart`, `rfid_locate_screen.dart`, `rfid_service.dart`, `RfidReaderController.kt` | Cascading dropdowns + rack-barcode scan; RFID toggle removed; haptic → graduated beep; low-power wired into gauge animation. Committed `8acb272`. |
+| 14 | Device reconnected | — | Reinstalled APK |
+| 15 | PROGRESS.md handoff doc + "รับค่า RFID" ยิงช้า | `rfid_input_screen.dart`, `rfid_service.dart`, `RfidReaderController.kt`, `PROGRESS.md` | Root cause: `ALL_TAG_FIELDS` detail mode was 10x slower for a TID field that never populates anyway. Removed `setDetailMode` end-to-end. Committed `7a151a9`. |
