@@ -858,7 +858,9 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
 .notif-bell-badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
   background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;}
 .nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
-  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;}
+  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;
+  cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;}
+.nav-badge:hover{transform:scale(1.18);box-shadow:0 0 0 3px color-mix(in srgb,var(--neg) 25%,transparent);}
 .notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;max-width:90vw;max-height:70vh;
   background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:.5px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:401;}
@@ -2950,7 +2952,17 @@ function goSetup(stab){
   },60);
 }
 window.goSetup=goSetup;
-$all('#nav button[data-tab]').forEach(function(b){b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
+/* คลิกที่ badge ตัวเลขค้าง (เช่น "สต็อกกล่อง" มี badge แดง 3) ควรพาไปที่รายการ
+   ที่ต้องจัดการเลย ไม่ใช่ไปเปิดแท็บ "ทั้งหมด" แล้วให้ผู้ใช้ไปหาต่อเอง — เจาะจงเฉพาะ
+   ตอนคลิกโดนตัว badge เท่านั้น คลิกที่อื่นในปุ่มยังเข้าแท็บปกติเหมือนเดิม */
+$all('#nav button[data-tab]').forEach(function(b){b.addEventListener('click',function(e){
+  var badge=b.querySelector('.nav-badge');
+  if(b.dataset.tab==='inventory'&&badge&&!badge.hidden&&(e.target===badge||badge.contains(e.target))){
+    goInventory({status:'pending',label:'รอติดบาร์โค้ด ('+(badge.textContent||'0')+' รายการ)'});
+    return;
+  }
+  switchTab(b.dataset.tab);
+});});
 window.addEventListener('resize',function(){
   /* re-evaluate the sidebar<->top threshold and keep the vertical nav offset in sync */
   var eff=effectiveLayout();
@@ -3227,7 +3239,7 @@ $('#btnAddBox').onclick = function() {
     var regTs=iso();
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
       lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:false,
+      location:pendingStageLocation(regTs),lastSeenAt:regTs,labeled:false,
       /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
          stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
       history:[{dir:'reg',ts:regTs,recorder:USER}]};
@@ -3244,7 +3256,7 @@ $('#btnAddBox').onclick = function() {
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
       if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
         lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:false,
+        location:pendingStageLocation(regTsB),lastSeenAt:regTsB,labeled:false,
         history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
@@ -3389,12 +3401,50 @@ window.renderWhGateTypeList=renderWhGateTypeList;
 var DEFAULT_STAGING={zone:'พื้นที่รับของขาเข้า',rack:'STG-01'};
 function whStaging(whId){var w=S.warehouses[whId]||{};
   return {zone:(w.stagingZone||DEFAULT_STAGING.zone),rack:(w.stagingRack||DEFAULT_STAGING.rack)};}
-/* True if a location is a staging point (explicit flag, or configured/legacy staging rack, or empty) */
-function isStagingLoc(loc){ return false; } /* SOW: no Putaway/staging */
+/* True if a location is a staging point: has a zone/rack but no shelf/slot
+   (a real putaway position always has shelf+slot — see locAutoCode/locBuildCode)
+   and that zone/rack matches this warehouse's configured (or default) staging
+   spot. Re-enabled — a box sitting at loc-none read as "not in the building at
+   all" to an operator standing right next to it at the receiving dock, which
+   is worse than the ambiguity this was meant to avoid (see pendingStageLocation
+   below and isRackedBox in renderInventory). */
+function isStagingLoc(loc){
+  loc=loc||{};
+  if(loc.shelf||loc.slot)return false;
+  if(!loc.zone&&!loc.rack)return false;
+  var st=whStaging(loc.wh);
+  return loc.zone===st.zone&&loc.rack===st.rack;
+}
 /* Human label for a staging location — shows the actual configured zone/rack, not a hardcoded value */
 function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
   var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
   return 'พื้นที่พักสินค้า'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
+/* กล่อง "รอติดบาร์โค้ด" (pending, labeled=false) ผ่าน Gate เข้ามาในพื้นที่คลังแล้วจริง ๆ
+   (สแกนรับเข้า/สร้างข้อมูลตอนของมาถึง) เพียงแต่ยังไม่ได้ติดสติกเกอร์บาร์โค้ด จึงยัง
+   สแกนเข้าคลังแบบเป็นทางการไม่ได้ — ปล่อยเป็น loc-none (ไม่มีตำแหน่ง) ทำให้เกิด data
+   paradox: ของกองอยู่จริงในคลัง แต่ระบบมองว่าอยู่นอกคลัง หาไม่เจอ ทั้งตัดออกจาก
+   รายงาน on-hand ด้วย จึงต้อง auto-assign ไปที่ "โซนพักรับ (RCV-STAGE)" ทันทีที่สร้าง
+   ข้อมูล — เลือกคลังให้อัตโนมัติได้เฉพาะตอนมีคลังเดียวในระบบ (เดาไม่ได้ว่าจะไปโผล่
+   คลังไหนถ้ามีหลายคลัง แต่ยังคงติดป้ายโซนพักรับไว้เหมือนกัน ไม่ปล่อยว่าง) */
+function pendingStageLocation(ts){
+  var whIds=Object.keys(S.warehouses);
+  var wh=whIds.length===1?whIds[0]:'';
+  var st=whStaging(wh);
+  return {wh:wh,zone:st.zone,rack:st.rack,shelf:'',slot:'',gate:null,ts:ts};
+}
+/* Location-cell badge for a "รอติดบาร์โค้ด" box (status pending, labeled=false) —
+   shared by every table/modal that renders this cell, so the RCV-STAGE fix
+   only has to be reasoned about in one place. Falls back to the old loc-none
+   text only for the edge case where pendingStageLocation() somehow never ran
+   (should be unreachable post-backfill, but a missing location must never
+   silently render as if it were a real position). */
+function pendingLocBadge(b){
+  var loc=b.location||{};
+  if(isStagingLoc(loc)){
+    return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(loc)+' (RCV-STAGE) — รอติดบาร์โค้ด</span>';
+  }
+  return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
+}
 
 $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
@@ -4030,7 +4080,7 @@ function openBoxActionModal(tag){
     ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
     :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
     :b.status==='pending'&&b.labeled===true?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>'
-    :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
+    :b.status==='pending'?pendingLocBadge(b)
     :locShort(b.location);
 
   var actions=[];
@@ -6167,16 +6217,16 @@ function renderOverview(){
   applyAutoLost();
   renderMdHealthBanner();
   var all=Object.values(S.boxes);
-  /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค นับเป็น "ในคลัง" แล้ว (แค่ยังไม่ Putaway)
-     — ดูหมายเหตุเดียวกันใน localStatusCounts() */
-  var wh=all.filter(function(b){return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);}).length;
+  /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค (รอ Putaway) และรอติดบาร์โค้ด (โซนพักรับ
+     RCV-STAGE) ทั้งคู่นับเป็น "ในคลัง" แล้ว — ดูหมายเหตุเดียวกันใน localStatusCounts() */
+  var wh=all.filter(function(b){return b.status==='warehouse'||b.status==='pending';}).length;
   var out=all.filter(function(b){return b.status==='out';}).length;
   var lost=all.filter(function(b){return b.status==='lost';}).length;
   var outToday=S.events.filter(function(e){return e.dir==='out'&&dstr(new Date(e.ts))===dstr();}).length;
   var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dstr(new Date(e.ts))===dstr();}).length;
   var overdueCount=all.filter(function(b){return b.status==='out'&&isOverdue(b);}).length;
   var awaitingCount=all.filter(function(b){return b.status==='out'&&!isOverdue(b);}).length;
-  var putawayCount=all.filter(function(b){return (b.status==='warehouse'&&isAtStaging(b))||(b.status==='pending'&&b.labeled===true);}).length;
+  var putawayCount=all.filter(function(b){return (b.status==='warehouse'&&isAtStaging(b))||b.status==='pending';}).length;
   var inEv=S.events.filter(function(e){return e.dir==='in';}).length;
   var outEv=S.events.filter(function(e){return e.dir==='out';}).length;
   /* feed the live isometric hero scene with real occupancy + traffic */
@@ -6274,7 +6324,7 @@ function renderOverview(){
         var locOrCust=b.status==='out'
           ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
           :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
-          :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
+          :b.status==='pending'?pendingLocBadge(b)
           :locShort(b.location);
 
         typeFlowHtml+='<tr class="flowrow" style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
@@ -6503,7 +6553,7 @@ function renderSetup(){
     var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);
   });
   $('#boxBody').innerHTML=bx.length?bx.map(function(b){
-    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>':(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
+    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?pendingLocBadge(b):(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
     var lotExpCell=(b.lot||b.expiry)
       ?(b.lot?('<span class="mono">'+esc(b.lot)+'</span>'):'')+(b.expiry?((b.lot?'<div class="tag" style="margin-top:2px;">':'')+esc(b.expiry)+' '+expiryPill(b)+(b.lot?'</div>':'')):'')
       :'<span class="muted small">-</span>';
@@ -6518,7 +6568,10 @@ function renderSetup(){
       +'<td class="c muted">›</td></tr>';
   }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
   /* ติดป้ายแล้วรอ Putaway = อยู่ในคลังแล้ว นับรวมในยอด "ในคลัง" ไม่ใช่ "รอติดบาร์โค้ด" */
-  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);}).length;
+  /* รอติดบาร์โค้ด (labeled=false) ก็อยู่ในคลังจริง (โซนพักรับ RCV-STAGE) เหมือน
+     รอ Putaway (labeled=true) — นับรวมทั้งคู่ใน "ในคลัง" ส่วน "รอติดบาร์โค้ด" ยัง
+     แยกนับไว้ต่างหากเป็นคิวงานที่ต้องจัดการ (ไม่ใช่ตัวชี้ว่าอยู่นอกคลัง) */
+  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'||b.status==='pending';}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending'&&b.labeled!==true;}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติดบาร์โค้ด '+totalPending+'</span>':'');
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
@@ -6707,6 +6760,23 @@ function backfillLocationsFromBoxes() {
   return added;
 }
 window.backfillLocationsFromBoxes = backfillLocationsFromBoxes;
+
+/* ── heal pre-existing "รอติดบาร์โค้ด" boxes stuck at loc-none ──
+   pendingStageLocation() only runs for *newly* created boxes — any box
+   registered before that fix shipped is still sitting on the old empty
+   location and needs the same one-time repair backfillLocationsFromBoxes()
+   already does for a different gap. Called at boot right alongside it. */
+function backfillStagingForPending() {
+  var fixed = 0;
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'pending' || b.labeled === true) return;
+    if (isStagingLoc(b.location||{})) return;
+    b.location = pendingStageLocation(b.location&&b.location.ts || b.regAt || iso());
+    fixed++;
+  });
+  return fixed;
+}
+window.backfillStagingForPending = backfillStagingForPending;
 
 /* ── occupancy: which location codes currently hold a box ──
    Built from live S.boxes rather than a stored field, so it can never go
@@ -8406,7 +8476,9 @@ function bootLoad(attempt){
       setTimeout(function(){bootLoad((attempt||0)+1);},retryIn);
       return;
     }
-    if(backfillLocationsFromBoxes())save();
+    var backfilled=backfillLocationsFromBoxes();
+    if(backfillStagingForPending())backfilled=true;
+    if(backfilled)save();
     renderAll();
     hydrateIcons(document);
     /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้)
@@ -8470,7 +8542,7 @@ function invLocText(b) {
   /* ติดแท็กแล้วแต่เลือกไม่ให้ระบบ Putaway ให้ทันที — แยกจาก "รอติดบาร์โค้ด" ที่ยัง
      ไม่ติดแท็กเลย ไม่งั้นคอลัมน์นี้จะดูเหมือนไม่ขยับแม้กดยืนยันติดแท็กไปแล้ว */
   if (b.status === 'pending' && b.labeled === true) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>';
-  if (b.status === 'pending') return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
+  if (b.status === 'pending') return pendingLocBadge(b);
   var loc = b.location || {};
   if (!loc.wh) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่ระบุตำแหน่ง</span>';
   if (isStagingLoc(loc)) {
@@ -8940,6 +9012,10 @@ function localStatusCounts() {
        Putaway จึงต้องนับรวมอยู่ใน "ในคลัง" ด้วย (ไม่ใช่แค่แท็บ "รอ Putaway"
        แยกต่างหาก) — status ในข้อมูลยังคงเป็น 'pending' เหมือนเดิม แก้แค่การนับสรุป */
     if (b.status === 'pending' && b.labeled === true) { c.pendingPutaway++; c.warehouse++; }
+    /* รอติดบาร์โค้ด = อยู่ที่โซนพักรับในคลังจริง (RCV-STAGE, ดู pendingStageLocation)
+       นับรวมใน "ในคลัง" ด้วยเหมือนกัน — ยังคงนับ c.pending แยกไว้เป็นคิวงานที่ต้อง
+       จัดการ (ตรงกับ badge นับค้างที่เมนู Inventory) */
+    else if (b.status === 'pending') { c.pending++; c.warehouse++; }
     else if (c[b.status] !== undefined) c[b.status]++;
     if (b.labeled !== false && !b.rfidTid && !b.rfidEpc) c.noRfid++;
     if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
@@ -12361,7 +12437,7 @@ function refreshNotifBadges(){
   var nav=$('#navBadgeInventory'); if(!nav)return;
   var pending=(typeof localStatusCounts==='function')?
     (function(){var c=localStatusCounts();return (c.pending||0)+(c.pendingPutaway||0)+(c.noRfid||0);})():0;
-  if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);} else nav.hidden=true;
+  if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);nav.title='คลิกเพื่อกรองดู '+pending+' รายการที่ต้องจัดการ';} else nav.hidden=true;
 }
 let notifAudioCtx=null;
 function playNotifChime(){

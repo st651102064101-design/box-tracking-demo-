@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes } from '../db/schema.js';
+import { boxes, boxTypes, warehouses } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
@@ -148,7 +148,21 @@ boxesRouter.post(
 
     const now = new Date();
     const ts = now.toISOString();
-    const location = { wh: '', zone: '', rack: '', shelf: '', slot: '', gate: null, ts };
+    /* A freshly-registered box has physically arrived (or is being data-entered
+     * as it arrives) but has no barcode sticker yet, so it can't be scanned
+     * through a real Gate/putaway flow — leaving location entirely blank read
+     * as "not in the building at all" (loc-none) to anyone looking at the
+     * table, which is a real data-integrity problem: the box is sitting at
+     * the receiving dock, taking up floor space and countable as on-hand
+     * stock, but the system couldn't say where. Auto-assign the default
+     * receiving/staging spot instead — mirrors legacy.html's own
+     * pendingStageLocation(). Only guessed when there's exactly one
+     * warehouse on file; with several, which one this box physically landed
+     * at can't be inferred, so it's left unset (still flagged staging via
+     * zone/rack, just without a wh) rather than guessed wrong. */
+    const whList = await db.select({ id: warehouses.id }).from(warehouses);
+    const wh = whList.length === 1 ? whList[0]!.id : '';
+    const location = { wh, zone: 'พื้นที่รับของขาเข้า', rack: 'STG-01', shelf: '', slot: '', gate: null, ts };
     const history = [{ dir: 'reg', ts, recorder: req.user!.username }];
     const data = {
       tag,
