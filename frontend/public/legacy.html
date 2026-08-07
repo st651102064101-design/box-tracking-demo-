@@ -1278,7 +1278,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
-  <button data-tab="inventory" title="สต็อกกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span><span class="nav-badge" id="navBadgeInventory" hidden>0</span></span><span class="navlbl">สต็อกกล่อง</span></button>
+  <button data-tab="inventory" title="สต็อกกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">สต็อกกล่อง</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
@@ -1807,6 +1807,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <button class="btn sm ghost" id="bulkInvHold" title="กันไม่ให้จ่ายออกจนกว่าจะปลดล็อก — ใช้ได้เฉพาะกล่องในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)</button>
       <button class="btn sm ghost" id="bulkInvDamage" title="ยังอยู่ในคลังแต่กันออกจากการใช้งาน — ใช้ได้กับกล่องในคลังหรือที่ Hold อยู่"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ตีชำรุด (Damage)</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
+      <button class="btn sm red" id="bulkInvDelete" title="ลบออกจากระบบถาวร — ใช้เมื่อบันทึกผิด/ทดสอบ ไม่ใช่กรณีกล่องหายจริง (ใช้ปุ่ม แจ้งกล่องหาย แทน)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg></span> ลบ</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
     </div>
   </div>
@@ -1895,7 +1896,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row no-print reveal" style="margin-bottom:22px;">
     <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
-    <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
+    <!-- ซ่อนจาก sub-tab bar ปกติ — ตัวช่วยรับกล่องเข้าคลัง (openBoxWizard) เข้ามาแทน
+         การรับเข้าด้วยมือแบบนี้แล้ว แต่ยังต้องคงปุ่มนี้ไว้ใน DOM เพราะ editBox()
+         เรียก goSetup('box') ซึ่ง querySelector+click ปุ่มนี้เพื่อเปิดฟอร์มแก้ไข
+         ประเภท/Lot/วันหมดอายุ/ซัพพลายเออร์ ของกล่องที่มีอยู่แล้ว — ลบปุ่มออกจริง ๆ
+         จะทำให้แก้ไขข้อมูลกล่องเดิมไม่ได้เลย -->
+    <button class="btn ghost sm stab" data-stab="box" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
     <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค<span class="sf-badge" data-stab-badge="loc"></span></button>
@@ -3941,10 +3947,13 @@ function isStagingLoc(loc){
   var st=whStaging(loc.wh);
   return loc.zone===st.zone&&loc.rack===st.rack;
 }
-/* Human label for a staging location — shows the actual configured zone/rack, not a hardcoded value */
+/* Human label for a staging location — just the configured zone name (e.g.
+   "พื้นที่รับของขาเข้า"), not the internal rack code (STG-01) or the redundant
+   "พื้นที่พักสินค้า · <zone> · <rack code>" stack this used to build — a rack
+   code and a repeated "staging area" prefix mean nothing to the person reading
+   the screen, only the zone name does. */
 function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
-  var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
-  return 'พื้นที่พักสินค้า'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
+  return esc(loc.zone||st.zone||'พื้นที่พักสินค้า');}
 /* กล่อง "รอติดบาร์โค้ด" (pending, labeled=false) ผ่าน Gate เข้ามาในพื้นที่คลังแล้วจริง ๆ
    (สแกนรับเข้า/สร้างข้อมูลตอนของมาถึง) เพียงแต่ยังไม่ได้ติดสติกเกอร์บาร์โค้ด จึงยัง
    สแกนเข้าคลังแบบเป็นทางการไม่ได้ — ปล่อยเป็น loc-none (ไม่มีตำแหน่ง) ทำให้เกิด data
@@ -3971,7 +3980,7 @@ function pendingStageLocation(ts,whId){
 function pendingLocBadge(b){
   var loc=b.location||{};
   if(isStagingLoc(loc)){
-    return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(loc)+' (RCV-STAGE) — รอติดบาร์โค้ด</span>';
+    return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(loc)+' — รอติดบาร์โค้ด</span>';
   }
   return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
 }
@@ -9169,7 +9178,7 @@ function invLastRecorder(b) {
 }
 
 /* ---- extra filter state (set by goInventory) ---- */
-var invWhFilter  = '';   /* warehouse id — show only boxes in that WH */
+var invWhFilter  = 'ALL';   /* warehouse id — show only boxes in that WH ('ALL' = no filter, everything incl. outside) */
 var invDoFilter  = '';   /* DO number  — show all boxes that ever belonged to this DO */
 
 /* ---- navigation helper called from overview cards ---- */
@@ -9786,7 +9795,7 @@ function toggleInvSumGroup(gid, rowEl) {
 window.toggleInvSumGroup = toggleInvSumGroup;
 
 document.getElementById('schInv').addEventListener('input', function(){
-  invWhFilter = ''; invDoFilter = '';
+  invWhFilter = 'ALL'; invDoFilter = '';
   var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
   renderInventory();
 });
@@ -10255,6 +10264,40 @@ $('#bulkInvWriteoff').addEventListener('click', function() {
       toast('แจ้งกล่องหายแล้ว', live.length + ' ใบ', 'warn');
       renderAll();
     });
+});
+
+/* ลบหลายใบพร้อมกัน — เดี่ยว (openDeleteBoxModal) บังคับสแกน Tag ทีละใบเพื่อยืนยันว่า
+   ถอด Tag ออกจากกล่องจริงแล้ว ทำแบบนั้นกับหลายสิบใบพร้อมกันไม่ไหว จึงลดระดับความ
+   ป้องกันลงมาเป็น "พิมพ์ยืนยันจำนวน" แทน — ยังต้องตั้งใจพิมพ์ตัวเลขที่ตรงกันเป๊ะ
+   ไม่ใช่แค่กดปุ่มเดียวผ่าน จึงกันมือลั่นได้ในระดับที่เหมาะกับงานเป็นชุด */
+$('#bulkInvDelete').addEventListener('click', function() {
+  var tags = getChecked('inv-cb'); if (!tags.length) return;
+  var n = tags.length;
+  openModal(
+    '<div class="mhead"><h3>ลบ ' + n + ' กล่อง</h3><button class="x" data-close>' + IC('close') + '</button></div>'
+    + '<div class="mbody">'
+    + '<div class="banner bad" style="margin:0 0 14px;">ลบออกจากระบบถาวร ย้อนกลับไม่ได้ — ใช้เมื่อบันทึกผิด/ทดสอบเท่านั้น ถ้ากล่องหายจริงให้ใช้ปุ่ม "แจ้งกล่องหาย" แทน (เปลี่ยนสถานะ ไม่ลบข้อมูล)</div>'
+    + '<div class="tag" style="margin-bottom:10px;max-height:160px;overflow:auto;">' + tags.map(esc).join(', ') + '</div>'
+    + '<div class="field"><label>พิมพ์ <b>' + n + '</b> เพื่อยืนยันลบทั้ง ' + n + ' ใบ</label><input id="delBulkConfirm" placeholder="' + n + '" autocomplete="off" inputmode="numeric"></div>'
+    + '</div>'
+    + '<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn red" id="delBulkBtn" disabled>ยืนยันลบ ' + n + ' ใบ</button></div>'
+  );
+  var input = $('#delBulkConfirm'), btn = $('#delBulkBtn');
+  input.addEventListener('input', function() { btn.disabled = input.value.trim() !== String(n); });
+  setTimeout(function() { input.focus(); }, 50);
+  btn.onclick = function() {
+    if (btn.disabled) return;
+    tags.forEach(function(t) {
+      var b = S.boxes[t]; if (!b) return;
+      var before = Object.assign({}, b);
+      delete S.boxes[t];
+      auditEntry('DELETE', USER, t, typeName(before.type), before, null);
+      trackTags = trackTags.filter(function(x) { return x !== t; });
+    });
+    save(); closeModal(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
+    toast('ลบแล้ว', n + ' ใบ', 'warn');
+    renderAll();
+  };
 });
 
 $('#bulkInvHold').addEventListener('click', function() {
