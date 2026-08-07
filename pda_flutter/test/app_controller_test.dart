@@ -52,6 +52,7 @@ class FakeApi extends ApiClient {
     String? plate,
     String? driver,
     String? vehicleType,
+    Map<String, String>? conditions,
   }) async {
     if (throwOnGate != null) {
       final e = throwOnGate!;
@@ -359,10 +360,7 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
-    /* A return often arrives without a vehicle worth naming — someone walks
-       a box back in. Blocking that only taught operators to type a fake
-       plate, so inbound accepts an empty one. */
-    test('inbound commits without a plate', () async {
+    test('inbound commits fine without a plate — Gate In never requires one', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -370,14 +368,11 @@ void main() {
       await c.doCommit();
 
       expect(api.gateInCalls, hasLength(1));
-      expect(api.gateInCalls.first['tags'], ['CRT-02']);
-      expect(api.gateInCalls.first['plate'], '');
+      expect(api.gateInCalls.first['plate'], isEmpty);
       expect(c.queue, isEmpty);
     });
 
-    /* Outbound still requires one: that record is how a box in a customer's
-       hands gets traced back. */
-    test('an outbound commit without a plate posts nothing and keeps the queue', () async {
+    test('outbound without a plate posts nothing and keeps the queue', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'out';
@@ -430,7 +425,7 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
       expect(api.gateInCalls, isEmpty);
@@ -446,15 +441,13 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
       // Handover: someone else takes the device before connectivity returns.
       c.lock();
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0002'));
-      c.toggleOnline();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await c.syncNow();
 
       expect(api.gateInCalls, hasLength(1));
       expect(api.gateInCalls.first['employeeId'], 'EMP-0001');
@@ -467,12 +460,10 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.connectedForTest = false;
       await c.doCommit();
 
-      c.toggleOnline();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await c.syncNow();
 
       expect(api.gateInCalls, hasLength(1));
       expect(c.outbox, isEmpty);

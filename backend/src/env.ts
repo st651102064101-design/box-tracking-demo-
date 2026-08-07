@@ -15,6 +15,13 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-secret-change-me',
   // Kept short since there's no refresh-token flow yet — a stolen token self-expires quickly.
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
+  // Second, independent factor on top of the JWT — a stolen/leaked bearer
+  // token alone still isn't enough to call the API if this is set, since
+  // every request also has to carry X-API-Key. Empty (the default) means
+  // "not enforced", so an existing deployment/the legacy.html web client
+  // (which has no way to be given this key today) keeps working unchanged
+  // until an operator opts in by setting API_KEY — see requireApiKey.
+  apiKey: process.env.API_KEY ?? '',
   seedAdmin: {
     username: process.env.SEED_ADMIN_USERNAME ?? 'admin',
     password: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',

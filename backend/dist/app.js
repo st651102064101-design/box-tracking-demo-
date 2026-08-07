@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import { notFound, errorHandler } from './middleware/error.js';
+import { requireApiKey } from './middleware/auth.js';
 import { authRouter } from './routes/auth.js';
 import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
@@ -31,6 +32,22 @@ const authLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'too_many_requests', message: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
+});
+/**
+ * Baseline throttle for every authenticated (operational) endpoint —
+ * gate/boxes/masters/rfid/pin/state — previously unlimited entirely. 300
+ * requests/min comfortably covers a real terminal (RFID batches, polling,
+ * queue commits) while still bounding a runaway client or a credential
+ * that's actively being abused. authLimiter above stays separate and
+ * stricter since login/register are unauthenticated and a much cheaper
+ * target to hammer.
+ */
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'too_many_requests', message: 'มีการเรียก API ถี่เกินไป กรุณาลองใหม่ภายหลัง' },
 });
 /** Build the Express app (kept separate from listen() so Supertest can import it). */
 export function createApp() {
@@ -69,12 +86,18 @@ export function createApp() {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/register', authLimiter);
     app.use('/api/auth', authRouter);
-    app.use('/api/state', stateRouter);
-    app.use('/api/gate', gateRouter);
-    app.use('/api/boxes', boxesRouter);
-    app.use('/api/rfid', rfidRouter);
-    app.use('/api/masters', mastersRouter);
-    app.use('/api/employees', employeePinRouter);
+    // Every operational route beyond this point is authenticated (each
+    // router's own requireAuth), rate-limited, and — once API_KEY is set —
+    // also requires X-API-Key. /api/stream is excluded: it's a long-lived SSE
+    // connection, not a request burst, so the per-minute request limiter
+    // doesn't apply to it in any useful way, and it authenticates via its own
+    // query-param token instead of a header (EventSource can't send headers).
+    app.use('/api/state', apiLimiter, requireApiKey, stateRouter);
+    app.use('/api/gate', apiLimiter, requireApiKey, gateRouter);
+    app.use('/api/boxes', apiLimiter, requireApiKey, boxesRouter);
+    app.use('/api/rfid', apiLimiter, requireApiKey, rfidRouter);
+    app.use('/api/masters', apiLimiter, requireApiKey, mastersRouter);
+    app.use('/api/employees', apiLimiter, requireApiKey, employeePinRouter);
     app.use('/api/stream', streamRouter);
     app.use(notFound);
     app.use(errorHandler);

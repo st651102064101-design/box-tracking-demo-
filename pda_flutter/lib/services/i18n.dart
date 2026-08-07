@@ -72,6 +72,45 @@ class LocaleController extends ChangeNotifier {
     'ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป':
         'Only this model is currently supported — additional models will be added in a future update',
     'เครื่องอ่าน RFID ในตัวเครื่อง': 'Integrated RFID reader',
+
+    // settings screen
+    'ตั้งค่า': 'Settings',
+    'การเชื่อมต่อระบบหลัก': 'Main system connection',
+    'เชื่อมต่อกับ BoxTrace แล้ว': 'Connected to BoxTrace',
+    'พบ': 'Found',
+    'กล่องในฐานข้อมูล': 'boxes in the database',
+    'โหมดประหยัดพลังงาน': 'Low power mode',
+    'ลดกราฟฟิกและความถี่รีเฟรช เพื่อความเร็วบนเครื่อง': "Reduces graphics and refresh rate for speed on this device",
+    'รับค่า RFID': 'Read RFID',
+    'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่':
+        "Read tags live, unlinked to any box — check read speed here",
+    'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ': "Supervisors only — this terminal is stationed at",
+    'รหัส PIN ส่วนตัว': 'Personal PIN',
+    'ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส': 'Already set — tap to change it',
+    'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ':
+        "Not set yet — tap to set one so no one else can tap your name",
+    'เปลี่ยนคน / จบงาน': 'Switch person / end shift',
+    'กลับไปหน้ายิงบัตร': 'Back to the badge screen',
+    'เชื่อมกับ BoxTrace backend': 'Connected to the BoxTrace backend',
+    'ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra':
+        'Only available on Android devices with a Zebra reader',
+    'เชื่อมต่อเครื่องอ่านแล้ว': 'Reader connected',
+    'เชื่อมต่อไม่สำเร็จ': 'Connection failed',
+    'ตัดการเชื่อมต่อ': 'Disconnected',
+    'ยังไม่ได้เชื่อมต่อ': 'Not connected yet',
+    'เครื่องอ่าน RFID (Zebra)': 'RFID reader (Zebra)',
+    'เชื่อมต่อใหม่': 'Reconnect',
+    'ระยะยิงแท็ก': 'Tag read range',
+    'กำลังยิงทดสอบ… แตะเพื่อหยุด': 'Test firing… tap to stop',
+    'แตะเพื่อทดสอบยิง': 'Tap to test fire',
+    'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้':
+        "Connect the reader first to fine-tune the range across this device's full spec",
+    'กรองสัญญาณอ่อน (RSSI)': 'Filter weak signal (RSSI)',
+    'ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ':
+        "Drops tags read weaker than the set threshold — keeps reads from bleeding into the next pallet over",
+    'เสียงบี๊บ': 'Beep sound',
+    'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที — เสียงนี้ใช้เฉพาะตอนยิงแท็ก RFID เท่านั้น ไม่มีผลกับเสียงอื่นของเครื่อง (เช่น เสียงยิงบาร์โค้ด)':
+        "Tap to preview and pick instantly — this sound only applies when reading RFID tags, it has no effect on the device's other sounds (like the barcode scan beep)",
   };
 }
 

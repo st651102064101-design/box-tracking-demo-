@@ -85,6 +85,20 @@ export const customerSchema = z.object({
   returnDays: z.number().int().nonnegative().nullish(),
 });
 
+/** One row of the Location Master — `code` is the primary key (see
+ *  db/schema.ts's `locations` table); zone/rack/shelf/slot are each
+ *  optional so a partial location (e.g. zone-only) can still be recorded. */
+export const locationSchema = z.object({
+  code: z.string().min(1),
+  wh: z.string().nullish(),
+  zone: z.string().nullish(),
+  rack: z.string().nullish(),
+  shelf: z.string().nullish(),
+  slot: z.string().nullish(),
+  type: z.string().nullish(),
+  note: z.string().nullish(),
+});
+
 /* ─── gate operations ──────────────────────────────────────────────────────*/
 export const gateOutSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
@@ -140,4 +154,9 @@ export const gateInSchema = z.object({
   plate: z.string().optional(),
   driver: z.string().optional(),
   vehicleType: z.string().optional(),
+  /** Per-tag condition an operator flagged while scanning this batch in —
+   *  a box marked here lands on 'hold' or 'damage' instead of 'warehouse',
+   *  same statuses legacy.html's own box list already filters by. Any tag
+   *  not present here is assumed fine and goes straight to 'warehouse'. */
+  conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
 });

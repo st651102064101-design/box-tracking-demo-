@@ -64,7 +64,7 @@ class Panel extends StatelessWidget {
         color: color ?? C.surface,
         borderRadius: BorderRadius.circular(radius),
         border: border ?? Border.all(color: C.border),
-        boxShadow: shadow,
+        boxShadow: C.lowGraphics ? null : shadow,
       ),
       child: child,
     );
@@ -95,7 +95,7 @@ class PrimaryButton extends StatelessWidget {
             decoration: enabled
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: C.lime.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))],
+                    boxShadow: C.shadow([BoxShadow(color: C.lime.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))]),
                   )
                 : null,
             child: Row(
@@ -160,6 +160,40 @@ class RoundIconButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(width: size, height: size, child: Icon(icon, size: size * 0.53, color: C.ink)),
+      ),
+    );
+  }
+}
+
+/// Lime submit-arrow button meant for a `TextField`'s `suffixIcon` — a
+/// scanner in keyboard-wedge mode types a trailing Enter, but a human typing
+/// the code by hand on this handheld often doesn't reach for it (or the
+/// on-screen keyboard's own Enter/Go key never fires `onSubmitted` the way
+/// the MC3390R's own trigger does). Every free-text lookup field (track,
+/// RFID find/register, barcode/RFID scan-or-type) needs an explicit tap
+/// target that does exactly what Enter already does, so nobody has to guess.
+class SubmitArrowButton extends StatelessWidget {
+  final VoidCallback? onTap;
+  const SubmitArrowButton({super.key, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Material(
+        // Bright lime background + dark icon, same pairing PrimaryButton
+        // uses — was the other way round (limeDeep bg + black icon), which
+        // on a dark field reads as a near-invisible dark-on-dark circle.
+        color: C.lime,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: C.limeDeep),
+          ),
+        ),
       ),
     );
   }
@@ -231,9 +265,21 @@ class StickyHeader extends StatelessWidget {
   }
 }
 
-/// Online/offline chip. Green means "connected," gray means "not" — orange is
-/// reserved for warnings elsewhere in the app, so offline deliberately isn't
-/// that color even though it's a less-than-ideal state.
+/// Online/offline indicator — one real, auto-detected state (see
+/// AppController.connected, kept live by RealtimeService's SSE heartbeat)
+/// used identically everywhere it appears (badge screen, Home, Gate) so the
+/// app never shows two different answers to "am I online?" at once. Green
+/// means "connected," gray means "not" — orange is reserved for warnings
+/// elsewhere in the app, so offline deliberately isn't that color even
+/// though it's a less-than-ideal state.
+///
+/// Labeled (not icon-only) since a bare cloud glyph reads as decoration —
+/// spelling out "Online"/"Offline" is what makes it legible as a status at
+/// a glance. There is deliberately no way to force this to say "online"
+/// (tapping while offline can only retry the real connection, never fake
+/// it) and no way to force it to "offline" either — that used to be a
+/// separate manual toggle, which is exactly what let this chip disagree
+/// with the actual connection state.
 class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
@@ -243,24 +289,23 @@ class OnlineChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
           color: online ? C.limeBg : C.neutralBg,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(17),
           border: Border.all(color: online ? C.limeBorder : C.border2),
         ),
+        alignment: Alignment.center,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: online ? C.limeText : C.muted, shape: BoxShape.circle),
-            ),
+            Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                size: 16, color: online ? C.limeText : C.muted),
             const SizedBox(width: 6),
-            Text(online ? 'ออนไลน์' : 'ออฟไลน์',
+            Text(online ? 'Online' : 'Offline',
                 style: TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w600, color: online ? C.limeText : C.muted)),
+                    fontSize: 12, fontWeight: FontWeight.w700, color: online ? C.limeText : C.muted)),
           ],
         ),
       ),
@@ -268,14 +313,26 @@ class OnlineChip extends StatelessWidget {
   }
 }
 
-/// Field label above an input.
+/// Field label above an input. [error], when set, appends the validation
+/// message inline in red right after the label — one place a form field's
+/// "what's wrong with this" lives, instead of every screen inventing its own
+/// red-text-somewhere-nearby convention.
 class FieldLabel extends StatelessWidget {
   final String text;
-  const FieldLabel(this.text, {super.key});
+  final String? error;
+  const FieldLabel(this.text, {super.key, this.error});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3),
+            children: [
+              TextSpan(text: text),
+              if (error != null) TextSpan(text: '  ·  $error', style: TextStyle(color: C.red)),
+            ],
+          ),
+        ),
       );
 }
 
@@ -300,6 +357,112 @@ InputDecoration pdaInput(String hint, {double radius = 13}) => InputDecoration(
         borderSide: BorderSide(color: C.ink, width: 1.5),
       ),
     );
+
+/// A dropdown that can add its own new option, instead of every screen
+/// needing a separate "manage X" admin flow before a genuinely new zone,
+/// box type, or customer can be picked at all. The "+ เพิ่มใหม่" action is
+/// pinned as the very first row so it's visible without scrolling the list
+/// no matter how many real options exist — see the ask this was built for:
+/// every dropdown in the app should let the operator add a missing value
+/// right there, not send them somewhere else first.
+///
+/// [onAdd] is given whatever text the operator typed in the prompt and
+/// returns the value to select once added (typically after an API call
+/// that persists it) — return null to cancel without changing the
+/// selection. [value]/[options]/[onChanged] behave like a normal dropdown.
+class AddableDropdown extends StatelessWidget {
+  final String? value;
+  final List<String> options;
+  final String Function(String value) labelFor;
+  final ValueChanged<String?> onChanged;
+  final Future<String?> Function(String typed) onAdd;
+  final String hint;
+  final String addLabel;
+  final double radius;
+  // Where the cursor should land once a real option is picked and the
+  // dropdown closes — the operator is filling in a form top-to-bottom and
+  // shouldn't have to tap the next field by hand every time. Not requested
+  // for the "+ เพิ่มใหม่" path, which opens its own dialog instead.
+  final FocusNode? nextFocus;
+  /// Validation message — red border + red text below, same as any other
+  /// PDA form field. Null (the default) renders exactly as before.
+  final String? errorText;
+
+  const AddableDropdown({
+    super.key,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.onAdd,
+    this.labelFor = _identity,
+    this.hint = '— ไม่ระบุ —',
+    this.addLabel = '+ เพิ่มใหม่…',
+    this.radius = 12,
+    this.nextFocus,
+    this.errorText,
+  });
+
+  static String _identity(String v) => v;
+
+  static const _addSentinel = ' __add_new__';
+
+  Future<void> _promptAdd(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('เพิ่มรายการใหม่'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: pdaInput('พิมพ์ค่าใหม่'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ยกเลิก')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('เพิ่ม'),
+          ),
+        ],
+      ),
+    );
+    if (typed == null || typed.isEmpty || !context.mounted) return;
+    final added = await onAdd(typed);
+    if (added != null) onChanged(added);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: (value != null && options.contains(value)) ? value : null,
+      isExpanded: true,
+      decoration: pdaInput(hint, radius: radius).copyWith(errorText: errorText, errorMaxLines: 2),
+      items: [
+        DropdownMenuItem(
+          value: _addSentinel,
+          child: Text(addLabel, style: TextStyle(color: C.limeText, fontWeight: FontWeight.w700)),
+        ),
+        ...options.map((v) => DropdownMenuItem(value: v, child: Text(labelFor(v), overflow: TextOverflow.ellipsis))),
+      ],
+      onChanged: (v) {
+        if (v == _addSentinel) {
+          _promptAdd(context);
+        } else {
+          onChanged(v);
+          // The framework closes the dropdown's own menu before this
+          // callback fires, but focus needs to move after that teardown
+          // settles — otherwise the request loses to the dropdown reclaiming
+          // focus on its way out.
+          if (nextFocus != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => nextFocus!.requestFocus());
+          }
+        }
+      },
+    );
+  }
+}
 
 /// Uppercase muted section caption.
 class Caption extends StatelessWidget {

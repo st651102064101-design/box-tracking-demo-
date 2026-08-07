@@ -68,5 +68,18 @@ services:
     ports:
       - "5100:80"
 
+  # Static host for the one-input RFID rapid-read test page. Bind-mounted
+  # read-only rather than baked into an image so editing rfid_test/index.html
+  # only needs a browser reload on the terminal, not a rebuild — this page
+  # exists to be tuned against real hardware.
+  rfid-test:
+    image: nginx:alpine
+    container_name: boxtrace-rfid-test
+    restart: unless-stopped
+    volumes:
+      - ./rfid_test:/usr/share/nginx/html:ro
+    ports:
+      - "5200:80"
+
 volumes:
   db-data:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/box.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -21,8 +22,6 @@ class HomeScreen extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(18, top + 14, 18, 6),
           child: Row(
             children: [
-              const BrandMark(size: 40),
-              const SizedBox(width: 12),
               // The operator's name is the most important thing on this screen:
               // if the wrong person is signed in, it has to be noticeable
               // before a scan is committed — and fixable in one tap.
@@ -61,7 +60,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              OnlineChip(online: c.online, onTap: c.toggleOnline),
+              // Reflects real, auto-detected server reachability everywhere
+              // this chip appears (badge screen, here, Gate) — see
+              // AppController.connected/retryOrConfigure.
+              OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
               const SizedBox(width: 8),
               RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
             ],
@@ -87,7 +89,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              ...(c.postConfirmed ? _confirmedBody(c) : _postPickerBody(c)),
+              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c)),
             ],
           ),
         ),
@@ -171,15 +173,34 @@ List<Widget> _postPickerBody(AppController c) {
 }
 
 /// คลัง/ประตูยืนยันแล้ว — สถิติ + "งานหลัก" ตามปกติ
-List<Widget> _confirmedBody(AppController c) {
+List<Widget> _confirmedBody(BuildContext context, AppController c) {
   return [
     Row(
       children: [
-        Expanded(child: _Stat(value: '${c.warehouseCount}', label: 'ในคลัง')),
+        Expanded(
+          child: _Stat(
+            value: '${c.warehouseCount}',
+            label: 'ในคลัง',
+            onTap: () => _showBoxListSheet(context, c, title: 'กล่องในคลัง', status: 'warehouse'),
+          ),
+        ),
         const SizedBox(width: 9),
-        Expanded(child: _Stat(value: '${c.outCount}', label: 'ออกอยู่', valueColor: C.orange)),
+        Expanded(
+          child: _Stat(
+            value: '${c.outCount}',
+            label: 'ออกอยู่',
+            valueColor: C.orange,
+            onTap: () => _showBoxListSheet(context, c, title: 'กล่องที่ออกอยู่', status: 'out'),
+          ),
+        ),
         const SizedBox(width: 9),
-        Expanded(child: _TodayStat(inN: c.todayIn, outN: c.todayOut)),
+        Expanded(
+          child: _TodayStat(
+            inN: c.todayIn,
+            outN: c.todayOut,
+            onTap: () => _showTodayEventsSheet(context, c),
+          ),
+        ),
       ],
     ),
     if (c.emp != null && c.isVisiting(c.emp!))
@@ -194,47 +215,440 @@ List<Widget> _confirmedBody(AppController c) {
         child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
       ),
     const SizedBox(height: 16),
-    const Caption('งานหลัก'),
-    const SizedBox(height: 10),
-    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
-    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
-    if (c.canScan && c.currentGateType != 'out') ...[
-      _ActionCard(
-        dark: true,
+    // Grouped by where a box is in its life, not by which screen happens to
+    // exist: Inbound -> Internal -> Outbound -> Audit/Exception. An operator
+    // walking to the dock knows which of those four they are doing before
+    // they pick up the terminal, so that is the first decision the menu asks
+    // for. Routine groups are open; the ones that are occasional start
+    // collapsed so the daily path stays a single screen with no scrolling.
+    ..._menuGroups(c),
+    if (c.outbox.isNotEmpty || c.damagedFlags.any((f) => !f.synced)) ...[
+      const SizedBox(height: 14),
+      _OutboxBanner(c: c, onSync: c.syncNow),
+    ],
+  ];
+}
+
+/// The four WMS stages, in the order a box moves through them. Each group is
+/// one collapsible section; the items inside are the screens that actually do
+/// that stage's work.
+///
+/// Gate direction still filters what shows: a door configured IN-only never
+/// offers Gate Out, and vice versa. Permission (`canScan`) and connectivity
+/// gate individual items exactly as before — a menu entry that cannot work is
+/// hidden rather than shown disabled, because a dead tap is worse than an
+/// absent one on a handheld.
+List<Widget> _menuGroups(AppController c) {
+  final pendingDamage = c.damagedFlags.where((f) => !f.synced).length;
+
+  final inbound = <Widget>[
+    // Receiving writes a brand-new box row the moment it's tapped and has no
+    // local outbox path, so starting it offline would strand the operator.
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.add_box,
+        iconColor: C.limeText,
+        iconBg: C.limeBg,
+        title: 'รับกล่องใหม่จาก Supplier',
+        sub: 'สร้างกล่อง → ติดป้าย → ผูก RFID → Putaway',
+        onTap: c.goBoxRegister,
+      ),
+    if (c.canScan && c.currentGateType != 'out')
+      _MenuItem(
         icon: Icons.south,
         iconColor: C.lime,
-        iconBg: C.onInk.withValues(alpha: 0.12),
-        title: 'รับเข้า / รับคืน',
+        iconBg: C.limeBg,
+        title: 'รับคืนกล่อง',
         sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
         onTap: c.goScanIn,
       ),
-      const SizedBox(height: 12),
-    ],
-    if (c.canScan && c.currentGateType != 'in') ...[
-      _ActionCard(
+    // Standalone tag commissioning: nested here rather than sitting on the
+    // top level, because binding a tag outside of receiving is the exception
+    // (a label that fell off), not a daily task.
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.qr_code_scanner,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ลงทะเบียนแท็ก RFID',
+        sub: 'ผูกแท็กให้กล่องที่มีอยู่แล้ว (แท็กหลุด/เปลี่ยนใหม่)',
+        onTap: c.goRfidRegister,
+      ),
+  ];
+
+  final outbound = <Widget>[
+    if (c.canScan && c.currentGateType != 'in')
+      _MenuItem(
         icon: Icons.north,
         iconColor: C.orange,
         iconBg: C.orangeBg,
-        title: 'ส่งออก',
-        sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
+        title: 'จ่ายกล่องออกให้ลูกค้า',
+        sub: 'Gate Out — ยิงกล่องออกจากคลัง',
         onTap: c.goScanOut,
       ),
-      const SizedBox(height: 12),
-    ],
-    _ActionCard(
-      small: true,
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.swap_horiz,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ย้ายตำแหน่งจัดเก็บ',
+        sub: 'Relocate — ย้ายกล่องไปโซน/แร็คอื่นในคลัง',
+        onTap: c.goRelocate,
+      ),
+  ];
+
+  final search = <Widget>[
+    _MenuItem(
       icon: Icons.search,
       iconColor: C.ink2,
       iconBg: C.neutralBg,
-      title: 'ค้นหา / ตรวจสอบกล่อง',
-      sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
+      title: 'ค้นหาตำแหน่ง / ประวัติกล่อง',
+      sub: 'Track — สถานะ ตำแหน่งล่าสุด ประวัติเข้า-ออก',
       onTap: c.goTrack,
     ),
-    if (c.outbox.isNotEmpty) ...[
-      const SizedBox(height: 14),
-      _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
+    _MenuItem(
+      icon: Icons.nfc,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
+      title: 'เรดาร์หากล่องด้วย RFID',
+      sub: 'Geiger — เดินกวาดหากล่องที่หาไม่เจอบนแร็ค',
+      onTap: c.goLocate,
+    ),
+  ];
+
+  final audit = <Widget>[
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.fact_check_outlined,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'ตรวจนับสต็อก',
+        sub: 'Cycle Count — กวาดทั้งโซน/แร็ค แล้วเทียบกับระบบ',
+        onTap: c.goCycleCount,
+      ),
+    // Never gated on connectivity: this writes to the local queue and syncs
+    // later, so hiding it offline would remove the one report an operator
+    // most needs when the network is down.
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.report_gmailerrorred,
+        iconColor: C.red,
+        iconBg: C.orangeBg,
+        title: 'แจ้งกล่องชำรุด / สูญหาย',
+        sub: pendingDamage > 0
+            ? 'บันทึกได้แม้ออฟไลน์ — รอซิงค์ $pendingDamage รายการ'
+            : 'บันทึกได้แม้ออฟไลน์ — จะซิงค์อัตโนมัติ',
+        onTap: c.goDamagedBox,
+      ),
+  ];
+
+  final groups = <Widget>[
+    if (inbound.isNotEmpty)
+      _MenuGroup(
+        emoji: '📦',
+        title: 'รับกล่องเข้า',
+        subtitle: 'Inbound / Return',
+        initiallyOpen: true,
+        children: inbound,
+      ),
+    if (outbound.isNotEmpty)
+      _MenuGroup(
+        emoji: '🚚',
+        title: 'จ่ายกล่องออก',
+        subtitle: 'Outbound / Transfer',
+        initiallyOpen: true,
+        children: outbound,
+      ),
+    _MenuGroup(
+      emoji: '🔍',
+      title: 'ค้นหา & ติดตาม',
+      subtitle: 'Search & Audit',
+      children: search,
+    ),
+    if (audit.isNotEmpty)
+      _MenuGroup(
+        emoji: '📋',
+        title: 'ตรวจนับ & แจ้งปัญหา',
+        subtitle: 'Count & Issues',
+        badge: pendingDamage > 0 ? '$pendingDamage' : null,
+        children: audit,
+      ),
+  ];
+
+  return [
+    for (var i = 0; i < groups.length; i++) ...[
+      if (i > 0) const SizedBox(height: 10),
+      groups[i],
     ],
   ];
+}
+
+/// One collapsible stage of the menu. Stateful only so each group remembers
+/// its own open/closed state as the operator works — the rest of this screen
+/// is stateless and rebuilds on every notifyListeners().
+class _MenuGroup extends StatefulWidget {
+  final String emoji, title, subtitle;
+  final String? badge;
+  final bool initiallyOpen;
+  final List<Widget> children;
+  const _MenuGroup({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.children,
+    this.badge,
+    this.initiallyOpen = false,
+  });
+
+  @override
+  State<_MenuGroup> createState() => _MenuGroupState();
+}
+
+class _MenuGroupState extends State<_MenuGroup> {
+  late bool _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Text(widget.emoji, style: const TextStyle(fontSize: 19)),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(widget.title,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        Text(widget.subtitle, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                      ],
+                    ),
+                  ),
+                  if (widget.badge != null) ...[
+                    Pill(widget.badge!, color: C.orange, bg: C.orangeBg, fontSize: 11),
+                    const SizedBox(width: 8),
+                  ],
+                  Icon(_open ? Icons.expand_less : Icons.expand_more, size: 22, color: C.chevron),
+                ],
+              ),
+            ),
+          ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(children: widget.children),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A leaf action inside a [_MenuGroup]. Flatter than the old top-level
+/// _ActionCard on purpose — the group card already supplies the frame, and
+/// nesting two bordered cards reads as clutter on a 4" screen.
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor, iconBg;
+  final String title, sub;
+  final VoidCallback onTap;
+  const _MenuItem({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.sub,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                    Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 19, color: C.chevron),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared shell every detail sheet on this screen uses — drag handle,
+/// scroll-capped growth, safe-area bottom padding. Kept as one function so
+/// a screen too short for the full list (see the earlier "BOTTOM
+/// OVERFLOWED" fix on the handover sheet) is fixed everywhere at once.
+void _showDetailSheet(BuildContext context, {required String title, required List<Widget> children}) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetCtx) => Container(
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Flexible(child: SingleChildScrollView(child: Column(children: children))),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _detailRow({required String title, required String subtitle, Widget? trailing}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: C.neutralBg,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: C.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: C.muted)),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
+    ),
+  );
+}
+
+/// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
+/// number, not just the count. [status] matches Box.status directly.
+void _showBoxListSheet(BuildContext context, AppController c, {required String title, required String status}) {
+  final S = c.S;
+  final boxes = (S?.boxes ?? const <Box>[]).where((b) => b.status == status).toList()
+    ..sort((a, b) => a.tag.compareTo(b.tag));
+  _showDetailSheet(
+    context,
+    title: '$title (${boxes.length})',
+    children: boxes.isEmpty
+        ? [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('ไม่มีกล่อง', style: TextStyle(fontSize: 13, color: C.faint))),
+            ),
+          ]
+        : boxes.map((b) {
+            final sub = status == 'out'
+                ? S!.custName(b.customer)
+                : [
+                    S!.whName(b.location['wh']?.toString()),
+                    if ((b.location['zone'] ?? '').toString().isNotEmpty) 'โซน ${b.location['zone']}',
+                  ].join(' · ');
+            return _detailRow(
+              title: b.tag,
+              subtitle: '${S.typeName(b.type)} · $sub',
+            );
+          }).toList(),
+  );
+}
+
+/// "วันนี้" stat tap — every in/out event from today, newest first.
+void _showTodayEventsSheet(BuildContext context, AppController c) {
+  final events = (c.S?.events ?? const [])
+      .whereType<Map>()
+      .where((e) {
+        final dir = e['dir'];
+        if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
+        final ts = e['ts']?.toString();
+        if (ts == null) return false;
+        final d = DateTime.tryParse(ts)?.toLocal();
+        if (d == null) return false;
+        final n = DateTime.now();
+        return d.year == n.year && d.month == n.month && d.day == n.day;
+      })
+      .toList()
+    ..sort((a, b) => (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
+  _showDetailSheet(
+    context,
+    title: 'วันนี้ (${events.length})',
+    children: events.isEmpty
+        ? [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('ยังไม่มีรายการวันนี้', style: TextStyle(fontSize: 13, color: C.faint))),
+            ),
+          ]
+        : events.map((e) {
+            final dir = e['dir'];
+            final isOut = dir == 'out';
+            final ts = DateTime.tryParse(e['ts']?.toString() ?? '')?.toLocal();
+            final time = ts == null
+                ? ''
+                : '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+            final who = (e['recorder'] ?? '').toString();
+            return _detailRow(
+              title: (e['tag'] ?? '').toString(),
+              subtitle: [time, if (who.isNotEmpty) who].join(' · '),
+              trailing: Pill(isOut ? 'ออก' : 'เข้า',
+                  color: isOut ? C.orange : C.limeText, bg: isOut ? C.orangeBg : C.limeBg),
+            );
+          }).toList(),
+  );
 }
 
 /// Handover sheet: end this person's session, or hand the device to the next
@@ -245,14 +659,35 @@ void _openHandover(BuildContext context, AppController c) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
+    // Default (isScrollControlled: false) caps the sheet at ~half the
+    // screen — fine on a phone, but this device's short/wide display left
+    // "เปลี่ยนคน / จบงาน" + up to two more action tiles with nowhere to go
+    // ("BOTTOM OVERFLOWED BY 81 PIXELS"). isScrollControlled lets it grow to
+    // fit its content up to the full screen height instead of a fixed cap;
+    // the SingleChildScrollView below is the fallback for whatever's left
+    // over on a screen too short even for that.
+    isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(18),
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
       decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Same drag-handle bar the PIN pad sheet uses — this sheet drags
+          // down to dismiss same as any modal sheet, but with padding.all
+          // the same on every edge there was nothing visually marking that
+          // affordance the way iOS's own sheets always do.
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
           Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           Text(
             [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
@@ -282,19 +717,8 @@ void _openHandover(BuildContext context, AppController c) {
               },
             ),
           ],
-          if (c.canConfigureDevice) ...[
-            const SizedBox(height: 10),
-            _SheetAction(
-              icon: Icons.settings_outlined,
-              label: 'ตั้งค่าเครื่อง',
-              sub: 'เปลี่ยนคลัง/ประตูที่เครื่องนี้ประจำ',
-              onTap: () {
-                Navigator.of(sheetCtx).pop();
-                c.goDeviceSetup();
-              },
-            ),
-          ],
         ],
+        ),
       ),
     ),
   );
@@ -309,8 +733,15 @@ class _WhPickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = tag != null;
+    // heroBg/onHero (not ink/onInk) — this tile is meant to always look like
+    // a dark accent card with a lime badge on it, in both themes. ink/onInk
+    // invert with the theme (correctly, for actual body text), so using them
+    // here meant this tile flipped to a near-white card with a barely-visible
+    // lime-on-light-gray badge the moment dark mode was on — exactly the
+    // "badge สีเทา ข้อความสีเขียว" contrast bug this fixes. See theme.dart's
+    // own note on heroBg for the same lesson learned elsewhere already.
     return Material(
-      color: highlighted ? C.ink : C.neutralBg,
+      color: highlighted ? C.heroBg : C.neutralBg,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -328,13 +759,13 @@ class _WhPickTile extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w600,
-                        color: highlighted ? C.onInk : null)),
+                        color: highlighted ? C.onHero : null)),
               ),
               if (tag != null) ...[
-                Pill(tag!, color: C.lime, bg: C.onInk.withValues(alpha: 0.14)),
+                Pill(tag!, color: C.lime, bg: C.onHero.withValues(alpha: 0.14)),
                 const SizedBox(width: 8),
               ],
-              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onInk.withValues(alpha: 0.5) : C.chevron),
+              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onHero.withValues(alpha: 0.5) : C.chevron),
             ],
           ),
         ),
@@ -462,117 +893,29 @@ String _gateDirSuffix(String dir) {
 class _Stat extends StatelessWidget {
   final String value, label;
   final Color? valueColor;
-  const _Stat({required this.value, required this.label, this.valueColor});
+  final VoidCallback? onTap;
+  const _Stat({required this.value, required this.label, this.valueColor, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Panel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(value,
-              style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                  color: valueColor ?? C.ink,
-                  fontFeatures: const [FontFeature.tabularFigures()])),
-          Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodayStat extends StatelessWidget {
-  final int inN, outN;
-  const _TodayStat({required this.inN, required this.outN});
-  @override
-  Widget build(BuildContext context) {
-    return Panel(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 5),
-          Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
-          Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  final bool dark, small;
-  final IconData icon;
-  final Color iconColor, iconBg;
-  final String title, sub;
-  final VoidCallback onTap;
-  const _ActionCard({
-    this.dark = false,
-    this.small = false,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    final radius = small ? 20.0 : 22.0;
-    final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
-    final box = small ? 44.0 : 52.0;
     return Material(
-      color: dark ? C.ink : C.surface,
-      borderRadius: BorderRadius.circular(radius),
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: Container(
-          padding: pad,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            border: dark ? null : Border.all(color: C.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                blurRadius: dark ? 24 : (small ? 0 : 20),
-                offset: Offset(0, dark ? 8 : 6),
-              )
-            ],
-          ),
-          child: Row(
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: box,
-                height: box,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(box * 0.29)),
-                child: Icon(icon, color: iconColor, size: small ? 23 : 27),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: small ? 16.5 : 19,
-                            fontWeight: FontWeight.w700,
-                            color: dark ? C.onInk : C.ink)),
-                    Text(sub,
-                        style: TextStyle(
-                            fontSize: small ? 12.5 : 13,
-                            color: dark ? C.onInk.withValues(alpha: 0.62) : C.muted)),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right,
-                  color: dark ? C.onInk.withValues(alpha: 0.5) : C.chevron, size: small ? 20 : 22),
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                      color: valueColor ?? C.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+              Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -581,50 +924,124 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _OutboxBanner extends StatelessWidget {
-  final int count;
-  final VoidCallback onSync;
-  const _OutboxBanner({required this.count, required this.onSync});
+class _TodayStat extends StatelessWidget {
+  final int inN, outN;
+  final VoidCallback? onTap;
+  const _TodayStat({required this.inN, required this.outN, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      decoration: BoxDecoration(
-        color: C.neutralBg,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: C.border2),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 5),
+              Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
+              Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
-            alignment: Alignment.center,
-            child: Text('$count',
-                style: TextStyle(
-                    color: C.onInk,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    fontFeatures: [FontFeature.tabularFigures()])),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Text('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์',
-                style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: onSync,
-            style: FilledButton.styleFrom(
-              backgroundColor: C.ink,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              minimumSize: Size.zero,
+    );
+  }
+}
+
+class _PendingItem {
+  final DateTime at;
+  final String title;
+  final String subtitle;
+  const _PendingItem(this.at, this.title, this.subtitle);
+}
+
+List<_PendingItem> _pendingItems(AppController c) {
+  final items = <_PendingItem>[
+    ...c.outbox.map((tx) {
+      final at = DateTime.tryParse(tx.ts) ?? DateTime.now();
+      final title = tx.type == 'in' ? 'รับคืน ${tx.tags.length} กล่อง' : 'ส่งออก ${tx.tags.length} กล่อง';
+      final who = c.S?.custName(tx.customer ?? '') ?? tx.customer;
+      final subtitle = [
+        if (tx.type == 'out' && (who ?? '').isNotEmpty) '→ $who',
+        'ประตู ${tx.gate}',
+        tx.recorder,
+      ].join(' · ');
+      return _PendingItem(at, title, subtitle);
+    }),
+    ...c.damagedFlags.where((f) => !f.synced).map(
+          (f) => _PendingItem(f.createdAt, 'แจ้งเสียหาย ${f.barcode}',
+              f.rfidEpcs.isEmpty ? 'ไม่มี RFID' : '${f.rfidEpcs.length} แท็ก RFID'),
+        ),
+  ];
+  items.sort((a, b) => b.at.compareTo(a.at)); // newest first
+  return items;
+}
+
+String _fmtHm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+class _OutboxBanner extends StatelessWidget {
+  final AppController c;
+  final VoidCallback onSync;
+  const _OutboxBanner({required this.c, required this.onSync});
+  @override
+  Widget build(BuildContext context) {
+    final items = _pendingItems(c);
+    return GestureDetector(
+      onTap: () => _showDetailSheet(
+        context,
+        title: 'รอซิงก์ (${items.length})',
+        children: items.isEmpty
+            ? [Text('ไม่มีรายการค้าง', style: TextStyle(fontSize: 13, color: C.faint))]
+            : items
+                .map((i) => _detailRow(
+                      title: i.title,
+                      subtitle: '${i.subtitle} · ${_fmtHm(i.at)}',
+                    ))
+                .toList(),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(
+          color: C.neutralBg,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: C.border2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
+              alignment: Alignment.center,
+              child: Text('${items.length}',
+                  style: TextStyle(
+                      color: C.onInk,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFeatures: [FontFeature.tabularFigures()])),
             ),
-            child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-          ),
-        ],
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text('รายการค้าง sync (ออฟไลน์) — แตะเพื่อดูว่าทำอะไรไปแล้วบ้าง',
+                  style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: onSync,
+              style: FilledButton.styleFrom(
+                backgroundColor: C.ink,
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                minimumSize: Size.zero,
+              ),
+              child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       ),
     );
   }

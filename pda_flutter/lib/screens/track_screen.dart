@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +18,16 @@ class _TrackScreenState extends State<TrackScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
 
+  /// No submit button — typing already filters live (see trackSuggestions),
+  /// and a scan should never need a tap either. Enter still resolves
+  /// immediately when a scanner's trailing keystroke (or the keyboard's
+  /// Go/Done) sends it; this debounce is the fallback for scanners on this
+  /// terminal that don't send that trailing Enter (see the same pattern in
+  /// scan_screen.dart / rfid_register_screen.dart).
+  Timer? _autoSearchTimer;
+  static const _autoSearchDelay = Duration(milliseconds: 180);
+  static const _autoSearchMinLen = 3;
+
   @override
   void initState() {
     super.initState();
@@ -24,14 +36,27 @@ class _TrackScreenState extends State<TrackScreen> {
 
   @override
   void dispose() {
+    _autoSearchTimer?.cancel();
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
   }
 
   void _search(AppController c) {
+    _autoSearchTimer?.cancel();
     c.onTrackChanged(_ctrl.text);
     c.doTrack();
+  }
+
+  void _onChanged(AppController c) {
+    c.onTrackChanged(_ctrl.text);
+    _autoSearchTimer?.cancel();
+    final text = _ctrl.text.trim();
+    if (text.length < _autoSearchMinLen) return;
+    _autoSearchTimer = Timer(_autoSearchDelay, () {
+      if (!mounted || _ctrl.text.trim() != text) return;
+      c.doTrack();
+    });
   }
 
   void _tapSuggestion(AppController c, String tag) {
@@ -63,56 +88,84 @@ class _TrackScreenState extends State<TrackScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
             children: [
-              // search box
-              TextField(
-                controller: _ctrl,
-                focusNode: _focus,
-                textCapitalization: TextCapitalization.characters,
-                autocorrect: false,
-                enableSuggestions: false,
-                onChanged: c.onTrackChanged,
-                onSubmitted: (_) => _search(c),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: 'รหัสกล่อง เช่น CRT-01',
-                  hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                  prefixIcon: Icon(Icons.search, color: C.muted),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.arrow_forward, color: C.onInk),
-                    style: IconButton.styleFrom(
-                        backgroundColor: C.ink, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    onPressed: () => _search(c),
+              _inputModeToggle(c),
+              const SizedBox(height: 11),
+              // search box — hidden entirely in RFID mode (see the toggle
+              // above): nothing to type when the reader resolves the scan
+              // directly through AppController._onReaderTag.
+              if (c.scanInputMode == ScanInputMode.barcode)
+                TextField(
+                  controller: _ctrl,
+                  focusNode: _focus,
+                  textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: (_) => _onChanged(c),
+                  onSubmitted: (_) => _search(c),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+                  decoration: InputDecoration(
+                    hintText: 'รหัสกล่อง เช่น CRT-01',
+                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                    prefixIcon: Icon(Icons.search, color: C.muted),
+                    suffixIcon: SubmitArrowButton(onTap: () => _search(c)),
+                    isDense: true,
+                    filled: true,
+                    fillColor: C.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.ink, width: 1.5),
+                    ),
                   ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: C.surface,
-                  border: OutlineInputBorder(
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  decoration: BoxDecoration(
+                    color: C.surface,
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+                    border: Border.all(color: C.fieldBorder, width: 1.5),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: C.ink, width: 1.5),
+                  child: Column(
+                    children: [
+                      Icon(Icons.wifi_tethering, size: 22, color: C.muted),
+                      const SizedBox(height: 6),
+                      Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
+                          style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                    ],
                   ),
                 ),
-              ),
               const SizedBox(height: 14),
               // Live suggestions as soon as the first character lands —
               // scanning still works the same (a gun sends the full code +
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (box == null && c.trackSuggestions.isNotEmpty)
-                _suggestions(c)
-              else if (c.trackTried && box == null)
+              if (c.trackSearching)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                )
+              else if (box == null && c.trackSuggestions.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text('พบ ${c.trackSuggestions.length} กล่อง',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                ),
+                _suggestions(c),
+              ] else if (c.trackTried && box == null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
-                    child: Text('ไม่พบกล่อง "${c.trackVal}" ในระบบ',
+                    child: Text(c.trackError ?? 'ไม่พบกล่อง "${c.trackVal}" ในระบบ',
                         style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -133,52 +186,119 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
+  Widget _inputModeToggle(AppController c) {
+    Widget seg(ScanInputMode m, String label, IconData icon) {
+      final selected = c.scanInputMode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (c.scanInputMode == m) return;
+            c.setScanInputMode(m);
+            if (m == ScanInputMode.barcode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+            } else {
+              _focus.unfocus();
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
+        ],
+      ),
+    );
+  }
+
+  /// A search can genuinely match a hundred-plus boxes (see
+  /// AppController.trackSuggestions, uncapped on purpose) — a vertical list
+  /// of a hundred rows means a hundred rows of scrolling before the operator
+  /// even sees whether their box is in there. A grid of small ID cards puts
+  /// far more of the result set on screen at once; column count adapts to
+  /// the available width but stays clamped 3-10 so cards on a wide screen
+  /// don't shrink to unreadable and cards on a narrow one don't get crushed
+  /// three-to-a-row when only three fit anyway.
   Widget _suggestions(AppController c) {
     final tags = c.trackSuggestions;
     final S = c.S;
-    return Container(
-      decoration: BoxDecoration(
-        color: C.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: C.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(tags.length, (i) {
-          final tag = tags[i];
-          final b = S?.box(tag);
-          return InkWell(
-            onTap: () => _tapSuggestion(c, tag),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                border: i == tags.length - 1 ? null : Border(bottom: BorderSide(color: C.border)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = (constraints.maxWidth / 92).floor().clamp(3, 10);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: tags.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.86,
+          ),
+          itemBuilder: (context, i) {
+            final tag = tags[i];
+            final b = S?.box(tag);
+            final sm = b != null ? StatusMeta.of(b.status) : null;
+            return InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _tapSuggestion(c, tag),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                decoration: BoxDecoration(
+                  color: C.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: sm?.color.withValues(alpha: 0.35) ?? C.border),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 17, color: C.muted),
+                    const SizedBox(height: 6),
+                    Text(tag,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                    if (sm != null) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(color: sm.color, shape: BoxShape.circle),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(tag,
-                            style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
-                        if (b != null)
-                          Text(S!.typeName(b.type), style: TextStyle(fontSize: 12, color: C.muted)),
-                      ],
-                    ),
-                  ),
-                  if (b != null) Pill(StatusMeta.of(b.status).label, color: StatusMeta.of(b.status).color, bg: StatusMeta.of(b.status).bg, fontSize: 11),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -224,7 +344,7 @@ class _TrackScreenState extends State<TrackScreen> {
         color: C.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: C.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))],
+        boxShadow: C.shadow([BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))]),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

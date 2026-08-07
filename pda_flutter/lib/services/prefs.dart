@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ class Prefs {
   static const _kUsername = 'boxtrace_username';
   static const _kPassword = 'boxtrace_password';
   static const _kToken = 'boxtrace_token';
+  static const _kApiKey = 'boxtrace_api_key';
 
   // this device's fixed post (warehouse + gate) and behaviour
   static const _kDeviceWh = 'boxtrace_device_wh';
@@ -30,11 +32,15 @@ class Prefs {
 
   static const _kStateCache = 'boxtrace_state_cache';
   static const _kOutbox = 'boxtrace_pda_outbox';
+  static const _kDamagedFlags = 'boxtrace_pda_damaged_flags';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
+  static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
+  static const _kRfidToneId = 'boxtrace_rfid_tone_id';
+  static const _kRfidVolumePercent = 'boxtrace_rfid_volume_percent';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -59,11 +65,40 @@ class Prefs {
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
 
+  /// Minimum RSSI (dBm) a read has to clear to count at all — the "stray
+  /// read" filter: RFID punches through cardboard and thin stock easily
+  /// enough that a sweep aimed at pallet A can pick up pallet B sitting
+  /// right next to it. Null means off (every read counts, the original
+  /// behavior); set, it drops anything weaker before it ever reaches
+  /// addScan/doTrack/badge matching. A raw dBm number, not a percent — this
+  /// is what the reader itself reports per read, no conversion needed.
+  int? get rfidMinRssi => _p.containsKey(_kRfidMinRssi) ? _p.getInt(_kRfidMinRssi) : null;
+  set rfidMinRssi(int? v) {
+    if (v == null) {
+      _p.remove(_kRfidMinRssi);
+    } else {
+      _p.setInt(_kRfidMinRssi, v);
+    }
+  }
+
   /// Antenna transmit power as a percentage of the reader's max — the knob
   /// behind the "ใกล้ / ปานกลาง / ไกล" picker in settings. Defaults to full
   /// power (ไกล) since that's what the reader itself defaults to on connect.
   int get rfidPowerPercent => _p.getInt(_kRfidPowerPercent) ?? 100;
   set rfidPowerPercent(int v) => _p.setInt(_kRfidPowerPercent, v);
+
+  /// Which of RfidService.rfidTones the reader plays for a read/scan beep —
+  /// an id, not an index, so adding/reordering the catalog later can't
+  /// silently repoint a saved choice at the wrong sound. Defaults to the
+  /// tone this app always used before this became configurable.
+  String get rfidToneId => _p.getString(_kRfidToneId) ?? 'html_tick';
+  set rfidToneId(String v) => _p.setString(_kRfidToneId, v);
+
+  /// Beep loudness as a percentage — independent of the locate screen's own
+  /// proximity-scaled volume (playLocateBeep), which still multiplies this
+  /// as its ceiling rather than ignoring it.
+  int get rfidVolumePercent => _p.getInt(_kRfidVolumePercent) ?? 100;
+  set rfidVolumePercent(int v) => _p.setInt(_kRfidVolumePercent, v);
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than
@@ -93,10 +128,11 @@ class Prefs {
     if (saved != null) return saved;
     if (_compiledBaseUrl.isNotEmpty) return _compiledBaseUrl;
     // 10.0.2.2 is the Android-emulator-only alias for the host machine — a
-    // real browser can never resolve it, so a fresh web visit with no saved
-    // setting would otherwise fail to connect before the operator ever gets
-    // a chance to open Settings. Android keeps the emulator-friendly default
-    // since kIsWeb is false there.
+    // real browser (or a real Zebra PDA) can never resolve it, so a fresh
+    // install with no saved setting would otherwise fail to connect before
+    // the operator ever gets a chance to open Settings. These devices are
+    // all real hardware on the warehouse LAN, so default straight to the
+    // known server address instead of the emulator alias.
     if (kIsWeb) {
       final b = Uri.base;
       // Served from the backend itself (same origin, default or API port) —
@@ -108,7 +144,7 @@ class Prefs {
       }
       return '${b.scheme}://${b.host}:4000';
     }
-    return 'http://10.0.2.2:4000';
+    return 'http://192.168.1.149:4000';
   }
 
   set baseUrl(String v) => _p.setString(_kBaseUrl, v);
@@ -123,6 +159,14 @@ class Prefs {
 
   String? get token => _p.getString(_kToken);
   set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
+
+  /// Optional X-API-Key sent alongside the JWT (see backend's requireApiKey)
+  /// — blank by default, and harmless against a backend that hasn't set
+  /// API_KEY. Set once per device, same section of device setup as the
+  /// service account, since it's also a credential nobody but an admin
+  /// provisioning the terminal should be typing in.
+  String get apiKey => _p.getString(_kApiKey) ?? '';
+  set apiKey(String v) => _p.setString(_kApiKey, v);
 
   /// Legacy fixed-post fields from before warehouse/gate moved to a per-visit
   /// pick (see lastWh/lastGate below) — kept only so an old install's saved
@@ -192,6 +236,22 @@ class Prefs {
 
   set outbox(List<dynamic> v) => _p.setString(_kOutbox, jsonEncode(v));
 
+  /// Damaged-box reports (see [DamagedFlag]) — stored exactly like [outbox]
+  /// (JSON blob in SharedPreferences, not a real database) since the record
+  /// shape and volume here are the same order of magnitude: a handful of
+  /// small entries per shift, never the bulk data a stock count would be.
+  List<dynamic> get damagedFlags {
+    final s = _p.getString(_kDamagedFlags);
+    if (s == null) return [];
+    try {
+      return List<dynamic>.from(jsonDecode(s));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  set damagedFlags(List<dynamic> v) => _p.setString(_kDamagedFlags, jsonEncode(v));
+
   /// The PIN itself lives on the backend now (bcrypt-hashed, see
   /// `Employee.hasPin` / `ApiClient.setEmployeePin`/`verifyEmployeePin`) —
   /// that's what makes it work the same on every PDA an employee badges into,
@@ -221,5 +281,43 @@ class Prefs {
   void clearPinSkip(String id) {
     final sk = _skipped..remove(id);
     _p.setString(_kPinSkipped, jsonEncode(sk));
+  }
+
+  // ── offline PIN fallback ──────────────────────────────────────────────
+  // The PIN itself is verified server-side (see `pinSkipped` above) — that's
+  // the authority whenever the server is reachable. But a PDA gate has to
+  // keep working when it isn't, and an employee with a PIN set couldn't badge
+  // in at all if `verifyEmployeePin`'s network call was the only path in.
+  // What's cached here is never the PIN itself, only a hash of it salted with
+  // the employee id — enough to recognise "this is the same PIN the server
+  // last confirmed for this person on this device", not enough to recover the
+  // PIN from a lost or stolen terminal. Refreshed on every successful online
+  // verify/set, so offline access is never more than one online sign-in stale.
+  static const _kPinHashPrefix = 'boxtrace_pin_hash_';
+
+  static String _pinHash(String employeeId, String pin) =>
+      sha256.convert(utf8.encode('$employeeId:$pin')).toString();
+
+  /// Record that the server just confirmed [pin] is correct for [employeeId]
+  /// (or that it was just set to [pin]) — call right after any successful
+  /// setEmployeePin/verifyEmployeePin/confirmPinReset.
+  void cachePinHash(String employeeId, String pin) {
+    _p.setString('$_kPinHashPrefix$employeeId', _pinHash(employeeId, pin));
+  }
+
+  /// True once *some* PIN has been cached for [employeeId] on this device —
+  /// i.e. there's a reference to check a mistyped offline entry against at
+  /// all. False the first time this employee ever badges into this specific
+  /// device while it has no signal, which [login_screen.dart] treats as "no
+  /// reference to fail against" rather than "wrong PIN".
+  bool hasCachedPin(String employeeId) => _p.getString('$_kPinHashPrefix$employeeId') != null;
+
+  /// True if [pin] matches the last PIN the server confirmed for
+  /// [employeeId] on this device. The fallback [showPinPad]'s `validate`
+  /// reaches for only when `verifyEmployeePin` itself couldn't be reached —
+  /// a wrong PIN the server actually answered is never routed here.
+  bool verifyPinOffline(String employeeId, String pin) {
+    final cached = _p.getString('$_kPinHashPrefix$employeeId');
+    return cached != null && cached == _pinHash(employeeId, pin);
   }
 }

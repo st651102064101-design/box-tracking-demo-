@@ -8,8 +8,9 @@
  * care whether an operator scanned a barcode or an RFID tag.
  */
 import { and, eq, inArray, ne, or } from 'drizzle-orm';
-import { boxes, auditLog } from '../db/schema.js';
+import { boxes } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
+import { writeAuditLog } from './audit.js';
 /**
  * Resolves a batch of scanned codes (barcodes and/or RFID reads, mixed
  * freely) against boxes.{tag,rfid_epc,rfid_tid} in one query.
@@ -62,15 +63,25 @@ export async function associateTag(db, input) {
         const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
         if (!box)
             throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
-        const [claimedBy] = await tx
-            .select()
-            .from(boxes)
-            .where(and(eq(boxes.rfidTid, rfidTid), ne(boxes.tag, tag)));
+        // "Is this physical tag already on another box?" — asked against whichever
+        // identifiers we were given. With a TID that's the factory serial; without
+        // one the EPC is the only identity the tag has, so it has to carry the same
+        // guard, otherwise the same tag could be commissioned onto two boxes and
+        // every later scan would resolve ambiguously.
+        const identity = rfidTid
+            ? or(eq(boxes.rfidTid, rfidTid), eq(boxes.rfidEpc, rfidEpc))
+            : eq(boxes.rfidEpc, rfidEpc);
+        const [claimedBy] = await tx.select().from(boxes).where(and(identity, ne(boxes.tag, tag)));
         if (claimedBy) {
             throw httpError(409, `แท็กนี้ผูกกับกล่อง ${claimedBy.tag} อยู่แล้ว — แท็กเดิมต้องถอดออกจากกล่องนั้นก่อน`, 'rfid_tid_in_use');
         }
-        if (box.rfidTid && box.rfidTid !== rfidTid && !replace) {
-            throw httpError(409, `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${box.rfidTid}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`, 'already_tagged');
+        // Same rule as before, but keyed on whatever this box actually carries: a
+        // box commissioned by EPC alone has no TID to compare against, and gating
+        // on TID would let a second scan silently overwrite its tag.
+        const carries = box.rfidTid ?? box.rfidEpc;
+        const incomingMatches = box.rfidTid ? box.rfidTid === rfidTid : box.rfidEpc === rfidEpc;
+        if (carries && !incomingMatches && !replace) {
+            throw httpError(409, `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${carries}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`, 'already_tagged');
         }
         const before = { rfidTid: box.rfidTid, rfidEpc: box.rfidEpc };
         // `data` is the JSONB snapshot the legacy UI actually reads (via the
@@ -81,13 +92,14 @@ export async function associateTag(db, input) {
             .update(boxes)
             .set({ rfidTid, rfidEpc, data, updatedAt: new Date() })
             .where(eq(boxes.tag, tag));
-        await tx.insert(auditLog).values({
+        const after = { rfidTid, rfidEpc };
+        await writeAuditLog(tx, {
             action: before.rfidTid ? 'rfid_replace' : 'rfid_associate',
             actor,
-            entityId: tag,
-            entityName: tag,
+            itemId: tag,
+            itemName: tag,
             before,
-            after: { rfidTid, rfidEpc },
+            after,
         });
         return { tag, rfidTid, rfidEpc };
     });
@@ -99,22 +111,19 @@ export async function detachTag(db, tag, actor) {
         const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
         if (!box)
             throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
-        if (!box.rfidTid)
+        // Either identifier counts as "tagged" — a box commissioned by EPC alone
+        // has no TID, and gating on TID would make its tag undetachable.
+        if (!box.rfidTid && !box.rfidEpc) {
             throw httpError(409, `กล่อง ${tag} ไม่มีแท็ก RFID ผูกอยู่`, 'not_tagged');
+        }
         const before = { rfidTid: box.rfidTid, rfidEpc: box.rfidEpc };
         const data = { ...box.data, rfidTid: null, rfidEpc: null };
         await tx
             .update(boxes)
             .set({ rfidTid: null, rfidEpc: null, data, updatedAt: new Date() })
             .where(eq(boxes.tag, tag));
-        await tx.insert(auditLog).values({
-            action: 'rfid_detach',
-            actor,
-            entityId: tag,
-            entityName: tag,
-            before,
-            after: { rfidTid: null, rfidEpc: null },
-        });
+        const after = { rfidTid: null, rfidEpc: null };
+        await writeAuditLog(tx, { action: 'rfid_detach', actor, itemId: tag, itemName: tag, before, after });
         return { tag };
     });
 }

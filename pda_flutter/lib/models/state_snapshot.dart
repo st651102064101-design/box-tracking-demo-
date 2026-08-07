@@ -1,10 +1,11 @@
 import 'box.dart';
+import 'location.dart';
 
 /// Typed view over the full `S` snapshot returned by `GET /api/state`.
 ///
 /// The backend round-trips the exact object the legacy UI used, so we parse the
 /// same maps: boxes / customers / boxtypes / warehouses / gates / employees /
-/// events / cfg. Everything is kept nullable-safe and falls back to empty.
+/// events / cfg / locations. Everything is kept nullable-safe and falls back to empty.
 class StateSnapshot {
   final Map<String, dynamic> boxesRaw;
   final Map<String, dynamic> customers;
@@ -14,6 +15,7 @@ class StateSnapshot {
   final Map<String, dynamic> employees;
   final List<dynamic> events;
   final Map<String, dynamic> cfg;
+  final Map<String, Location> locations; // code -> Location (Location Master)
 
   StateSnapshot({
     required this.boxesRaw,
@@ -24,12 +26,14 @@ class StateSnapshot {
     required this.employees,
     required this.events,
     required this.cfg,
+    required this.locations,
   });
 
   factory StateSnapshot.fromJson(Map<String, dynamic> j) {
     Map<String, dynamic> m(dynamic v) =>
         v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
     final gatesRaw = m(j['gates']);
+    final locationsRaw = m(j['locations']);
     return StateSnapshot(
       boxesRaw: m(j['boxes']),
       customers: m(j['customers']),
@@ -39,6 +43,9 @@ class StateSnapshot {
       employees: m(j['employees']),
       events: (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
       cfg: m(j['cfg']),
+      locations: locationsRaw.map(
+        (k, v) => MapEntry(k.toString(), Location.fromJson(k.toString(), m(v))),
+      ),
     );
   }
 

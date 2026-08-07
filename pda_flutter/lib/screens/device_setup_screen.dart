@@ -8,8 +8,9 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 /// Connecting a terminal to the main system — done once, by whoever hands the
-/// device out. It holds the one password in the whole product — the device's
-/// own service account, typed by an admin, never by warehouse staff.
+/// device out. Just the server address and (optionally) an API key: every
+/// terminal shares the same built-in service login, so there's no device
+/// account for whoever is provisioning it to type at all.
 ///
 /// คลัง/ประตูไม่ได้ถูกถามที่นี่อีกต่อไป — เดิมเคยผูกเครื่องไว้กับประตูเดียวถาวร
 /// แต่เครื่องจริงพกไปใช้หลายคลัง/ประตูในกะเดียวกันได้ จึงย้ายไปเลือกตอนกด
@@ -24,17 +25,15 @@ class DeviceSetupScreen extends StatefulWidget {
 
 class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _url;
-  late final TextEditingController _account;
-  late final TextEditingController _password;
-  bool _showAccount = false;
+  late final TextEditingController _apiKey;
+  bool _showAdvanced = false;
 
   @override
   void initState() {
     super.initState();
     final c = context.read<AppController>();
     _url = TextEditingController(text: c.prefs.baseUrl);
-    _account = TextEditingController(text: c.prefs.username);
-    _password = TextEditingController();
+    _apiKey = TextEditingController(text: c.prefs.apiKey);
     // Only one hardware profile is qualified today (see _kDeviceProfiles) —
     // making someone tap the one option they have no real choice about would
     // just be friction, so it's picked for them the moment this screen opens.
@@ -46,8 +45,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   @override
   void dispose() {
     _url.dispose();
-    _account.dispose();
-    _password.dispose();
+    _apiKey.dispose();
     super.dispose();
   }
 
@@ -124,36 +122,40 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                       decoration: pdaInput('http://192.168.1.10:4000'),
                     ),
                     const SizedBox(height: 10),
-                    // Collapsed by default: on a device that already works,
-                    // nobody should be poking at its credentials.
+                    // The device's own service account (username/password) no
+                    // longer has a field here at all — every terminal shares
+                    // the same built-in service login, so there is nothing
+                    // for whoever is provisioning the device to type. Only an
+                    // optional API key (a server-side add-on, not a login)
+                    // still lives behind this collapsed toggle.
                     GestureDetector(
-                      onTap: () => setState(() => _showAccount = !_showAccount),
+                      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
                       child: Row(
                         children: [
-                          Icon(_showAccount ? Icons.expand_less : Icons.expand_more,
+                          Icon(_showAdvanced ? Icons.expand_less : Icons.expand_more,
                               size: 18, color: C.muted),
                           const SizedBox(width: 4),
-                          Text(loc.t('บัญชีประจำเครื่อง'),
+                          Text(loc.t('ตัวเลือกขั้นสูง'),
                               style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
-                    if (_showAccount) ...[
+                    if (_showAdvanced) ...[
                       const SizedBox(height: 10),
                       TextField(
-                        controller: _account,
+                        controller: _apiKey,
                         autocorrect: false,
-                        decoration: pdaInput(loc.t('ชื่อบัญชีเครื่อง เช่น pda-01')),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _password,
                         obscureText: true,
-                        decoration: pdaInput(loc.t('รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)')),
+                        decoration: pdaInput(loc.t('API key (ถ้าเซิร์ฟเวอร์ตั้งไว้)')),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        loc.t('บัญชีนี้เป็นของเครื่อง ไม่ใช่ของพนักงาน — ตั้งครั้งเดียวตอนแจกเครื่อง'),
+                        // Backend requires this only when it's been given
+                        // an API_KEY env var of its own (see
+                        // middleware/auth.ts's requireApiKey — a no-op
+                        // otherwise); on a server that hasn't set one,
+                        // leaving this blank is correct, not incomplete.
+                        loc.t('เว้นว่างไว้ได้ถ้าเซิร์ฟเวอร์ไม่ได้ตั้งค่า API_KEY — ส่วนใหญ่ไม่จำเป็นต้องกรอก'),
                         style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
                       ),
                     ],
@@ -179,8 +181,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             onTap: (canSave && !c.busy)
                 ? () => c.completeDeviceSetup(
                       baseUrl: _url.text,
-                      username: _account.text,
-                      password: _password.text,
+                      apiKey: _apiKey.text,
                     )
                 : null,
           ),

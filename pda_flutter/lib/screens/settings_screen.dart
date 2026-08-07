@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../models/employee.dart';
+import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../services/theme_controller.dart';
@@ -34,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         StickyHeader(
           onBack: c.backToHome,
-          title: const Text('ตั้งค่า'),
+          title: Text(loc.t('ตั้งค่า')),
           actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
         ),
         Expanded(
@@ -47,7 +49,7 @@ class SettingsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Caption('การเชื่อมต่อระบบหลัก'),
+                    Caption(loc.t('การเชื่อมต่อระบบหลัก')),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -57,9 +59,9 @@ class SettingsScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: c.connected ? C.lime : C.red,
                             shape: BoxShape.circle,
-                            boxShadow: [
+                            boxShadow: C.shadow([
                               BoxShadow(color: c.connected ? C.limeBg : C.redBg, spreadRadius: 3)
-                            ],
+                            ]),
                           ),
                         ),
                         const SizedBox(width: 11),
@@ -69,10 +71,12 @@ class SettingsScreen extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                c.connected ? 'เชื่อมต่อกับ BoxTrace แล้ว' : (c.connError ?? 'ยังไม่พบข้อมูล'),
+                                c.connected
+                                    ? loc.t('เชื่อมต่อกับ BoxTrace แล้ว')
+                                    : (c.connError ?? loc.t('ยังไม่พบข้อมูล')),
                                 style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                               ),
-                              Text('พบ ${c.boxCount} กล่องในฐานข้อมูล',
+                              Text('${loc.t('พบ')} ${c.boxCount} ${loc.t('กล่องในฐานข้อมูล')}',
                                   style: TextStyle(fontSize: 12, color: C.muted)),
                             ],
                           ),
@@ -92,16 +96,16 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.nfc,
-                  title: 'อ่าน / ทดสอบแท็ก RFID',
-                  sub: 'อ่านแท็กสด ๆ พร้อมค่าดิบ — EPC, TID, RSSI, จำนวนครั้งที่เจอ',
+                  title: loc.t('รับค่า RFID'),
+                  sub: loc.t('อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่'),
                   onTap: () => c.go(Screen.rfidInput),
                 ),
               ],
               const SizedBox(height: 10),
               _tile(
                 icon: Icons.qr_code_scanner,
-                title: 'ลงทะเบียนแท็ก RFID',
-                sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
+                title: loc.t('ลงทะเบียนแท็ก RFID'),
+                sub: loc.t('สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที'),
                 onTap: () => c.go(Screen.rfidRegister),
               ),
               // Device setup only belongs here before the device has ever been
@@ -115,15 +119,15 @@ class SettingsScreen extends StatelessWidget {
                 if (c.canConfigureDevice)
                   _tile(
                     icon: Icons.router_outlined,
-                    title: 'ตั้งค่าเครื่อง',
-                    sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
+                    title: loc.t('ตั้งค่าเครื่อง'),
+                    sub: '${c.selWhName} · ${loc.t('ประตู')} ${c.gate} · ${loc.t('ที่อยู่เซิร์ฟเวอร์')}',
                     onTap: c.goDeviceSetup,
                   )
                 else
                   _tile(
                     icon: Icons.lock_outline,
-                    title: 'ตั้งค่าเครื่อง',
-                    sub: 'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ ${c.selWhName} ประตู ${c.gate}',
+                    title: loc.t('ตั้งค่าเครื่อง'),
+                    sub: '${loc.t('เฉพาะหัวหน้างาน — เครื่องนี้ประจำ')} ${c.selWhName} ${loc.t('ประตู')} ${c.gate}',
                     onTap: null,
                   ),
               ],
@@ -131,17 +135,17 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.pin_outlined,
-                  title: 'รหัส PIN ส่วนตัว',
+                  title: loc.t('รหัส PIN ส่วนตัว'),
                   sub: c.emp!.hasPin
-                      ? 'ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส'
-                      : 'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ',
+                      ? loc.t('ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส')
+                      : loc.t('ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ'),
                   onTap: () => _setupPin(context, c),
                 ),
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.swap_horiz,
-                  title: 'เปลี่ยนคน / จบงาน',
-                  sub: 'กลับไปหน้ายิงบัตร',
+                  title: loc.t('เปลี่ยนคน / จบงาน'),
+                  sub: loc.t('กลับไปหน้ายิงบัตร'),
                   danger: true,
                   onTap: () => c.lock(),
                 ),
@@ -149,7 +153,7 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 18),
               Center(
                 child: Text(
-                  'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · เชื่อมกับ BoxTrace backend',
+                  'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ BoxTrace backend')}',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),
                 ),
@@ -225,20 +229,61 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Lets an already-signed-in operator set (or replace) their own PIN —
-  /// the way in for whoever tapped "ข้าม / ไม่ตั้ง PIN" the first time and
-  /// changed their mind, or wants a new one. No old-PIN check: they're
-  /// already authenticated for this session, that's the whole point of
-  /// putting this here instead of only on the badge screen.
+  /// Lets an already-signed-in operator set (first time) or change (already
+  /// has one) their own PIN. A change now demands the *old* PIN first —
+  /// being signed into the session proves who's holding the device, not
+  /// that whoever's tapping this tile right now is that person; a PIN
+  /// exists specifically to stop someone else changing it out from under
+  /// them. First-time setup (no PIN on file yet) skips straight to picking
+  /// one, same as before. "ลืมรหัส?" on that old-PIN check reuses the same
+  /// email-OTP reset login_screen.dart's badge flow already has.
   Future<void> _setupPin(BuildContext context, AppController c) async {
     final e = c.emp;
     if (e == null) return;
+
+    if (e.hasPin) {
+      String? otpSentTo;
+      final verify = await showPinPad(
+        context,
+        title: 'ใส่รหัส PIN เดิมของ ${e.name}',
+        subtitle: 'ยืนยันตัวตนก่อนตั้งรหัสใหม่',
+        showForgot: true,
+        validate: (entered) async {
+          try {
+            final ok = await c.api.verifyEmployeePin(e.id, entered);
+            if (ok) c.prefs.cachePinHash(e.id, entered);
+            return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+          } catch (err) {
+            if (c.prefs.verifyPinOffline(e.id, entered)) return null;
+            return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
+          }
+        },
+        onForgot: () async {
+          try {
+            final req = await c.api.requestPinReset(e.id);
+            otpSentTo = req['sentTo']?.toString();
+            return null;
+          } catch (err) {
+            return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+          }
+        },
+      );
+      if (verify == null) return; // cancelled
+      if (verify.forgot) {
+        await _forgotPinFlow(context, c, e, otpSentTo);
+        return;
+      }
+      if (verify.pin == null) return;
+      if (!context.mounted) return;
+    }
+
     final first = await showPinPad(
       context,
       title: e.hasPin ? 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}' : 'ตั้งรหัส PIN สำหรับ ${e.name}',
       subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน',
     );
     if (first == null || first.pin == null) return;
+    if (!context.mounted) return;
     final confirm = await showPinPad(
       context,
       title: 'ยืนยันรหัส PIN อีกครั้ง',
@@ -255,7 +300,56 @@ class SettingsScreen extends StatelessWidget {
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, first.pin!);
     c.toastMsg('ตั้งรหัส PIN แล้ว', '', ResultKind.ok);
+  }
+
+  /// Same email-OTP reset login_screen.dart's badge flow uses (see its
+  /// _forgotPin) — duplicated rather than shared across the two screens'
+  /// otherwise-unrelated widget trees, since a fully-independent flow here
+  /// keeps this screen's PIN change working even if the badge screen's PIN
+  /// pad ever changes shape.
+  Future<void> _forgotPinFlow(BuildContext context, AppController c, Employee e, String? sentTo) async {
+    c.toastMsg(
+      'ส่งรหัส OTP แล้ว',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      ResultKind.info,
+    );
+    if (!context.mounted) return;
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: sentTo != null ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)' : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+    );
+    if (otpResult == null || otpResult.pin == null) return;
+    final otp = otpResult.pin!;
+
+    if (!context.mounted) return;
+    final newPinResult = await showPinPad(context, title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}');
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!context.mounted) return;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+    );
+    if (confirm == null || confirm.pin == null) return;
+
+    if (!context.mounted) return;
+    try {
+      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+    } catch (err) {
+      if (!context.mounted) return;
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', friendlyError(err), ResultKind.err);
+      return;
+    }
+    c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, newPin);
+    if (!context.mounted) return;
+    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
   }
 }
 
@@ -276,21 +370,85 @@ class _RfidPanel extends StatefulWidget {
 class _RfidPanelState extends State<_RfidPanel> {
   Map<String, dynamic> _d = const {};
   Timer? _poll;
-  late int _rangePercent;
+  /// Raw power index the slider is showing, once the operator has actually
+  /// dragged it this session. Null means "not touched yet" — the slider
+  /// falls back to whatever the reader itself last reported.
+  int? _rangeIndex;
+
+  /// True while a test fire is in progress — either the on-screen "แตะเพื่อ
+  /// ทดสอบยิง" toggle was tapped, or the physical MC3390R trigger is being
+  /// held (see _trigSub below). Either source lights up the same button, so
+  /// a range just set on the slider can be checked with whichever is handy.
+  bool _testFiring = false;
+
+  /// Mirrors the physical trigger onto this screen's own test-fire toggle.
+  /// AppController._onReaderTrigger deliberately no-ops on Screen.settings
+  /// (comment there: "settings' own test-fire button talks to the reader
+  /// directly") so a range check here never collides with barcode-mode/
+  /// wrong-screen warnings meant for the scan/track/RFID screens — but that
+  /// left the physical trigger doing nothing at all while this screen was
+  /// open. Subscribing here instead is what actually makes the hardware
+  /// trigger and the on-screen button fire the same sweep and stay in sync.
+  StreamSubscription<bool>? _trigSub;
 
   @override
   void initState() {
     super.initState();
-    _rangePercent = context.read<AppController>().prefs.rfidPowerPercent;
     _refresh();
     // The tag counter is only useful if it moves while the trigger is held.
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    // Low power mode widens this — a diagnostics call every 2s adds up over
+    // a shift, and this screen isn't the one place a slow counter matters.
+    final lowPower = context.read<AppController>().lowPowerMode;
+    _poll = Timer.periodic(Duration(seconds: lowPower ? 5 : 2), (_) => _refresh());
+    _trigSub = context.read<AppController>().rfid.triggers.listen(_onHardwareTrigger);
+  }
+
+  void _onHardwareTrigger(bool pressed) {
+    final c = context.read<AppController>();
+    if (pressed) {
+      if (_testFiring) return;
+      // A cradled terminal refuses inventory at the firmware level, so
+      // lighting the button up here would claim a sweep that never starts —
+      // which is exactly what made this look broken. Say why instead.
+      if (c.rfidCharging) {
+        c.toastMsg('ยิงทดสอบไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน แล้วลองอีกครั้ง', ResultKind.warn);
+        return;
+      }
+      setState(() => _testFiring = true);
+      c.rfid.startInventory();
+    } else {
+      // Always safe to stop, even if this screen didn't start it (e.g. the
+      // on-screen toggle already stopped it) — matches the "always safe"
+      // stop-on-release rule AppController._onReaderTrigger itself follows.
+      setState(() => _testFiring = false);
+      c.rfid.stopInventory();
+    }
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _trigSub?.cancel();
+    // A stray finger-up outside the button (or navigating away mid-press)
+    // must not leave the reader sweeping in the background.
+    if (_testFiring) context.read<AppController>().rfid.stopInventory();
     super.dispose();
+  }
+
+  Future<void> _startTest(AppController c) async {
+    if (_testFiring) return;
+    if (c.rfidCharging) {
+      c.toastMsg('ยิงทดสอบไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน แล้วลองอีกครั้ง', ResultKind.warn);
+      return;
+    }
+    setState(() => _testFiring = true);
+    await c.rfid.startInventory();
+  }
+
+  Future<void> _stopTest(AppController c) async {
+    if (!_testFiring) return;
+    setState(() => _testFiring = false);
+    await c.rfid.stopInventory();
   }
 
   Future<void> _refresh() async {
@@ -311,25 +469,30 @@ class _RfidPanelState extends State<_RfidPanel> {
     }
   }
 
-  String _label(AppController c) {
-    if (!c.rfid.supported) return 'ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra';
+  String _label(AppController c, LocaleController loc) {
+    if (!c.rfid.supported) return loc.t('ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra');
+    // Outranks the connection state: while cradled the reader may well be
+    // "connected" and still refuse every command, and an operator reading
+    // "เชื่อมต่อเครื่องอ่านแล้ว" next to a dead trigger learns nothing.
+    if (c.rfidCharging) return loc.t('อยู่บนแท่นชาร์จ — ยิงแท็กไม่ได้ขณะชาร์จ');
     switch (c.rfidStatus.state) {
       case RfidState.connected:
-        return 'เชื่อมต่อเครื่องอ่านแล้ว';
+        return loc.t('เชื่อมต่อเครื่องอ่านแล้ว');
       case RfidState.connecting:
-        return 'กำลังเชื่อมต่อ…';
+        return loc.t('กำลังเชื่อมต่อ…');
       case RfidState.error:
-        return 'เชื่อมต่อไม่สำเร็จ';
+        return loc.t('เชื่อมต่อไม่สำเร็จ');
       case RfidState.disconnected:
-        return 'ตัดการเชื่อมต่อ';
+        return loc.t('ตัดการเชื่อมต่อ');
       case RfidState.idle:
-        return 'ยังไม่ได้เชื่อมต่อ';
+        return loc.t('ยังไม่ได้เชื่อมต่อ');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final power = _d['powerIndex'] == null
         ? null
         : '${_d['powerIndex']} / ${_d['powerMaxIndex'] ?? '-'}'
@@ -341,32 +504,44 @@ class _RfidPanelState extends State<_RfidPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Caption('เครื่องอ่าน RFID (Zebra)'),
+          Caption(loc.t('เครื่องอ่าน RFID (Zebra)')),
           const SizedBox(height: 12),
           Row(
             children: [
               Container(
                 width: 11,
                 height: 11,
-                decoration: BoxDecoration(color: _colorFor(c.rfidStatus.state), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                    color: c.rfidCharging ? C.orange : _colorFor(c.rfidStatus.state), shape: BoxShape.circle),
               ),
               const SizedBox(width: 11),
               Expanded(
-                child: Text(_label(c),
+                child: Text(_label(c, loc),
                     style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
               ),
-              OutlinedButton(
-                onPressed: () async {
-                  await c.rfid.connect();
-                  await _refresh();
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: C.ink,
-                  side: BorderSide(color: C.border2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+              // Nothing to reconnect once already connected — the button
+              // only makes sense as a recovery action for connecting/error/
+              // disconnected/idle, and showing it regardless read as "this
+              // needs attention" even while the reader was already fine.
+              // Hidden while cradled: reconnecting cannot fix a firmware
+              // refusal, and offering it there sends the operator round a
+              // loop that always fails instead of at the one thing that
+              // works — lifting the terminal off the charger, which now
+              // recovers on its own (see the charging watch in
+              // RfidReaderController).
+              if (c.rfidStatus.state != RfidState.connected && !c.rfidCharging)
+                OutlinedButton(
+                  onPressed: () async {
+                    await c.rfid.connect();
+                    await _refresh();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.ink,
+                    side: BorderSide(color: C.border2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                  ),
+                  child: Text(loc.t('เชื่อมต่อใหม่')),
                 ),
-                child: const Text('เชื่อมต่อใหม่'),
-              ),
             ],
           ),
           if (c.rfidStatus.message.isNotEmpty)
@@ -378,15 +553,182 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 14),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            Text(loc.t('ระยะยิงแท็ก'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            _RangePicker(
-              value: _rangePercent,
-              onChanged: (v) {
-                setState(() => _rangePercent = v);
-                c.prefs.rfidPowerPercent = v;
-                c.rfid.setPowerPercent(v);
+            // The slider needs the reader's own max index to cover every
+            // step it actually has (see RfidService.setPowerIndex) — that
+            // number only exists once the reader has answered a diagnostics
+            // call, so there's honestly nothing precise to show before then.
+            if (_d['powerMaxIndex'] is int) ...[
+              Builder(builder: (context) {
+                final maxIdx = _d['powerMaxIndex'] as int;
+                final current = (_rangeIndex ?? (_d['powerIndex'] as int?) ?? maxIdx).clamp(0, maxIdx);
+                return _RangePicker(
+                  value: current,
+                  max: maxIdx,
+                  onChanged: (v) {
+                    setState(() => _rangeIndex = v);
+                    // Percent is still what's persisted (and what
+                    // AppController re-applies on the next connect, see
+                    // rfid.setPowerPercent) — it's the one unit that still
+                    // means something if this device is swapped for a
+                    // reader with a different index range.
+                    c.prefs.rfidPowerPercent = maxIdx == 0 ? 100 : ((v / maxIdx) * 100).round();
+                    c.rfid.setPowerIndex(v);
+                  },
+                );
+              }),
+              const SizedBox(height: 12),
+              // Tap to toggle — same start/stop the physical trigger does,
+              // so a range just dragged on the slider can be checked
+              // immediately without reaching for the gun. Was press-and-hold
+              // (mirroring how the *hardware* trigger behaves), but that
+              // made this the one button on the whole screen that worked
+              // differently from every other tap target in the app — a tap
+              // here now starts inventory and a second tap stops it, exactly
+              // like every other on/off control on screen.
+              GestureDetector(
+                onTap: () => _testFiring ? _stopTest(c) : _startTest(c),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                    color: c.rfidCharging
+                        ? C.orangeBg
+                        : _testFiring
+                            ? C.limeBg
+                            : C.neutralBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: c.rfidCharging
+                            ? C.orangeBorder
+                            : _testFiring
+                                ? C.limeBorder
+                                : C.border2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(c.rfidCharging ? Icons.battery_charging_full : Icons.wifi_tethering,
+                          size: 17,
+                          color: c.rfidCharging
+                              ? C.orange
+                              : _testFiring
+                                  ? C.limeText
+                                  : C.ink2),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                            c.rfidCharging
+                                ? loc.t('ยิงทดสอบไม่ได้ขณะชาร์จ — ยกออกจากแท่นก่อน')
+                                : _testFiring
+                                    ? loc.t('กำลังยิงทดสอบ… แตะเพื่อหยุด')
+                                    : loc.t('แตะเพื่อทดสอบยิง'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: c.rfidCharging
+                                    ? C.orange
+                                    : _testFiring
+                                        ? C.limeText
+                                        : C.ink2)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ] else
+              Text(
+                loc.t('เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้'),
+                style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
+              ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(loc.t('กรองสัญญาณอ่อน (RSSI)'),
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                ),
+                Switch(
+                  value: c.prefs.rfidMinRssi != null,
+                  onChanged: (on) {
+                    setState(() {
+                      // -70 dBm: matches the "ไกล" boundary RfidLocateScreen
+                      // already uses as its own far-signal cutoff — a
+                      // reasonable first guess for "this is a stray read
+                      // from the next pallet over", tunable from here.
+                      c.prefs.rfidMinRssi = on ? -70 : null;
+                    });
+                  },
+                  activeThumbColor: C.lime,
+                ),
+              ],
+            ),
+            Text(
+              loc.t('ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ'),
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+            ),
+            if (c.prefs.rfidMinRssi != null) ...[
+              const SizedBox(height: 10),
+              _RssiPicker(
+                value: c.prefs.rfidMinRssi!,
+                onChanged: (v) => setState(() => c.prefs.rfidMinRssi = v),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Divider(height: 1, color: C.border),
+            const SizedBox(height: 12),
+            Text(loc.t('เสียงบี๊บ'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              loc.t(
+                  'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที — เสียงนี้ใช้เฉพาะตอนยิงแท็ก RFID เท่านั้น ไม่มีผลกับเสียงอื่นของเครื่อง (เช่น เสียงยิงบาร์โค้ด)'),
+              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            _TonePicker(
+              value: c.prefs.rfidToneId,
+              onChanged: (id) {
+                setState(() => c.prefs.rfidToneId = id);
+                c.rfid.setBeepStyle(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
+                // Selecting a tone plays it immediately — the operator hears
+                // what they just picked without a separate "ทดสอบ" tap.
+                c.rfid.previewTone(toneId: id, volumePercent: c.prefs.rfidVolumePercent);
               },
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.volume_down, size: 16, color: C.muted),
+                Expanded(
+                  child: Slider(
+                    value: c.prefs.rfidVolumePercent.toDouble(),
+                    min: 1,
+                    max: 100,
+                    divisions: 99,
+                    activeColor: C.lime,
+                    label: '${c.prefs.rfidVolumePercent}%',
+                    onChanged: (v) => setState(() => c.prefs.rfidVolumePercent = v.round()),
+                    onChangeEnd: (v) {
+                      final vol = v.round();
+                      c.rfid.setBeepStyle(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                      c.rfid.previewTone(toneId: c.prefs.rfidToneId, volumePercent: vol);
+                    },
+                  ),
+                ),
+                Icon(Icons.volume_up, size: 16, color: C.muted),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 36,
+                  child: Text('${c.prefs.rfidVolumePercent}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.ink2)),
+                ),
+              ],
             ),
           ],
           if (!c.rfid.supported)
@@ -464,63 +806,193 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 }
 
-/// ใกล้ / ปานกลาง / ไกล — a friendlier face on antenna transmit power than a
-/// raw index, since "power 190/270" means nothing to an operator but "อ่าน
-/// เฉพาะกล่องใกล้ตัว" does. Maps to a percentage of the reader's max power;
-/// [RfidReaderController.setPower] converts that into an actual index.
-class _RangePicker extends StatelessWidget {
-  static const _steps = [
-    (label: 'ใกล้', sub: '~30 ซม.', percent: 30),
-    (label: 'ปานกลาง', sub: '~1-2 ม.', percent: 65),
-    (label: 'ไกล', sub: 'สุดกำลังเครื่อง', percent: 100),
-  ];
-
-  final int value;
-  final ValueChanged<int> onChanged;
-  const _RangePicker({required this.value, required this.onChanged});
+/// Beep sound picker (see rfid_service.dart's kRfidTones) — a row of chips
+/// rather than a dropdown since the whole catalog is short enough to lay
+/// out flat, and a chip tap doubles as the "listen to it" gesture (the
+/// caller plays a live preview onChanged, per the "เมื่อเลือกให้เล่นเสียงเลย" ask).
+class _TonePicker extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _TonePicker({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    // Snap to the nearest step so a value saved by an older build (or typed
-    // via some future settings-import feature) still highlights sensibly
-    // instead of leaving every option unselected.
-    final nearest = _steps.reduce(
-      (a, b) => (value - a.percent).abs() <= (value - b.percent).abs() ? a : b,
-    );
-    return Row(
-      children: _steps.map((s) {
-        final selected = s == nearest;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: s == _steps.last ? 0 : 8),
-            child: GestureDetector(
-              onTap: () => onChanged(s.percent),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected ? C.ink : C.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: selected ? C.ink : C.border2),
-                ),
-                child: Column(
-                  children: [
-                    Text(s.label,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? C.surface : C.ink)),
-                    const SizedBox(height: 2),
-                    Text(s.sub,
-                        style: TextStyle(
-                            fontSize: 10.5,
-                            color: selected ? C.surface.withOpacity(0.7) : C.muted)),
-                  ],
-                ),
-              ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kRfidTones.map((t) {
+        final selected = t.id == value;
+        return GestureDetector(
+          onTap: () => onChanged(t.id),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : C.neutralBg,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: selected ? C.ink : C.border2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(selected ? Icons.volume_up : Icons.play_arrow,
+                    size: 14, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Text(t.label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? C.surface : C.ink2)),
+              ],
             ),
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Minimum-RSSI slider for the stray-read filter (see
+/// AppController._onReaderBatch / Prefs.rfidMinRssi) — -95 dBm (accept
+/// almost anything) to -25 dBm (only a tag right up against the antenna).
+/// Raw dBm, not a percent: this is compared directly against what the
+/// reader reports per read, so the number here has to mean the same thing.
+class _RssiPicker extends StatelessWidget {
+  static const _min = -95.0;
+  static const _max = -25.0;
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _RssiPicker({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(value <= -80 ? 'หลวม · รับเกือบทุกแท็ก' : value <= -55 ? 'ปานกลาง' : 'เข้ม · เฉพาะแท็กใกล้มาก',
+                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value dBm',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+          ),
+          child: Slider(
+            value: value.toDouble().clamp(_min, _max),
+            min: _min,
+            max: _max,
+            onChanged: (v) => onChanged(v.round()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Fine-grained transmit-power slider — every raw index the reader actually
+/// has, 0 through [max]. Used to be three fixed presets (ใกล้/ปานกลาง/ไกล),
+/// then a 0-100% slider; a percent still only reaches ~101 of the reader's
+/// real steps because its index range runs well past 100 on this hardware.
+/// [RfidReaderController.setPowerIndex] sets that exact index directly —
+/// no percent math, no skipped steps.
+class _RangePicker extends StatelessWidget {
+  final int value;
+  final int max;
+  final ValueChanged<int> onChanged;
+  const _RangePicker({required this.value, required this.max, required this.onChanged});
+
+  /// The index range varies by reader model, so classification has to be
+  /// relative to [max] — this is the same ใกล้/ปานกลาง/ไกล vocabulary the
+  /// original preset picker used, now derived from position instead of
+  /// snapped to it.
+  String _label(int v) {
+    if (max <= 0) return '';
+    final pct = v / max * 100;
+    if (pct <= 40) return 'ใกล้ · ~30 ซม.';
+    if (pct <= 75) return 'ปานกลาง · ~1-2 ม.';
+    return 'ไกล · สุดกำลังเครื่อง';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(_label(value), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text('$value / $max',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: C.ink,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 5,
+            activeTrackColor: C.ink,
+            inactiveTrackColor: C.neutralBg2,
+            thumbColor: C.ink,
+            overlayColor: C.ink.withOpacity(0.12),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+          ),
+          child: Slider(
+            value: value.toDouble().clamp(0, max.toDouble()),
+            min: 0,
+            max: max <= 0 ? 1 : max.toDouble(),
+            // No `divisions` — a stepped slider snaps to fixed ticks, which
+            // is the same "only a few presets" limitation this replaced.
+            // Continuous drag reports every index the reader has, exactly
+            // as [RfidReaderController.setPowerIndex] expects it.
+            onChanged: max <= 0 ? null : (v) => onChanged(v.round()),
+          ),
+        ),
+        // Both work, not one or the other: drag the slider to get in the
+        // ballpark fast, then nudge ±1 to land on an exact index — a slider
+        // alone can't reliably hit a specific single-digit value on a
+        // 200+-step range with a thumb sized for a fingertip.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _stepButton(Icons.remove, value > 0 ? () => onChanged(value - 1) : null),
+            const SizedBox(width: 14),
+            _stepButton(Icons.add, value < max ? () => onChanged(value + 1) : null),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _stepButton(IconData icon, VoidCallback? onTap) {
+    return Material(
+      color: onTap == null ? C.neutralBg2 : C.neutralBg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 19, color: onTap == null ? C.faint : C.ink2),
+        ),
+      ),
     );
   }
 }

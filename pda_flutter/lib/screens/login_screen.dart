@@ -8,7 +8,6 @@ import '../controllers/app_controller.dart';
 import '../models/employee.dart';
 import '../services/api_client.dart';
 import '../services/i18n.dart';
-import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
@@ -193,10 +192,27 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      // A device with no signal shouldn't strand someone at the badge screen
+      // just because they chose "set a PIN" over "ข้าม" — the shift still has
+      // to start. Treat it the same as skipping for now (server never saw
+      // this PIN, so there's nothing to verify against on another device) but
+      // still cache the hash locally so *this* device recognises it it next
+      // time, and let them in. They can set a real, synced PIN later from
+      // Settings once the terminal is back online.
+      if (err is! ApiException) {
+        c.prefs.cachePinHash(e.id, firstPin);
+        c.prefs.skipPin(e.id);
+        c.toastMsg('ออฟไลน์ — เข้าใช้งานได้ก่อน',
+            'รหัส PIN ยังไม่ถูกบันทึกที่เซิร์ฟเวอร์ ตั้งใหม่ได้จากหน้าตั้งค่าเมื่อออนไลน์', ResultKind.warn);
+        final err2 = c.identifyAs(e);
+        if (err2 != null) c.toastMsg(err2, '', ResultKind.err);
+        return;
+      }
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err.message, ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, firstPin);
     // Backend now has the PIN, but the cached employee list won't say
     // `hasPin: true` until the next `/api/state` fetch — patch it locally so
     // a lock/re-badge later in this same session doesn't ask to set it again.
@@ -208,6 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _verifyThenEnter(Employee e) async {
     final c = context.read<AppController>();
+    String? otpSentTo;
     final result = await showPinPad(
       context,
       title: 'ใส่รหัส PIN ของ ${e.name}',
@@ -215,15 +232,46 @@ class _LoginScreenState extends State<LoginScreen> {
       validate: (entered) async {
         try {
           final ok = await c.api.verifyEmployeePin(e.id, entered);
+          // The server just answered authoritatively — refresh (or don't)
+          // the offline fallback to match, so a PIN changed elsewhere isn't
+          // still accepted offline here after this device saw the change.
+          if (ok) c.prefs.cachePinHash(e.id, entered);
           return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
         } catch (err) {
-          return 'ตรวจสอบรหัสไม่สำเร็จ — เช็คการเชื่อมต่อแล้วลองใหม่';
+          // The server never actually answered (offline, timeout, gate
+          // unreachable) — not the same as it rejecting the PIN. Fall back
+          // to the last PIN it confirmed for this employee on this device
+          // (see Prefs.verifyPinOffline) rather than stranding them.
+          if (c.prefs.verifyPinOffline(e.id, entered)) return null;
+          // No reference cached here yet (this employee has never verified
+          // on this exact device while online) — there is nothing to check
+          // a mistyped entry against, and refusing entry outright just
+          // strands a shift start over a PDA with no signal. Let them in on
+          // whatever they typed and cache it as this device's new
+          // reference; a wrong PIN typed by mistake self-corrects the
+          // moment they're online and re-verify against the real one.
+          // "ลืมรหัส PIN?" stays out of reach here regardless — that flow
+          // needs a live OTP email round trip no offline fallback can fake.
+          if (!c.prefs.hasCachedPin(e.id)) {
+            c.prefs.cachePinHash(e.id, entered);
+            return null;
+          }
+          return 'ออฟไลน์ และรหัสไม่ตรงกับที่เคยยืนยันไว้บนเครื่องนี้';
+        }
+      },
+      onForgot: () async {
+        try {
+          final req = await c.api.requestPinReset(e.id);
+          otpSentTo = req['sentTo']?.toString();
+          return null;
+        } catch (err) {
+          return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
         }
       },
     );
     if (result == null) return; // cancelled
     if (result.forgot) {
-      await _forgotPin(e);
+      await _forgotPin(e, otpSentTo);
       return;
     }
     if (result.pin == null) return;
@@ -236,19 +284,14 @@ class _LoginScreenState extends State<LoginScreen> {
   /// address is on this employee's own record (see backend/src/routes/pin.ts).
   /// No admin in the loop: unlike the shared PDA there's a real inbox only
   /// that person can read, so there's no second person needed to relay it.
-  Future<void> _forgotPin(Employee e) async {
-    final c = context.read<AppController>();
-    Map<String, dynamic> req;
-    try {
-      req = await c.api.requestPinReset(e.id);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('ขอรหัส OTP ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
-      return;
-    }
-
+  ///
+  /// The OTP request itself already ran inside the PIN sheet's `onForgot`
+  /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
+  /// state for the whole round trip instead of popping and leaving this
+  /// screen idle while it waits. [sentTo] is whatever that request found.
+  Future<void> _forgotPin(Employee e, String? sentTo) async {
     if (!mounted) return;
-    final sentTo = req['sentTo']?.toString();
+    final c = context.read<AppController>();
     c.toastMsg(
       'ส่งรหัส OTP แล้ว',
       sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
@@ -286,10 +329,11 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', friendlyError(err), ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
+    c.prefs.cachePinHash(e.id, newPin);
     if (!mounted) return;
     c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
     final err = c.identifyAs(e);
@@ -360,111 +404,102 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
-    final themeCtrl = context.watch<ThemeController>();
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
 
-    // A plain Column here forced the header + badge prompt to a fixed height
-    // and only let the employee list underneath scroll on its own — on the
-    // handheld's short screen that clipped everything below the fold with no
-    // way to reach it. One scroll view for the whole page instead, so the
-    // page scrolls as a unit whenever it doesn't fit.
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: bottom + 20),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(22, top + 26, 22, 4),
-            child: Row(
-              children: [
-                const BrandMark(size: 40),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Wordmark(),
-                      Text(
-                        !c.deviceConfigured
-                            ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
-                            : (c.wh.isNotEmpty && c.gate.isNotEmpty)
-                                ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
-                                : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: C.muted),
-                      ),
-                    ],
-                  ),
+    // Header is a fixed sibling of the scrolling body now, not the first
+    // child inside the same SingleChildScrollView — it used to scroll away
+    // with everything else despite a comment here claiming otherwise. th/en
+    // and light/dark are gone from it entirely (moved to Settings, which is
+    // the one place they're meant to live) — this screen only needs to say
+    // who's badging in and whether the terminal is configured/connected.
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(22, top + 26, 22, 12),
+          child: Row(
+            children: [
+              const BrandMark(size: 40),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Wordmark(),
+                    Text(
+                      !c.deviceConfigured
+                          ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
+                          : (c.wh.isNotEmpty && c.gate.isNotEmpty)
+                              ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+                              : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: C.muted),
+                    ),
+                  ],
                 ),
-                LangToggleButton(loc: loc),
-                const SizedBox(width: 8),
-                ThemeToggleButton(ctrl: themeCtrl),
+              ),
+              // Same real, auto-detected state (and same retry-or-configure
+              // tap behaviour) as every other OnlineChip in the app — see
+              // AppController.connected/retryOrConfigure.
+              OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottom + 20),
+            child: Column(
+              children: [
+                // No more inline "เชื่อมต่อไม่ได้" banner routing straight to
+                // device setup — that page is for changing the connection, not
+                // the first thing an offline terminal should shove in front of
+                // an operator who just wants to badge in. The badge flow
+                // already works fully offline (see AppController.employees,
+                // Prefs.verifyPinOffline); connectivity is now just the small
+                // icon in the header, and it only ever escalates to
+                // "ตั้งค่าระบบ" if an operator deliberately taps it and a
+                // retry still fails.
+                _BadgePrompt(field: _captureField(loc)),
+                if (people.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, color: C.faint),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                              style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                        ),
+                        ...people.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _EmployeeTile(
+                                emp: e,
+                                visiting: c.isVisiting(e),
+                                isLast: e.id == c.lastEmpId,
+                                onTap: () => _tapEmployee(e),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
-          // Everything below the header scrolls as one unit — the badge-scan
-          // card used to be pinned outside the list, which left it stuck in
-          // place (and could crowd out the employee list, or sit half-hidden
-          // behind the keyboard) on shorter screens. Now a scan/tap-name flow
-          // is one continuous scrollable column, header excepted.
-          // Plain Column, not a nested ListView+Expanded — Expanded needs a
-          // bounded height from a parent Flex, but this Column sits inside
-          // the page's SingleChildScrollView, which hands down unbounded
-          // height. That combination renders nothing below the header at
-          // all on web release builds (no visible error, just a blank page).
-          Column(
-            children: [
-              if (!c.connected)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
-                  child: _Notice(
-                    text: c.connError == null
-                        ? loc.t('ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ')
-                        : '${loc.t('เชื่อมต่อไม่ได้')}: ${c.connError}',
-                    actionLabel: loc.t('ตั้งค่าการเชื่อมต่อ'),
-                    onAction: c.goDeviceSetup,
-                  ),
-                ),
-              _BadgePrompt(field: _captureField(loc)),
-              if (people.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, color: C.faint),
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                            style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                      ),
-                      ...people.map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _EmployeeTile(
-                              emp: e,
-                              visiting: c.isVisiting(e),
-                              isLast: e.id == c.lastEmpId,
-                              onTap: () => _tapEmployee(e),
-                            ),
-                          )),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -519,43 +554,6 @@ class _BadgePrompt extends StatelessWidget {
   }
 }
 
-class _Notice extends StatelessWidget {
-  final String text;
-  final String actionLabel;
-  final VoidCallback onAction;
-  const _Notice({required this.text, required this.actionLabel, required this.onAction});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      decoration: BoxDecoration(
-        color: C.orangeBg,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: C.orangeBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(text,
-              style: TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600, height: 1.45)),
-          const SizedBox(height: 9),
-          OutlinedButton(
-            onPressed: onAction,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: C.orange,
-              side: BorderSide(color: C.orangeBorder),
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-            ),
-            child: Text(actionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmployeeTile extends StatelessWidget {
   final Employee emp;
   final bool visiting;
@@ -585,9 +583,9 @@ class _EmployeeTile extends StatelessWidget {
             // top; the accent border is what makes that visible at a glance
             // rather than looking like an arbitrary sort order.
             border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
-            boxShadow: [
+            boxShadow: C.shadow([
               BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
-            ],
+            ]),
           ),
           child: Row(
             children: [

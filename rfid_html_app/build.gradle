@@ -1,0 +1,5 @@
+// Standalone (non-Flutter) Gradle build — see README.md for why this app
+// exists alongside pda_flutter.
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

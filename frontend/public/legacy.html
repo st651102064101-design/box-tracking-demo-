@@ -112,13 +112,25 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto;}}
 
 /* ============================================================ NAV ============================================================ */
-.chrome{position:sticky;top:0;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
+/* #topBar (not .chrome/.navwrap individually) carries position:fixed, with
+   the two bars stacked in normal flow inside it — so hiding it on scroll is
+   one transform on one box, not two independently-sized ones (translateY
+   -100% on each would only lift .navwrap by its own ~55px, not the combined
+   bar height, leaving it parked a few px from the top instead of off-screen).
+   Fixed rather than sticky: Safari fails to keep position:sticky pinned when
+   body ends up as its own scroll container (see the overflow-x:hidden rule
+   on body below — per spec that forces overflow-y:auto too, making body a
+   scroller distinct from the viewport). Fixed is anchored to the viewport
+   regardless, so it doesn't hit that bug. Body gets an explicit padding-top
+   (--header-total-h, measured in JS from #topBar's real height) to reserve
+   the space sticky used to reserve automatically. */
+#topBar{position:fixed;top:0;left:0;right:0;z-index:90;transition:transform .32s var(--ease);}
+html.nav-hidden #topBar{transform:translateY(-100%);}
+html[data-layout="sidebar"] #topBar{position:static;transform:none!important;} /* .chrome/.navwrap take over their own fixed positioning below */
+
+.chrome{position:static;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
   backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--line);
-  padding:env(safe-area-inset-top) 0 0;transition:transform .28s var(--ease);}
-/* hide the top navbar+tabs on scroll-down, reveal on scroll-up — only in the
-   horizontal "top" layout; the sidebar layout's nav is vertical and stays put */
-html:not([data-layout="sidebar"]).nav-hidden .chrome,
-html:not([data-layout="sidebar"]).nav-hidden .navwrap{transform:translateY(-100%);}
+  padding:env(safe-area-inset-top) 0 0;}
 .chrome-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:13px 22px;}
 .brand{display:flex;align-items:center;gap:12px;cursor:pointer;}
 .brand .mark{width:30px;height:30px;border-radius:8px;background:var(--ink);color:var(--bg);
@@ -167,9 +179,12 @@ html[data-layout="sidebar"] .who-menu{position:fixed;top:0;right:0;left:auto;bot
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
 .iconbtn:active{transform:scale(.9);}
 
-.navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;transition:transform .28s var(--ease);
+.navwrap{position:static;z-index:80;
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border-bottom:.5px solid var(--line);}
+
+body{padding-top:var(--header-total-h,113px);}
+html[data-layout="sidebar"] body{padding-top:0;}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
 nav::-webkit-scrollbar{display:none;}
 nav button{position:relative;color:var(--muted);font-weight:500;font-size:14px;letter-spacing:-.01em;
@@ -854,6 +869,40 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
 @keyframes toastIn{from{opacity:0;transform:translateY(34px) scale(.92);}to{opacity:1;transform:none;}}
 @keyframes toastOut{to{opacity:0;transform:translateY(22px) scale(.95);}}
 
+/* PDA realtime notifications */
+.pda-toast-zone{position:fixed;top:calc(76px + env(safe-area-inset-top));right:16px;display:flex;flex-direction:column;
+  align-items:flex-end;gap:10px;z-index:500;pointer-events:none;max-width:min(360px,90vw);}
+.pda-toast-zone .toast{min-width:0;width:100%;}
+.notif-wrap{position:relative;}
+.notif-bell-badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;}
+.nav-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;
+  background:var(--neg);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;
+  cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;}
+.nav-badge:hover{transform:scale(1.18);box-shadow:0 0 0 3px color-mix(in srgb,var(--neg) 25%,transparent);}
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;max-width:90vw;max-height:70vh;
+  background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:.5px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:401;}
+@media(max-width:560px){.notif-panel{position:fixed;left:12px;right:12px;top:64px;width:auto;min-width:0;max-width:none;max-height:calc(100vh - 90px);}}
+/* Same off-screen-anchor bug .who-menu had: in sidebar-nav mode notif-wrap sits
+   inside the fixed ~236px-wide left rail, so right:0 anchors the 340px panel to
+   a box far too narrow for it and it renders clipped/overlapping the nav below.
+   Detach it and present it as a right-side panel instead, same fix as .who-menu. */
+html[data-layout="sidebar"] .notif-panel{position:fixed;top:0;right:0;left:auto;bottom:0;
+  width:340px;max-width:88vw;min-width:0;max-height:none;border-radius:0;
+  box-shadow:-8px 0 30px rgba(0,0,0,.3);}
+.notif-panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:.5px solid var(--line);}
+.notif-panel-body{overflow-y:auto;padding:6px;}
+.notif-empty{padding:24px 10px;text-align:center;color:var(--muted);font-size:13px;}
+.notif-item{display:flex;gap:10px;padding:10px;border-radius:10px;cursor:pointer;}
+.notif-item:hover{background:var(--bg);}
+.notif-item .ti{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:0 0 auto;color:#fff;font-weight:700;}
+.notif-item.ok .ti{background:var(--pos);color:var(--posInk);} .notif-item.warn .ti{background:var(--warn);}
+.notif-item .tt{font-size:13.5px;font-weight:600;} .notif-item .ts{font-size:11.5px;color:var(--muted);margin-top:2px;}
+.notif-item .tm{font-size:10.5px;color:var(--muted);margin-left:auto;white-space:nowrap;}
+@keyframes rowFlash{from{background:color-mix(in srgb,var(--accent) 35%,transparent);}to{background:transparent;}}
+tr.row-flash{animation:rowFlash 3s ease-out;}
+
 /* modal */
 .modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:22px;}
 .modal.show{display:flex;}
@@ -878,6 +927,49 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
 .alert .afoot button{padding:15px;font-size:16px;color:var(--accent);font-weight:500;border-top:.5px solid var(--line);transition:background .15s;}
 .alert .afoot button:first-child{border-top:none;} .alert .afoot button:hover{background:var(--surface2);}
 .alert .afoot button.danger{color:var(--neg);font-weight:600;}
+
+/* ===== drawer (แผงเลื่อนจากขอบขวา) =====
+   ใช้กับงานหลายขั้นตอนที่ยาวเกินกว่าจะยัดใน .modal และควรเห็นว่ายังอยู่บนหน้าเดิม
+   (Box Lifecycle Wizard) — .modal ยังคงไว้สำหรับงานสั้นที่จบในจอเดียว */
+.drawer{position:fixed;inset:0;z-index:320;display:none;}
+.drawer.show{display:block;}
+.drawer .dbackdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(6px);animation:fadeIn .28s var(--ease) both;}
+.drawer .dpanel{position:absolute;top:0;right:0;bottom:0;width:min(780px,100%);background:var(--bg);
+  border-left:.5px solid var(--line);box-shadow:-18px 0 60px rgba(0,0,0,.32);
+  display:flex;flex-direction:column;animation:drawerIn .38s var(--ease) both;}
+@keyframes drawerIn{from{transform:translateX(48px);opacity:0;}to{transform:none;opacity:1;}}
+.drawer .dhead{padding:20px 26px 0;border-bottom:.5px solid var(--line);flex:0 0 auto;}
+.drawer .dhead-top{display:flex;align-items:center;gap:12px;margin-bottom:15px;}
+.drawer .dhead h3{font-size:20px;font-weight:600;letter-spacing:-.025em;}
+.drawer .dhead .x{margin-left:auto;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--ink) 10%,transparent);
+  border:1px solid var(--line2);color:var(--ink2);display:grid;place-items:center;transition:transform .15s var(--ease),background .2s,color .2s;}
+.drawer .dhead .x svg{stroke-width:2.4;}
+.drawer .dhead .x:hover{transform:scale(1.1);background:var(--neg);border-color:var(--neg);color:#fff;}
+.drawer .dbody{padding:22px 26px 28px;overflow:auto;flex:1;}
+.drawer .dfoot{padding:15px 26px;border-top:.5px solid var(--line);display:flex;gap:11px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.drawer .dfoot .spacer{flex:1;}
+@media(max-width:560px){.drawer .dpanel{width:100%;}.drawer .dhead,.drawer .dbody,.drawer .dfoot{padding-left:16px;padding-right:16px;}}
+
+/* step rail ของ wizard */
+.wzsteps{display:flex;margin:0 -26px;padding:0 26px 13px;overflow-x:auto;scrollbar-width:none;}
+.wzsteps::-webkit-scrollbar{display:none;}
+.wzstep{display:flex;align-items:center;gap:8px;flex:0 0 auto;opacity:.4;transition:opacity .3s var(--ease);}
+.wzstep.on,.wzstep.done{opacity:1;}
+.wzstep .n{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;
+  background:color-mix(in srgb,var(--ink) 12%,transparent);color:var(--ink2);flex:0 0 auto;transition:background .3s,color .3s;}
+.wzstep.on .n{background:var(--ink);color:var(--bg);}
+.wzstep.done .n{background:var(--pos);color:var(--posInk);}
+.wzstep .lb{font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;}
+.wzstep .sep{width:20px;height:1px;background:var(--line2);margin:0 10px;flex:0 0 auto;}
+/* แถวกล่องในขั้น QC */
+.wzrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border:.5px solid var(--line);border-radius:12px;margin-bottom:7px;background:var(--surface);}
+.wzrow .tg{font-family:var(--mono);font-size:13px;font-weight:600;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.wzrow .qcseg{display:flex;gap:4px;flex:0 0 auto;}
+.wzrow .qcseg button{padding:5px 11px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted);
+  border:1px solid var(--line2);background:transparent;transition:background .18s,color .18s,border-color .18s;}
+.wzrow .qcseg button.on[data-q="pass"]{background:var(--pos);color:var(--posInk);border-color:var(--pos);}
+.wzrow .qcseg button.on[data-q="hold"]{background:var(--warn);color:#fff;border-color:var(--warn);}
+.wzrow .qcseg button.on[data-q="damage"]{background:var(--neg);color:#fff;border-color:var(--neg);}
 
 .banner{display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:16px;margin-bottom:16px;font-size:14px;line-height:1.5;}
 .banner.info{background:var(--accentSoft);color:var(--accentInk);}
@@ -1015,7 +1107,7 @@ hr.sep{border:none;border-top:.5px solid var(--line);margin:22px 0;}
 .track-card-head .tch-x:active{transform:scale(.9);}
 
 @media print{.chrome,.navwrap,.toast-zone,.no-print,.gatebox,.track-scan{display:none!important;}.tab{display:block!important;}
-  body{background:#fff;}.card,.tablecard,.occ-card,.track-sticky{box-shadow:none;border:1px solid #ccc;}.hero{padding-top:0;}
+  body{background:#fff;padding-top:0!important;}.card,.tablecard,.occ-card,.track-sticky{box-shadow:none;border:1px solid #ccc;}.hero{padding-top:0;}
   html[data-layout="sidebar"] main{margin-left:0!important;}}
 
 /* ============================================================
@@ -1166,7 +1258,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   try{if(localStorage.getItem('boxtrace_sidebar_collapsed')==='1')document.documentElement.setAttribute('data-sidebar-collapsed','1');}catch(e){}})();
 </script>
 
-<header class="chrome"><div class="chrome-inner">
+<div id="topBar"><header class="chrome"><div class="chrome-inner">
   <div class="brand" onclick="switchTab('overview')">
     <div class="mark"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span></div>
     <div><div class="nm">BoxTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
@@ -1186,11 +1278,47 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
-  <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังสินค้า</span></button>
+  <button data-tab="inventory" title="สต็อกกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">สต็อกกล่อง</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
-</nav></div>
+</nav></div></div>
+
+<script>
+/* reserve body space for the now-fixed header (was automatic under
+   position:sticky) and drive the hide-on-scroll-down/show-on-scroll-up
+   behavior. Kept in one place, right after the markup it measures, so it
+   runs (and can force a synchronous layout) before the rest of the page. */
+(function(){
+  function syncHeaderH(){
+    var b=document.getElementById('topBar');
+    document.documentElement.style.setProperty('--header-total-h',(b?b.offsetHeight:113)+'px');
+  }
+  syncHeaderH();
+  window.addEventListener('resize',syncHeaderH);
+  window.boxtraceSyncHeaderH=syncHeaderH;
+
+  var lastY=0,ticking=false,root=document.documentElement;
+  function scrollY(){return Math.max(window.scrollY||0,document.documentElement.scrollTop||0,document.body.scrollTop||0);}
+  function onScroll(){
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(function(){
+      var y=scrollY(),delta=y-lastY;
+      if(root.getAttribute('data-layout')==='sidebar'){root.classList.remove('nav-hidden');}
+      else if(y<=12){root.classList.remove('nav-hidden');}
+      else if(delta>4){root.classList.add('nav-hidden');}
+      else if(delta<-4){root.classList.remove('nav-hidden');}
+      lastY=y;ticking=false;
+    });
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  /* 'scroll' doesn't bubble, but a capturing listener on document still sees
+     it during the capture phase — covers the case where body (not window)
+     ends up doing the actual scrolling. */
+  document.addEventListener('scroll',onScroll,{passive:true,capture:true});
+})();
+</script>
 
 <main>
 
@@ -1613,18 +1741,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="h-sub reveal d2">มุมมองสต็อกกล่องตามฐานข้อมูล Master — รับเข้าด้วยการสแกนบาร์โค้ด ระบบดึงประเภท·หน่วย·พิกัดให้อัตโนมัติ · เลือกหลายใบเพื่อย้ายพิกัด/แจ้งกล่องหายพร้อมกัน · ทุกการเปลี่ยนแปลงบันทึก Audit Log</p>
   </div>
 
-  <!-- Quick Scan / Search bar -->
-  <div class="inv-scan-bar reveal d1">
-    <span class="iss-ic">⊟</span>
-    <input id="invScan" placeholder="สแกนบาร์โค้ด / บาร์โค้ด เพื่อค้นหาด่วน แล้วกด Enter" autocomplete="off">
-    <button class="btn accent sm" id="btnInvScan">ค้นหา</button>
-    <button class="btn pos sm" id="btnInvAddBox" onclick="openBoxRegModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ลงทะเบียนกล่องใหม่</button>
-  </div>
-
   <div class="invtoolbar reveal d2">
     <div class="invsearch">
       <span class="invsearch-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span></span>
-      <input id="schInv" placeholder="กรองบาร์โค้ด / ประเภท / ลูกค้า / พิกัด">
+      <input id="schInv" placeholder="สแกนบาร์โค้ด / ค้นหาประเภท, ลูกค้า, พิกัด..." autocomplete="off">
+      <span class="invsearch-ic invsearch-scan" title="รองรับสแกนบาร์โค้ดในช่องนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2M7 8v8M11 8v8M14 8v8M17 8v8"/></svg></span></span>
     </div>
     <div class="seg-filter" id="invStatusSeg">
       <button class="sf-btn active" data-st=""><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span> ทั้งหมด<span class="sf-badge" data-badge=""></span></button>
@@ -1641,16 +1762,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
-  <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
+  <!-- warehouse filter row: ทั้งหมด / ทุกคลัง / <รายคลัง> / นอกคลัง — only shown once there's
+       more than one warehouse (see buildInvWhPills, which no-ops with 0/1 warehouse). -->
   <div class="inv-cust-row" id="invWhRow">
-    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> แยกตามคลัง</span>
+    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> คลัง</span>
     <div class="icr-pills" id="invWhPills"></div>
   </div>
+  <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
   <div class="inv-cust-row" id="invCustRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
   </div>
   <div class="invtoolbar" style="margin-bottom:14px;">
+    <button class="btn accent sm" onclick="openBoxWizard()" title="รับกล่องใหม่เข้าคลังแบบครบขั้นตอน: รับเข้า → ติดบาร์โค้ด → ตรวจสอบ → จัดเก็บ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> รับกล่องเข้าคลัง</button>
     <div class="spacer"></div>
     <div class="inv-view-sw" id="invViewSw">
       <button class="ivs-btn active" data-view="serial" title="แสดง 1 บาร์โค้ด ต่อ 1 แถว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/></svg></span> รายใบ</button>
@@ -1683,6 +1807,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <button class="btn sm ghost" id="bulkInvHold" title="กันไม่ให้จ่ายออกจนกว่าจะปลดล็อก — ใช้ได้เฉพาะกล่องในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)</button>
       <button class="btn sm ghost" id="bulkInvDamage" title="ยังอยู่ในคลังแต่กันออกจากการใช้งาน — ใช้ได้กับกล่องในคลังหรือที่ Hold อยู่"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ตีชำรุด (Damage)</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
+      <button class="btn sm red" id="bulkInvDelete" title="ลบออกจากระบบถาวร — ใช้เมื่อบันทึกผิด/ทดสอบ ไม่ใช่กรณีกล่องหายจริง (ใช้ปุ่ม แจ้งกล่องหาย แทน)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg></span> ลบ</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
     </div>
   </div>
@@ -1771,11 +1896,125 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row no-print reveal" style="margin-bottom:22px;">
     <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
+    <!-- ซ่อนจาก sub-tab bar ปกติ — ตัวช่วยรับกล่องเข้าคลัง (openBoxWizard) เข้ามาแทน
+         การรับเข้าด้วยมือแบบนี้แล้ว แต่ยังต้องคงปุ่มนี้ไว้ใน DOM เพราะ editBox()
+         เรียก goSetup('box') ซึ่ง querySelector+click ปุ่มนี้เพื่อเปิดฟอร์มแก้ไข
+         ประเภท/Lot/วันหมดอายุ/ซัพพลายเออร์ ของกล่องที่มีอยู่แล้ว — ลบปุ่มออกจริง ๆ
+         จะทำให้แก้ไขข้อมูลกล่องเดิมไม่ได้เลย -->
+    <button class="btn ghost sm stab" data-stab="box" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
     <button class="btn ghost sm stab" data-stab="loc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค<span class="sf-badge" data-stab-badge="loc"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
+  </div>
+
+  <div class="ssec" id="ssec-box" style="display:none;">
+    <div class="card hover">
+      <h3>ลงทะเบียนกล่อง (Barcode)</h3>
+      <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "ในคลัง" พร้อมใช้งาน</p>
+
+      <!-- Mode Selector -->
+      <div class="inv-view-sw" id="boxModeSw" style="margin-bottom:20px;">
+        <button class="ivs-btn active" data-mode="single" id="bModeBtn_single"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg></span> เพิ่มทีละใบ</button>
+        <button class="ivs-btn" data-mode="batch" id="bModeBtn_batch">⧉ สร้างเป็นชุด</button>
+      </div>
+
+      <!-- Single Mode: บาร์โค้ด + Box Type -->
+      <div id="boxSingleWrap">
+        <div class="grid g3">
+          <div class="field">
+            <label>บาร์โค้ด (สร้างอัตโนมัติ) <span class="req">*</span></label>
+            <div class="auto-tag-row">
+              <input id="bTag" placeholder="BTX-..." readonly>
+              <button type="button" class="iconbtn" id="btnRegenTag" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+              <button type="button" class="iconbtn" id="btnCopyTag" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+              <button type="button" class="btn ghost sm" id="btnOverrideTag">แก้เอง</button>
+            </div>
+            <div class="tag" style="margin-top:5px;">กด <span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> เพื่อสร้างใหม่ · กด "แก้เอง" ถ้าต้องการระบุรหัสเอง</div>
+          </div>
+          <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bType"></select><div id="bTypeEmpty" style="display:none;margin-top:6px;"></div></div>
+        </div>
+      </div>
+
+      <!-- Batch Mode: Box Type + Prefix + Start + Qty -->
+      <div id="boxBatchWrap" style="display:none;">
+        <div class="grid g3" style="margin-bottom:0;">
+          <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bTypeBatch"></select></div>
+          <div class="field"><label>สร้างเป็นชุด — Prefix <span class="req">*</span></label>
+            <input id="bPrefix" list="dl-prefix" placeholder="CRT-" autocomplete="off">
+            <datalist id="dl-prefix"></datalist>
+            <div class="tag" style="margin-top:5px;" id="bPrefixHint"></div>
+          </div>
+          <div class="field"><label>เริ่มเลขที่</label><input id="bStart" type="number" min="1" value="1"></div>
+          <div class="field"><label>จำนวน <span class="req">*</span></label><input id="bQty" type="number" min="1" placeholder="5"></div>
+        </div>
+      </div>
+
+      <!-- Lot / Batch + Expiry (optional — enables FEFO allocation) -->
+      <div class="grid g3" style="margin-top:14px;">
+        <div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="bSupplier"></select><div id="bSupplierHint" style="display:none;"></div>
+          <div class="hint">ผังงานเริ่มที่ "Supplier ส่งกล่องมาใหม่" — บันทึกไว้จะสาวกลับได้ว่ากล่องล็อตนี้ซื้อมาจากใคร</div></div>
+        <div class="field">
+          <label>Lot / Batch (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="bLot" placeholder="วันที่-คลัง-กะ-ลำดับ" readonly>
+            <button type="button" class="iconbtn" id="btnRegenLot" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyLot" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideLot">แก้เอง</button>
+          </div>
+          <div class="hint">ประกอบจาก วันที่ผลิต · รหัสคลัง · กะการทำงาน (คำนวณจากเวลาปัจจุบัน) · ลำดับชุด — กด "แก้เอง" ถ้าต้องการระบุเอง</div>
+        </div>
+        <div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="bExpiry" type="date">
+          <div class="auto-tag-row" style="margin-top:6px;flex-wrap:wrap;">
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(30)">+30 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(90)">+90 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(180)">+180 วัน</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(365)">+1 ปี</button>
+            <button type="button" class="btn ghost sm" onclick="setExpiryQuick(0)">ไม่มีวันหมดอายุ</button>
+          </div>
+        </div>
+        <div class="field" style="align-self:end;"><div class="tag" style="margin:0;">มี "วันหมดอายุ" ระบบจะจ่ายออกแบบ <b>FEFO</b> (หมดอายุก่อน–ออกก่อน) อัตโนมัติ</div></div>
+      </div>
+
+      <div class="row" style="margin-top:20px;">
+        <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
+        <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
+        <button class="btn gray" id="btnCancelBox" style="display:none;">ยกเลิกแก้ไข</button>
+      </div>
+    </div>
+    <div class="tablecard">
+      <div class="tablehead"><h4>กล่องที่ลงทะเบียน</h4><span class="tag" id="cntBox"></span><div class="spacer"></div>
+        <select id="filtBoxStatus" style="width:auto;">
+          <option value="">ทุกสถานะ</option>
+          <option value="pending">รอติดบาร์โค้ด</option>
+          <option value="warehouse">ในคลัง</option>
+          <option value="hold">พักใช้งาน (Hold)</option>
+          <option value="damage">ชำรุด (Damage)</option>
+          <option value="out">ออกไปแล้ว</option>
+          <option value="lost">สูญหาย</option>
+        </select>
+        <select id="filtBoxCust" style="width:auto;"><option value="">ทุกลูกค้า</option></select>
+        <select id="filtBoxSup" style="width:auto;"><option value="">ทุกซัพพลายเออร์</option></select>
+        <span class="field" style="width:auto;flex-direction:row;align-items:center;gap:4px;margin:0;">
+          <input id="filtBoxValMin" type="number" placeholder="มูลค่าต่ำสุด" style="width:110px;">
+          <span class="muted small">–</span>
+          <input id="filtBoxValMax" type="number" placeholder="มูลค่าสูงสุด" style="width:110px;">
+        </span>
+        <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
+        <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
+        <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
+        <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      </div>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th>บันทึกล่าสุด</th><th></th></tr></thead>
+        <tbody id="boxBody"></tbody></table></div>
+      <div class="bulkbar" id="bulkBox" style="display:none;">
+        <span class="bcnt" id="bulkBoxCnt"></span>
+        <button class="btn sm ghost" id="bulkBoxLabel">พิมพ์ฉลาก</button>
+        <button class="btn sm red" id="bulkBoxDel">ลบที่เลือก</button>
+        <button class="btn sm gray" id="bulkBoxClear">ยกเลิก</button>
+      </div>
+    </div>
   </div>
 
   <div class="ssec" id="ssec-btype">
@@ -1794,7 +2033,15 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label><input id="btDim" placeholder="600x400x320" title="Format: กว้างxยาวxสูง เช่น 600x400x320"></div>
+        <div class="field"><label>ขนาด (มม.)</label>
+          <div class="row" style="gap:6px;">
+            <input id="btDimW" type="number" min="0" inputmode="numeric" placeholder="กว้าง" title="กว้าง (มม.)" style="width:0;flex:1;">
+            <span class="muted" style="align-self:center;">×</span>
+            <input id="btDimL" type="number" min="0" inputmode="numeric" placeholder="ยาว" title="ยาว (มม.)" style="width:0;flex:1;">
+            <span class="muted" style="align-self:center;">×</span>
+            <input id="btDimH" type="number" min="0" inputmode="numeric" placeholder="สูง" title="สูง (มม.)" style="width:0;flex:1;">
+          </div>
+        </div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -1949,9 +2196,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
         <div class="field"><label>สิทธิ์การใช้งาน</label>
           <select id="eAccess">
-            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ (ยิง Gate)</option>
-            <option value="supervisor" title="สิทธิ์เท่าพนักงานปฏิบัติการ — เป็นแค่ตำแหน่งงาน ไม่ได้เพิ่มสิทธิ์พิเศษในระบบ">หัวหน้างาน</option>
-            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ (Master)</option>
+            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ</option>
+            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ</option>
             <option value="viewer" title="ดูข้อมูลได้อย่างเดียว — ยิง Gate, แก้ไขข้อมูลหลัก, หรือบันทึกอะไรไม่ได้เลย">ผู้ชมอย่างเดียว</option>
           </select>
         </div>
@@ -1963,10 +2209,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
       <p class="desc" style="margin-top:10px;">
-        <b>สิทธิ์การใช้งานทำอะไรได้บ้าง:</b>
-        <b>ผู้ดูแลระบบ</b> — ยิง Gate, แก้ไขข้อมูลหลัก, และเพิ่ม/แก้ไข/ลบพนักงานได้ทั้งหมด ·
-        <b>พนักงานปฏิบัติการ / หัวหน้างาน</b> — ยิง Gate และแก้ไขข้อมูลหลักได้ แต่จัดการพนักงานคนอื่นไม่ได้ (หัวหน้างานเป็นแค่ตำแหน่ง ไม่ได้เพิ่มสิทธิ์) ·
-        <b>ผู้ชมอย่างเดียว</b> — ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย
+        สิทธิ์การใช้งาน: <b>ผู้ดูแลระบบ</b> (จัดการได้ทั้งหมด) · <b>พนักงานปฏิบัติการ/หัวหน้างาน</b> (ยิง Gate และแก้ไขข้อมูลหลักได้) · <b>ผู้ชมอย่างเดียว</b> (ดูข้อมูลได้อย่างเดียว)
       </p>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddEmp">บันทึกพนักงาน</button>
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -2007,8 +2250,18 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <select id="locRack" onchange="toggleLocTypeOther('locRack','locRackOther');locAutoCode();"></select>
             <input id="locRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locAutoCode()">
           </div>
-          <div class="field"><label>ชั้น (Shelf)</label><input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()"></div>
-          <div class="field"><label>ช่อง (Slot)</label><input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()"></div>
+          <div class="field"><label>ชั้น (Shelf)</label>
+            <div class="auto-tag-row">
+              <input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="addLocFieldValue('locShelf')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
+          <div class="field"><label>ช่อง (Slot)</label>
+            <div class="auto-tag-row">
+              <input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="addLocFieldValue('locSlot')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
           <div class="field"><label>ประเภทแร็ค</label>
             <select id="locType" onchange="toggleLocTypeOther('locType','locTypeOther')">
               <option value="Selective">Selective (ทั่วไป)</option>
@@ -2191,6 +2444,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 </main>
 
 <div class="toast-zone" id="toastZone"></div>
+<div class="pda-toast-zone" id="pdaToastZone"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 
 <!-- Box registration — reachable from the green button on Inventory; kept out
@@ -2299,6 +2553,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
 </div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
+<div class="drawer" id="drawer"><div class="dbackdrop" data-dclose></div><div class="dpanel" id="drawerPanel"></div></div>
 
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
      works 100% offline (no CDN). Added for the Gate-Out Excel import feature. -->
@@ -2615,7 +2870,12 @@ function normalizeState(d){
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
 }
-/** Loads S from the DB at boot. Returns a promise so init can await it. */
+/** Loads S from the DB at boot. Returns a promise so init can await it.
+    Resolves to true on a confirmed successful load, false otherwise — the
+    caller needs this to tell "server confirmed no employees exist yet" apart
+    from "we couldn't reach the server", since the latter must never trigger
+    the first-user registration wizard on top of data that's actually there
+    (see loadFromServer's caller below). */
 function loadFromServer(){
   return apiFetch('/api/state',{headers:authHeaders()})
     .then(function(r){
@@ -2623,8 +2883,8 @@ function loadFromServer(){
       if(!r.ok)throw new Error('HTTP '+r.status);
       return r.json();
     })
-    .then(function(d){ if(d) S=normalizeState(d); })
-    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);});
+    .then(function(d){ if(d){S=normalizeState(d);return true;} return false; })
+    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);return false;});
 }
 /* Swap in a snapshot the caller already holds, with the same normalisation
    loadFromServer() applies but without a second round-trip. The live-update
@@ -2826,6 +3086,17 @@ function gateOptions(sel){var gs=allGateNums();if(!gs.length)return '<option val
 function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">ยังไม่ระบุตำแหน่ง</span>';
   var tail=[loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
   return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
+/* ปุ่มลัดวันหมดอายุ — กรอกวันที่เองทีละหลักช้าและพลาดง่ายบนมือถือ/สแกนเนอร์
+   ปุ่ม +N วันคำนวณจากวันนี้ให้เลย ส่วน "ไม่มีวันหมดอายุ" ล้างค่าทิ้ง */
+/* กดปุ่มลัดซ้ำ ๆ ให้บวกสะสมต่อจากวันที่ตั้งไว้แล้ว ไม่ใช่รีเซ็ตกลับมา "วันนี้+N"
+   ทุกครั้ง — กด +30 วัน สองครั้งติดกันควรได้ +60 วันจากวันนี้ ไม่ใช่ +30 วันเท่าเดิม */
+function setExpiryQuick(days){var el=$('#bExpiry');if(!el)return;
+  if(!days){el.value='';return;}
+  var base=el.value?new Date(el.value+'T00:00:00'):now();
+  if(isNaN(base.getTime()))base=now();
+  base.setDate(base.getDate()+days);
+  el.value=base.toISOString().slice(0,10);}
+window.setExpiryQuick=setExpiryQuick;
 
 /* ===== toast / confirm / modal ===== */
 function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=document.createElement('div');
@@ -2900,23 +3171,17 @@ function goSetup(stab){
   },60);
 }
 window.goSetup=goSetup;
-$all('#nav button[data-tab]').forEach(function(b){b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
-/* hide navbar on scroll-down, reveal on scroll-up — ignores tiny jitters
-   (<6px) and stays visible near the very top so the header doesn't vanish
-   before the page has actually scrolled. */
-(function(){
-  var lastY=window.scrollY||0,ticking=false;
-  function onScroll(){
-    var y=window.scrollY||0,dy=y-lastY;
-    if(y<80){document.documentElement.classList.remove('nav-hidden');}
-    else if(dy>6){document.documentElement.classList.add('nav-hidden');}
-    else if(dy<-6){document.documentElement.classList.remove('nav-hidden');}
-    lastY=y;ticking=false;
+/* คลิกที่ badge ตัวเลขค้าง (เช่น "สต็อกกล่อง" มี badge แดง 3) ควรพาไปที่รายการ
+   ที่ต้องจัดการเลย ไม่ใช่ไปเปิดแท็บ "ทั้งหมด" แล้วให้ผู้ใช้ไปหาต่อเอง — เจาะจงเฉพาะ
+   ตอนคลิกโดนตัว badge เท่านั้น คลิกที่อื่นในปุ่มยังเข้าแท็บปกติเหมือนเดิม */
+$all('#nav button[data-tab]').forEach(function(b){b.addEventListener('click',function(e){
+  var badge=b.querySelector('.nav-badge');
+  if(b.dataset.tab==='inventory'&&badge&&!badge.hidden&&(e.target===badge||badge.contains(e.target))){
+    goInventory({status:'pending',label:'รอติดบาร์โค้ด ('+(badge.textContent||'0')+' รายการ)'});
+    return;
   }
-  window.addEventListener('scroll',function(){
-    if(!ticking){requestAnimationFrame(onScroll);ticking=true;}
-  },{passive:true});
-})();
+  switchTab(b.dataset.tab);
+});});
 window.addEventListener('resize',function(){
   /* re-evaluate the sidebar<->top threshold and keep the vertical nav offset in sync */
   var eff=effectiveLayout();
@@ -2945,9 +3210,42 @@ function nextSeqId(prefix,existingIds){
    showing that suggestion, "แก้เอง" unlocks manual typing (rename), and
    "สร้างรหัสใหม่" always snaps back to a fresh auto id regardless of any
    override in progress. */
-function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, computeAutoFn) {
+/* ขอเลข id ถัดไปจากเซิร์ฟเวอร์ (นับจากรหัสล่าสุดจริงใน DB ตอนนี้ ไม่ใช่จาก
+   snapshot ที่โหลดไว้ในเครื่อง ซึ่งอาจตกรุ่นถ้าอุปกรณ์/แท็บอื่นเพิ่งสร้างไปก่อน) —
+   ใช้เป็นแค่ "คำแนะนำ" ที่แม่นกว่าเดิม การกันชนกันจริงยังอยู่ที่ฝั่งเซิร์ฟเวอร์
+   (create endpoint ปฏิเสธ id ซ้ำด้วย 409 เสมอ ไม่ว่าเลขจะมาจากไหน) */
+function fetchNextId(kind){
+  return apiFetch('/api/masters/next-id?kind='+encodeURIComponent(kind),{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){return d&&d.id||null;})
+    .catch(function(){return null;});
+}
+function fetchNextTag(typeId){
+  if(!typeId)return Promise.resolve(null);
+  return apiFetch('/api/boxes/next-tag?type='+encodeURIComponent(typeId),{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){return d&&d.tag||null;})
+    .catch(function(){return null;});
+}
+function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, computeAutoFn, serverKind) {
   var t = $('#'+inputId), ob = $('#'+overrideBtnId);
-  function refresh(){ if (t && !t._override) t.value = computeAutoFn(); }
+  function refresh(){
+    if (!t || t._override) return;
+    t.value = computeAutoFn();
+    /* renderSetup() calls refresh() on every re-render (any state change),
+       so a fetch has to be de-duped or a busy screen would fire one request
+       per field per render — one in-flight request at a time is enough,
+       since it always resolves to "the latest as of right now" anyway. */
+    if (serverKind && !t._fetchingNextId) {
+      t._fetchingNextId = true;
+      fetchNextId(serverKind).then(function(id){
+        t._fetchingNextId = false;
+        /* ผู้ใช้อาจสลับไปพิมพ์เองหรือกดปุ่มอื่นระหว่างรอเซิร์ฟเวอร์ตอบ — อัปเดต
+           ทับได้เฉพาะตอนที่ยังอยู่โหมด auto เท่านั้น */
+        if (id && t && !t._override) t.value = id;
+      });
+    }
+  }
   function resetToAuto(){
     if (!t) return;
     t._override=false; t.readOnly=true; t.style.opacity='';
@@ -2977,10 +3275,10 @@ function wireAutoCodeField(inputId, regenBtnId, copyBtnId, overrideBtnId, comput
   refresh();
   return {refresh:refresh, reset:resetToAuto, edit:editExisting};
 }
-var btIdAuto = wireAutoCodeField('btId','btnRegenBtId','btnCopyBtId','btnOverrideBtId', function(){return nextSeqId('BT-',Object.keys(S.boxtypes));});
-var whIdAuto = wireAutoCodeField('whId','btnRegenWhId','btnCopyWhId','btnOverrideWhId', function(){return nextSeqId('WH-',Object.keys(S.warehouses));});
-var cIdAuto  = wireAutoCodeField('cId','btnRegenCId','btnCopyCId','btnOverrideCId', function(){return nextSeqId('CUST-',Object.keys(S.customers));});
-var eIdAuto  = wireAutoCodeField('eId','btnRegenEId','btnCopyEId','btnOverrideEId', function(){return nextSeqId('EMP-',Object.keys(S.employees));});
+var btIdAuto = wireAutoCodeField('btId','btnRegenBtId','btnCopyBtId','btnOverrideBtId', function(){return nextSeqId('BT-',Object.keys(S.boxtypes));}, 'boxtype');
+var whIdAuto = wireAutoCodeField('whId','btnRegenWhId','btnCopyWhId','btnOverrideWhId', function(){return nextSeqId('WH-',Object.keys(S.warehouses));}, 'warehouse');
+var cIdAuto  = wireAutoCodeField('cId','btnRegenCId','btnCopyCId','btnOverrideCId', function(){return nextSeqId('CUST-',Object.keys(S.customers));}, 'customer');
+var eIdAuto  = wireAutoCodeField('eId','btnRegenEId','btnCopyEId','btnOverrideEId', function(){return nextSeqId('EMP-',Object.keys(S.employees));}, 'employee');
 /* Lot/Batch auto-code: {YYYYMMDD}-{PLANT}-{SHIFT}-{SEQ}, the standard
    manufacturing lot-number shape (production date · plant/line code · shift ·
    running sequence within that day+plant+shift). All four segments come from
@@ -3025,19 +3323,72 @@ function genTagId(){var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';var d=new Date(
 /* Unified numbering: single-add and batch-add must produce tags in the SAME sequence
    for a given box type (e.g. BT002-05 from a batch, then BT002-06 from single-add next) —
    both derive the same prefix from the type id and continue the same running counter. */
+/* ใช้เป็น "ชุดตั้งต้น" เท่านั้น — ตอนที่ยังไม่มีกล่องใน DB ให้เรียนรู้เลยสักใบ */
 function tagPrefixForType(typeId){return typeId?typeId.toUpperCase().replace(/[^A-Z0-9]/g,'')+'-':'';}
+
+/* ===== ชุดเลขบาร์โค้ดกล่อง — อ่านจากของจริงใน DB ไม่ปั้นจากรหัสประเภทกล่อง =====
+   คลังที่ใช้งานจริงมีชุดเลขบาร์โค้ดของตัวเองอยู่แล้ว (BOX-001, BOX-002, …) การเดา
+   prefix จากรหัสประเภท (BT-001 → "BT001-") จะแตกชุดเลขใหม่ซ้อนขึ้นมาอีกชุด ทั้งที่
+   ผู้ใช้คาดว่าระบบจะนับต่อจากเลขล่าสุดที่มีอยู่จริง
+
+   เลือก prefix ที่ "ใช้มากที่สุด" ไม่ใช่ "ใช้ล่าสุด" — กล่องทดสอบไม่กี่ใบที่ยิงผิดชุด
+   เข้ามาจะได้ไม่ลากชุดเลขของทั้งคลังเปลี่ยนตาม เท่ากันค่อยตัดสินด้วยเวลาล่าสุด
+
+   เลขถัดไปนับข้ามทุกประเภทที่ใช้ prefix เดียวกัน เพราะบาร์โค้ดเป็นชุดเดียวของทั้งคลัง
+   ไม่ได้แยกตามประเภทกล่อง (BOX-010 เป็นลังเหล็ก ก็ยังกินเลข 010 ของชุด BOX- อยู่ดี)
+   และเทียบแบบไม่สนตัวพิมพ์เล็ก-ใหญ่ ไม่งั้น box-010 กับ BOX-010 จะถูกนับเป็นคนละชุด
+   แล้วระบบจะแนะนำเลขที่มีคนใช้ไปแล้ว
+   ความกว้างของเลขอ่านจากใบที่เลขสูงสุด: BOX-009 → BOX-010 ไม่ใช่ BOX-10 */
+function tagSeriesFor(typeId){
+  var all={};
+  Object.values(S.boxes).forEach(function(b){
+    var m=String(b.tag||'').match(/^(.*\D)(\d+)$/);
+    if(!m)return;
+    var pre=m[1],k=pre.toLowerCase(),n=parseInt(m[2],10),ts=b.regAt||'';
+    var e=all[k]||(all[k]={variants:{},count:0,typeCount:0,max:0,width:m[2].length,ts:''});
+    e.variants[pre]=(e.variants[pre]||0)+1;
+    e.count++;
+    if(typeId&&b.type===typeId)e.typeCount++;
+    if(n>e.max){e.max=n;e.width=m[2].length;}
+    if(ts>e.ts)e.ts=ts;
+  });
+  var list=Object.keys(all).map(function(k){return all[k];});
+  if(!list.length)return null;
+  /* ชุดที่กล่องประเภทนี้ใช้อยู่มาก่อน ถ้าประเภทนี้ยังไม่เคยมีกล่องเลยค่อยดูทั้งระบบ */
+  var scoped=list.filter(function(e){return e.typeCount>0;});
+  var useScoped=scoped.length>0;
+  var pick=(useScoped?scoped:list).sort(function(a,b){
+    var ka=useScoped?a.typeCount:a.count, kb=useScoped?b.typeCount:b.count;
+    return kb-ka||(a.ts<b.ts?1:(a.ts>b.ts?-1:0));
+  })[0];
+  /* ตัวสะกด prefix เอาแบบที่ใช้บ่อยที่สุดในชุด (BOX- ชนะ box- ที่พิมพ์ผิดมาใบเดียว) */
+  pick.pre=Object.keys(pick.variants).sort(function(a,b){return pick.variants[b]-pick.variants[a];})[0];
+  return pick;
+}
+window.tagSeriesFor=tagSeriesFor;
+/* prefix + ความกว้างเลข ที่ควรใช้กับกล่องประเภทนี้ (มีของใน DB ให้เรียนก็ใช้ของจริง) */
+function tagSeriesPrefix(typeId){var s=tagSeriesFor(typeId);return s?s.pre:tagPrefixForType(typeId);}
+function tagSeriesWidth(typeId){var s=tagSeriesFor(typeId);return s?s.width:0;}
+function tagSeriesNextNum(typeId){var s=tagSeriesFor(typeId);return s?s.max+1:1;}
+window.tagSeriesPrefix=tagSeriesPrefix;window.tagSeriesWidth=tagSeriesWidth;window.tagSeriesNextNum=tagSeriesNextNum;
 function nextTagForType(typeId){
   if(!typeId)return genTagId();
-  var prefix=tagPrefixForType(typeId);
-  var max=0;
-  Object.keys(S.boxes).forEach(function(id){
-    if(id.indexOf(prefix)!==0)return;
-    var m=id.slice(prefix.length).match(/^(\d+)$/);
-    if(m){var n=parseInt(m[1],10);if(n>max)max=n;}
-  });
-  return prefix+String(max+1);
+  var s=tagSeriesFor(typeId);
+  if(!s)return tagPrefixForType(typeId)+'1';   /* DB ยังว่าง — เริ่มชุดใหม่จากรหัสประเภท */
+  return s.pre+pad(s.max+1,s.width);
 }
-function refreshTagId(){var t=$('#bTag');if(t&&!t._override)t.value=nextTagForType(val('bType'));}
+function refreshTagId(){
+  var t=$('#bTag');if(!t||t._override)return;
+  var type=val('bType');
+  t.value=nextTagForType(type);
+  if(type&&!t._fetchingNextTag){
+    t._fetchingNextTag=true;
+    fetchNextTag(type).then(function(tag){
+      t._fetchingNextTag=false;
+      if(tag&&t&&!t._override&&val('bType')===type)t.value=tag;
+    });
+  }
+}
 setTimeout(function(){refreshTagId();
   var bTypeSel=$('#bType');if(bTypeSel)bTypeSel.addEventListener('change',refreshTagId);
   var br=$('#btnRegenTag');if(br)br.addEventListener('click',function(){var t=$('#bTag');t._override=false;t.readOnly=true;t.style.opacity='';refreshTagId();toast('สร้างรหัสใหม่แล้ว',val('bTag'),'info');});
@@ -3140,39 +3491,427 @@ $('#btnAddBox').onclick = function() {
     return;
   }
   if (boxRegMode === 'single') {
-    var tag = val('bTag'); if (!tag) return toast('กรอก บาร์โค้ด', null, 'err');
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
-    if (S.boxes[tag]) return toast('มี Tag นี้แล้ว', tag, 'err');
-    var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
-    var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
-    var regTs=iso();
-    S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-      lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:false,
-      /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
-         stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
-      history:[{dir:'reg',ts:regTs,recorder:USER}]};
-    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
-    save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
-    toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติดบาร์โค้ด'); renderAll();
+    var r = createBoxes({mode:'single',tag:val('bTag'),type:type,lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
+    if (!r.ok) return toast('บันทึกไม่สำเร็จ', r.err, 'err');
+    var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
+    toast('ลงทะเบียนกล่องแล้ว', r.tags[0] + ' · รอติดบาร์โค้ด'); renderAll();
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
-    var pre = val('bPrefix') || 'BOX-', start = num('bStart') || 1, qty = num('bQty') || 0;
-    if (qty <= 0) return toast('ระบุจำนวน', null, 'err');
-    if (qty > 2000) return toast('จำนวนมากเกินไป', 'สูงสุด 2000', 'err');
-    var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
-    var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
-    for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
-      if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-        lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:false,
-        history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
-    if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
-    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
+    var r = createBoxes({mode:'batch',type:type,prefix:val('bPrefix')||'BOX-',start:num('bStart')||1,qty:num('bQty')||0,
+      width:tagSeriesWidth(type),lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
+    if (!r.ok) return toast('สร้างไม่สำเร็จ', r.err, 'err');
+    toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + r.tags.length + ' ใบ · รอติดบาร์โค้ด'
+      + (r.dup ? (' · ข้าม ' + r.dup + ' ใบ (บาร์โค้ดซ้ำ)') : '')); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
   }
 };
+
+/* ===================================================================
+   SHARED RECEIVING PRIMITIVES — createBoxes / applyLabeled / commitPutaway
+   ทุกทางเข้าที่รับกล่องใหม่ (ปุ่ม "บันทึกรับเข้า" หน้าตั้งค่า, modal พิมพ์ป้าย,
+   Box Lifecycle Wizard หน้า Inventory) ต้องเรียกสามตัวนี้เท่านั้น ห้ามเขียน
+   status/history/audit เองที่จุดอื่น — เคยเกิดบั๊กมาแล้วตอนที่บางเส้นทางตั้ง
+   สถานะโดยไม่ push history ทำให้ stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง
+   (ดูคอมเมนต์ยาวที่ boxTimeline) การมีจุดเขียนเดียวคือสิ่งที่กันไม่ให้กลับมาอีก
+   =================================================================== */
+/* o = {mode:'single'|'batch', tag, type, prefix, start, qty, lot, expiry, supplier, wh}
+   wh = คลังที่รับของเข้า (ไม่ใส่ = ให้ pendingStageLocation เดาเองแบบเดิม)
+   คืน {ok, tags:[], dup} หรือ {ok:false, err} */
+function createBoxes(o){
+  o=o||{};
+  var type=o.type; if(!type)return {ok:false,err:'ยังไม่ได้เลือกประเภทกล่อง'};
+  var bt=S.boxtypes[type]||{}, value=bt.value||S.cfg.boxValue;
+  var lot=o.lot||'', expiry=o.expiry||'', sup=o.supplier||'';
+  var tags=[], dup=0;
+  function mk(tag,note){
+    if(S.boxes[tag]){dup++;return;}
+    var ts=iso();
+    /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
+       stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
+    var h={dir:'reg',ts:ts,recorder:USER}; if(note)h.note=note;
+    S.boxes[tag]={tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+      lot:lot,expiry:expiry,supplier:sup,regAt:ts,regBy:USER,
+      location:pendingStageLocation(ts,o.wh),lastSeenAt:ts,labeled:false,history:[h]};
+    tags.push(tag);
+  }
+  if(o.mode==='batch'){
+    var pre=o.prefix||'BOX-', start=o.start||1, qty=o.qty||0;
+    if(qty<=0)return {ok:false,err:'ยังไม่ได้ระบุจำนวน'};
+    if(qty>2000)return {ok:false,err:'จำนวนมากเกินไป — สูงสุด 2000 ใบต่อครั้ง'};
+    /* เติมศูนย์หน้าเลขให้เท่าชุดเดิม ไม่งั้นจะได้ BOX-11 มาต่อท้าย BOX-010 ซึ่งเรียง
+       ผิดลำดับทั้งในตารางและบนสติกเกอร์ (width=0 = ไม่เติม รักษาพฤติกรรมเดิม) */
+    var w=o.width||0;
+    var fmt=function(n){return w?pad(n,w):String(n);};
+    for(var i=0;i<qty;i++)mk(pre+fmt(start+i),'สร้างเป็นชุด');
+    if(!tags.length)return {ok:false,err:'บาร์โค้ดในช่วงนี้มีอยู่ในระบบครบแล้วทุกใบ'};
+    auditEntry('CREATE',USER,pre+fmt(start)+'…'+pre+fmt(start+qty-1),'สร้างเป็นชุด · '+typeName(type),null,
+      {type:type,value:value,qty:tags.length,supplier:sup,tags:tags});
+  }else{
+    if(!o.tag)return {ok:false,err:'ยังไม่ได้กรอกบาร์โค้ด'};
+    if(S.boxes[o.tag])return {ok:false,err:'มีบาร์โค้ด '+o.tag+' นี้อยู่แล้ว'};
+    mk(o.tag);
+    auditEntry('CREATE',USER,o.tag,typeName(type),null,{type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
+  }
+  save();
+  return {ok:true,tags:tags,dup:dup};
+}
+window.createBoxes=createBoxes;
+
+/* ติดป้ายบาร์โค้ดเสร็จ — ตั้ง labeled=true + ลง history ให้ทุกใบที่ส่งมา
+   (แยกออกมาจาก confirmTagged เพื่อให้ wizard ใช้ท่าเดียวกันเป๊ะ) */
+function applyLabeled(tags){
+  var ts=iso(), n=0;
+  (tags||[]).forEach(function(t){
+    var b=S.boxes[t]; if(!b)return;
+    b.labeled=true;b.labeledAt=ts;b.labeledBy=USER;
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'label',ts:ts,recorder:USER});
+    n++;
+  });
+  return n;
+}
+window.applyLabeled=applyLabeled;
+
+/* จัดเก็บขึ้นแร็ค (Putaway) — locs[i] คู่กับ tags[i]; ใบไหนไม่มีตำแหน่งให้ข้าม
+   (นับเป็น skipped แล้วค้างสถานะ "รอ Putaway" ตามเดิม)
+   เดินเส้นทางเดียวกับการรับเข้าที่หน้า Gate In ทุกประการ (กติกา isNewBox เดิม)
+   เพื่อให้ history/สถานะตรงกัน ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
+function commitPutaway(tags,locs,fallbackWh){
+  var ts=iso(), placed=0, skipped=0;
+  (tags||[]).forEach(function(t,i){
+    var b=S.boxes[t]; if(!b)return;
+    var loc=(locs||[])[i]; if(!loc){skipped++;return;}
+    var wh=loc.wh||fallbackWh;
+    var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,
+      note:isNewBox?'Initial Inbound ผ่านการติดป้ายบาร์โค้ด':'รับเข้าผ่านการติดป้ายบาร์โค้ด'});
+    S.events.push({ts:ts,dir:isNewBox?'in-new':'in',tag:t,type:b.type,do:isNewBox?'':b.do,customer:isNewBox?'':b.customer,
+      customerName:isNewBox?'':custName(b.customer),wh:wh,recorder:USER});
+    b.status='warehouse';if(!isNewBox)b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';
+    b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
+    b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:null,ts:ts};
+    b.lastSeenAt=ts;
+    auditEntry('GATE_IN',USER,t,typeName(b.type),null,{wh:whName(wh),loc:[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · ')});
+    placed++;
+  });
+  return {placed:placed,skipped:skipped};
+}
+window.commitPutaway=commitPutaway;
+
+/* ===================================================================
+   BOX LIFECYCLE WIZARD — drawer หน้า Inventory
+   Receiving → Labeling → Quality Check → Putaway
+
+   ตัว wizard ไม่มี business logic ของตัวเองเลย ทุกขั้นเรียก primitive ที่
+   ใช้ร่วมกับหน้าจออื่น (createBoxes / applyLabeled / applyQcStatus /
+   commitPutaway) — กล่องที่เกิดจาก wizard จึงมี history/audit เหมือนกล่องที่
+   ทำทีละขั้นจากหน้า ตั้งค่า + Inventory ทุกประการ
+
+   ออกกลางคันได้ตลอด ไม่มีข้อมูลหาย: กล่องถูกบันทึกตั้งแต่จบขั้น "รับเข้า" แล้ว
+   ที่เหลือไปทำต่อจากแท็บ "รอติดบาร์โค้ด" / "รอ Putaway" ได้ตามปกติ
+
+   QC อยู่ก่อน Putaway ตามมาตรฐาน WMS — ตรวจที่ท่ารับของ ใบที่ไม่ผ่านจะไม่ถูก
+   เก็บขึ้นแร็คตั้งแต่แรก แต่ค้างอยู่ที่ RCV-STAGE (ดู applyQcStatus ที่ไม่แตะ
+   location เลย และ canQcFail ที่เปิดให้ตีสถานะกล่อง pending+labeled ได้)
+   =================================================================== */
+var WZ=null;
+var WZ_STEPS=[{lb:'รับเข้า'},{lb:'ติดบาร์โค้ด'},{lb:'ตรวจสอบ (QC)'},{lb:'จัดเก็บ'}];
+var WZ_PREVIEW_CAP=12;   /* จำนวนป้ายตัวอย่างสูงสุดที่วาด — ชุด 2000 ใบวาดครบเบราว์เซอร์ค้าง */
+var WZ_QC_ROWS_CAP=50;   /* เกินจำนวนนี้ QC เปลี่ยนเป็นโหมด "ยิงเฉพาะใบที่มีปัญหา" */
+
+function closeDrawer(){$('#drawer').classList.remove('show');}
+window.closeDrawer=closeDrawer;
+$('#drawer').addEventListener('click',function(e){if(e.target.closest('[data-dclose]'))wzExit();});
+
+function wzExit(){
+  var n=WZ?WZ.tags.length:0, step=WZ?WZ.step:1;
+  closeDrawer();
+  if(n&&step<4)toast('ปิดตัวช่วยแล้ว',n+' ใบที่สร้างไว้ยังอยู่ในระบบ — ทำต่อได้ที่แท็บ "รอติดบาร์โค้ด" / "รอ Putaway"','info');
+  WZ=null;
+}
+window.wzExit=wzExit;
+
+function openBoxWizard(){
+  if(!Object.keys(S.boxtypes).length)return toast('ยังไม่มีประเภทกล่อง','ไปเพิ่มที่ ตั้งค่า → ประเภทกล่อง ก่อน','err');
+  if(!Object.keys(S.warehouses).length)return toast('ยังไม่มีคลัง','ไปเพิ่มที่ ตั้งค่า → คลัง & ประตู ก่อน','err');
+  var dp=defaultPutaway();
+  var whIds=Object.keys(S.warehouses);
+  WZ={step:1,mode:'single',tags:[],qc:{},wh:(dp.wh&&S.warehouses[dp.wh])?dp.wh:whIds[0],type:'',putMode:'nearest'};
+  renderWz();
+  $('#drawer').classList.add('show');
+}
+window.openBoxWizard=openBoxWizard;
+
+function wzRail(){
+  return '<div class="wzsteps">'+WZ_STEPS.map(function(s,i){
+    var n=i+1,cls=WZ.step===n?' on':(WZ.step>n?' done':'');
+    return (i?'<span class="sep"></span>':'')
+      +'<div class="wzstep'+cls+'"><span class="n">'+(WZ.step>n?'✓':n)+'</span><span class="lb">'+esc(s.lb)+'</span></div>';
+  }).join('')+'</div>';
+}
+
+function renderWz(){
+  var parts=['<div class="dhead"><div class="dhead-top">'
+    +'<h3>ตัวช่วยรับกล่องเข้าคลัง</h3>'
+    +'<button class="x" onclick="wzExit()">'+IC('close')+'</button>'
+    +'</div>'+wzRail()+'</div>'];
+  if(WZ.step===1)parts.push(wzBody1(),wzFoot1());
+  else if(WZ.step===2)parts.push(wzBody2(),wzFoot2());
+  else if(WZ.step===3)parts.push(wzBody3(),wzFoot3());
+  else if(WZ.step===4)parts.push(wzBody4(),wzFoot4());
+  else parts.push(wzBodyDone(),wzFootDone());
+  $('#drawerPanel').innerHTML=parts.join('');
+  if(WZ.step===1)wzBind1();
+  if(WZ.step===4&&WZ.putMode==='pick')bindLocPicker('wzPut',{wh:WZ.wh});
+  renderLocDatalist();
+}
+
+/* ---------- STEP 1 · Receiving ---------- */
+function wzBody1(){
+  var whs=Object.values(S.warehouses).sort(function(a,b){return (a.name||'').localeCompare(b.name||'','th');});
+  var types=Object.values(S.boxtypes);
+  var t=WZ.type||types[0].id;WZ.type=t;
+  var single=WZ.mode==='single';
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 18px;font-size:13.5px;line-height:1.5;">ลงทะเบียนกล่องที่เพิ่งมาถึงท่ารับของ — กล่องจะไปพักที่ RCV-STAGE ของคลังที่เลือก แล้วเดินต่อไปขั้นติดบาร์โค้ด</p>'
+    +'<div class="grid g2">'
+      +'<div class="field"><label>คลังที่รับเข้า <span class="req">*</span></label><select id="wzWh">'
+        +whs.map(function(w){return '<option value="'+esc(w.id)+'"'+(WZ.wh===w.id?' selected':'')+'>'+esc(w.name)+'</option>';}).join('')
+      +'</select></div>'
+      +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="wzType">'
+        +types.map(function(x){return '<option value="'+esc(x.id)+'"'+(t===x.id?' selected':'')+'>'+esc(x.name)+'</option>';}).join('')
+      +'</select></div>'
+    +'</div>'
+    +'<div class="inv-view-sw" style="margin:14px 0 16px;">'
+      +'<button class="ivs-btn'+(single?' active':'')+'" onclick="wzSetMode(\'single\')">เพิ่มทีละใบ</button>'
+      +'<button class="ivs-btn'+(single?'':' active')+'" onclick="wzSetMode(\'batch\')">⧉ สร้างเป็นชุด</button>'
+    +'</div>'
+    +(single
+      ?'<div class="field"><label>บาร์โค้ด <span class="req">*</span></label><input id="wzTag" value="'+esc(nextTagForType(t))+'"><div class="hint">นับต่อจากบาร์โค้ดล่าสุดในระบบ — แก้เองได้</div></div>'
+      :'<div class="grid g3">'
+        +'<div class="field"><label>Prefix <span class="req">*</span></label><input id="wzPrefix" value="'+esc(tagSeriesPrefix(t))+'"></div>'
+        +'<div class="field"><label>เริ่มเลขที่</label><input id="wzStart" type="number" min="1" value="'+esc(tagSeriesNextNum(t))+'"></div>'
+        +'<div class="field"><label>จำนวน <span class="req">*</span></label><input id="wzQty" type="number" min="1" placeholder="10"></div>'
+      +'</div><div class="tag" id="wzBatchHint" style="margin-top:2px;"></div>')
+    +'<div class="grid g3" style="margin-top:16px;">'
+      +'<div class="field"><label>ซัพพลายเออร์</label><select id="wzSupplier">'+supplierOptions('')+'</select></div>'
+      +'<div class="field"><label>Lot / Batch</label><input id="wzLot" value="'+esc(nextLotCode())+'"></div>'
+      +'<div class="field"><label>วันหมดอายุ (ถ้ามี)</label><input id="wzExpiry" type="date"><div class="hint">มีวันหมดอายุ ระบบจะจ่ายออกแบบ FEFO</div></div>'
+    +'</div>'
+  +'</div>';
+}
+function wzSetMode(m){wzCapture1();WZ.mode=m;renderWz();}
+window.wzSetMode=wzSetMode;
+/* เก็บค่าที่พิมพ์ไว้ก่อน re-render จะได้ไม่หายตอนสลับโหมด/เปลี่ยนประเภท */
+function wzCapture1(){
+  if($('#wzWh'))WZ.wh=val('wzWh');
+  if($('#wzType'))WZ.type=val('wzType');
+  if($('#wzSupplier'))WZ.supplier=val('wzSupplier');
+  if($('#wzLot'))WZ.lot=val('wzLot');
+  if($('#wzExpiry'))WZ.expiry=val('wzExpiry');
+  if($('#wzQty'))WZ.qty=num('wzQty');
+}
+function wzBind1(){
+  var ty=$('#wzType');
+  if(ty)ty.addEventListener('change',function(){wzCapture1();renderWz();});
+  ['wzPrefix','wzStart','wzQty'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',wzBatchHint);});
+  if(WZ.supplier)setv('wzSupplier',WZ.supplier);
+  if(WZ.lot)setv('wzLot',WZ.lot);
+  if(WZ.expiry)setv('wzExpiry',WZ.expiry);
+  if(WZ.qty&&$('#wzQty'))setv('wzQty',WZ.qty);
+  wzBatchHint();
+}
+function wzBatchHint(){
+  var h=$('#wzBatchHint');if(!h)return;
+  var p=val('wzPrefix'),s=num('wzStart')||1,q=num('wzQty')||0,w=tagSeriesWidth(WZ.type);
+  var f=function(n){return w?pad(n,w):String(n);};
+  h.textContent=(!p||q<=0)?'':(q===1?('จะสร้าง: '+p+f(s)):('จะสร้าง: '+p+f(s)+' … '+p+f(s+q-1)+' ('+q+' ใบ)'));
+}
+function wzFoot1(){
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ยกเลิก</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo1()">ถัดไป · ติดบาร์โค้ด '+IC('arrowRight')+'</button></div>';
+}
+function wzDo1(){
+  wzCapture1();
+  var o={type:WZ.type,wh:WZ.wh,supplier:WZ.supplier||'',lot:WZ.lot||'',expiry:WZ.expiry||''};
+  if(WZ.mode==='single'){o.mode='single';o.tag=val('wzTag');}
+  else{o.mode='batch';o.prefix=val('wzPrefix');o.start=num('wzStart')||1;o.qty=num('wzQty')||0;o.width=tagSeriesWidth(WZ.type);}
+  var r=createBoxes(o);
+  if(!r.ok)return toast('สร้างกล่องไม่สำเร็จ',r.err,'err');
+  WZ.tags=r.tags;WZ.step=2;
+  renderAll();renderWz();
+  toast('รับเข้าแล้ว',r.tags.length+' ใบ · พักที่ '+whName(WZ.wh)+(r.dup?(' · ข้ามซ้ำ '+r.dup+' ใบ'):''),'ok');
+}
+window.wzDo1=wzDo1;
+
+/* ---------- STEP 2 · Labeling ---------- */
+function wzBody2(){
+  var boxes=WZ.tags.map(function(t){return S.boxes[t];}).filter(Boolean);
+  var shown=boxes.slice(0,WZ_PREVIEW_CAP);
+  var cards=shown.map(function(b){return finLabelHtml(b.tag,b.type,typeName(b.type),b.lot,b.expiry);}).join('');
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">พิมพ์ป้ายแล้วแปะลงกล่องจริง — กด "ยืนยัน" เมื่อแปะครบทุกใบ (แท็ก RFID ผูกจากเครื่อง PDA ภายหลัง)</p>'
+    +'<div class="tag" style="margin-bottom:14px;">'+boxes.length+' ใบ · '+esc(typeName(WZ.type))+(boxes.length>shown.length?(' — แสดงตัวอย่าง '+shown.length+' ใบแรก'):'')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;">'+cards+'</div>'
+  +'</div>';
+}
+function wzFoot2(){
+  return '<div class="dfoot">'
+    +'<button class="btn ghost sm" onclick="wzDownloadPng()">'+IC('download','hoverbob')+' PNG</button>'
+    +'<button class="btn ghost sm" onclick="wzDownloadPdf()">'+IC('download','hoverbob')+' PDF</button>'
+    +'<div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo2()">ยืนยันติดป้ายครบแล้ว '+IC('arrowRight')+'</button></div>';
+}
+function wzBoxes(tags){return (tags||WZ.tags).map(function(t){return S.boxes[t];}).filter(Boolean);}
+function wzDownloadPng(){wzBoxes().slice(0,WZ_PREVIEW_CAP).forEach(function(b,i){setTimeout(function(){
+  var a=document.createElement('a');a.href=labelToPNG(b.tag,b.type,typeName(b.type),b.lot,b.expiry);a.download='rfid-label-'+b.tag+'.png';a.click();},i*200);});}
+function wzDownloadPdf(){labelsToPDF(wzBoxes());}
+window.wzDownloadPng=wzDownloadPng;window.wzDownloadPdf=wzDownloadPdf;
+function wzDo2(){
+  var n=applyLabeled(WZ.tags);save();
+  WZ.tags.forEach(function(t){WZ.qc[t]='pass';});
+  WZ.step=3;renderAll();renderWz();
+  toast('ติดป้ายแล้ว',n+' ใบ · ต่อไปตรวจสภาพกล่อง','ok');
+}
+window.wzDo2=wzDo2;
+
+/* ---------- STEP 3 · Quality Check ---------- */
+function wzQcCounts(){
+  var c={pass:0,hold:0,damage:0};
+  WZ.tags.forEach(function(t){c[WZ.qc[t]||'pass']++;});
+  return c;
+}
+function wzQcRow(t){
+  var b=S.boxes[t]||{};var q=WZ.qc[t]||'pass';
+  return '<div class="wzrow"><span class="tg">'+esc(t)+'</span><div class="qcseg">'
+    +['pass','hold','damage'].map(function(k){
+      var lb=k==='pass'?'ผ่าน':(k==='hold'?'Hold':'ชำรุด');
+      return '<button data-q="'+k+'" class="'+(q===k?'on':'')+'" onclick="wzSetQc(\''+esc(t)+'\',\''+k+'\')">'+lb+'</button>';
+    }).join('')+'</div></div>';
+}
+function wzBody3(){
+  var c=wzQcCounts(),big=WZ.tags.length>WZ_QC_ROWS_CAP;
+  var flagged=WZ.tags.filter(function(t){return (WZ.qc[t]||'pass')!=='pass';});
+  var rows=big?flagged:WZ.tags;
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">ตรวจสภาพกล่องที่ท่ารับก่อนเก็บขึ้นแร็ค — ใบที่ไม่ผ่านจะค้างอยู่ที่ RCV-STAGE ไม่ถูกจัดเก็บ และไม่ถูกนับเป็นของพร้อมจ่าย</p>'
+    +'<div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap;">'
+      +'<span class="pill ok">ผ่าน '+c.pass+'</span><span class="pill warn">Hold '+c.hold+'</span><span class="pill bad">ชำรุด '+c.damage+'</span>'
+      +'<div class="spacer" style="flex:1;"></div>'
+      +(c.pass<WZ.tags.length?'<button class="btn ghost sm" onclick="wzQcAllPass()">ตั้งให้ผ่านทั้งหมด</button>':'')
+    +'</div>'
+    +(big
+      ?'<div class="inv-scan-bar" style="margin-bottom:12px;"><span class="iss-ic" style="color:var(--accent);">⌗</span>'
+        +'<input id="wzQcScan" placeholder="ยิง/พิมพ์บาร์โค้ดใบที่มีปัญหา แล้ว Enter" autocomplete="off">'
+        +'<button class="btn sm ghost" onclick="wzQcFlag()">เพิ่ม</button></div>'
+        +'<div class="tag" style="margin-bottom:10px;">ชุดนี้ '+WZ.tags.length+' ใบ — ค่าเริ่มต้นคือผ่านทั้งหมด ยิงเฉพาะใบที่มีปัญหาเข้ามา</div>'
+      :'')
+    +(rows.length?rows.map(wzQcRow).join(''):'<p class="muted" style="text-align:center;padding:18px 0;font-size:13.5px;">ยังไม่มีใบที่ติดปัญหา — กด "ถัดไป" เพื่อจัดเก็บทั้งหมด</p>')
+  +'</div>';
+}
+function wzSetQc(t,q){WZ.qc[t]=q;renderWz();}
+window.wzSetQc=wzSetQc;
+function wzQcAllPass(){WZ.tags.forEach(function(t){WZ.qc[t]='pass';});renderWz();}
+window.wzQcAllPass=wzQcAllPass;
+function wzQcFlag(){
+  var v=(val('wzQcScan')||'').trim();if(!v)return;
+  var t=resolveTag?resolveTag(v):v;
+  if(WZ.tags.indexOf(t)<0)return toast('ไม่อยู่ในชุดนี้',v,'err');
+  WZ.qc[t]='damage';renderWz();
+  var el=$('#wzQcScan');if(el){el.value='';el.focus();}
+}
+window.wzQcFlag=wzQcFlag;
+function wzFoot3(){
+  var c=wzQcCounts();
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ปิด</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo3()">ถัดไป · จัดเก็บ '+c.pass+' ใบ '+IC('arrowRight')+'</button></div>';
+}
+function wzDo3(){
+  var hold=WZ.tags.filter(function(t){return WZ.qc[t]==='hold';});
+  var dmg=WZ.tags.filter(function(t){return WZ.qc[t]==='damage';});
+  if(hold.length)applyQcStatus(hold,'hold','ตรวจไม่ผ่านที่ท่ารับ (QC ขาเข้า) — พักไว้ก่อน');
+  if(dmg.length)applyQcStatus(dmg,'damage','ตรวจไม่ผ่านที่ท่ารับ (QC ขาเข้า) — ชำรุด');
+  if(hold.length||dmg.length)save();
+  WZ.step=4;renderAll();renderWz();
+  if(hold.length||dmg.length)toast('บันทึกผลตรวจแล้ว',(hold.length?('Hold '+hold.length+' ใบ'):'')+(hold.length&&dmg.length?' · ':'')+(dmg.length?('ชำรุด '+dmg.length+' ใบ'):'')+' · ค้างที่ RCV-STAGE','warn');
+}
+window.wzDo3=wzDo3;
+
+/* ---------- STEP 4 · Putaway ---------- */
+function wzPassTags(){return WZ.tags.filter(function(t){return (WZ.qc[t]||'pass')==='pass'&&S.boxes[t];});}
+function wzBody4(){
+  var pass=wzPassTags();
+  if(!pass.length){
+    return '<div class="dbody"><p class="muted" style="text-align:center;padding:26px 0;font-size:13.5px;line-height:1.6;">'
+      +'ไม่มีใบที่ผ่านการตรวจ — ทุกใบค้างอยู่ที่ RCV-STAGE<br>จัดการต่อได้จากแท็บ Hold / ชำรุด ที่หน้า Inventory</p></div>';
+  }
+  var free=findFreeLocations(WZ.wh,pass.length);
+  var sug=free.length
+    ?('ระบบจะจัดเก็บที่ '+free.slice(0,6).map(function(l){return [l.zone,l.rack,l.shelf,l.slot].filter(Boolean).join('-');}).join(', ')
+      +(free.length>6?(' … รวม '+free.length+' ช่อง'):'')
+      +(free.length<pass.length?('<br><span style="color:var(--warn);">เหลืออีก '+(pass.length-free.length)+' ใบไม่พอช่องว่าง จะค้างเป็น "รอ Putaway"</span>'):''))
+    :'<span style="color:var(--neg);">ไม่พบตำแหน่งว่างในผังของ '+esc(whName(WZ.wh))+' — เลือกตำแหน่งเอง หรือไปเพิ่มผังชั้นวางก่อน</span>';
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">เก็บกล่องที่ผ่านการตรวจขึ้นชั้นวาง — จบขั้นนี้กล่องจะพร้อมจ่ายออก</p>'
+    +'<div class="tag" style="margin-bottom:14px;">จัดเก็บ '+pass.length+' ใบ เข้า '+esc(whName(WZ.wh))+'</div>'
+    +'<div class="seg-filter" style="margin-bottom:12px;">'
+      +'<button class="sf-btn'+(WZ.putMode==='nearest'?' active':'')+'" onclick="wzSetPutMode(\'nearest\')">แร็คว่างที่ใกล้ที่สุด</button>'
+      +'<button class="sf-btn'+(WZ.putMode==='pick'?' active':'')+'" onclick="wzSetPutMode(\'pick\')">เลือกตำแหน่งเอง</button>'
+    +'</div>'
+    +(WZ.putMode==='nearest'?('<div class="muted small">'+sug+'</div>'):locPickerHtml('wzPut',{wh:WZ.wh}))
+  +'</div>';
+}
+function wzSetPutMode(m){WZ.putMode=m;renderWz();}
+window.wzSetPutMode=wzSetPutMode;
+function wzFoot4(){
+  var pass=wzPassTags();
+  if(!pass.length)return '<div class="dfoot"><div class="spacer"></div><button class="btn accent" onclick="wzExit()">เสร็จสิ้น</button></div>';
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ข้ามไปก่อน</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo4()">จัดเก็บขึ้นแร็ค '+IC('check')+'</button></div>';
+}
+function wzDo4(){
+  var pass=wzPassTags();
+  var locs;
+  if(WZ.putMode==='pick'){
+    var loc={wh:WZ.wh,zone:val('wzPutZone'),rack:val('wzPutRack'),shelf:val('wzPutShelf'),slot:val('wzPutSlot')};
+    if(!loc.zone&&!loc.rack)return toast('ยังไม่ได้เลือกตำแหน่ง','กรอกโซนหรือแร็คก่อน','err');
+    locs=pass.map(function(){return loc;});
+  }else{
+    locs=findFreeLocations(WZ.wh,pass.length);
+    if(!locs.length)return toast('ไม่มีตำแหน่งว่าง','เลือกตำแหน่งเอง หรือเพิ่มผังชั้นวางก่อน','err');
+  }
+  var r=commitPutaway(pass,locs,WZ.wh);
+  save();
+  WZ.result=r;WZ.step=5;renderAll();renderWz();
+  toast('จัดเก็บเสร็จแล้ว',r.placed+' ใบขึ้นแร็ค'+(r.skipped?(' · เหลือรอ Putaway '+r.skipped+' ใบ'):''),'ok');
+}
+window.wzDo4=wzDo4;
+
+/* ---------- สรุปผล ---------- */
+function wzBodyDone(){
+  var c=wzQcCounts(),r=WZ.result||{placed:0,skipped:0};
+  function line(lb,v,cls){return '<div class="wzrow"><span class="tg">'+lb+'</span><span class="pill '+(cls||'')+'">'+v+'</span></div>';}
+  return '<div class="dbody">'
+    +'<div style="text-align:center;padding:6px 0 20px;">'
+      +'<div style="width:54px;height:54px;border-radius:50%;background:var(--pos);color:var(--posInk);display:grid;place-items:center;margin:0 auto 12px;">'+IC('check')+'</div>'
+      +'<h3 style="font-size:19px;font-weight:600;margin:0 0 4px;">รับกล่องเข้าคลังเสร็จแล้ว</h3>'
+      +'<p class="muted" style="font-size:13.5px;margin:0;">'+esc(whName(WZ.wh))+' · '+esc(typeName(WZ.type))+' · รวม '+WZ.tags.length+' ใบ</p>'
+    +'</div>'
+    +line('จัดเก็บขึ้นแร็คแล้ว',r.placed+' ใบ','ok')
+    +(r.skipped?line('ค้างรอ Putaway (ช่องว่างไม่พอ)',r.skipped+' ใบ','warn'):'')
+    +(c.hold?line('Hold ที่ท่ารับ',c.hold+' ใบ','warn'):'')
+    +(c.damage?line('ชำรุดที่ท่ารับ',c.damage+' ใบ','bad'):'')
+  +'</div>';
+}
+function wzFootDone(){
+  return '<div class="dfoot"><button class="btn ghost" onclick="wzRestart()">รับชุดถัดไป</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="closeDrawer();WZ=null;">เสร็จสิ้น</button></div>';
+}
+function wzRestart(){var wh=WZ.wh,ty=WZ.type;WZ=null;openBoxWizard();if(WZ){WZ.wh=wh;WZ.type=ty;renderWz();}}
+window.wzRestart=wzRestart;
 
 function renderPrefixDatalist(){
   var prefixSet={};
@@ -3188,7 +3927,8 @@ function updateBatchPreview(){
   var pre=val('bPrefix');var start=num('bStart')||1;var qty=num('bQty')||0;
   var hint=document.getElementById('bPrefixHint');if(!hint)return;
   if(!pre||qty<=0){hint.textContent='';return;}
-  var first=pre+String(start);var last=pre+String(start+qty-1);
+  var w=tagSeriesWidth(val('bTypeBatch'));var f=function(n){return w?pad(n,w):String(n);};
+  var first=pre+f(start);var last=pre+f(start+qty-1);
   hint.textContent=qty===1?('จะสร้าง: '+first):('จะสร้าง: '+first+' … '+last+' ('+qty+' ใบ)');
 }
 
@@ -3197,10 +3937,10 @@ function syncPrefixFromBatchType(){
   if(!bTypeBatch||!bPrefix)return;
   var typeId=bTypeBatch.value;
   if(typeId){
-    bPrefix.value=tagPrefixForType(typeId);
+    bPrefix.value=tagSeriesPrefix(typeId);
     /* continue the same running number the single-add mode would use next,
        so batch and single-add for this type never collide/diverge */
-    if(bStart){var nextTag=nextTagForType(typeId);var m=nextTag.slice(bPrefix.value.length).match(/^(\d+)$/);if(m)bStart.value=parseInt(m[1],10);}
+    if(bStart)bStart.value=tagSeriesNextNum(typeId);
   }
   updateBatchPreview();
 }
@@ -3235,37 +3975,31 @@ $('#btnAddBtype').onclick=function(){
   }
   var before=editingBtype?Object.assign({},S.boxtypes[editingBtype]):null;
   if(editingBtype&&editingBtype!==id)delete S.boxtypes[editingBtype];
-  var dimClean = val('btDim').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x'); var dimParts = dimClean.split('x'); if(dimParts.length>3) dimClean=dimParts.slice(0,3).join('x');
+  var dimClean = dimFromFields();
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:dimClean};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();
+  ['btName','btUnit','btValue','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();
   toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
-function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
+  ['btName','btUnit','btValue','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);dimToFields(t.dim);
   $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
-(function(){
-  var el = document.getElementById('btDim');
-  if (el) {
-    el.addEventListener('input', function() {
-      var v = this.value;
-      v = v.replace(/\s+/g, '');
-      v = v.replace(/[X×]/g, 'x');
-      v = v.replace(/[^0-9x]/g, '');
-      v = v.replace(/^x+/, '');
-      v = v.replace(/x{2,}/g, 'x');
-      var parts = v.split('x');
-      if (parts.length > 3) {
-        v = parts.slice(0, 3).join('x');
-      }
-      this.value = v;
-    });
-  }
-})();
+/* กว้าง/ยาว/สูง แยกเป็น 3 ช่องแทนช่องข้อความเดียว — พิมพ์ตัวเลขล้วน ไม่ต้องมานั่ง
+   จำ format "600x400x320" เอง แต่ยังเก็บ/อ่านเป็นสตริง "WxLxH" เดิมทุกที่ที่ใช้
+   t.dim อยู่แล้ว (ป้ายพิมพ์บาร์โค้ด, PDA, ฯลฯ) เพื่อไม่ต้องแก้ schema/ที่อื่น */
+function dimFromFields(){
+  var w=val('btDimW').trim(),l=val('btDimL').trim(),h=val('btDimH').trim();
+  if(!w&&!l&&!h)return '';
+  return [w||'0',l||'0',h||'0'].join('x');
+}
+function dimToFields(dim){
+  var parts=String(dim||'').split(/[x×X]/);
+  setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
+}
 
 /* ===== SETUP: warehouse/gate CRUD ===== */
 var editingWh=null;
@@ -3316,12 +4050,57 @@ window.renderWhGateTypeList=renderWhGateTypeList;
 var DEFAULT_STAGING={zone:'พื้นที่รับของขาเข้า',rack:'STG-01'};
 function whStaging(whId){var w=S.warehouses[whId]||{};
   return {zone:(w.stagingZone||DEFAULT_STAGING.zone),rack:(w.stagingRack||DEFAULT_STAGING.rack)};}
-/* True if a location is a staging point (explicit flag, or configured/legacy staging rack, or empty) */
-function isStagingLoc(loc){ return false; } /* SOW: no Putaway/staging */
-/* Human label for a staging location — shows the actual configured zone/rack, not a hardcoded value */
+/* True if a location is a staging point: has a zone/rack but no shelf/slot
+   (a real putaway position always has shelf+slot — see locAutoCode/locBuildCode)
+   and that zone/rack matches this warehouse's configured (or default) staging
+   spot. Re-enabled — a box sitting at loc-none read as "not in the building at
+   all" to an operator standing right next to it at the receiving dock, which
+   is worse than the ambiguity this was meant to avoid (see pendingStageLocation
+   below and isRackedBox in renderInventory). */
+function isStagingLoc(loc){
+  loc=loc||{};
+  if(loc.shelf||loc.slot)return false;
+  if(!loc.zone&&!loc.rack)return false;
+  var st=whStaging(loc.wh);
+  return loc.zone===st.zone&&loc.rack===st.rack;
+}
+/* Human label for a staging location — just the configured zone name (e.g.
+   "พื้นที่รับของขาเข้า"), not the internal rack code (STG-01) or the redundant
+   "พื้นที่พักสินค้า · <zone> · <rack code>" stack this used to build — a rack
+   code and a repeated "staging area" prefix mean nothing to the person reading
+   the screen, only the zone name does. */
 function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
-  var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
-  return 'พื้นที่พักสินค้า'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
+  return esc(loc.zone||st.zone||'พื้นที่พักสินค้า');}
+/* กล่อง "รอติดบาร์โค้ด" (pending, labeled=false) ผ่าน Gate เข้ามาในพื้นที่คลังแล้วจริง ๆ
+   (สแกนรับเข้า/สร้างข้อมูลตอนของมาถึง) เพียงแต่ยังไม่ได้ติดสติกเกอร์บาร์โค้ด จึงยัง
+   สแกนเข้าคลังแบบเป็นทางการไม่ได้ — ปล่อยเป็น loc-none (ไม่มีตำแหน่ง) ทำให้เกิด data
+   paradox: ของกองอยู่จริงในคลัง แต่ระบบมองว่าอยู่นอกคลัง หาไม่เจอ ทั้งตัดออกจาก
+   รายงาน on-hand ด้วย จึงต้อง auto-assign ไปที่ "โซนพักรับ (RCV-STAGE)" ทันทีที่สร้าง
+   ข้อมูล — เลือกคลังให้อัตโนมัติได้เฉพาะตอนมีคลังเดียวในระบบ (เดาไม่ได้ว่าจะไปโผล่
+   คลังไหนถ้ามีหลายคลัง แต่ยังคงติดป้ายโซนพักรับไว้เหมือนกัน ไม่ปล่อยว่าง) */
+/* whId (optional) = คลังที่กำลังรับของเข้าจริง ๆ ตอนนี้ — Box Lifecycle Wizard ถามไว้
+   ที่ step "Receiving" เพราะการรับเข้าเกิดที่ท่ารับของคลังใดคลังหนึ่งเสมอ พอรู้คลัง
+   แน่ชัดก็ไม่ต้องเดา และกล่องจะไม่ตกไปอยู่กลุ่ม "นอกคลัง" ทั้งที่กองอยู่หน้าท่ารับ
+   (ดู isRackedBox ซึ่งต้องมี location.wh ที่มีจริงจึงจะนับว่าอยู่ในคลัง) */
+function pendingStageLocation(ts,whId){
+  var whIds=Object.keys(S.warehouses);
+  var wh=(whId&&S.warehouses[whId])?whId:(whIds.length===1?whIds[0]:'');
+  var st=whStaging(wh);
+  return {wh:wh,zone:st.zone,rack:st.rack,shelf:'',slot:'',gate:null,ts:ts};
+}
+/* Location-cell badge for a "รอติดบาร์โค้ด" box (status pending, labeled=false) —
+   shared by every table/modal that renders this cell, so the RCV-STAGE fix
+   only has to be reasoned about in one place. Falls back to the old loc-none
+   text only for the edge case where pendingStageLocation() somehow never ran
+   (should be unreachable post-backfill, but a missing location must never
+   silently render as if it were a real position). */
+function pendingLocBadge(b){
+  var loc=b.location||{};
+  if(isStagingLoc(loc)){
+    return '<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(loc)+' — รอติดบาร์โค้ด</span>';
+  }
+  return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
+}
 
 $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
@@ -3957,7 +4736,7 @@ function openBoxActionModal(tag){
     ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
     :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
     :b.status==='pending'&&b.labeled===true?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>'
-    :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
+    :b.status==='pending'?pendingLocBadge(b)
     :b.status==='hold'&&!(b.location&&b.location.wh)?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></span>จุดพักสินค้า (Hold Area) — รอตรวจสอบ</span>'
     :locShort(b.location);
 
@@ -4129,6 +4908,22 @@ function openMasterRowActions(kind,id,title,canDelete){
 }
 window.openMasterRowActions=openMasterRowActions;
 
+/* หน้า "กล่องที่ลงทะเบียน" (Setup) — เดิมมีปุ่มแก้ไข/ลบแปะลอยอยู่ท้ายทุกแถว
+   ย้ายมาเป็น modal เดียวกับรูปแบบตาราง master data อื่น (btype/wh/cust/emp,
+   ดู openMasterRowActions) กดที่แถวเพื่อเปิด แทนที่จะมีปุ่มค้างอยู่ตลอดทุกแถว */
+function openBoxRowModal(tag){
+  var b=S.boxes[tag];if(!b)return;
+  openModal(
+    '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody"><div style="display:flex;flex-direction:column;gap:8px;">'
+      +'<button class="btn ghost" style="width:100%;justify-content:flex-start;" onclick="closeModal();editBox(\''+esc(tag)+'\')">แก้ไข</button>'
+      +'<button class="btn red" style="width:100%;justify-content:flex-start;" onclick="closeModal();delBox(\''+esc(tag)+'\')">ลบ</button>'
+    +'</div></div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+  );
+}
+window.openBoxRowModal=openBoxRowModal;
+
 function markLost(tag){
   var b=S.boxes[tag];if(!b||b.status==='pending')return;
   confirmA('ตีกล่อง '+tag+' เป็นสูญหาย?','การยืนยันนี้จะเปลี่ยนสถานะเป็น "สูญหาย" — สามารถยกเลิกได้ภายหลังหากพบกล่อง','ยืนยันตีหาย',true)
@@ -4156,36 +4951,75 @@ window.markLost=markLost;window.recoverLost=recoverLost;
    Both keep b.location so they still occupy a bin; they are excluded from
    the "available in warehouse" count and from every outbound flow.
    ============================================================ */
+/* กล่องที่ "ตี Hold/ชำรุด" ได้ = อยู่ในคลังจริง (warehouse) หรือเพิ่งรับเข้าและติดป้าย
+   แล้วแต่ยังไม่ขึ้นแร็ค (pending + labeled) — กลุ่มหลังคือกล่องที่กองอยู่ที่ท่ารับของ
+   (RCV-STAGE) ซึ่งเป็นจุดที่ QC ขาเข้าตรวจจริงตามมาตรฐาน WMS: ตรวจที่ dock ก่อน
+   putaway ของเสียจึงไม่ถูกเก็บขึ้นแร็คตั้งแต่แรก เดิมบล็อกไว้เฉพาะ warehouse ทำให้
+   ตรวจก่อน putaway ไม่ได้เลย
+   กล่องที่ยังไม่ติดป้าย (labeled=false) ยังตีไม่ได้ — ยังไม่มีบาร์โค้ดบนตัวจริงให้
+   ผูกผลตรวจเข้ากับใบไหนได้อย่างมั่นใจ */
+function canQcFail(b){
+  if(!b)return false;
+  return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);
+}
+window.canQcFail=canQcFail;
+/* ตัวเขียนสถานะ QC ตัวเดียวของระบบ — ทั้งปุ่มทีละใบ (markHold/markDamage ซึ่งมี
+   dialog ยืนยันของตัวเอง) และ Box Lifecycle Wizard (ยืนยันทั้งชุดในตัว wizard)
+   เรียกผ่านตัวนี้ทั้งคู่ เพื่อไม่ให้ history/audit ของสองเส้นทางเพี้ยนจากกัน
+   ไม่แตะ b.location เลย — กล่องที่ตกตรวจที่ท่ารับจึงค้างอยู่ที่ RCV-STAGE ตามจริง */
+function applyQcStatus(tags,kind,reason){
+  var ts=iso(),n=0;
+  (tags||[]).forEach(function(t){
+    var b=S.boxes[t];if(!b)return;
+    var before={status:b.status};
+    b.status=kind;
+    if(kind==='hold')b.holdAt=ts;else b.damageAt=ts;
+    b.lastSeenAt=ts;
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:kind,ts:ts,recorder:USER,reason:reason});
+    auditEntry(kind==='hold'?'HOLD':'DAMAGE',USER,t,typeName(b.type),before,{status:kind,reason:reason});
+    n++;
+  });
+  return n;
+}
+window.applyQcStatus=applyQcStatus;
 function markHold(tag){
-  var b=S.boxes[tag];if(!b||b.status!=='warehouse')return;
+  var b=S.boxes[tag];if(!b||!canQcFail(b))return;
   confirmA('พักการใช้งาน '+tag+' (Hold)?','กล่องจะยังอยู่ในตำแหน่งเดิม แต่ถูกกันไม่ให้จ่ายออกจนกว่าจะปลดล็อก','ยืนยัน Hold',false).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='hold';b.holdAt=iso();b.lastSeenAt=iso();
-    b.history.push({dir:'hold',ts:iso(),reason:'พักการใช้งาน (Hold)'});
-    auditEntry('HOLD',USER,tag,typeName(b.type),before,{status:'hold'});
+    applyQcStatus([tag],'hold','พักการใช้งาน (Hold)');
     save();toast('พักการใช้งานแล้ว',tag+' · Hold','warn');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
+}
+/* ปลด Hold / ซ่อมเสร็จ แล้วกล่องควรกลับไปสถานะไหน?
+   ถ้ามันยังกองอยู่ที่ท่ารับ (RCV-STAGE — ตกตรวจตั้งแต่ QC ขาเข้า ยังไม่เคยขึ้นแร็ค)
+   คำตอบคือ "รอ Putaway" (pending + labeled) ไม่ใช่ "ในคลัง" เพราะของยังไม่ได้ถูกเก็บ
+   ขึ้นชั้นจริง ถ้าตอบ warehouse มันจะไปโผล่ในคิวจ่ายออกทั้งที่ยังหาไม่เจอบนแร็ค
+   กล่องที่เคยขึ้นแร็คแล้วค่อยโดน Hold ทีหลัง กลับเป็น warehouse ตามเดิม */
+function qcReleaseTarget(b){
+  return (b.status!=='lost'&&isStagingLoc(b.location||{})&&!(b.history||[]).some(function(h){return h.dir==='in';}))
+    ? 'pending' : 'warehouse';
 }
 function releaseHold(tag){
   var b=S.boxes[tag];if(!b||b.status!=='hold')return;
-  var before={status:b.status};b.status='warehouse';b.holdAt=null;b.lastSeenAt=iso();
-  b.history.push({dir:'reg',ts:iso(),reason:'ปลด Hold — กลับมาพร้อมใช้งาน'});
-  auditEntry('RELEASE_HOLD',USER,tag,typeName(b.type),before,{status:'warehouse'});
-  save();toast('ปลด Hold แล้ว',tag+' · พร้อมใช้งาน','ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();
+  var before={status:b.status};var to=qcReleaseTarget(b);
+  b.status=to;b.holdAt=null;b.lastSeenAt=iso();
+  b.history.push({dir:'reg',ts:iso(),reason:to==='pending'?'ปลด Hold — กลับเข้าคิวรอ Putaway':'ปลด Hold — กลับมาพร้อมใช้งาน'});
+  auditEntry('RELEASE_HOLD',USER,tag,typeName(b.type),before,{status:to});
+  save();toast('ปลด Hold แล้ว',tag+(to==='pending'?' · รอ Putaway':' · พร้อมใช้งาน'),'ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();
 }
 function markDamage(tag){
-  var b=S.boxes[tag];if(!b||(b.status!=='warehouse'&&b.status!=='hold'))return;
+  var b=S.boxes[tag];if(!b||!(canQcFail(b)||b.status==='hold'))return;
   confirmA('ตีชำรุด '+tag+' (Damage)?','กล่องยังอยู่ในคลังแต่จะถูกกันออกจากการใช้งาน — ต่างจาก "สูญหาย" ที่หายไปจริง','ยืนยันชำรุด',true).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='damage';b.damageAt=iso();b.lastSeenAt=iso();
-    b.history.push({dir:'damage',ts:iso(),reason:'ตีชำรุด (Damage)'});
-    auditEntry('DAMAGE',USER,tag,typeName(b.type),before,{status:'damage'});
+    applyQcStatus([tag],'damage','ตีชำรุด (Damage)');
     save();toast('ตีชำรุดแล้ว',tag+' · Damage','warn');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
 }
 function repairDamage(tag){
   var b=S.boxes[tag];if(!b||b.status!=='damage')return;
   confirmA('ซ่อมเสร็จ '+tag+'?','กล่องจะกลับสู่สถานะ "ในคลัง" พร้อมใช้งานอีกครั้ง','ยืนยันซ่อมเสร็จ',false).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='warehouse';b.damageAt=null;b.lastSeenAt=iso();
-    b.history.push({dir:'reg',ts:iso(),reason:'ซ่อมเสร็จ — กลับเข้าคลัง'});
-    auditEntry('REPAIR',USER,tag,typeName(b.type),before,{status:'warehouse'});
-    save();toast('ซ่อมเสร็จแล้ว',tag+' · พร้อมใช้งาน','ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
+    var before={status:b.status};var to=qcReleaseTarget(b);
+    b.status=to;b.damageAt=null;b.lastSeenAt=iso();
+    b.history.push({dir:'reg',ts:iso(),reason:to==='pending'?'ซ่อมเสร็จ — กลับเข้าคิวรอ Putaway':'ซ่อมเสร็จ — กลับเข้าคลัง'});
+    auditEntry('REPAIR',USER,tag,typeName(b.type),before,{status:to});
+    save();toast('ซ่อมเสร็จแล้ว',tag+(to==='pending'?' · รอ Putaway':' · พร้อมใช้งาน'),'ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
 }
 window.markHold=markHold;window.releaseHold=releaseHold;window.markDamage=markDamage;window.repairDamage=repairDamage;
 
@@ -4267,32 +5101,56 @@ window.allocateSuggest=allocateSuggest;
 
 function openAllocateModal(){
   var types=Object.values(S.boxtypes);
-  var typeOpts='<option value="">— ทุกประเภท —</option>'+types.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
+  var totalAvail=availableQtyForType('');
+  var typeOpts='<option value="">— ทุกประเภท (พร้อมจ่าย: '+totalAvail+') —</option>'+types.map(function(t){
+    var n=availableQtyForType(t.id);
+    return '<option value="'+esc(t.id)+'"'+(n?'':' disabled')+'>'+esc(t.name)+' (พร้อมจ่าย: '+n+')</option>';
+  }).join('');
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบกล่อง (FIFO / FEFO)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
       +'<p class="muted small" style="margin:0 0 14px;">เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน — <b>FEFO</b> ใช้วันหมดอายุ, <b>FIFO</b> ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ "ในคลัง")</p>'
-      +'<div class="grid g3" style="margin-bottom:14px;">'
+      +'<div class="grid g3" style="margin-bottom:6px;">'
         +'<div class="field"><label>ประเภทกล่อง</label><select id="alType">'+typeOpts+'</select></div>'
-        +'<div class="field"><label>จำนวนที่ต้องจ่าย</label><input id="alQty" type="number" min="1" value="5"></div>'
+        +'<div class="field"><label>จำนวนที่ต้องจ่าย</label>'
+          +'<div class="auto-tag-row"><input id="alQty" type="number" min="1" value="5"><button type="button" class="btn ghost sm" id="alMaxBtn">MAX</button></div>'
+        +'</div>'
         +'<div class="field"><label>วิธีจัด</label><select id="alMode"><option value="fefo">FEFO — หมดอายุก่อน ออกก่อน</option><option value="fifo">FIFO — เข้าก่อน ออกก่อน</option></select></div>'
       +'</div>'
+      +'<div class="tag" id="alAvailHint" style="margin-bottom:10px;"></div>'
       +'<div id="alResult"></div>'
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
       +'<button class="btn accent" id="alQueueBtn">'+IC('pin')+' ไปหยิบตามพิกัด</button></div>'
   );
   var sheet=$('#modalSheet');if(sheet)sheet.style.width='640px';
+  function currentMax(){return availableQtyForType(val('alType'));}
   function refresh(){
-    var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
+    var type=val('alType'),qtyRaw=num('alQty')||0,mode=val('alMode');
+    var max=currentMax();
+    /* คีบจำนวนไม่ให้เกินสต็อกที่มีจริงตั้งแต่ตอนพิมพ์ — กันไม่ให้กด "ไปหยิบตามพิกัด"
+       แล้วเจอ toast error ทีหลังทั้งที่เห็นตัวเลขพร้อมจ่ายอยู่ตรงหน้าแล้ว */
+    var qty=qtyRaw;
+    var clamped=false;
+    if(max>0&&qty>max){qty=max;clamped=true;var qEl=$('#alQty');if(qEl)qEl.value=max;}
+    var hint=$('#alAvailHint');
+    if(hint){
+      hint.innerHTML=max>0
+        ?('พร้อมจ่ายสูงสุด: <b>'+max+'</b> ใบ'+(clamped?' <span style="color:var(--warn);">— จำนวนที่ระบุเกินสต็อกที่มีอยู่ ปรับให้อัตโนมัติแล้ว</span>':''))
+        :'<span style="color:var(--neg);">ไม่มีสต็อกพร้อมจ่ายสำหรับตัวเลือกนี้</span>';
+    }
     var list=allocateSuggest(type,qty,mode);
     $('#alResult').innerHTML=list.length
       ?'<div class="twrap" style="max-height:46vh;"><table><thead><tr><th>#</th><th>บาร์โค้ด</th><th>ประเภท</th><th>Lot</th><th>หมดอายุ</th><th>เข้าคลังเมื่อ</th><th>ตำแหน่ง</th></tr></thead><tbody>'
         +list.map(function(b,i){return '<tr><td class="mono">'+(i+1)+'</td><td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td>'+esc(b.lot||'-')+'</td><td>'+(b.expiry?esc(b.expiry)+' '+expiryPill(b):'<span class="muted">-</span>')+'</td><td class="small">'+fmtTs(boxReceiveTs(b))+'</td><td class="small">'+locShort(b.location)+'</td></tr>';}).join('')
         +'</tbody></table></div>'
       :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้</div>';
+    var btn=$('#alQueueBtn');
+    if(btn)btn.disabled=(max<=0||qty<1);
   }
   ['alType','alQty','alMode'].forEach(function(id){var e=$('#'+id);if(e){e.addEventListener('input',refresh);e.addEventListener('change',refresh);}});
+  var maxBtn=$('#alMaxBtn');
+  if(maxBtn)maxBtn.addEventListener('click',function(){var m=currentMax();if(m>0){setv('alQty',m);refresh();}});
   /* "ไปหยิบตามพิกัด" used to push the suggested tags straight into the
      Gate-Out scan queue (pendingOut) on click — marking them as shipped
      before anyone had actually laid hands on a box, let alone scanned its
@@ -4739,7 +5597,12 @@ function code128Modules(data){
 }
 function code128SVG(data,h){h=h||90;var mods=code128Modules(data),x=0,bars='';
   mods.forEach(function(m){if(m.bar)bars+='<rect x="'+x+'" y="0" width="'+m.w+'" height="'+h+'"/>';x+=m.w;});
-  return '<svg viewBox="0 0 '+x+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" style="display:block;width:100%;" xmlns="http://www.w3.org/2000/svg" fill="#000">'+bars+'</svg>';}
+  /* shape-rendering=crispEdges (same fix already applied to qrCodeSVG above)
+     stops the browser antialiasing bar edges when the viewBox's module
+     units get scaled to an arbitrary container pixel width — without it,
+     thin 1-module bars blur/waver at non-integer scale factors, which is
+     exactly what a barcode scanner reads bar *width* to decode. */
+  return '<svg viewBox="0 0 '+x+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" shape-rendering="crispEdges" style="display:block;width:100%;" xmlns="http://www.w3.org/2000/svg" fill="#000">'+bars+'</svg>';}
 
 /* ============================================================
    QR Code — 100% offline, no external library.
@@ -4881,16 +5744,11 @@ function finLabelHtml(tag,typeId,typeNm,lot,expiry){
   return '<div class="rfid-fin-card">'
     +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>Barcode Label</div>'
     +'<div class="rfid-fin-wrap"><div class="finlabel">'
-      +'<div class="fl-head"><div><div class="fl-brand">BOXTRACE</div><div class="fl-cap">BARCODE</div></div>'
-      +'<div style="display:flex;align-items:center;gap:10px;">'
-        +(typeId?'<div class="fl-type">'+esc(String(typeId).toUpperCase())+'</div>':'')
-        +'<div style="width:82px;height:82px;flex:0 0 auto;" title="QR code of RFID tag">'+qrCodeSVG(tag,82)+'</div>'
-      +'</div></div>'
+      +'<div class="fl-head"><div><div class="fl-brand">BOXTRACE</div><div class="fl-cap">BARCODE</div></div></div>'
       +'<div class="fl-div"></div>'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#666;margin-bottom:2px;">Item Number</div>'
       +'<div class="fl-bc">'+code128SVG(tag,150)+'</div>'
       +'<div class="fl-code">'+esc(tag)+'</div>'
-      +(lot?finLabelRow('Batch/Lot',lot):'')
       +(expiry?finLabelRow('Expiry Date',expiry):'')
     +'</div></div>'
     +'<div class="muted small" style="text-align:center;">'+esc(typeNm)+'</div>'
@@ -4898,14 +5756,12 @@ function finLabelHtml(tag,typeId,typeNm,lot,expiry){
 }
 /* draw the same label onto a canvas → PNG data URL (offline download) */
 function labelToPNG(tag,typeId,typeNm,lot,expiry){
-  var extraRows=(lot?1:0)+(expiry?1:0);
+  var extraRows=expiry?1:0;
   var W=1000,H=520+extraRows*110,c=document.createElement('canvas');c.width=W;c.height=H;var g=c.getContext('2d');
   g.fillStyle='#fff';g.fillRect(0,0,W,H);
   g.textBaseline='alphabetic';g.fillStyle='#000';
   g.font='800 40px -apple-system,Arial,sans-serif';g.fillText('BOXTRACE',32,56);
   g.fillStyle='#333';g.font='700 22px -apple-system,Arial,sans-serif';g.fillText('BARCODE',32,88);
-  if(typeId){g.fillStyle='#000';g.font='800 28px -apple-system,Arial,sans-serif';g.textAlign='right';g.fillText(String(typeId).toUpperCase(),W-116,52);g.textAlign='left';}
-  drawQRToCanvas(g,tag,W-96,10,86); // QR code of the RFID tag, top-right corner
   g.fillStyle='#000';g.fillRect(32,106,W-64,3);
   g.font='700 20px -apple-system,Arial,sans-serif';g.fillStyle='#666';g.fillText('ITEM NUMBER',32,132);
   var mods=code128Modules(tag),total=0;mods.forEach(function(m){total+=m.w;});
@@ -4924,7 +5780,6 @@ function labelToPNG(tag,typeId,typeNm,lot,expiry){
     g.textAlign='right';g.font='700 20px monospace';g.fillStyle='#000';g.fillText(String(val),W-32,rowY+34);g.textAlign='left';
     rowY+=110;
   }
-  if(lot)drawRow('Batch/Lot',lot);
   if(expiry)drawRow('Expiry Date',expiry);
   return c.toDataURL('image/png');
 }
@@ -4941,17 +5796,12 @@ function labelPrintCardHtml(b){
     +'</div>';
   }
   return '<div class="lbl-card">'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
-      +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">BOXTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
-      +'<div style="display:flex;align-items:center;gap:10px;">'
-        +(b.type?'<div style="font-size:16px;font-weight:800;">'+xmlEsc(String(b.type).toUpperCase())+'</div>':'')
-        +'<div style="width:76px;height:76px;flex:0 0 auto;">'+qrCodeSVG(b.tag,76)+'</div>'
-      +'</div></div>'
+    +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">BOXTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
     +'<div style="height:2px;background:#111;margin:8px 0 10px;"></div>'
     +'<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#666;margin-bottom:2px;">Item Number</div>'
     +'<div>'+code128SVG(b.tag,90)+'</div>'
     +'<div style="text-align:center;font-family:monospace;font-weight:800;font-size:26px;letter-spacing:.08em;margin-top:4px;">'+xmlEsc(b.tag)+'</div>'
-    +(lot?row('Batch/Lot',lot):'')+(expiry?row('Expiry Date',expiry):'')
+    +(expiry?row('Expiry Date',expiry):'')
     +'<div style="text-align:center;color:#888;font-size:11px;margin-top:8px;">'+xmlEsc(typeNm||'')+'</div>'
   +'</div>';
 }
@@ -5023,7 +5873,7 @@ function printLabels(tags){if(!tags||!tags.length)return;
   openModal(
     '<div class="mhead"><h3>พิมพ์ป้ายบาร์โค้ด ('+boxes.length+' ใบ)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
     +'<div class="mbody" id="zplPreviewBody" style="background:var(--bg);"><div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;padding:6px;">'+cards+'</div>'+putawaySection+'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
+    +'<div class="mfoot">'
       +'<button class="btn ghost" id="btnZplDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PNG</button>'
       +'<button class="btn ghost" id="btnPdfDownload">'+IC('download','hoverbob')+' ดาวน์โหลด PDF (พร้อมพิมพ์)</button>'
       +'<button class="btn accent" id="btnConfirmTagged"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg></span> ยืนยันติดป้ายเสร็จแล้ว</button></div>'
@@ -5054,14 +5904,7 @@ window.setTagPutawayMode=function(mode){
    เดียวกับ commitInvReceive() (ใช้กติกา isNewBox เดิม) เพื่อให้ history/สถานะ
    ตรงกับกล่องที่รับเข้าผ่านหน้า Gate In ทุกประการ ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
 function confirmTagged(allTags,pendingTags){
-  var boxes=allTags.map(function(t){return S.boxes[t];}).filter(Boolean);
-  var lblTs=iso();
-  boxes.forEach(function(b){
-    b.labeled=true;b.labeledAt=lblTs;b.labeledBy=USER;
-    /* ขั้น "พิมพ์บาร์โค้ด" ต้องลง history ด้วย ไม่ใช่แค่ flag labeled — ดู boxTimeline */
-    if(!Array.isArray(b.history))b.history=[];
-    b.history.push({dir:'label',ts:lblTs,recorder:USER});
-  });
+  var labeled=applyLabeled(allTags);
   var placed=0,skipped=0;
   if(pendingTags.length){
     var autoEl=$('#tagAutoPutaway');
@@ -5078,27 +5921,11 @@ function confirmTagged(allTags,pendingTags){
       }else{
         locs=findFreeLocations(dp.wh,pendingTags.length);
       }
-      if(locs){
-        var ts=iso();
-        pendingTags.forEach(function(t,i){
-          var b=S.boxes[t];if(!b)return;
-          var loc=locs[i];if(!loc){skipped++;return;}
-          var wh=loc.wh||dp.wh;
-          var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
-          b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,note:isNewBox?'Initial Inbound ผ่านการติดป้ายบาร์โค้ด':'รับเข้าผ่านการติดป้ายบาร์โค้ด'});
-          S.events.push({ts:ts,dir:isNewBox?'in-new':'in',tag:t,type:b.type,do:isNewBox?'':b.do,customer:isNewBox?'':b.customer,customerName:isNewBox?'':custName(b.customer),wh:wh,recorder:USER});
-          b.status='warehouse';if(!isNewBox)b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';
-          b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
-          b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:null,ts:ts};
-          b.lastSeenAt=ts;
-          auditEntry('GATE_IN',USER,t,typeName(b.type),null,{wh:whName(wh),loc:[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · ')});
-          placed++;
-        });
-      }
+      if(locs){var r=commitPutaway(pendingTags,locs,dp.wh);placed=r.placed;skipped=r.skipped;}
     }
   }
   save();closeModal();
-  var msg='ติดป้ายแล้ว '+boxes.length+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
+  var msg='ติดป้ายแล้ว '+labeled+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
   toast('ติดป้ายเสร็จแล้ว',msg,'ok');
   renderAll();
 }
@@ -5149,10 +5976,21 @@ function statusPill(s,ctx){
    could easily miss at a glance. */
 function rfidBadge(b){
   if(!b||b.labeled===false)return '';
-  return boxRfid(b)
-    ? ' <span class="pill" style="font-size:10px;padding:1px 6px;" title="RFID '+esc(boxRfid(b))+'">RFID</span>'
+  var _rid=boxRfid(b);
+  return _rid
+    /* trailing chars shown right on the pill (hover still shows the full
+       id via title) so an operator can identify the tag at a glance instead
+       of having to hover/click every row; click copies the full id. */
+    ? ' <span class="pill mono" style="font-size:10px;padding:1px 6px;cursor:pointer;" title="RFID '+esc(_rid)+' — คลิกเพื่อคัดลอก" data-tid="'+esc(_rid)+'" onclick="copyRfidTid(this,event)">RFID ·'+esc(_rid.slice(-6))+'</span>'
     : ' <span class="pill warn" style="font-size:10px;padding:1px 6px;">ไม่มี RFID</span>';
 }
+function copyRfidTid(el,ev){
+  if(ev)ev.stopPropagation();
+  var tid=el.getAttribute('data-tid');if(!tid)return;
+  navigator.clipboard.writeText(tid).catch(function(){});
+  toast('คัดลอก RFID TID แล้ว',tid,'info');
+}
+window.copyRfidTid=copyRfidTid;
 function journeyDots(s){var d1='<span class="jd '+(s==='warehouse'?'on-wh':'dim')+'"></span>';var d2='<span class="jd '+(s==='out'?'on-out':'dim')+'"></span>';var d3='<span class="jd '+(s==='lost'?'on-lost':'dim')+'"></span>';return '<span class="journey">'+d1+d2+d3+'</span>';}
 
 /* ===================================================================
@@ -5593,7 +6431,10 @@ function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);i
   if(b.status==='lost'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' ถูกตีเป็นสูญหาย</div>';setv('scanOut','');return;}
   if(b.status==='pending'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง (สแกนเข้าครั้งแรกก่อน)</div>';setv('scanOut','');return;}
   if(b.status==='hold'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้</div>';setv('scanOut','');return;}
-  if(b.status==='damage'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' สถานะชำรุด (Damage) — จ่ายออกไม่ได้</div>';setv('scanOut','');return;}
+  /* Damage is not blocked at scan time — the destination (ลูกค้าปกติ vs
+     Supplier) isn't chosen yet at this point in the flow. saveOutbound()
+     below does the real check once a customer is selected: a damaged box
+     may only ship back to a Supplier-kind destination, never a customer. */
   if(pendingOut.indexOf(tag)<0)pendingOut.push(tag);
   setv('scanOut','');renderOutResult();$('#scanOut').focus();
 }
@@ -5657,6 +6498,32 @@ function saveOutbound(){
   if(requireCustomerSetup())return;
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
+  /* กล่องชำรุด (damage) จ่ายออกได้เฉพาะปลายทางที่เป็น Supplier (ส่งคืนผู้จำหน่าย)
+     เท่านั้น — ปลายทางเป็นลูกค้าปกติต้องปลดสถานะ/ซ่อมก่อนจึงส่งออกได้ ตรงกับ
+     กติกาเดียวกันที่ backend บังคับซ้ำใน gateOut() (services/gate.ts) */
+  var custKind=(S.customers[cust]||{}).kind||'customer';
+  var damagedInQueue=pendingOut.filter(function(t){return (S.boxes[t]||{}).status==='damage';});
+  if(damagedInQueue.length&&custKind!=='supplier'){
+    return toast('จ่ายออกไม่ได้','กล่องชำรุด '+damagedInQueue.join(', ')+' ส่งออกได้เฉพาะปลายทาง Supplier เท่านั้น','err');
+  }
+  /* scanOut() กันสถานะที่จ่ายออกไม่ได้ตอนยิงเข้าคิว แต่ระหว่างที่ยังค้างอยู่ใน
+     คิว (ยังไม่กดยืนยัน) สถานะจริงอาจเปลี่ยนไปแล้ว — เช่นอุปกรณ์/แท็บอื่นจ่าย
+     กล่องใบเดียวกันออกไปก่อน ต้องเช็คซ้ำตอนกดยืนยันจริง ไม่ใช่เชื่อคิวเก่าเฉย ๆ
+     ไม่งั้นจะจ่ายซ้ำ/ทับข้อมูลลูกค้า-DO เดิม — mirror ของ gateOut() ฝั่ง backend
+     (NOT_SHIPPABLE) ที่ปฏิเสธทั้งชุดถ้ามีใบใดใบหนึ่งไม่อยู่ในสถานะ 'warehouse'
+     (ยกเว้นชำรุดที่กำลังส่งไป supplier ซึ่งเพิ่งอนุญาตไปข้างบน) */
+  var notShippable=pendingOut.filter(function(t){
+    var b=S.boxes[t];if(!b)return true;
+    if(b.status==='warehouse')return false;
+    if(b.status==='damage'&&custKind==='supplier')return false;
+    return true;
+  });
+  if(notShippable.length){
+    pendingOut=pendingOut.filter(function(t){return notShippable.indexOf(t)<0;});
+    notShippable.forEach(function(t){delete outConditionMap[t];});
+    renderOutResult();
+    return toast('มีกล่องจ่ายออกไม่ได้แล้ว','สถานะเปลี่ยนไประหว่างรอยืนยัน: '+notShippable.join(', ')+' — เอาออกจากคิวแล้ว กดยืนยันอีกครั้งสำหรับใบที่เหลือ','err');
+  }
   /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
      history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
      แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
@@ -5718,10 +6585,13 @@ function clearGateOut(){
 window.clearGateOut=clearGateOut;
 
 /* ===== GATE IN ===== */
+/* เดโมยิงเร็วต้องเป็นกล่องที่ "ไม่ได้อยู่ในคลัง" เท่านั้น — Gate In หน้านี้รับแค่
+   ของคืนจากลูกค้า (status 'out') ไม่รับกล่อง pending/hold/damage/lost ซึ่งไม่มี
+   ทางถูกยิงเข้า Gate In จริง ๆ */
 function buildQuickIn(){
   var out=Object.values(S.boxes).filter(function(b){return b.status==='out';}).slice(0,6);
   $('#quickIn').innerHTML=out.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
-    out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
+    out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(typeName(b.type))+'<div class="tag" style="margin-top:2px;font-size:10px;">'+esc(b.tag)+'</div></button>';}).join('')):'';
 }
 function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
   var b=S.boxes[tag];
@@ -5759,6 +6629,18 @@ $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','in
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
+  /* scanIn() กันกล่อง status='warehouse' ไม่ให้เข้าคิวได้ตอนยิง แต่ระหว่างที่
+     กล่องยังค้างอยู่ในคิว (ยังไม่กดยืนยัน) สถานะอาจเปลี่ยนไปแล้วจริง ๆ — เช่น
+     อุปกรณ์/แท็บอื่นรับกล่องใบเดียวกันเข้าไปก่อน ต้องเช็คซ้ำที่นี่ (ตอนกดยืนยันจริง)
+     ไม่ใช่เชื่อคิวเก่าเฉย ๆ ไม่งั้นจะรับซ้ำ ทับตำแหน่ง/รอบใช้งานผิด — mirror ของ
+     gateIn() ฝั่ง backend (box_already_in_warehouse) ที่ปฏิเสธทั้งชุดถ้ามีใบใด
+     ใบหนึ่งอยู่ในคลังแล้ว */
+  var alreadyIn=pendingIn.filter(function(t){var b=S.boxes[t];return b&&b.status==='warehouse';});
+  if(alreadyIn.length){
+    pendingIn=pendingIn.filter(function(t){return alreadyIn.indexOf(t)<0;});
+    renderInResult();
+    return toast('มีกล่องอยู่ในคลังอยู่แล้ว',alreadyIn.join(', ')+' — เอาออกจากคิวแล้ว กดยืนยันอีกครั้งสำหรับใบที่เหลือ','err');
+  }
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
   var partner=val('inPartner');
   if(!val('inRecorder'))setv('inRecorder',USER);
@@ -6043,14 +6925,16 @@ function renderOverview(){
   applyAutoLost();
   renderMdHealthBanner();
   var all=Object.values(S.boxes);
-  var wh=all.filter(function(b){return b.status==='warehouse';}).length;
+  /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค (รอ Putaway) และรอติดบาร์โค้ด (โซนพักรับ
+     RCV-STAGE) ทั้งคู่นับเป็น "ในคลัง" แล้ว — ดูหมายเหตุเดียวกันใน localStatusCounts() */
+  var wh=all.filter(function(b){return b.status==='warehouse'||b.status==='pending';}).length;
   var out=all.filter(function(b){return b.status==='out';}).length;
   var lost=all.filter(function(b){return b.status==='lost';}).length;
   var outToday=S.events.filter(function(e){return e.dir==='out'&&dstr(new Date(e.ts))===dstr();}).length;
   var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dstr(new Date(e.ts))===dstr();}).length;
   var overdueCount=all.filter(function(b){return b.status==='out'&&isOverdue(b);}).length;
   var awaitingCount=all.filter(function(b){return b.status==='out'&&!isOverdue(b);}).length;
-  var putawayCount=all.filter(function(b){return b.status==='warehouse'&&isAtStaging(b);}).length;
+  var putawayCount=all.filter(function(b){return (b.status==='warehouse'&&isAtStaging(b))||b.status==='pending';}).length;
   var inEv=S.events.filter(function(e){return e.dir==='in';}).length;
   var outEv=S.events.filter(function(e){return e.dir==='out';}).length;
   /* feed the live isometric hero scene with real occupancy + traffic */
@@ -6148,7 +7032,7 @@ function renderOverview(){
         var locOrCust=b.status==='out'
           ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
           :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
-          :b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>'
+          :b.status==='pending'?pendingLocBadge(b)
           :locShort(b.location);
 
         typeFlowHtml+='<tr class="flowrow" style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
@@ -6223,7 +7107,7 @@ function renderOverview(){
   // occupancy by warehouse
   var whs=Object.values(S.warehouses);
   $('#ovOccupancy').innerHTML=whs.length?whs.map(function(w){
-    var inWh=all.filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+    var inWh=all.filter(function(b){return isRackedBox(b)&&(b.location||{}).wh===w.id;}).length;
     var pct=wh?Math.round(inWh/wh*100):0;
     return '<div class="occ-card" style="cursor:pointer;" data-wh-id="'+esc(w.id)+'" data-wh-name="'+esc(w.name)+'" onclick="occCardClick(this)" title="ดูกล่องในคลัง '+esc(w.name)+'">'
       +'<div class="ocw-name">'+esc(w.name)+'</div><div class="ocw-sub">ประตู '+(w.gates&&w.gates.length?w.gates[0]+'–'+w.gates[w.gates.length-1]:'-')+'</div>'
@@ -6327,8 +7211,17 @@ function renderSetup(){
   /* ซัพพลายเออร์สำหรับหน้าลงทะเบียนกล่อง — ไม่บังคับ เพราะกล่องที่มีอยู่เดิม
      ก่อนเริ่มใช้ระบบก็ไม่มีใครจำได้แล้วว่าซื้อมาจากไหน */
   var bSupSel=$('#bSupplier'),bSupHint=$('#bSupplierHint');
-  var hasSup=Object.values(S.customers).some(isSupplierKind);
-  if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
+  var supList=Object.values(S.customers).filter(isSupplierKind);
+  var hasSup=supList.length>0;
+  if(bSupSel){
+    var keepS=bSupSel.value;
+    bSupSel.innerHTML=hasSup?(supplierOptions(keepS)+'<option value="__addsupplier__">+ เพิ่มซัพพลายเออร์ที่ส่งกล่องมา</option>'):'';
+    if(keepS)bSupSel.value=keepS;
+    /* มีซัพพลายเออร์ให้เลือกจริงแค่รายเดียว — เลือกให้เลยเหมือน doCustomer ด้านบน */
+    else if(supList.length===1)bSupSel.value=supList[0].id;
+    bSupSel.style.display=hasSup?'':'none';
+    if(!bSupSel._addBound){bSupSel._addBound=true;bSupSel.addEventListener('change',function(){if(bSupSel.value==='__addsupplier__'){bSupSel.value=keepS&&keepS!=='__addsupplier__'?keepS:'';goSetup('cust');}});}
+  }
   if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
   var inPartnerSel=$('#inPartner');
   if(inPartnerSel){
@@ -6346,32 +7239,48 @@ function renderSetup(){
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
   // box table
+  var filtBoxCustSel=$('#filtBoxCust'),filtBoxSupSel=$('#filtBoxSup');
+  if(filtBoxCustSel){var keepFc=filtBoxCustSel.value;
+    filtBoxCustSel.innerHTML='<option value="">ทุกลูกค้า</option>'+Object.values(S.customers).filter(isCustomerKind).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');
+    filtBoxCustSel.value=keepFc;}
+  if(filtBoxSupSel){var keepFs=filtBoxSupSel.value;
+    filtBoxSupSel.innerHTML='<option value="">ทุกซัพพลายเออร์</option>'+Object.values(S.customers).filter(isSupplierKind).map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.id)+' · '+esc(c.name)+'</option>';}).join('');
+    filtBoxSupSel.value=keepFs;}
   var sb=val('schBox').toLowerCase();var fs=val('filtBoxStatus');
+  var fc=val('filtBoxCust');var fsup=val('filtBoxSup');
+  var fvMin=val('filtBoxValMin');var fvMax=val('filtBoxValMax');
   var bx=Object.values(S.boxes).filter(function(b){
     if(fs&&b.status!==fs)return false;
+    if(fc&&b.customer!==fc)return false;
+    if(fsup&&b.supplier!==fsup)return false;
+    if(fvMin!==''&&Number(b.value||0)<Number(fvMin))return false;
+    if(fvMax!==''&&Number(b.value||0)>Number(fvMax))return false;
     return !sb||(b.tag+typeName(b.type)+custName(b.customer)).toLowerCase().indexOf(sb)>=0;
   }).sort(function(a,b){
     if(uiSort.box==='az'||uiSort.box==='za'){var m=uiSort.box==='za'?-1:1;return m*String(a.tag||'').localeCompare(String(b.tag||''),undefined,{numeric:true,sensitivity:'base'});}
     var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);
   });
   $('#boxBody').innerHTML=bx.length?bx.map(function(b){
-    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>':(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
+    var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?pendingLocBadge(b):(b.status==='warehouse'&&isStagingLoc(b.location||{})?'<span class="loc-stg"><span class="loc-stg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'+stagingLabel(b.location||{})+' — รอ Putaway</span>':locShort(b.location));
     var lotExpCell=(b.lot||b.expiry)
       ?(b.lot?('<span class="mono">'+esc(b.lot)+'</span>'):'')+(b.expiry?((b.lot?'<div class="tag" style="margin-top:2px;">':'')+esc(b.expiry)+' '+expiryPill(b)+(b.lot?'</div>':'')):'')
       :'<span class="muted small">-</span>';
     /* CRUD only here (แก้ไข/ลบ) — ทุกอย่างที่เป็น lifecycle จริงของกล่อง
        (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
        เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
-    return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
+    var lastTs=b.lastSeenAt||b.regAt||'';
+    return '<tr class="row-click" data-tag="'+esc(b.tag)+'" onclick="if(event.target.type!==\'checkbox\')openBoxRowModal(\''+esc(b.tag)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
       +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
-      +'<td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
-      +'</div></td></tr>';
+      +'<td class="mono small">'+(lastTs?esc(fmtTs(lastTs)):'-')+'</td>'
+      +'<td class="c muted">›</td></tr>';
   }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
-  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
-  var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
+  /* ติดป้ายแล้วรอ Putaway = อยู่ในคลังแล้ว นับรวมในยอด "ในคลัง" ไม่ใช่ "รอติดบาร์โค้ด" */
+  /* รอติดบาร์โค้ด (labeled=false) ก็อยู่ในคลังจริง (โซนพักรับ RCV-STAGE) เหมือน
+     รอ Putaway (labeled=true) — นับรวมทั้งคู่ใน "ในคลัง" ส่วน "รอติดบาร์โค้ด" ยัง
+     แยกนับไว้ต่างหากเป็นคิวงานที่ต้องจัดการ (ไม่ใช่ตัวชี้ว่าอยู่นอกคลัง) */
+  var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'||b.status==='pending';}).length;
+  var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending'&&b.labeled!==true;}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอติดบาร์โค้ด '+totalPending+'</span>':'');
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
 
@@ -6395,7 +7304,7 @@ function renderSetup(){
   }):Object.values(S.warehouses);
   var whs=sortTable(whsAll,uiSort.wh,'name');
   var gtColors={'both':'var(--ink)','in':'var(--pos)','out':'var(--neg)'};
-  $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+  $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return isRackedBox(b)&&(b.location||{}).wh===w.id;}).length;
     var pendingPutaway=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id&&isStagingLoc(b.location);}).length;
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
@@ -6471,6 +7380,10 @@ function renderSetup(){
 }
 $('#schBox').addEventListener('input',renderSetup);
 $('#filtBoxStatus').addEventListener('change',renderSetup);
+$('#filtBoxCust').addEventListener('change',renderSetup);
+$('#filtBoxSup').addEventListener('change',renderSetup);
+$('#filtBoxValMin').addEventListener('input',renderSetup);
+$('#filtBoxValMax').addEventListener('input',renderSetup);
 /* box-type search â works by typing OR by scanning a barcode of the type code.
    autoScanBind runs the scanner-Thai auto-fix (autoFixScannerThai) before filtering,
    so a scanner firing while the OS keyboard is in Thai mode still finds the right row. */
@@ -6521,6 +7434,18 @@ function locTypeValue(selId, otherId) {
 }
 window.locTypeValue = locTypeValue;
 
+/* ชั้น/ช่อง เป็น input + datalist อยู่แล้ว (พิมพ์ค่าใหม่ได้อิสระ ไม่ใช่ select
+   ปิดตายแบบโซน/แร็ค) — ปุ่ม "+" นี้แค่ล้างค่าเดิม โฟกัส และเปิด picker ให้เห็นตัวเลือก
+   ที่มีอยู่ทันที ให้ชัดเจนว่าเพิ่มค่าใหม่ได้ตรงนี้เลย ไม่ต้องเดา */
+function addLocFieldValue(inputId) {
+  var el = $('#'+inputId); if (!el) return;
+  el.value = '';
+  el.focus();
+  if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (e) {} }
+  locAutoCode();
+}
+window.addLocFieldValue = addLocFieldValue;
+
 /* ── heal Location Master rows that boxes reference but were never registered ──
    The 3D warehouse view and box records themselves fall back to a box's own
    `location` field, so a rack can look fully populated there while Location
@@ -6543,6 +7468,23 @@ function backfillLocationsFromBoxes() {
   return added;
 }
 window.backfillLocationsFromBoxes = backfillLocationsFromBoxes;
+
+/* ── heal pre-existing "รอติดบาร์โค้ด" boxes stuck at loc-none ──
+   pendingStageLocation() only runs for *newly* created boxes — any box
+   registered before that fix shipped is still sitting on the old empty
+   location and needs the same one-time repair backfillLocationsFromBoxes()
+   already does for a different gap. Called at boot right alongside it. */
+function backfillStagingForPending() {
+  var fixed = 0;
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'pending' || b.labeled === true) return;
+    if (isStagingLoc(b.location||{})) return;
+    b.location = pendingStageLocation(b.location&&b.location.ts || b.regAt || iso());
+    fixed++;
+  });
+  return fixed;
+}
+window.backfillStagingForPending = backfillStagingForPending;
 
 /* ── occupancy: which location codes currently hold a box ──
    Built from live S.boxes rather than a stored field, so it can never go
@@ -8230,14 +9172,30 @@ window.seedDemo=seedDemo;
    the (empty) default S, or a render would flash empty before real data
    arrives. An empty account stays empty — seedDemo() is opt-in only, via
    "ใส่ข้อมูลตัวอย่าง" in the ⋯ menu, never automatic. */
-loadFromServer().then(function(){
-  if(backfillLocationsFromBoxes())save();
-  renderAll();
-  hydrateIcons(document);
-  /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
-  if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
-  setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
-});
+/* โหลดล้มเหลว (เช่น network สะดุด/เซิร์ฟเวอร์ 500 ชั่วคราว) ต้องไม่ถูกอ่านผิดเป็น
+   "ยังไม่มีพนักงานในระบบ" — ไม่งั้นจะไปโผล่หน้า "ลงทะเบียนผู้ใช้งานคนแรก" ทับข้อมูล
+   จริงที่มีอยู่แล้วใน DB (จะได้ EMP ซ้ำ/สับสนสิทธิ์ Admin) จึงต้อง retry จนกว่าจะ
+   โหลดสำเร็จจริง ก่อนตัดสินใจว่าจะเปิด modal นี้หรือไม่ */
+function bootLoad(attempt){
+  loadFromServer().then(function(ok){
+    if(!ok){
+      var retryIn=Math.min(1000*Math.pow(2,attempt||0),8000);
+      toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้','กำลังลองใหม่…','err');
+      setTimeout(function(){bootLoad((attempt||0)+1);},retryIn);
+      return;
+    }
+    var backfilled=backfillLocationsFromBoxes();
+    if(backfillStagingForPending())backfilled=true;
+    if(backfilled)save();
+    renderAll();
+    hydrateIcons(document);
+    /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้)
+       — มาถึงบรรทัดนี้ได้เฉพาะตอนโหลดจากเซิร์ฟเวอร์สำเร็จจริงเท่านั้น */
+    if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
+    setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
+  });
+}
+bootLoad(0);
 
 /* ===== INVENTORY CRUD ===== */
 S.inventory = S.inventory || {};
@@ -8292,7 +9250,7 @@ function invLocText(b) {
   /* ติดแท็กแล้วแต่เลือกไม่ให้ระบบ Putaway ให้ทันที — แยกจาก "รอติดบาร์โค้ด" ที่ยัง
      ไม่ติดแท็กเลย ไม่งั้นคอลัมน์นี้จะดูเหมือนไม่ขยับแม้กดยืนยันติดแท็กไปแล้ว */
   if (b.status === 'pending' && b.labeled === true) return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอ Putaway</span>';
-  if (b.status === 'pending') return '<span class="loc-none"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> รอติดบาร์โค้ด</span>';
+  if (b.status === 'pending') return pendingLocBadge(b);
   var loc = b.location || {};
   /* กล่อง Hold ที่ยังไม่ถูกจัดเก็บขึ้นแร็ค (เช่น รับคืนจากลูกค้าแล้วพักไว้ตรวจสอบ)
      ไม่ควรขึ้น "ยังไม่ระบุตำแหน่ง" เหมือนกล่องที่ยังไม่เคย Gate In — ตามมาตรฐาน WMS
@@ -8342,7 +9300,7 @@ function invLastRecorder(b) {
 }
 
 /* ---- extra filter state (set by goInventory) ---- */
-var invWhFilter  = '';   /* warehouse id — show only boxes in that WH */
+var invWhFilter  = 'ALL';   /* warehouse id — show only boxes in that WH ('ALL' = no filter, everything incl. outside) */
 var invDoFilter  = '';   /* DO number  — show all boxes that ever belonged to this DO */
 
 /* ---- navigation helper called from overview cards ---- */
@@ -8352,8 +9310,13 @@ function goInventory(opts) {
   /* reset all filters first */
   invStatusFilter = opts.status || '';
   invCustFilter   = opts.cust   || '';
-  invWhFilter     = opts.wh     || '';
   invDoFilter     = opts.doNo   || '';
+  /* กล่องที่นับในการ์ด/โหนดผังงาน (เช่น "อยู่กับลูกค้า"/"เกินกำหนดคืน") มักไม่เคยอยู่
+     บนแร็คเลย ('out'/pending ฯลฯ) — ปล่อยให้ wh pill ค้างที่ "ทุกคลัง" แบบเดิมจะทำให้
+     ตารางว่างเปล่าทั้งที่การ์ดขึ้นจำนวนไว้ ใช้ตัวเดียวกับตอนกดแท็บสถานะ (ดู
+     pickInvWhWithData ด้านล่าง) เลือก pill ที่มีข้อมูลจริงให้เอง เว้นแต่ผู้เรียก
+     ระบุ wh มาตรง ๆ */
+  invWhFilter     = ('wh' in opts) ? opts.wh : pickInvWhWithData();
   /* sync status seg UI */
   $all('#invStatusSeg .sf-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.st === invStatusFilter);
@@ -8572,6 +9535,96 @@ function clearInvFilter() {
 }
 window.clearInvFilter = clearInvFilter;
 
+/* Warehouse-pill predicate, factored out of filteredInvBoxes() so
+   pickInvWhWithData() below can probe each pill's count without duplicating
+   this logic (ดู buildInvWhPills / setInvWh):
+     - '' (ทุกคลัง)  → เฉพาะกล่องที่อยู่ในคลังจริงและมีรหัสคลังที่ถูกต้อง (ไม่รวมกล่องนอกคลัง)
+     - 'OUTSIDE' (นอกคลัง) → กล่องที่ไม่ได้อยู่บนชั้นวางจริง: ออกกับลูกค้า/รอผูก Tag,
+       Hold/ชำรุด (พักไว้ ยังไม่ขึ้นชั้น), แจ้งหาย, หรือแม้สถานะ warehouse แต่ไม่มีรหัสคลัง
+     - รหัสคลังเฉพาะ → เดิม (เฉพาะกล่องที่ขึ้นชั้นในคลังนั้นจริง ๆ) */
+/* กล่อง Hold/ชำรุด ไม่ได้ถูกย้ายออกจากตำแหน่งเดิม (ดู markHold/markDamage — ทั้งคู่
+   ไม่แตะ b.location เลย) ยังอยู่บนแร็คเดิมจริง ๆ เพียงแต่ถูกกันไม่ให้จ่ายออก จึงนับ
+   เป็น "ในคลัง"/อยู่ที่คลังนั้นได้เหมือนกล่อง warehouse ปกติ — ต่างจากกล่องที่ status
+   เป็น warehouse แต่ไม่มีรหัสคลัง (เพิ่งรับเข้ายังไม่ Putaway) ซึ่งยังนับเป็นนอกคลังอยู่ */
+function isRackedBox(b) {
+  return (b.status === 'warehouse' || b.status === 'hold' || b.status === 'damage')
+    && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh];
+}
+function invWhMatches(b, wf) {
+  if (wf === 'ALL') return true;
+  if (wf === 'OUTSIDE') return !isRackedBox(b);
+  if (wf === '') return isRackedBox(b);
+  if (wf) return ((b.location || {}).wh === wf && isRackedBox(b));
+  return true;
+}
+/* Status-tab predicate, also factored out so pickInvWhWithData() can test
+   "would this status show anything under this warehouse pill" without a
+   second copy of every branch below. */
+function invStatusMatches(b, todayStr) {
+  if (invStatusFilter === 'unlocated') return (b.status === 'warehouse' && !(b.location || {}).wh);
+  if (invStatusFilter === 'putaway') return (b.status === 'warehouse' && isAtStaging(b));
+  if (invStatusFilter === 'pending') {
+    /* รอติดบาร์โค้ด: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
+       status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
+       statusPill) ไม่ใช่ "รอติดบาร์โค้ด" ให้ไปอยู่ในแท็บ pendingPutaway แทน
+       ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
+    return (b.status === 'pending' && b.labeled !== true);
+  }
+  if (invStatusFilter === 'pendingPutaway') {
+    /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
+       คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย
+       (ดู statusPill สำหรับ pill "รอ Putaway" ตัวเดียวกันนี้) */
+    return (b.status === 'pending' && b.labeled === true);
+  }
+  if (invStatusFilter === 'noRfid') {
+    /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
+       badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
+       labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
+    return !(b.labeled === false || boxRfid(b));
+  }
+  if (invStatusFilter === 'inboundQueue') {
+    /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
+       สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
+       เพื่อไม่ให้แท็บ "ส่งลูกค้า" ติด active ทั้งที่ผู้ใช้กด "คิวรับเข้า" */
+    return b.status === 'out';
+  }
+  if (invStatusFilter === 'outboundQueue') {
+    /* คิวส่งออก (การ์ด outq): กล่องที่อยู่ในคลังจริง = พร้อมหยิบจ่ายออก
+       (ไม่รวม Hold/ชำรุด ซึ่งถูกกันออกจากการใช้งานไปแล้ว) */
+    return b.status === 'warehouse';
+  }
+  if (invStatusFilter === 'outToday') {
+    /* ออกวันนี้: boxes that have an 'out' history event today */
+    return (b.history || []).some(function(h){ return h.dir === 'out' && h.ts && h.ts.slice(0,10) === todayStr; });
+  }
+  if (invStatusFilter === 'overdue') return (b.status === 'out' && isOverdue(b));
+  /* รอคืน: out and still within its return window (not overdue yet) — distinct from the "overdue" bucket */
+  if (invStatusFilter === 'awaiting') return (b.status === 'out' && !isOverdue(b));
+  /* กล่องที่เคยออกและคืนกลับมา (cycles > 0) */
+  if (invStatusFilter === 'returned') return ((b.cycles || 0) > 0);
+  if (invStatusFilter) return b.status === invStatusFilter;
+  return true;
+}
+/* เลือก pill "แยกตามคลัง" ให้เองเวลาเปลี่ยนแท็บสถานะ — ไม่งั้นแท็บที่มีกล่องจริง
+   (เช่น "ชำรุด") จะโชว์ตารางว่างเปล่าถ้า pill เดิมค้างอยู่ที่ "ทุกคลัง" ในขณะที่
+   กล่องกลุ่มนั้นทั้งหมดอยู่ฝั่ง "นอกคลัง" — ทดสอบทีละ pill ตามลำดับที่ผู้ใช้เห็น
+   บนจอ (ทุกคลัง → รายคลัง → นอกคลัง) แล้วเลือกอันแรกที่มีข้อมูลจริง */
+function pickInvWhWithData() {
+  var todayStr = dstr(now());
+  var base = Object.values(S.boxes).filter(function(b) {
+    return invStatusMatches(b, todayStr) && (!invCustFilter || b.customer === invCustFilter);
+  });
+  var candidates = [''].concat(Object.keys(S.warehouses)).concat(['OUTSIDE']);
+  for (var i = 0; i < candidates.length; i++) {
+    if (base.some(function(b) { return invWhMatches(b, candidates[i]); })) return candidates[i];
+  }
+  /* ไม่มี pill เจาะจงตัวไหนมีข้อมูลเลย (เช่นข้อมูลอยู่นอกคลังแต่ยังไม่ตรงเงื่อนไข
+     OUTSIDE เป๊ะ ๆ ในบางเคส edge case) — ใช้ "ทั้งหมด" เป็น fallback สุดท้ายแทนที่
+     จะปล่อยให้ตารางว่างเปล่า */
+  return 'ALL';
+}
+window.pickInvWhWithData = pickInvWhWithData;
+
 /* ---- filter helper shared by both views ---- */
 function filteredInvBoxes() {
   var sb = (document.getElementById('schInv') ? document.getElementById('schInv').value : '').toLowerCase();
@@ -8590,55 +9643,9 @@ function filteredInvBoxes() {
       }
       return true;
     }
-    /* Filter by warehouse */
-    if (invWhFilter) {
-      if (!((b.location || {}).wh === invWhFilter && b.status === 'warehouse')) return false;
-    }
+    if (!invWhMatches(b, invWhFilter)) return false;
     /* ── standard status filter ── */
-    if (invStatusFilter === 'unlocated') {
-      if (!(b.status === 'warehouse' && !(b.location || {}).wh)) return false;
-    } else if (invStatusFilter === 'putaway') {
-      if (!(b.status === 'warehouse' && isAtStaging(b))) return false;
-    } else if (invStatusFilter === 'pending') {
-      /* รอติดบาร์โค้ด: ยังไม่ติดป้ายบาร์โค้ดเลย (labeled=false) เท่านั้น — กล่องที่
-         status=pending แต่ labeled=true จริง ๆ คือ "รอ Putaway" (ดู pill ใน
-         statusPill) ไม่ใช่ "รอติดบาร์โค้ด" ให้ไปอยู่ในแท็บ pendingPutaway แทน
-         ไม่งั้นแท็บนี้จะโชว์แถวที่ pill ขึ้น "รอ Putaway" ปนอยู่ */
-      if (!(b.status === 'pending' && b.labeled !== true)) return false;
-    } else if (invStatusFilter === 'pendingPutaway') {
-      /* รอ Putaway: ติดป้ายบาร์โค้ดแล้ว (labeled=true) แต่ยังไม่เคยสแกนเข้าคลังเลย —
-         คนละกลุ่มกับ data-st="pending" เดิมที่รวมทั้งกล่องที่ยังไม่ติดป้ายด้วย
-         (ดู statusPill สำหรับ pill "รอ Putaway" ตัวเดียวกันนี้) */
-      if (!(b.status === 'pending' && b.labeled === true)) return false;
-    } else if (invStatusFilter === 'noRfid') {
-      /* รอติด Tag RFID: มีบาร์โค้ด/ป้ายแล้ว แต่ยังไม่ได้ผูกแท็ก RFID — ตรงกับเงื่อนไข
-         badge "ไม่มี RFID" ใน rfidBadge() ทุกประการ (ยกเว้นกล่องที่ยังไม่ติดป้ายเลย
-         labeled===false ซึ่งมีตัวกรอง "รอติดบาร์โค้ด" ของตัวเองอยู่แล้ว) */
-      if (b.labeled === false || boxRfid(b)) return false;
-    } else if (invStatusFilter === 'inboundQueue') {
-      /* คิวรับเข้า (การ์ด inq บนผังกระบวนการ): กล่องที่อยู่กับลูกค้า = กล่องที่
-         สุดท้ายต้องกลับเข้าคลังผ่าน Gate อีกครั้ง ใช้ค่าสถานะเทียมแยกจาก 'out'
-         เพื่อไม่ให้แท็บ "ส่งลูกค้า" ติด active ทั้งที่ผู้ใช้กด "คิวรับเข้า" */
-      if (b.status !== 'out') return false;
-    } else if (invStatusFilter === 'outboundQueue') {
-      /* คิวส่งออก (การ์ด outq): กล่องที่อยู่ในคลังจริง = พร้อมหยิบจ่ายออก
-         (ไม่รวม Hold/ชำรุด ซึ่งถูกกันออกจากการใช้งานไปแล้ว) */
-      if (b.status !== 'warehouse') return false;
-    } else if (invStatusFilter === 'outToday') {
-      /* ออกวันนี้: boxes that have an 'out' history event today */
-      var outToday = (b.history || []).some(function(h){
-        return h.dir === 'out' && h.ts && h.ts.slice(0,10) === todayStr;
-      });
-      if (!outToday) return false;
-    } else if (invStatusFilter === 'overdue') {
-      if (!(b.status === 'out' && isOverdue(b))) return false;
-    } else if (invStatusFilter === 'awaiting') {
-      /* รอคืน: out and still within its return window (not overdue yet) — distinct from the "overdue" bucket */
-      if (!(b.status === 'out' && !isOverdue(b))) return false;
-    } else if (invStatusFilter === 'returned') {
-      /* กล่องที่เคยออกและคืนกลับมา (cycles > 0) */
-      if (!((b.cycles || 0) > 0)) return false;
-    } else if (invStatusFilter && b.status !== invStatusFilter) return false;
+    if (!invStatusMatches(b, todayStr)) return false;
     /* customer sub-filter */
     if (invCustFilter && b.customer !== invCustFilter) return false;
     if (!sb) return true;
@@ -8661,11 +9668,23 @@ function buildInvWhPills() {
   }
   whRow.classList.add('show');
   whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
-  var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
+  /* "ทั้งหมด" = ไม่ filter ตามคลังเลย รวมทั้งในคลังและนอกคลังเข้าด้วยกัน — ต่างจาก
+     "ทุกคลัง" ซึ่งจริง ๆ กรองเฉพาะกล่องที่ขึ้นแร็คในคลังจริง (isRackedBox) เท่านั้น
+     ไม่รวมกล่องนอกคลัง (ส่งลูกค้า/สูญหาย/รอติดบาร์โค้ดที่ยังไม่รู้คลัง ฯลฯ) */
+  var allCnt = Object.keys(S.boxes).length;
+  var html = '<button class="icr-pill' + (invWhFilter === 'ALL' ? ' active' : '') + '" onclick="setInvWh(\'ALL\')">ทั้งหมด <span style="opacity:.55;font-size:11px;">('+allCnt+')</span></button>';
+  html += '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
   whs.forEach(function(w) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
+    var cnt = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location||{}).wh === w.id; }).length;
     html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
+  /* นอกคลัง — กล่องที่ไม่ได้อยู่บนแร็คในคลังจริง: ออกกับลูกค้า/รอผูก Tag/รอ Putaway,
+     แจ้งหาย, หรือ warehouse ที่ไม่มีรหัสคลัง — Hold/ชำรุดที่ยังมีตำแหน่งเดิมอยู่
+     (isRackedBox) ไม่ถือเป็นนอกคลังแล้ว ดูหมายเหตุที่ isRackedBox */
+  var outsideCnt = Object.values(S.boxes).filter(function(b) {
+    return !isRackedBox(b);
+  }).length;
+  html += '<button class="icr-pill' + (invWhFilter === 'OUTSIDE' ? ' active' : '') + '" onclick="setInvWh(\'OUTSIDE\')">นอกคลัง <span style="opacity:.55;font-size:11px;">('+outsideCnt+')</span></button>';
   pillsEl.innerHTML = html;
 }
 function setInvWh(id) {
@@ -8679,15 +9698,20 @@ function buildInvCustPills() {
   var isOut = invStatusFilter === 'out';
   custRow.classList.toggle('show', isOut);
   if (!isOut) { invCustFilter = ''; return; }
-  /* collect customers that have at least one 'out' box */
+  /* collect customers that have at least one 'out' box — scoped to the
+     selected warehouse (invWhFilter), same as the status badges above, so
+     the customer pills stay consistent with whichever warehouse is active */
+  var whBoxes = Object.values(S.boxes).filter(function(b) {
+    return !invWhFilter || (b.location || {}).wh === invWhFilter;
+  });
   var custIds = [];
-  Object.values(S.boxes).forEach(function(b) {
+  whBoxes.forEach(function(b) {
     if (b.status === 'out' && b.customer && custIds.indexOf(b.customer) < 0) custIds.push(b.customer);
   });
   custIds.sort(function(a, b) { return custName(a).localeCompare(custName(b), 'th'); });
   var html = '<button class="icr-pill' + (invCustFilter === '' ? ' active' : '') + '" onclick="setInvCust(\'\')">ทุกลูกค้า</button>';
   custIds.forEach(function(id) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'out' && b.customer === id; }).length;
+    var cnt = whBoxes.filter(function(b) { return b.status === 'out' && b.customer === id; }).length;
     html += '<button class="icr-pill' + (invCustFilter === id ? ' active' : '') + '" onclick="setInvCust(\''+esc(id)+'\')">'+esc(custName(id))+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
   pillsEl.innerHTML = html;
@@ -8706,13 +9730,26 @@ window.setInvCust = setInvCust;
    render, so a heavier table load never holds badge counts up and vice versa. */
 function localStatusCounts() {
   var all = Object.values(S.boxes || {});
+  /* Scope every badge to the selected warehouse (invWhFilter) — otherwise
+     picking a warehouse would filter the table but leave the tab badges
+     (e.g. "รอติด Tag RFID") showing global counts across every warehouse. */
+  if (invWhFilter) {
+    all = all.filter(function(b) { return (b.location || {}).wh === invWhFilter; });
+  }
   var c = { '': all.length, pending: 0, warehouse: 0, hold: 0, damage: 0, out: 0, lost: 0,
     pendingPutaway: 0, noRfid: 0, unlocated: 0 };
   all.forEach(function(b) {
     /* 'pending' บาดจ์ (รอติดบาร์โค้ด) ต้องไม่รวมกล่องที่ labeled=true — พวกนั้น
        คือ "รอ Putaway" (นับแยกไว้ที่ pendingPutaway) เดียวกับบั๊กที่แก้ใน
        flow board compute() ไปแล้ว ต้องแก้ที่นี่ด้วยเพราะเป็นคนละจุดกัน */
-    if (b.status === 'pending' && b.labeled === true) c.pendingPutaway++;
+    /* ติดป้ายแล้วแต่ยังไม่ได้จัดขึ้นแร็ค = อยู่ในคลังแล้วจริง ๆ เพียงแต่ยังไม่ได้
+       Putaway จึงต้องนับรวมอยู่ใน "ในคลัง" ด้วย (ไม่ใช่แค่แท็บ "รอ Putaway"
+       แยกต่างหาก) — status ในข้อมูลยังคงเป็น 'pending' เหมือนเดิม แก้แค่การนับสรุป */
+    if (b.status === 'pending' && b.labeled === true) { c.pendingPutaway++; c.warehouse++; }
+    /* รอติดบาร์โค้ด = อยู่ที่โซนพักรับในคลังจริง (RCV-STAGE, ดู pendingStageLocation)
+       นับรวมใน "ในคลัง" ด้วยเหมือนกัน — ยังคงนับ c.pending แยกไว้เป็นคิวงานที่ต้อง
+       จัดการ (ตรงกับ badge นับค้างที่เมนู Inventory) */
+    else if (b.status === 'pending') { c.pending++; c.warehouse++; }
     else if (c[b.status] !== undefined) c[b.status]++;
     if (b.labeled !== false && !boxRfid(b)) c.noRfid++;
     if (b.status === 'warehouse' && !(b.location || {}).wh) c.unlocated++;
@@ -8731,6 +9768,11 @@ function applyInvStatusBadges(counts) {
 function refreshInvStatusBadges() {
   var local = localStatusCounts();
   applyInvStatusBadges(local);
+  /* GET /status-summary aggregates across ALL warehouses server-side (no wh
+     param) — merging it in would clobber the correct per-warehouse local
+     counts back to global ones the moment a warehouse is selected, so skip
+     the refresh entirely in that case and trust the client-computed counts. */
+  if (invWhFilter) return;
   fetch('/api/boxes/status-summary', { headers: authHeaders() })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
@@ -8875,7 +9917,7 @@ function toggleInvSumGroup(gid, rowEl) {
 window.toggleInvSumGroup = toggleInvSumGroup;
 
 document.getElementById('schInv').addEventListener('input', function(){
-  invWhFilter = ''; invDoFilter = '';
+  invWhFilter = 'ALL'; invDoFilter = '';
   var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
   renderInventory();
 });
@@ -8899,24 +9941,24 @@ $all('#invStatusSeg .sf-btn').forEach(function(btn) {
     $all('#invStatusSeg .sf-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     invStatusFilter = btn.dataset.st;
-    invCustFilter = ''; invWhFilter = ''; invDoFilter = '';
+    invCustFilter = ''; invDoFilter = '';
+    invWhFilter = pickInvWhWithData();
     var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
-    buildInvCustPills();
     renderInventory();
   });
 });
 
-/* ---- Quick Search by scan ---- */
+/* ---- Quick search: #schInv is now the ONLY inventory search field —
+   typing live-filters the table (listener above), a barcode scan or Enter
+   on an exact match jumps straight to that box's Track page instead, same
+   as the old separate #invScan bar used to. Merged so there's one obvious
+   place to search/scan instead of two boxes doing overlapping jobs. */
 function invQuickSearch() {
-  var v = resolveTag(val('invScan').trim()); if (!v) return;
-  if (S.boxes[v]) { trackBox(v); switchTab('track'); setv('invScan', ''); return; }
-  // fall back to filtering the table
-  setv('schInv', v); setv('invScan', ''); renderInventory();
-  toast('กรองรายการตาม', v, 'info');
+  var v = resolveTag(val('schInv').trim()); if (!v) return;
+  if (S.boxes[v]) { trackBox(v); switchTab('track'); setv('schInv', ''); }
 }
-$('#btnInvScan').onclick = invQuickSearch;
-$('#invScan').addEventListener('keydown', function(e) { if (e.key === 'Enter') invQuickSearch(); });
-autoScanBind($('#invScan'), invQuickSearch);
+$('#schInv').addEventListener('keydown', function(e) { if (e.key === 'Enter') invQuickSearch(); });
+autoScanBind($('#schInv'), invQuickSearch);
 /* Putaway button removed (out of scope per SOW) */
 
 /* ====== CREATE: สแกนรับเข้าคลัง (auto-fill type/unit + default location) ====== */
@@ -9346,21 +10388,48 @@ $('#bulkInvWriteoff').addEventListener('click', function() {
     });
 });
 
+/* ลบหลายใบพร้อมกัน — เดี่ยว (openDeleteBoxModal) บังคับสแกน Tag ทีละใบเพื่อยืนยันว่า
+   ถอด Tag ออกจากกล่องจริงแล้ว ทำแบบนั้นกับหลายสิบใบพร้อมกันไม่ไหว จึงลดระดับความ
+   ป้องกันลงมาเป็น "พิมพ์ยืนยันจำนวน" แทน — ยังต้องตั้งใจพิมพ์ตัวเลขที่ตรงกันเป๊ะ
+   ไม่ใช่แค่กดปุ่มเดียวผ่าน จึงกันมือลั่นได้ในระดับที่เหมาะกับงานเป็นชุด */
+$('#bulkInvDelete').addEventListener('click', function() {
+  var tags = getChecked('inv-cb'); if (!tags.length) return;
+  var n = tags.length;
+  openModal(
+    '<div class="mhead"><h3>ลบ ' + n + ' กล่อง</h3><button class="x" data-close>' + IC('close') + '</button></div>'
+    + '<div class="mbody">'
+    + '<div class="banner bad" style="margin:0 0 14px;">ลบออกจากระบบถาวร ย้อนกลับไม่ได้ — ใช้เมื่อบันทึกผิด/ทดสอบเท่านั้น ถ้ากล่องหายจริงให้ใช้ปุ่ม "แจ้งกล่องหาย" แทน (เปลี่ยนสถานะ ไม่ลบข้อมูล)</div>'
+    + '<div class="tag" style="margin-bottom:10px;max-height:160px;overflow:auto;">' + tags.map(esc).join(', ') + '</div>'
+    + '<div class="field"><label>พิมพ์ <b>' + n + '</b> เพื่อยืนยันลบทั้ง ' + n + ' ใบ</label><input id="delBulkConfirm" placeholder="' + n + '" autocomplete="off" inputmode="numeric"></div>'
+    + '</div>'
+    + '<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn red" id="delBulkBtn" disabled>ยืนยันลบ ' + n + ' ใบ</button></div>'
+  );
+  var input = $('#delBulkConfirm'), btn = $('#delBulkBtn');
+  input.addEventListener('input', function() { btn.disabled = input.value.trim() !== String(n); });
+  setTimeout(function() { input.focus(); }, 50);
+  btn.onclick = function() {
+    if (btn.disabled) return;
+    tags.forEach(function(t) {
+      var b = S.boxes[t]; if (!b) return;
+      var before = Object.assign({}, b);
+      delete S.boxes[t];
+      auditEntry('DELETE', USER, t, typeName(before.type), before, null);
+      trackTags = trackTags.filter(function(x) { return x !== t; });
+    });
+    save(); closeModal(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
+    toast('ลบแล้ว', n + ' ใบ', 'warn');
+    renderAll();
+  };
+});
+
 $('#bulkInvHold').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var live = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status === 'warehouse'; });
-  if (!live.length) return toast('พักการใช้งานได้เฉพาะกล่องในคลัง', 'กล่องที่เลือกไม่มีใบที่อยู่ในคลัง', 'warn');
+  var live = tags.filter(function(t) { return canQcFail(S.boxes[t]); });
+  if (!live.length) return toast('พักการใช้งานได้เฉพาะกล่องในคลังหรือที่รอ Putaway', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
   confirmA('พักการใช้งาน ' + live.length + ' กล่อง (Hold)?', 'กล่องจะยังอยู่ในตำแหน่งเดิม แต่ถูกกันไม่ให้จ่ายออกจนกว่าจะปลดล็อก', 'ยืนยัน Hold', false)
     .then(function(ok) {
       if (!ok) return;
-      var ts = iso();
-      live.forEach(function(t) {
-        var b = S.boxes[t];
-        var before = { status: b.status };
-        b.status = 'hold'; b.holdAt = ts; b.lastSeenAt = ts;
-        b.history.push({ dir: 'hold', ts: ts, reason: 'พักการใช้งาน (Hold, Bulk)' });
-        auditEntry('HOLD', USER, t, typeName(b.type), before, { status: 'hold' });
-      });
+      applyQcStatus(live, 'hold', 'พักการใช้งาน (Hold, Bulk)');
       save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
       toast('พักการใช้งานแล้ว', live.length + ' ใบ · Hold', 'warn');
       renderAll();
@@ -9369,19 +10438,12 @@ $('#bulkInvHold').addEventListener('click', function() {
 
 $('#bulkInvDamage').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var live = tags.filter(function(t) { var b = S.boxes[t]; return b && (b.status === 'warehouse' || b.status === 'hold'); });
-  if (!live.length) return toast('ตีชำรุดได้เฉพาะกล่องในคลังหรือที่ Hold อยู่', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
+  var live = tags.filter(function(t) { var b = S.boxes[t]; return canQcFail(b) || (b && b.status === 'hold'); });
+  if (!live.length) return toast('ตีชำรุดได้เฉพาะกล่องในคลัง ที่รอ Putaway หรือที่ Hold อยู่', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
   confirmA('ตีชำรุด ' + live.length + ' กล่อง (Damage)?', 'กล่องยังอยู่ในคลังแต่จะถูกกันออกจากการใช้งาน — ต่างจาก "สูญหาย" ที่หายไปจริง', 'ยืนยันชำรุด', true)
     .then(function(ok) {
       if (!ok) return;
-      var ts = iso();
-      live.forEach(function(t) {
-        var b = S.boxes[t];
-        var before = { status: b.status };
-        b.status = 'damage'; b.damageAt = ts; b.lastSeenAt = ts;
-        b.history.push({ dir: 'damage', ts: ts, reason: 'ตีชำรุด (Damage, Bulk)' });
-        auditEntry('DAMAGE', USER, t, typeName(b.type), before, { status: 'damage' });
-      });
+      applyQcStatus(live, 'damage', 'ตีชำรุด (Damage, Bulk)');
       save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
       toast('ตีชำรุดแล้ว', live.length + ' ใบ · Damage', 'warn');
       renderAll();
@@ -9997,7 +11059,7 @@ function exportWhExcel() {
   var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
   var rows = whs.map(function(w) {
     var gs = (w.gates || []).slice().sort(function(a, b) { return a - b; });
-    var stored = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location || {}).wh === w.id; }).length;
+    var stored = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location || {}).wh === w.id; }).length;
     return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
   });
   downloadXLS('warehouses-' + dstr() + '.xls', headers, rows);
@@ -10225,24 +11287,24 @@ function openColumnMapModal(opts){
       return id;
     };
   }
-  /* Box tags aren't a flat sequence — they're per-type-prefix counters
-     (nextTagForType scans live S.boxes for TYPEPREFIX-NN). Import can't
+  /* Box tags aren't a flat sequence — they're prefix counters. Import can't
      write rows into S.boxes mid-preview, so this keeps its own counters,
-     seeded from S.boxes once, mirroring tagPrefixForType's exact prefix
-     rule and pad(...,2) width so the sequence a batch import produces
-     continues seamlessly from — and into — manual single/batch add. */
+     seeded once from tagSeriesFor() (the same "learn the series that's
+     actually in the DB" rule single/batch add uses) so the sequence a batch
+     import produces continues seamlessly from — and into — manual add.
+     Counters are keyed case-insensitively for the same reason tagSeriesFor
+     is: BOX-010 and box-010 are one series, not two. */
   function makeBoxTagGen(){
     var counters={};
-    Object.keys(S.boxes).forEach(function(id){
-      var m=id.match(/^([A-Z0-9]+-)(\d+)$/);
-      if(m){var p=m[1],n=parseInt(m[2],10);if(!counters[p]||n>counters[p])counters[p]=n;}
-    });
     return function(typeId){
       if(!typeId)return genTagId();
-      var prefix=tagPrefixForType(typeId);
-      var next=(counters[prefix]||0)+1;
-      counters[prefix]=next;
-      return prefix+pad(next,2);
+      var s=tagSeriesFor(typeId);
+      var prefix=s?s.pre:tagPrefixForType(typeId);
+      var width=s?s.width:2;
+      var k=prefix.toLowerCase();
+      if(counters[k]===undefined)counters[k]=s?s.max:0;
+      var next=++counters[k];
+      return prefix+pad(next,width);
     };
   }
 
@@ -10693,7 +11755,9 @@ function openColumnMapModal(opts){
     if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
     if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
     if(b.status==='hold')return {ok:false,code:'hold',tag:tag,reason:'ถูกพักการใช้งาน (Hold)'};
-    if(b.status==='damage')return {ok:false,code:'damage',tag:tag,reason:'สถานะชำรุด (Damage)'};
+    /* damage is NOT rejected here — same reason as scanOut(): the destination
+       (customer vs Supplier) isn't known per-row until saveOutbound() checks
+       the whole queue against the single DO customer selected for this batch */
     return {ok:true,tag:tag,type:typeName(b.type)};
   }
 
@@ -11690,7 +12754,7 @@ function openColumnMapModal(opts){
     "ยังไม่กลับเข้าคลัง":"Not yet returned","ตัวเลขสำคัญ":"Key figures","กล่องทั้งหมดในระบบ":"Total boxes in system",
     "ออกไปแล้ว (ยังไม่คืน)":"Out (not returned)","รับคืนสะสม (ครั้ง)":"Returns (times)","เกินกำหนดคืน":"Overdue",
     "รอบหมุนเวียนรวม":"Total cycles","มูลค่าสูญหาย (บาท)":"Loss value (THB)","พิมพ์ภาพรวม":"Print overview",
-    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory",
+    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory","สต็อกกล่อง":"Inventory",
     "ติดตามกล่อง":"Track Box","ตั้งค่า (Master)":"Setup (Master)",
     "สลับโหมดสว่าง/มืด":"Toggle light/dark","ใส่ข้อมูลตัวอย่าง":"Load sample data","เมนู":"Menu",
     "รอ Putaway":"Awaiting putaway",
@@ -12052,6 +13116,107 @@ const DAY=86400000;
    1 · DATA — ใช้ state S ของแอปเดิม (legacy-sync.js sync กับ PostgreSQL อยู่แล้ว)
        + poll GET /api/state เพื่อรับความเปลี่ยนแปลงจากเครื่องอื่น / PDA
    ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   PDA REALTIME NOTIFICATIONS — bell/badge/toast/row-flash/sound
+   Runs entirely off the diff between the box snapshot already on screen
+   and the one just pulled from /api/state or nudged by SSE — the bus
+   (backend/src/lib/bus.ts) only carries a version bump, no payload, so
+   "what changed" has to be reconstructed client-side from the two snapshots.
+   ══════════════════════════════════════════════════════════════ */
+const NOTIF_SOUND_KEY='boxtrace_notif_sound';
+let notifUnread=0;
+let notifSoundOn=true;
+try{ notifSoundOn=localStorage.getItem(NOTIF_SOUND_KEY)!=='0'; }catch(_){}
+let pdaFlashTags=[];
+
+const NOTIF_KIND={
+  newBox:{label:'ลงทะเบียนกล่องใหม่',kind:'ok',priority:false},
+  pendingPutaway:{label:'รอ Putaway',kind:'ok',priority:false},
+  noRfid:{label:'ไม่มี RFID',kind:'warn',priority:false},
+  pendingLabel:{label:'รอติดบาร์โค้ด',kind:'warn',priority:true}
+};
+
+function detectPdaEvents(oldBoxes,newBoxes){
+  var events=[];
+  Object.keys(newBoxes).forEach(function(tag){
+    var nb=newBoxes[tag], ob=oldBoxes[tag];
+    if(!ob){
+      events.push({type:'newBox',tag:tag,box:nb});
+      if(nb.status==='pending'&&nb.labeled!==true)events.push({type:'pendingLabel',tag:tag,box:nb});
+      return;
+    }
+    if(nb.status==='pending'&&nb.labeled===true&&!(ob.status==='pending'&&ob.labeled===true)){
+      events.push({type:'pendingPutaway',tag:tag,box:nb});
+    }
+    var hadRfid=!!(ob.rfidTid||ob.rfidEpc), hasRfid=!!(nb.rfidTid||nb.rfidEpc);
+    if(nb.labeled!==false&&!hasRfid&&!hadRfid&&ob.status!==nb.status){
+      events.push({type:'noRfid',tag:tag,box:nb});
+    }
+  });
+  if(!events.length)return;
+  pdaFlashTags=events.map(function(e){return e.tag;});
+  events.forEach(pushNotif);
+  refreshNotifBadges();
+}
+
+function pushNotif(ev){
+  var meta=NOTIF_KIND[ev.type]||{label:ev.type,kind:'info',priority:false};
+  notifUnread++;
+  pdaToast(ev.tag,meta.label,meta.kind);
+  if(meta.priority&&notifSoundOn)playNotifChime();
+}
+
+function pdaToast(tag,label,kind){
+  var z=$('#pdaToastZone'); if(!z)return;
+  var t=document.createElement('div');
+  t.className='toast '+(kind==='warn'?'warn':'ok');
+  var ic=kind==='warn'?IC('warn','tick'):IC('check','tick');
+  t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(tag)+'</div><div class="sub">'+esc(label)+'</div></div>';
+  z.appendChild(t);
+  setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},4200);
+}
+
+function flashPdaRows(){
+  if(!pdaFlashTags.length)return;
+  var tags=pdaFlashTags; pdaFlashTags=[];
+  requestAnimationFrame(function(){
+    tags.forEach(function(tag){
+      var row=document.querySelector('tr[data-tag="'+CSS.escape(tag)+'"]');
+      if(!row)return;
+      row.classList.remove('row-flash'); void row.offsetWidth; row.classList.add('row-flash');
+      setTimeout(function(){row.classList.remove('row-flash');},3000);
+    });
+  });
+}
+
+/* กระดิ่งแจ้งเตือน (#notifWrap/#notifPanel) ถูกลบออกจาก header แล้ว — เหลือแค่
+   badge นับค้างที่เมนู Inventory (#navBadgeInventory) กับ toast/row-flash ซึ่ง
+   เป็นคนละกลไกกัน ไม่ต้องมี panel ก็แจ้งเตือนได้ */
+function refreshNotifBadges(){
+  var nav=$('#navBadgeInventory'); if(!nav)return;
+  var pending=(typeof localStatusCounts==='function')?
+    (function(){var c=localStatusCounts();return (c.pending||0)+(c.pendingPutaway||0)+(c.noRfid||0);})():0;
+  if(pending>0){nav.hidden=false;nav.textContent=pending>99?'99+':String(pending);nav.title='คลิกเพื่อกรองดู '+pending+' รายการที่ต้องจัดการ';} else nav.hidden=true;
+}
+let notifAudioCtx=null;
+function playNotifChime(){
+  try{
+    notifAudioCtx=notifAudioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    var ctx=notifAudioCtx, t0=ctx.currentTime;
+    [880,1320].forEach(function(freq,i){
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,t0+i*0.12);
+      g.gain.linearRampToValueAtTime(0.12,t0+i*0.12+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+i*0.12+0.28);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0+i*0.12); o.stop(t0+i*0.12+0.3);
+    });
+  }catch(_){}
+}
+document.addEventListener('DOMContentLoaded',function(){ refreshNotifBadges(); });
+if(document.readyState!=='loading'){ refreshNotifBadges(); }
+
 const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
 let live=true;
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
@@ -12068,6 +13233,10 @@ async function pullState(){
 }
 /* เซิร์ฟเวอร์เป็น source of truth — โหลดเข้าแอปด้วยกลไกเดิม (load + renderAll) */
 function adoptServerState(st){
+  /* diff against what's on screen *before* it gets overwritten below —
+     this is the only point that sees both the old and new box snapshot,
+     so PDA-notification detection has to happen right here */
+  try{ detectPdaEvents(S.boxes||{}, st.boxes||{}); }catch(e){console.warn('pda notif diff',e);}
   /* mirror it for the next reload, but mark it as already-synced so the
      persistence bridge does not PUT the server's own snapshot back at it */
   const snap=JSON.stringify(st);
@@ -12087,6 +13256,7 @@ function adoptServerState(st){
     else redraw();
   }catch(e){console.warn('w3d adopt',e);}
   scheduleBuild();
+  flashPdaRows();
 }
 /* helper ของแอป — ถ้ามีให้ใช้ของแอป ไม่มีค่อย fallback */
 const isOverdue=b=>!!(Wn.isOverdue?Wn.isOverdue(b):(b&&b.status==='out'&&b.dueAt&&+new Date(b.dueAt)<Date.now()));
