@@ -112,7 +112,23 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto;}}
 
 /* ============================================================ NAV ============================================================ */
-.chrome{position:sticky;top:0;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
+/* #topBar (not .chrome/.navwrap individually) carries position:fixed, with
+   the two bars stacked in normal flow inside it — so hiding it on scroll is
+   one transform on one box, not two independently-sized ones (translateY
+   -100% on each would only lift .navwrap by its own ~55px, not the combined
+   bar height, leaving it parked a few px from the top instead of off-screen).
+   Fixed rather than sticky: Safari fails to keep position:sticky pinned when
+   body ends up as its own scroll container (see the overflow-x:hidden rule
+   on body below — per spec that forces overflow-y:auto too, making body a
+   scroller distinct from the viewport). Fixed is anchored to the viewport
+   regardless, so it doesn't hit that bug. Body gets an explicit padding-top
+   (--header-total-h, measured in JS from #topBar's real height) to reserve
+   the space sticky used to reserve automatically. */
+#topBar{position:fixed;top:0;left:0;right:0;z-index:90;transition:transform .32s var(--ease);}
+html.nav-hidden #topBar{transform:translateY(-100%);}
+html[data-layout="sidebar"] #topBar{position:static;transform:none!important;} /* .chrome/.navwrap take over their own fixed positioning below */
+
+.chrome{position:static;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
   backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--line);
   padding:env(safe-area-inset-top) 0 0;}
 .chrome-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:13px 22px;}
@@ -163,9 +179,12 @@ html[data-layout="sidebar"] .who-menu{position:fixed;top:0;right:0;left:auto;bot
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
 .iconbtn:active{transform:scale(.9);}
 
-.navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;
+.navwrap{position:static;z-index:80;
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border-bottom:.5px solid var(--line);}
+
+body{padding-top:var(--header-total-h,113px);}
+html[data-layout="sidebar"] body{padding-top:0;}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
 nav::-webkit-scrollbar{display:none;}
 nav button{position:relative;color:var(--muted);font-weight:500;font-size:14px;letter-spacing:-.01em;
@@ -909,6 +928,49 @@ tr.row-flash{animation:rowFlash 3s ease-out;}
 .alert .afoot button:first-child{border-top:none;} .alert .afoot button:hover{background:var(--surface2);}
 .alert .afoot button.danger{color:var(--neg);font-weight:600;}
 
+/* ===== drawer (แผงเลื่อนจากขอบขวา) =====
+   ใช้กับงานหลายขั้นตอนที่ยาวเกินกว่าจะยัดใน .modal และควรเห็นว่ายังอยู่บนหน้าเดิม
+   (Box Lifecycle Wizard) — .modal ยังคงไว้สำหรับงานสั้นที่จบในจอเดียว */
+.drawer{position:fixed;inset:0;z-index:320;display:none;}
+.drawer.show{display:block;}
+.drawer .dbackdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(6px);animation:fadeIn .28s var(--ease) both;}
+.drawer .dpanel{position:absolute;top:0;right:0;bottom:0;width:min(780px,100%);background:var(--bg);
+  border-left:.5px solid var(--line);box-shadow:-18px 0 60px rgba(0,0,0,.32);
+  display:flex;flex-direction:column;animation:drawerIn .38s var(--ease) both;}
+@keyframes drawerIn{from{transform:translateX(48px);opacity:0;}to{transform:none;opacity:1;}}
+.drawer .dhead{padding:20px 26px 0;border-bottom:.5px solid var(--line);flex:0 0 auto;}
+.drawer .dhead-top{display:flex;align-items:center;gap:12px;margin-bottom:15px;}
+.drawer .dhead h3{font-size:20px;font-weight:600;letter-spacing:-.025em;}
+.drawer .dhead .x{margin-left:auto;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--ink) 10%,transparent);
+  border:1px solid var(--line2);color:var(--ink2);display:grid;place-items:center;transition:transform .15s var(--ease),background .2s,color .2s;}
+.drawer .dhead .x svg{stroke-width:2.4;}
+.drawer .dhead .x:hover{transform:scale(1.1);background:var(--neg);border-color:var(--neg);color:#fff;}
+.drawer .dbody{padding:22px 26px 28px;overflow:auto;flex:1;}
+.drawer .dfoot{padding:15px 26px;border-top:.5px solid var(--line);display:flex;gap:11px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.drawer .dfoot .spacer{flex:1;}
+@media(max-width:560px){.drawer .dpanel{width:100%;}.drawer .dhead,.drawer .dbody,.drawer .dfoot{padding-left:16px;padding-right:16px;}}
+
+/* step rail ของ wizard */
+.wzsteps{display:flex;margin:0 -26px;padding:0 26px 13px;overflow-x:auto;scrollbar-width:none;}
+.wzsteps::-webkit-scrollbar{display:none;}
+.wzstep{display:flex;align-items:center;gap:8px;flex:0 0 auto;opacity:.4;transition:opacity .3s var(--ease);}
+.wzstep.on,.wzstep.done{opacity:1;}
+.wzstep .n{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;
+  background:color-mix(in srgb,var(--ink) 12%,transparent);color:var(--ink2);flex:0 0 auto;transition:background .3s,color .3s;}
+.wzstep.on .n{background:var(--ink);color:var(--bg);}
+.wzstep.done .n{background:var(--pos);color:var(--posInk);}
+.wzstep .lb{font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;}
+.wzstep .sep{width:20px;height:1px;background:var(--line2);margin:0 10px;flex:0 0 auto;}
+/* แถวกล่องในขั้น QC */
+.wzrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border:.5px solid var(--line);border-radius:12px;margin-bottom:7px;background:var(--surface);}
+.wzrow .tg{font-family:var(--mono);font-size:13px;font-weight:600;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.wzrow .qcseg{display:flex;gap:4px;flex:0 0 auto;}
+.wzrow .qcseg button{padding:5px 11px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted);
+  border:1px solid var(--line2);background:transparent;transition:background .18s,color .18s,border-color .18s;}
+.wzrow .qcseg button.on[data-q="pass"]{background:var(--pos);color:var(--posInk);border-color:var(--pos);}
+.wzrow .qcseg button.on[data-q="hold"]{background:var(--warn);color:#fff;border-color:var(--warn);}
+.wzrow .qcseg button.on[data-q="damage"]{background:var(--neg);color:#fff;border-color:var(--neg);}
+
 .banner{display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:16px;margin-bottom:16px;font-size:14px;line-height:1.5;}
 .banner.info{background:var(--accentSoft);color:var(--accentInk);}
 .banner.warn{background:var(--warnSoft);color:var(--warn);}
@@ -1045,7 +1107,7 @@ hr.sep{border:none;border-top:.5px solid var(--line);margin:22px 0;}
 .track-card-head .tch-x:active{transform:scale(.9);}
 
 @media print{.chrome,.navwrap,.toast-zone,.no-print,.gatebox,.track-scan{display:none!important;}.tab{display:block!important;}
-  body{background:#fff;}.card,.tablecard,.occ-card,.track-sticky{box-shadow:none;border:1px solid #ccc;}.hero{padding-top:0;}
+  body{background:#fff;padding-top:0!important;}.card,.tablecard,.occ-card,.track-sticky{box-shadow:none;border:1px solid #ccc;}.hero{padding-top:0;}
   html[data-layout="sidebar"] main{margin-left:0!important;}}
 
 /* ============================================================
@@ -1196,7 +1258,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   try{if(localStorage.getItem('boxtrace_sidebar_collapsed')==='1')document.documentElement.setAttribute('data-sidebar-collapsed','1');}catch(e){}})();
 </script>
 
-<header class="chrome"><div class="chrome-inner">
+<div id="topBar"><header class="chrome"><div class="chrome-inner">
   <div class="brand" onclick="switchTab('overview')">
     <div class="mark"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span></div>
     <div><div class="nm">BoxTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
@@ -1220,7 +1282,43 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
-</nav></div>
+</nav></div></div>
+
+<script>
+/* reserve body space for the now-fixed header (was automatic under
+   position:sticky) and drive the hide-on-scroll-down/show-on-scroll-up
+   behavior. Kept in one place, right after the markup it measures, so it
+   runs (and can force a synchronous layout) before the rest of the page. */
+(function(){
+  function syncHeaderH(){
+    var b=document.getElementById('topBar');
+    document.documentElement.style.setProperty('--header-total-h',(b?b.offsetHeight:113)+'px');
+  }
+  syncHeaderH();
+  window.addEventListener('resize',syncHeaderH);
+  window.boxtraceSyncHeaderH=syncHeaderH;
+
+  var lastY=0,ticking=false,root=document.documentElement;
+  function scrollY(){return Math.max(window.scrollY||0,document.documentElement.scrollTop||0,document.body.scrollTop||0);}
+  function onScroll(){
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(function(){
+      var y=scrollY(),delta=y-lastY;
+      if(root.getAttribute('data-layout')==='sidebar'){root.classList.remove('nav-hidden');}
+      else if(y<=12){root.classList.remove('nav-hidden');}
+      else if(delta>4){root.classList.add('nav-hidden');}
+      else if(delta<-4){root.classList.remove('nav-hidden');}
+      lastY=y;ticking=false;
+    });
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  /* 'scroll' doesn't bubble, but a capturing listener on document still sees
+     it during the capture phase — covers the case where body (not window)
+     ends up doing the actual scrolling. */
+  document.addEventListener('scroll',onScroll,{passive:true,capture:true});
+})();
+</script>
 
 <main>
 
@@ -1664,12 +1762,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
+  <!-- warehouse filter row: ทั้งหมด / ทุกคลัง / <รายคลัง> / นอกคลัง — only shown once there's
+       more than one warehouse (see buildInvWhPills, which no-ops with 0/1 warehouse). -->
+  <div class="inv-cust-row" id="invWhRow">
+    <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> คลัง</span>
+    <div class="icr-pills" id="invWhPills"></div>
+  </div>
   <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
   <div class="inv-cust-row" id="invCustRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
   </div>
   <div class="invtoolbar" style="margin-bottom:14px;">
+    <button class="btn accent sm" onclick="openBoxWizard()" title="รับกล่องใหม่เข้าคลังแบบครบขั้นตอน: รับเข้า → ติดบาร์โค้ด → ตรวจสอบ → จัดเก็บ"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> รับกล่องเข้าคลัง</button>
     <div class="spacer"></div>
     <div class="inv-view-sw" id="invViewSw">
       <button class="ivs-btn active" data-view="serial" title="แสดง 1 บาร์โค้ด ต่อ 1 แถว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/></svg></span> รายใบ</button>
@@ -2336,6 +2441,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <div class="pda-toast-zone" id="pdaToastZone"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
+<div class="drawer" id="drawer"><div class="dbackdrop" data-dclose></div><div class="dpanel" id="drawerPanel"></div></div>
 
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
      works 100% offline (no CDN). Added for the Gate-Out Excel import feature. -->
@@ -3220,39 +3326,423 @@ $('#btnAddBox').onclick = function() {
     return;
   }
   if (boxRegMode === 'single') {
-    var tag = val('bTag'); if (!tag) return toast('กรอก บาร์โค้ด', null, 'err');
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
-    if (S.boxes[tag]) return toast('มี Tag นี้แล้ว', tag, 'err');
-    var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
-    var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
-    var regTs=iso();
-    S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-      lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:pendingStageLocation(regTs),lastSeenAt:regTs,labeled:false,
-      /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
-         stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
-      history:[{dir:'reg',ts:regTs,recorder:USER}]};
-    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
-    save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
-    toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอติดบาร์โค้ด'); renderAll();
+    var r = createBoxes({mode:'single',tag:val('bTag'),type:type,lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
+    if (!r.ok) return toast('บันทึกไม่สำเร็จ', r.err, 'err');
+    var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
+    toast('ลงทะเบียนกล่องแล้ว', r.tags[0] + ' · รอติดบาร์โค้ด'); renderAll();
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
-    var pre = val('bPrefix') || 'BOX-', start = num('bStart') || 1, qty = num('bQty') || 0;
-    if (qty <= 0) return toast('ระบุจำนวน', null, 'err');
-    if (qty > 2000) return toast('จำนวนมากเกินไป', 'สูงสุด 2000', 'err');
-    var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
-    var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
-    for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
-      if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
-        lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:pendingStageLocation(regTsB),lastSeenAt:regTsB,labeled:false,
-        history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
-    if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
-    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอติดบาร์โค้ด'); renderPrefixDatalist(); renderAll();
+    var r = createBoxes({mode:'batch',type:type,prefix:val('bPrefix')||'BOX-',start:num('bStart')||1,qty:num('bQty')||0,
+      lot:val('bLot'),expiry:val('bExpiry'),supplier:val('bSupplier')});
+    if (!r.ok) return toast('สร้างไม่สำเร็จ', r.err, 'err');
+    toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + r.tags.length + ' ใบ · รอติดบาร์โค้ด'
+      + (r.dup ? (' · ข้าม ' + r.dup + ' ใบ (บาร์โค้ดซ้ำ)') : '')); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
   }
 };
+
+/* ===================================================================
+   SHARED RECEIVING PRIMITIVES — createBoxes / applyLabeled / commitPutaway
+   ทุกทางเข้าที่รับกล่องใหม่ (ปุ่ม "บันทึกรับเข้า" หน้าตั้งค่า, modal พิมพ์ป้าย,
+   Box Lifecycle Wizard หน้า Inventory) ต้องเรียกสามตัวนี้เท่านั้น ห้ามเขียน
+   status/history/audit เองที่จุดอื่น — เคยเกิดบั๊กมาแล้วตอนที่บางเส้นทางตั้ง
+   สถานะโดยไม่ push history ทำให้ stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง
+   (ดูคอมเมนต์ยาวที่ boxTimeline) การมีจุดเขียนเดียวคือสิ่งที่กันไม่ให้กลับมาอีก
+   =================================================================== */
+/* o = {mode:'single'|'batch', tag, type, prefix, start, qty, lot, expiry, supplier, wh}
+   wh = คลังที่รับของเข้า (ไม่ใส่ = ให้ pendingStageLocation เดาเองแบบเดิม)
+   คืน {ok, tags:[], dup} หรือ {ok:false, err} */
+function createBoxes(o){
+  o=o||{};
+  var type=o.type; if(!type)return {ok:false,err:'ยังไม่ได้เลือกประเภทกล่อง'};
+  var bt=S.boxtypes[type]||{}, value=bt.value||S.cfg.boxValue;
+  var lot=o.lot||'', expiry=o.expiry||'', sup=o.supplier||'';
+  var tags=[], dup=0;
+  function mk(tag,note){
+    if(S.boxes[tag]){dup++;return;}
+    var ts=iso();
+    /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
+       stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
+    var h={dir:'reg',ts:ts,recorder:USER}; if(note)h.note=note;
+    S.boxes[tag]={tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+      lot:lot,expiry:expiry,supplier:sup,regAt:ts,regBy:USER,
+      location:pendingStageLocation(ts,o.wh),lastSeenAt:ts,labeled:false,history:[h]};
+    tags.push(tag);
+  }
+  if(o.mode==='batch'){
+    var pre=o.prefix||'BOX-', start=o.start||1, qty=o.qty||0;
+    if(qty<=0)return {ok:false,err:'ยังไม่ได้ระบุจำนวน'};
+    if(qty>2000)return {ok:false,err:'จำนวนมากเกินไป — สูงสุด 2000 ใบต่อครั้ง'};
+    for(var i=0;i<qty;i++)mk(pre+String(start+i),'สร้างเป็นชุด');
+    if(!tags.length)return {ok:false,err:'บาร์โค้ดในช่วงนี้มีอยู่ในระบบครบแล้วทุกใบ'};
+    auditEntry('CREATE',USER,pre+String(start)+'…'+pre+String(start+qty-1),'สร้างเป็นชุด · '+typeName(type),null,
+      {type:type,value:value,qty:tags.length,supplier:sup,tags:tags});
+  }else{
+    if(!o.tag)return {ok:false,err:'ยังไม่ได้กรอกบาร์โค้ด'};
+    if(S.boxes[o.tag])return {ok:false,err:'มีบาร์โค้ด '+o.tag+' นี้อยู่แล้ว'};
+    mk(o.tag);
+    auditEntry('CREATE',USER,o.tag,typeName(type),null,{type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
+  }
+  save();
+  return {ok:true,tags:tags,dup:dup};
+}
+window.createBoxes=createBoxes;
+
+/* ติดป้ายบาร์โค้ดเสร็จ — ตั้ง labeled=true + ลง history ให้ทุกใบที่ส่งมา
+   (แยกออกมาจาก confirmTagged เพื่อให้ wizard ใช้ท่าเดียวกันเป๊ะ) */
+function applyLabeled(tags){
+  var ts=iso(), n=0;
+  (tags||[]).forEach(function(t){
+    var b=S.boxes[t]; if(!b)return;
+    b.labeled=true;b.labeledAt=ts;b.labeledBy=USER;
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'label',ts:ts,recorder:USER});
+    n++;
+  });
+  return n;
+}
+window.applyLabeled=applyLabeled;
+
+/* จัดเก็บขึ้นแร็ค (Putaway) — locs[i] คู่กับ tags[i]; ใบไหนไม่มีตำแหน่งให้ข้าม
+   (นับเป็น skipped แล้วค้างสถานะ "รอ Putaway" ตามเดิม)
+   เดินเส้นทางเดียวกับการรับเข้าที่หน้า Gate In ทุกประการ (กติกา isNewBox เดิม)
+   เพื่อให้ history/สถานะตรงกัน ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
+function commitPutaway(tags,locs,fallbackWh){
+  var ts=iso(), placed=0, skipped=0;
+  (tags||[]).forEach(function(t,i){
+    var b=S.boxes[t]; if(!b)return;
+    var loc=(locs||[])[i]; if(!loc){skipped++;return;}
+    var wh=loc.wh||fallbackWh;
+    var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,
+      note:isNewBox?'Initial Inbound ผ่านการติดป้ายบาร์โค้ด':'รับเข้าผ่านการติดป้ายบาร์โค้ด'});
+    S.events.push({ts:ts,dir:isNewBox?'in-new':'in',tag:t,type:b.type,do:isNewBox?'':b.do,customer:isNewBox?'':b.customer,
+      customerName:isNewBox?'':custName(b.customer),wh:wh,recorder:USER});
+    b.status='warehouse';if(!isNewBox)b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';
+    b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
+    b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:null,ts:ts};
+    b.lastSeenAt=ts;
+    auditEntry('GATE_IN',USER,t,typeName(b.type),null,{wh:whName(wh),loc:[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · ')});
+    placed++;
+  });
+  return {placed:placed,skipped:skipped};
+}
+window.commitPutaway=commitPutaway;
+
+/* ===================================================================
+   BOX LIFECYCLE WIZARD — drawer หน้า Inventory
+   Receiving → Labeling → Quality Check → Putaway
+
+   ตัว wizard ไม่มี business logic ของตัวเองเลย ทุกขั้นเรียก primitive ที่
+   ใช้ร่วมกับหน้าจออื่น (createBoxes / applyLabeled / applyQcStatus /
+   commitPutaway) — กล่องที่เกิดจาก wizard จึงมี history/audit เหมือนกล่องที่
+   ทำทีละขั้นจากหน้า ตั้งค่า + Inventory ทุกประการ
+
+   ออกกลางคันได้ตลอด ไม่มีข้อมูลหาย: กล่องถูกบันทึกตั้งแต่จบขั้น "รับเข้า" แล้ว
+   ที่เหลือไปทำต่อจากแท็บ "รอติดบาร์โค้ด" / "รอ Putaway" ได้ตามปกติ
+
+   QC อยู่ก่อน Putaway ตามมาตรฐาน WMS — ตรวจที่ท่ารับของ ใบที่ไม่ผ่านจะไม่ถูก
+   เก็บขึ้นแร็คตั้งแต่แรก แต่ค้างอยู่ที่ RCV-STAGE (ดู applyQcStatus ที่ไม่แตะ
+   location เลย และ canQcFail ที่เปิดให้ตีสถานะกล่อง pending+labeled ได้)
+   =================================================================== */
+var WZ=null;
+var WZ_STEPS=[{lb:'รับเข้า'},{lb:'ติดบาร์โค้ด'},{lb:'ตรวจสอบ (QC)'},{lb:'จัดเก็บ'}];
+var WZ_PREVIEW_CAP=12;   /* จำนวนป้ายตัวอย่างสูงสุดที่วาด — ชุด 2000 ใบวาดครบเบราว์เซอร์ค้าง */
+var WZ_QC_ROWS_CAP=50;   /* เกินจำนวนนี้ QC เปลี่ยนเป็นโหมด "ยิงเฉพาะใบที่มีปัญหา" */
+
+function closeDrawer(){$('#drawer').classList.remove('show');}
+window.closeDrawer=closeDrawer;
+$('#drawer').addEventListener('click',function(e){if(e.target.closest('[data-dclose]'))wzExit();});
+
+function wzExit(){
+  var n=WZ?WZ.tags.length:0, step=WZ?WZ.step:1;
+  closeDrawer();
+  if(n&&step<4)toast('ปิดตัวช่วยแล้ว',n+' ใบที่สร้างไว้ยังอยู่ในระบบ — ทำต่อได้ที่แท็บ "รอติดบาร์โค้ด" / "รอ Putaway"','info');
+  WZ=null;
+}
+window.wzExit=wzExit;
+
+function openBoxWizard(){
+  if(!Object.keys(S.boxtypes).length)return toast('ยังไม่มีประเภทกล่อง','ไปเพิ่มที่ ตั้งค่า → ประเภทกล่อง ก่อน','err');
+  if(!Object.keys(S.warehouses).length)return toast('ยังไม่มีคลัง','ไปเพิ่มที่ ตั้งค่า → คลัง & ประตู ก่อน','err');
+  var dp=defaultPutaway();
+  var whIds=Object.keys(S.warehouses);
+  WZ={step:1,mode:'single',tags:[],qc:{},wh:(dp.wh&&S.warehouses[dp.wh])?dp.wh:whIds[0],type:'',putMode:'nearest'};
+  renderWz();
+  $('#drawer').classList.add('show');
+}
+window.openBoxWizard=openBoxWizard;
+
+function wzRail(){
+  return '<div class="wzsteps">'+WZ_STEPS.map(function(s,i){
+    var n=i+1,cls=WZ.step===n?' on':(WZ.step>n?' done':'');
+    return (i?'<span class="sep"></span>':'')
+      +'<div class="wzstep'+cls+'"><span class="n">'+(WZ.step>n?'✓':n)+'</span><span class="lb">'+esc(s.lb)+'</span></div>';
+  }).join('')+'</div>';
+}
+
+function renderWz(){
+  var parts=['<div class="dhead"><div class="dhead-top">'
+    +'<h3>ตัวช่วยรับกล่องเข้าคลัง</h3>'
+    +'<button class="x" onclick="wzExit()">'+IC('close')+'</button>'
+    +'</div>'+wzRail()+'</div>'];
+  if(WZ.step===1)parts.push(wzBody1(),wzFoot1());
+  else if(WZ.step===2)parts.push(wzBody2(),wzFoot2());
+  else if(WZ.step===3)parts.push(wzBody3(),wzFoot3());
+  else if(WZ.step===4)parts.push(wzBody4(),wzFoot4());
+  else parts.push(wzBodyDone(),wzFootDone());
+  $('#drawerPanel').innerHTML=parts.join('');
+  if(WZ.step===1)wzBind1();
+  if(WZ.step===4&&WZ.putMode==='pick')bindLocPicker('wzPut',{wh:WZ.wh});
+  renderLocDatalist();
+}
+
+/* ---------- STEP 1 · Receiving ---------- */
+function wzBody1(){
+  var whs=Object.values(S.warehouses).sort(function(a,b){return (a.name||'').localeCompare(b.name||'','th');});
+  var types=Object.values(S.boxtypes);
+  var t=WZ.type||types[0].id;WZ.type=t;
+  var single=WZ.mode==='single';
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 18px;font-size:13.5px;line-height:1.5;">ลงทะเบียนกล่องที่เพิ่งมาถึงท่ารับของ — กล่องจะไปพักที่ RCV-STAGE ของคลังที่เลือก แล้วเดินต่อไปขั้นติดบาร์โค้ด</p>'
+    +'<div class="grid g2">'
+      +'<div class="field"><label>คลังที่รับเข้า <span class="req">*</span></label><select id="wzWh">'
+        +whs.map(function(w){return '<option value="'+esc(w.id)+'"'+(WZ.wh===w.id?' selected':'')+'>'+esc(w.name)+'</option>';}).join('')
+      +'</select></div>'
+      +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="wzType">'
+        +types.map(function(x){return '<option value="'+esc(x.id)+'"'+(t===x.id?' selected':'')+'>'+esc(x.name)+'</option>';}).join('')
+      +'</select></div>'
+    +'</div>'
+    +'<div class="inv-view-sw" style="margin:14px 0 16px;">'
+      +'<button class="ivs-btn'+(single?' active':'')+'" onclick="wzSetMode(\'single\')">เพิ่มทีละใบ</button>'
+      +'<button class="ivs-btn'+(single?'':' active')+'" onclick="wzSetMode(\'batch\')">⧉ สร้างเป็นชุด</button>'
+    +'</div>'
+    +(single
+      ?'<div class="field"><label>บาร์โค้ด <span class="req">*</span></label><input id="wzTag" value="'+esc(nextTagForType(t))+'"><div class="hint">สร้างจากรหัสประเภทกล่อง + ลำดับถัดไป — แก้เองได้</div></div>'
+      :'<div class="grid g3">'
+        +'<div class="field"><label>Prefix <span class="req">*</span></label><input id="wzPrefix" value="'+esc(tagPrefixForType(t))+'"></div>'
+        +'<div class="field"><label>เริ่มเลขที่</label><input id="wzStart" type="number" min="1" value="'+esc(wzNextStart(t))+'"></div>'
+        +'<div class="field"><label>จำนวน <span class="req">*</span></label><input id="wzQty" type="number" min="1" placeholder="10"></div>'
+      +'</div><div class="tag" id="wzBatchHint" style="margin-top:2px;"></div>')
+    +'<div class="grid g3" style="margin-top:16px;">'
+      +'<div class="field"><label>ซัพพลายเออร์</label><select id="wzSupplier">'+supplierOptions('')+'</select></div>'
+      +'<div class="field"><label>Lot / Batch</label><input id="wzLot" value="'+esc(nextLotCode())+'"></div>'
+      +'<div class="field"><label>วันหมดอายุ (ถ้ามี)</label><input id="wzExpiry" type="date"><div class="hint">มีวันหมดอายุ ระบบจะจ่ายออกแบบ FEFO</div></div>'
+    +'</div>'
+  +'</div>';
+}
+function wzNextStart(t){var nx=nextTagForType(t),p=tagPrefixForType(t);var m=nx.slice(p.length).match(/^(\d+)$/);return m?parseInt(m[1],10):1;}
+function wzSetMode(m){wzCapture1();WZ.mode=m;renderWz();}
+window.wzSetMode=wzSetMode;
+/* เก็บค่าที่พิมพ์ไว้ก่อน re-render จะได้ไม่หายตอนสลับโหมด/เปลี่ยนประเภท */
+function wzCapture1(){
+  if($('#wzWh'))WZ.wh=val('wzWh');
+  if($('#wzType'))WZ.type=val('wzType');
+  if($('#wzSupplier'))WZ.supplier=val('wzSupplier');
+  if($('#wzLot'))WZ.lot=val('wzLot');
+  if($('#wzExpiry'))WZ.expiry=val('wzExpiry');
+  if($('#wzQty'))WZ.qty=num('wzQty');
+}
+function wzBind1(){
+  var ty=$('#wzType');
+  if(ty)ty.addEventListener('change',function(){wzCapture1();renderWz();});
+  ['wzPrefix','wzStart','wzQty'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',wzBatchHint);});
+  if(WZ.supplier)setv('wzSupplier',WZ.supplier);
+  if(WZ.lot)setv('wzLot',WZ.lot);
+  if(WZ.expiry)setv('wzExpiry',WZ.expiry);
+  if(WZ.qty&&$('#wzQty'))setv('wzQty',WZ.qty);
+  wzBatchHint();
+}
+function wzBatchHint(){
+  var h=$('#wzBatchHint');if(!h)return;
+  var p=val('wzPrefix'),s=num('wzStart')||1,q=num('wzQty')||0;
+  h.textContent=(!p||q<=0)?'':(q===1?('จะสร้าง: '+p+s):('จะสร้าง: '+p+s+' … '+p+(s+q-1)+' ('+q+' ใบ)'));
+}
+function wzFoot1(){
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ยกเลิก</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo1()">ถัดไป · ติดบาร์โค้ด '+IC('arrowRight')+'</button></div>';
+}
+function wzDo1(){
+  wzCapture1();
+  var o={type:WZ.type,wh:WZ.wh,supplier:WZ.supplier||'',lot:WZ.lot||'',expiry:WZ.expiry||''};
+  if(WZ.mode==='single'){o.mode='single';o.tag=val('wzTag');}
+  else{o.mode='batch';o.prefix=val('wzPrefix');o.start=num('wzStart')||1;o.qty=num('wzQty')||0;}
+  var r=createBoxes(o);
+  if(!r.ok)return toast('สร้างกล่องไม่สำเร็จ',r.err,'err');
+  WZ.tags=r.tags;WZ.step=2;
+  renderAll();renderWz();
+  toast('รับเข้าแล้ว',r.tags.length+' ใบ · พักที่ '+whName(WZ.wh)+(r.dup?(' · ข้ามซ้ำ '+r.dup+' ใบ'):''),'ok');
+}
+window.wzDo1=wzDo1;
+
+/* ---------- STEP 2 · Labeling ---------- */
+function wzBody2(){
+  var boxes=WZ.tags.map(function(t){return S.boxes[t];}).filter(Boolean);
+  var shown=boxes.slice(0,WZ_PREVIEW_CAP);
+  var cards=shown.map(function(b){return finLabelHtml(b.tag,b.type,typeName(b.type),b.lot,b.expiry);}).join('');
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">พิมพ์ป้ายแล้วแปะลงกล่องจริง — กด "ยืนยัน" เมื่อแปะครบทุกใบ (แท็ก RFID ผูกจากเครื่อง PDA ภายหลัง)</p>'
+    +'<div class="tag" style="margin-bottom:14px;">'+boxes.length+' ใบ · '+esc(typeName(WZ.type))+(boxes.length>shown.length?(' — แสดงตัวอย่าง '+shown.length+' ใบแรก'):'')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;">'+cards+'</div>'
+  +'</div>';
+}
+function wzFoot2(){
+  return '<div class="dfoot">'
+    +'<button class="btn ghost sm" onclick="wzDownloadPng()">'+IC('download','hoverbob')+' PNG</button>'
+    +'<button class="btn ghost sm" onclick="wzDownloadPdf()">'+IC('download','hoverbob')+' PDF</button>'
+    +'<div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo2()">ยืนยันติดป้ายครบแล้ว '+IC('arrowRight')+'</button></div>';
+}
+function wzBoxes(tags){return (tags||WZ.tags).map(function(t){return S.boxes[t];}).filter(Boolean);}
+function wzDownloadPng(){wzBoxes().slice(0,WZ_PREVIEW_CAP).forEach(function(b,i){setTimeout(function(){
+  var a=document.createElement('a');a.href=labelToPNG(b.tag,b.type,typeName(b.type),b.lot,b.expiry);a.download='rfid-label-'+b.tag+'.png';a.click();},i*200);});}
+function wzDownloadPdf(){labelsToPDF(wzBoxes());}
+window.wzDownloadPng=wzDownloadPng;window.wzDownloadPdf=wzDownloadPdf;
+function wzDo2(){
+  var n=applyLabeled(WZ.tags);save();
+  WZ.tags.forEach(function(t){WZ.qc[t]='pass';});
+  WZ.step=3;renderAll();renderWz();
+  toast('ติดป้ายแล้ว',n+' ใบ · ต่อไปตรวจสภาพกล่อง','ok');
+}
+window.wzDo2=wzDo2;
+
+/* ---------- STEP 3 · Quality Check ---------- */
+function wzQcCounts(){
+  var c={pass:0,hold:0,damage:0};
+  WZ.tags.forEach(function(t){c[WZ.qc[t]||'pass']++;});
+  return c;
+}
+function wzQcRow(t){
+  var b=S.boxes[t]||{};var q=WZ.qc[t]||'pass';
+  return '<div class="wzrow"><span class="tg">'+esc(t)+'</span><div class="qcseg">'
+    +['pass','hold','damage'].map(function(k){
+      var lb=k==='pass'?'ผ่าน':(k==='hold'?'Hold':'ชำรุด');
+      return '<button data-q="'+k+'" class="'+(q===k?'on':'')+'" onclick="wzSetQc(\''+esc(t)+'\',\''+k+'\')">'+lb+'</button>';
+    }).join('')+'</div></div>';
+}
+function wzBody3(){
+  var c=wzQcCounts(),big=WZ.tags.length>WZ_QC_ROWS_CAP;
+  var flagged=WZ.tags.filter(function(t){return (WZ.qc[t]||'pass')!=='pass';});
+  var rows=big?flagged:WZ.tags;
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">ตรวจสภาพกล่องที่ท่ารับก่อนเก็บขึ้นแร็ค — ใบที่ไม่ผ่านจะค้างอยู่ที่ RCV-STAGE ไม่ถูกจัดเก็บ และไม่ถูกนับเป็นของพร้อมจ่าย</p>'
+    +'<div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap;">'
+      +'<span class="pill ok">ผ่าน '+c.pass+'</span><span class="pill warn">Hold '+c.hold+'</span><span class="pill bad">ชำรุด '+c.damage+'</span>'
+      +'<div class="spacer" style="flex:1;"></div>'
+      +(c.pass<WZ.tags.length?'<button class="btn ghost sm" onclick="wzQcAllPass()">ตั้งให้ผ่านทั้งหมด</button>':'')
+    +'</div>'
+    +(big
+      ?'<div class="inv-scan-bar" style="margin-bottom:12px;"><span class="iss-ic" style="color:var(--accent);">⌗</span>'
+        +'<input id="wzQcScan" placeholder="ยิง/พิมพ์บาร์โค้ดใบที่มีปัญหา แล้ว Enter" autocomplete="off">'
+        +'<button class="btn sm ghost" onclick="wzQcFlag()">เพิ่ม</button></div>'
+        +'<div class="tag" style="margin-bottom:10px;">ชุดนี้ '+WZ.tags.length+' ใบ — ค่าเริ่มต้นคือผ่านทั้งหมด ยิงเฉพาะใบที่มีปัญหาเข้ามา</div>'
+      :'')
+    +(rows.length?rows.map(wzQcRow).join(''):'<p class="muted" style="text-align:center;padding:18px 0;font-size:13.5px;">ยังไม่มีใบที่ติดปัญหา — กด "ถัดไป" เพื่อจัดเก็บทั้งหมด</p>')
+  +'</div>';
+}
+function wzSetQc(t,q){WZ.qc[t]=q;renderWz();}
+window.wzSetQc=wzSetQc;
+function wzQcAllPass(){WZ.tags.forEach(function(t){WZ.qc[t]='pass';});renderWz();}
+window.wzQcAllPass=wzQcAllPass;
+function wzQcFlag(){
+  var v=(val('wzQcScan')||'').trim();if(!v)return;
+  var t=resolveTag?resolveTag(v):v;
+  if(WZ.tags.indexOf(t)<0)return toast('ไม่อยู่ในชุดนี้',v,'err');
+  WZ.qc[t]='damage';renderWz();
+  var el=$('#wzQcScan');if(el){el.value='';el.focus();}
+}
+window.wzQcFlag=wzQcFlag;
+function wzFoot3(){
+  var c=wzQcCounts();
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ปิด</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo3()">ถัดไป · จัดเก็บ '+c.pass+' ใบ '+IC('arrowRight')+'</button></div>';
+}
+function wzDo3(){
+  var hold=WZ.tags.filter(function(t){return WZ.qc[t]==='hold';});
+  var dmg=WZ.tags.filter(function(t){return WZ.qc[t]==='damage';});
+  if(hold.length)applyQcStatus(hold,'hold','ตรวจไม่ผ่านที่ท่ารับ (QC ขาเข้า) — พักไว้ก่อน');
+  if(dmg.length)applyQcStatus(dmg,'damage','ตรวจไม่ผ่านที่ท่ารับ (QC ขาเข้า) — ชำรุด');
+  if(hold.length||dmg.length)save();
+  WZ.step=4;renderAll();renderWz();
+  if(hold.length||dmg.length)toast('บันทึกผลตรวจแล้ว',(hold.length?('Hold '+hold.length+' ใบ'):'')+(hold.length&&dmg.length?' · ':'')+(dmg.length?('ชำรุด '+dmg.length+' ใบ'):'')+' · ค้างที่ RCV-STAGE','warn');
+}
+window.wzDo3=wzDo3;
+
+/* ---------- STEP 4 · Putaway ---------- */
+function wzPassTags(){return WZ.tags.filter(function(t){return (WZ.qc[t]||'pass')==='pass'&&S.boxes[t];});}
+function wzBody4(){
+  var pass=wzPassTags();
+  if(!pass.length){
+    return '<div class="dbody"><p class="muted" style="text-align:center;padding:26px 0;font-size:13.5px;line-height:1.6;">'
+      +'ไม่มีใบที่ผ่านการตรวจ — ทุกใบค้างอยู่ที่ RCV-STAGE<br>จัดการต่อได้จากแท็บ Hold / ชำรุด ที่หน้า Inventory</p></div>';
+  }
+  var free=findFreeLocations(WZ.wh,pass.length);
+  var sug=free.length
+    ?('ระบบจะจัดเก็บที่ '+free.slice(0,6).map(function(l){return [l.zone,l.rack,l.shelf,l.slot].filter(Boolean).join('-');}).join(', ')
+      +(free.length>6?(' … รวม '+free.length+' ช่อง'):'')
+      +(free.length<pass.length?('<br><span style="color:var(--warn);">เหลืออีก '+(pass.length-free.length)+' ใบไม่พอช่องว่าง จะค้างเป็น "รอ Putaway"</span>'):''))
+    :'<span style="color:var(--neg);">ไม่พบตำแหน่งว่างในผังของ '+esc(whName(WZ.wh))+' — เลือกตำแหน่งเอง หรือไปเพิ่มผังชั้นวางก่อน</span>';
+  return '<div class="dbody">'
+    +'<p class="muted" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;">เก็บกล่องที่ผ่านการตรวจขึ้นชั้นวาง — จบขั้นนี้กล่องจะพร้อมจ่ายออก</p>'
+    +'<div class="tag" style="margin-bottom:14px;">จัดเก็บ '+pass.length+' ใบ เข้า '+esc(whName(WZ.wh))+'</div>'
+    +'<div class="seg-filter" style="margin-bottom:12px;">'
+      +'<button class="sf-btn'+(WZ.putMode==='nearest'?' active':'')+'" onclick="wzSetPutMode(\'nearest\')">แร็คว่างที่ใกล้ที่สุด</button>'
+      +'<button class="sf-btn'+(WZ.putMode==='pick'?' active':'')+'" onclick="wzSetPutMode(\'pick\')">เลือกตำแหน่งเอง</button>'
+    +'</div>'
+    +(WZ.putMode==='nearest'?('<div class="muted small">'+sug+'</div>'):locPickerHtml('wzPut',{wh:WZ.wh}))
+  +'</div>';
+}
+function wzSetPutMode(m){WZ.putMode=m;renderWz();}
+window.wzSetPutMode=wzSetPutMode;
+function wzFoot4(){
+  var pass=wzPassTags();
+  if(!pass.length)return '<div class="dfoot"><div class="spacer"></div><button class="btn accent" onclick="wzExit()">เสร็จสิ้น</button></div>';
+  return '<div class="dfoot"><button class="btn gray" onclick="wzExit()">ข้ามไปก่อน</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="wzDo4()">จัดเก็บขึ้นแร็ค '+IC('check')+'</button></div>';
+}
+function wzDo4(){
+  var pass=wzPassTags();
+  var locs;
+  if(WZ.putMode==='pick'){
+    var loc={wh:WZ.wh,zone:val('wzPutZone'),rack:val('wzPutRack'),shelf:val('wzPutShelf'),slot:val('wzPutSlot')};
+    if(!loc.zone&&!loc.rack)return toast('ยังไม่ได้เลือกตำแหน่ง','กรอกโซนหรือแร็คก่อน','err');
+    locs=pass.map(function(){return loc;});
+  }else{
+    locs=findFreeLocations(WZ.wh,pass.length);
+    if(!locs.length)return toast('ไม่มีตำแหน่งว่าง','เลือกตำแหน่งเอง หรือเพิ่มผังชั้นวางก่อน','err');
+  }
+  var r=commitPutaway(pass,locs,WZ.wh);
+  save();
+  WZ.result=r;WZ.step=5;renderAll();renderWz();
+  toast('จัดเก็บเสร็จแล้ว',r.placed+' ใบขึ้นแร็ค'+(r.skipped?(' · เหลือรอ Putaway '+r.skipped+' ใบ'):''),'ok');
+}
+window.wzDo4=wzDo4;
+
+/* ---------- สรุปผล ---------- */
+function wzBodyDone(){
+  var c=wzQcCounts(),r=WZ.result||{placed:0,skipped:0};
+  function line(lb,v,cls){return '<div class="wzrow"><span class="tg">'+lb+'</span><span class="pill '+(cls||'')+'">'+v+'</span></div>';}
+  return '<div class="dbody">'
+    +'<div style="text-align:center;padding:6px 0 20px;">'
+      +'<div style="width:54px;height:54px;border-radius:50%;background:var(--pos);color:var(--posInk);display:grid;place-items:center;margin:0 auto 12px;">'+IC('check')+'</div>'
+      +'<h3 style="font-size:19px;font-weight:600;margin:0 0 4px;">รับกล่องเข้าคลังเสร็จแล้ว</h3>'
+      +'<p class="muted" style="font-size:13.5px;margin:0;">'+esc(whName(WZ.wh))+' · '+esc(typeName(WZ.type))+' · รวม '+WZ.tags.length+' ใบ</p>'
+    +'</div>'
+    +line('จัดเก็บขึ้นแร็คแล้ว',r.placed+' ใบ','ok')
+    +(r.skipped?line('ค้างรอ Putaway (ช่องว่างไม่พอ)',r.skipped+' ใบ','warn'):'')
+    +(c.hold?line('Hold ที่ท่ารับ',c.hold+' ใบ','warn'):'')
+    +(c.damage?line('ชำรุดที่ท่ารับ',c.damage+' ใบ','bad'):'')
+  +'</div>';
+}
+function wzFootDone(){
+  return '<div class="dfoot"><button class="btn ghost" onclick="wzRestart()">รับชุดถัดไป</button><div class="spacer"></div>'
+    +'<button class="btn accent" onclick="closeDrawer();WZ=null;">เสร็จสิ้น</button></div>';
+}
+function wzRestart(){var wh=WZ.wh,ty=WZ.type;WZ=null;openBoxWizard();if(WZ){WZ.wh=wh;WZ.type=ty;renderWz();}}
+window.wzRestart=wzRestart;
 
 function renderPrefixDatalist(){
   var prefixSet={};
@@ -3415,9 +3905,13 @@ function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
    รายงาน on-hand ด้วย จึงต้อง auto-assign ไปที่ "โซนพักรับ (RCV-STAGE)" ทันทีที่สร้าง
    ข้อมูล — เลือกคลังให้อัตโนมัติได้เฉพาะตอนมีคลังเดียวในระบบ (เดาไม่ได้ว่าจะไปโผล่
    คลังไหนถ้ามีหลายคลัง แต่ยังคงติดป้ายโซนพักรับไว้เหมือนกัน ไม่ปล่อยว่าง) */
-function pendingStageLocation(ts){
+/* whId (optional) = คลังที่กำลังรับของเข้าจริง ๆ ตอนนี้ — Box Lifecycle Wizard ถามไว้
+   ที่ step "Receiving" เพราะการรับเข้าเกิดที่ท่ารับของคลังใดคลังหนึ่งเสมอ พอรู้คลัง
+   แน่ชัดก็ไม่ต้องเดา และกล่องจะไม่ตกไปอยู่กลุ่ม "นอกคลัง" ทั้งที่กองอยู่หน้าท่ารับ
+   (ดู isRackedBox ซึ่งต้องมี location.wh ที่มีจริงจึงจะนับว่าอยู่ในคลัง) */
+function pendingStageLocation(ts,whId){
   var whIds=Object.keys(S.warehouses);
-  var wh=whIds.length===1?whIds[0]:'';
+  var wh=(whId&&S.warehouses[whId])?whId:(whIds.length===1?whIds[0]:'');
   var st=whStaging(wh);
   return {wh:wh,zone:st.zone,rack:st.rack,shelf:'',slot:'',gate:null,ts:ts};
 }
@@ -4284,36 +4778,75 @@ window.markLost=markLost;window.recoverLost=recoverLost;
    Both keep b.location so they still occupy a bin; they are excluded from
    the "available in warehouse" count and from every outbound flow.
    ============================================================ */
+/* กล่องที่ "ตี Hold/ชำรุด" ได้ = อยู่ในคลังจริง (warehouse) หรือเพิ่งรับเข้าและติดป้าย
+   แล้วแต่ยังไม่ขึ้นแร็ค (pending + labeled) — กลุ่มหลังคือกล่องที่กองอยู่ที่ท่ารับของ
+   (RCV-STAGE) ซึ่งเป็นจุดที่ QC ขาเข้าตรวจจริงตามมาตรฐาน WMS: ตรวจที่ dock ก่อน
+   putaway ของเสียจึงไม่ถูกเก็บขึ้นแร็คตั้งแต่แรก เดิมบล็อกไว้เฉพาะ warehouse ทำให้
+   ตรวจก่อน putaway ไม่ได้เลย
+   กล่องที่ยังไม่ติดป้าย (labeled=false) ยังตีไม่ได้ — ยังไม่มีบาร์โค้ดบนตัวจริงให้
+   ผูกผลตรวจเข้ากับใบไหนได้อย่างมั่นใจ */
+function canQcFail(b){
+  if(!b)return false;
+  return b.status==='warehouse'||(b.status==='pending'&&b.labeled===true);
+}
+window.canQcFail=canQcFail;
+/* ตัวเขียนสถานะ QC ตัวเดียวของระบบ — ทั้งปุ่มทีละใบ (markHold/markDamage ซึ่งมี
+   dialog ยืนยันของตัวเอง) และ Box Lifecycle Wizard (ยืนยันทั้งชุดในตัว wizard)
+   เรียกผ่านตัวนี้ทั้งคู่ เพื่อไม่ให้ history/audit ของสองเส้นทางเพี้ยนจากกัน
+   ไม่แตะ b.location เลย — กล่องที่ตกตรวจที่ท่ารับจึงค้างอยู่ที่ RCV-STAGE ตามจริง */
+function applyQcStatus(tags,kind,reason){
+  var ts=iso(),n=0;
+  (tags||[]).forEach(function(t){
+    var b=S.boxes[t];if(!b)return;
+    var before={status:b.status};
+    b.status=kind;
+    if(kind==='hold')b.holdAt=ts;else b.damageAt=ts;
+    b.lastSeenAt=ts;
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:kind,ts:ts,recorder:USER,reason:reason});
+    auditEntry(kind==='hold'?'HOLD':'DAMAGE',USER,t,typeName(b.type),before,{status:kind,reason:reason});
+    n++;
+  });
+  return n;
+}
+window.applyQcStatus=applyQcStatus;
 function markHold(tag){
-  var b=S.boxes[tag];if(!b||b.status!=='warehouse')return;
+  var b=S.boxes[tag];if(!b||!canQcFail(b))return;
   confirmA('พักการใช้งาน '+tag+' (Hold)?','กล่องจะยังอยู่ในตำแหน่งเดิม แต่ถูกกันไม่ให้จ่ายออกจนกว่าจะปลดล็อก','ยืนยัน Hold',false).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='hold';b.holdAt=iso();b.lastSeenAt=iso();
-    b.history.push({dir:'hold',ts:iso(),reason:'พักการใช้งาน (Hold)'});
-    auditEntry('HOLD',USER,tag,typeName(b.type),before,{status:'hold'});
+    applyQcStatus([tag],'hold','พักการใช้งาน (Hold)');
     save();toast('พักการใช้งานแล้ว',tag+' · Hold','warn');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
+}
+/* ปลด Hold / ซ่อมเสร็จ แล้วกล่องควรกลับไปสถานะไหน?
+   ถ้ามันยังกองอยู่ที่ท่ารับ (RCV-STAGE — ตกตรวจตั้งแต่ QC ขาเข้า ยังไม่เคยขึ้นแร็ค)
+   คำตอบคือ "รอ Putaway" (pending + labeled) ไม่ใช่ "ในคลัง" เพราะของยังไม่ได้ถูกเก็บ
+   ขึ้นชั้นจริง ถ้าตอบ warehouse มันจะไปโผล่ในคิวจ่ายออกทั้งที่ยังหาไม่เจอบนแร็ค
+   กล่องที่เคยขึ้นแร็คแล้วค่อยโดน Hold ทีหลัง กลับเป็น warehouse ตามเดิม */
+function qcReleaseTarget(b){
+  return (b.status!=='lost'&&isStagingLoc(b.location||{})&&!(b.history||[]).some(function(h){return h.dir==='in';}))
+    ? 'pending' : 'warehouse';
 }
 function releaseHold(tag){
   var b=S.boxes[tag];if(!b||b.status!=='hold')return;
-  var before={status:b.status};b.status='warehouse';b.holdAt=null;b.lastSeenAt=iso();
-  b.history.push({dir:'reg',ts:iso(),reason:'ปลด Hold — กลับมาพร้อมใช้งาน'});
-  auditEntry('RELEASE_HOLD',USER,tag,typeName(b.type),before,{status:'warehouse'});
-  save();toast('ปลด Hold แล้ว',tag+' · พร้อมใช้งาน','ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();
+  var before={status:b.status};var to=qcReleaseTarget(b);
+  b.status=to;b.holdAt=null;b.lastSeenAt=iso();
+  b.history.push({dir:'reg',ts:iso(),reason:to==='pending'?'ปลด Hold — กลับเข้าคิวรอ Putaway':'ปลด Hold — กลับมาพร้อมใช้งาน'});
+  auditEntry('RELEASE_HOLD',USER,tag,typeName(b.type),before,{status:to});
+  save();toast('ปลด Hold แล้ว',tag+(to==='pending'?' · รอ Putaway':' · พร้อมใช้งาน'),'ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();
 }
 function markDamage(tag){
-  var b=S.boxes[tag];if(!b||(b.status!=='warehouse'&&b.status!=='hold'))return;
+  var b=S.boxes[tag];if(!b||!(canQcFail(b)||b.status==='hold'))return;
   confirmA('ตีชำรุด '+tag+' (Damage)?','กล่องยังอยู่ในคลังแต่จะถูกกันออกจากการใช้งาน — ต่างจาก "สูญหาย" ที่หายไปจริง','ยืนยันชำรุด',true).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='damage';b.damageAt=iso();b.lastSeenAt=iso();
-    b.history.push({dir:'damage',ts:iso(),reason:'ตีชำรุด (Damage)'});
-    auditEntry('DAMAGE',USER,tag,typeName(b.type),before,{status:'damage'});
+    applyQcStatus([tag],'damage','ตีชำรุด (Damage)');
     save();toast('ตีชำรุดแล้ว',tag+' · Damage','warn');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
 }
 function repairDamage(tag){
   var b=S.boxes[tag];if(!b||b.status!=='damage')return;
   confirmA('ซ่อมเสร็จ '+tag+'?','กล่องจะกลับสู่สถานะ "ในคลัง" พร้อมใช้งานอีกครั้ง','ยืนยันซ่อมเสร็จ',false).then(function(ok){if(!ok)return;
-    var before={status:b.status};b.status='warehouse';b.damageAt=null;b.lastSeenAt=iso();
-    b.history.push({dir:'reg',ts:iso(),reason:'ซ่อมเสร็จ — กลับเข้าคลัง'});
-    auditEntry('REPAIR',USER,tag,typeName(b.type),before,{status:'warehouse'});
-    save();toast('ซ่อมเสร็จแล้ว',tag+' · พร้อมใช้งาน','ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
+    var before={status:b.status};var to=qcReleaseTarget(b);
+    b.status=to;b.damageAt=null;b.lastSeenAt=iso();
+    b.history.push({dir:'reg',ts:iso(),reason:to==='pending'?'ซ่อมเสร็จ — กลับเข้าคิวรอ Putaway':'ซ่อมเสร็จ — กลับเข้าคลัง'});
+    auditEntry('REPAIR',USER,tag,typeName(b.type),before,{status:to});
+    save();toast('ซ่อมเสร็จแล้ว',tag+(to==='pending'?' · รอ Putaway':' · พร้อมใช้งาน'),'ok');if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
 }
 window.markHold=markHold;window.releaseHold=releaseHold;window.markDamage=markDamage;window.repairDamage=repairDamage;
 
@@ -5198,14 +5731,7 @@ window.setTagPutawayMode=function(mode){
    เดียวกับ commitInvReceive() (ใช้กติกา isNewBox เดิม) เพื่อให้ history/สถานะ
    ตรงกับกล่องที่รับเข้าผ่านหน้า Gate In ทุกประการ ไม่ได้ตั้งกติกาคู่ขนานขึ้นมาเอง */
 function confirmTagged(allTags,pendingTags){
-  var boxes=allTags.map(function(t){return S.boxes[t];}).filter(Boolean);
-  var lblTs=iso();
-  boxes.forEach(function(b){
-    b.labeled=true;b.labeledAt=lblTs;b.labeledBy=USER;
-    /* ขั้น "พิมพ์บาร์โค้ด" ต้องลง history ด้วย ไม่ใช่แค่ flag labeled — ดู boxTimeline */
-    if(!Array.isArray(b.history))b.history=[];
-    b.history.push({dir:'label',ts:lblTs,recorder:USER});
-  });
+  var labeled=applyLabeled(allTags);
   var placed=0,skipped=0;
   if(pendingTags.length){
     var autoEl=$('#tagAutoPutaway');
@@ -5222,27 +5748,11 @@ function confirmTagged(allTags,pendingTags){
       }else{
         locs=findFreeLocations(dp.wh,pendingTags.length);
       }
-      if(locs){
-        var ts=iso();
-        pendingTags.forEach(function(t,i){
-          var b=S.boxes[t];if(!b)return;
-          var loc=locs[i];if(!loc){skipped++;return;}
-          var wh=loc.wh||dp.wh;
-          var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
-          b.history.push({dir:'in',ts:ts,do:isNewBox?'':b.do,po:isNewBox?'':b.po,customer:isNewBox?'':b.customer,wh:wh,loc:loc,recorder:USER,note:isNewBox?'Initial Inbound ผ่านการติดป้ายบาร์โค้ด':'รับเข้าผ่านการติดป้ายบาร์โค้ด'});
-          S.events.push({ts:ts,dir:isNewBox?'in-new':'in',tag:t,type:b.type,do:isNewBox?'':b.do,customer:isNewBox?'':b.customer,customerName:isNewBox?'':custName(b.customer),wh:wh,recorder:USER});
-          b.status='warehouse';if(!isNewBox)b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';
-          b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
-          b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:null,ts:ts};
-          b.lastSeenAt=ts;
-          auditEntry('GATE_IN',USER,t,typeName(b.type),null,{wh:whName(wh),loc:[loc.zone,loc.rack,loc.shelf,loc.slot].filter(Boolean).join(' · ')});
-          placed++;
-        });
-      }
+      if(locs){var r=commitPutaway(pendingTags,locs,dp.wh);placed=r.placed;skipped=r.skipped;}
     }
   }
   save();closeModal();
-  var msg='ติดป้ายแล้ว '+boxes.length+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
+  var msg='ติดป้ายแล้ว '+labeled+' ใบ'+(placed?(' · จัดเก็บขึ้นแร็คอัตโนมัติ '+placed+' ใบ'):'')+(skipped?(' · เหลือรอ Putaway '+skipped+' ใบ (ช่องว่างไม่พอ)'):'');
   toast('ติดป้ายเสร็จแล้ว',msg,'ok');
   renderAll();
 }
@@ -9702,19 +10212,12 @@ $('#bulkInvWriteoff').addEventListener('click', function() {
 
 $('#bulkInvHold').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var live = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status === 'warehouse'; });
-  if (!live.length) return toast('พักการใช้งานได้เฉพาะกล่องในคลัง', 'กล่องที่เลือกไม่มีใบที่อยู่ในคลัง', 'warn');
+  var live = tags.filter(function(t) { return canQcFail(S.boxes[t]); });
+  if (!live.length) return toast('พักการใช้งานได้เฉพาะกล่องในคลังหรือที่รอ Putaway', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
   confirmA('พักการใช้งาน ' + live.length + ' กล่อง (Hold)?', 'กล่องจะยังอยู่ในตำแหน่งเดิม แต่ถูกกันไม่ให้จ่ายออกจนกว่าจะปลดล็อก', 'ยืนยัน Hold', false)
     .then(function(ok) {
       if (!ok) return;
-      var ts = iso();
-      live.forEach(function(t) {
-        var b = S.boxes[t];
-        var before = { status: b.status };
-        b.status = 'hold'; b.holdAt = ts; b.lastSeenAt = ts;
-        b.history.push({ dir: 'hold', ts: ts, reason: 'พักการใช้งาน (Hold, Bulk)' });
-        auditEntry('HOLD', USER, t, typeName(b.type), before, { status: 'hold' });
-      });
+      applyQcStatus(live, 'hold', 'พักการใช้งาน (Hold, Bulk)');
       save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
       toast('พักการใช้งานแล้ว', live.length + ' ใบ · Hold', 'warn');
       renderAll();
@@ -9723,19 +10226,12 @@ $('#bulkInvHold').addEventListener('click', function() {
 
 $('#bulkInvDamage').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
-  var live = tags.filter(function(t) { var b = S.boxes[t]; return b && (b.status === 'warehouse' || b.status === 'hold'); });
-  if (!live.length) return toast('ตีชำรุดได้เฉพาะกล่องในคลังหรือที่ Hold อยู่', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
+  var live = tags.filter(function(t) { var b = S.boxes[t]; return canQcFail(b) || (b && b.status === 'hold'); });
+  if (!live.length) return toast('ตีชำรุดได้เฉพาะกล่องในคลัง ที่รอ Putaway หรือที่ Hold อยู่', 'กล่องที่เลือกไม่มีใบที่ตรงเงื่อนไข', 'warn');
   confirmA('ตีชำรุด ' + live.length + ' กล่อง (Damage)?', 'กล่องยังอยู่ในคลังแต่จะถูกกันออกจากการใช้งาน — ต่างจาก "สูญหาย" ที่หายไปจริง', 'ยืนยันชำรุด', true)
     .then(function(ok) {
       if (!ok) return;
-      var ts = iso();
-      live.forEach(function(t) {
-        var b = S.boxes[t];
-        var before = { status: b.status };
-        b.status = 'damage'; b.damageAt = ts; b.lastSeenAt = ts;
-        b.history.push({ dir: 'damage', ts: ts, reason: 'ตีชำรุด (Damage, Bulk)' });
-        auditEntry('DAMAGE', USER, t, typeName(b.type), before, { status: 'damage' });
-      });
+      applyQcStatus(live, 'damage', 'ตีชำรุด (Damage, Bulk)');
       save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
       toast('ตีชำรุดแล้ว', live.length + ' ใบ · Damage', 'warn');
       renderAll();
