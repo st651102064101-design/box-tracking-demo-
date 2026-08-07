@@ -1037,9 +1037,51 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     );
   }
 
+  /// Auto-picks the first available zone → rack → shelf → slot so the
+  /// operator never has to tap a dropdown just to move it off "ไม่ระบุ" —
+  /// each level only fills in once the field above it is set and the
+  /// cascade actually has an option to offer, and it never overrides
+  /// something the operator (or a rack-barcode scan) already chose. Runs
+  /// one level per frame; a 4-level cascade settles within a few frames,
+  /// invisible to the operator.
+  void _autoFillLocDefaults(LocationCascade cascade) {
+    if (_locMode != _LocInputMode.manual) return;
+    final wh = _c.wh;
+    String? next;
+    void Function() apply;
+    if (_locZone == null) {
+      final zones = cascade.zones(wh);
+      if (zones.isEmpty) return;
+      next = zones.first;
+      apply = () => setState(() => _locZone = next);
+    } else if (_locRack == null) {
+      final racks = cascade.racks(wh, _locZone);
+      if (racks.isEmpty) return;
+      next = racks.first;
+      apply = () => setState(() => _locRack = next);
+    } else if (_locShelf == null) {
+      final shelves = cascade.shelves(wh, _locZone, _locRack);
+      if (shelves.isEmpty) return;
+      next = shelves.first;
+      apply = () => setState(() => _locShelf = next);
+    } else if (_locSlot == null) {
+      final slots = cascade.slots(wh, _locZone, _locRack, _locShelf);
+      if (slots.isEmpty) return;
+      next = slots.first;
+      apply = () => setState(() => _locSlot = next);
+    } else {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) apply();
+    });
+  }
+
   Widget _putawayCard(AppController c) {
     final cascade = _locCascade;
     final hasLocations = cascade.locations.isNotEmpty;
+    final hasLocationsForWh = cascade.zones(_c.wh).isNotEmpty;
+    _autoFillLocDefaults(cascade);
     final canSubmit = _locZone != null || _locRack != null || _locShelf != null || _locSlot != null;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1064,6 +1106,12 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text('ยังไม่มีข้อมูลผังชั้นวาง (Location Master) ในระบบ',
+                  style: TextStyle(fontSize: 11.5, color: C.muted)),
+            )
+          else if (_locMode == _LocInputMode.manual && !hasLocationsForWh)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text('${c.selWhName} ยังไม่มีผังชั้นวาง — พิมพ์โซนใหม่ที่ "+ เพิ่มใหม่..." เพื่อเริ่มสร้าง',
                   style: TextStyle(fontSize: 11.5, color: C.muted)),
             ),
           const SizedBox(height: 14),
