@@ -1643,18 +1643,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="h-sub reveal d2">มุมมองสต็อกกล่องตามฐานข้อมูล Master — รับเข้าด้วยการสแกนบาร์โค้ด ระบบดึงประเภท·หน่วย·พิกัดให้อัตโนมัติ · เลือกหลายใบเพื่อย้ายพิกัด/แจ้งกล่องหายพร้อมกัน · ทุกการเปลี่ยนแปลงบันทึก Audit Log</p>
   </div>
 
-  <!-- Quick Scan / Search bar -->
-  <div class="inv-scan-bar reveal d1">
-    <span class="iss-ic">⊟</span>
-    <input id="invScan" placeholder="สแกนบาร์โค้ด / บาร์โค้ด เพื่อค้นหาด่วน แล้วกด Enter" autocomplete="off">
-    <button class="btn accent sm" id="btnInvScan">ค้นหา</button>
-    
-  </div>
-
   <div class="invtoolbar reveal d2">
     <div class="invsearch">
       <span class="invsearch-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span></span>
-      <input id="schInv" placeholder="กรองบาร์โค้ด / ประเภท / ลูกค้า / พิกัด">
+      <input id="schInv" placeholder="สแกนบาร์โค้ด / ค้นหาประเภท, ลูกค้า, พิกัด..." autocomplete="off">
+      <span class="invsearch-ic invsearch-scan" title="รองรับสแกนบาร์โค้ดในช่องนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2M7 8v8M11 8v8M14 8v8M17 8v8"/></svg></span></span>
     </div>
     <div class="seg-filter" id="invStatusSeg">
       <button class="sf-btn active" data-st=""><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span> ทั้งหมด<span class="sf-badge" data-badge=""></span></button>
@@ -4405,32 +4398,56 @@ window.allocateSuggest=allocateSuggest;
 
 function openAllocateModal(){
   var types=Object.values(S.boxtypes);
-  var typeOpts='<option value="">— ทุกประเภท —</option>'+types.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
+  var totalAvail=availableQtyForType('');
+  var typeOpts='<option value="">— ทุกประเภท (พร้อมจ่าย: '+totalAvail+') —</option>'+types.map(function(t){
+    var n=availableQtyForType(t.id);
+    return '<option value="'+esc(t.id)+'"'+(n?'':' disabled')+'>'+esc(t.name)+' (พร้อมจ่าย: '+n+')</option>';
+  }).join('');
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบกล่อง (FIFO / FEFO)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
       +'<p class="muted small" style="margin:0 0 14px;">เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน — <b>FEFO</b> ใช้วันหมดอายุ, <b>FIFO</b> ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ "ในคลัง")</p>'
-      +'<div class="grid g3" style="margin-bottom:14px;">'
+      +'<div class="grid g3" style="margin-bottom:6px;">'
         +'<div class="field"><label>ประเภทกล่อง</label><select id="alType">'+typeOpts+'</select></div>'
-        +'<div class="field"><label>จำนวนที่ต้องจ่าย</label><input id="alQty" type="number" min="1" value="5"></div>'
+        +'<div class="field"><label>จำนวนที่ต้องจ่าย</label>'
+          +'<div class="auto-tag-row"><input id="alQty" type="number" min="1" value="5"><button type="button" class="btn ghost sm" id="alMaxBtn">MAX</button></div>'
+        +'</div>'
         +'<div class="field"><label>วิธีจัด</label><select id="alMode"><option value="fefo">FEFO — หมดอายุก่อน ออกก่อน</option><option value="fifo">FIFO — เข้าก่อน ออกก่อน</option></select></div>'
       +'</div>'
+      +'<div class="tag" id="alAvailHint" style="margin-bottom:10px;"></div>'
       +'<div id="alResult"></div>'
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
       +'<button class="btn accent" id="alQueueBtn">'+IC('pin')+' ไปหยิบตามพิกัด</button></div>'
   );
   var sheet=$('#modalSheet');if(sheet)sheet.style.width='640px';
+  function currentMax(){return availableQtyForType(val('alType'));}
   function refresh(){
-    var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
+    var type=val('alType'),qtyRaw=num('alQty')||0,mode=val('alMode');
+    var max=currentMax();
+    /* คีบจำนวนไม่ให้เกินสต็อกที่มีจริงตั้งแต่ตอนพิมพ์ — กันไม่ให้กด "ไปหยิบตามพิกัด"
+       แล้วเจอ toast error ทีหลังทั้งที่เห็นตัวเลขพร้อมจ่ายอยู่ตรงหน้าแล้ว */
+    var qty=qtyRaw;
+    var clamped=false;
+    if(max>0&&qty>max){qty=max;clamped=true;var qEl=$('#alQty');if(qEl)qEl.value=max;}
+    var hint=$('#alAvailHint');
+    if(hint){
+      hint.innerHTML=max>0
+        ?('พร้อมจ่ายสูงสุด: <b>'+max+'</b> ใบ'+(clamped?' <span style="color:var(--warn);">— จำนวนที่ระบุเกินสต็อกที่มีอยู่ ปรับให้อัตโนมัติแล้ว</span>':''))
+        :'<span style="color:var(--neg);">ไม่มีสต็อกพร้อมจ่ายสำหรับตัวเลือกนี้</span>';
+    }
     var list=allocateSuggest(type,qty,mode);
     $('#alResult').innerHTML=list.length
       ?'<div class="twrap" style="max-height:46vh;"><table><thead><tr><th>#</th><th>บาร์โค้ด</th><th>ประเภท</th><th>Lot</th><th>หมดอายุ</th><th>เข้าคลังเมื่อ</th><th>ตำแหน่ง</th></tr></thead><tbody>'
         +list.map(function(b,i){return '<tr><td class="mono">'+(i+1)+'</td><td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td>'+esc(b.lot||'-')+'</td><td>'+(b.expiry?esc(b.expiry)+' '+expiryPill(b):'<span class="muted">-</span>')+'</td><td class="small">'+fmtTs(boxReceiveTs(b))+'</td><td class="small">'+locShort(b.location)+'</td></tr>';}).join('')
         +'</tbody></table></div>'
       :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้</div>';
+    var btn=$('#alQueueBtn');
+    if(btn)btn.disabled=(max<=0||qty<1);
   }
   ['alType','alQty','alMode'].forEach(function(id){var e=$('#'+id);if(e){e.addEventListener('input',refresh);e.addEventListener('change',refresh);}});
+  var maxBtn=$('#alMaxBtn');
+  if(maxBtn)maxBtn.addEventListener('click',function(){var m=currentMax();if(m>0){setv('alQty',m);refresh();}});
   /* "ไปหยิบตามพิกัด" used to push the suggested tags straight into the
      Gate-Out scan queue (pendingOut) on click — marking them as shipped
      before anyone had actually laid hands on a box, let alone scanned its
@@ -9209,17 +9226,17 @@ $all('#invStatusSeg .sf-btn').forEach(function(btn) {
   });
 });
 
-/* ---- Quick Search by scan ---- */
+/* ---- Quick search: #schInv is now the ONLY inventory search field —
+   typing live-filters the table (listener above), a barcode scan or Enter
+   on an exact match jumps straight to that box's Track page instead, same
+   as the old separate #invScan bar used to. Merged so there's one obvious
+   place to search/scan instead of two boxes doing overlapping jobs. */
 function invQuickSearch() {
-  var v = resolveTag(val('invScan').trim()); if (!v) return;
-  if (S.boxes[v]) { trackBox(v); switchTab('track'); setv('invScan', ''); return; }
-  // fall back to filtering the table
-  setv('schInv', v); setv('invScan', ''); renderInventory();
-  toast('กรองรายการตาม', v, 'info');
+  var v = resolveTag(val('schInv').trim()); if (!v) return;
+  if (S.boxes[v]) { trackBox(v); switchTab('track'); setv('schInv', ''); }
 }
-$('#btnInvScan').onclick = invQuickSearch;
-$('#invScan').addEventListener('keydown', function(e) { if (e.key === 'Enter') invQuickSearch(); });
-autoScanBind($('#invScan'), invQuickSearch);
+$('#schInv').addEventListener('keydown', function(e) { if (e.key === 'Enter') invQuickSearch(); });
+autoScanBind($('#schInv'), invQuickSearch);
 /* Putaway button removed (out of scope per SOW) */
 
 /* ====== CREATE: สแกนรับเข้าคลัง (auto-fill type/unit + default location) ====== */
