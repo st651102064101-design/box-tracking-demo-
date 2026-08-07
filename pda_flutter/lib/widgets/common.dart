@@ -180,15 +180,18 @@ class SubmitArrowButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: Material(
-        color: C.limeDeep,
+        // Bright lime background + dark icon, same pairing PrimaryButton
+        // uses — was the other way round (limeDeep bg + black icon), which
+        // on a dark field reads as a near-invisible dark-on-dark circle.
+        color: C.lime,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: const SizedBox(
+          child: SizedBox(
             width: 32,
             height: 32,
-            child: Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.black),
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: C.limeDeep),
           ),
         ),
       ),

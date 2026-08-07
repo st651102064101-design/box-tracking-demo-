@@ -8854,6 +8854,7 @@ function isRackedBox(b) {
     && !!(b.location || {}).wh && !!S.warehouses[(b.location || {}).wh];
 }
 function invWhMatches(b, wf) {
+  if (wf === 'ALL') return true;
   if (wf === 'OUTSIDE') return !isRackedBox(b);
   if (wf === '') return isRackedBox(b);
   if (wf) return ((b.location || {}).wh === wf && isRackedBox(b));
@@ -8920,7 +8921,10 @@ function pickInvWhWithData() {
   for (var i = 0; i < candidates.length; i++) {
     if (base.some(function(b) { return invWhMatches(b, candidates[i]); })) return candidates[i];
   }
-  return '';
+  /* ไม่มี pill เจาะจงตัวไหนมีข้อมูลเลย (เช่นข้อมูลอยู่นอกคลังแต่ยังไม่ตรงเงื่อนไข
+     OUTSIDE เป๊ะ ๆ ในบางเคส edge case) — ใช้ "ทั้งหมด" เป็น fallback สุดท้ายแทนที่
+     จะปล่อยให้ตารางว่างเปล่า */
+  return 'ALL';
 }
 window.pickInvWhWithData = pickInvWhWithData;
 
@@ -8967,7 +8971,12 @@ function buildInvWhPills() {
   }
   whRow.classList.add('show');
   whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
-  var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
+  /* "ทั้งหมด" = ไม่ filter ตามคลังเลย รวมทั้งในคลังและนอกคลังเข้าด้วยกัน — ต่างจาก
+     "ทุกคลัง" ซึ่งจริง ๆ กรองเฉพาะกล่องที่ขึ้นแร็คในคลังจริง (isRackedBox) เท่านั้น
+     ไม่รวมกล่องนอกคลัง (ส่งลูกค้า/สูญหาย/รอติดบาร์โค้ดที่ยังไม่รู้คลัง ฯลฯ) */
+  var allCnt = Object.keys(S.boxes).length;
+  var html = '<button class="icr-pill' + (invWhFilter === 'ALL' ? ' active' : '') + '" onclick="setInvWh(\'ALL\')">ทั้งหมด <span style="opacity:.55;font-size:11px;">('+allCnt+')</span></button>';
+  html += '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
   whs.forEach(function(w) {
     var cnt = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location||{}).wh === w.id; }).length;
     html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
