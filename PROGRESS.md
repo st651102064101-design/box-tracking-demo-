@@ -15,42 +15,79 @@
 > `origin/PDA`, currently identical) fresh instead — e.g. one of the
 > `.claude/worktrees/*` dirs that tracks a live branch, like this one.
 
-## Current status (2026-08-07)
+## Current status (2026-08-07, updated again same day)
 
-**`main` and `PDA` are now identical** (`origin/main` == `origin/PDA` ==
-commit `a59a121`) — `PDA` was fast-forward-merged straight into `main` (no
-merge commit needed, `main` was already an ancestor). This branch/worktree
-(`zebra-pda-rfid-tid-112c74`, tracking `PDA`) is the one to keep working from.
+**`main` and `PDA` are identical** (`origin/main` == `origin/PDA` ==
+commit `31e9538`). This branch/worktree (`zebra-pda-rfid-tid-112c74`,
+tracking `PDA`) is the one to keep working from.
 
-### Branch cleanup done this session
-Per user request, deleted every branch except `main`/`PDA` (both local and
-`origin`), but **tagged each one's tip first** so nothing is actually lost —
-recover any of them with `git checkout archive/<name>` or `git log
-archive/<name>`:
+### Branch cleanup + merges (this was a two-part request)
+First pass deleted every branch except `main`/`PDA`, tagging each tip first
+as `archive/<branch-name>` for safety. **Second pass** (same day): the user
+had two of those tags merged into `main`, and the other two deleted outright
+(tags included — genuinely gone now, not recoverable except via GitHub's
+reflog/event history if that's ever needed):
 
-| Deleted branch | Archive tag | Unique commits vs. main (still NOT merged) |
-|---|---|---|
-| `claude/customer-5-data-display-dda8e4` | `archive/customer-5-data-display-dda8e4` | 4 — inventory table 0-rows-despite-nonzero-count fix, warehouse filter reorder, RFID TID badge (click-to-copy), RFID EPC in box detail modal |
-| `claude/merge-buttons-machine-settings-a6a904` | `archive/merge-buttons-machine-settings-a6a904` | 7 — PDA RFID bench screens merged, MC3390R trigger-stall/wrong-tag-binding fix, ใกล้/ปานกลาง range read-nothing fix, device-setup UX cleanup, offline device-setup completion + auto-recover connection |
-| `claude/pda-gate-validation-f75d57` | `archive/pda-gate-validation-f75d57` | 1 — restrict PDA gate-in/out to boxes belonging to the operator's own warehouse |
-| `claude/rfid-performance-optimization-ab2b0e` | `archive/rfid-performance-optimization-ab2b0e` | 8 — RFID single-tag-read misses, register-screen barcode auto-submit/confirm-before-bind, track-screen box-not-found fallback + live-suggestion typing fix, reused-EPC rejection (not just TID), low-graphics/battery-saver toggle (**note:** this session made low-power the *permanent default* and removed the toggle entirely — re-check for conflict if reviving this branch), SMTP port-25 fallback docs |
+| Archived branch | Outcome |
+|---|---|
+| `claude/customer-5-data-display-dda8e4` (4 commits) | **Merged into main** (commit `55b0822`) — RFID EPC now shown alongside TID in the box detail modal, inventory RFID badge shows trailing chars + click-to-copy. Its own "inventory 0 rows" fix and warehouse-filter reorder were dropped as conflicts, superseded by this session's own `isRackedBox()`/`invWhMatches()`/`pickInvWhWithData()` work (strictly more complete) and the `#invScan`→`#schInv` merge (also this session). |
+| `claude/rfid-performance-optimization-ab2b0e` (8 commits) | **Merged into main** (commits `b2052f2`, `31e9538`) — see full writeup below, this was the big one (10 conflicting files, one real architecture collision). |
+| `claude/pda-gate-validation-f75d57` (1 commit) | **Deleted entirely**, tag included, per explicit user instruction. Was: restrict PDA gate-in/out to boxes belonging to the operator's own warehouse. If this is wanted later it needs to be re-implemented from scratch — nothing recoverable in this repo anymore. |
+| `claude/merge-buttons-machine-settings-a6a904` (7 commits) | **Deleted entirely**, tag included, per explicit user instruction. Was: PDA RFID bench screens merged, MC3390R trigger-stall/wrong-tag-binding fix, ใกล้/ปานกลาง range read-nothing fix, device-setup UX cleanup, offline device-setup completion. Same as above — gone, re-implement if wanted. Its **local branch ref** also still technically exists, checked out by name at the root checkout `/Users/kriangkrai/Projects/box-tracking-demo-` (that checkout's own state is unrelated/separate, see note above) — only the `origin` copy and the archive tag were removed. |
 
-`claude/merge-buttons-machine-settings-a6a904`'s **local** ref could not be
-deleted (still checked out by branch name at the root checkout
-`/Users/kriangkrai/Projects/box-tracking-demo-` — see note above); only its
-`origin` copy was removed. The 3 other worktrees at `.claude/worktrees/
-customer-5-data-display-dda8e4`, `pda-gate-validation-f75d57`,
-`rfid-performance-optimization-ab2b0e` are now in detached-HEAD state (their
-branch refs are gone) but still hold the same commits — same content as the
-archive tags, just also reachable there if a worktree already exists.
+### `rfid-performance-optimization-ab2b0e` merge — what actually happened
+This branch and this session's own from-scratch RFID/PDA work had
+independently touched almost the same surface (10 conflicting files:
+`backend/src/services/rfid.ts`, `RfidReaderController.kt`,
+`app_controller.dart`, `home_screen.dart`, `rfid_input_screen.dart`,
+`rfid_register_screen.dart`, `rfid_test_sheet.dart` (modify/delete),
+`root_screen.dart`, `settings_screen.dart`, `track_screen.dart`,
+`prefs.dart`, `rfid_service.dart`). **General pattern found across nearly
+every conflict:** this session's own `main`/`PDA` code was consistently the
+*later*, more complete rewrite of the same thing the branch was trying to
+do — including the exact regression the branch's `setTidEnrichment`/TID
+"detail mode" toggle represents (a later commit, already on `main` before
+this merge, root-caused that exact toggle to ~10x slower reads for a TID
+field that never actually arrives on this reader regardless, and removed it
+end-to-end — bringing the branch's version back in would have silently
+reintroduced that bug). Resolution:
+- `rfid_register_screen.dart` taken wholesale from `main` (`git checkout
+  --ours`) — its `ScanSpeedAutoSubmit`-based rewrite already covers
+  everything the branch's flat-Timer-debounce + `_pendingTid`/`_pendingEpc`
+  confirm-step version was trying to do, more completely.
+- `rfid_test_sheet.dart`: kept deleted (main had already consolidated its
+  role into `rfid_input_screen.dart`; nothing else references it).
+- Genuinely additive, non-conflicting pieces from the branch were kept:
+  `track_screen.dart`'s `trackSearching` loading-spinner state,
+  `home_screen.dart`/`root_screen.dart` switched to the branch's cleaner
+  `C.shadow()`/`C.anim()` helpers (see below).
+- **One real architectural collision, resolved per explicit user decision:**
+  the branch's "low graphics" settings toggle (`GraphicsController`, a
+  `ChangeNotifier` + Prefs-backed switch, **default OFF**) directly
+  contradicted this session's own earlier decision to make the lean/fast
+  animation path the **permanent, non-optional default** (see
+  `AppController.lowPowerMode` → hardcoded `true`, toggle removed). User
+  chose: keep the branch's cleaner infrastructure (`C.shadow()`/`C.anim()`
+  helpers in `theme.dart`, now used consistently instead of scattered
+  per-widget `lowPowerMode` checks) but force `C.lowGraphics` to a
+  permanent `const true` — **deleted `GraphicsController` entirely**
+  (the whole file, its `main.dart` Provider wiring, the settings Switch)
+  rather than let two different sessions' "always fast" mechanisms compete.
+- Backend `rfid.ts`: kept `main`'s null-safe reused-tag-identity check
+  (already functionally equivalent to, and more defensive than, the
+  branch's version of the same "reject reused EPC not just TID" fix).
+- **Caught and fixed a genuine mistake mid-merge:** `graphics_controller.dart`
+  was deleted on disk but not `git add`ed before the first merge commit, so
+  it silently stayed committed (via the merge's own auto-stage of a
+  branch-added file). Caught in the immediate post-commit `git status`
+  check, fixed with a follow-up commit (`31e9538`) — don't assume a merge
+  commit is complete just because it committed without error; always
+  `git status` right after.
 
-**If you're picking this up:** those 4 archived branches contain real,
-unmerged, still-relevant fixes (see table). None of it made it into `main`
-this session — only re-implemented pieces that happened to be covered by
-this session's own from-scratch web/PDA work did. Worth triaging each one
-(`git diff main...archive/<name>`) and cherry-picking or re-applying what's
-still wanted, especially the RFID performance/bench-screen work (7-8 commits
-each) which looks substantial and not obviously superseded.
+**Verified before pushing:** `flutter analyze` clean, `flutter test` 67/67,
+`flutter build web --release`, backend `tsc --noEmit` clean, backend
+`npm test` 83/83. Rebuilt + redeployed all three Docker services
+(`backend`, `frontend`, `pda`) after, confirmed all responding.
 
 ### This session's work (huge scope — summarized, not exhaustive)
 Web (`frontend/public/legacy.html`) and PDA (`pda_flutter/`) both got a large
@@ -149,10 +186,13 @@ as test-runner flakiness, not a real regression, but worth knowing if it
 happens again.
 
 ### Known gaps / not done this session
-- The 4 archived branches above (RFID bench-screen work, gate-validation-
-  by-warehouse, customer/inventory display fixes) are **not** merged into
-  `main` — they were superseded in scope by unrelated fixes this session,
-  not by equivalent re-implementations. Real work is still sitting there.
+- `claude/pda-gate-validation-f75d57`'s one fix (restrict PDA gate-in/out to
+  the operator's own warehouse) and `claude/merge-buttons-machine-settings-
+  a6a904`'s 7 fixes (RFID bench screens, MC3390R trigger-stall/wrong-tag
+  fixes, device-setup UX) are **gone** — deleted per explicit user
+  instruction, not merged, not archived. If either is still wanted, it needs
+  re-implementing from scratch; there's nothing left in this repo to recover
+  it from (see table above).
 - No exhaustive/independent QA pass was done — one concrete race condition
   was found and fixed (Gate In/Out commit-time re-validation, see above) but
   a full "senior tester, 30 years" audit as requested was explicitly scoped
@@ -168,12 +208,11 @@ happens again.
 
 ## Next steps (whoever picks this up)
 
-1. Triage the 4 `archive/*` tags — decide what's still wanted, cherry-pick
-   or rebase onto current `main`. Start with
-   `archive/rfid-performance-optimization-ab2b0e` and
-   `archive/merge-buttons-machine-settings-a6a904` (largest, 7-8 commits
-   each, RFID hardware behavior fixes that are unlikely to have been
-   accidentally covered elsewhere).
+1. Both remaining `archive/*` branches were merged into `main` this session
+   (see table above) — nothing left to triage there. If PDA gate-validation-
+   by-warehouse or the MC3390R trigger-stall fixes (both deleted, not
+   archived) turn out to still be wanted, they need re-implementing from
+   scratch.
 2. Decide on the root checkout's (`/Users/kriangkrai/Projects/
    box-tracking-demo-`) ~135 uncommitted files — nobody has confirmed intent.
 3. If box registration ever grows a warehouse-selection field, revisit
