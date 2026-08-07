@@ -52,11 +52,8 @@ class _ScanScreenState extends State<ScanScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final isOut = c.mode == 'out';
     final plateOk = (isOut ? c.outPlate : c.inPlate).trim().isNotEmpty;
-    final vtypeOk = isOut
-        ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
-        : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
     final canCommit =
-        c.queue.isNotEmpty && (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
+        c.queue.isNotEmpty && (!isOut || c.outCustomer.isNotEmpty) && plateOk;
 
     return Column(
       children: [
