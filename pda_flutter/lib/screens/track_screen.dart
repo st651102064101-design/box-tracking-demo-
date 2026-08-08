@@ -70,13 +70,22 @@ class _TrackScreenState extends State<TrackScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
-    // keep the field in sync when a hardware read populates trackVal
+    // keep the field in sync when a hardware read populates trackVal — and
+    // just as importantly, clear it back out once doTrack() empties trackVal
+    // after a completed scan resolves (see AppController.doTrack); without
+    // this half, the field kept showing the just-committed code and the next
+    // scan's characters landed after it instead of into a clean field.
     if (c.trackVal.isNotEmpty && _ctrl.text != c.trackVal) {
       _ctrl.text = c.trackVal;
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    } else if (c.trackVal.isEmpty && _ctrl.text.isNotEmpty) {
+      _ctrl.clear();
     }
     final bottom = MediaQuery.of(context).padding.bottom;
     final box = c.trackBox;
+    final hits = c.scanInputMode == ScanInputMode.rfid ? c.trackRfidHits : c.trackBarcodeHits;
+    final hitsUnit = c.scanInputMode == ScanInputMode.rfid ? loc.t('แท็ก') : loc.t('กล่อง');
+    final hitsIcon = c.scanInputMode == ScanInputMode.rfid ? Icons.nfc : Icons.qr_code_scanner;
 
     return Column(
       children: [
@@ -149,13 +158,13 @@ class _TrackScreenState extends State<TrackScreen> {
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (c.scanInputMode == ScanInputMode.rfid && c.trackRfidHits.isNotEmpty) ...[
+              if (hits.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 8),
-                  child: Text('${loc.t('พบ')} ${c.trackRfidHits.length} ${loc.t('แท็ก')}',
+                  child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
                 ),
-                _rfidHitsList(c, loc),
+                _hitsList(c, hits, hitsIcon, loc),
                 if (box != null) const SizedBox(height: 14),
               ] else if (box == null && c.trackSuggestions.isNotEmpty) ...[
                 Padding(
@@ -296,12 +305,13 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  /// Vertical list of every distinct tag the reader has found this sweep
-  /// (see AppController.trackRfidHits) — one row per tag, in the order it
-  /// was first seen, tap a row to open its full detail card below.
-  Widget _rfidHitsList(AppController c, LocaleController loc) {
+  /// Vertical list of every distinct box found this session — RFID sweep
+  /// hits (AppController.trackRfidHits) or committed barcode scans
+  /// (trackBarcodeHits), whichever the current input mode is using — one row
+  /// per tag, in the order it was first seen, tap a row to open its full
+  /// detail card below.
+  Widget _hitsList(AppController c, List<String> tags, IconData icon, LocaleController loc) {
     final S = c.S;
-    final tags = c.trackRfidHits;
     return Container(
       decoration: BoxDecoration(
         color: C.surface,
@@ -326,7 +336,7 @@ class _TrackScreenState extends State<TrackScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.nfc, size: 18, color: C.muted),
+                  Icon(icon, size: 18, color: C.muted),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(

@@ -150,6 +150,14 @@ class AppController extends ChangeNotifier {
   /// _onReaderTag's Screen.track case), which is what makes "5 tags in the
   /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
   final List<String> trackRfidHits = [];
+  /// Same idea as [trackRfidHits] but for barcode mode: every distinct box a
+  /// scan (or a completed typed code) has resolved to, in the order found.
+  /// Without this, a keyboard-wedge scanner that doesn't clear the field
+  /// between reads left each new scan's characters landing after the
+  /// previous one's leftover text — two genuinely different barcodes
+  /// concatenating into one garbled search string instead of becoming two
+  /// results.
+  final List<String> trackBarcodeHits = [];
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
@@ -831,6 +839,7 @@ class AppController extends ChangeNotifier {
     trackTag = '';
     trackTried = false;
     trackRfidHits.clear();
+    trackBarcodeHits.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1346,6 +1355,15 @@ class AppController extends ChangeNotifier {
     }
     trackTag = resolveTag(raw);
     trackTried = true;
+    // A resolved, real box means this search string was a completed code —
+    // typed in full or scanned — not a still-in-progress partial. Log it as
+    // a hit (same list-of-results shape RFID mode already uses) and clear
+    // the field so the next scan starts clean instead of the wedge's next
+    // characters landing after this one's leftover text.
+    if (S?.box(trackTag) != null) {
+      if (!trackBarcodeHits.contains(trackTag)) trackBarcodeHits.add(trackTag);
+      trackVal = '';
+    }
     notifyListeners();
   }
 
