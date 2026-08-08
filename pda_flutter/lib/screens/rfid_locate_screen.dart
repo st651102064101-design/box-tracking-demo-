@@ -51,6 +51,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   int _hits = 0;
   Timer? _decayTimer;
   DateTime? _lastHapticAt;
+  DateTime? _lastGradeSoundAt;
 
   // Reader's realistic dBm range on this hardware (see rfid_input_screen /
   // the RFID test sheet for raw values on the terminal) — clamps the meter
@@ -79,7 +80,39 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       rfid.connect();
     }
     _decayTimer = Timer.periodic(const Duration(milliseconds: 200), (_) => _tick());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focus.requestFocus();
+      _forceMaxRangeAndNotify();
+    });
+  }
+
+  /// Every time this screen is opened: push the reader's transmit power to
+  /// its own max (a sweep search needs every bit of range it can get,
+  /// regardless of whatever ใกล้/ปานกลาง/ไกล pick Settings last saved) and
+  /// tell the operator it happened — "ทุกครั้ง" per the ask, not just the
+  /// first visit, since the setting could have been dialed back again since.
+  Future<void> _forceMaxRangeAndNotify() async {
+    final c = context.read<AppController>();
+    if (c.rfid.supported) {
+      final d = await c.rfid.diagnostics();
+      final maxIdx = d['powerMaxIndex'];
+      if (maxIdx is int) {
+        c.prefs.rfidPowerPercent = 100;
+        await c.rfid.setPowerIndex(maxIdx);
+      }
+    }
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ตั้งระยะยิงสูงสุด'),
+        content: const Text('ระบบตั้งกำลังส่งสัญญาณของเครื่องอ่านไว้ที่ระยะไกลสุดโดยอัตโนมัติ '
+            'เพื่อให้กวาดหากล่องได้ไกลที่สุดเท่าที่เครื่องรองรับ'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('เข้าใจแล้ว')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -145,6 +178,25 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       } else {
         HapticFeedback.selectionClick();
       }
+    }
+
+    // Audible "grade" ladder over the same signal: same four tiers as
+    // _proximityLabel, each a distinct, more urgent tone so a walking
+    // operator can track "did the grade go up" by ear without watching the
+    // gauge. Throttled on its own timer (not reused from haptics — a sound
+    // needs longer to actually be heard as separate ticks than a vibration
+    // does) so a strong, steady signal doesn't turn into a solid tone.
+    final soundGap = Duration(milliseconds: (320 - (level * 220)).round());
+    if (_lastGradeSoundAt == null || now.difference(_lastGradeSoundAt!) >= soundGap) {
+      _lastGradeSoundAt = now;
+      final soundId = level > 0.75
+          ? 'grade_found'
+          : level > 0.55
+              ? 'grade_close'
+              : level > 0.25
+                  ? 'grade_warm'
+                  : 'grade_far';
+      context.read<AppController>().rfid.playSound(soundId);
     }
   }
 

@@ -625,6 +625,11 @@ class _RfidPanelState extends State<_RfidPanel> {
                 onSelect: c.setRfidSoundId,
               ),
             ),
+            const SizedBox(height: 10),
+            _VolumeRow(
+              value: c.prefs.rfidSoundVolume,
+              onChanged: (v) => c.setRfidSoundVolume(v),
+            ),
           ],
           if (!c.rfid.supported)
             Padding(
@@ -881,6 +886,55 @@ class _SoundRow extends StatelessWidget {
             Icon(Icons.chevron_right, size: 19, color: C.chevron),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Slider for the RFID detection sound's playback level — a plain 0-100%
+/// drag, previewing live so dragging past "too quiet to hear on a noisy
+/// floor" or "startles everyone" is obvious before letting go.
+class _VolumeRow extends StatelessWidget {
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _VolumeRow({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: C.neutralBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.border2),
+      ),
+      child: Row(
+        children: [
+          Icon(value == 0 ? Icons.volume_off : Icons.volume_up, size: 18, color: C.ink2),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+              ),
+              child: Slider(
+                value: value,
+                min: 0,
+                max: 1,
+                activeColor: C.ink,
+                inactiveColor: C.border2,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 34,
+            child: Text('${(value * 100).round()}%',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.muted)),
+          ),
+        ],
       ),
     );
   }

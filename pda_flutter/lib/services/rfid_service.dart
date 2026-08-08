@@ -340,6 +340,16 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Playback level for the RFID detection sound (0.0-1.0), pushed down
+  /// whenever the setting changes and once on connect — same pattern as
+  /// [setRfidSoundId].
+  Future<void> setSoundVolume(double volume) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setSoundVolume', {'volume': volume});
+    } catch (_) {}
+  }
+
   Future<bool> isConnected() async {
     if (!supported) return false;
     try {

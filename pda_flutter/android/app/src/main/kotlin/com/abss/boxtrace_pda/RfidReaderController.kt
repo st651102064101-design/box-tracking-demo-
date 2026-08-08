@@ -55,7 +55,12 @@ class RfidReaderController(private val context: Context) :
     // can enqueue tones far faster than a 40ms tone can play, and an unbounded
     // queue turns into a beep that keeps going long after the trigger is
     // released.
-    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
+    /** User-configurable playback level, 0.0-1.0, see [setSoundVolume]. Applied
+     *  to the synth-based tones' gain directly; the two `classic_*` ids play
+     *  through [toneGen] instead, which is rebuilt at the matching ToneGenerator
+     *  volume (0-100) whenever this changes. */
+    @Volatile private var soundVolume = 1.0
+    private var toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME)
     private val beepExec = Executors.newSingleThreadExecutor()
     @Volatile private var beepInFlight = false
     /**
@@ -156,6 +161,14 @@ class RfidReaderController(private val context: Context) :
                 Thread.sleep(18)
                 synth(Waveform.SQUARE, 2400.0, 22, 0.32)
             }
+            "grade_far" -> synth(Waveform.SQUARE, 900.0, 55, 0.3)
+            "grade_warm" -> synth(Waveform.SINE, 1600.0, 45, 0.32)
+            "grade_close" -> synth(Waveform.SQUARE, 2600.0, 40, 0.35)
+            "grade_found" -> {
+                synth(Waveform.SQUARE, 3200.0, 25, 0.4)
+                Thread.sleep(15)
+                synth(Waveform.SQUARE, 3200.0, 25, 0.4)
+            }
             else -> Log.w(TAG, "playSoundId: unknown id \"$id\", playing nothing")
         }
     }
@@ -174,6 +187,7 @@ class RfidReaderController(private val context: Context) :
      * SDK's read-callback thread.
      */
     private fun synth(wave: Waveform, freqHz: Double, durationMs: Int, gain: Double) {
+        val gain = gain * soundVolume
         val sampleRate = 44100
         val frameCount = sampleRate * durationMs / 1000
         val samples = ShortArray(frameCount)
@@ -285,6 +299,7 @@ class RfidReaderController(private val context: Context) :
             "playTone" -> { playTone(call.argument<String>("kind") ?: "ok"); result.success(true) }
             "setRfidSoundId" -> { rfidSoundId = call.argument<String>("soundId") ?: rfidSoundId; result.success(true) }
             "playSound" -> { playSoundId(call.argument<String>("soundId") ?: "none"); result.success(true) }
+            "setSoundVolume" -> { setSoundVolume(call.argument<Double>("volume") ?: 1.0); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
@@ -621,6 +636,20 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
+    /** Sets the RFID detection sound's playback level, 0.0-1.0. Rebuilds
+     *  [toneGen] at the matching ToneGenerator volume (its own 0-100 scale) so
+     *  `classic_beep`/`classic_ack` track it too, not just the synth tones. */
+    fun setSoundVolume(volume: Double) {
+        soundVolume = volume.coerceIn(0.0, 1.0)
+        try {
+            toneGen.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "toneGen release failed", e)
+        }
+        val level = (soundVolume * ToneGenerator.MAX_VOLUME).toInt().coerceIn(1, ToneGenerator.MAX_VOLUME)
+        toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, level)
+    }
+
     fun setDetailMode(enabled: Boolean) {
         if (detailMode == enabled) return
         detailMode = enabled
@@ -691,7 +720,12 @@ class RfidReaderController(private val context: Context) :
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
-            val tags: Array<TagData>? = rd.Actions.getReadTags(100)
+            // 1000, not 100: at ~170-180 tags/sec a dense burst between two
+            // callback turns can queue more than 100 reads in the SDK's own
+            // buffer, and getReadTags(100) would silently leave the rest for
+            // next time (or never, if the trigger releases first) — this
+            // just asks for everything currently buffered in one call.
+            val tags: Array<TagData>? = rd.Actions.getReadTags(1000)
             if (tags == null || tags.isEmpty()) return
 
             // Sort by peak RSSI descending so near tags (strongest signal) come first.

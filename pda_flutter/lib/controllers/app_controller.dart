@@ -193,6 +193,7 @@ class AppController extends ChangeNotifier {
         // Dart which sound to play per read, so it has to be told once here
         // (and again on every change — see setRfidSoundId below).
         rfid.setRfidSoundId(prefs.rfidSoundId);
+        rfid.setSoundVolume(prefs.rfidSoundVolume);
       }
       notifyListeners();
     });
@@ -982,6 +983,16 @@ class AppController extends ChangeNotifier {
     prefs.rfidSoundId = id;
     rfid.setRfidSoundId(id);
     rfid.playSound(id);
+    notifyListeners();
+  }
+
+  /// Sets the RFID detection sound's playback level (0.0-1.0). Persists,
+  /// pushes it to native the same way [setRfidSoundId] does, and previews at
+  /// the new level with whatever sound is currently selected.
+  void setRfidSoundVolume(double volume) {
+    prefs.rfidSoundVolume = volume;
+    rfid.setSoundVolume(volume);
+    rfid.playSound(prefs.rfidSoundId);
     notifyListeners();
   }
 

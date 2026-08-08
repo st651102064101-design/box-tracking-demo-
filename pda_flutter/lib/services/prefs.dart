@@ -37,6 +37,7 @@ class Prefs {
   static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidSoundId = 'boxtrace_rfid_sound_id';
+  static const _kRfidSoundVolume = 'boxtrace_rfid_sound_volume';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
 
@@ -102,6 +103,11 @@ class Prefs {
   /// speed measurement in this app was made against.
   String get rfidSoundId => _p.getString(_kRfidSoundId) ?? 'html_tick';
   set rfidSoundId(String v) => _p.setString(_kRfidSoundId, v);
+
+  /// Playback level for the RFID detection sound, 0.0-1.0. Full volume by
+  /// default — matches the reader's own out-of-the-box behavior.
+  double get rfidSoundVolume => _p.getDouble(_kRfidSoundVolume) ?? 1.0;
+  set rfidSoundVolume(double v) => _p.setDouble(_kRfidSoundVolume, v.clamp(0.0, 1.0));
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than
