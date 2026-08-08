@@ -121,12 +121,14 @@ class _ScanScreenState extends State<ScanScreen> {
     final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final isOut = c.mode == 'out';
-    // ทะเบียนรถ is only mandatory on the way out — Gate In doesn't require it.
-    final plateOk = !isOut || c.outPlate.trim().isNotEmpty;
+    // ทะเบียนรถ is optional on both directions now. It used to be mandatory
+    // on the way out, which stopped "ถัดไป" dead for the common case of a
+    // plate that isn't known yet at the moment the boxes are being staged —
+    // the field is still there to fill in, it just no longer blocks.
     final vtypeOk = isOut
         ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
-    final formValid = (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
+    final formValid = (!isOut || c.outCustomer.isNotEmpty) && vtypeOk;
     // Step 1 (form): "ถัดไป" needs a valid form, nothing about the queue —
     // it's still empty at this point. Step 2 (scan): commit needs both a
     // non-empty queue and the form still valid (it was checked once to get
@@ -242,7 +244,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FieldLabel(loc.t('ทะเบียนรถ *')),
+                    FieldLabel(loc.t('ทะเบียนรถ')),
                     TextField(controller: _plateCtrl, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
                   ],
                 ),

@@ -319,18 +319,10 @@ class SettingsScreen extends StatelessWidget {
       ResultKind.info,
     );
     if (!context.mounted) return;
-    final otpResult = await showPinPad(
-      context,
-      title: loc.t('กรอกรหัส OTP'),
-      subtitle: sentTo != null
-          ? '${loc.t('ส่งไปที่')} $sentTo ${loc.t('(มีอายุ 5 นาที)')}'
-          : loc.t('รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)'),
-      length: 6,
-    );
-    if (otpResult == null || otpResult.pin == null) return;
-    final otp = otpResult.pin!;
-
-    if (!context.mounted) return;
+    // New PIN first, OTP last — see login_screen.dart's _forgotPin for the
+    // full reasoning: confirmPinReset is the only endpoint that checks an
+    // OTP, and it sets the PIN in the same call, so the OTP can only be
+    // validated at the step where it's typed if the PIN is already in hand.
     final newPinResult = await showPinPad(context, title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
     if (newPinResult == null || newPinResult.pin == null) return;
     final newPin = newPinResult.pin!;
@@ -344,13 +336,28 @@ class SettingsScreen extends StatelessWidget {
     if (confirm == null || confirm.pin == null) return;
 
     if (!context.mounted) return;
-    try {
-      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-    } catch (err) {
-      if (!context.mounted) return;
-      c.toastMsg(loc.t('รีเซ็ต PIN ไม่สำเร็จ'), err is ApiException ? err.message : '$err', ResultKind.err);
-      return;
-    }
+    var applied = false;
+    final otpResult = await showPinPad(
+      context,
+      title: loc.t('กรอกรหัส OTP'),
+      subtitle: sentTo != null
+          ? '${loc.t('ส่งไปที่')} $sentTo ${loc.t('(มีอายุ 5 นาที)')}'
+          : loc.t('รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)'),
+      length: 6,
+      validate: (otp) async {
+        try {
+          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          return err.message.isEmpty ? loc.t('รหัส OTP ไม่ถูกต้องหรือหมดอายุ') : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (otpResult == null || !applied) return;
+
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);
     if (!context.mounted) return;

@@ -260,26 +260,27 @@ class _LoginScreenState extends State<LoginScreen> {
   /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
   /// state for the whole round trip instead of popping and leaving this
   /// screen idle while it waits. [sentTo] is whatever that request found.
+  ///
+  /// Step order is new-PIN → confirm → **OTP last**, which looks backwards
+  /// but is the only way the OTP actually gets validated at the step where
+  /// it's typed. The backend exposes exactly one reset call —
+  /// `confirmPinReset(id, otp, pin)`, which checks the OTP and sets the PIN
+  /// together — and no standalone "is this OTP valid" endpoint. Asking for
+  /// the OTP first therefore couldn't check anything: a wrong code was only
+  /// discovered after the operator had already typed a new PIN twice, and
+  /// then dumped them back to the start. Collecting the PIN first lets the
+  /// OTP pad's own `validate` make the real call, so a wrong code shows
+  /// inline and the pad stays open for a retype — no lost work, no screen
+  /// change until the server has actually accepted it.
   Future<void> _forgotPin(Employee e, String? sentTo) async {
     if (!mounted) return;
     final c = context.read<AppController>();
     c.toastMsg(
       'ส่งรหัส OTP แล้ว',
-      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว' : 'เช็คอีเมลของคุณ',
       ResultKind.info,
     );
-    final otpResult = await showPinPad(
-      context,
-      title: 'กรอกรหัส OTP',
-      subtitle: sentTo != null
-          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
-          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
-      length: 6,
-    );
-    if (otpResult == null || otpResult.pin == null) return;
-    final otp = otpResult.pin!;
 
-    if (!mounted) return;
     final newPinResult = await showPinPad(
       context,
       title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
@@ -296,13 +297,31 @@ class _LoginScreenState extends State<LoginScreen> {
     if (confirm == null || confirm.pin == null) return;
 
     if (!mounted) return;
-    try {
-      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', c.errorMessage(err), ResultKind.err);
-      return;
-    }
+    var applied = false;
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: sentTo != null
+          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
+          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+      validate: (otp) async {
+        try {
+          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          // The server answered and refused — almost always a wrong or
+          // expired code. Its own message is more specific than anything
+          // guessable here, so it's shown verbatim.
+          return err.message.isEmpty ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (otpResult == null || !applied) return; // cancelled, or never accepted
+
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);
     if (!mounted) return;

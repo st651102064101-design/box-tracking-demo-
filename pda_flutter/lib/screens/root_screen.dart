@@ -13,6 +13,9 @@ import 'rfid_input_screen.dart';
 import 'rfid_register_screen.dart';
 import 'rfid_locate_screen.dart';
 import 'box_register_screen.dart';
+import 'transfer_screen.dart';
+import 'cycle_count_screen.dart';
+import 'more_hub_screen.dart';
 import 'toast_overlay.dart';
 
 /// Hosts the current screen inside a phone-width frame (max 560px, like the
@@ -94,6 +97,12 @@ class RootScreen extends StatelessWidget {
         return const RfidLocateScreen(key: ValueKey('rfidLocate'));
       case Screen.boxRegister:
         return const BoxRegisterScreen(key: ValueKey('boxRegister'));
+      case Screen.transfer:
+        return const TransferScreen(key: ValueKey('transfer'));
+      case Screen.cycleCount:
+        return const CycleCountScreen(key: ValueKey('cycleCount'));
+      case Screen.moreHub:
+        return const MoreHubScreen(key: ValueKey('moreHub'));
     }
   }
 }

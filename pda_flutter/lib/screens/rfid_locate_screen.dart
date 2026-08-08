@@ -174,6 +174,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // an unmounted State.
     final c = context.read<AppController>();
     if (identical(c.systemBackOverride, _handleBack)) c.systemBackOverride = null;
+    c.rfidLocateSweepStep = false;
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
@@ -332,11 +333,17 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // The sweep step has no barcode alternative — it only makes sense as an
     // RFID proximity search — so it always needs the trigger to actually
     // fire regardless of what the pick step's toggle was last set to.
+    // rfidLocateSweepStep is the authoritative signal for that (see
+    // AppController._onReaderTrigger); setScanInputMode alone wasn't enough,
+    // since anything that flipped the shared mode back to barcode left the
+    // trigger dead on a screen with no barcode path at all.
+    c.rfidLocateSweepStep = true;
     c.setScanInputMode(ScanInputMode.rfid);
   }
 
   void _changeTarget(AppController c) {
     c.rfid.stopInventory();
+    c.rfidLocateSweepStep = false;
     setState(() {
       _step = _Step.pick;
       _target = null;
@@ -702,10 +709,27 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 }
 
-/// Semi-circular signal meter — a needle sweeping 0..180° reads more like
-/// "how close" at a glance than a numeric dBm ever would, which is the point
-/// of a Geiger-style search: the operator watches the meter, not a number,
-/// while walking.
+/// Signal-strength colour ramp for the Geiger sweep: grey (nothing) →
+/// amber (something, keep walking) → green (it's right here). Deliberately
+/// NOT the red→green ramp this used to run: red reads as "error/failure" in
+/// every other part of this app, and a weak-but-valid signal is neither.
+/// Grey→amber→green is the convention a signal meter actually wants —
+/// absence, then partial, then good.
+Color _signalColor(double level) {
+  const grey = Color(0xFF9A9AA0);
+  const amber = Color(0xFFF5A623);
+  const green = Color(0xFF1E8E3E);
+  if (level <= 0.0) return grey;
+  if (level < 0.5) return Color.lerp(grey, amber, level / 0.5)!;
+  return Color.lerp(amber, green, (level - 0.5) / 0.5)!;
+}
+
+/// Semi-circular signal meter with a large 0-100% readout in the middle —
+/// the number is what an operator glancing down mid-walk actually reads,
+/// the arc is what they track without reading. dBm never appears here: it's
+/// a negative logarithmic figure that means nothing to anyone who isn't an
+/// RF engineer (the raw value is still shown as small text below the gauge
+/// for diagnostics).
 class _Gauge extends StatelessWidget {
   final double level; // 0..1
   final bool found;
@@ -718,10 +742,38 @@ class _Gauge extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       builder: (context, animated, _) => SizedBox(
-        width: 220,
-        height: 120,
-        child: CustomPaint(
-          painter: _GaugePainter(level: animated, found: found),
+        width: 240,
+        height: 140,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            CustomPaint(
+              size: const Size(240, 140),
+              painter: _GaugePainter(level: animated, found: found),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${(animated * 100).round()}',
+                    style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
+                      letterSpacing: -1.5,
+                      color: animated <= 0 ? C.faint : _signalColor(animated),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  Text('%',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700, color: C.muted, height: 1.1)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -736,38 +788,30 @@ class _GaugePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height);
-    final radius = size.width / 2 - 10;
+    final radius = size.width / 2 - 12;
 
     final track = Paint()
       ..color = C.neutralBg2
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 16
+      ..strokeWidth = 20
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius), math.pi, math.pi, false, track);
 
-    final fillColor = found ? C.limeText : Color.lerp(C.red, C.limeText, level)!;
-    final fill = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 16
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      math.pi,
-      math.pi * level.clamp(0.0, 1.0),
-      false,
-      fill,
-    );
-
-    // Needle
-    final angle = math.pi + math.pi * level.clamp(0.0, 1.0);
-    final needleEnd = Offset(center.dx + radius * 0.82 * math.cos(angle), center.dy + radius * 0.82 * math.sin(angle));
-    final needle = Paint()
-      ..color = C.ink
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(center, needleEnd, needle);
-    canvas.drawCircle(center, 6, Paint()..color = C.ink);
+    final clamped = level.clamp(0.0, 1.0);
+    if (clamped > 0) {
+      final fill = Paint()
+        ..color = _signalColor(clamped)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 20
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        math.pi,
+        math.pi * clamped,
+        false,
+        fill,
+      );
+    }
   }
 
   @override

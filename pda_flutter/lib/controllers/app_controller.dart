@@ -12,7 +12,22 @@ import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
 
-enum Screen { boot, deviceSetup, login, home, scan, track, settings, rfidInput, rfidRegister, rfidLocate, boxRegister }
+enum Screen {
+  boot,
+  deviceSetup,
+  login,
+  home,
+  scan,
+  track,
+  settings,
+  rfidInput,
+  rfidRegister,
+  rfidLocate,
+  boxRegister,
+  transfer,
+  cycleCount,
+  moreHub,
+}
 
 /// Which physical input a trigger pull means right now, on any screen that
 /// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
@@ -871,6 +886,34 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
+  /// Relocate an already-warehoused box — TransferScreen. Reuses the exact
+  /// same PUT/POST putawayBox endpoint BoxRegisterScreen's putaway step
+  /// calls; the backend already logs a 'relocate' history entry instead of
+  /// 'putaway' whenever the box's status is already 'warehouse' (see
+  /// track_screen.dart's history rendering for the 'relocate' dir it
+  /// expects), so no new API was needed for this screen.
+  void goTransfer() {
+    screen = Screen.transfer;
+    notifyListeners();
+  }
+
+  /// Reconciliation sweep over one location — CycleCountScreen. Purely
+  /// client-side: there's no cycle-count endpoint on the backend, so this
+  /// works entirely off the already-cached box list (S.boxes), comparing
+  /// "expected here" against what actually got scanned this session.
+  void goCycleCount() {
+    screen = Screen.cycleCount;
+    notifyListeners();
+  }
+
+  /// Hub for the less-frequent floor actions that don't each need their own
+  /// slot on Home's primary 6-button menu — RFID tag binding, brand-new box
+  /// intake, and the text-search box lookup (Track).
+  void goMoreHub() {
+    screen = Screen.moreHub;
+    notifyListeners();
+  }
+
   void onScanChanged(String v) {
     scanVal = v;
     notifyListeners();
@@ -1550,10 +1593,19 @@ class AppController extends ChangeNotifier {
     // does nothing at all — no read, no beep, no vibration. Previously the
     // toggle only hid the barcode field in the UI; the reader itself still
     // started and beeped on every read because this dispatcher never knew
-    // which mode was selected. RfidLocateScreen forces scanInputMode back
-    // to rfid the moment a target is picked (its .locate step has no
-    // barcode alternative), so this only ever blocks its pick step.
-    if ((screen == Screen.scan || screen == Screen.track || screen == Screen.rfidLocate) &&
+    // which mode was selected.
+    //
+    // rfidLocateSweepStep is what exempts RfidLocateScreen's sweep step:
+    // that step has no barcode alternative at all, so gating it on a
+    // *shared, app-wide* mode flag meant the trigger silently did nothing
+    // there whenever anything else had last left the mode on บาร์โค้ด —
+    // including this screen's own pick step, which now deliberately starts
+    // in barcode mode. The on-screen "เริ่มกวาดหา" button calls
+    // startInventory() directly and never went through here, which is
+    // exactly why that button worked while the trigger appeared dead.
+    if ((screen == Screen.scan ||
+            screen == Screen.track ||
+            (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
         scanInputMode == ScanInputMode.barcode) {
       toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
       return;
@@ -1603,6 +1655,12 @@ class AppController extends ChangeNotifier {
   /// accidentally arms the antenna; the screen flips this on entering its
   /// rfid step and back off leaving it (skip, bind, dispose, …).
   bool boxRegisterRfidStep = false;
+
+  /// True only while RfidLocateScreen is on its sweep step (a target box has
+  /// been picked). That step is RFID-only by definition, so the trigger must
+  /// work there regardless of what [scanInputMode] happens to be set to
+  /// app-wide — see the rfidLocate branch in [_onReaderTrigger].
+  bool rfidLocateSweepStep = false;
 
   /// Same idea, for RfidRegisterScreen's own waitingRfid step. That screen
   /// already arms the reader itself the instant a barcode resolves (see its

@@ -264,6 +264,35 @@ class LocaleController extends ChangeNotifier {
     'ปานกลาง · ~1-2 ม.': 'Medium · ~1-2 m',
     'ไกล · สุดกำลังเครื่อง': 'Far · full reader power',
 
+    // home menu (6 primary actions) + the screens behind them
+    'จ่ายออก': 'Gate Out',
+    'รับเข้า': 'Gate In',
+    'ตรวจนับ': 'Cycle Count',
+    'ค้นหา/เรดาร์': 'Search / Radar',
+    'ผูก Tag / ชำรุด / อื่นๆ': 'Tag / Damage / More',
+    // transfer screen
+    'ยิงหรือพิมพ์รหัสกล่องที่จะย้าย': 'Scan or type the box code to move',
+    'ตำแหน่งใหม่': 'New location',
+    'ยืนยันย้ายตำแหน่ง': 'Confirm transfer',
+    'แร็ค': 'Rack',
+    'ชั้น': 'Shelf',
+    'ช่อง': 'Slot',
+    'กำลังบันทึก…': 'Saving…',
+    // cycle count screen
+    'เลือกโซนที่จะตรวจนับ': 'Choose a zone to count',
+    'ทั้งคลัง': 'Whole warehouse',
+    'คาดว่ามี': 'Expected',
+    'พบแล้ว': 'Counted',
+    'ยังไม่พบ': 'Missing',
+    'ไม่ควรอยู่ที่นี่': 'Unexpected here',
+    // more hub
+    'ผูกแท็ก RFID': 'Bind RFID tag',
+    'ลงทะเบียนกล่องใหม่': 'Register a new box',
+    'แจ้งกล่องชำรุด — ทำได้ตอนรับเข้า (Gate In): ติ๊กสถานะ "ชำรุด" ที่การ์ดกล่องนั้นในคิวก่อนยืนยัน':
+        'Flagging a box damaged is done at Gate In: tick "Damaged" on that box\'s card in the queue before confirming',
+    // pin reset
+    'รหัส OTP ไม่ถูกต้องหรือหมดอายุ': 'OTP is incorrect or has expired',
+
     // scan (gate) screen
     'กลับไปสแกนกล่องเพิ่ม': 'Back to scan more boxes',
     'แก้ไขข้อมูลลูกค้า/รถ': 'Edit customer/vehicle info',

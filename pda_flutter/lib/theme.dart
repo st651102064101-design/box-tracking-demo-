@@ -57,6 +57,22 @@ class C {
   static Color neutralBg = const Color(0xFFECEEEF);
   static Color neutralBg2 = const Color(0xFFF0F0F2);
 
+  // Home menu color-coding — one convention across every primary-menu tile:
+  // green = inbound, blue = outbound/transfer, orange = audit/search,
+  // red = tag/damage/other. Distinct from [lime] (the generic "primary
+  // action/ok" accent used everywhere else) since the menu's whole point is
+  // letting an operator recognise a category by colour alone at a glance,
+  // which needs its own fixed mapping independent of what "ok" means
+  // elsewhere in the app.
+  static Color menuGreen = const Color(0xFF1E8E3E);
+  static Color menuGreenBg = const Color(0xFFE3F5E7);
+  static Color menuBlue = const Color(0xFF0A66C2);
+  static Color menuBlueBg = const Color(0xFFE3EEFB);
+  static Color menuOrange = const Color(0xFFBF5D00);
+  static Color menuOrangeBg = const Color(0xFFFFF2E0);
+  static Color menuRed = const Color(0xFFD70015);
+  static Color menuRedBg = const Color(0xFFFFECEB);
+
   /// Fixed near-black brand tile/card background — deliberately does NOT
   /// invert with [apply] like [ink] does. [ink] is "foreground ink colour,"
   /// which correctly flips to near-white so text stays legible on a dark
@@ -104,6 +120,15 @@ class C {
 
     neutralBg = dark ? const Color(0xFF2C2C2E) : const Color(0xFFECEEEF);
     neutralBg2 = dark ? const Color(0xFF242426) : const Color(0xFFF0F0F2);
+
+    menuGreen = dark ? const Color(0xFF34C759) : const Color(0xFF1E8E3E);
+    menuGreenBg = dark ? const Color(0xFF102B16) : const Color(0xFFE3F5E7);
+    menuBlue = dark ? const Color(0xFF4A9EFF) : const Color(0xFF0A66C2);
+    menuBlueBg = dark ? const Color(0xFF10233A) : const Color(0xFFE3EEFB);
+    menuOrange = orange;
+    menuOrangeBg = orangeBg;
+    menuRed = red;
+    menuRedBg = redBg;
   }
 }
 
@@ -127,13 +152,28 @@ ThemeData buildTheme() {
     ),
     splashFactory: InkRipple.splashFactory,
   );
+  // Inter — the sans a lot of enterprise WMS/logistics UIs (and modern SaaS
+  // dashboards generally) standardize on for exactly this kind of dense,
+  // numbers-heavy operational screen: tall x-height and unambiguous
+  // digits/punctuation at small sizes, which is what a PDA's cramped layout
+  // needs most.
+  //
+  // Inter carries no Thai glyphs, and most of this app's copy is Thai.
+  // fontFamilyFallback is what keeps that working: Flutter falls through to
+  // the platform's own Thai-capable system font per-glyph, so Latin text and
+  // digits render as Inter while Thai keeps rendering exactly as it did
+  // before — rather than the tofu boxes a bare `fontFamily: 'Inter'` would
+  // produce on every Thai label.
   return base.copyWith(
-    textTheme: base.textTheme.apply(
-      bodyColor: C.ink,
-      displayColor: C.ink,
-      // Anuphan (Thai) can be dropped into assets and referenced here; the
-      // system font already renders Thai fine on the device.
-    ),
+    textTheme: base.textTheme
+        .apply(
+          fontFamily: 'Inter',
+          fontFamilyFallback: const ['Noto Sans Thai', 'Sarabun', 'sans-serif'],
+        )
+        .apply(
+          bodyColor: C.ink,
+          displayColor: C.ink,
+        ),
   );
 }
 

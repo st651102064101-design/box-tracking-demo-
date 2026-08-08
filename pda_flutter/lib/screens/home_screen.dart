@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
@@ -10,6 +11,73 @@ import '../widgets/common.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  /// Physical number-key shortcuts for the MC3390R's side keypad, matching
+  /// the [1]-[6] badges each _MenuTile shows — "press 1, land on Gate Out"
+  /// without touching the screen at all, for an operator whose hands are
+  /// already full of a box. Both the top-row digit and the numeric-keypad
+  /// variant are handled since which one a given handheld's keymap actually
+  /// sends isn't something this app controls. Only fires on key-down (not
+  /// up/repeat) and only once per tile is even visible — a gate posted
+  /// IN-only or OUT-only hides the tile that wouldn't work anyway, so its
+  /// number does nothing rather than silently jumping to a menu item the
+  /// operator can't see.
+  static const _keyActions = <int, String>{
+    1: 'out',
+    2: 'in',
+    3: 'transfer',
+    4: 'cycleCount',
+    5: 'locate',
+    6: 'moreHub',
+  };
+
+  KeyEventResult _onKey(AppController c, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final digit = _digitFor(event.logicalKey);
+    if (digit == null) return KeyEventResult.ignored;
+    final action = _keyActions[digit];
+    if (action == null) return KeyEventResult.ignored;
+    switch (action) {
+      case 'out':
+        if (c.canScan && c.currentGateType != 'in') c.goScanOut();
+        break;
+      case 'in':
+        if (c.canScan && c.currentGateType != 'out') c.goScanIn();
+        break;
+      case 'transfer':
+        if (c.canScan) c.goTransfer();
+        break;
+      case 'cycleCount':
+        c.goCycleCount();
+        break;
+      case 'locate':
+        c.goLocate();
+        break;
+      case 'moreHub':
+        c.goMoreHub();
+        break;
+    }
+    return KeyEventResult.handled;
+  }
+
+  static final _topRow = {
+    LogicalKeyboardKey.digit1: 1,
+    LogicalKeyboardKey.digit2: 2,
+    LogicalKeyboardKey.digit3: 3,
+    LogicalKeyboardKey.digit4: 4,
+    LogicalKeyboardKey.digit5: 5,
+    LogicalKeyboardKey.digit6: 6,
+  };
+  static final _numpad = {
+    LogicalKeyboardKey.numpad1: 1,
+    LogicalKeyboardKey.numpad2: 2,
+    LogicalKeyboardKey.numpad3: 3,
+    LogicalKeyboardKey.numpad4: 4,
+    LogicalKeyboardKey.numpad5: 5,
+    LogicalKeyboardKey.numpad6: 6,
+  };
+
+  static int? _digitFor(LogicalKeyboardKey key) => _topRow[key] ?? _numpad[key];
+
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
@@ -17,7 +85,10 @@ class HomeScreen extends StatelessWidget {
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
 
-    return Column(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) => _onKey(c, event),
+      child: Column(
       children: [
         // header
         Padding(
@@ -93,6 +164,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -215,76 +287,106 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         child: _Note(loc.t('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้')),
       ),
     const SizedBox(height: 16),
-    Caption(loc.t('งานหลัก')),
-    const SizedBox(height: 10),
-    if (c.canScan) ...[
-      _ActionCard(
-        icon: Icons.add_box,
-        iconColor: C.limeDeep,
-        iconBg: C.limeBg,
-        title: loc.t('ลงทะเบียนกล่อง'),
-        sub: loc.t('รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway'),
-        onTap: c.goBoxRegister,
+    // Product title strip sitting directly above the menu, as in the
+    // reference layout. Names the hardware profile that was actually
+    // detected at setup (see device_setup_screen's _detectDevice) rather
+    // than hardcoding "MC3390R" — a build running on anything else says so.
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: C.heroBg,
+        borderRadius: BorderRadius.circular(14),
       ),
-      const SizedBox(height: 12),
-    ],
-    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
-    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
-    if (c.canScan && c.currentGateType != 'out') ...[
-      _ActionCard(
-        dark: true,
-        icon: Icons.south,
-        iconColor: C.lime,
-        iconBg: C.onInk.withValues(alpha: 0.12),
-        title: loc.t('รับเข้า / รับคืน'),
-        sub: loc.t('Gate In — ยิงกล่องกลับเข้าคลัง'),
-        onTap: c.goScanIn,
+      child: Row(
+        children: [
+          Icon(Icons.inventory_2_rounded, size: 19, color: C.lime),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              c.prefs.deviceModel == 'mc3390r'
+                  ? 'AMS Mobile Tracker (MC3390R)'
+                  : 'AMS Mobile Tracker',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: C.onHero, letterSpacing: -0.2),
+            ),
+          ),
+        ],
       ),
-      const SizedBox(height: 12),
-    ],
-    if (c.canScan && c.currentGateType != 'in') ...[
-      _ActionCard(
-        icon: Icons.north,
-        iconColor: C.orange,
-        iconBg: C.orangeBg,
-        title: loc.t('ส่งออก'),
-        sub: loc.t('Gate Out — จ่ายกล่องออกให้ลูกค้า'),
-        onTap: c.goScanOut,
-      ),
-      const SizedBox(height: 12),
-    ],
-    // Moved here from Settings — commissioning a tag is a routine
-    // warehouse-floor action alongside Gate In/Out, not device config.
-    if (c.canScan) ...[
-      _ActionCard(
-        small: true,
-        icon: Icons.qr_code_scanner,
-        iconColor: C.ink2,
-        iconBg: C.neutralBg,
-        title: loc.t('ลงทะเบียนแท็ก RFID'),
-        sub: loc.t('สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที'),
-        onTap: c.goRfidRegister,
-      ),
-      const SizedBox(height: 12),
-    ],
-    _ActionCard(
-      small: true,
-      icon: Icons.nfc,
-      iconColor: C.ink2,
-      iconBg: C.neutralBg,
-      title: loc.t('หากล่อง / RFID'),
-      sub: loc.t('เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger'),
-      onTap: c.goLocate,
     ),
     const SizedBox(height: 12),
-    _ActionCard(
-      small: true,
-      icon: Icons.search,
-      iconColor: C.ink2,
-      iconBg: C.neutralBg,
-      title: loc.t('ค้นหา / ตรวจสอบกล่อง'),
-      sub: loc.t('Track — ดูสถานะ ตำแหน่ง ประวัติ'),
-      onTap: c.goTrack,
+    // Numbered [1]-[6] — matches the physical number-key bindings
+    // (HomeScreen's KeyboardListener) so the badge an operator sees is the
+    // same digit that jumps here from the keyboard. Colour groups follow
+    // one convention throughout: green = inbound, blue = outbound/transfer,
+    // orange = audit/search, red = tag/damage/other.
+    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
+    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
+    if (c.canScan && c.currentGateType != 'in') ...[
+      _MenuTile(
+        number: 1,
+        icon: Icons.local_shipping_outlined,
+        color: C.menuBlue,
+        bg: C.menuBlueBg,
+        title: loc.t('จ่ายออก'),
+        sub: 'Gate Out',
+        onTap: c.goScanOut,
+      ),
+      const SizedBox(height: 10),
+    ],
+    if (c.canScan && c.currentGateType != 'out') ...[
+      _MenuTile(
+        number: 2,
+        icon: Icons.inventory_2_outlined,
+        color: C.menuGreen,
+        bg: C.menuGreenBg,
+        title: loc.t('รับเข้า'),
+        sub: 'Gate In / Return',
+        onTap: c.goScanIn,
+      ),
+      const SizedBox(height: 10),
+    ],
+    if (c.canScan) ...[
+      _MenuTile(
+        number: 3,
+        icon: Icons.sync_alt,
+        color: C.menuBlue,
+        bg: C.menuBlueBg,
+        title: loc.t('ย้ายตำแหน่ง'),
+        sub: 'Transfer',
+        onTap: c.goTransfer,
+      ),
+      const SizedBox(height: 10),
+    ],
+    _MenuTile(
+      number: 4,
+      icon: Icons.checklist,
+      color: C.menuOrange,
+      bg: C.menuOrangeBg,
+      title: loc.t('ตรวจนับ'),
+      sub: 'Cycle Count',
+      onTap: c.goCycleCount,
+    ),
+    const SizedBox(height: 10),
+    _MenuTile(
+      number: 5,
+      icon: Icons.radar,
+      color: C.menuOrange,
+      bg: C.menuOrangeBg,
+      title: loc.t('ค้นหา/เรดาร์'),
+      sub: 'Search / Radar',
+      onTap: c.goLocate,
+    ),
+    const SizedBox(height: 10),
+    _MenuTile(
+      number: 6,
+      icon: Icons.sell_outlined,
+      color: C.menuRed,
+      bg: C.menuRedBg,
+      title: loc.t('ผูก Tag / ชำรุด / อื่นๆ'),
+      sub: 'Tag / Damage / More',
+      onTap: c.goMoreHub,
     ),
     if (c.outbox.isNotEmpty) ...[
       const SizedBox(height: 14),
@@ -732,80 +834,79 @@ class _TodayStat extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  final bool dark, small;
+/// One of the 6 primary-menu buttons. Fixed 72dp tall — inside the 64-80dp
+/// touch-target range a scanner-gun grip (thick gloves, one-handed use,
+/// walking) actually needs, not the ~48dp a phone-held-in-two-hands app can
+/// get away with — and a coloured number badge on the left matching
+/// HomeScreen's number-key bindings (press "1"-"6" to jump here without
+/// touching the screen at all).
+class _MenuTile extends StatelessWidget {
+  final int number;
   final IconData icon;
-  final Color iconColor, iconBg;
-  final String title, sub;
+  final Color color;
+  final Color bg;
+  final String title;
+  final String sub;
   final VoidCallback onTap;
-  const _ActionCard({
-    this.dark = false,
-    this.small = false,
+  const _MenuTile({
+    required this.number,
     required this.icon,
-    required this.iconColor,
-    required this.iconBg,
+    required this.color,
+    required this.bg,
     required this.title,
     required this.sub,
     required this.onTap,
   });
+
   @override
   Widget build(BuildContext context) {
-    // Every card on this screen carries a blurred shadow — cheap one at a
-    // time, not cheap five deep on a screen that redraws on every
-    // notifyListeners(). Low power mode drops it to a flat border.
     final lowPower = context.select<AppController, bool>((c) => c.lowPowerMode);
-    final radius = small ? 20.0 : 22.0;
-    final pad = small ? const EdgeInsets.symmetric(horizontal: 18, vertical: 16) : const EdgeInsets.all(18);
-    final box = small ? 44.0 : 52.0;
     return Material(
-      color: dark ? C.ink : C.surface,
-      borderRadius: BorderRadius.circular(radius),
+      color: C.surface,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: pad,
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            border: (dark && !lowPower) ? null : Border.all(color: C.border),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: C.border),
             boxShadow: lowPower
                 ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(dark ? 0.14 : 0.06),
-                      blurRadius: dark ? 24 : (small ? 0 : 20),
-                      offset: Offset(0, dark ? 8 : 6),
-                    )
-                  ],
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 14, offset: const Offset(0, 4))],
           ),
           child: Row(
             children: [
-              Container(
-                width: box,
-                height: box,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(box * 0.29)),
-                child: Icon(icon, color: iconColor, size: small ? 23 : 27),
+              // Number badge — same colour family as the icon tile, one
+              // step lighter, so the digit reads as "part of this button"
+              // rather than a separate decoration.
+              SizedBox(
+                width: 22,
+                child: Text('$number',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color.withValues(alpha: 0.55))),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 8),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                child: Icon(icon, color: color, size: 25),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: small ? 16.5 : 19,
-                            fontWeight: FontWeight.w700,
-                            color: dark ? C.onInk : C.ink)),
-                    Text(sub,
-                        style: TextStyle(
-                            fontSize: small ? 12.5 : 13,
-                            color: dark ? C.onInk.withValues(alpha: 0.62) : C.muted)),
+                    Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    Text(sub, style: TextStyle(fontSize: 12, color: C.muted, letterSpacing: 0.2)),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right,
-                  color: dark ? C.onInk.withValues(alpha: 0.5) : C.chevron, size: small ? 20 : 22),
+              Icon(Icons.chevron_right, color: C.chevron, size: 22),
             ],
           ),
         ),

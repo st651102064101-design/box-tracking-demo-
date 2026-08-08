@@ -23,3 +23,23 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Inter, bundled as assets rather than pulled with the google_fonts
+  # package: that package downloads font files over HTTP on first use, which
+  # is exactly wrong for a handheld that spends much of its shift out of
+  # Wi-Fi range in a warehouse — it would silently fall back to the system
+  # font offline, so the app's typography would change depending on signal.
+  # Bundling costs ~2MB of APK and makes the font unconditional.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
