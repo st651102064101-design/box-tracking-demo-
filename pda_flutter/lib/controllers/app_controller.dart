@@ -1016,11 +1016,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get lowPowerMode => prefs.lowPowerMode;
-  void setLowPowerMode(bool v) {
-    prefs.lowPowerMode = v;
-    notifyListeners();
-  }
+  /// Always on now — trims animations/gradients/shadows and widens
+  /// background-polling intervals everywhere that checks this, on every
+  /// device, all the time, for a consistently smooth app rather than
+  /// something an operator had to know to switch on. No longer reads
+  /// Prefs.lowPowerMode (the toggle that used to drive this is gone from
+  /// Settings) or exposes a setter.
+  bool get lowPowerMode => true;
 
   /// Session-only (not persisted) — starts each fresh entry into a
   /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
@@ -1516,14 +1518,17 @@ class AppController extends ChangeNotifier {
       toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
       return;
     }
-    // Gate scanning and the box-locate sweep both drive their own feedback
-    // instead of the reader's dense per-read tick: Gate's is discrete
-    // ok/error tones from addScan() (see playTone calls below); locate's is
-    // haptic-only, gated to genuine target matches (see
-    // RfidLocateScreen._onBatch) — a beep on every stray read of a
-    // neighbouring pallet's tags was exactly the bug this fixes. Every
-    // other RFID screen still wants the raw per-read feedback.
-    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate);
+    // Gate scanning, the box-locate sweep, and Track's own multi-tag list all
+    // drive their own feedback instead of the reader's dense per-read tick:
+    // Gate's is discrete ok/error tones from addScan() (see playTone calls
+    // below); locate's is haptic-only, gated to genuine target matches (see
+    // RfidLocateScreen._onBatch); Track's is one sound per newly-found tag
+    // (see _onReaderTag's Screen.track case). Leaving the native tick on for
+    // any of these means a re-read of a tag already handled still beeps —
+    // the SDK fires it from its own read callback with no idea a tag is a
+    // repeat, only Dart does. Every other RFID screen still wants the raw
+    // per-read feedback.
+    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate && screen != Screen.track);
     rfid.startInventory();
   }
 

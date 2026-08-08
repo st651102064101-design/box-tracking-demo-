@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 
 /// The "◈" brand mark on the dark rounded tile.
@@ -243,6 +245,7 @@ class OnlineChip extends StatelessWidget {
   const OnlineChip({super.key, required this.online, this.onTap});
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -258,7 +261,7 @@ class OnlineChip extends StatelessWidget {
             Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
                 size: 16, color: online ? C.limeText : C.muted),
             const SizedBox(width: 5),
-            Text(online ? 'ออนไลน์' : 'ออฟไลน์',
+            Text(loc.t(online ? 'ออนไลน์' : 'ออฟไลน์'),
                 style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,

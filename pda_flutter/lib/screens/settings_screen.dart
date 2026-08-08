@@ -37,7 +37,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         StickyHeader(
           onBack: c.backToHome,
-          title: const Text('ตั้งค่า'),
+          title: Text(loc.t('ตั้งค่า')),
           actions: [LangToggleButton(loc: loc), const SizedBox(width: 8), ThemeToggleButton(ctrl: themeCtrl)],
         ),
         Expanded(
@@ -50,7 +50,7 @@ class SettingsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Caption('การเชื่อมต่อระบบหลัก'),
+                    Caption(loc.t('การเชื่อมต่อระบบหลัก')),
                     const SizedBox(height: 12),
                     // Tappable only while actually disconnected — connected
                     // is nothing to act on. A tap first retries with
@@ -83,11 +83,11 @@ class SettingsScreen extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  c.connected ? 'เชื่อมต่อกับ BoxTrace แล้ว' : (c.connError ?? 'ยังไม่พบข้อมูล'),
+                                  c.connected ? loc.t('เชื่อมต่อกับ BoxTrace แล้ว') : (c.connError ?? loc.t('ยังไม่พบข้อมูล')),
                                   style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                                 ),
                                 Text(
-                                  c.connected ? 'พบ ${c.boxCount} กล่องในฐานข้อมูล' : 'แตะเพื่อเชื่อมต่อใหม่',
+                                  c.connected ? '${loc.t('พบ')} ${c.boxCount} ${loc.t('กล่องในฐานข้อมูล')}' : loc.t('แตะเพื่อเชื่อมต่อใหม่'),
                                   style: TextStyle(fontSize: 12, color: C.muted),
                                 ),
                               ],
@@ -104,41 +104,14 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Panel(
-                padding: const EdgeInsets.all(16),
-                radius: 18,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('โหมดประหยัดพลังงาน',
-                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 3),
-                          Text('ลดกราฟฟิกและความถี่รีเฟรช เพื่อความเร็วบนเครื่อง',
-                              style: TextStyle(fontSize: 12, color: C.muted, height: 1.4)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: c.lowPowerMode,
-                      onChanged: c.setLowPowerMode,
-                      activeThumbColor: C.lime,
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 10),
               const _RfidPanel(),
               if (isAdminOrNull) ...[
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.nfc,
-                  title: 'รับค่า RFID',
-                  sub: 'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่',
+                  title: loc.t('รับค่า RFID'),
+                  sub: loc.t('อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่'),
                   onTap: () => c.go(Screen.rfidInput),
                 ),
               ],
@@ -146,32 +119,32 @@ class SettingsScreen extends StatelessWidget {
               if (c.canConfigureDevice)
                 _tile(
                   icon: Icons.router_outlined,
-                  title: 'ตั้งค่าเครื่อง',
-                  sub: '${c.selWhName} · ประตู ${c.gate} · เซิร์ฟเวอร์ + บัญชีเครื่อง',
+                  title: loc.t('ตั้งค่าเครื่อง'),
+                  sub: '${c.selWhName} · ${loc.t('ประตู')} ${c.gate} · ${loc.t('เซิร์ฟเวอร์ + บัญชีเครื่อง')}',
                   onTap: c.goDeviceSetup,
                 )
               else
                 _tile(
                   icon: Icons.lock_outline,
-                  title: 'ตั้งค่าเครื่อง',
-                  sub: 'เฉพาะหัวหน้างาน — เครื่องนี้ประจำ ${c.selWhName} ประตู ${c.gate}',
+                  title: loc.t('ตั้งค่าเครื่อง'),
+                  sub: '${loc.t('เฉพาะหัวหน้างาน — เครื่องนี้ประจำ')} ${c.selWhName} ${loc.t('ประตู')} ${c.gate}',
                   onTap: null,
                 ),
               if (c.emp != null) ...[
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.pin_outlined,
-                  title: 'รหัส PIN ส่วนตัว',
+                  title: loc.t('รหัส PIN ส่วนตัว'),
                   sub: c.emp!.hasPin
-                      ? 'ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส'
-                      : 'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ',
+                      ? loc.t('ตั้งไว้แล้ว — แตะเพื่อเปลี่ยนรหัส')
+                      : loc.t('ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ'),
                   onTap: () => _setupPin(context, c),
                 ),
                 const SizedBox(height: 10),
                 _tile(
                   icon: Icons.swap_horiz,
-                  title: 'เปลี่ยนคน / จบงาน',
-                  sub: 'กลับไปหน้ายิงบัตร',
+                  title: loc.t('เปลี่ยนคน / จบงาน'),
+                  sub: loc.t('กลับไปหน้ายิงบัตร'),
                   danger: true,
                   onTap: () => c.lock(),
                 ),
@@ -179,7 +152,7 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 18),
               Center(
                 child: Text(
-                  'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · เชื่อมกับ BoxTrace backend',
+                  'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ BoxTrace backend')}',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),
                 ),
@@ -266,22 +239,23 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _setupPin(BuildContext context, AppController c) async {
     final e = c.emp;
     if (e == null) return;
+    final loc = context.read<LocaleController>();
 
     if (e.hasPin) {
       String? otpSentTo;
       final verify = await showPinPad(
         context,
-        title: 'ใส่รหัส PIN เดิมของ ${e.name}',
-        subtitle: 'ยืนยันตัวตนก่อนตั้งรหัสใหม่',
+        title: '${loc.t('ใส่รหัส PIN เดิมของ')} ${e.name}',
+        subtitle: loc.t('ยืนยันตัวตนก่อนตั้งรหัสใหม่'),
         showForgot: true,
         validate: (entered) async {
           try {
             final ok = await c.api.verifyEmployeePin(e.id, entered);
             if (ok) c.prefs.cachePinHash(e.id, entered);
-            return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
+            return ok ? null : loc.t('รหัสไม่ถูกต้อง ลองใหม่');
           } catch (err) {
             if (c.prefs.verifyPinOffline(e.id, entered)) return null;
-            return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
+            return loc.t('ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน');
           }
         },
         onForgot: () async {
@@ -290,7 +264,7 @@ class SettingsScreen extends StatelessWidget {
             otpSentTo = req['sentTo']?.toString();
             return null;
           } catch (err) {
-            return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+            return err is ApiException ? err.message : loc.t('ขอรหัส OTP ไม่สำเร็จ');
           }
         },
       );
@@ -305,16 +279,16 @@ class SettingsScreen extends StatelessWidget {
 
     final first = await showPinPad(
       context,
-      title: e.hasPin ? 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}' : 'ตั้งรหัส PIN สำหรับ ${e.name}',
-      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน',
+      title: e.hasPin ? '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}' : '${loc.t('ตั้งรหัส PIN สำหรับ')} ${e.name}',
+      subtitle: loc.t('ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน'),
     );
     if (first == null || first.pin == null) return;
     if (!context.mounted) return;
     final confirm = await showPinPad(
       context,
-      title: 'ยืนยันรหัส PIN อีกครั้ง',
-      subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
-      validate: (entered) async => entered == first.pin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      title: loc.t('ยืนยันรหัส PIN อีกครั้ง'),
+      subtitle: loc.t('พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน'),
+      validate: (entered) async => entered == first.pin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
     );
     if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
     if (!context.mounted) return;
@@ -322,12 +296,12 @@ class SettingsScreen extends StatelessWidget {
       await c.api.setEmployeePin(e.id, first.pin!);
     } catch (err) {
       if (!context.mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', '$err', ResultKind.err);
+      c.toastMsg(loc.t('ตั้งรหัส PIN ไม่สำเร็จ'), '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, first.pin!);
-    c.toastMsg('ตั้งรหัส PIN แล้ว', '', ResultKind.ok);
+    c.toastMsg(loc.t('ตั้งรหัส PIN แล้ว'), '', ResultKind.ok);
   }
 
   /// Same email-OTP reset login_screen.dart's badge flow uses (see its
@@ -336,31 +310,36 @@ class SettingsScreen extends StatelessWidget {
   /// keeps this screen's PIN change working even if the badge screen's PIN
   /// pad ever changes shape.
   Future<void> _forgotPinFlow(BuildContext context, AppController c, Employee e, String? sentTo) async {
+    final loc = context.read<LocaleController>();
     c.toastMsg(
-      'ส่งรหัส OTP แล้ว',
-      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      loc.t('ส่งรหัส OTP แล้ว'),
+      sentTo != null
+          ? '${loc.t('ส่งไปที่อีเมล')} $sentTo ${loc.t('แล้ว — กรอกรหัส 6 หลักด้านล่าง')}'
+          : loc.t('เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง'),
       ResultKind.info,
     );
     if (!context.mounted) return;
     final otpResult = await showPinPad(
       context,
-      title: 'กรอกรหัส OTP',
-      subtitle: sentTo != null ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)' : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      title: loc.t('กรอกรหัส OTP'),
+      subtitle: sentTo != null
+          ? '${loc.t('ส่งไปที่')} $sentTo ${loc.t('(มีอายุ 5 นาที)')}'
+          : loc.t('รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)'),
       length: 6,
     );
     if (otpResult == null || otpResult.pin == null) return;
     final otp = otpResult.pin!;
 
     if (!context.mounted) return;
-    final newPinResult = await showPinPad(context, title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}');
+    final newPinResult = await showPinPad(context, title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
     if (newPinResult == null || newPinResult.pin == null) return;
     final newPin = newPinResult.pin!;
 
     if (!context.mounted) return;
     final confirm = await showPinPad(
       context,
-      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
+      validate: (entered) async => entered == newPin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
     );
     if (confirm == null || confirm.pin == null) return;
 
@@ -369,13 +348,13 @@ class SettingsScreen extends StatelessWidget {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!context.mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      c.toastMsg(loc.t('รีเซ็ต PIN ไม่สำเร็จ'), err is ApiException ? err.message : '$err', ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);
     if (!context.mounted) return;
-    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
+    c.toastMsg(loc.t('ตั้งรหัส PIN ใหม่แล้ว'), '', ResultKind.ok);
   }
 }
 
@@ -456,25 +435,26 @@ class _RfidPanelState extends State<_RfidPanel> {
     }
   }
 
-  String _label(AppController c) {
-    if (!c.rfid.supported) return 'ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra';
+  String _label(AppController c, LocaleController loc) {
+    if (!c.rfid.supported) return loc.t('ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra');
     switch (c.rfidStatus.state) {
       case RfidState.connected:
-        return 'เชื่อมต่อเครื่องอ่านแล้ว';
+        return loc.t('เชื่อมต่อเครื่องอ่านแล้ว');
       case RfidState.connecting:
-        return 'กำลังเชื่อมต่อ…';
+        return loc.t('กำลังเชื่อมต่อ…');
       case RfidState.error:
-        return 'เชื่อมต่อไม่สำเร็จ';
+        return loc.t('เชื่อมต่อไม่สำเร็จ');
       case RfidState.disconnected:
-        return 'ตัดการเชื่อมต่อ';
+        return loc.t('ตัดการเชื่อมต่อ');
       case RfidState.idle:
-        return 'ยังไม่ได้เชื่อมต่อ';
+        return loc.t('ยังไม่ได้เชื่อมต่อ');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final power = _d['powerIndex'] == null
         ? null
         : '${_d['powerIndex']} / ${_d['powerMaxIndex'] ?? '-'}'
@@ -486,7 +466,7 @@ class _RfidPanelState extends State<_RfidPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Caption('เครื่องอ่าน RFID (Zebra)'),
+          Caption(loc.t('เครื่องอ่าน RFID (Zebra)')),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -497,7 +477,7 @@ class _RfidPanelState extends State<_RfidPanel> {
               ),
               const SizedBox(width: 11),
               Expanded(
-                child: Text(_label(c),
+                child: Text(_label(c, loc),
                     style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
               ),
               OutlinedButton(
@@ -510,7 +490,7 @@ class _RfidPanelState extends State<_RfidPanel> {
                   side: BorderSide(color: C.border2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                 ),
-                child: const Text('เชื่อมต่อใหม่'),
+                child: Text(loc.t('เชื่อมต่อใหม่')),
               ),
             ],
           ),
@@ -523,7 +503,7 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 14),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            const Text('ระยะยิงแท็ก', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            Text(loc.t('ระยะยิงแท็ก'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             // The slider needs the reader's own max index to cover every
             // step it actually has (see RfidService.setPowerIndex) — that
@@ -571,7 +551,7 @@ class _RfidPanelState extends State<_RfidPanel> {
                     children: [
                       Icon(Icons.wifi_tethering, size: 17, color: _testFiring ? C.limeDeep : C.ink2),
                       const SizedBox(width: 8),
-                      Text(_testFiring ? 'กำลังยิงทดสอบ… ปล่อยนิ้วเพื่อหยุด' : 'กดค้างเพื่อทดสอบยิง',
+                      Text(loc.t(_testFiring ? 'กำลังยิงทดสอบ… ปล่อยนิ้วเพื่อหยุด' : 'กดค้างเพื่อทดสอบยิง'),
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -582,7 +562,7 @@ class _RfidPanelState extends State<_RfidPanel> {
               ),
             ] else
               Text(
-                'เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้',
+                loc.t('เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้'),
                 style: TextStyle(fontSize: 12, color: C.faint, height: 1.4),
               ),
             const SizedBox(height: 14),
@@ -590,8 +570,8 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Expanded(
-                  child: Text('กรองสัญญาณอ่อน (RSSI)', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Text(loc.t('กรองสัญญาณอ่อน (RSSI)'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
                 ),
                 Switch(
                   value: c.prefs.rfidMinRssi != null,
@@ -609,7 +589,7 @@ class _RfidPanelState extends State<_RfidPanel> {
               ],
             ),
             Text(
-              'ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ',
+              loc.t('ตัดทิ้งแท็กที่อ่านได้อ่อนกว่าค่าที่ตั้ง — กันอ่านทะลุไปโดนพาเลทข้างๆ'),
               style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
             ),
             if (c.prefs.rfidMinRssi != null) ...[
@@ -622,19 +602,19 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 14),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            const Text('เสียงเมื่อเจอแท็ก RFID', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            Text(loc.t('เสียงเมื่อเจอแท็ก RFID'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-              'แตะเพื่อฟังตัวอย่างแล้วเลือกทันที',
+              loc.t('แตะเพื่อฟังตัวอย่างแล้วเลือกทันที'),
               style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
             ),
             const SizedBox(height: 10),
             _SoundRow(
-              label: 'เสียงตอนอ่าน RFID',
+              label: loc.t('เสียงตอนอ่าน RFID'),
               soundId: c.prefs.rfidSoundId,
               onTap: () => showSoundPickerSheet(
                 context,
-                title: 'เสียงตอนอ่าน RFID',
+                title: loc.t('เสียงตอนอ่าน RFID'),
                 currentId: c.prefs.rfidSoundId,
                 onPreview: c.rfid.playSound,
                 onSelect: c.setRfidSoundId,
@@ -650,8 +630,8 @@ class _RfidPanelState extends State<_RfidPanel> {
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text(
-                'บนเบราว์เซอร์/เดสก์ท็อปจะไม่มีเครื่องอ่าน — ใช้ช่องพิมพ์รหัสแทนได้ '
-                'รายละเอียดด้านล่างจะขึ้นเมื่อรันบนเครื่องจริง',
+                loc.t('บนเบราว์เซอร์/เดสก์ท็อปจะไม่มีเครื่องอ่าน — ใช้ช่องพิมพ์รหัสแทนได้ '
+                    'รายละเอียดด้านล่างจะขึ้นเมื่อรันบนเครื่องจริง'),
                 style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.45),
               ),
             ),
@@ -659,19 +639,19 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 14),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            _row('รุ่นเครื่องอ่าน', _d['model']),
-            _row('ชื่ออุปกรณ์', _d['host']),
-            _row('หมายเลขเครื่อง', _d['serial']),
-            _row('เฟิร์มแวร์', _d['firmware']),
-            _row('ภูมิภาค (Region)', _d['region']),
-            _row('ช่องทางเชื่อมต่อ', _d['transport']),
-            _row('กำลังส่ง (index)', power),
+            _row(loc.t('รุ่นเครื่องอ่าน'), _d['model']),
+            _row(loc.t('ชื่ออุปกรณ์'), _d['host']),
+            _row(loc.t('หมายเลขเครื่อง'), _d['serial']),
+            _row(loc.t('เฟิร์มแวร์'), _d['firmware']),
+            _row(loc.t('ภูมิภาค (Region)'), _d['region']),
+            _row(loc.t('ช่องทางเชื่อมต่อ'), _d['transport']),
+            _row(loc.t('กำลังส่ง (index)'), power),
             const SizedBox(height: 10),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            _row('แท็กที่อ่านได้สะสม', '${_d['tagCount'] ?? 0}'),
-            _row('EPC ล่าสุด', _d['lastEpc']),
-            _row('RSSI ล่าสุด', _d['lastRssi']?.toString()),
+            _row(loc.t('แท็กที่อ่านได้สะสม'), '${_d['tagCount'] ?? 0}'),
+            _row(loc.t('EPC ล่าสุด'), _d['lastEpc']),
+            _row(loc.t('RSSI ล่าสุด'), _d['lastRssi']?.toString()),
             if (_d['lastError'] != null) ...[
               const SizedBox(height: 8),
               Container(
@@ -681,14 +661,14 @@ class _RfidPanelState extends State<_RfidPanel> {
                   color: C.redBg,
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Text('ข้อผิดพลาดล่าสุด: ${_d['lastError']}',
+                child: Text('${loc.t('ข้อผิดพลาดล่าสุด')}: ${_d['lastError']}',
                     style: TextStyle(fontSize: 12, color: C.red, height: 1.4)),
               ),
             ],
             const SizedBox(height: 10),
             Text(
-              'ทดสอบ: เหนี่ยวไกค้างไว้ 5 วินาทีใกล้กล่องที่ติดแท็ก — ถ้าตัวเลข '
-              '"แท็กที่อ่านได้สะสม" เดินขึ้น แปลว่าเครื่องอ่านทำงานครบวงจรแล้ว',
+              loc.t('ทดสอบ: เหนี่ยวไกค้างไว้ 5 วินาทีใกล้กล่องที่ติดแท็ก — ถ้าตัวเลข '
+                  '"แท็กที่อ่านได้สะสม" เดินขึ้น แปลว่าเครื่องอ่านทำงานครบวงจรแล้ว'),
               style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.45),
             ),
           ],
@@ -736,13 +716,19 @@ class _RssiPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(value <= -80 ? 'หลวม · รับเกือบทุกแท็ก' : value <= -55 ? 'ปานกลาง' : 'เข้ม · เฉพาะแท็กใกล้มาก',
+            Text(
+                loc.t(value <= -80
+                    ? 'หลวม · รับเกือบทุกแท็ก'
+                    : value <= -55
+                        ? 'ปานกลาง'
+                        : 'เข้ม · เฉพาะแท็กใกล้มาก'),
                 style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
             Text('$value dBm',
                 style: TextStyle(
@@ -789,23 +775,24 @@ class _RangePicker extends StatelessWidget {
   /// relative to [max] — this is the same ใกล้/ปานกลาง/ไกล vocabulary the
   /// original preset picker used, now derived from position instead of
   /// snapped to it.
-  String _label(int v) {
+  String _label(int v, LocaleController loc) {
     if (max <= 0) return '';
     final pct = v / max * 100;
-    if (pct <= 40) return 'ใกล้ · ~30 ซม.';
-    if (pct <= 75) return 'ปานกลาง · ~1-2 ม.';
-    return 'ไกล · สุดกำลังเครื่อง';
+    if (pct <= 40) return loc.t('ใกล้ · ~30 ซม.');
+    if (pct <= 75) return loc.t('ปานกลาง · ~1-2 ม.');
+    return loc.t('ไกล · สุดกำลังเครื่อง');
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_label(value), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            Text(_label(value, loc), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
             Text('$value / $max',
                 style: TextStyle(
                     fontSize: 13.5,

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -68,6 +69,7 @@ class _TrackScreenState extends State<TrackScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     // keep the field in sync when a hardware read populates trackVal
     if (c.trackVal.isNotEmpty && _ctrl.text != c.trackVal) {
       _ctrl.text = c.trackVal;
@@ -80,14 +82,14 @@ class _TrackScreenState extends State<TrackScreen> {
       children: [
         StickyHeader(
           onBack: c.backToHome,
-          title: const Text('ค้นหา / ตรวจสอบกล่อง'),
-          subtitle: const Text('ยิงหรือพิมพ์รหัสกล่อง'),
+          title: Text(loc.t('ค้นหา / ตรวจสอบกล่อง')),
+          subtitle: Text(loc.t('ยิงหรือพิมพ์รหัสกล่อง')),
         ),
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
             children: [
-              _inputModeToggle(c),
+              _inputModeToggle(c, loc),
               const SizedBox(height: 11),
               // search box — hidden entirely in RFID mode (see the toggle
               // above): nothing to type when the reader resolves the scan
@@ -103,7 +105,7 @@ class _TrackScreenState extends State<TrackScreen> {
                   onSubmitted: (_) => _search(c),
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
                   decoration: InputDecoration(
-                    hintText: 'รหัสกล่อง เช่น CRT-01',
+                    hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
                     hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                     prefixIcon: Icon(Icons.search, color: C.muted),
                     isDense: true,
@@ -136,7 +138,7 @@ class _TrackScreenState extends State<TrackScreen> {
                     children: [
                       Icon(Icons.wifi_tethering, size: 22, color: C.muted),
                       const SizedBox(height: 6),
-                      Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
+                      Text(loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID'),
                           style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
                     ],
                   ),
@@ -150,15 +152,15 @@ class _TrackScreenState extends State<TrackScreen> {
               if (c.scanInputMode == ScanInputMode.rfid && c.trackRfidHits.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 8),
-                  child: Text('พบ ${c.trackRfidHits.length} แท็ก',
+                  child: Text('${loc.t('พบ')} ${c.trackRfidHits.length} ${loc.t('แท็ก')}',
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
                 ),
-                _rfidHitsList(c),
+                _rfidHitsList(c, loc),
                 if (box != null) const SizedBox(height: 14),
               ] else if (box == null && c.trackSuggestions.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 8),
-                  child: Text('พบ ${c.trackSuggestions.length} กล่อง',
+                  child: Text('${loc.t('พบ')} ${c.trackSuggestions.length} ${loc.t('กล่อง')}',
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
                 ),
                 _suggestions(c),
@@ -166,11 +168,11 @@ class _TrackScreenState extends State<TrackScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Center(
-                    child: Text('ไม่พบกล่อง "${c.trackVal}" ในระบบ',
+                    child: Text('${loc.t('ไม่พบกล่อง')} "${c.trackVal}" ${loc.t('ในระบบ')}',
                         style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
                   ),
                 ),
-              if (box != null) _card(c, box),
+              if (box != null) _card(c, box, loc),
             ],
           ),
         ),
@@ -178,7 +180,7 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _inputModeToggle(AppController c) {
+  Widget _inputModeToggle(AppController c, LocaleController loc) {
     Widget seg(ScanInputMode m, String label, IconData icon) {
       final selected = c.scanInputMode == m;
       return Expanded(
@@ -220,7 +222,7 @@ class _TrackScreenState extends State<TrackScreen> {
       decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
           seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
@@ -297,7 +299,7 @@ class _TrackScreenState extends State<TrackScreen> {
   /// Vertical list of every distinct tag the reader has found this sweep
   /// (see AppController.trackRfidHits) — one row per tag, in the order it
   /// was first seen, tap a row to open its full detail card below.
-  Widget _rfidHitsList(AppController c) {
+  Widget _rfidHitsList(AppController c, LocaleController loc) {
     final S = c.S;
     final tags = c.trackRfidHits;
     return Container(
@@ -337,7 +339,7 @@ class _TrackScreenState extends State<TrackScreen> {
                         if (b != null)
                           Text(S!.typeName(b.type), style: TextStyle(fontSize: 12, color: C.muted))
                         else
-                          Text('ไม่พบกล่องนี้ในระบบ', style: TextStyle(fontSize: 12, color: C.red)),
+                          Text(loc.t('ไม่พบกล่องนี้ในระบบ'), style: TextStyle(fontSize: 12, color: C.red)),
                       ],
                     ),
                   ),
@@ -351,25 +353,25 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _card(AppController c, Box b) {
+  Widget _card(AppController c, Box b, LocaleController loc) {
     final S = c.S!;
     final sm = StatusMeta.of(b.status);
     String line1Label, line1;
     if (b.status == 'out') {
-      line1Label = 'ลูกค้า / DO';
+      line1Label = loc.t('ลูกค้า / DO');
       line1 = '${S.custName(b.customer)}${b.doNo.isNotEmpty ? ' · ${b.doNo}' : ''}';
     } else if (b.status == 'lost') {
-      line1Label = 'สูญหายกับ';
+      line1Label = loc.t('สูญหายกับ');
       line1 = S.custName(b.customer);
     } else {
       final l = b.location;
       final parts = <String>[S.whName(l['wh']?.toString())];
-      if ((l['zone'] ?? '').toString().isNotEmpty) parts.add('โซน ${l['zone']}');
+      if ((l['zone'] ?? '').toString().isNotEmpty) parts.add('${loc.t('โซน')} ${l['zone']}');
       if ((l['rack'] ?? '').toString().isNotEmpty) parts.add('${l['rack']}');
-      line1Label = 'ตำแหน่ง';
+      line1Label = loc.t('ตำแหน่ง');
       line1 = (l['zone'] != null || l['rack'] != null) && parts.length > 1
           ? parts.join(' · ')
-          : '${S.whName(l['wh']?.toString())} · รอจัดเก็บ';
+          : '${S.whName(l['wh']?.toString())} · ${loc.t('รอจัดเก็บ')}';
     }
 
     final hist = b.history.reversed.take(6).toList();
@@ -435,9 +437,9 @@ class _TrackScreenState extends State<TrackScreen> {
               children: [
                 _row(line1Label, line1),
                 const SizedBox(height: 11),
-                _row('รอบหมุนเวียน', '${b.cycles} รอบ'),
+                _row(loc.t('รอบหมุนเวียน'), '${b.cycles} ${loc.t('รอบ')}'),
                 const SizedBox(height: 11),
-                _row('เห็นล่าสุด', c.fmtTs(b.lastSeenAt)),
+                _row(loc.t('เห็นล่าสุด'), c.fmtTs(b.lastSeenAt)),
               ],
             ),
           ),
@@ -447,9 +449,9 @@ class _TrackScreenState extends State<TrackScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6, bottom: 12),
-                    child: Caption('ประวัติล่าสุด'),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 12),
+                    child: Caption(loc.t('ประวัติล่าสุด')),
                   ),
                   ...List.generate(hist.length, (i) {
                     final h = hist[i];
@@ -457,20 +459,20 @@ class _TrackScreenState extends State<TrackScreen> {
                     final isInit = dir == 'in' && (h['note'] ?? '').toString().startsWith('รับเข้าครั้งแรก');
                     String title;
                     if (dir == 'out') {
-                      title = 'ออก → ${S.custName(h['customer']?.toString())}';
+                      title = '${loc.t('ออก')} → ${S.custName(h['customer']?.toString())}';
                     } else if (isInit) {
-                      title = 'รับเข้าครั้งแรก ${S.whName(h['wh']?.toString())}';
+                      title = '${loc.t('รับเข้าครั้งแรก')} ${S.whName(h['wh']?.toString())}';
                     } else if (dir == 'in') {
-                      title = 'รับคืนเข้า ${S.whName(h['wh']?.toString())}';
+                      title = '${loc.t('รับคืนเข้า')} ${S.whName(h['wh']?.toString())}';
                     } else if (dir == 'lost') {
-                      title = 'ตีเป็นสูญหาย';
+                      title = loc.t('ตีเป็นสูญหาย');
                     } else if (dir == 'relocate') {
-                      title = 'ย้ายตำแหน่ง';
+                      title = loc.t('ย้ายตำแหน่ง');
                     } else {
-                      title = 'ลงทะเบียน';
+                      title = loc.t('ลงทะเบียน');
                     }
                     final meta = <String>[c.fmtTs(h['ts']?.toString())];
-                    if ((h['recorder'] ?? '').toString().isNotEmpty) meta.add('โดย ${h['recorder']}');
+                    if ((h['recorder'] ?? '').toString().isNotEmpty) meta.add('${loc.t('โดย')} ${h['recorder']}');
                     if (dir == 'out' && (h['do'] ?? '').toString().isNotEmpty) meta.add('${h['do']}');
                     return _histRow(
                       color: histColor(dir),

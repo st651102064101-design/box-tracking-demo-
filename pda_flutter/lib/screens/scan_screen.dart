@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -114,6 +115,7 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final isOut = c.mode == 'out';
     // ทะเบียนรถ is only mandatory on the way out — Gate In doesn't require it.
@@ -132,13 +134,13 @@ class _ScanScreenState extends State<ScanScreen> {
           onBack: c.backToHome,
           title: Row(
             children: [
-              Pill(isOut ? 'ออก' : 'เข้า',
+              Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
                   color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
               const SizedBox(width: 7),
-              Text(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน'),
+              Text(loc.t(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน')),
             ],
           ),
-          subtitle: Text('${c.selWhName} · ประตู ${c.gate}'),
+          subtitle: Text('${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'),
           actions: [OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap)],
         ),
         Expanded(
@@ -160,20 +162,20 @@ class _ScanScreenState extends State<ScanScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.chevron_left, size: 17, color: C.muted),
-                            Text('กลับไปสแกนกล่องเพิ่ม',
+                            Text(loc.t('กลับไปสแกนกล่องเพิ่ม'),
                                 style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
                     ),
-                    isOut ? _outForm(c) : _inForm(c),
+                    isOut ? _outForm(c, loc) : _inForm(c, loc),
                   ]
                 : [
-                    _scannerPanel(c),
+                    _scannerPanel(c, loc),
                     const SizedBox(height: 13),
-                    _queueHeader(c),
+                    _queueHeader(c, loc),
                     const SizedBox(height: 8),
-                    ..._queueList(c),
+                    ..._queueList(c, loc),
                   ],
           ),
         ),
@@ -192,7 +194,7 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             ),
             child: PrimaryButton(
-              label: !_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง'),
+              label: loc.t(!_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 decoration: BoxDecoration(
@@ -208,17 +210,17 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _outForm(AppController c) {
+  Widget _outForm(AppController c, LocaleController loc) {
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const FieldLabel('ลูกค้าปลายทาง *'),
+          FieldLabel(loc.t('ลูกค้าปลายทาง *')),
           DropdownButtonFormField<String>(
             value: c.outCustomer.isEmpty ? null : c.outCustomer,
             isExpanded: true,
-            decoration: pdaInput('— เลือกลูกค้า —', radius: 12),
-            hint: Text('— เลือกลูกค้า —', style: TextStyle(color: C.faint)),
+            decoration: pdaInput(loc.t('— เลือกลูกค้า —'), radius: 12),
+            hint: Text(loc.t('— เลือกลูกค้า —'), style: TextStyle(color: C.faint)),
             items: c.customerList.map((cust) {
               final id = (cust['id'] ?? '').toString();
               return DropdownMenuItem(value: id, child: Text('$id · ${cust['name'] ?? ''}', overflow: TextOverflow.ellipsis));
@@ -232,7 +234,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('ทะเบียนรถ *'),
+                    FieldLabel(loc.t('ทะเบียนรถ *')),
                     TextField(controller: _plateCtrl, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
                   ],
                 ),
@@ -242,40 +244,40 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('คนขับ'),
-                    TextField(controller: _driverCtrl, onChanged: c.setOutDriver, decoration: pdaInput('ชื่อคนขับ', radius: 12)),
+                    FieldLabel(loc.t('คนขับ')),
+                    TextField(controller: _driverCtrl, onChanged: c.setOutDriver, decoration: pdaInput(loc.t('ชื่อคนขับ'), radius: 12)),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 11),
-          const FieldLabel('ประเภทรถ'),
+          FieldLabel(loc.t('ประเภทรถ')),
           DropdownButtonFormField<String>(
             value: c.outVehicleType.isEmpty ? null : c.outVehicleType,
             isExpanded: true,
-            decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
-            hint: Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
-            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
+            hint: Text(loc.t('— เลือกประเภทรถ —'), style: TextStyle(color: C.faint)),
+            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t)))).toList(),
             onChanged: (v) => c.setOutVehicleType(v ?? ''),
           ),
           if (c.outVehicleType == 'อื่นๆ') ...[
             const SizedBox(height: 9),
-            const FieldLabel('ระบุประเภทรถ *'),
+            FieldLabel(loc.t('ระบุประเภทรถ *')),
             TextField(
                 controller: _outVtypeOtherCtrl,
                 onChanged: c.setOutVehicleTypeOther,
-                decoration: pdaInput('เช่น รถตู้ / รถพ่วง', radius: 12)),
+                decoration: pdaInput(loc.t('เช่น รถตู้ / รถพ่วง'), radius: 12)),
           ],
           const SizedBox(height: 8),
-          Text('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก',
+          Text(loc.t('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก'),
               style: TextStyle(fontSize: 11.5, color: C.muted)),
         ],
       ),
     );
   }
 
-  Widget _inForm(AppController c) {
+  Widget _inForm(AppController c, LocaleController loc) {
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,7 +288,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('ทะเบียนรถ'),
+                    FieldLabel(loc.t('ทะเบียนรถ')),
                     TextField(
                         controller: _inPlateCtrl,
                         onChanged: c.setInPlate,
@@ -299,40 +301,40 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const FieldLabel('คนขับ'),
+                    FieldLabel(loc.t('คนขับ')),
                     TextField(
                         controller: _inDriverCtrl,
                         onChanged: c.setInDriver,
-                        decoration: pdaInput('ชื่อคนขับ', radius: 12)),
+                        decoration: pdaInput(loc.t('ชื่อคนขับ'), radius: 12)),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 11),
-          const FieldLabel('ประเภทรถ'),
+          FieldLabel(loc.t('ประเภทรถ')),
           DropdownButtonFormField<String>(
             value: c.inVehicleType.isEmpty ? null : c.inVehicleType,
             isExpanded: true,
-            decoration: pdaInput('— เลือกประเภทรถ —', radius: 12),
-            hint: Text('— เลือกประเภทรถ —', style: TextStyle(color: C.faint)),
-            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
+            hint: Text(loc.t('— เลือกประเภทรถ —'), style: TextStyle(color: C.faint)),
+            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t)))).toList(),
             onChanged: (v) => c.setInVehicleType(v ?? ''),
           ),
           if (c.inVehicleType == 'อื่นๆ') ...[
             const SizedBox(height: 9),
-            const FieldLabel('ระบุประเภทรถ *'),
+            FieldLabel(loc.t('ระบุประเภทรถ *')),
             TextField(
                 controller: _inVtypeOtherCtrl,
                 onChanged: c.setInVehicleTypeOther,
-                decoration: pdaInput('เช่น รถตู้ / รถพ่วง', radius: 12)),
+                decoration: pdaInput(loc.t('เช่น รถตู้ / รถพ่วง'), radius: 12)),
           ],
         ],
       ),
     );
   }
 
-  Widget _scannerPanel(AppController c) {
+  Widget _scannerPanel(AppController c, LocaleController loc) {
     // Trigger's actually held in RFID mode: collapse the toggle/status card
     // to a slim strip so the boxes landing in the queue below get the
     // screen, not a card that already did its job of picking the mode.
@@ -352,7 +354,7 @@ class _ScanScreenState extends State<ScanScreen> {
               child: CircularProgressIndicator(strokeWidth: 2.2, color: C.limeDeep),
             ),
             const SizedBox(width: 11),
-            Text('กำลังอ่านแท็ก RFID…',
+            Text(loc.t('กำลังอ่านแท็ก RFID…'),
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.limeDeep)),
           ],
         ),
@@ -360,12 +362,12 @@ class _ScanScreenState extends State<ScanScreen> {
     }
     final connected = c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
     final readyText = !c.rfid.supported
-        ? 'โหมดจำลอง'
+        ? loc.t('โหมดจำลอง')
         : c.rfidStatus.state == RfidState.connected
-            ? 'สแกนเนอร์พร้อม'
+            ? loc.t('สแกนเนอร์พร้อม')
             : c.rfidStatus.state == RfidState.connecting
-                ? 'กำลังเชื่อมต่อ…'
-                : 'สแกนเนอร์ไม่พร้อม';
+                ? loc.t('กำลังเชื่อมต่อ…')
+                : loc.t('สแกนเนอร์ไม่พร้อม');
     // This card repaints on every scan while the trigger's held — a
     // gradient background is a per-frame cost that flat color isn't, and
     // this is the one background in the app redrawing at scan speed rather
@@ -408,7 +410,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
           ),
           const SizedBox(height: 11),
-          _inputModeToggle(c),
+          _inputModeToggle(c, loc),
           const SizedBox(height: 11),
           // scan input — Enter (a scanner's trailing keystroke, or the
           // keyboard's "Go"/"Done" action) submits; no separate tap needed.
@@ -428,7 +430,7 @@ class _ScanScreenState extends State<ScanScreen> {
               style: const TextStyle(
                   fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
               decoration: InputDecoration(
-                hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัส',
+                hintText: loc.t('ยิงบาร์โค้ด หรือพิมพ์รหัส'),
                 hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
@@ -461,7 +463,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 children: [
                   Icon(Icons.wifi_tethering, size: 22, color: C.muted),
                   const SizedBox(height: 6),
-                  Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
+                  Text(loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID'),
                       style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
                 ],
               ),
@@ -472,7 +474,7 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _inputModeToggle(AppController c) {
+  Widget _inputModeToggle(AppController c, LocaleController loc) {
     Widget seg(ScanInputMode m, String label, IconData icon) {
       final selected = c.scanInputMode == m;
       return Expanded(
@@ -515,7 +517,7 @@ class _ScanScreenState extends State<ScanScreen> {
       decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
           seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
@@ -562,31 +564,31 @@ class _ScanScreenState extends State<ScanScreen> {
     );
   }
 
-  Widget _queueHeader(AppController c) {
+  Widget _queueHeader(AppController c, LocaleController loc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('คิวสแกน · ${c.queue.length} ใบ',
+          Text('${loc.t('คิวสแกน')} · ${c.queue.length} ${loc.t('ใบ')}',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
           if (c.queue.isNotEmpty)
             GestureDetector(
               onTap: c.clearQueue,
-              child: Text('ล้างคิว', style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w500)),
+              child: Text(loc.t('ล้างคิว'), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w500)),
             ),
         ],
       ),
     );
   }
 
-  List<Widget> _queueList(AppController c) {
+  List<Widget> _queueList(AppController c, LocaleController loc) {
     if (c.queue.isEmpty) {
       return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 26, horizontal: 16),
           child: Center(
-            child: Text('ยังไม่มีกล่องในคิว — ยิงบาร์โค้ดเพื่อเริ่ม',
+            child: Text(loc.t('ยังไม่มีกล่องในคิว — ยิงบาร์โค้ดเพื่อเริ่ม'),
                 style: TextStyle(fontSize: 13, color: C.faint)),
           ),
         )
@@ -604,16 +606,16 @@ class _ScanScreenState extends State<ScanScreen> {
       late Color bc, bbg;
       if (c.mode == 'in') {
         if (isRet) {
-          badge = 'คืน · ${(b?.cycles ?? 0) + 1}';
+          badge = '${loc.t('คืน')} · ${(b?.cycles ?? 0) + 1}';
           bc = C.limeText;
           bbg = C.limeBg;
         } else {
-          badge = 'ใหม่';
+          badge = loc.t('ใหม่');
           bc = C.ink2;
           bbg = C.neutralBg;
         }
       } else {
-        badge = 'พร้อมจ่าย';
+        badge = loc.t('พร้อมจ่าย');
         bc = C.ink2;
         bbg = C.neutralBg;
       }
@@ -692,6 +694,7 @@ class _ConditionPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     Widget chip(String? v, String label, Color c, Color bg) {
       final selected = value == v;
       return Expanded(
@@ -717,11 +720,11 @@ class _ConditionPicker extends StatelessWidget {
 
     return Row(
       children: [
-        chip(null, 'ปกติ', C.limeText, C.limeBg),
+        chip(null, loc.t('ปกติ'), C.limeText, C.limeBg),
         const SizedBox(width: 6),
-        chip('damage', 'ชำรุด', C.red, C.redBg),
+        chip('damage', loc.t('ชำรุด'), C.red, C.redBg),
         const SizedBox(width: 6),
-        chip('hold', 'พัก (Hold)', C.orange, C.orangeBg),
+        chip('hold', loc.t('พัก (Hold)'), C.orange, C.orangeBg),
       ],
     );
   }

@@ -33,7 +33,6 @@ class Prefs {
   static const _kOutbox = 'boxtrace_pda_outbox';
   static const _kLang = 'boxtrace_lang';
   static const _kDark = 'boxtrace_dark';
-  static const _kLowPower = 'boxtrace_low_power';
   static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
   static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
   static const _kRfidSoundId = 'boxtrace_rfid_sound_id';
@@ -63,15 +62,6 @@ class Prefs {
 
   bool get darkMode => _p.getBool(_kDark) ?? false;
   set darkMode(bool v) => _p.setBool(_kDark, v);
-
-  /// Trims animations, gradients, shadows, and background polling intervals
-  /// across the app — the MC3390R visibly drops frames under the full
-  /// visual treatment (cross-fade screen transitions, gradient panels,
-  /// shadowed cards) once its battery is warm or several screens have
-  /// stacked up. Off by default: full graphics unless an operator asks for
-  /// speed over polish.
-  bool get lowPowerMode => _p.getBool(_kLowPower) ?? false;
-  set lowPowerMode(bool v) => _p.setBool(_kLowPower, v);
 
   /// Minimum RSSI (dBm) a read has to clear to count at all — the "stray
   /// read" filter: RFID punches through cardboard and thin stock easily

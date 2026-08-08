@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -12,6 +13,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
 
@@ -50,8 +52,8 @@ class HomeScreen extends StatelessWidget {
                         ),
                         Text(
                             c.postConfirmed
-                                ? '${c.selWhName} · ประตู ${c.gate}${_gateDirSuffix(c.currentGateType)}'
-                                : 'ยังไม่ได้เลือกคลัง/ประตู',
+                                ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}${_gateDirSuffix(c.currentGateType, loc)}'
+                                : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: C.muted)),
@@ -81,12 +83,12 @@ class HomeScreen extends StatelessWidget {
                       border: Border.all(color: C.orangeBorder),
                     ),
                     child: Text(
-                      'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง',
+                      loc.t('ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง'),
                       style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
                     ),
                   ),
                 ),
-              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c)),
+              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c, loc)),
             ],
           ),
         ),
@@ -98,12 +100,12 @@ class HomeScreen extends StatelessWidget {
 /// รอยิงบัตรแล้ว แต่ยังไม่ได้ยืนยันคลัง/ประตูของรอบทำงานนี้ — "งานหลัก" ยังไม่โผล่
 /// จนกว่าจะเลือกคลังแล้วเลือกประตูให้ครบ (ดู [AppController.selectPendingWh] /
 /// [AppController.confirmPost])
-List<Widget> _postPickerBody(AppController c) {
+List<Widget> _postPickerBody(AppController c, LocaleController loc) {
   final whs = c.warehouseList;
   if (whs.isEmpty) {
     return [
       const SizedBox(height: 16),
-      _Note('ยังไม่มีคลังในระบบ — ไปเพิ่มคลังที่ระบบหลักก่อน'),
+      _Note(loc.t('ยังไม่มีคลังในระบบ — ไปเพิ่มคลังที่ระบบหลักก่อน')),
     ];
   }
   final pendingWh = c.pendingWh;
@@ -111,12 +113,12 @@ List<Widget> _postPickerBody(AppController c) {
     final showLast = c.hasLastSelection && whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
     return [
       const SizedBox(height: 16),
-      const Caption('เลือกคลัง'),
+      Caption(loc.t('เลือกคลัง')),
       const SizedBox(height: 10),
       if (showLast) ...[
         _WhPickTile(
-          name: '${c.lastWhName} · ประตู ${c.lastGate}',
-          tag: 'ล่าสุด',
+          name: '${c.lastWhName} · ${loc.t('ประตู')} ${c.lastGate}',
+          tag: loc.t('ล่าสุด'),
           icon: Icons.history,
           onTap: c.useLastPost,
         ),
@@ -142,13 +144,13 @@ List<Widget> _postPickerBody(AppController c) {
     Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(child: Caption('เลือกประตู · $whName')),
+        Expanded(child: Caption('${loc.t('เลือกประตู')} · $whName')),
         InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: c.clearPendingWh,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Text('เปลี่ยนคลัง',
+            child: Text(loc.t('เปลี่ยนคลัง'),
                 style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
           ),
         ),
@@ -171,23 +173,24 @@ List<Widget> _postPickerBody(AppController c) {
 
 /// คลัง/ประตูยืนยันแล้ว — สถิติ + "งานหลัก" ตามปกติ
 List<Widget> _confirmedBody(BuildContext context, AppController c) {
+  final loc = context.watch<LocaleController>();
   return [
     Row(
       children: [
         Expanded(
           child: _Stat(
             value: '${c.warehouseCount}',
-            label: 'ในคลัง',
-            onTap: () => _showBoxListSheet(context, c, title: 'กล่องในคลัง', status: 'warehouse'),
+            label: loc.t('ในคลัง'),
+            onTap: () => _showBoxListSheet(context, c, title: loc.t('กล่องในคลัง'), status: 'warehouse'),
           ),
         ),
         const SizedBox(width: 9),
         Expanded(
           child: _Stat(
             value: '${c.outCount}',
-            label: 'ออกอยู่',
+            label: loc.t('ออกอยู่'),
             valueColor: C.orange,
-            onTap: () => _showBoxListSheet(context, c, title: 'กล่องที่ออกอยู่', status: 'out'),
+            onTap: () => _showBoxListSheet(context, c, title: loc.t('กล่องที่ออกอยู่'), status: 'out'),
           ),
         ),
         const SizedBox(width: 9),
@@ -203,24 +206,24 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     if (c.emp != null && c.isVisiting(c.emp!))
       Padding(
         padding: const EdgeInsets.only(top: 14),
-        child: _Note('คุณประจำ ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
-            '— รายการที่ยิงจะบันทึกที่ ${c.selWhName} ประตู ${c.gate}'),
+        child: _Note('${loc.t('คุณประจำ')} ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
+            '${loc.t('— รายการที่ยิงจะบันทึกที่')} ${c.selWhName} ${loc.t('ประตู')} ${c.gate}'),
       ),
     if (!c.canScan)
       Padding(
         padding: const EdgeInsets.only(top: 14),
-        child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
+        child: _Note(loc.t('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้')),
       ),
     const SizedBox(height: 16),
-    const Caption('งานหลัก'),
+    Caption(loc.t('งานหลัก')),
     const SizedBox(height: 10),
     if (c.canScan) ...[
       _ActionCard(
         icon: Icons.add_box,
         iconColor: C.limeDeep,
         iconBg: C.limeBg,
-        title: 'ลงทะเบียนกล่อง',
-        sub: 'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway',
+        title: loc.t('ลงทะเบียนกล่อง'),
+        sub: loc.t('รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway'),
         onTap: c.goBoxRegister,
       ),
       const SizedBox(height: 12),
@@ -233,8 +236,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         icon: Icons.south,
         iconColor: C.lime,
         iconBg: C.onInk.withValues(alpha: 0.12),
-        title: 'รับเข้า / รับคืน',
-        sub: 'Gate In — ยิงกล่องกลับเข้าคลัง',
+        title: loc.t('รับเข้า / รับคืน'),
+        sub: loc.t('Gate In — ยิงกล่องกลับเข้าคลัง'),
         onTap: c.goScanIn,
       ),
       const SizedBox(height: 12),
@@ -244,8 +247,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         icon: Icons.north,
         iconColor: C.orange,
         iconBg: C.orangeBg,
-        title: 'ส่งออก',
-        sub: 'Gate Out — จ่ายกล่องออกให้ลูกค้า',
+        title: loc.t('ส่งออก'),
+        sub: loc.t('Gate Out — จ่ายกล่องออกให้ลูกค้า'),
         onTap: c.goScanOut,
       ),
       const SizedBox(height: 12),
@@ -258,8 +261,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         icon: Icons.qr_code_scanner,
         iconColor: C.ink2,
         iconBg: C.neutralBg,
-        title: 'ลงทะเบียนแท็ก RFID',
-        sub: 'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที',
+        title: loc.t('ลงทะเบียนแท็ก RFID'),
+        sub: loc.t('สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที'),
         onTap: c.goRfidRegister,
       ),
       const SizedBox(height: 12),
@@ -269,8 +272,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       icon: Icons.nfc,
       iconColor: C.ink2,
       iconBg: C.neutralBg,
-      title: 'หากล่อง / RFID',
-      sub: 'เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger',
+      title: loc.t('หากล่อง / RFID'),
+      sub: loc.t('เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger'),
       onTap: c.goLocate,
     ),
     const SizedBox(height: 12),
@@ -279,8 +282,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       icon: Icons.search,
       iconColor: C.ink2,
       iconBg: C.neutralBg,
-      title: 'ค้นหา / ตรวจสอบกล่อง',
-      sub: 'Track — ดูสถานะ ตำแหน่ง ประวัติ',
+      title: loc.t('ค้นหา / ตรวจสอบกล่อง'),
+      sub: loc.t('Track — ดูสถานะ ตำแหน่ง ประวัติ'),
       onTap: c.goTrack,
     ),
     if (c.outbox.isNotEmpty) ...[
@@ -358,6 +361,7 @@ Widget _detailRow({required String title, required String subtitle, Widget? trai
 /// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
 /// number, not just the count. [status] matches Box.status directly.
 void _showBoxListSheet(BuildContext context, AppController c, {required String title, required String status}) {
+  final loc = context.read<LocaleController>();
   final S = c.S;
   final boxes = (S?.boxes ?? const <Box>[]).where((b) => b.status == status).toList()
     ..sort((a, b) => a.tag.compareTo(b.tag));
@@ -368,7 +372,7 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('ไม่มีกล่อง', style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(child: Text(loc.t('ไม่มีกล่อง'), style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : boxes.map((b) {
@@ -376,7 +380,7 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
                 ? S!.custName(b.customer)
                 : [
                     S!.whName(b.location['wh']?.toString()),
-                    if ((b.location['zone'] ?? '').toString().isNotEmpty) 'โซน ${b.location['zone']}',
+                    if ((b.location['zone'] ?? '').toString().isNotEmpty) '${loc.t('โซน')} ${b.location['zone']}',
                   ].join(' · ');
             return _detailRow(
               title: b.tag,
@@ -388,6 +392,7 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
 
 /// "วันนี้" stat tap — every in/out event from today, newest first.
 void _showTodayEventsSheet(BuildContext context, AppController c) {
+  final loc = context.read<LocaleController>();
   final events = (c.S?.events ?? const [])
       .whereType<Map>()
       .where((e) {
@@ -404,12 +409,12 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
     ..sort((a, b) => (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
   _showDetailSheet(
     context,
-    title: 'วันนี้ (${events.length})',
+    title: '${loc.t('วันนี้')} (${events.length})',
     children: events.isEmpty
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('ยังไม่มีรายการวันนี้', style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(child: Text(loc.t('ยังไม่มีรายการวันนี้'), style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : events.map((e) {
@@ -423,7 +428,7 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
             return _detailRow(
               title: (e['tag'] ?? '').toString(),
               subtitle: [time, if (who.isNotEmpty) who].join(' · '),
-              trailing: Pill(isOut ? 'ออก' : 'เข้า',
+              trailing: Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
                   color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
             );
           }).toList(),
@@ -435,6 +440,7 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
 /// handover *is* the sign-out. The device itself stays signed in and stationed
 /// where it is, so the next operator is one badge scan away from working.
 void _openHandover(BuildContext context, AppController c) {
+  final loc = context.read<LocaleController>();
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -469,7 +475,7 @@ void _openHandover(BuildContext context, AppController c) {
           ),
           Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           Text(
-            [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
+            [c.emp?.subtitle ?? '', '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}']
                 .where((s) => s.isNotEmpty)
                 .join(' · '),
             style: TextStyle(fontSize: 12.5, color: C.muted),
@@ -477,8 +483,8 @@ void _openHandover(BuildContext context, AppController c) {
           const SizedBox(height: 16),
           _SheetAction(
             icon: Icons.swap_horiz,
-            label: 'เปลี่ยนคน / จบงาน',
-            sub: 'กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม',
+            label: loc.t('เปลี่ยนคน / จบงาน'),
+            sub: loc.t('กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม'),
             onTap: () {
               Navigator.of(sheetCtx).pop();
               c.lock();
@@ -488,8 +494,8 @@ void _openHandover(BuildContext context, AppController c) {
             const SizedBox(height: 10),
             _SheetAction(
               icon: Icons.sync_alt,
-              label: 'เปลี่ยนคลัง/ประตู',
-              sub: 'เลือกจุดทำงานใหม่สำหรับกะนี้',
+              label: loc.t('เปลี่ยนคลัง/ประตู'),
+              sub: loc.t('เลือกจุดทำงานใหม่สำหรับกะนี้'),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
                 c.reselectPost();
@@ -558,10 +564,10 @@ class _GatePickChip extends StatelessWidget {
   static const _outColor = Color(0xFFD93025);
 
   // 'in' | 'out' | 'both' -> spans สีตรงข้ามกัน; 'both' โชว์ทั้งสองคำต่อกัน
-  List<TextSpan> get _typeSpans {
+  List<TextSpan> _typeSpans(LocaleController loc) {
     const style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
-    final inSpan = TextSpan(text: 'เข้า', style: style.copyWith(color: _inColor));
-    final outSpan = TextSpan(text: 'ออก', style: style.copyWith(color: _outColor));
+    final inSpan = TextSpan(text: loc.t('เข้า'), style: style.copyWith(color: _inColor));
+    final outSpan = TextSpan(text: loc.t('ออก'), style: style.copyWith(color: _outColor));
     return switch (type) {
       'in' => [inSpan],
       'out' => [outSpan],
@@ -571,6 +577,7 @@ class _GatePickChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Material(
       color: C.neutralBg,
       borderRadius: BorderRadius.circular(13),
@@ -585,10 +592,10 @@ class _GatePickChip extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('ประตู $label',
+              Text('${loc.t('ประตู')} $label',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
-              Text.rich(TextSpan(children: _typeSpans)),
+              Text.rich(TextSpan(children: _typeSpans(loc))),
             ],
           ),
         ),
@@ -651,12 +658,12 @@ class _Note extends StatelessWidget {
       );
 }
 
-String _gateDirSuffix(String dir) {
+String _gateDirSuffix(String dir, LocaleController loc) {
   switch (dir) {
     case 'in':
-      return ' (เข้า)';
+      return ' (${loc.t('เข้า')})';
     case 'out':
-      return ' (ออก)';
+      return ' (${loc.t('ออก')})';
     default:
       return '';
   }
@@ -702,6 +709,7 @@ class _TodayStat extends StatelessWidget {
   const _TodayStat({required this.inN, required this.outN, this.onTap});
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -714,7 +722,7 @@ class _TodayStat extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 5),
-              Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
+              Text(loc.t('วันนี้'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
               Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
             ],
           ),
@@ -812,6 +820,7 @@ class _OutboxBanner extends StatelessWidget {
   const _OutboxBanner({required this.count, required this.onSync});
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
       decoration: BoxDecoration(
@@ -835,7 +844,7 @@ class _OutboxBanner extends StatelessWidget {
           ),
           const SizedBox(width: 11),
           Expanded(
-            child: Text('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์',
+            child: Text(loc.t('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์'),
                 style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
           ),
           const SizedBox(width: 8),

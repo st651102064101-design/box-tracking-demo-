@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
+import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -102,14 +103,15 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       }
     }
     if (!mounted) return;
+    final loc = context.read<LocaleController>();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('ตั้งระยะยิงสูงสุด'),
-        content: const Text('ระบบตั้งกำลังส่งสัญญาณของเครื่องอ่านไว้ที่ระยะไกลสุดโดยอัตโนมัติ '
-            'เพื่อให้กวาดหากล่องได้ไกลที่สุดเท่าที่เครื่องรองรับ'),
+        title: Text(loc.t('ตั้งระยะยิงสูงสุด')),
+        content: Text(loc.t('ระบบตั้งกำลังส่งสัญญาณของเครื่องอ่านไว้ที่ระยะไกลสุดโดยอัตโนมัติ '
+            'เพื่อให้กวาดหากล่องได้ไกลที่สุดเท่าที่เครื่องรองรับ')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('เข้าใจแล้ว')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(loc.t('เข้าใจแล้ว'))),
         ],
       ),
     );
@@ -274,6 +276,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     // Kept in sync every rebuild rather than only in initState/step
     // transitions — cheap, and guarantees a system back press always
     // matches whatever the StickyHeader arrow below would do right now.
@@ -282,18 +285,18 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       children: [
         StickyHeader(
           onBack: _step == _Step.locate ? () => _changeTarget(c) : c.backToHome,
-          title: const Text('หากล่อง / RFID'),
-          subtitle: Text(_step == _Step.pick ? 'เลือกกล่องที่จะหา' : 'กวาดหาสัญญาณ'),
+          title: Text(loc.t('หากล่อง / RFID')),
+          subtitle: Text(loc.t(_step == _Step.pick ? 'เลือกกล่องที่จะหา' : 'กวาดหาสัญญาณ')),
         ),
         Expanded(
-          child: _step == _Step.pick ? _pickBody(c) : _locateBody(c),
+          child: _step == _Step.pick ? _pickBody(c, loc) : _locateBody(c, loc),
         ),
       ],
     );
   }
 
   // ── Step 1: pick ──────────────────────────────────────────────────────
-  Widget _pickBody(AppController c) {
+  Widget _pickBody(AppController c, LocaleController loc) {
     final bottom = MediaQuery.of(context).padding.bottom;
     final q = _searchCtrl.text.trim().toLowerCase();
     final all = c.S?.boxes.toList() ?? const <Box>[];
@@ -307,7 +310,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
       children: [
-        _inputModeToggle(c),
+        _inputModeToggle(c, loc),
         const SizedBox(height: 11),
         if (c.scanInputMode == ScanInputMode.barcode)
           TextField(
@@ -319,7 +322,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             onChanged: (_) => setState(() {}),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
             decoration: InputDecoration(
-              hintText: 'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01',
+              hintText: loc.t('พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01'),
               hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
               prefixIcon: Icon(Icons.search, color: C.muted),
               isDense: true,
@@ -352,7 +355,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               children: [
                 Icon(Icons.wifi_tethering, size: 22, color: C.muted),
                 const SizedBox(height: 6),
-                Text('เหนี่ยวไกยิงแท็กของกล่องที่จะหา',
+                Text(loc.t('เหนี่ยวไกยิงแท็กของกล่องที่จะหา'),
                     style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
               ],
             ),
@@ -363,13 +366,13 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         else if (q.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-            child: Text('พิมพ์รหัสหรือประเภทกล่อง เพื่อค้นหากล่องที่จะตามหา',
+            child: Text(loc.t('พิมพ์รหัสหรือประเภทกล่อง เพื่อค้นหากล่องที่จะตามหา'),
                 style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
           )
         else if (results.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-            child: Text('ไม่พบกล่องที่ตรงกับ "$q"',
+            child: Text('${loc.t('ไม่พบกล่องที่ตรงกับ')} "$q"',
                 style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
           )
         else
@@ -406,7 +409,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                                   style: const TextStyle(
                                       fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
                               Text(
-                                hasTag ? c.S!.typeName(b.type) : '${c.S!.typeName(b.type)} · ยังไม่ได้ผูกแท็ก RFID',
+                                hasTag
+                                    ? c.S!.typeName(b.type)
+                                    : '${c.S!.typeName(b.type)} · ${loc.t('ยังไม่ได้ผูกแท็ก RFID')}',
                                 style: TextStyle(fontSize: 12, color: hasTag ? C.muted : C.red),
                               ),
                             ],
@@ -425,7 +430,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 
   // ── Step 2: locate ────────────────────────────────────────────────────
-  Widget _locateBody(AppController c) {
+  Widget _locateBody(AppController c, LocaleController loc) {
     final bottom = MediaQuery.of(context).padding.bottom;
     final b = _target!;
     final S = c.S!;
@@ -436,12 +441,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     final l = b.location;
     final locParts = <String>[];
     if (b.status == 'out') {
-      locParts.add('ออกอยู่กับ ${S.custName(b.customer)}');
+      locParts.add('${loc.t('ออกอยู่กับ')} ${S.custName(b.customer)}');
     } else if (b.status == 'lost') {
-      locParts.add('แจ้งสูญหาย');
+      locParts.add(loc.t('แจ้งสูญหาย'));
     } else {
       locParts.add(S.whName(l['wh']?.toString()));
-      if ((l['zone'] ?? '').toString().isNotEmpty) locParts.add('โซน ${l['zone']}');
+      if ((l['zone'] ?? '').toString().isNotEmpty) locParts.add('${loc.t('โซน')} ${l['zone']}');
       if ((l['rack'] ?? '').toString().isNotEmpty) locParts.add('${l['rack']}');
     }
 
@@ -475,7 +480,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               ),
               GestureDetector(
                 onTap: () => _changeTarget(c),
-                child: Text('เปลี่ยนกล่อง', style: TextStyle(fontSize: 12.5, color: C.ink2, fontWeight: FontWeight.w600)),
+                child: Text(loc.t('เปลี่ยนกล่อง'), style: TextStyle(fontSize: 12.5, color: C.ink2, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -500,12 +505,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                   Expanded(
                     child: Text(
                       !c.rfid.supported
-                          ? 'ใช้ได้เฉพาะบนเครื่องอ่าน Zebra'
+                          ? loc.t('ใช้ได้เฉพาะบนเครื่องอ่าน Zebra')
                           : connected
-                              ? (_reading ? 'กำลังกวาดหา…' : 'พร้อม — กดหรือเหนี่ยวไกเพื่อเริ่ม')
+                              ? loc.t(_reading ? 'กำลังกวาดหา…' : 'พร้อม — กดหรือเหนี่ยวไกเพื่อเริ่ม')
                               : _status.state == RfidState.connecting
-                                  ? 'กำลังเชื่อมต่อ…'
-                                  : (_status.message.isEmpty ? 'ยังไม่ได้เชื่อมต่อ' : _status.message),
+                                  ? loc.t('กำลังเชื่อมต่อ…')
+                                  : (_status.message.isEmpty ? loc.t('ยังไม่ได้เชื่อมต่อ') : _status.message),
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -515,7 +520,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               _Gauge(level: level, found: found),
               const SizedBox(height: 18),
               Text(
-                _rssi == null ? 'ไม่พบสัญญาณ' : found ? 'พบกล่องแล้ว — อยู่ใกล้มาก' : _proximityLabel(level),
+                _rssi == null
+                    ? loc.t('ไม่พบสัญญาณ')
+                    : found
+                        ? loc.t('พบกล่องแล้ว — อยู่ใกล้มาก')
+                        : loc.t(_proximityLabel(level)),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -524,7 +533,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                _rssi == null ? 'เหนี่ยวไกแล้วเดินกวาดไปเรื่อยๆ สัญญาณจะแรงขึ้นเมื่อเข้าใกล้' : 'RSSI ${_rssi}dBm · อ่านพบแล้ว $_hits ครั้ง',
+                _rssi == null
+                    ? loc.t('เหนี่ยวไกแล้วเดินกวาดไปเรื่อยๆ สัญญาณจะแรงขึ้นเมื่อเข้าใกล้')
+                    : 'RSSI ${_rssi}dBm · ${loc.t('อ่านพบแล้ว')} $_hits ${loc.t('ครั้ง')}',
                 style: TextStyle(fontSize: 12, color: C.muted),
               ),
               const SizedBox(height: 20),
@@ -533,7 +544,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 child: FilledButton.icon(
                   onPressed: c.rfid.supported ? () => _toggleRead(c) : null,
                   icon: Icon(_reading ? Icons.stop : Icons.wifi_tethering),
-                  label: Text(_reading ? 'หยุดกวาด' : 'เริ่มกวาดหา'),
+                  label: Text(loc.t(_reading ? 'หยุดกวาด' : 'เริ่มกวาดหา')),
                   style: FilledButton.styleFrom(
                     backgroundColor: _reading ? C.red : C.ink,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -553,8 +564,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             border: Border.all(color: C.border),
           ),
           child: Text(
-            'ระบบบันทึกตำแหน่งล่าสุดว่า "${locParts.join(' · ')}" — ใช้เป็นจุดเริ่มเดินกวาด '
-            'แล้วสังเกตมิเตอร์ด้านบนเพื่อยืนยันว่ากล่องอยู่ในโซนนี้จริง',
+            '${loc.t('ระบบบันทึกตำแหน่งล่าสุดว่า')} "${locParts.join(' · ')}" ${loc.t('— ใช้เป็นจุดเริ่มเดินกวาด '
+                'แล้วสังเกตมิเตอร์ด้านบนเพื่อยืนยันว่ากล่องอยู่ในโซนนี้จริง')}',
             style: TextStyle(fontSize: 12, color: C.ink3, height: 1.45),
           ),
         ),
@@ -568,7 +579,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     return 'ยังไกล — ลองเดินไปทางอื่น';
   }
 
-  Widget _inputModeToggle(AppController c) {
+  Widget _inputModeToggle(AppController c, LocaleController loc) {
     Widget seg(ScanInputMode m, String label, IconData icon) {
       final selected = c.scanInputMode == m;
       return Expanded(
@@ -610,7 +621,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
+          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
           seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
