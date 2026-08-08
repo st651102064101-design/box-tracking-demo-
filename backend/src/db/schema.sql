@@ -188,6 +188,27 @@ CREATE TABLE IF NOT EXISTS inventory (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ตรวจนับ (cycle count) sessions. `expected` is frozen at open time so a box
+-- gated out mid-count can't quietly erase its own discrepancy; see
+-- src/db/schema.ts for the full reasoning.
+CREATE TABLE IF NOT EXISTS cycle_counts (
+  id          TEXT PRIMARY KEY,
+  wh          TEXT NOT NULL,
+  zone        TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'open',
+  started_by  TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at   TIMESTAMPTZ,
+  expected    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  counted     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  unexpected  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  data        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Finding "the open session for this post" is the single hottest lookup here
+-- (every scan the PDA submits resolves through it).
+CREATE INDEX IF NOT EXISTS cycle_counts_open_idx ON cycle_counts (wh, zone, status);
+
 CREATE TABLE IF NOT EXISTS events (
   id   SERIAL PRIMARY KEY,
   ts   TIMESTAMPTZ NOT NULL DEFAULT now(),
