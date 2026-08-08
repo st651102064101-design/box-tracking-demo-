@@ -129,3 +129,17 @@ export const gateInSchema = z.object({
    *  not present here is assumed fine and goes straight to 'warehouse'. */
   conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
 });
+
+/* ─── ตรวจนับ (cycle count) ────────────────────────────────────────────────*/
+export const cycleCountOpenSchema = z.object({
+  wh: z.string().trim().min(1, 'ต้องระบุคลัง'),
+  /** Empty string = count the whole warehouse, not one zone. */
+  zone: z.string().trim().optional().default(''),
+});
+
+export const cycleCountScanSchema = z.object({
+  /** A batch, not one tag per request: an RFID sweep produces tags far faster
+   *  than a round trip per read could keep up with, and the PDA already
+   *  de-duplicates locally before posting. Barcodes just send arrays of one. */
+  tags: z.array(z.string().trim().min(1)).min(1, 'ต้องมีอย่างน้อย 1 รหัส'),
+});
