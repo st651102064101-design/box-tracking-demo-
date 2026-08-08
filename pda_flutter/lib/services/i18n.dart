@@ -295,6 +295,23 @@ class LocaleController extends ChangeNotifier {
     'ปิดรอบ': 'Close',
     'ยกเลิก': 'Cancel',
     'รอส่งเข้าระบบ': 'Waiting to send',
+
+    // transfer screen
+    'เหนี่ยวไกเพื่อกวาดหลายกล่องพร้อมกัน': 'Pull the trigger to sweep several boxes at once',
+    'หลายกล่อง': 'multiple',
+    'เลือกกล่องจากรายการ': 'Choose a box from the list',
+    'ยิงบาร์โค้ดแทน': 'Scan a barcode instead',
+    'เลือกจากรายการแทน': 'Choose from a list instead',
+    'พิมพ์รหัสหรือประเภทกล่อง': 'Type a code or box type',
+    'ยังไม่พบกล่อง — เหนี่ยวไกกวาดเหนือกองกล่องที่จะย้าย': 'No boxes found yet — pull the trigger and sweep over the pile to move',
+    'เลือกย้าย': 'selected',
+    'ล้างรายการ': 'Clear list',
+    'ตำแหน่งใหม่ (ทั้งหมด)': 'New location (all)',
+    'ใช้ร่วมกันทั้งชุด — ชั้น/ช่องตั้งแยกทีละกล่องด้านล่าง': 'Shared by the whole batch — shelf/slot are set per box below',
+    'ย้ายทั้งหมด': 'Move all',
+    'เพิ่ม': 'Add',
+    'ไม่ระบุ': 'Unspecified',
+    'เพิ่มใหม่': 'Add new',
     // more hub
     'ผูกแท็ก RFID': 'Bind RFID tag',
     'ลงทะเบียนกล่องใหม่': 'Register a new box',

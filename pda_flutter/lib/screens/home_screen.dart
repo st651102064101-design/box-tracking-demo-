@@ -88,10 +88,8 @@ class HomeScreen extends StatelessWidget {
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) => _onKey(c, event),
-      child: Column(
-      children: [
-        // header
-        Padding(
+      child: AutoHideHeader(
+        header: Padding(
           padding: EdgeInsets.fromLTRB(18, top + 14, 18, 6),
           child: Row(
             children: [
@@ -115,7 +113,9 @@ class HomeScreen extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.3)),
                             ),
                             const SizedBox(width: 4),
                             Icon(Icons.expand_more, size: 17, color: C.chevron),
@@ -135,35 +135,49 @@ class HomeScreen extends StatelessWidget {
               ),
               OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
               const SizedBox(width: 8),
-              RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
+              RoundIconButton(
+                  icon: Icons.settings_outlined,
+                  onTap: () => c.go(Screen.settings),
+                  size: 38),
             ],
           ),
         ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18, bottom + 20),
-            children: [
-              if (!c.connected)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: C.orangeBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: C.orangeBorder),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(18, 14, 18, bottom + 20),
+                children: [
+                  if (!c.connected)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 15, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: C.orangeBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: C.orangeBorder),
+                        ),
+                        child: Text(
+                          loc.t(
+                              'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง'),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              color: C.orange,
+                              fontWeight: FontWeight.w600,
+                              height: 1.45),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      loc.t('ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง'),
-                      style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
-                    ),
-                  ),
-                ),
-              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c, loc)),
-            ],
-          ),
+                  ...(c.postConfirmed
+                      ? _confirmedBody(context, c)
+                      : _postPickerBody(c, loc)),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
       ),
     );
   }
@@ -182,7 +196,8 @@ List<Widget> _postPickerBody(AppController c, LocaleController loc) {
   }
   final pendingWh = c.pendingWh;
   if (pendingWh == null) {
-    final showLast = c.hasLastSelection && whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
+    final showLast = c.hasLastSelection &&
+        whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
     return [
       const SizedBox(height: 16),
       Caption(loc.t('เลือกคลัง')),
@@ -223,7 +238,10 @@ List<Widget> _postPickerBody(AppController c, LocaleController loc) {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Text(loc.t('เปลี่ยนคลัง'),
-                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: C.muted,
+                    fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -253,7 +271,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
           child: _Stat(
             value: '${c.warehouseCount}',
             label: loc.t('ในคลัง'),
-            onTap: () => _showBoxListSheet(context, c, title: loc.t('กล่องในคลัง'), status: 'warehouse'),
+            onTap: () => _showBoxListSheet(context, c,
+                title: loc.t('กล่องในคลัง'), status: 'warehouse'),
           ),
         ),
         const SizedBox(width: 9),
@@ -262,7 +281,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
             value: '${c.outCount}',
             label: loc.t('ออกอยู่'),
             valueColor: C.orange,
-            onTap: () => _showBoxListSheet(context, c, title: loc.t('กล่องที่ออกอยู่'), status: 'out'),
+            onTap: () => _showBoxListSheet(context, c,
+                title: loc.t('กล่องที่ออกอยู่'), status: 'out'),
           ),
         ),
         const SizedBox(width: 9),
@@ -278,13 +298,15 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     if (c.emp != null && c.isVisiting(c.emp!))
       Padding(
         padding: const EdgeInsets.only(top: 14),
-        child: _Note('${loc.t('คุณประจำ')} ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
+        child: _Note(
+            '${loc.t('คุณประจำ')} ${c.S?.whName(c.emp!.wh) ?? c.emp!.wh} '
             '${loc.t('— รายการที่ยิงจะบันทึกที่')} ${c.selWhName} ${loc.t('ประตู')} ${c.gate}'),
       ),
     if (!c.canScan)
       Padding(
         padding: const EdgeInsets.only(top: 14),
-        child: _Note(loc.t('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้')),
+        child: _Note(loc.t(
+            'บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้')),
       ),
     const SizedBox(height: 16),
     // Product title strip sitting directly above the menu, as in the
@@ -309,7 +331,10 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: C.onHero, letterSpacing: -0.2),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: C.onHero,
+                  letterSpacing: -0.2),
             ),
           ),
         ],
@@ -399,16 +424,20 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
 /// scroll-capped growth, safe-area bottom padding. Kept as one function so
 /// a screen too short for the full list (see the earlier "BOTTOM
 /// OVERFLOWED" fix on the handover sheet) is fixed everywhere at once.
-void _showDetailSheet(BuildContext context, {required String title, required List<Widget> children}) {
+void _showDetailSheet(BuildContext context,
+    {required String title, required List<Widget> children}) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
+      margin: EdgeInsets.fromLTRB(
+          12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(
+          color: C.surface, borderRadius: BorderRadius.circular(22)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,19 +447,24 @@ void _showDetailSheet(BuildContext context, {required String title, required Lis
               width: 36,
               height: 4,
               margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: C.border2, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          Flexible(child: SingleChildScrollView(child: Column(children: children))),
+          Flexible(
+              child: SingleChildScrollView(child: Column(children: children))),
         ],
       ),
     ),
   );
 }
 
-Widget _detailRow({required String title, required String subtitle, Widget? trailing}) {
+Widget _detailRow(
+    {required String title, required String subtitle, Widget? trailing}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Container(
@@ -448,7 +482,10 @@ Widget _detailRow({required String title, required String subtitle, Widget? trai
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'monospace')),
                 Text(subtitle, style: TextStyle(fontSize: 12, color: C.muted)),
               ],
             ),
@@ -462,10 +499,13 @@ Widget _detailRow({required String title, required String subtitle, Widget? trai
 
 /// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
 /// number, not just the count. [status] matches Box.status directly.
-void _showBoxListSheet(BuildContext context, AppController c, {required String title, required String status}) {
+void _showBoxListSheet(BuildContext context, AppController c,
+    {required String title, required String status}) {
   final loc = context.read<LocaleController>();
   final S = c.S;
-  final boxes = (S?.boxes ?? const <Box>[]).where((b) => b.status == status).toList()
+  final boxes = (S?.boxes ?? const <Box>[])
+      .where((b) => b.status == status)
+      .toList()
     ..sort((a, b) => a.tag.compareTo(b.tag));
   _showDetailSheet(
     context,
@@ -474,7 +514,9 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text(loc.t('ไม่มีกล่อง'), style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(
+                  child: Text(loc.t('ไม่มีกล่อง'),
+                      style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : boxes.map((b) {
@@ -482,7 +524,8 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
                 ? S!.custName(b.customer)
                 : [
                     S!.whName(b.location['wh']?.toString()),
-                    if ((b.location['zone'] ?? '').toString().isNotEmpty) '${loc.t('โซน')} ${b.location['zone']}',
+                    if ((b.location['zone'] ?? '').toString().isNotEmpty)
+                      '${loc.t('โซน')} ${b.location['zone']}',
                   ].join(' · ');
             return _detailRow(
               title: b.tag,
@@ -495,20 +538,18 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
 /// "วันนี้" stat tap — every in/out event from today, newest first.
 void _showTodayEventsSheet(BuildContext context, AppController c) {
   final loc = context.read<LocaleController>();
-  final events = (c.S?.events ?? const [])
-      .whereType<Map>()
-      .where((e) {
-        final dir = e['dir'];
-        if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
-        final ts = e['ts']?.toString();
-        if (ts == null) return false;
-        final d = DateTime.tryParse(ts)?.toLocal();
-        if (d == null) return false;
-        final n = DateTime.now();
-        return d.year == n.year && d.month == n.month && d.day == n.day;
-      })
-      .toList()
-    ..sort((a, b) => (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
+  final events = (c.S?.events ?? const []).whereType<Map>().where((e) {
+    final dir = e['dir'];
+    if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
+    final ts = e['ts']?.toString();
+    if (ts == null) return false;
+    final d = DateTime.tryParse(ts)?.toLocal();
+    if (d == null) return false;
+    final n = DateTime.now();
+    return d.year == n.year && d.month == n.month && d.day == n.day;
+  }).toList()
+    ..sort((a, b) =>
+        (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
   _showDetailSheet(
     context,
     title: '${loc.t('วันนี้')} (${events.length})',
@@ -516,7 +557,9 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text(loc.t('ยังไม่มีรายการวันนี้'), style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(
+                  child: Text(loc.t('ยังไม่มีรายการวันนี้'),
+                      style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : events.map((e) {
@@ -531,7 +574,8 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
               title: (e['tag'] ?? '').toString(),
               subtitle: [time, if (who.isNotEmpty) who].join(' · '),
               trailing: Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
-                  color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
+                  color: isOut ? C.orange : C.limeDeep,
+                  bg: isOut ? C.orangeBg : C.limeBg),
             );
           }).toList(),
   );
@@ -555,56 +599,62 @@ void _openHandover(BuildContext context, AppController c) {
     // over on a screen too short even for that.
     isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      margin: EdgeInsets.fromLTRB(
+          12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(
+          color: C.surface, borderRadius: BorderRadius.circular(22)),
       child: SingleChildScrollView(
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Same drag-handle bar the PIN pad sheet uses — this sheet drags
-          // down to dismiss same as any modal sheet, but with padding.all
-          // the same on every edge there was nothing visually marking that
-          // affordance the way iOS's own sheets always do.
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Same drag-handle bar the PIN pad sheet uses — this sheet drags
+            // down to dismiss same as any modal sheet, but with padding.all
+            // the same on every edge there was nothing visually marking that
+            // affordance the way iOS's own sheets always do.
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: C.border2, borderRadius: BorderRadius.circular(2)),
+              ),
             ),
-          ),
-          Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          Text(
-            [c.emp?.subtitle ?? '', '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}']
-                .where((s) => s.isNotEmpty)
-                .join(' · '),
-            style: TextStyle(fontSize: 12.5, color: C.muted),
-          ),
-          const SizedBox(height: 16),
-          _SheetAction(
-            icon: Icons.swap_horiz,
-            label: loc.t('เปลี่ยนคน / จบงาน'),
-            sub: loc.t('กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม'),
-            onTap: () {
-              Navigator.of(sheetCtx).pop();
-              c.lock();
-            },
-          ),
-          if (c.canScan) ...[
-            const SizedBox(height: 10),
+            Text(c.user,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            Text(
+              [
+                c.emp?.subtitle ?? '',
+                '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+              ].where((s) => s.isNotEmpty).join(' · '),
+              style: TextStyle(fontSize: 12.5, color: C.muted),
+            ),
+            const SizedBox(height: 16),
             _SheetAction(
-              icon: Icons.sync_alt,
-              label: loc.t('เปลี่ยนคลัง/ประตู'),
-              sub: loc.t('เลือกจุดทำงานใหม่สำหรับกะนี้'),
+              icon: Icons.swap_horiz,
+              label: loc.t('เปลี่ยนคน / จบงาน'),
+              sub: loc.t('กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม'),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
-                c.reselectPost();
+                c.lock();
               },
             ),
+            if (c.canScan) ...[
+              const SizedBox(height: 10),
+              _SheetAction(
+                icon: Icons.sync_alt,
+                label: loc.t('เปลี่ยนคลัง/ประตู'),
+                sub: loc.t('เลือกจุดทำงานใหม่สำหรับกะนี้'),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  c.reselectPost();
+                },
+              ),
+            ],
           ],
-        ],
         ),
       ),
     ),
@@ -616,7 +666,8 @@ class _WhPickTile extends StatelessWidget {
   final VoidCallback onTap;
   final String? tag;
   final IconData? icon;
-  const _WhPickTile({required this.name, required this.onTap, this.tag, this.icon});
+  const _WhPickTile(
+      {required this.name, required this.onTap, this.tag, this.icon});
   @override
   Widget build(BuildContext context) {
     final highlighted = tag != null;
@@ -645,7 +696,10 @@ class _WhPickTile extends StatelessWidget {
                 Pill(tag!, color: C.lime, bg: C.onInk.withValues(alpha: 0.14)),
                 const SizedBox(width: 8),
               ],
-              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onInk.withValues(alpha: 0.5) : C.chevron),
+              Icon(Icons.chevron_right,
+                  size: 20,
+                  color:
+                      highlighted ? C.onInk.withValues(alpha: 0.5) : C.chevron),
             ],
           ),
         ),
@@ -658,7 +712,8 @@ class _GatePickChip extends StatelessWidget {
   final String label;
   final String type;
   final VoidCallback onTap;
-  const _GatePickChip({required this.label, required this.type, required this.onTap});
+  const _GatePickChip(
+      {required this.label, required this.type, required this.onTap});
 
   // ขาเข้า/ขาออก ต้องเป็นสีตรงข้ามกันชัดเจน (เขียว vs แดง) ส่วนไม้ tone อ่อนของ
   // C.lime/C.orange ที่ใช้ในการ์ดเมนูหลักไม่ต่างกันพอเมื่อโชว์เป็น label เล็กๆ
@@ -668,12 +723,18 @@ class _GatePickChip extends StatelessWidget {
   // 'in' | 'out' | 'both' -> spans สีตรงข้ามกัน; 'both' โชว์ทั้งสองคำต่อกัน
   List<TextSpan> _typeSpans(LocaleController loc) {
     const style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
-    final inSpan = TextSpan(text: loc.t('เข้า'), style: style.copyWith(color: _inColor));
-    final outSpan = TextSpan(text: loc.t('ออก'), style: style.copyWith(color: _outColor));
+    final inSpan =
+        TextSpan(text: loc.t('เข้า'), style: style.copyWith(color: _inColor));
+    final outSpan =
+        TextSpan(text: loc.t('ออก'), style: style.copyWith(color: _outColor));
     return switch (type) {
       'in' => [inSpan],
       'out' => [outSpan],
-      _ => [inSpan, TextSpan(text: '·', style: TextStyle(fontSize: 11, color: C.border2)), outSpan],
+      _ => [
+          inSpan,
+          TextSpan(text: '·', style: TextStyle(fontSize: 11, color: C.border2)),
+          outSpan
+        ],
     };
   }
 
@@ -690,12 +751,15 @@ class _GatePickChip extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 64),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border2)),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: C.border2)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('${loc.t('ประตู')} $label',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text.rich(TextSpan(children: _typeSpans(loc))),
             ],
@@ -710,7 +774,11 @@ class _SheetAction extends StatelessWidget {
   final IconData icon;
   final String label, sub;
   final VoidCallback onTap;
-  const _SheetAction({required this.icon, required this.label, required this.sub, required this.onTap});
+  const _SheetAction(
+      {required this.icon,
+      required this.label,
+      required this.sub,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -731,7 +799,9 @@ class _SheetAction extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
                     Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
@@ -756,7 +826,8 @@ class _Note extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           border: Border.all(color: C.border),
         ),
-        child: Text(text, style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4)),
+        child: Text(text,
+            style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4)),
       );
 }
 
@@ -775,7 +846,8 @@ class _Stat extends StatelessWidget {
   final String value, label;
   final Color? valueColor;
   final VoidCallback? onTap;
-  const _Stat({required this.value, required this.label, this.valueColor, this.onTap});
+  const _Stat(
+      {required this.value, required this.label, this.valueColor, this.onTap});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -796,7 +868,11 @@ class _Stat extends StatelessWidget {
                       letterSpacing: -0.6,
                       color: valueColor ?? C.ink,
                       fontFeatures: const [FontFeature.tabularFigures()])),
-              Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -824,8 +900,17 @@ class _TodayStat extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 5),
-              Text(loc.t('วันนี้'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
-              Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
+              Text(loc.t('วันนี้'),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: C.ink2,
+                      height: 1.35)),
+              Text('↓$inN · ↑$outN',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -875,7 +960,12 @@ class _MenuTile extends StatelessWidget {
             border: Border.all(color: C.border),
             boxShadow: lowPower
                 ? null
-                : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 14, offset: const Offset(0, 4))],
+                : [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4))
+                  ],
           ),
           child: Row(
             children: [
@@ -886,13 +976,17 @@ class _MenuTile extends StatelessWidget {
                 width: 22,
                 child: Text('$number',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color.withValues(alpha: 0.55))),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: color.withValues(alpha: 0.55))),
               ),
               const SizedBox(width: 8),
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                    color: bg, borderRadius: BorderRadius.circular(14)),
                 child: Icon(icon, color: color, size: 25),
               ),
               const SizedBox(width: 14),
@@ -901,8 +995,12 @@ class _MenuTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                    Text(sub, style: TextStyle(fontSize: 12, color: C.muted, letterSpacing: 0.2)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
+                    Text(sub,
+                        style: TextStyle(
+                            fontSize: 12, color: C.muted, letterSpacing: 0.2)),
                   ],
                 ),
               ),
@@ -934,7 +1032,8 @@ class _OutboxBanner extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+                color: C.orange, borderRadius: BorderRadius.circular(10)),
             alignment: Alignment.center,
             child: Text('$count',
                 style: TextStyle(
@@ -945,8 +1044,14 @@ class _OutboxBanner extends StatelessWidget {
           ),
           const SizedBox(width: 11),
           Expanded(
-            child: Text(loc.t('รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์'),
-                style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
+            child: Text(
+                loc.t(
+                    'รายการค้าง sync (ออฟไลน์) — จะส่งเข้าระบบเมื่อกลับมาออนไลน์'),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: C.ink3,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500)),
           ),
           const SizedBox(width: 8),
           FilledButton(
@@ -954,10 +1059,12 @@ class _OutboxBanner extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: C.ink,
               padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               minimumSize: Size.zero,
             ),
-            child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            child: const Text('Sync',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

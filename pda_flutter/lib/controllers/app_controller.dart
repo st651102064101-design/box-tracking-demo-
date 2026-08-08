@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
 import '../models/box.dart';
 import '../models/employee.dart';
@@ -73,12 +74,39 @@ class Toast {
 /// picker jumps straight to that warehouse's gate list; if there is only one
 /// gate, it confirms the post outright. See [postConfirmed],
 /// [selectPendingWh], [confirmPost].
-class AppController extends ChangeNotifier {
+class AppController extends ChangeNotifier with WidgetsBindingObserver {
   final ApiClient api;
   final Prefs prefs;
   final RfidService rfid;
 
-  AppController({required this.api, required this.prefs, required this.rfid});
+  AppController({required this.api, required this.prefs, required this.rfid}) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// A backgrounded PDA has no business still sweeping RFID — a screen
+  /// backgrounded mid-inventory (trigger held through the recents/home
+  /// button, or just left running) kept the antenna going, and with nothing
+  /// on screen to drain it the native side's tag-read events piled up
+  /// against the main thread's message queue for as long as backgrounding
+  /// lasted. Coming back to the app then meant working through that entire
+  /// backlog before it could respond to anything — which is exactly what
+  /// "freezes after being used for a while, especially after the recents
+  /// button" looks like from the outside. MainActivity.onPause/onStop does
+  /// the same stopInventory() call natively, as a second line of defense in
+  /// case the engine is too busy to run this Dart-side listener promptly.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        rfid.stopInventory();
+        break;
+      case AppLifecycleState.resumed:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
 
   // ── screen + shift ──────────────────────────────────────────────────────
   Screen screen = Screen.boot;
@@ -401,6 +429,7 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _toastTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
@@ -1544,10 +1573,33 @@ class AppController extends ChangeNotifier {
           notifyListeners();
         }
         break;
+      case Screen.transfer:
+        // Same accumulate-distinct-tags shape as Screen.track above — a
+        // bulk transfer sweep should list every box the trigger has swept
+        // over, not resolve to just one. Only accepted while status is
+        // actually 'warehouse': a tag belonging to a box that's out with a
+        // customer or still pending intake has no business in a "move this
+        // shelf's boxes" batch, and letting it in would just fail (or
+        // silently relocate the wrong thing) once TransferScreen tries to
+        // submit it.
+        final t = resolveTag(epc);
+        final b = S?.box(t);
+        if (b != null && b.status == 'warehouse' && !transferRfidHits.contains(t)) {
+          transferRfidHits.add(t);
+          rfid.playSound(prefs.rfidSoundId);
+          notifyListeners();
+        }
+        break;
       default:
         break;
     }
   }
+
+  /// Distinct box tags TransferScreen's RFID bulk-select sweep has found
+  /// this session — see the Screen.transfer case in [_onReaderTag] above.
+  /// Cleared by the screen itself whenever it resets (mode switch, screen
+  /// leave, batch submitted).
+  final List<String> transferRfidHits = [];
 
   void _onReaderTrigger(bool pressed) {
     if (!pressed) {
@@ -1577,7 +1629,8 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister &&
-        screen != Screen.settings) {
+        screen != Screen.settings &&
+        screen != Screen.transfer) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // Settings is included here — its RFID diagnostics panel has its own
       // "กดค้างเพื่อทดสอบยิง" hold button, but an operator standing there and
@@ -1605,6 +1658,7 @@ class AppController extends ChangeNotifier {
     // exactly why that button worked while the trigger appeared dead.
     if ((screen == Screen.scan ||
             screen == Screen.track ||
+            screen == Screen.transfer ||
             (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
         scanInputMode == ScanInputMode.barcode) {
       toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
@@ -1630,13 +1684,14 @@ class AppController extends ChangeNotifier {
       // one on every trigger pull during barcode entry too.
       return;
     }
-    // Gate scanning, the box-locate sweep, Track's own multi-tag list, and
-    // box registration's tag-candidate sweep all drive their own feedback
-    // instead of the reader's dense per-read tick: Gate's is discrete
-    // ok/error tones from addScan() (see playTone calls below); locate's is
-    // haptic-only, gated to genuine target matches (see
-    // RfidLocateScreen._onBatch); Track's and box registration's are one
-    // sound per newly-found tag (see _onReaderTag's Screen.track case and
+    // Gate scanning, the box-locate sweep, Track's own multi-tag list,
+    // Transfer's bulk-select list, and box registration's tag-candidate
+    // sweep all drive their own feedback instead of the reader's dense
+    // per-read tick: Gate's is discrete ok/error tones from addScan() (see
+    // playTone calls below); locate's is haptic-only, gated to genuine
+    // target matches (see RfidLocateScreen._onBatch); Track's, Transfer's,
+    // and box registration's are one sound per newly-found tag (see
+    // _onReaderTag's Screen.track/Screen.transfer cases and
     // BoxRegisterScreen._onTagRead). Leaving the native tick on for any of
     // these means a re-read of a tag already handled still beeps — the SDK
     // fires it from its own read callback with no idea a tag is a repeat,
@@ -1645,6 +1700,7 @@ class AppController extends ChangeNotifier {
     rfid.setAutoBeep(screen != Screen.scan &&
         screen != Screen.rfidLocate &&
         screen != Screen.track &&
+        screen != Screen.transfer &&
         screen != Screen.boxRegister);
     rfid.startInventory();
   }

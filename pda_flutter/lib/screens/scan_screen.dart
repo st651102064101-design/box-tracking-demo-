@@ -16,7 +16,13 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-const _vehicleTypes = ['รถกระบะ', 'รถบรรทุก 6 ล้อ', 'รถบรรทุก 10 ล้อ', 'รถเทรลเลอร์', 'อื่นๆ'];
+const _vehicleTypes = [
+  'รถกระบะ',
+  'รถบรรทุก 6 ล้อ',
+  'รถบรรทุก 10 ล้อ',
+  'รถเทรลเลอร์',
+  'อื่นๆ'
+];
 
 class _ScanScreenState extends State<ScanScreen> {
   final _scanCtrl = TextEditingController();
@@ -126,97 +132,116 @@ class _ScanScreenState extends State<ScanScreen> {
     // plate that isn't known yet at the moment the boxes are being staged —
     // the field is still there to fill in, it just no longer blocks.
     final vtypeOk = isOut
-        ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
-        : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
+        ? (c.outVehicleType != 'อื่นๆ' ||
+            c.outVehicleTypeOther.trim().isNotEmpty)
+        : (c.inVehicleType != 'อื่นๆ' ||
+            c.inVehicleTypeOther.trim().isNotEmpty);
     final formValid = (!isOut || c.outCustomer.isNotEmpty) && vtypeOk;
     // Step 1 (form): "ถัดไป" needs a valid form, nothing about the queue —
     // it's still empty at this point. Step 2 (scan): commit needs both a
     // non-empty queue and the form still valid (it was checked once to get
     // here, but re-checking costs nothing and stays honest if state ever
     // changes out from under it).
-    final canProceed = !_onScanStep ? formValid : (c.queue.isNotEmpty && formValid);
+    final canProceed =
+        !_onScanStep ? formValid : (c.queue.isNotEmpty && formValid);
 
-    return Column(
-      children: [
-        StickyHeader(
-          onBack: c.backToHome,
-          title: Row(
-            children: [
-              Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
-                  color: isOut ? C.orange : C.limeDeep, bg: isOut ? C.orangeBg : C.limeBg),
-              const SizedBox(width: 7),
-              Text(loc.t(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน')),
-            ],
-          ),
-          subtitle: Text('${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'),
-          actions: [OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap)],
+    return AutoHideHeader(
+      header: StickyHeader(
+        onBack: c.backToHome,
+        title: Row(
+          children: [
+            Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
+                color: isOut ? C.orange : C.limeDeep,
+                bg: isOut ? C.orangeBg : C.limeBg),
+            const SizedBox(width: 7),
+            Text(loc.t(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน')),
+          ],
         ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
-            // Form step comes first now — nothing about ลูกค้า/ทะเบียนรถ
-            // depends on which boxes end up scanned, so filling it in
-            // doesn't need to wait on a scan happening first. The scan step
-            // (scanner panel + queue) only shows once "ถัดไป" confirms the
-            // form's valid; "แก้ไขข้อมูล…" is the way back to change it
-            // without losing whatever's already been scanned.
-            children: !_onScanStep
-                ? [isOut ? _outForm(c, loc) : _inForm(c, loc)]
-                : [
-                    GestureDetector(
-                      onTap: () => setState(() => _onScanStep = false),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 9),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.chevron_left, size: 17, color: C.muted),
-                            Text(loc.t('แก้ไขข้อมูลลูกค้า/รถ'),
-                                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                          ],
+        subtitle: Text('${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'),
+        actions: [OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap)],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
+              // Form step comes first now — nothing about ลูกค้า/ทะเบียนรถ
+              // depends on which boxes end up scanned, so filling it in
+              // doesn't need to wait on a scan happening first. The scan step
+              // (scanner panel + queue) only shows once "ถัดไป" confirms the
+              // form's valid; "แก้ไขข้อมูล…" is the way back to change it
+              // without losing whatever's already been scanned.
+              children: !_onScanStep
+                  ? [isOut ? _outForm(c, loc) : _inForm(c, loc)]
+                  : [
+                      GestureDetector(
+                        onTap: () => setState(() => _onScanStep = false),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 9),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.chevron_left,
+                                  size: 17, color: C.muted),
+                              Text(loc.t('แก้ไขข้อมูลลูกค้า/รถ'),
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: C.muted,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    _scannerPanel(c, loc),
-                    const SizedBox(height: 13),
-                    _queueHeader(c, loc),
-                    const SizedBox(height: 8),
-                    ..._queueList(c, loc),
-                  ],
+                      _scannerPanel(c, loc),
+                      const SizedBox(height: 13),
+                      _queueHeader(c, loc),
+                      const SizedBox(height: 8),
+                      ..._queueList(c, loc),
+                    ],
+            ),
           ),
-        ),
-        // Step 1 always shows "ถัดไป" (disabled until the form's valid) —
-        // nothing to scan yet, so there's no queue count to gate it on. Step
-        // 2 only shows the button once something's actually been scanned: a
-        // disabled commit button sitting there before the first scan lands
-        // invites a tap and a "why won't this work" moment.
-        if (!_onScanStep || c.queue.isNotEmpty)
-          Container(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [C.bg, Color(0x00F5F5F7)],
-                stops: [0.68, 1],
+          // Step 1 always shows "ถัดไป" (disabled until the form's valid) —
+          // nothing to scan yet, so there's no queue count to gate it on. Step
+          // 2 only shows the button once something's actually been scanned: a
+          // disabled commit button sitting there before the first scan lands
+          // invites a tap and a "why won't this work" moment.
+          if (!_onScanStep || c.queue.isNotEmpty)
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [C.bg, Color(0x00F5F5F7)],
+                  stops: [0.68, 1],
+                ),
+              ),
+              child: PrimaryButton(
+                label: loc.t(!_onScanStep
+                    ? 'ถัดไป'
+                    : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
+                trailing: _onScanStep
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: C.limeDeep.withOpacity(0.16),
+                            borderRadius: BorderRadius.circular(999)),
+                        child: Text('${c.queue.length}',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: C.limeDeep,
+                                fontFeatures: [FontFeature.tabularFigures()])),
+                      )
+                    : Icon(Icons.arrow_forward,
+                        size: 19, color: canProceed ? C.limeDeep : C.faint),
+                onTap: (canProceed && !c.busy)
+                    ? () => _onPrimary(c, formValid)
+                    : null,
               ),
             ),
-            child: PrimaryButton(
-              label: loc.t(!_onScanStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
-              trailing: _onScanStep
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
-                      child: Text('${c.queue.length}',
-                          style: TextStyle(
-                              fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
-                    )
-                  : Icon(Icons.arrow_forward, size: 19, color: canProceed ? C.limeDeep : C.faint),
-              onTap: (canProceed && !c.busy) ? () => _onPrimary(c, formValid) : null,
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -230,10 +255,14 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.outCustomer.isEmpty ? null : c.outCustomer,
             isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกลูกค้า —'), radius: 12),
-            hint: Text(loc.t('— เลือกลูกค้า —'), style: TextStyle(color: C.faint)),
+            hint: Text(loc.t('— เลือกลูกค้า —'),
+                style: TextStyle(color: C.faint)),
             items: c.customerList.map((cust) {
               final id = (cust['id'] ?? '').toString();
-              return DropdownMenuItem(value: id, child: Text('$id · ${cust['name'] ?? ''}', overflow: TextOverflow.ellipsis));
+              return DropdownMenuItem(
+                  value: id,
+                  child: Text('$id · ${cust['name'] ?? ''}',
+                      overflow: TextOverflow.ellipsis));
             }).toList(),
             onChanged: (v) => c.setOutCustomer(v ?? ''),
           ),
@@ -245,7 +274,10 @@ class _ScanScreenState extends State<ScanScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     FieldLabel(loc.t('ทะเบียนรถ')),
-                    TextField(controller: _plateCtrl, onChanged: c.setOutPlate, decoration: pdaInput('82-1234 กทม', radius: 12)),
+                    TextField(
+                        controller: _plateCtrl,
+                        onChanged: c.setOutPlate,
+                        decoration: pdaInput('82-1234 กทม', radius: 12)),
                   ],
                 ),
               ),
@@ -255,7 +287,10 @@ class _ScanScreenState extends State<ScanScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     FieldLabel(loc.t('คนขับ')),
-                    TextField(controller: _driverCtrl, onChanged: c.setOutDriver, decoration: pdaInput(loc.t('ชื่อคนขับ'), radius: 12)),
+                    TextField(
+                        controller: _driverCtrl,
+                        onChanged: c.setOutDriver,
+                        decoration: pdaInput(loc.t('ชื่อคนขับ'), radius: 12)),
                   ],
                 ),
               ),
@@ -267,8 +302,11 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.outVehicleType.isEmpty ? null : c.outVehicleType,
             isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
-            hint: Text(loc.t('— เลือกประเภทรถ —'), style: TextStyle(color: C.faint)),
-            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t)))).toList(),
+            hint: Text(loc.t('— เลือกประเภทรถ —'),
+                style: TextStyle(color: C.faint)),
+            items: _vehicleTypes
+                .map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t))))
+                .toList(),
             onChanged: (v) => c.setOutVehicleType(v ?? ''),
           ),
           if (c.outVehicleType == 'อื่นๆ') ...[
@@ -327,8 +365,11 @@ class _ScanScreenState extends State<ScanScreen> {
             value: c.inVehicleType.isEmpty ? null : c.inVehicleType,
             isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
-            hint: Text(loc.t('— เลือกประเภทรถ —'), style: TextStyle(color: C.faint)),
-            items: _vehicleTypes.map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t)))).toList(),
+            hint: Text(loc.t('— เลือกประเภทรถ —'),
+                style: TextStyle(color: C.faint)),
+            items: _vehicleTypes
+                .map((t) => DropdownMenuItem(value: t, child: Text(loc.t(t))))
+                .toList(),
             onChanged: (v) => c.setInVehicleType(v ?? ''),
           ),
           if (c.inVehicleType == 'อื่นๆ') ...[
@@ -361,16 +402,21 @@ class _ScanScreenState extends State<ScanScreen> {
             SizedBox(
               width: 15,
               height: 15,
-              child: CircularProgressIndicator(strokeWidth: 2.2, color: C.limeDeep),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.2, color: C.limeDeep),
             ),
             const SizedBox(width: 11),
             Text(loc.t('กำลังอ่านแท็ก RFID…'),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.limeDeep)),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: C.limeDeep)),
           ],
         ),
       );
     }
-    final connected = c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
+    final connected =
+        c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
     final readyText = !c.rfid.supported
         ? loc.t('โหมดจำลอง')
         : c.rfidStatus.state == RfidState.connected
@@ -390,7 +436,9 @@ class _ScanScreenState extends State<ScanScreen> {
         gradient: lowPower
             ? null
             : const LinearGradient(
-                begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFF3F3F5), Color(0xFFE7E7EA)]),
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFF3F3F5), Color(0xFFE7E7EA)]),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: C.border2),
       ),
@@ -401,7 +449,11 @@ class _ScanScreenState extends State<ScanScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('GATE · ${c.mode == 'in' ? 'INBOUND' : 'OUTBOUND'}',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: C.muted)),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: C.muted)),
               Row(
                 children: [
                   Container(
@@ -410,11 +462,17 @@ class _ScanScreenState extends State<ScanScreen> {
                     decoration: BoxDecoration(
                       color: connected ? C.lime : C.orange,
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: (connected ? C.limeBg : C.orangeBg), blurRadius: 0, spreadRadius: 3)],
+                      boxShadow: [
+                        BoxShadow(
+                            color: (connected ? C.limeBg : C.orangeBg),
+                            blurRadius: 0,
+                            spreadRadius: 3)
+                      ],
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(readyText, style: TextStyle(fontSize: 11, color: C.muted)),
+                  Text(readyText,
+                      style: TextStyle(fontSize: 11, color: C.muted)),
                 ],
               ),
             ],
@@ -438,12 +496,17 @@ class _ScanScreenState extends State<ScanScreen> {
               enableSuggestions: false,
               onSubmitted: (_) => _submit(c),
               style: const TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: 0.6, fontFamily: 'monospace'),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                  fontFamily: 'monospace'),
               decoration: InputDecoration(
                 hintText: loc.t('ยิงบาร์โค้ด หรือพิมพ์รหัส'),
-                hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                hintStyle: TextStyle(
+                    fontFamily: 'Roboto', color: C.faint, fontSize: 15),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
                 filled: true,
                 fillColor: C.surface,
                 border: OutlineInputBorder(
@@ -474,7 +537,10 @@ class _ScanScreenState extends State<ScanScreen> {
                   Icon(Icons.wifi_tethering, size: 22, color: C.muted),
                   const SizedBox(height: 6),
                   Text(loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID'),
-                      style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: C.muted,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -493,7 +559,8 @@ class _ScanScreenState extends State<ScanScreen> {
             if (c.scanInputMode == m) return;
             c.setScanInputMode(m);
             if (m == ScanInputMode.barcode) {
-              WidgetsBinding.instance.addPostFrameCallback((_) => _scanFocus.requestFocus());
+              WidgetsBinding.instance
+                  .addPostFrameCallback((_) => _scanFocus.requestFocus());
             } else {
               // Nothing left on screen worth the keyboard's space.
               _scanFocus.unfocus();
@@ -524,7 +591,8 @@ class _ScanScreenState extends State<ScanScreen> {
 
     return Container(
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
@@ -561,12 +629,19 @@ class _ScanScreenState extends State<ScanScreen> {
     return Container(
       margin: const EdgeInsets.only(top: 11),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: bd)),
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: bd)),
       child: Text.rich(
         TextSpan(
-          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: col),
+          style: TextStyle(
+              fontSize: 13.5, fontWeight: FontWeight.w500, color: col),
           children: [
-            TextSpan(text: r.tag, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+            TextSpan(
+                text: r.tag,
+                style: const TextStyle(
+                    fontFamily: 'monospace', fontWeight: FontWeight.w700)),
             TextSpan(text: r.tag.isEmpty ? r.msg : ' · ${r.msg}'),
           ],
         ),
@@ -581,11 +656,16 @@ class _ScanScreenState extends State<ScanScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text('${loc.t('คิวสแกน')} · ${c.queue.length} ${loc.t('ใบ')}',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: C.ink)),
           if (c.queue.isNotEmpty)
             GestureDetector(
               onTap: c.clearQueue,
-              child: Text(loc.t('ล้างคิว'), style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w500)),
+              child: Text(loc.t('ล้างคิว'),
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
             ),
         ],
       ),
@@ -637,7 +717,8 @@ class _ScanScreenState extends State<ScanScreen> {
           decoration: BoxDecoration(
             color: C.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: condition != null ? C.orangeBorder : C.border),
+            border: Border.all(
+                color: condition != null ? C.orangeBorder : C.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,8 +728,11 @@ class _ScanScreenState extends State<ScanScreen> {
                   Container(
                     width: 34,
                     height: 34,
-                    decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(9)),
-                    child: Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+                    decoration: BoxDecoration(
+                        color: C.neutralBg2,
+                        borderRadius: BorderRadius.circular(9)),
+                    child: Icon(Icons.inventory_2_outlined,
+                        size: 18, color: C.muted),
                   ),
                   const SizedBox(width: 11),
                   Expanded(
@@ -658,7 +742,10 @@ class _ScanScreenState extends State<ScanScreen> {
                       children: [
                         Text(t,
                             style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.4)),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace',
+                                letterSpacing: 0.4)),
                         Text(S?.typeName(b?.type) ?? '-',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -671,7 +758,9 @@ class _ScanScreenState extends State<ScanScreen> {
                   GestureDetector(
                     onTap: () => c.removeFromQueue(t),
                     child: SizedBox(
-                        width: 28, height: 28, child: Icon(Icons.close, size: 17, color: C.chevron)),
+                        width: 28,
+                        height: 28,
+                        child: Icon(Icons.close, size: 17, color: C.chevron)),
                   ),
                 ],
               ),

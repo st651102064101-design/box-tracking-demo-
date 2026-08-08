@@ -60,8 +60,14 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   }
 
   List<String> _zonesInWh(AppController c) {
-    final all = c.S?.boxes.where((b) => b.status == 'warehouse' && b.location['wh'] == c.wh) ?? const <Box>[];
-    final zones = all.map((b) => (b.location['zone'] ?? '').toString()).where((z) => z.isNotEmpty).toSet().toList()
+    final all = c.S?.boxes.where(
+            (b) => b.status == 'warehouse' && b.location['wh'] == c.wh) ??
+        const <Box>[];
+    final zones = all
+        .map((b) => (b.location['zone'] ?? '').toString())
+        .where((z) => z.isNotEmpty)
+        .toSet()
+        .toList()
       ..sort();
     return zones;
   }
@@ -93,7 +99,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       _scanFocus.requestFocus();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e is ApiException ? e.message : _c.errorMessage(e));
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -140,7 +147,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
         _session = s;
         _error = null;
       });
-      final unknown = (s['unknown'] is List) ? (s['unknown'] as List) : const [];
+      final unknown =
+          (s['unknown'] is List) ? (s['unknown'] as List) : const [];
       if (unknown.isNotEmpty) {
         _c.toastMsg('ไม่พบรหัสนี้ในระบบ', unknown.join(', '), ResultKind.warn);
       }
@@ -148,7 +156,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       if (!mounted) return;
       // Put them back so nothing is lost — the next scan retries the lot.
       _pending.insertAll(0, batch);
-      setState(() => _error = e is ApiException ? e.message : _c.errorMessage(e));
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
       if (_pending.isNotEmpty && mounted && _error == null) await _flush();
@@ -170,8 +179,12 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
           '${loc.t('ปิดรอบแล้วจะบันทึกผลลงระบบ และเพิ่มสแกนอีกไม่ได้')}',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(loc.t('ยกเลิก'))),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(loc.t('ปิดรอบ'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(loc.t('ยกเลิก'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(loc.t('ปิดรอบ'))),
         ],
       ),
     );
@@ -187,7 +200,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e is ApiException ? e.message : _c.errorMessage(e));
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -204,164 +218,206 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     final missing = _list('missing');
     final unexpected = _list('unexpected');
 
-    return Column(
-      children: [
-        StickyHeader(
-          onBack: c.backToHome,
-          title: Text(loc.t('ตรวจนับ')),
-          subtitle: Text(session == null
-              ? c.selWhName
-              : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
-        ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-            children: [
-              if (_error != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: C.redBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: C.redBorder),
+    return AutoHideHeader(
+      header: StickyHeader(
+        onBack: c.backToHome,
+        title: Text(loc.t('ตรวจนับ')),
+        subtitle: Text(session == null
+            ? c.selWhName
+            : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+              children: [
+                if (_error != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 13, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: C.redBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: C.redBorder),
+                    ),
+                    child: Text(_error!,
+                        style: TextStyle(
+                            fontSize: 12.5, color: C.red, height: 1.4)),
                   ),
-                  child: Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red, height: 1.4)),
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (session == null) ...[
-                if (zones.isNotEmpty) ...[
-                  Text(loc.t('เลือกโซนที่จะตรวจนับ'),
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  const SizedBox(height: 12),
+                ],
+                if (session == null) ...[
+                  if (zones.isNotEmpty) ...[
+                    Text(loc.t('เลือกโซนที่จะตรวจนับ'),
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.muted)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _zoneChip(loc.t('ทั้งคลัง'), _zone == null,
+                            () => setState(() => _zone = null)),
+                        ...zones.map((z) => _zoneChip(
+                            z, _zone == z, () => setState(() => _zone = z))),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _busy ? null : _start,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: C.ink,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                          _busy ? loc.t('กำลังเริ่ม…') : loc.t('เริ่มตรวจนับ')),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                      loc.t(
+                          'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
+                      style: TextStyle(
+                          fontSize: 11.5, color: C.faint, height: 1.45)),
+                ] else ...[
+                  TextField(
+                    controller: _scanCtrl,
+                    focusNode: _scanFocus,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (_) => _onScanChanged(),
+                    onSubmitted: (_) => _submitScan(_scanCtrl.text.trim()),
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'monospace'),
+                    decoration: InputDecoration(
+                      hintText: loc.t('ยิงบาร์โค้ด หรือพิมพ์รหัส'),
+                      hintStyle: TextStyle(
+                          fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                      prefixIcon: Icon(Icons.checklist, color: C.muted),
+                      suffixIcon: _busy
+                          ? const Padding(
+                              padding: EdgeInsets.all(13),
+                              child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                            )
+                          : null,
+                      isDense: true,
+                      filled: true,
+                      fillColor: C.surface,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide:
+                              BorderSide(color: C.fieldBorder, width: 1.5)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide:
+                              BorderSide(color: C.fieldBorder, width: 1.5)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: C.ink, width: 1.5)),
+                    ),
+                  ),
+                  if (_pending.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('${loc.t('รอส่งเข้าระบบ')} ${_pending.length}',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: C.orange,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
                     children: [
-                      _zoneChip(loc.t('ทั้งคลัง'), _zone == null, () => setState(() => _zone = null)),
-                      ...zones.map((z) => _zoneChip(z, _zone == z, () => setState(() => _zone = z))),
+                      Expanded(
+                          child: _CountStat(
+                              value: '${_summary('expected')}',
+                              label: loc.t('คาดว่ามี'),
+                              color: C.ink)),
+                      const SizedBox(width: 9),
+                      Expanded(
+                          child: _CountStat(
+                              value: '${_summary('counted')}',
+                              label: loc.t('พบแล้ว'),
+                              color: C.menuGreen)),
+                      const SizedBox(width: 9),
+                      Expanded(
+                          child: _CountStat(
+                              value: '${_summary('missing')}',
+                              label: loc.t('ยังไม่พบ'),
+                              color: C.menuOrange)),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                ],
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _busy ? null : _start,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: C.ink,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _busy ? null : _close,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: C.lime,
+                        foregroundColor: C.limeDeep,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(loc.t('ปิดรอบและบันทึกผล'),
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800)),
                     ),
-                    child: Text(_busy ? loc.t('กำลังเริ่ม…') : loc.t('เริ่มตรวจนับ')),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(loc.t('รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
-                    style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.45)),
-              ] else ...[
-                TextField(
-                  controller: _scanCtrl,
-                  focusNode: _scanFocus,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.characters,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  onChanged: (_) => _onScanChanged(),
-                  onSubmitted: (_) => _submitScan(_scanCtrl.text.trim()),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                  decoration: InputDecoration(
-                    hintText: loc.t('ยิงบาร์โค้ด หรือพิมพ์รหัส'),
-                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                    prefixIcon: Icon(Icons.checklist, color: C.muted),
-                    suffixIcon: _busy
-                        ? const Padding(
-                            padding: EdgeInsets.all(13),
-                            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                          )
-                        : null,
-                    isDense: true,
-                    filled: true,
-                    fillColor: C.surface,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: C.ink, width: 1.5)),
-                  ),
-                ),
-                if (_pending.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text('${loc.t('รอส่งเข้าระบบ')} ${_pending.length}',
-                      style: TextStyle(fontSize: 11.5, color: C.orange, fontWeight: FontWeight.w600)),
-                ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(child: _CountStat(value: '${_summary('expected')}', label: loc.t('คาดว่ามี'), color: C.ink)),
-                    const SizedBox(width: 9),
-                    Expanded(child: _CountStat(value: '${_summary('counted')}', label: loc.t('พบแล้ว'), color: C.menuGreen)),
-                    const SizedBox(width: 9),
-                    Expanded(child: _CountStat(value: '${_summary('missing')}', label: loc.t('ยังไม่พบ'), color: C.menuOrange)),
+                  if (unexpected.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Caption(loc.t('ไม่ควรอยู่ที่นี่')),
+                    const SizedBox(height: 8),
+                    ...unexpected.map((tag) => _rowTile(
+                          tag: tag,
+                          sub: _typeOf(c, tag),
+                          color: C.red,
+                          icon: Icons.error_outline,
+                        )),
                   ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _busy ? null : _close,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: C.lime,
-                      foregroundColor: C.limeDeep,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(loc.t('ปิดรอบและบันทึกผล'),
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-                if (unexpected.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Caption(loc.t('ไม่ควรอยู่ที่นี่')),
-                  const SizedBox(height: 8),
-                  ...unexpected.map((tag) => _rowTile(
-                        tag: tag,
-                        sub: _typeOf(c, tag),
-                        color: C.red,
-                        icon: Icons.error_outline,
-                      )),
-                ],
-                if (missing.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Caption(loc.t('ยังไม่พบ')),
-                  const SizedBox(height: 8),
-                  ...missing.map((tag) => _rowTile(
-                        tag: tag,
-                        sub: _typeOf(c, tag),
-                        color: C.faint,
-                        icon: Icons.radio_button_unchecked,
-                      )),
-                ],
-                if (counted.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Caption(loc.t('พบแล้ว')),
-                  const SizedBox(height: 8),
-                  ...counted.map((tag) => _rowTile(
-                        tag: tag,
-                        sub: _typeOf(c, tag),
-                        color: C.menuGreen,
-                        icon: Icons.check_circle,
-                      )),
+                  if (missing.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Caption(loc.t('ยังไม่พบ')),
+                    const SizedBox(height: 8),
+                    ...missing.map((tag) => _rowTile(
+                          tag: tag,
+                          sub: _typeOf(c, tag),
+                          color: C.faint,
+                          icon: Icons.radio_button_unchecked,
+                        )),
+                  ],
+                  if (counted.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Caption(loc.t('พบแล้ว')),
+                    const SizedBox(height: 8),
+                    ...counted.map((tag) => _rowTile(
+                          tag: tag,
+                          sub: _typeOf(c, tag),
+                          color: C.menuGreen,
+                          icon: Icons.check_circle,
+                        )),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -381,18 +437,27 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
           border: Border.all(color: selected ? C.ink : C.border2),
         ),
         child: Text(label,
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? C.surface : C.ink2)),
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? C.surface : C.ink2)),
       ),
     );
   }
 
-  Widget _rowTile({required String tag, required String sub, required Color color, required IconData icon}) {
+  Widget _rowTile(
+      {required String tag,
+      required String sub,
+      required Color color,
+      required IconData icon}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-        decoration:
-            BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border)),
+        decoration: BoxDecoration(
+            color: C.surface,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: C.border)),
         child: Row(
           children: [
             Icon(icon, size: 18, color: color),
@@ -402,8 +467,13 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(tag, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
-                  if (sub.isNotEmpty) Text(sub, style: TextStyle(fontSize: 11.5, color: C.muted)),
+                  Text(tag,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'monospace')),
+                  if (sub.isNotEmpty)
+                    Text(sub, style: TextStyle(fontSize: 11.5, color: C.muted)),
                 ],
               ),
             ),
@@ -417,7 +487,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
 class _CountStat extends StatelessWidget {
   final String value, label;
   final Color color;
-  const _CountStat({required this.value, required this.label, required this.color});
+  const _CountStat(
+      {required this.value, required this.label, required this.color});
   @override
   Widget build(BuildContext context) {
     return Panel(
@@ -426,8 +497,12 @@ class _CountStat extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color)),
-          Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
         ],
       ),
     );

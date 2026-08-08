@@ -233,6 +233,83 @@ class StickyHeader extends StatelessWidget {
   }
 }
 
+/// Wraps a screen's [header] (almost always a [StickyHeader]) and its
+/// scrollable [body] so the header smoothly slides/fades away on scroll-down
+/// and back on scroll-up — the same iOS Safari/Twitter-style compact nav bar
+/// behavior, on every screen that has one, rather than each screen wiring
+/// its own ScrollController and animation.
+///
+/// [body] carries everything that used to sit below the header in that
+/// screen's own `Column` — typically an `Expanded(child: ListView(...))`
+/// plus whatever fixed bottom bar/button follows it — since this widget's
+/// [NotificationListener] only needs to see scroll events bubble up through
+/// it, not own the scroll view itself. A screen adopts this by wrapping its
+/// existing `Column(children: [StickyHeader(...), ...rest])` as
+/// `AutoHideHeader(header: StickyHeader(...), body: Column(children: [...rest]))`.
+///
+/// Direction is read straight off each [ScrollUpdateNotification]'s own
+/// delta rather than tracked via a owned ScrollController, so this works
+/// unmodified with any descendant scrollable (ListView, SingleChildScrollView,
+/// nested ones) without the wrapped screen having to expose its controller.
+class AutoHideHeader extends StatefulWidget {
+  final Widget header;
+  final Widget body;
+  const AutoHideHeader({super.key, required this.header, required this.body});
+
+  @override
+  State<AutoHideHeader> createState() => _AutoHideHeaderState();
+}
+
+class _AutoHideHeaderState extends State<AutoHideHeader> {
+  bool _visible = true;
+
+  bool _onScroll(ScrollNotification n) {
+    // A pixel-by-pixel reaction to every microscopic drag frame reads as
+    // jitter, not a decision — Apple's own compact-nav bars commit to a
+    // direction only once a scroll has moved a real amount. 8px is enough to
+    // filter overscroll-bounce and a barely-there drag while still feeling
+    // immediate on a deliberate swipe.
+    if (n is ScrollUpdateNotification) {
+      final delta = n.scrollDelta ?? 0;
+      if (delta.abs() < 8) return false;
+      // Always show once back near the top — the header reappearing only
+      // on an upward flick, never on arriving at the top some other way
+      // (e.g. a jump-to-top tap), was the one case that felt broken to hide.
+      final show = delta < 0 || n.metrics.pixels <= 0;
+      if (show != _visible) setState(() => _visible = show);
+    } else if (n is ScrollEndNotification && n.metrics.pixels <= 0 && !_visible) {
+      setState(() => _visible = true);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              opacity: _visible ? 1 : 0,
+              child: _visible ? widget.header : const SizedBox(width: double.infinity, height: 0),
+            ),
+          ),
+        ),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: widget.body,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Online/offline indicator — icon only, no label. Green means "connected,"
 /// gray means "not" — orange is reserved for warnings elsewhere in the app,
 /// so offline deliberately isn't that color even though it's a

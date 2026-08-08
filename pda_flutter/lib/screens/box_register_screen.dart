@@ -59,6 +59,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   StreamSubscription<RfidStatus>? _statusSub;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   final List<_Candidate> _found = [];
+
   /// 'unmatched' (default — the tags actually worth binding), 'matched'
   /// (already belongs to another box, shown to double-check before
   /// stealing one), or 'all'.
@@ -81,7 +82,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     _tagSub = rfid.tagReads.listen(_onTagRead);
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
     _tagCtrl.addListener(_onTagChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _tagFocus.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _tagFocus.requestFocus());
   }
 
   @override
@@ -105,7 +107,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   void _onTagChanged() {
     _autoSubmitTimer?.cancel();
     final text = _tagCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null) return;
+    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null)
+      return;
     _autoSubmitTimer = Timer(_autoSubmitDelay, () {
       if (!mounted || _creating || _tagCtrl.text.trim() != text) return;
       _submitCreate();
@@ -135,7 +138,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         _step = _Step.label;
       });
     } catch (e) {
-      setState(() => _error = e is ApiException ? e.message : 'สร้างกล่องไม่สำเร็จ');
+      setState(
+          () => _error = e is ApiException ? e.message : 'สร้างกล่องไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -160,7 +164,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       // for a trigger pull now (see AppController._onReaderTrigger).
       _c.boxRegisterRfidStep = true;
     } catch (e) {
-      setState(() => _error = e is ApiException ? e.message : 'ยืนยันติดป้ายไม่สำเร็จ');
+      setState(() =>
+          _error = e is ApiException ? e.message : 'ยืนยันติดป้ายไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _labeling = false);
     }
@@ -205,7 +210,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       await _c.api.associateRfid(tag, rfidEpc: epc, replace: true);
       _goPutaway();
     } catch (e) {
-      setState(() => _rfidError = e is ApiException ? e.message : 'ผูกแท็กไม่สำเร็จ');
+      setState(() =>
+          _rfidError = e is ApiException ? e.message : 'ผูกแท็กไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _binding = false);
     }
@@ -260,11 +266,14 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       );
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
       setState(() => _step = _Step.success);
-      _c.toastMsg('รับกล่องเข้าคลังแล้ว', '$tag · วันนี้ $count กล่อง', ResultKind.ok);
+      _c.toastMsg(
+          'รับกล่องเข้าคลังแล้ว', '$tag · วันนี้ $count กล่อง', ResultKind.ok);
       _successTimer?.cancel();
-      _successTimer = Timer(const Duration(milliseconds: 1400), _resetForNextBox);
+      _successTimer =
+          Timer(const Duration(milliseconds: 1400), _resetForNextBox);
     } catch (e) {
-      setState(() => _error = e is ApiException ? e.message : 'จัดเก็บไม่สำเร็จ');
+      setState(
+          () => _error = e is ApiException ? e.message : 'จัดเก็บไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _puttingAway = false);
     }
@@ -300,37 +309,44 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final today = _c.prefs.rfidRegisteredToday(_today);
 
-    return Column(
-      children: [
-        StickyHeader(onBack: c.backToHome, title: const Text('ลงทะเบียนกล่อง')),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('รับเข้าสำเร็จวันนี้', style: TextStyle(fontSize: 13, color: C.muted)),
-                  Text('$today กล่อง',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: C.lime)),
+    return AutoHideHeader(
+      header: StickyHeader(
+          onBack: c.backToHome, title: const Text('ลงทะเบียนกล่อง')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('รับเข้าสำเร็จวันนี้',
+                        style: TextStyle(fontSize: 13, color: C.muted)),
+                    Text('$today กล่อง',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: C.lime)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _stepper(),
+                const SizedBox(height: 14),
+                if (_step == _Step.create) _createCard(c),
+                if (_step == _Step.label) _labelCard(),
+                if (_step == _Step.rfid) _rfidCard(),
+                if (_step == _Step.putaway) _putawayCard(c),
+                if (_step == _Step.success) _successCard(),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red)),
                 ],
-              ),
-              const SizedBox(height: 14),
-              _stepper(),
-              const SizedBox(height: 14),
-              if (_step == _Step.create) _createCard(c),
-              if (_step == _Step.label) _labelCard(),
-              if (_step == _Step.rfid) _rfidCard(),
-              if (_step == _Step.putaway) _putawayCard(c),
-              if (_step == _Step.success) _successCard(),
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red)),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -353,7 +369,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               Expanded(
                 child: Container(
                   height: 4,
-                  margin: EdgeInsets.only(left: i == 0 ? 0 : 4, right: i == labels.length - 1 ? 0 : 4),
+                  margin: EdgeInsets.only(
+                      left: i == 0 ? 0 : 4,
+                      right: i == labels.length - 1 ? 0 : 4),
                   decoration: BoxDecoration(
                     color: done || current ? C.lime : C.neutralBg2,
                     borderRadius: BorderRadius.circular(2),
@@ -386,7 +404,10 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
             decoration: pdaInput('— เลือกประเภทกล่อง —', radius: 12),
             items: types.map((t) {
               final id = (t['id'] ?? '').toString();
-              return DropdownMenuItem(value: id, child: Text('${t['name'] ?? id}', overflow: TextOverflow.ellipsis));
+              return DropdownMenuItem(
+                  value: id,
+                  child: Text('${t['name'] ?? id}',
+                      overflow: TextOverflow.ellipsis));
             }).toList(),
             onChanged: (v) => setState(() => _selectedType = v),
           ),
@@ -401,25 +422,36 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
             enableSuggestions: false,
             enabled: !_creating,
             onSubmitted: (_) => _submitCreate(),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'monospace'),
             decoration: InputDecoration(
               hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัสใหม่',
-              hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 14),
+              hintStyle:
+                  TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 14),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
               filled: true,
               fillColor: C.neutralBg,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
               suffixIcon: _creating
                   ? const Padding(
                       padding: EdgeInsets.all(12),
-                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
                     )
                   : null,
             ),
           ),
           const SizedBox(height: 8),
-          Text('เริ่มจากสร้างข้อมูลกล่อง — ยังไม่ใช่การจ่ายบาร์โค้ดจริง แค่บันทึกว่ากล่องนี้เข้าระบบแล้ว',
+          Text(
+              'เริ่มจากสร้างข้อมูลกล่อง — ยังไม่ใช่การจ่ายบาร์โค้ดจริง แค่บันทึกว่ากล่องนี้เข้าระบบแล้ว',
               style: TextStyle(fontSize: 11.5, color: C.muted, height: 1.4)),
         ],
       ),
@@ -441,15 +473,23 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
             children: [
               Icon(Icons.check_circle, color: C.limeDeep, size: 18),
               const SizedBox(width: 8),
-              Text('สร้างกล่องแล้ว', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+              Text('สร้างกล่องแล้ว',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: C.muted)),
             ],
           ),
           const SizedBox(height: 8),
           Text(_tag ?? '',
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+              style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'monospace')),
           const SizedBox(height: 14),
           Text('ติดสติกเกอร์บาร์โค้ดที่ตัวกล่องแล้วกดยืนยัน',
-              style: TextStyle(fontSize: 13, color: C.ink2, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                  fontSize: 13, color: C.ink2, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -458,9 +498,11 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: C.ink,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text(_labeling ? 'กำลังบันทึก…' : 'ยืนยันติดป้ายเสร็จแล้ว'),
+              child:
+                  Text(_labeling ? 'กำลังบันทึก…' : 'ยืนยันติดป้ายเสร็จแล้ว'),
             ),
           ),
         ],
@@ -472,10 +514,12 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   /// worth flagging before it gets bound again, since [associateRfid]'s own
   /// `replace: true` would happily steal it. Backs the "จับคู่แล้ว/ยังไม่จับคู่"
   /// filter below.
-  bool _isMatched(String epc) => _c.S?.boxes.any((b) => b.rfidEpc == epc) ?? false;
+  bool _isMatched(String epc) =>
+      _c.S?.boxes.any((b) => b.rfidEpc == epc) ?? false;
 
   Widget _rfidCard() {
-    final connected = _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
+    final connected =
+        _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
     Color dot = _binding ? C.limeDeep : C.orange;
     final visible = switch (_candidateFilter) {
       'unmatched' => _found.where((c) => !_isMatched(c.epc)).toList(),
@@ -497,27 +541,36 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               _RfidDot(color: dot, pulsing: !_binding),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(_binding ? 'กำลังผูกแท็ก…' : 'ผูกแท็ก RFID (ไม่บังคับ)',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: Text(
+                    _binding ? 'กำลังผูกแท็ก…' : 'ผูกแท็ก RFID (ไม่บังคับ)',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700)),
               ),
               if (!_binding)
                 TextButton(
                   onPressed: _skipRfid,
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  child: Text('ข้าม', style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w700)),
+                  style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  child: Text('ข้าม',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: C.muted,
+                          fontWeight: FontWeight.w700)),
                 ),
             ],
           ),
           if (!connected)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('เครื่องอ่าน RFID ยังไม่พร้อม — ${_rfidStatus.message.isEmpty ? "กำลังเชื่อมต่อ…" : _rfidStatus.message}',
+              child: Text(
+                  'เครื่องอ่าน RFID ยังไม่พร้อม — ${_rfidStatus.message.isEmpty ? "กำลังเชื่อมต่อ…" : _rfidStatus.message}',
                   style: TextStyle(fontSize: 12, color: C.orange)),
             ),
           if (_rfidError != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(_rfidError!, style: TextStyle(fontSize: 12.5, color: C.red)),
+              child: Text(_rfidError!,
+                  style: TextStyle(fontSize: 12.5, color: C.red)),
             ),
           if (!_binding) ...[
             const SizedBox(height: 12),
@@ -529,11 +582,15 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                 children: [
                   Expanded(
                     child: Text('พบ ${_found.length} แท็ก — เลือกใบที่จะผูก',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.muted)),
                   ),
                   GestureDetector(
                     onTap: _rescan,
-                    child: Text('ยิงใหม่', style: TextStyle(fontSize: 12.5, color: C.orange)),
+                    child: Text('ยิงใหม่',
+                        style: TextStyle(fontSize: 12.5, color: C.orange)),
                   ),
                 ],
               ),
@@ -551,7 +608,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               if (visible.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text('ไม่มีแท็กในตัวกรองนี้', style: TextStyle(fontSize: 12, color: C.faint)),
+                  child: Text('ไม่มีแท็กในตัวกรองนี้',
+                      style: TextStyle(fontSize: 12, color: C.faint)),
                 )
               else
                 RadioGroup<String>(
@@ -570,11 +628,15 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                     disabledBackgroundColor: C.neutralBg,
                     disabledForegroundColor: C.faint,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13)),
                   ),
                   child: Text(
-                    _selectedEpc == null ? 'เลือกแท็กที่จะผูก' : 'ผูกกับ ${_tag ?? ''}',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                    _selectedEpc == null
+                        ? 'เลือกแท็กที่จะผูก'
+                        : 'ผูกกับ ${_tag ?? ''}',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
@@ -632,13 +694,15 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           fontFamily: 'monospace',
-                          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w600,
                           color: selected ? C.ink : C.ink2,
                         ),
                       ),
                       if (matched) ...[
                         const SizedBox(width: 6),
-                        Pill('จับคู่แล้ว', color: C.orange, bg: C.orangeBg, fontSize: 10),
+                        Pill('จับคู่แล้ว',
+                            color: C.orange, bg: C.orangeBg, fontSize: 10),
                       ],
                     ],
                   ),
@@ -665,9 +729,13 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(_tag ?? '',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'monospace')),
           const SizedBox(height: 4),
-          Text('จัดเก็บที่ ${c.selWhName}', style: TextStyle(fontSize: 12.5, color: C.muted)),
+          Text('จัดเก็บที่ ${c.selWhName}',
+              style: TextStyle(fontSize: 12.5, color: C.muted)),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -676,7 +744,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const FieldLabel('โซน'),
-                    TextField(controller: _zoneCtrl, decoration: pdaInput('เช่น A', radius: 12)),
+                    TextField(
+                        controller: _zoneCtrl,
+                        decoration: pdaInput('เช่น A', radius: 12)),
                   ],
                 ),
               ),
@@ -686,7 +756,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const FieldLabel('แร็ค'),
-                    TextField(controller: _rackCtrl, decoration: pdaInput('เช่น 1', radius: 12)),
+                    TextField(
+                        controller: _rackCtrl,
+                        decoration: pdaInput('เช่น 1', radius: 12)),
                   ],
                 ),
               ),
@@ -700,7 +772,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const FieldLabel('ชั้น'),
-                    TextField(controller: _shelfCtrl, decoration: pdaInput('เช่น 2', radius: 12)),
+                    TextField(
+                        controller: _shelfCtrl,
+                        decoration: pdaInput('เช่น 2', radius: 12)),
                   ],
                 ),
               ),
@@ -710,7 +784,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const FieldLabel('ช่อง'),
-                    TextField(controller: _slotCtrl, decoration: pdaInput('เช่น 3', radius: 12)),
+                    TextField(
+                        controller: _slotCtrl,
+                        decoration: pdaInput('เช่น 3', radius: 12)),
                   ],
                 ),
               ),
@@ -725,10 +801,13 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                 backgroundColor: C.lime,
                 foregroundColor: C.limeDeep,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13)),
               ),
-              child: Text(_puttingAway ? 'กำลังบันทึก…' : 'จัดเก็บขึ้นแร็ค (Putaway)',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              child: Text(
+                  _puttingAway ? 'กำลังบันทึก…' : 'จัดเก็บขึ้นแร็ค (Putaway)',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
             ),
           ),
         ],
@@ -740,14 +819,20 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
-      decoration: BoxDecoration(color: C.limeBg, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.limeBorder)),
+      decoration: BoxDecoration(
+          color: C.limeBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: C.limeBorder)),
       child: Column(
         children: [
           Text('🎉', style: const TextStyle(fontSize: 32)),
           const SizedBox(height: 8),
           Text('รับกล่อง ${_tag ?? ''} เข้าคลังเรียบร้อยแล้ว',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: C.limeDeep)),
+              style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: C.limeDeep)),
         ],
       ),
     );
@@ -770,7 +855,14 @@ class _RfidDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: pulsing ? [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 0, spreadRadius: 4)] : null,
+        boxShadow: pulsing
+            ? [
+                BoxShadow(
+                    color: color.withValues(alpha: 0.35),
+                    blurRadius: 0,
+                    spreadRadius: 4)
+              ]
+            : null,
       ),
     );
   }

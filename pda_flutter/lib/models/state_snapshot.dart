@@ -14,6 +14,10 @@ class StateSnapshot {
   final Map<String, dynamic> employees;
   final List<dynamic> events;
   final Map<String, dynamic> cfg;
+  /// `code -> {wh, zone, rack, shelf, slot, type, note, ...}` — the master
+  /// rack/shelf/slot list a warehouse admin defines up front (see backend's
+  /// `locations` table), not just wherever a box happens to have landed.
+  final Map<String, dynamic> locations;
 
   StateSnapshot({
     required this.boxesRaw,
@@ -24,6 +28,7 @@ class StateSnapshot {
     required this.employees,
     required this.events,
     required this.cfg,
+    required this.locations,
   });
 
   factory StateSnapshot.fromJson(Map<String, dynamic> j) {
@@ -39,6 +44,7 @@ class StateSnapshot {
       employees: m(j['employees']),
       events: (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
       cfg: m(j['cfg']),
+      locations: m(j['locations']),
     );
   }
 
@@ -126,5 +132,35 @@ class StateSnapshot {
       return (w['gateTypes'] as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
     }
     return const {};
+  }
+
+  /// Every distinct value seen for one location field (zone/rack/shelf/slot)
+  /// in [whId] — union of the master [locations] list (what an admin defined
+  /// up front) and whatever's actually on a box's own location right now
+  /// (a shelf someone's already using that never got added to the master
+  /// list shouldn't vanish from the dropdown just because of that). Used to
+  /// populate TransferScreen's zone/rack/shelf/slot pickers instead of a
+  /// free-typed field with nothing to keep two operators spelling the same
+  /// shelf the same way.
+  List<String> locationValues(String whId, String field, {String? zone, String? rack}) {
+    final out = <String>{};
+    for (final raw in locations.values) {
+      if (raw is! Map) continue;
+      if ((raw['wh'] ?? '').toString() != whId) continue;
+      if (zone != null && (raw['zone'] ?? '').toString() != zone) continue;
+      if (rack != null && (raw['rack'] ?? '').toString() != rack) continue;
+      final v = (raw[field] ?? '').toString();
+      if (v.isNotEmpty) out.add(v);
+    }
+    for (final b in boxes) {
+      final l = b.location;
+      if ((l['wh'] ?? '').toString() != whId) continue;
+      if (zone != null && (l['zone'] ?? '').toString() != zone) continue;
+      if (rack != null && (l['rack'] ?? '').toString() != rack) continue;
+      final v = (l[field] ?? '').toString();
+      if (v.isNotEmpty) out.add(v);
+    }
+    final list = out.toList()..sort();
+    return list;
   }
 }

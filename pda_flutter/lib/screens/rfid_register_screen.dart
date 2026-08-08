@@ -25,7 +25,8 @@ class _Candidate {
   final int? rssi;
   final int hits;
   final String? claimedByTag;
-  const _Candidate({required this.epc, this.rssi, required this.hits, this.claimedByTag});
+  const _Candidate(
+      {required this.epc, this.rssi, required this.hits, this.claimedByTag});
 }
 
 /// Dedicated fast-path for commissioning new boxes: scan the barcode, pull
@@ -64,8 +65,10 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   String? _rfidError; // shown in the RFID card when a read can't be used
   bool _verifying = false;
   bool _binding = false;
+
   /// Distinct tags this sweep has turned up, strongest signal first.
   final List<_Candidate> _found = [];
+
   /// The one the operator ticked. Never set by the app — an auto-selection is
   /// indistinguishable on screen from a deliberate one, and this is the step
   /// that decides which physical box a tag belongs to from here on.
@@ -145,7 +148,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       _selectedEpc = null;
     });
     _barcodeCtrl.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _barcodeFocus.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _barcodeFocus.requestFocus());
   }
 
   Future<void> _submitBarcode() async {
@@ -185,7 +189,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       _c.rfidRegisterRfidStep = true;
       unawaited(_c.rfid.startInventory());
     } catch (e) {
-      setState(() => _error = e is ApiException ? e.message : 'ตรวจสอบบาร์โค้ดไม่สำเร็จ');
+      setState(() =>
+          _error = e is ApiException ? e.message : 'ตรวจสอบบาร์โค้ดไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -248,7 +253,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     if (i < 0) return; // rescanned away in the meantime
     setState(() {
       final c = _found[i];
-      _found[i] = _Candidate(epc: c.epc, rssi: c.rssi, hits: c.hits, claimedByTag: owner);
+      _found[i] = _Candidate(
+          epc: c.epc, rssi: c.rssi, hits: c.hits, claimedByTag: owner);
       // Can't stay ticked if it just turned out to belong to another box —
       // the button would otherwise read "ผูกกับ …" over a selection that
       // is no longer legal to submit.
@@ -272,7 +278,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       setState(() {
         _step = _Step.success;
       });
-      _c.toastMsg('ผูกแท็ก RFID แล้ว', '$tag · วันนี้ $count กล่อง', ResultKind.ok);
+      _c.toastMsg(
+          'ผูกแท็ก RFID แล้ว', '$tag · วันนี้ $count กล่อง', ResultKind.ok);
       _successTimer?.cancel();
       _successTimer = Timer(const Duration(milliseconds: 1400), () {
         if (!mounted) return;
@@ -285,7 +292,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         _barcodeFocus.requestFocus();
       });
     } catch (e) {
-      setState(() => _rfidError = e is ApiException ? e.message : 'ผูกแท็กไม่สำเร็จ');
+      setState(() =>
+          _rfidError = e is ApiException ? e.message : 'ผูกแท็กไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _binding = false);
     }
@@ -306,31 +314,38 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final today = _c.prefs.rfidRegisteredToday(_today);
 
-    return Column(
-      children: [
-        StickyHeader(onBack: c.backToHome, title: const Text('ลงทะเบียนแท็ก RFID')),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('ผูกสำเร็จวันนี้', style: TextStyle(fontSize: 13, color: C.muted)),
-                  Text('$today กล่อง',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: C.lime)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _barcodeCard(),
-              const SizedBox(height: 12),
-              _rfidCard(),
-              const SizedBox(height: 14),
-              _banner(),
-            ],
+    return AutoHideHeader(
+      header: StickyHeader(
+          onBack: c.backToHome, title: const Text('ลงทะเบียนแท็ก RFID')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('ผูกสำเร็จวันนี้',
+                        style: TextStyle(fontSize: 13, color: C.muted)),
+                    Text('$today กล่อง',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: C.lime)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _barcodeCard(),
+                const SizedBox(height: 12),
+                _rfidCard(),
+                const SizedBox(height: 14),
+                _banner(),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -341,7 +356,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       decoration: BoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: verified ? C.limeBorder : C.border2, width: 1.5),
+        border:
+            Border.all(color: verified ? C.limeBorder : C.border2, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,7 +368,10 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                   color: verified ? C.limeDeep : C.red, size: 18),
               const SizedBox(width: 8),
               Text(verified ? 'บาร์โค้ดถูกต้อง' : 'รอสแกนบาร์โค้ดกล่อง',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: C.muted)),
             ],
           ),
           const SizedBox(height: 10),
@@ -363,7 +382,9 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                 Expanded(
                   child: Text(_tag ?? '',
                       style: const TextStyle(
-                          fontSize: 26, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'monospace')),
                 ),
                 // Only while still waiting on the RFID read — once a tag is
                 // actually being bound or the success banner is showing,
@@ -375,12 +396,16 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                   TextButton(
                     onPressed: _changeBarcode,
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: Text('เปลี่ยนบาร์โค้ด',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.orange)),
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.orange)),
                   ),
               ],
             )
@@ -394,21 +419,33 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               enableSuggestions: false,
               enabled: !_verifying,
               onSubmitted: (_) => _submitBarcode(),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace'),
               decoration: InputDecoration(
                 hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัสกล่อง',
-                hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 14),
+                hintStyle: TextStyle(
+                    fontFamily: 'Roboto', color: C.faint, fontSize: 14),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
                 filled: true,
                 fillColor: C.neutralBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
                 suffixIcon: _verifying
                     ? const Padding(
                         padding: EdgeInsets.all(12),
-                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
                       )
-                    : IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _submitBarcode),
+                    : IconButton(
+                        icon: const Icon(Icons.arrow_forward),
+                        onPressed: _submitBarcode),
               ),
             ),
           if (_error != null) ...[
@@ -422,7 +459,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
 
   Widget _rfidCard() {
     final active = _step == _Step.waitingRfid;
-    final connected = _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
+    final connected =
+        _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
     Color dot = C.border2;
     String label = 'รอสแกนแท็ก RFID';
     if (active) {
@@ -436,7 +474,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         decoration: BoxDecoration(
           color: C.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: active ? C.orangeBorder : C.border2, width: 1.5),
+          border: Border.all(
+              color: active ? C.orangeBorder : C.border2, width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,20 +485,24 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                 _RfidDot(color: dot, pulsing: active && !_binding),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  child: Text(label,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
             if (!connected)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('เครื่องอ่าน RFID ยังไม่พร้อม — ${_rfidStatus.message.isEmpty ? "กำลังเชื่อมต่อ…" : _rfidStatus.message}',
+                child: Text(
+                    'เครื่องอ่าน RFID ยังไม่พร้อม — ${_rfidStatus.message.isEmpty ? "กำลังเชื่อมต่อ…" : _rfidStatus.message}',
                     style: TextStyle(fontSize: 12, color: C.orange)),
               ),
             if (_rfidError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(_rfidError!, style: TextStyle(fontSize: 12.5, color: C.red)),
+                child: Text(_rfidError!,
+                    style: TextStyle(fontSize: 12.5, color: C.red)),
               ),
             if (active && !_binding) ...[
               const SizedBox(height: 12),
@@ -471,11 +514,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                   children: [
                     Expanded(
                       child: Text('พบ ${_found.length} แท็ก — เลือกใบที่จะผูก',
-                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: C.muted)),
                     ),
                     GestureDetector(
                       onTap: _rescan,
-                      child: Text('ยิงใหม่', style: TextStyle(fontSize: 12.5, color: C.orange)),
+                      child: Text('ยิงใหม่',
+                          style: TextStyle(fontSize: 12.5, color: C.orange)),
                     ),
                   ],
                 ),
@@ -506,11 +553,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                       disabledBackgroundColor: C.neutralBg,
                       disabledForegroundColor: C.faint,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13)),
                     ),
                     child: Text(
-                      _selectedEpc == null ? 'เลือกแท็กที่จะผูก' : 'ผูกกับ ${_tag ?? ''}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                      _selectedEpc == null
+                          ? 'เลือกแท็กที่จะผูก'
+                          : 'ผูกกับ ${_tag ?? ''}',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800),
                     ),
                   ),
                 ),
@@ -541,9 +592,15 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                 children: [
                   Text(c.epc,
                       style: TextStyle(
-                          fontSize: 13, fontFamily: 'monospace', fontWeight: FontWeight.w600, color: C.faint)),
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                          color: C.faint)),
                   Text('ผูกกับกล่อง ${c.claimedByTag} อยู่แล้ว',
-                      style: TextStyle(fontSize: 11.5, color: C.red, fontWeight: FontWeight.w600)),
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: C.red,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -619,8 +676,14 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         key: ValueKey(_step),
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
-        child: Text(text, textAlign: TextAlign.center, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: fg)),
+        decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border)),
+        child: Text(text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13.5, fontWeight: FontWeight.w700, color: fg)),
       ),
     );
   }
@@ -641,7 +704,14 @@ class _RfidDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: pulsing ? [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 0, spreadRadius: 4)] : null,
+        boxShadow: pulsing
+            ? [
+                BoxShadow(
+                    color: color.withValues(alpha: 0.35),
+                    blurRadius: 0,
+                    spreadRadius: 4)
+              ]
+            : null,
       ),
     );
   }

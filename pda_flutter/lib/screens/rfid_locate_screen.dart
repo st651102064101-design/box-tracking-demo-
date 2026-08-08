@@ -361,17 +361,19 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // transitions — cheap, and guarantees a system back press always
     // matches whatever the StickyHeader arrow below would do right now.
     c.systemBackOverride = _step == _Step.locate ? _handleBack : null;
-    return Column(
-      children: [
-        StickyHeader(
-          onBack: _step == _Step.locate ? () => _changeTarget(c) : c.backToHome,
-          title: Text(loc.t('หากล่อง / RFID')),
-          subtitle: Text(loc.t(_step == _Step.pick ? 'เลือกกล่องที่จะหา' : 'กวาดหาสัญญาณ')),
-        ),
-        Expanded(
-          child: _step == _Step.pick ? _pickBody(c, loc) : _locateBody(c, loc),
-        ),
-      ],
+    return AutoHideHeader(
+      header: StickyHeader(
+        onBack: _step == _Step.locate ? () => _changeTarget(c) : c.backToHome,
+        title: Text(loc.t('หากล่อง / RFID')),
+        subtitle: Text(loc.t(_step == _Step.pick ? 'เลือกกล่องที่จะหา' : 'กวาดหาสัญญาณ')),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: _step == _Step.pick ? _pickBody(c, loc) : _locateBody(c, loc),
+          ),
+        ],
+      ),
     );
   }
 
