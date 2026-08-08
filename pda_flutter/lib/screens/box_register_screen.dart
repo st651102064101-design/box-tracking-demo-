@@ -59,6 +59,10 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   StreamSubscription<RfidStatus>? _statusSub;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
   final List<_Candidate> _found = [];
+  /// 'unmatched' (default — the tags actually worth binding), 'matched'
+  /// (already belongs to another box, shown to double-check before
+  /// stealing one), or 'all'.
+  String _candidateFilter = 'unmatched';
   String? _selectedEpc;
   bool _binding = false;
   String? _rfidError;
@@ -83,6 +87,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   @override
   void dispose() {
     _rfid?.stopInventory();
+    _c.boxRegisterRfidStep = false;
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
@@ -146,10 +151,14 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     try {
       await _c.api.labelBox(tag);
       setState(() => _step = _Step.rfid);
-      // Same reasoning as RfidRegisterScreen: arm the reader the instant
-      // this step opens rather than making the operator tap something
-      // first — they're already holding the gun on this exact box.
-      unawaited(_c.rfid.startInventory());
+      // Unlike RfidRegisterScreen, this step does NOT arm the reader on its
+      // own the instant it opens — a pulled trigger anywhere else on this
+      // screen (create/label barcode entry) used to also start an RFID
+      // sweep, since the central trigger dispatcher only knew "screen ==
+      // boxRegister", not which of its steps was showing. boxRegisterRfidStep
+      // is what tells that dispatcher this step is the one actually asking
+      // for a trigger pull now (see AppController._onReaderTrigger).
+      _c.boxRegisterRfidStep = true;
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : 'ยืนยันติดป้ายไม่สำเร็จ');
     } finally {
@@ -160,8 +169,15 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   void _onTagRead(RfidTagRead read) {
     if (_step != _Step.rfid || _binding) return;
     if (read.epc.isEmpty) return;
+    final existing = _found.indexWhere((c) => c.epc == read.epc);
+    // Native auto-beep is off for this screen now (see AppController.
+    // _onReaderTrigger's setAutoBeep call) — a re-read of a candidate
+    // already in the list is silent by design, same reasoning as Gate's
+    // queue and Track's hit list: a held trigger re-reads the same tags
+    // constantly, and a beep for every one of those is noise, not signal.
+    // Only a genuinely new EPC landing in the list gets the tone.
+    if (existing < 0) _c.rfid.playSound(_c.prefs.rfidSoundId);
     setState(() {
-      final existing = _found.indexWhere((c) => c.epc == read.epc);
       if (existing >= 0) {
         final c = _found[existing];
         _found[existing] = _Candidate(
@@ -204,6 +220,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   }
 
   void _goPutaway() {
+    _c.boxRegisterRfidStep = false;
     if (!mounted) return;
     setState(() {
       _step = _Step.putaway;
@@ -267,6 +284,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _rfidError = null;
       _found.clear();
       _selectedEpc = null;
+      _candidateFilter = 'unmatched';
       _zoneCtrl.clear();
       _rackCtrl.clear();
       _shelfCtrl.clear();
@@ -450,9 +468,20 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     );
   }
 
+  /// Whether [epc] already belongs to some other box on file — a candidate
+  /// worth flagging before it gets bound again, since [associateRfid]'s own
+  /// `replace: true` would happily steal it. Backs the "จับคู่แล้ว/ยังไม่จับคู่"
+  /// filter below.
+  bool _isMatched(String epc) => _c.S?.boxes.any((b) => b.rfidEpc == epc) ?? false;
+
   Widget _rfidCard() {
     final connected = _rfidStatus.state == RfidState.connected || !_c.rfid.supported;
     Color dot = _binding ? C.limeDeep : C.orange;
+    final visible = switch (_candidateFilter) {
+      'unmatched' => _found.where((c) => !_isMatched(c.epc)).toList(),
+      'matched' => _found.where((c) => _isMatched(c.epc)).toList(),
+      _ => _found,
+    };
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -493,7 +522,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
           if (!_binding) ...[
             const SizedBox(height: 12),
             if (_found.isEmpty)
-              Text('ยังไม่พบแท็ก — เหนี่ยวไกหรือจ่อแท็กเข้าใกล้เครื่องอ่าน',
+              Text('เหนี่ยวไกเพื่อเริ่มค้นหาแท็ก',
                   style: TextStyle(fontSize: 12.5, color: C.faint))
             else ...[
               Row(
@@ -508,12 +537,28 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              RadioGroup<String>(
-                groupValue: _selectedEpc,
-                onChanged: (v) => setState(() => _selectedEpc = v),
-                child: Column(children: _found.map(_candidateRow).toList()),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _filterChip('unmatched', 'ยังไม่จับคู่'),
+                  const SizedBox(width: 6),
+                  _filterChip('matched', 'จับคู่แล้ว'),
+                  const SizedBox(width: 6),
+                  _filterChip('all', 'ทั้งหมด'),
+                ],
               ),
+              const SizedBox(height: 8),
+              if (visible.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text('ไม่มีแท็กในตัวกรองนี้', style: TextStyle(fontSize: 12, color: C.faint)),
+                )
+              else
+                RadioGroup<String>(
+                  groupValue: _selectedEpc,
+                  onChanged: (v) => setState(() => _selectedEpc = v),
+                  child: Column(children: visible.map(_candidateRow).toList()),
+                ),
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
@@ -540,8 +585,29 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     );
   }
 
+  Widget _filterChip(String value, String label) {
+    final selected = _candidateFilter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _candidateFilter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? C.ink : C.neutralBg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? C.ink : C.border2),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? C.surface : C.ink2)),
+      ),
+    );
+  }
+
   Widget _candidateRow(_Candidate c) {
     final selected = _selectedEpc == c.epc;
+    final matched = _isMatched(c.epc);
     return InkWell(
       onTap: () => setState(() => _selectedEpc = c.epc),
       borderRadius: BorderRadius.circular(12),
@@ -559,14 +625,22 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    c.epc,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? C.ink : C.ink2,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        c.epc,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                          color: selected ? C.ink : C.ink2,
+                        ),
+                      ),
+                      if (matched) ...[
+                        const SizedBox(width: 6),
+                        Pill('จับคู่แล้ว', color: C.orange, bg: C.orangeBg, fontSize: 10),
+                      ],
+                    ],
                   ),
                   Text('สัญญาณ ${c.rssi ?? '—'} · อ่านได้ ${c.hits} ครั้ง',
                       style: TextStyle(fontSize: 11.5, color: C.faint)),

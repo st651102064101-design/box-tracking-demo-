@@ -28,6 +28,11 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _password;
   bool _showAccount = false;
 
+  /// The one profile this screen actually shows/picks — resolved from what
+  /// Android reports the handheld as (see [_detectDevice]), not assumed.
+  /// Null while detection is still running.
+  _DeviceProfile? _profile;
+
   @override
   void initState() {
     super.initState();
@@ -35,12 +40,50 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url = TextEditingController(text: c.prefs.baseUrl);
     _account = TextEditingController(text: c.prefs.username);
     _password = TextEditingController();
-    // Only one hardware profile is qualified today (see _kDeviceProfiles) —
-    // making someone tap the one option they have no real choice about would
-    // just be friction, so it's picked for them the moment this screen opens.
-    if (_kDeviceProfiles.length == 1 && c.prefs.deviceModel.isEmpty) {
-      c.setDeviceModel(_kDeviceProfiles.first.id);
-    }
+    _detectDevice(c);
+  }
+
+  /// Used to auto-pick the Zebra profile for every device this build ran
+  /// on, regardless of what it actually was — a phone or an emulator got
+  /// labelled "Zebra MC3300 Series (MC3390R)" just as confidently as a real
+  /// unit, because the picker never asked the OS. Now it does: Build.MODEL/
+  /// MANUFACTURER/BRAND (via RfidService.deviceInfo, no reader connection
+  /// required) either matches the one qualified profile or it doesn't, and
+  /// only a genuine match gets that name — anything else shows its own real
+  /// manufacturer/model instead of a false "Zebra" label.
+  Future<void> _detectDevice(AppController c) async {
+    final info = await c.rfid.deviceInfo();
+    final model = (info['model'] ?? '').toString();
+    final manufacturer = (info['manufacturer'] ?? '').toString();
+    final brand = (info['brand'] ?? '').toString();
+    final release = (info['androidRelease'] ?? '').toString();
+    final looksZebra = manufacturer.toLowerCase().contains('zebra') ||
+        brand.toLowerCase().contains('zebra') ||
+        model.toUpperCase().contains('MC33');
+
+    final resolved = looksZebra
+        ? const _DeviceProfile(
+            id: 'mc3390r',
+            name: 'Zebra MC3300 Series (MC3390R)',
+            androidVersion: 'Android 8.0 (Oreo)',
+            note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
+            hasRfid: true,
+          )
+        : _DeviceProfile(
+            id: 'generic',
+            name: [manufacturer, model].where((s) => s.isNotEmpty).join(' ').trim().isEmpty
+                ? 'อุปกรณ์นี้'
+                : [manufacturer, model].where((s) => s.isNotEmpty).join(' '),
+            androidVersion: release.isEmpty ? '' : 'Android $release',
+            note: 'ไม่มีเครื่องอ่าน RFID ในตัวเครื่อง — ใช้บาร์โค้ดได้ตามปกติ',
+            hasRfid: false,
+          );
+    if (!mounted) return;
+    setState(() => _profile = resolved);
+    // Single detected option — picking it for the operator is the same
+    // "no real choice, don't make them tap it" reasoning the old
+    // always-Zebra version had, just now backed by an actual check.
+    if (c.prefs.deviceModel.isEmpty) c.setDeviceModel(resolved.id);
   }
 
   @override
@@ -76,6 +119,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
               _StepLabel(loc.t('1 · อุปกรณ์ที่ใช้งาน')),
               const SizedBox(height: 11),
               _DeviceModelPicker(
+                profile: _profile,
                 selected: c.prefs.deviceModel,
                 onPick: c.setDeviceModel,
                 loc: loc,
@@ -199,41 +243,37 @@ class _DeviceProfile {
   final String name;
   final String androidVersion;
   final String note;
+  final bool hasRfid;
   const _DeviceProfile({
     required this.id,
     required this.name,
     required this.androidVersion,
     required this.note,
+    required this.hasRfid,
   });
 }
 
-/// The devices this build has been qualified against. A single entry today —
-/// see [_DeviceModelPicker]'s footnote — but kept as a list (not a fixed
-/// value) so adding the next supported model is a one-line change here, not
-/// a rewrite of this screen.
-const _kDeviceProfiles = [
-  _DeviceProfile(
-    id: 'mc3390r',
-    name: 'Zebra MC3300 Series (MC3390R)',
-    androidVersion: 'Android 8.0 (Oreo)',
-    note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
-  ),
-];
-
-/// Step 1 of setup: which handheld model this terminal is. Required before
-/// "บันทึกและเริ่มใช้งาน" unlocks (see `canSave` in [DeviceSetupScreen]) —
-/// recorded once per terminal so the fleet's hardware inventory stays
-/// accurate without anyone having to audit it by hand later. Auto-picked in
-/// [_DeviceSetupScreenState.initState] whenever there's only one option, so
-/// this list stays visible as confirmation rather than a required tap.
+/// Step 1 of setup: which handheld this terminal actually is — detected (see
+/// [_DeviceSetupScreenState._detectDevice]), not assumed. [profile] is null
+/// while that detection is still in flight. Auto-picked once known, so this
+/// stays visible as confirmation of what was found rather than a required
+/// tap — but it's now confirming a real check, not repeating a hardcoded
+/// name at every device that opens this screen.
 class _DeviceModelPicker extends StatelessWidget {
+  final _DeviceProfile? profile;
   final String selected;
   final ValueChanged<String> onPick;
   final LocaleController loc;
-  const _DeviceModelPicker({required this.selected, required this.onPick, required this.loc});
+  const _DeviceModelPicker({
+    required this.profile,
+    required this.selected,
+    required this.onPick,
+    required this.loc,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final p = profile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -242,18 +282,27 @@ class _DeviceModelPicker extends StatelessWidget {
           style: TextStyle(fontSize: 12.5, color: C.muted, height: 1.4),
         ),
         const SizedBox(height: 11),
-        ..._kDeviceProfiles.map((p) => Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: _DeviceProfileTile(
-                profile: p,
-                selected: selected == p.id,
-                onTap: () => onPick(p.id),
-              ),
-            )),
-        Text(
-          loc.t('ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป'),
-          style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
-        ),
+        if (p == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4))),
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 9),
+            child: _DeviceProfileTile(
+              profile: p,
+              selected: selected == p.id,
+              onTap: () => onPick(p.id),
+            ),
+          ),
+          Text(
+            p.hasRfid
+                ? loc.t('ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป')
+                : loc.t('ตรวจไม่พบเครื่องอ่าน RFID ในตัวเครื่องนี้ — ฟังก์ชันบาร์โค้ดยังใช้งานได้ตามปกติ'),
+            style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
+          ),
+        ],
       ],
     );
   }
@@ -300,7 +349,8 @@ class _DeviceProfileTile extends StatelessWidget {
                     Text(profile.name,
                         style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text('${profile.androidVersion} · ${profile.note}',
+                    Text(
+                        [if (profile.androidVersion.isNotEmpty) profile.androidVersion, profile.note].join(' · '),
                         style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),

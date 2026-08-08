@@ -1558,19 +1558,58 @@ class AppController extends ChangeNotifier {
       toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
       return;
     }
-    // Gate scanning, the box-locate sweep, and Track's own multi-tag list all
-    // drive their own feedback instead of the reader's dense per-read tick:
-    // Gate's is discrete ok/error tones from addScan() (see playTone calls
-    // below); locate's is haptic-only, gated to genuine target matches (see
-    // RfidLocateScreen._onBatch); Track's is one sound per newly-found tag
-    // (see _onReaderTag's Screen.track case). Leaving the native tick on for
-    // any of these means a re-read of a tag already handled still beeps —
-    // the SDK fires it from its own read callback with no idea a tag is a
-    // repeat, only Dart does. Every other RFID screen still wants the raw
-    // per-read feedback.
-    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate && screen != Screen.track);
+    if (screen == Screen.boxRegister && !boxRegisterRfidStep) {
+      // The create/label/putaway/success steps all expect a *barcode* (the
+      // box's own tag, scanned or typed) — only the rfid step's card is
+      // asking for a trigger pull. Same class of bug as the login screen
+      // fix: this dispatcher used to start an RFID sweep on every trigger
+      // pull anywhere on this screen, which meant scanning the box's
+      // barcode to create it could also silently arm the antenna. Nothing
+      // to toast: the barcode step's own field/imager already answered the
+      // trigger, this handler just isn't part of that path yet.
+      return;
+    }
+    if (screen == Screen.rfidRegister && !rfidRegisterRfidStep) {
+      // Same reasoning, one step earlier: the waitingBarcode step's own
+      // field/imager handles a trigger pull there. RfidRegisterScreen arms
+      // the reader itself the instant a barcode resolves (see its
+      // _submitBarcode), so this dispatcher isn't even the normal way that
+      // screen starts a sweep — but without this gate it would still fire
+      // one on every trigger pull during barcode entry too.
+      return;
+    }
+    // Gate scanning, the box-locate sweep, Track's own multi-tag list, and
+    // box registration's tag-candidate sweep all drive their own feedback
+    // instead of the reader's dense per-read tick: Gate's is discrete
+    // ok/error tones from addScan() (see playTone calls below); locate's is
+    // haptic-only, gated to genuine target matches (see
+    // RfidLocateScreen._onBatch); Track's and box registration's are one
+    // sound per newly-found tag (see _onReaderTag's Screen.track case and
+    // BoxRegisterScreen._onTagRead). Leaving the native tick on for any of
+    // these means a re-read of a tag already handled still beeps — the SDK
+    // fires it from its own read callback with no idea a tag is a repeat,
+    // only Dart does. Every other RFID screen still wants the raw per-read
+    // feedback.
+    rfid.setAutoBeep(screen != Screen.scan &&
+        screen != Screen.rfidLocate &&
+        screen != Screen.track &&
+        screen != Screen.boxRegister);
     rfid.startInventory();
   }
+
+  /// True only while BoxRegisterScreen's own rfid step (_Step.rfid) is on
+  /// top — see the Screen.boxRegister branch in [_onReaderTrigger] above.
+  /// Defaults false so the create/label steps' barcode entry never
+  /// accidentally arms the antenna; the screen flips this on entering its
+  /// rfid step and back off leaving it (skip, bind, dispose, …).
+  bool boxRegisterRfidStep = false;
+
+  /// Same idea, for RfidRegisterScreen's own waitingRfid step. That screen
+  /// already arms the reader itself the instant a barcode resolves (see its
+  /// _submitBarcode — no trigger pull needed there), but the *barcode* step
+  /// still needs this false so a trigger pulled while typing/scanning a box
+  /// code doesn't also fire the antenna through this dispatcher.
+  bool rfidRegisterRfidStep = false;
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;

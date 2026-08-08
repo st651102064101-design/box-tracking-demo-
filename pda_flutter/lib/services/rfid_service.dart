@@ -375,6 +375,20 @@ class RfidService {
     }
   }
 
+  /// What Android itself reports this handheld as — manufacturer/model/
+  /// brand — independent of whether a Zebra reader ever answers. Unlike
+  /// [diagnostics], works with no reader present at all, since it's asking
+  /// the OS, not the RFID SDK. Empty on non-Android (desktop/web).
+  Future<Map<String, dynamic>> deviceInfo() async {
+    if (!supported) return const {};
+    try {
+      final r = await _method.invokeMapMethod<String, dynamic>('deviceInfo');
+      return r ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   void dispose() {
     _sub?.cancel();
     _buffer.clear();

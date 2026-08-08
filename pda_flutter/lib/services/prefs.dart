@@ -39,6 +39,7 @@ class Prefs {
   static const _kRfidSoundVolume = 'boxtrace_rfid_sound_volume';
   static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
   static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
+  static const _kHideMaxRangeAlert = 'boxtrace_hide_max_range_alert';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -98,6 +99,13 @@ class Prefs {
   /// default — matches the reader's own out-of-the-box behavior.
   double get rfidSoundVolume => _p.getDouble(_kRfidSoundVolume) ?? 1.0;
   set rfidSoundVolume(double v) => _p.setDouble(_kRfidSoundVolume, v.clamp(0.0, 1.0));
+
+  /// "อย่าแสดงอีก" on RfidLocateScreen's max-range dialog — off by default,
+  /// so a fresh device still gets told once. Per-device, not per-employee:
+  /// the dialog is about what the terminal's antenna is doing, not who's
+  /// holding it.
+  bool get hideMaxRangeAlert => _p.getBool(_kHideMaxRangeAlert) ?? false;
+  set hideMaxRangeAlert(bool v) => _p.setBool(_kHideMaxRangeAlert, v);
 
   /// How many boxes got an RFID tag registered today, on this device — resets
   /// itself the first time it's touched on a new calendar day rather than

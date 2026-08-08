@@ -35,6 +35,15 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   final _searchCtrl = TextEditingController();
   final _focus = FocusNode();
 
+  /// Same burst-detection trick as track_screen.dart/login_screen.dart: a
+  /// keyboard-wedge scan on this hardware often lands as one onChanged call
+  /// carrying the whole code, not a keystroke at a time. More than one new
+  /// character in a single callback is scan-speed proof no human typing
+  /// produces — used to tell "this was scanned" apart from "still typing to
+  /// filter the list" so a scanned barcode can jump straight to the sweep
+  /// step instead of just sitting in the results list waiting for a tap.
+  int _prevSearchLen = 0;
+
   _Step _step = _Step.pick;
   Box? _target;
 
@@ -58,14 +67,32 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   // the RFID test sheet for raw values on the terminal) — clamps the meter
   // to something that actually moves across a room instead of pinning at the
   // extremes for every read.
-  static const _rssiFar = -70;
-  static const _rssiClose = -30;
+  //
+  // Widened from the original -70/-30: a passive UHF tag's peak RSSI rarely
+  // gets stronger than about -40dBm even held right against the antenna
+  // (-30dBm is close to this reader's own overload/saturation floor), so a
+  // "found" threshold built on -30 as "close" was only ever reachable with
+  // the tag pressed flat against the reader — reported as "gauge won't move
+  // unless you're touching it." -85 as "far" also gives real distance reads
+  // (which land in the -75..-90dBm range on this hardware at a few meters,
+  // not down at -70) somewhere to register on the meter instead of clamping
+  // to zero the moment they're not already close.
+  static const _rssiFar = -85;
+  static const _rssiClose = -45;
   static const _staleAfter = Duration(milliseconds: 900);
 
   @override
   void initState() {
     super.initState();
-    final rfid = context.read<AppController>().rfid;
+    final c = context.read<AppController>();
+    // Unlike Scan/Track — which deliberately let scanInputMode carry over
+    // between visits — this screen always starts on บาร์โค้ด. It's the
+    // "pick a box" step's default entry point (searching by tag/type is the
+    // common case), and scanInputMode is shared app-wide state, so without
+    // this a previous RFID pick on Scan or Track would leak in here as the
+    // starting mode too.
+    c.setScanInputMode(ScanInputMode.barcode);
+    final rfid = c.rfid;
     _status = RfidStatus(rfid.state, '');
     _tagSub = rfid.tagBatches.listen(_onBatch);
     _statusSub = rfid.status.listen((s) {
@@ -96,16 +123,46 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     final c = context.read<AppController>();
     await c.forceMaxRfidPower();
     if (!mounted) return;
+    if (c.prefs.hideMaxRangeAlert) return;
     final loc = context.read<LocaleController>();
-    showDialog(
+    bool dontShowAgain = false;
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(loc.t('ตั้งระยะยิงสูงสุด')),
-        content: Text(loc.t('ระบบตั้งกำลังส่งสัญญาณของเครื่องอ่านไว้ที่ระยะไกลสุดโดยอัตโนมัติ '
-            'เพื่อให้กวาดหากล่องได้ไกลที่สุดเท่าที่เครื่องรองรับ')),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(loc.t('เข้าใจแล้ว'))),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(loc.t('ตั้งระยะยิงสูงสุด')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(loc.t('ระบบตั้งกำลังส่งสัญญาณของเครื่องอ่านไว้ที่ระยะไกลสุดโดยอัตโนมัติ '
+                  'เพื่อให้กวาดหากล่องได้ไกลที่สุดเท่าที่เครื่องรองรับ')),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () => setDialogState(() => dontShowAgain = !dontShowAgain),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: dontShowAgain,
+                      onChanged: (v) => setDialogState(() => dontShowAgain = v ?? false),
+                    ),
+                    Flexible(child: Text(loc.t('ไม่ต้องแสดงอีก'))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (dontShowAgain) c.prefs.hideMaxRangeAlert = true;
+                Navigator.of(ctx).pop();
+              },
+              child: Text(loc.t('เข้าใจแล้ว')),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -241,6 +298,29 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     }
   }
 
+  /// Fires on every keystroke in the pick step's search field — rebuilds to
+  /// refresh the filtered list as always, but also checks whether what just
+  /// landed looks like a completed scan (see [_prevSearchLen]) rather than a
+  /// human still typing. A scan that resolves to exactly one taggable box
+  /// jumps straight into the sweep step, same as tapping that result would —
+  /// "ยิงปุ๊บ ต้องเข้าหาพร้อม RFID เลย" — instead of leaving the operator to
+  /// find and tap their own scan in the results list.
+  void _onSearchChanged(AppController c) {
+    final addedChars = _searchCtrl.text.length - _prevSearchLen;
+    _prevSearchLen = _searchCtrl.text.length;
+    setState(() {});
+    if (addedChars <= 1) return;
+    final q = _searchCtrl.text.trim();
+    if (q.isEmpty) return;
+    final s = c.S;
+    if (s == null) return;
+    final b = s.box(c.resolveTag(q));
+    if (b == null) return;
+    final hasTag = (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false);
+    if (!hasTag) return;
+    _pick(c, b);
+  }
+
   void _pick(AppController c, Box b) {
     setState(() {
       _target = b;
@@ -312,7 +392,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             textCapitalization: TextCapitalization.characters,
             autocorrect: false,
             enableSuggestions: false,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => _onSearchChanged(c),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
             decoration: InputDecoration(
               hintText: loc.t('พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01'),

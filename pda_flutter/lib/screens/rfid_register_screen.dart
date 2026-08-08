@@ -100,6 +100,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     // it has to be disarmed the same way — a stray back-navigation must not
     // leave it sweeping in the background.
     _rfid?.stopInventory();
+    _c.rfidRegisterRfidStep = false;
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
@@ -134,6 +135,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
   /// onto whatever gets scanned next.
   void _changeBarcode() {
     unawaited(_c.rfid.stopInventory());
+    _c.rfidRegisterRfidStep = false;
     setState(() {
       _step = _Step.waitingBarcode;
       _tag = null;
@@ -175,7 +177,12 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       // a gun against a box they have already scanned; making them put a hand
       // on the screen between the two halves of one action is the whole thing
       // this flow was getting wrong. The trigger still works as before — this
-      // just means it isn't required.
+      // just means it isn't required. rfidRegisterRfidStep tells the central
+      // trigger dispatcher this step is the one actually expecting a pull now
+      // (see AppController._onReaderTrigger) — set before starting inventory
+      // so a trigger pulled in the same instant isn't gated out by a stale
+      // false.
+      _c.rfidRegisterRfidStep = true;
       unawaited(_c.rfid.startInventory());
     } catch (e) {
       setState(() => _error = e is ApiException ? e.message : 'ตรวจสอบบาร์โค้ดไม่สำเร็จ');
@@ -261,6 +268,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     try {
       await _c.api.associateRfid(tag, rfidEpc: epc, replace: true);
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
+      _c.rfidRegisterRfidStep = false;
       setState(() {
         _step = _Step.success;
       });

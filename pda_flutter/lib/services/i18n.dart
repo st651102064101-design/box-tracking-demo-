@@ -72,6 +72,10 @@ class LocaleController extends ChangeNotifier {
     'ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป':
         'Only this model is currently supported — additional models will be added in a future update',
     'เครื่องอ่าน RFID ในตัวเครื่อง': 'Integrated RFID reader',
+    'ไม่มีเครื่องอ่าน RFID ในตัวเครื่อง — ใช้บาร์โค้ดได้ตามปกติ': 'No integrated RFID reader — barcode still works normally',
+    'ตรวจไม่พบเครื่องอ่าน RFID ในตัวเครื่องนี้ — ฟังก์ชันบาร์โค้ดยังใช้งานได้ตามปกติ':
+        'No RFID reader detected on this device — barcode features still work normally',
+    'อุปกรณ์นี้': 'This device',
 
     // shared
     'เข้า': 'In',
@@ -151,6 +155,8 @@ class LocaleController extends ChangeNotifier {
         'The system automatically set the reader\'s transmit power to its maximum, '
             'so the sweep can reach as far as this reader supports',
     'เข้าใจแล้ว': 'Got it',
+    'ไม่ต้องแสดงอีก': 'Don\'t show again',
+    'เจอ': 'Found',
     'เลือกกล่องที่จะหา': 'Pick a box to find',
     'กวาดหาสัญญาณ': 'Sweeping for a signal',
     'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01': 'Type or scan a box code, e.g. CRT-01',
@@ -260,6 +266,7 @@ class LocaleController extends ChangeNotifier {
 
     // scan (gate) screen
     'กลับไปสแกนกล่องเพิ่ม': 'Back to scan more boxes',
+    'แก้ไขข้อมูลลูกค้า/รถ': 'Edit customer/vehicle info',
     'ถัดไป': 'Next',
     'ยืนยันส่งออก': 'Confirm Gate Out',
     'ยืนยันรับเข้าคลัง': 'Confirm Gate In',

@@ -28,13 +28,14 @@ class _ScanScreenState extends State<ScanScreen> {
   final _inVtypeOtherCtrl = TextEditingController();
   final _scanFocus = FocusNode();
 
-  /// Scan-then-details, same shape on both directions: the operator isn't
-  /// looking at customer/vehicle fields before they've even started scanning
-  /// boxes. "ถัดไป" reveals the form; the actual commit only happens from
-  /// there. Reset is implicit — setMode() always routes through a fresh
-  /// ScanScreen instance (see root_screen.dart's ValueKey), so this never
-  /// needs to be cleared by hand between Gate In and Gate Out.
-  bool _detailsStep = false;
+  /// Details-then-scan, same shape on both directions: the customer/vehicle
+  /// form comes first (nothing about it depends on which boxes end up
+  /// scanned), "ถัดไป" moves to the scanner/queue step, and the actual
+  /// commit only happens from there. Reset is implicit — setMode() always
+  /// routes through a fresh ScanScreen instance (see root_screen.dart's
+  /// ValueKey), so this never needs to be cleared by hand between Gate In
+  /// and Gate Out.
+  bool _onScanStep = false;
 
   /// True while the reader's trigger is actually held down. In RFID mode
   /// this collapses the toggle/status card down to a slim "กำลังอ่าน…"
@@ -97,19 +98,21 @@ class _ScanScreenState extends State<ScanScreen> {
     _scanFocus.requestFocus();
   }
 
-  /// First tap just reveals the customer/vehicle form (label becomes
-  /// "ยืนยันรับเข้าคลัง"/"ยืนยันส่งออก" at that point); the second tap actually
-  /// commits. A failed commit leaves the queue non-empty, which is the
-  /// signal to stay on the details step for a retry rather than snapping
-  /// back to an empty scan screen.
-  Future<void> _onPrimary(AppController c) async {
-    if (!_detailsStep) {
-      setState(() => _detailsStep = true);
+  /// First tap (label "ถัดไป", only enabled once the form itself is valid)
+  /// moves from the customer/vehicle step to the scanner/queue step; the
+  /// second tap (label "ยืนยันรับเข้าคลัง"/"ยืนยันส่งออก") actually commits. A
+  /// failed commit leaves the queue non-empty, which is the signal to stay
+  /// on the scan step for a retry rather than snapping back to an empty
+  /// form.
+  Future<void> _onPrimary(AppController c, bool formValid) async {
+    if (!_onScanStep) {
+      if (!formValid) return;
+      setState(() => _onScanStep = true);
       return;
     }
     await c.doCommit();
     if (!mounted) return;
-    if (c.queue.isEmpty) setState(() => _detailsStep = false);
+    if (c.queue.isEmpty) setState(() => _onScanStep = false);
   }
 
   @override
@@ -123,10 +126,13 @@ class _ScanScreenState extends State<ScanScreen> {
     final vtypeOk = isOut
         ? (c.outVehicleType != 'อื่นๆ' || c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' || c.inVehicleTypeOther.trim().isNotEmpty);
-    // The form itself is hidden until the details step, so its fields can't
-    // block "ถัดไป" — only the actual commit tap needs them valid.
     final formValid = (!isOut || c.outCustomer.isNotEmpty) && plateOk && vtypeOk;
-    final canCommit = c.queue.isNotEmpty && (!_detailsStep || formValid);
+    // Step 1 (form): "ถัดไป" needs a valid form, nothing about the queue —
+    // it's still empty at this point. Step 2 (scan): commit needs both a
+    // non-empty queue and the form still valid (it was checked once to get
+    // here, but re-checking costs nothing and stays honest if state ever
+    // changes out from under it).
+    final canProceed = !_onScanStep ? formValid : (c.queue.isNotEmpty && formValid);
 
     return Column(
       children: [
@@ -146,31 +152,29 @@ class _ScanScreenState extends State<ScanScreen> {
         Expanded(
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 120),
-            // Details step shows only the vehicle form — not the scanner
-            // panel (with its บาร์โค้ด/RFID toggle, which has nothing to do
-            // once scanning's done) and not the queue list, which the "×N"
-            // badge on the bottom button already accounts for. "กลับไปสแกน
-            // กล่องเพิ่ม" is the way back to the scan step if either needs
-            // to be seen or changed again.
-            children: _detailsStep
-                ? [
+            // Form step comes first now — nothing about ลูกค้า/ทะเบียนรถ
+            // depends on which boxes end up scanned, so filling it in
+            // doesn't need to wait on a scan happening first. The scan step
+            // (scanner panel + queue) only shows once "ถัดไป" confirms the
+            // form's valid; "แก้ไขข้อมูล…" is the way back to change it
+            // without losing whatever's already been scanned.
+            children: !_onScanStep
+                ? [isOut ? _outForm(c, loc) : _inForm(c, loc)]
+                : [
                     GestureDetector(
-                      onTap: () => setState(() => _detailsStep = false),
+                      onTap: () => setState(() => _onScanStep = false),
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 9),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.chevron_left, size: 17, color: C.muted),
-                            Text(loc.t('กลับไปสแกนกล่องเพิ่ม'),
+                            Text(loc.t('แก้ไขข้อมูลลูกค้า/รถ'),
                                 style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
                     ),
-                    isOut ? _outForm(c, loc) : _inForm(c, loc),
-                  ]
-                : [
                     _scannerPanel(c, loc),
                     const SizedBox(height: 13),
                     _queueHeader(c, loc),
@@ -179,10 +183,12 @@ class _ScanScreenState extends State<ScanScreen> {
                   ],
           ),
         ),
-        // Nothing scanned yet: no "ถัดไป" to press, so there's no button to
-        // show — a disabled button still invites a tap and a "why won't this
-        // work" moment before the first scan has even landed.
-        if (c.queue.isNotEmpty)
+        // Step 1 always shows "ถัดไป" (disabled until the form's valid) —
+        // nothing to scan yet, so there's no queue count to gate it on. Step
+        // 2 only shows the button once something's actually been scanned: a
+        // disabled commit button sitting there before the first scan lands
+        // invites a tap and a "why won't this work" moment.
+        if (!_onScanStep || c.queue.isNotEmpty)
           Container(
             padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
             decoration: BoxDecoration(
@@ -194,16 +200,18 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             ),
             child: PrimaryButton(
-              label: loc.t(!_detailsStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                    color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
-                child: Text('${c.queue.length}',
-                    style: TextStyle(
-                        fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
-              ),
-              onTap: (canCommit && !c.busy) ? () => _onPrimary(c) : null,
+              label: loc.t(!_onScanStep ? 'ถัดไป' : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
+              trailing: _onScanStep
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: C.limeDeep.withOpacity(0.16), borderRadius: BorderRadius.circular(999)),
+                      child: Text('${c.queue.length}',
+                          style: TextStyle(
+                              fontSize: 14, color: C.limeDeep, fontFeatures: [FontFeature.tabularFigures()])),
+                    )
+                  : Icon(Icons.arrow_forward, size: 19, color: canProceed ? C.limeDeep : C.faint),
+              onTap: (canProceed && !c.busy) ? () => _onPrimary(c, formValid) : null,
             ),
           ),
       ],

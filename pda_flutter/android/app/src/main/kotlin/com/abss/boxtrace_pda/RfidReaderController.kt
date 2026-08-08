@@ -6,6 +6,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -303,11 +304,31 @@ class RfidReaderController(private val context: Context) :
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
+            "deviceInfo" -> result.success(deviceInfo())
             else -> result.notImplemented()
         }
     }
 
     private fun isConnected(): Boolean = reader?.isConnected == true
+
+    /**
+     * What the OS itself says this handheld actually is — independent of
+     * whether a Zebra RFID reader ever answers. device_setup_screen.dart
+     * uses this to decide whether the "Zebra MC3300 Series (MC3390R)"
+     * profile is honest to show at all: [diagnostics] only knows the reader
+     * model, and only once one has connected, so on its own it can't tell
+     * "this is genuinely an MC3390R that hasn't connected yet" apart from
+     * "this is some other Android device entirely" — Build.MANUFACTURER/
+     * MODEL/BRAND can, immediately, with no reader involved.
+     */
+    private fun deviceInfo(): Map<String, Any?> {
+        return mapOf(
+            "manufacturer" to Build.MANUFACTURER,
+            "model" to Build.MODEL,
+            "brand" to Build.BRAND,
+            "androidRelease" to Build.VERSION.RELEASE,
+        )
+    }
 
     /**
      * One call that answers "is this reader actually working?" — model, firmware,

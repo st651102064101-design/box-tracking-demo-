@@ -380,10 +380,23 @@ class _RfidPanelState extends State<_RfidPanel> {
   /// falls back to whatever the reader itself last reported.
   int? _rangeIndex;
 
-  /// True while the on-screen "กดค้างเพื่อทดสอบยิง" button is held —
-  /// mirrors the physical trigger so a range just set on the slider can be
-  /// checked without reaching for the gun.
+  /// True while either the on-screen "กดค้างเพื่อทดสอบยิง" button OR the
+  /// physical trigger is actually firing — the on-screen button used to be
+  /// the only thing that ever set this, so pulling the *physical* trigger
+  /// while standing on this screen (now allowed, see AppController.
+  /// _onReaderTrigger's Screen.settings branch) span up an inventory sweep
+  /// the button itself never found out about: it just sat there reading
+  /// "กดค้างเพื่อทดสอบยิง" the whole time despite the antenna actually
+  /// running. [_triggerSub] below is what keeps the two in sync.
   bool _testFiring = false;
+  StreamSubscription<bool>? _triggerSub;
+
+  /// Distinct EPCs seen during the current test fire, most-recent-first —
+  /// what backs the fanned "stacked cards" display (see [_foundCardStack]).
+  /// Cleared at the start of every new test so an old sweep's tags don't
+  /// linger into the next one.
+  final List<String> _liveFound = [];
+  StreamSubscription<List<RfidTagRead>>? _tagSub;
 
   @override
   void initState() {
@@ -394,12 +407,42 @@ class _RfidPanelState extends State<_RfidPanel> {
     // a shift, and this screen isn't the one place a slow counter matters.
     final lowPower = context.read<AppController>().lowPowerMode;
     _poll = Timer.periodic(Duration(seconds: lowPower ? 5 : 2), (_) => _refresh());
+    final rfid = context.read<AppController>().rfid;
+    _triggerSub = rfid.triggers.listen((pressed) {
+      if (!mounted) return;
+      if (pressed) {
+        setState(() {
+          _testFiring = true;
+          _liveFound.clear();
+        });
+        _testPoll?.cancel();
+        _testPoll = Timer.periodic(const Duration(milliseconds: 200), (_) => _refresh());
+      } else {
+        setState(() => _testFiring = false);
+        _testPoll?.cancel();
+        _testPoll = null;
+        _refresh();
+      }
+    });
+    _tagSub = rfid.tagBatches.listen((batch) {
+      if (!_testFiring) return;
+      final added = batch.map((r) => r.epc).where((e) => e.isNotEmpty && !_liveFound.contains(e)).toSet();
+      if (added.isEmpty) return;
+      setState(() {
+        for (final epc in added) {
+          _liveFound.insert(0, epc);
+        }
+        if (_liveFound.length > 8) _liveFound.removeRange(8, _liveFound.length);
+      });
+    });
   }
 
   @override
   void dispose() {
     _poll?.cancel();
     _testPoll?.cancel();
+    _triggerSub?.cancel();
+    _tagSub?.cancel();
     // A stray finger-up outside the button (or navigating away mid-press)
     // must not leave the reader sweeping in the background.
     if (_testFiring) context.read<AppController>().rfid.stopInventory();
@@ -418,7 +461,10 @@ class _RfidPanelState extends State<_RfidPanel> {
 
   Future<void> _startTest(AppController c) async {
     if (_testFiring) return;
-    setState(() => _testFiring = true);
+    setState(() {
+      _testFiring = true;
+      _liveFound.clear();
+    });
     await c.rfid.startInventory();
     _testPoll?.cancel();
     _testPoll = Timer.periodic(const Duration(milliseconds: 200), (_) => _refresh());
@@ -586,6 +632,15 @@ class _RfidPanelState extends State<_RfidPanel> {
                   ),
                 ),
               ),
+              if (_liveFound.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  '${loc.t('เจอ')} ${_liveFound.length} ${loc.t('แท็ก')}',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.muted),
+                ),
+                const SizedBox(height: 8),
+                _FoundCardStack(epcs: _liveFound),
+              ],
             ] else
               Text(
                 loc.t('เชื่อมต่อเครื่องอ่านก่อน เพื่อปรับระยะยิงแบบละเอียดเต็มสเปกของเครื่องนี้'),
@@ -722,6 +777,69 @@ class _RfidPanelState extends State<_RfidPanel> {
                     color: text == '—' ? C.faint : C.ink)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Every distinct EPC found during a test fire, fanned like a hand of
+/// playing cards instead of stacked as separate toasts one below another —
+/// each card offset a few pixels further right/down and rotated slightly
+/// more than the last, most-recent tag on top. Reads as one object growing
+/// a card at a time, not a wall of alerts pushing the rest of the screen
+/// down every time a new tag turns up.
+class _FoundCardStack extends StatelessWidget {
+  final List<String> epcs; // most-recent-first
+  const _FoundCardStack({required this.epcs});
+
+  @override
+  Widget build(BuildContext context) {
+    // Oldest-drawn-first so the most recent tag's card physically sits on
+    // top of the stack, matching "most-recent-first" in the data.
+    final ordered = epcs.reversed.toList();
+    const cardWidth = 168.0;
+    final maxOffset = (ordered.length - 1) * 10.0;
+    return SizedBox(
+      height: 30.0 + ordered.length * 10 + 6,
+      width: cardWidth + maxOffset,
+      child: Stack(
+        children: List.generate(ordered.length, (i) {
+          final epc = ordered[i];
+          final top = epc == epcs.first; // newest tag, drawn last = on top
+          return Positioned(
+            left: i * 10.0,
+            top: i * 10.0,
+            child: Transform.rotate(
+              angle: (i.isEven ? -1 : 1) * 0.02 * (i + 1),
+              child: Container(
+                width: cardWidth,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: top ? C.limeBg : C.surface,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: top ? C.limeBorder : C.border),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2))],
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.nfc, size: 14, color: top ? C.limeDeep : C.muted),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(epc,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              fontFamily: 'monospace',
+                              fontWeight: top ? FontWeight.w800 : FontWeight.w600,
+                              color: top ? C.limeDeep : C.ink2)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
