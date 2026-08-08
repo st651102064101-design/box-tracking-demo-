@@ -52,35 +52,50 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     const Caption('การเชื่อมต่อระบบหลัก'),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: c.connected ? C.lime : C.red,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(color: c.connected ? C.limeBg : C.redBg, spreadRadius: 3)
-                            ],
+                    // Tappable only while actually disconnected — connected
+                    // is nothing to act on. A tap first retries with
+                    // whatever's already saved, and only walks into the
+                    // server-address/service-account form if that still
+                    // fails (see AppController.reconnectOrConfigure) — the
+                    // PDA-is-on-Wi-Fi-but-server-unreachable case this exists
+                    // for needs a new address typed in, not another silent
+                    // retry.
+                    InkWell(
+                      onTap: c.connected ? null : c.reconnectOrConfigure,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 11,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              color: c.connected ? C.lime : C.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(color: c.connected ? C.limeBg : C.redBg, spreadRadius: 3)
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                c.connected ? 'เชื่อมต่อกับ BoxTrace แล้ว' : (c.connError ?? 'ยังไม่พบข้อมูล'),
-                                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
-                              ),
-                              Text('พบ ${c.boxCount} กล่องในฐานข้อมูล',
-                                  style: TextStyle(fontSize: 12, color: C.muted)),
-                            ],
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  c.connected ? 'เชื่อมต่อกับ BoxTrace แล้ว' : (c.connError ?? 'ยังไม่พบข้อมูล'),
+                                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  c.connected ? 'พบ ${c.boxCount} กล่องในฐานข้อมูล' : 'แตะเพื่อเชื่อมต่อใหม่',
+                                  style: TextStyle(fontSize: 12, color: C.muted),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          if (!c.connected) Icon(Icons.refresh, size: 18, color: C.muted),
+                        ],
+                      ),
                     ),
                     if (isAdminOrNull) ...[
                       const SizedBox(height: 10),

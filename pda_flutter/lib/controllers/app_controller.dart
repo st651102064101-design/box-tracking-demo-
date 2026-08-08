@@ -715,6 +715,39 @@ class AppController extends ChangeNotifier {
     go(Screen.deviceSetup);
   }
 
+  /// What a tap on the navbar's offline chip or Settings' connection panel
+  /// does: try reconnecting with whatever's already saved first (a terminal
+  /// that reads "online" (Wi-Fi/LAN up) but can't reach the server needs more
+  /// than another silent retry to ever recover), and if that still fails,
+  /// walk straight into the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form (device setup)
+  /// so a wrong IP or an expired service account can be fixed on the spot.
+  /// A non-supervisor can't get to that form (see [canConfigureDevice]) —
+  /// they get told to ask one instead, rather than the tap silently doing
+  /// nothing.
+  Future<void> reconnectOrConfigure() async {
+    final ok = await retryConnection();
+    if (ok) return;
+    if (canConfigureDevice) {
+      goDeviceSetup();
+    } else {
+      toastMsg('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', connError ?? 'แจ้งหัวหน้างานเพื่อตรวจสอบการตั้งค่าเครื่อง', ResultKind.err);
+    }
+  }
+
+  /// The navbar chip's tap target: while genuinely connected it's still the
+  /// manual online/offline (queue-mode) toggle every screen that shows it
+  /// already relied on; once actually disconnected, toggling that flag does
+  /// nothing useful (see [onlineDisplay] — it can't show "online" without
+  /// [connected] regardless), so a tap there means "help me reconnect"
+  /// instead.
+  void onlineChipTap() {
+    if (connected) {
+      toggleOnline();
+    } else {
+      reconnectOrConfigure();
+    }
+  }
+
   /// A site with one warehouse — or a warehouse with one gate — offers no real
   /// choice, so fill it in rather than making whoever provisions the device tap
   /// the only option there is. [pickWh] handles the single-gate half.

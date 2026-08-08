@@ -60,7 +60,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              OnlineChip(online: c.onlineDisplay, onTap: c.toggleOnline),
+              OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
               const SizedBox(width: 8),
               RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
             ],

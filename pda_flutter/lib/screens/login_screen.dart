@@ -412,17 +412,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              // Same manual online/offline toggle Home/Gate screens use — it
-              // has to actually flip on every tap, including from online to
-              // offline, which the old retry-only icon here never did
-              // (tapping while genuinely connected just reconfirmed
-              // "online" every time). Shows c.onlineDisplay (online &&
-              // connected), not the toggle alone, so a genuinely dead
-              // connection can never still read "ออนไลน์" just because
-              // nobody happened to tap it. Real connectivity loss still gets
-              // its own one-shot alert regardless of this toggle's position
-              // — see root_screen.dart's _OfflineAlertListener.
-              OnlineChip(online: c.onlineDisplay, onTap: c.toggleOnline),
+              // Shows c.onlineDisplay (online && connected), not the manual
+              // toggle alone, so a genuinely dead connection can never still
+              // read "ออนไลน์" just because nobody happened to tap it. The tap
+              // itself (c.onlineChipTap) is the same manual online/offline
+              // toggle while actually connected, or a reconnect attempt —
+              // falling through to the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form if
+              // that still fails — while it isn't. Real connectivity loss
+              // still gets its own one-shot alert regardless of this chip —
+              // see root_screen.dart's _OfflineAlertListener.
+              OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
             ],
           ),
         ),
