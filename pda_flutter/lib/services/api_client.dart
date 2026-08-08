@@ -280,4 +280,38 @@ class ApiClient {
     await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
         headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
   }
+
+  // ── ตรวจนับ (cycle count) ───────────────────────────────────────────────
+  // Session-based on purpose: a count of a real aisle takes minutes and this
+  // terminal drops off Wi-Fi constantly mid-shift, so scans are posted as
+  // they're found rather than held until the end — a handheld that dies
+  // halfway doesn't take the whole count with it.
+
+  /// POST /api/cycle-counts { wh, zone } -> the session, with `expected`
+  /// frozen server-side at open time. Opening a warehouse/zone that already
+  /// has a live session returns that one instead (`resumed: true`), so two
+  /// operators sent to the same aisle land in the same count.
+  Future<Map<String, dynamic>> openCycleCount({required String wh, String zone = ''}) async {
+    return await _send(() => http.post(_u('/api/cycle-counts'),
+        headers: _headers, body: jsonEncode({'wh': wh, 'zone': zone}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/cycle-counts/:id/scan { tags } — a batch, since an RFID sweep
+  /// produces tags far faster than one round trip per read could keep up
+  /// with. Codes may be barcodes, EPCs or TIDs; the server resolves all
+  /// three. Returns the updated session plus `unknown` for codes that
+  /// matched no box at all.
+  Future<Map<String, dynamic>> cycleCountScan(String id, List<String> tags) async {
+    return await _send(() => http.post(_u('/api/cycle-counts/$id/scan'),
+        headers: _headers, body: jsonEncode({'tags': tags}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/cycle-counts/:id/close — finalizes and records the result to
+  /// the activity feed and audit log. Deliberately does not change any box's
+  /// status; see the route's own docstring for why that stays a separate,
+  /// deliberate action.
+  Future<Map<String, dynamic>> closeCycleCount(String id) async {
+    return await _send(() => http.post(_u('/api/cycle-counts/$id/close'), headers: _headers))
+        as Map<String, dynamic>;
+  }
 }

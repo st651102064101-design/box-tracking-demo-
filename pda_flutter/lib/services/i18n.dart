@@ -285,6 +285,16 @@ class LocaleController extends ChangeNotifier {
     'พบแล้ว': 'Counted',
     'ยังไม่พบ': 'Missing',
     'ไม่ควรอยู่ที่นี่': 'Unexpected here',
+    'เริ่มตรวจนับ': 'Start count',
+    'กำลังเริ่ม…': 'Starting…',
+    'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้':
+        'The count is recorded on the server — if someone already has a count open for this zone, you\'ll continue theirs',
+    'ปิดรอบและบันทึกผล': 'Close and save result',
+    'ปิดรอบตรวจนับ': 'Close this count?',
+    'ปิดรอบแล้วจะบันทึกผลลงระบบ และเพิ่มสแกนอีกไม่ได้': 'Closing saves the result and no more scans can be added',
+    'ปิดรอบ': 'Close',
+    'ยกเลิก': 'Cancel',
+    'รอส่งเข้าระบบ': 'Waiting to send',
     // more hub
     'ผูกแท็ก RFID': 'Bind RFID tag',
     'ลงทะเบียนกล่องใหม่': 'Register a new box',
