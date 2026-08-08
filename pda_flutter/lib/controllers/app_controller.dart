@@ -144,6 +144,12 @@ class AppController extends ChangeNotifier {
   String trackVal = '';
   String trackTag = '';
   bool trackTried = false;
+  /// Distinct tags found while sweeping in RFID mode on TrackScreen, in the
+  /// order first seen. A held trigger reads the same tag dozens of times a
+  /// second — only the first read of each tag lands here (see
+  /// _onReaderTag's Screen.track case), which is what makes "5 tags in the
+  /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
+  final List<String> trackRfidHits = [];
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
@@ -768,6 +774,7 @@ class AppController extends ChangeNotifier {
     trackVal = '';
     trackTag = '';
     trackTried = false;
+    trackRfidHits.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1305,6 +1312,16 @@ class AppController extends ChangeNotifier {
     doTrack();
   }
 
+  /// Opens the full detail card for one tag out of [trackRfidHits] — tapping
+  /// a row in the RFID results list. Deliberately doesn't touch trackVal (or
+  /// clear trackRfidHits): the barcode field and the RFID sweep results stay
+  /// independent, same reasoning as _onReaderTag's Screen.track case.
+  void viewTrackHit(String tag) {
+    trackTag = tag;
+    trackTried = true;
+    notifyListeners();
+  }
+
   // ═══════════════════════ settings ════════════════════════════════════════
   /// Applies the terminal's connection details and re-authenticates. The
   /// service credentials are the device's own — an operator never sees them,
@@ -1377,8 +1394,19 @@ class AppController extends ChangeNotifier {
         addScan(epc, viaRfid: true);
         break;
       case Screen.track:
-        trackVal = epc;
-        doTrack();
+        // Accumulate distinct tags rather than resolving straight to a
+        // single box (the old behavior) — a sweep over a pile of boxes
+        // should list every tag found, not keep overwriting one result with
+        // whichever tag the reader last happened to see. trackVal is
+        // deliberately left untouched: it's the barcode field's own state,
+        // and populating it from an RFID read is what used to leak the last
+        // tag number into the barcode box after switching modes.
+        final tag = resolveTag(epc);
+        if (!trackRfidHits.contains(tag)) {
+          trackRfidHits.add(tag);
+          rfid.playSound(prefs.rfidSoundId);
+          notifyListeners();
+        }
         break;
       case Screen.login:
         // An RFID employee card and a printed badge land in the same place.

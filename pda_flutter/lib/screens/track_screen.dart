@@ -147,7 +147,15 @@ class _TrackScreenState extends State<TrackScreen> {
               // Enter in one burst, resolving straight to the card below),
               // this is purely for someone typing by hand who shouldn't have
               // to get the whole code exactly right before seeing anything.
-              if (box == null && c.trackSuggestions.isNotEmpty) ...[
+              if (c.scanInputMode == ScanInputMode.rfid && c.trackRfidHits.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text('พบ ${c.trackRfidHits.length} แท็ก',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
+                ),
+                _rfidHitsList(c),
+                if (box != null) const SizedBox(height: 14),
+              ] else if (box == null && c.trackSuggestions.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 2, bottom: 8),
                   child: Text('พบ ${c.trackSuggestions.length} กล่อง',
@@ -283,6 +291,63 @@ class _TrackScreenState extends State<TrackScreen> {
           },
         );
       },
+    );
+  }
+
+  /// Vertical list of every distinct tag the reader has found this sweep
+  /// (see AppController.trackRfidHits) — one row per tag, in the order it
+  /// was first seen, tap a row to open its full detail card below.
+  Widget _rfidHitsList(AppController c) {
+    final S = c.S;
+    final tags = c.trackRfidHits;
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(tags.length, (i) {
+          final tag = tags[i];
+          final b = S?.box(tag);
+          final sm = b != null ? StatusMeta.of(b.status) : null;
+          final selected = c.trackTried && c.trackTag == tag;
+          return InkWell(
+            onTap: () => c.viewTrackHit(tag),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? C.neutralBg : null,
+                border: i == tags.length - 1 ? null : Border(bottom: BorderSide(color: C.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.nfc, size: 18, color: C.muted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(tag,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                        if (b != null)
+                          Text(S!.typeName(b.type), style: TextStyle(fontSize: 12, color: C.muted))
+                        else
+                          Text('ไม่พบกล่องนี้ในระบบ', style: TextStyle(fontSize: 12, color: C.red)),
+                      ],
+                    ),
+                  ),
+                  if (sm != null) Pill(sm.label, color: sm.color, bg: sm.bg, fontSize: 11),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 
