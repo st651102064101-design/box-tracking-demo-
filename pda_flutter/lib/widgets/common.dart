@@ -246,16 +246,25 @@ class OnlineChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 34,
-        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: online ? C.limeBg : C.neutralBg,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(17),
           border: Border.all(color: online ? C.limeBorder : C.border2),
         ),
-        alignment: Alignment.center,
-        child: Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-            size: 17, color: online ? C.limeText : C.muted),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                size: 16, color: online ? C.limeText : C.muted),
+            const SizedBox(width: 5),
+            Text(online ? 'ออนไลน์' : 'ออฟไลน์',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: online ? C.limeText : C.muted)),
+          ],
+        ),
       ),
     );
   }

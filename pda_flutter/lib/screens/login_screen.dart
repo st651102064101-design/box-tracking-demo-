@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', c.errorMessage(err), ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
@@ -236,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
           otpSentTo = req['sentTo']?.toString();
           return null;
         } catch (err) {
-          return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+          return err is ApiException ? err.message : c.errorMessage(err);
         }
       },
     );
@@ -300,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
     } catch (err) {
       if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', err is ApiException ? err.message : '$err', ResultKind.err);
+      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', c.errorMessage(err), ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
@@ -412,15 +412,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              // Same manual online/offline toggle Home/Gate screens use
-              // (c.online, not the auto-detected c.connected) — it has to
-              // actually flip on every tap, including from online to
+              // Same manual online/offline toggle Home/Gate screens use — it
+              // has to actually flip on every tap, including from online to
               // offline, which the old retry-only icon here never did
               // (tapping while genuinely connected just reconfirmed
-              // "online" every time). Real connectivity loss still gets its
-              // own one-shot alert regardless of this toggle's position —
-              // see root_screen.dart's _OfflineAlertListener.
-              OnlineChip(online: c.online, onTap: c.toggleOnline),
+              // "online" every time). Shows c.onlineDisplay (online &&
+              // connected), not the toggle alone, so a genuinely dead
+              // connection can never still read "ออนไลน์" just because
+              // nobody happened to tap it. Real connectivity loss still gets
+              // its own one-shot alert regardless of this toggle's position
+              // — see root_screen.dart's _OfflineAlertListener.
+              OnlineChip(online: c.onlineDisplay, onTap: c.toggleOnline),
             ],
           ),
         ),

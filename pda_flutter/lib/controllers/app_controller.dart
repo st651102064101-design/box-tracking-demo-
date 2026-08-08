@@ -349,9 +349,32 @@ class AppController extends ChangeNotifier {
   String _msg(Object e) {
     if (e is ApiException) return e.message;
     final s = e.toString();
+    // A dead/unreachable Base URL surfaces as some flavor of SocketException
+    // wrapped inside http's ClientException — verbatim, that's e.g.
+    // "ClientException with SocketException: No route to host (OS Error: No
+    // route to host, errno = 113), address = 192.168.1.149", which the regex
+    // below can't clean up (the wrapper reads "...Exception with Socket...:",
+    // not "...Exception: ", so it never matches) and which means nothing to
+    // an operator anyway. Same underlying cause — this terminal's network
+    // can't currently reach the address in Settings — whatever the exact OS
+    // errno, so one Thai message covers all of them.
+    if (s.contains('SocketException') ||
+        s.contains('No route to host') ||
+        s.contains('Network is unreachable') ||
+        s.contains('Connection refused') ||
+        s.contains('Failed host lookup')) {
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่าเครื่องนี้อยู่ในเครือข่าย/Wi-Fi เดียวกับเซิร์ฟเวอร์ และ Base URL ในหน้าตั้งค่าถูกต้อง';
+    }
+    if (e is TimeoutException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
     final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
     return m == null ? s : s.substring(m.end);
   }
+
+  /// Public entry point for [_msg] — screens whose own try/catch around an
+  /// `api.*` call has nowhere else to turn a raw error into the same
+  /// operator-facing Thai text `applyConnection`/`_ensureAuthAndState` use
+  /// (see login_screen.dart's PIN flows).
+  String errorMessage(Object e) => _msg(e);
 
   @override
   void dispose() {
@@ -1408,11 +1431,6 @@ class AppController extends ChangeNotifier {
           notifyListeners();
         }
         break;
-      case Screen.login:
-        // An RFID employee card and a printed badge land in the same place.
-        // Box tags swept up along with it match nobody and fall through.
-        if (identifyByScanCode(epc) == null) return;
-        break;
       default:
         break;
     }
@@ -1428,9 +1446,20 @@ class AppController extends ChangeNotifier {
       rfid.stopInventory();
       return;
     }
+    if (screen == Screen.login) {
+      // Badge-in is barcode-only: a printed badge scans through the
+      // handheld's own keyboard-wedge/imager, which fires off the same
+      // physical trigger button independently of this SDK. This handler
+      // must never also switch that button over to an RFID sweep here —
+      // that was firing the antenna alongside every barcode scan, which is
+      // exactly the "close RFID find mode, trigger only reads barcodes"
+      // behavior this screen is supposed to have. Nothing to toast: the
+      // trigger did its job via the imager, this handler just isn't part
+      // of that path on this screen.
+      return;
+    }
     if (screen != Screen.scan &&
         screen != Screen.track &&
-        screen != Screen.login &&
         screen != Screen.rfidInput &&
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
@@ -1467,6 +1496,15 @@ class AppController extends ChangeNotifier {
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;
+
+  /// What the navbar's online/offline chip should actually show — [online]
+  /// alone used to drive it, which meant a genuinely dead connection still
+  /// displayed "online" until someone happened to tap the chip (it starts
+  /// true and nothing else ever turned it false). Real connectivity now
+  /// overrides the manual toggle in one direction only: truly offline always
+  /// shows offline, but the operator can still use the toggle to go into
+  /// offline/queue mode on purpose while [connected] is otherwise true.
+  bool get onlineDisplay => online && connected;
   int get boxCount => S?.boxCount ?? 0;
   String get selWhName => S?.whName(wh) ?? wh;
 
