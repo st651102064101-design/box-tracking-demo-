@@ -29,6 +29,16 @@ class _TrackScreenState extends State<TrackScreen> {
   static const _autoSearchDelay = Duration(milliseconds: 180);
   static const _autoSearchMinLen = 3;
 
+  /// Length after the previous onChanged — same trick login_screen.dart's
+  /// badge field uses. A keyboard-wedge scan on this hardware often lands as
+  /// one onChanged burst carrying the whole code rather than a keystroke at
+  /// a time; more than one new character in a single callback is scan-speed
+  /// proof no human typing produces, so that's committed immediately instead
+  /// of waiting out [_autoSearchDelay]. That's what keeps two barcodes fired
+  /// back-to-back from concatenating: the field clears the instant the first
+  /// burst lands, before the second one can arrive on top of it.
+  int _prevLen = 0;
+
   @override
   void initState() {
     super.initState();
@@ -53,7 +63,14 @@ class _TrackScreenState extends State<TrackScreen> {
     c.onTrackChanged(_ctrl.text);
     _autoSearchTimer?.cancel();
     final text = _ctrl.text.trim();
+    final addedChars = _ctrl.text.length - _prevLen;
+    _prevLen = _ctrl.text.length;
+    if (text.isEmpty) return;
     if (text.length < _autoSearchMinLen) return;
+    if (addedChars > 1) {
+      c.doTrack();
+      return;
+    }
     _autoSearchTimer = Timer(_autoSearchDelay, () {
       if (!mounted || _ctrl.text.trim() != text) return;
       c.doTrack();
@@ -201,6 +218,10 @@ class _TrackScreenState extends State<TrackScreen> {
               WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
             } else {
               _focus.unfocus();
+              // Same reasoning as RfidLocateScreen: finding boxes in a pile
+              // needs every bit of range the reader has, regardless of
+              // whatever ใกล้/ปานกลาง/ไกล pick Settings last saved.
+              c.forceMaxRfidPower();
             }
           },
           child: Container(

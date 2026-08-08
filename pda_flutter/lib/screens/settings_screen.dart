@@ -399,22 +399,38 @@ class _RfidPanelState extends State<_RfidPanel> {
   @override
   void dispose() {
     _poll?.cancel();
+    _testPoll?.cancel();
     // A stray finger-up outside the button (or navigating away mid-press)
     // must not leave the reader sweeping in the background.
     if (_testFiring) context.read<AppController>().rfid.stopInventory();
     super.dispose();
   }
 
+  /// Runs only while the hold-to-test button is actually held — the
+  /// background [_poll] above is deliberately slow (2-5s) to keep a
+  /// diagnostics call from adding up over a whole shift, but that same
+  /// slowness made a brief test hold look broken: release the button before
+  /// the next slow tick lands and the tag counter never visibly moved at
+  /// all. A tight poll only for the few seconds a test is actually running
+  /// costs nothing over a shift and makes the counter track the hold in
+  /// real time.
+  Timer? _testPoll;
+
   Future<void> _startTest(AppController c) async {
     if (_testFiring) return;
     setState(() => _testFiring = true);
     await c.rfid.startInventory();
+    _testPoll?.cancel();
+    _testPoll = Timer.periodic(const Duration(milliseconds: 200), (_) => _refresh());
   }
 
   Future<void> _stopTest(AppController c) async {
     if (!_testFiring) return;
     setState(() => _testFiring = false);
+    _testPoll?.cancel();
+    _testPoll = null;
     await c.rfid.stopInventory();
+    await _refresh();
   }
 
   Future<void> _refresh() async {
@@ -533,10 +549,20 @@ class _RfidPanelState extends State<_RfidPanel> {
               // does — starts/stops inventory — so a range just dragged on
               // the slider can be checked immediately without setting the
               // handheld down to reach for the gun.
-              GestureDetector(
-                onTapDown: (_) => _startTest(c),
-                onTapUp: (_) => _stopTest(c),
-                onTapCancel: () => _stopTest(c),
+              //
+              // Listener + raw pointer events, not GestureDetector's
+              // onTapDown/onTapUp/onTapCancel: this button sits inside the
+              // Settings ListView, and a tap-based recognizer here competes
+              // in the same gesture arena as the Scrollable's own drag
+              // recognizer — holding a finger down long enough to matter is
+              // exactly what a scroll gesture also looks like at first,
+              // which was cancelling the hold (onTapCancel firing) almost
+              // immediately and making the button look unresponsive. Raw
+              // pointer events don't participate in that arena at all.
+              Listener(
+                onPointerDown: (_) => _startTest(c),
+                onPointerUp: (_) => _stopTest(c),
+                onPointerCancel: (_) => _stopTest(c),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 13),

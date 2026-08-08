@@ -94,14 +94,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// first visit, since the setting could have been dialed back again since.
   Future<void> _forceMaxRangeAndNotify() async {
     final c = context.read<AppController>();
-    if (c.rfid.supported) {
-      final d = await c.rfid.diagnostics();
-      final maxIdx = d['powerMaxIndex'];
-      if (maxIdx is int) {
-        c.prefs.rfidPowerPercent = 100;
-        await c.rfid.setPowerIndex(maxIdx);
-      }
-    }
+    await c.forceMaxRfidPower();
     if (!mounted) return;
     final loc = context.read<LocaleController>();
     showDialog(

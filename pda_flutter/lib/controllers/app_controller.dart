@@ -742,18 +742,17 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// The navbar chip's tap target: while genuinely connected it's still the
-  /// manual online/offline (queue-mode) toggle every screen that shows it
-  /// already relied on; once actually disconnected, toggling that flag does
-  /// nothing useful (see [onlineDisplay] — it can't show "online" without
-  /// [connected] regardless), so a tap there means "help me reconnect"
-  /// instead.
+  /// The navbar chip's tap target. While genuinely disconnected, a tap means
+  /// "help me reconnect" (see [reconnectOrConfigure]). While genuinely
+  /// connected, a tap now does nothing — the manual online/offline
+  /// (queue-mode) toggle it used to also drive let an operator switch a
+  /// working connection to "offline" by mistake, silently queuing every
+  /// scan instead of sending it. [toggleOnline] itself is untouched (the
+  /// outbox banner's "Sync" button still uses it to force a flush), only
+  /// this chip's tap while actually online is now a no-op instead of a trap.
   void onlineChipTap() {
-    if (connected) {
-      toggleOnline();
-    } else {
-      reconnectOrConfigure();
-    }
+    if (connected) return;
+    reconnectOrConfigure();
   }
 
   /// A site with one warehouse — or a warehouse with one gate — offers no real
@@ -1451,6 +1450,24 @@ class AppController extends ChangeNotifier {
     rfid.connect();
   }
 
+  /// Pushes the reader's transmit power to its own maximum — for any screen
+  /// whose whole point is finding/detecting tags as reliably as possible
+  /// (RfidLocateScreen's sweep, TrackScreen's RFID mode). More power is the
+  /// one lever that actually helps a weak-signal tag get decoded at all,
+  /// not just read louder — a stray "ใกล้/ปานกลาง" pick left over from
+  /// Settings would otherwise silently cap range on a screen that needs
+  /// every bit of it. Safe to call repeatedly; each call re-reads the
+  /// reader's own max index rather than assuming a cached one still applies.
+  Future<void> forceMaxRfidPower() async {
+    if (!rfid.supported) return;
+    final d = await rfid.diagnostics();
+    final maxIdx = d['powerMaxIndex'];
+    if (maxIdx is int) {
+      prefs.rfidPowerPercent = 100;
+      await rfid.setPowerIndex(maxIdx);
+    }
+  }
+
   /// Stray-read filter: RFID reads through cardboard and thin stock easily
   /// enough that a sweep aimed at one pallet picks up tags on the pallet
   /// next to it. When Prefs.rfidMinRssi is set, a read weaker than that
@@ -1516,9 +1533,14 @@ class AppController extends ChangeNotifier {
         screen != Screen.rfidInput &&
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
-        screen != Screen.boxRegister) {
-      // A screen with no scanning purpose at all (Settings, Home, device
-      // setup, …). The antenna must not light up here — silently doing
+        screen != Screen.boxRegister &&
+        screen != Screen.settings) {
+      // A screen with no scanning purpose at all (Home, device setup, …).
+      // Settings is included here — its RFID diagnostics panel has its own
+      // "กดค้างเพื่อทดสอบยิง" hold button, but an operator standing there and
+      // pulling the *physical* trigger to test the reader should get the
+      // same result, not a "this screen doesn't support scanning" toast. The
+      // antenna must not light up here — silently doing
       // nothing left an operator assuming a broken trigger, not a screen
       // that was never going to answer it.
       toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', '', ResultKind.warn);
