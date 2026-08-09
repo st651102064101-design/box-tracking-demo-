@@ -347,7 +347,7 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         bg: C.menuBlueBg,
         title: loc.t('จ่ายออก'),
         sub: 'Gate Out',
-        onTap: c.goScanOut,
+        onTap: () => _showOutboundModeSheet(context, c),
       ),
       const SizedBox(height: 10),
     ],
@@ -454,6 +454,158 @@ Widget _detailRow(
       ),
     ),
   );
+}
+
+/// "จ่ายออก" tile tap — asks *how* the operator is picking before jumping
+/// into the scan flow, same distinction a real WMS makes between
+/// System-Directed picking and Ad-Hoc/door picking:
+///  - "แนะนำการหยิบ (FIFO/FEFO)" would have the backend hand back a picking
+///    queue (oldest-in/earliest-expiry box first) instead of the operator
+///    choosing what to scan. There is no such queue on this backend yet — no
+///    picking-order field, no "next box" endpoint — so the tile stays here
+///    but disabled with a plain explanation rather than pretending to work.
+///  - "ของอยู่หน้าประตูแล้ว (ยิงอิสระ)" is exactly today's flow: go straight
+///    to ScanScreen and scan whatever's stacked at the door.
+void _showOutboundModeSheet(BuildContext context, AppController c) {
+  final loc = context.read<LocaleController>();
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) {
+      final bottom = MediaQuery.of(ctx).padding.bottom;
+      return Container(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 18),
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              alignment: Alignment.center,
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: C.border2, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Text(loc.t('จะหยิบกล่องออกแบบไหน'),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            _OutboundModeButton(
+              icon: Icons.route_outlined,
+              title: loc.t('แนะนำการหยิบ (FIFO/FEFO)'),
+              subtitle: loc
+                  .t('ระบบบอกลำดับกล่องที่ควรหยิบก่อน — ยังไม่พร้อมใช้งาน (ต้องมีระบบคิวงานจาก Backend ก่อน)'),
+              enabled: false,
+              onTap: () {},
+            ),
+            const SizedBox(height: 10),
+            _OutboundModeButton(
+              icon: Icons.qr_code_scanner,
+              title: loc.t('ของอยู่หน้าประตูแล้ว (ยิงอิสระ)'),
+              subtitle: loc.t('ยิงกล่องที่กองอยู่หน้าประตูได้เลย ไม่ต้องรอคิว'),
+              enabled: true,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                c.goScanOut();
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _OutboundModeButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _OutboundModeButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: C.neutralBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                    color: C.surface, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, size: 20, color: C.ink2),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(title,
+                              style: const TextStyle(
+                                  fontSize: 14.5, fontWeight: FontWeight.w700)),
+                        ),
+                        if (!enabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: C.neutralBg2,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text('เร็วๆ นี้',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: C.muted)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 12, color: C.muted, height: 1.35)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
@@ -27,6 +29,14 @@ class PinResult {
 /// immediately and leaving the caller to show its own loading UI over a
 /// blank screen) and only pops once it resolves. Return null on success or
 /// an error message to keep the sheet open and let the operator retry.
+///
+/// [resendCooldown], when given (the OTP sheet only — 4-digit PIN sheets
+/// never pass this), starts a countdown under the dots and replaces it with
+/// a "ส่งรหัสอีกครั้ง" button once it reaches zero. [onResend] is the call
+/// that button makes; return null to restart the countdown from
+/// [resendCooldown] again, or an error message to show inline without
+/// resetting the clock (so a rate-limited resend doesn't quietly eat the
+/// operator's next legitimate attempt).
 Future<PinResult?> showPinPad(
   BuildContext context, {
   required String title,
@@ -36,6 +46,8 @@ Future<PinResult?> showPinPad(
   bool showForgot = false,
   Future<String?> Function(String pin)? validate,
   Future<String?> Function()? onForgot,
+  Duration? resendCooldown,
+  Future<String?> Function()? onResend,
 }) {
   return showModalBottomSheet<PinResult>(
     context: context,
@@ -50,6 +62,8 @@ Future<PinResult?> showPinPad(
       showForgot: showForgot,
       validate: validate,
       onForgot: onForgot,
+      resendCooldown: resendCooldown,
+      onResend: onResend,
     ),
   );
 }
@@ -62,6 +76,8 @@ class _PinPadSheet extends StatefulWidget {
   final bool showForgot;
   final Future<String?> Function(String pin)? validate;
   final Future<String?> Function()? onForgot;
+  final Duration? resendCooldown;
+  final Future<String?> Function()? onResend;
   const _PinPadSheet({
     required this.title,
     this.subtitle,
@@ -70,6 +86,8 @@ class _PinPadSheet extends StatefulWidget {
     required this.showForgot,
     this.validate,
     this.onForgot,
+    this.resendCooldown,
+    this.onResend,
   });
 
   @override
@@ -85,7 +103,63 @@ class _PinPadSheetState extends State<_PinPadSheet> {
   // specific than the plain PIN-check spinner.
   bool _forgotBusy = false;
 
-  bool get _busy => _checking || _forgotBusy;
+  // OTP resend countdown — see [showPinPad]'s resendCooldown/onResend.
+  Timer? _resendTimer;
+  int _secondsLeft = 0;
+  bool _resending = false;
+
+  bool get _busy => _checking || _forgotBusy || _resending;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.resendCooldown != null) _startCooldown();
+  }
+
+  void _startCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _secondsLeft = widget.resendCooldown!.inSeconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_secondsLeft <= 1) {
+        t.cancel();
+        setState(() => _secondsLeft = 0);
+        return;
+      }
+      setState(() => _secondsLeft--);
+    });
+  }
+
+  Future<void> _tapResend() async {
+    if (_busy || widget.onResend == null || _secondsLeft > 0) return;
+    setState(() {
+      _error = null;
+      _resending = true;
+    });
+    final err = await widget.onResend!();
+    if (!mounted) return;
+    setState(() => _resending = false);
+    if (err != null) {
+      setState(() => _error = err);
+      return; // rate-limited or failed — clock stays at 0, operator can retry
+    }
+    _startCooldown();
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    super.dispose();
+  }
+
+  String _fmtCountdown(int secs) {
+    final m = (secs ~/ 60).toString().padLeft(2, '0');
+    final s = (secs % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
 
   void _tap(String d) {
     if (_busy || _digits.length >= widget.length) return;
@@ -219,6 +293,18 @@ class _PinPadSheetState extends State<_PinPadSheet> {
             Text(_error!,
                 style: TextStyle(
                     fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
+          ],
+          if (widget.resendCooldown != null) ...[
+            const SizedBox(height: 10),
+            _secondsLeft > 0
+                ? Text(
+                    'ส่งรหัสอีกครั้งได้ใน ${_fmtCountdown(_secondsLeft)}',
+                    style: TextStyle(fontSize: 12.5, color: C.faint),
+                  )
+                : TextButton(
+                    onPressed: _busy ? null : _tapResend,
+                    child: Text(_resending ? 'กำลังส่ง…' : 'ส่งรหัสอีกครั้ง'),
+                  ),
           ],
           const SizedBox(height: 24),
           IgnorePointer(

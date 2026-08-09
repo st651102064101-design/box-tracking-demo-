@@ -394,6 +394,19 @@ class SettingsScreen extends StatelessWidget {
           return c.errorMessage(err);
         }
       },
+      // See login_screen.dart's _forgotPin for the same resend wiring — kept
+      // identical (3-minute client-side cooldown, server's own rate limiter
+      // does the rest) so the two OTP screens behave the same way.
+      resendCooldown: const Duration(minutes: 3),
+      onResend: () async {
+        try {
+          final req = await c.api.requestPinReset(e.id);
+          sentTo = req['sentTo']?.toString();
+          return null;
+        } catch (err) {
+          return err is ApiException ? err.message : c.errorMessage(err);
+        }
+      },
     );
     if (otpResult == null || !applied) return;
 
