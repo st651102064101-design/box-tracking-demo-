@@ -61,11 +61,18 @@ boxesRouter.get(
 boxesRouter.get(
   '/suggest-location',
   asyncHandler(async (req, res) => {
-    const wh = typeof req.query.wh === 'string' ? req.query.wh : '';
+    const wh = typeof req.query.wh === 'string' ? req.query.wh.trim() : '';
     if (!wh) throw httpError(400, 'ต้องระบุคลัง', 'wh_required');
     const db = getDb();
     const locRows = await db.select().from(locations).where(eq(locations.wh, wh));
-    if (!locRows.length) return res.json({ suggestion: null });
+    // `reason` distinguishes "nobody ever defined a shelf layout for this
+    // warehouse" from "every defined shelf already has a box on it" — both
+    // render as the same "nothing to suggest" outcome to the client, but a
+    // dev/ops person staring at this response while debugging "the PDA says
+    // no shelf found and I can see empty ones" needs to tell them apart, since
+    // the fixes are completely different (define locations vs. free up a
+    // shelf / the request wasn't reaching this code at all).
+    if (!locRows.length) return res.json({ suggestion: null, reason: 'no_master_locations' });
 
     const boxRows = await db.select({ location: boxes.location }).from(boxes).where(eq(boxes.status, 'warehouse'));
     const key = (l: { wh?: unknown; zone?: unknown; rack?: unknown; shelf?: unknown; slot?: unknown }) =>
@@ -73,7 +80,7 @@ boxesRouter.get(
     const occupied = new Set(boxRows.map((r) => key((r.location ?? {}) as Record<string, unknown>)));
 
     const free = locRows.find((loc) => !occupied.has(key(loc)));
-    if (!free) return res.json({ suggestion: null });
+    if (!free) return res.json({ suggestion: null, reason: 'all_occupied' });
     res.json({
       suggestion: { zone: free.zone ?? '', rack: free.rack ?? '', shelf: free.shelf ?? '', slot: free.slot ?? '' },
     });

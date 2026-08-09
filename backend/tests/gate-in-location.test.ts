@@ -82,6 +82,7 @@ describe('GET /api/boxes/suggest-location', () => {
     const res = await request(ctx.app).get('/api/boxes/suggest-location?wh=WH-EMPTY').set(auth(ctx.token));
     expect(res.status).toBe(200);
     expect(res.body.suggestion).toBeNull();
+    expect(res.body.reason).toBe('no_master_locations');
   });
 
   it('returns null once every defined location already has a box', async () => {
@@ -99,6 +100,7 @@ describe('GET /api/boxes/suggest-location', () => {
     const res = await request(ctx.app).get('/api/boxes/suggest-location?wh=WH-001').set(auth(ctx.token));
     expect(res.status).toBe(200);
     expect(res.body.suggestion).toBeNull();
+    expect(res.body.reason).toBe('all_occupied');
   });
 });
 
