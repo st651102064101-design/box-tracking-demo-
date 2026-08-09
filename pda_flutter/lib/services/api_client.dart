@@ -12,6 +12,14 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status, $message)';
 }
 
+/// Result of [ApiClient.suggestLocation] — see that method's doc for what
+/// [reason] distinguishes when [suggestion] is null.
+class SuggestLocationResult {
+  final Map<String, String>? suggestion;
+  final String? reason;
+  SuggestLocationResult({required this.suggestion, this.reason});
+}
+
 /// Thin REST wrapper around the BoxTrace Express backend.
 ///
 /// All endpoints except `/auth` and `/health` require `Authorization: Bearer`.
@@ -165,17 +173,23 @@ class ApiClient {
         }))) as Map<String, dynamic>;
   }
 
-  /// GET /api/boxes/suggest-location?wh=X -> {zone,rack,shelf,slot} | null —
-  /// the first location on [wh]'s own master locations list with no
-  /// 'warehouse' box currently sitting on it. Null (not an error) when the
-  /// warehouse has no master list defined, or every spot on it is taken.
-  Future<Map<String, String>?> suggestLocation(String wh) async {
+  /// GET /api/boxes/suggest-location?wh=X — the first location on [wh]'s own
+  /// master locations list with no 'warehouse' box currently sitting on it.
+  /// [SuggestLocationResult.suggestion] is null (not an error) when the
+  /// warehouse has no master list defined, or every spot on it is taken;
+  /// [SuggestLocationResult.reason] tells those two apart ('no_master_locations'
+  /// vs 'all_occupied') for a more specific message than a flat "not found".
+  Future<SuggestLocationResult> suggestLocation(String wh) async {
     final body = await _send(() => http.get(
         _u('/api/boxes/suggest-location?wh=${Uri.encodeQueryComponent(wh)}'),
         headers: _headers)) as Map<String, dynamic>;
     final s = body['suggestion'];
-    if (s is! Map) return null;
-    return s.map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
+    return SuggestLocationResult(
+      suggestion: s is Map
+          ? s.map((k, v) => MapEntry(k.toString(), (v ?? '').toString()))
+          : null,
+      reason: body['reason']?.toString(),
+    );
   }
 
   /// POST /api/gate/out { tags, customer, gate, doNo?, po?, employeeId, recorder, … }

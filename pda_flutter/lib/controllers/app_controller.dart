@@ -199,10 +199,26 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, String>? get suggestedLocation => _suggestedLocation;
   bool suggestingLocation = false;
 
+  /// True when the last [_fetchSuggestedLocation] call itself failed (network
+  /// error, endpoint not deployed yet, auth, …) — kept separate from
+  /// [suggestedLocation] being null, which means the request *succeeded* and
+  /// the server genuinely had no empty shelf to offer. Conflating the two
+  /// showed "ไม่พบชั้นวางว่าง" even when the real problem was the call never
+  /// reaching the server, which reads as a data problem when it's actually a
+  /// connectivity/deployment one.
+  bool suggestLocationFailed = false;
+
+  /// 'no_master_locations' | 'all_occupied' | null — set on a successful
+  /// call whenever [suggestedLocation] comes back null, so the UI can say
+  /// something more specific than a flat "not found" (see
+  /// ApiClient.suggestLocation).
+  String? suggestLocationEmptyReason;
+
   void setReceiveLocationMode(ReceiveLocationMode m) {
     receiveLocationMode = m;
     notifyListeners();
     if (m == ReceiveLocationMode.auto) _fetchSuggestedLocation();
+    if (m == ReceiveLocationMode.manual) _autoFillReceiveLocation();
   }
 
   /// Re-asks the server for an empty shelf — called whenever "ตามที่ระบบ
@@ -210,15 +226,62 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// see a shelf that was just filled by the one before it.
   Future<void> _fetchSuggestedLocation() async {
     suggestingLocation = true;
+    suggestLocationFailed = false;
     notifyListeners();
     try {
-      _suggestedLocation = await api.suggestLocation(wh);
+      final result = await api.suggestLocation(wh);
+      _suggestedLocation = result.suggestion;
+      suggestLocationEmptyReason = result.reason;
     } catch (_) {
       _suggestedLocation = null;
+      suggestLocationEmptyReason = null;
+      suggestLocationFailed = true;
     } finally {
       suggestingLocation = false;
       notifyListeners();
     }
+  }
+
+  /// When a field's own dropdown only has one real option to begin with,
+  /// there's nothing for the operator to actually decide — auto-pick it and
+  /// cascade into the next field the same way a manual tap would, instead of
+  /// making them tap through four dropdowns that only ever had one answer
+  /// each. Stops at the first field with more than one option, or none.
+  void _autoFillReceiveLocation() {
+    final s = S;
+    if (s == null) return;
+    var changed = false;
+    if (receiveZone.isEmpty) {
+      final opts = s.locationValues(wh, 'zone');
+      if (opts.length == 1) {
+        receiveZone = opts.first;
+        changed = true;
+      }
+    }
+    if (receiveZone.isNotEmpty && receiveRack.isEmpty) {
+      final opts = s.locationValues(wh, 'rack', zone: receiveZone);
+      if (opts.length == 1) {
+        receiveRack = opts.first;
+        changed = true;
+      }
+    }
+    if (receiveRack.isNotEmpty && receiveShelf.isEmpty) {
+      final opts =
+          s.locationValues(wh, 'shelf', zone: receiveZone, rack: receiveRack);
+      if (opts.length == 1) {
+        receiveShelf = opts.first;
+        changed = true;
+      }
+    }
+    if (receiveRack.isNotEmpty && receiveSlot.isEmpty) {
+      final opts =
+          s.locationValues(wh, 'slot', zone: receiveZone, rack: receiveRack);
+      if (opts.length == 1) {
+        receiveSlot = opts.first;
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
   }
 
   void setReceiveZone(String v) {
@@ -227,6 +290,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     receiveShelf = '';
     receiveSlot = '';
     notifyListeners();
+    _autoFillReceiveLocation();
   }
 
   void setReceiveRack(String v) {
@@ -234,6 +298,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     receiveShelf = '';
     receiveSlot = '';
     notifyListeners();
+    _autoFillReceiveLocation();
   }
 
   void setReceiveShelf(String v) {
@@ -246,6 +311,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Where a "รอ Putaway" batch actually sits in the meantime — just the
+  /// warehouse it's being received into, pulled from the same DB-backed `S`
+  /// every other location field on this screen reads from. There's no
+  /// separate "holding zone" concept in the data model (a box with no
+  /// location is literally just "somewhere in this warehouse, not yet
+  /// shelved" — see TrackScreen's "รอจัดเก็บ"), so this is the most specific
+  /// truthful answer to "where is it" without inventing one.
+  String get pendingPutawayLocationLabel => S?.whName(wh) ?? wh;
+
   void _clearReceiveLocation() {
     receiveLocationMode = ReceiveLocationMode.defer;
     receiveZone = '';
@@ -253,6 +327,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     receiveShelf = '';
     receiveSlot = '';
     _suggestedLocation = null;
+    suggestLocationFailed = false;
+    suggestLocationEmptyReason = null;
   }
 
   /// What actually gets sent to gateIn — null means "รอ Putaway" (the

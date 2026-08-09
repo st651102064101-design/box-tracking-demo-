@@ -394,13 +394,21 @@ class LocaleController extends ChangeNotifier {
     'เลือกเอง': 'Pick manually',
     'รอ Putaway': 'Pending putaway',
     'กำลังหาชั้นวางว่าง…': 'Finding an empty shelf…',
-    'ไม่พบชั้นวางว่าง — จะเก็บไว้รอ Putaway แทน':
-        'No empty shelf found — will stay pending putaway',
+    'คลังนี้ยังไม่ได้ตั้งค่าผังชั้นวาง — จะเก็บไว้รอ Putaway แทน':
+        'No shelf layout set up for this warehouse yet — will stay pending putaway',
+    'ชั้นวางที่ตั้งค่าไว้ถูกใช้ครบแล้ว — จะเก็บไว้รอ Putaway แทน':
+        'Every set-up shelf is already taken — will stay pending putaway',
 
     // transfer screen: scan-a-location-code alternative to dropdowns
     'ยิงบาร์โค้ด': 'Scan barcode',
     'เลือกจาก Dropdown': 'Pick from dropdown',
     'ยิงบาร์โค้ดชั้นวาง/แร็ค': 'Scan the shelf/rack barcode',
+
+    // gate in: pending-putaway detail + suggest-location error state
+    'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่ หรือเลือกเอง/รอ Putaway แทน':
+        'Could not reach the server — retry, or pick manually / defer instead',
+    'จะพักไว้ที่': 'Will stay at',
+    '— รอเจ้าหน้าที่จัดเก็บขึ้นชั้นภายหลัง': '— pending putaway by staff later',
 
     // rfid locate screen: sweep census on the pick step
     'เหนี่ยวไกกวาดหากล่องในบริเวณนี้ — หรือยิงแท็กของกล่องที่จะหา':

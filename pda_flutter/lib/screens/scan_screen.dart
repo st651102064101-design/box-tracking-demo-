@@ -436,8 +436,16 @@ class _ScanScreenState extends State<ScanScreen> {
                     style: TextStyle(fontSize: 12.5, color: C.muted)),
               ],
             )
+          else if (c.suggestLocationFailed)
+            Text(
+                loc.t(
+                    'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่ หรือเลือกเอง/รอ Putaway แทน'),
+                style: TextStyle(fontSize: 12.5, color: C.red))
           else if (c.suggestedLocation == null)
-            Text(loc.t('ไม่พบชั้นวางว่าง — จะเก็บไว้รอ Putaway แทน'),
+            Text(
+                loc.t(c.suggestLocationEmptyReason == 'no_master_locations'
+                    ? 'คลังนี้ยังไม่ได้ตั้งค่าผังชั้นวาง — จะเก็บไว้รอ Putaway แทน'
+                    : 'ชั้นวางที่ตั้งค่าไว้ถูกใช้ครบแล้ว — จะเก็บไว้รอ Putaway แทน'),
                 style: TextStyle(fontSize: 12.5, color: C.red))
           else
             Container(
@@ -511,6 +519,30 @@ class _ScanScreenState extends State<ScanScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+        if (mode == ReceiveLocationMode.defer) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: C.neutralBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: C.border),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 16, color: C.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                      '${loc.t('จะพักไว้ที่')} ${c.pendingPutawayLocationLabel} '
+                      '${loc.t('— รอเจ้าหน้าที่จัดเก็บขึ้นชั้นภายหลัง')}',
+                      style: TextStyle(
+                          fontSize: 12.5, color: C.ink2, height: 1.4)),
+                ),
+              ],
+            ),
           ),
         ],
       ],
