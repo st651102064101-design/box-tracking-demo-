@@ -145,6 +145,18 @@ export const rfidAssociateSchema = z
     return { rfid, replace: v.replace };
   });
 
+/** Where a Gate In batch lands on the shelf, when the operator chose one —
+ *  omitted entirely means "leave it wherever it already was" (the pending-
+ *  putaway holding pattern, and the only behavior gateIn had before this
+ *  existed). `wh` isn't part of this — the box's own gate already implies
+ *  the warehouse, same as every other location the box ever gets. */
+export const gateInLocationSchema = z.object({
+  zone: z.string().trim().optional().default(''),
+  rack: z.string().trim().optional().default(''),
+  shelf: z.string().trim().optional().default(''),
+  slot: z.string().trim().optional().default(''),
+});
+
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
   gate: z.number().int().positive(),
@@ -159,6 +171,12 @@ export const gateInSchema = z.object({
    *  same statuses legacy.html's own box list already filters by. Any tag
    *  not present here is assumed fine and goes straight to 'warehouse'. */
   conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
+  /** One shelf position applied to every tag in this batch that actually
+   *  lands on 'warehouse' (not hold/damage) — the PDA's three-way choice at
+   *  Gate In: a system-suggested empty shelf, a spot the operator picked by
+   *  hand, or omitted to leave the batch in the pending-putaway holding
+   *  pattern for later. See services/gate.ts's gateIn for how it's applied. */
+  location: gateInLocationSchema.optional(),
 });
 
 /* ─── ตรวจนับ (cycle count) ────────────────────────────────────────────────*/
