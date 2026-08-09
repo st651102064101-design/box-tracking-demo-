@@ -1929,12 +1929,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID', ResultKind.info);
       return;
     }
-    // Gate scanning has no barcode/RFID toggle any more: the trigger *is* the
-    // RFID read and the imager's side button *is* the barcode, each arriving
-    // on its own channel, so there is no mode for the trigger to be wrong
-    // about. Screen.scan is therefore not in this gate — the others still
-    // carry the toggle and still need it.
-    if ((screen == Screen.track ||
+    if ((screen == Screen.scan ||
+            screen == Screen.track ||
             screen == Screen.transfer ||
             (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
         scanInputMode == ScanInputMode.barcode) {

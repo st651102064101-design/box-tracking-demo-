@@ -828,54 +828,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 
   Widget _inputModeToggle(AppController c, LocaleController loc) {
-    Widget seg(ScanInputMode m, String label, IconData icon) {
-      final selected = c.scanInputMode == m;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {
-            if (c.scanInputMode == m) return;
-            c.setScanInputMode(m);
-            setState(() => _sweepTags.clear());
-            if (m == ScanInputMode.barcode) {
-              WidgetsBinding.instance
-                  .addPostFrameCallback((_) => _focus.requestFocus());
-            } else {
-              _focus.unfocus();
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: selected ? C.ink : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
-                const SizedBox(width: 6),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? C.surface : C.ink2)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
-          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
-        ],
-      ),
+    return ScanModeToggle(
+      onChanged: (m) {
+        setState(() => _sweepTags.clear());
+        if (m == ScanInputMode.barcode) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _focus.requestFocus());
+        } else {
+          _focus.unfocus();
+        }
+      },
     );
   }
 }

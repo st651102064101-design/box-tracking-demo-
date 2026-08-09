@@ -611,3 +611,88 @@ String locationText(Map<String, String> l) => [
       l['shelf'],
       l['slot'],
     ].where((v) => (v ?? '').isNotEmpty).join(' / ');
+
+/// The บาร์โค้ด / RFID switch, shared by every screen that offers both.
+///
+/// The two are genuinely different jobs, not two spellings of "scan": the
+/// imager reads one code from a narrow beam at arm's length, the antenna
+/// sweeps every tag within metres of wherever it happens to be pointed. Which
+/// one is armed decides what a trigger pull means and what a decoded barcode
+/// is allowed to do, so the operator has to be able to see and set it — an
+/// app that guesses will eventually guess wrong in a rack full of tags.
+///
+/// The selection itself lives on [AppController.scanInputMode] rather than in
+/// each screen, because the hardware trigger is dispatched centrally too (see
+/// AppController._onReaderTrigger) — a screen-local toggle that dispatcher
+/// never saw is exactly how "barcode mode" still fired the antenna.
+class ScanModeToggle extends StatelessWidget {
+  /// Extra label on the RFID segment, e.g. "หลายกล่อง" where a sweep is a
+  /// bulk-select rather than a single read.
+  final String? rfidNote;
+
+  /// Per-screen side effects of the switch — clearing a sweep list, pushing
+  /// the reader to full power. The mode change itself is already done.
+  final ValueChanged<ScanInputMode>? onChanged;
+
+  const ScanModeToggle({super.key, this.rfidNote, this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
+
+    Widget seg(ScanInputMode m, String label, IconData icon) {
+      final selected = c.scanInputMode == m;
+      return Expanded(
+        child: GestureDetector(
+          // Opaque so a tap anywhere on the segment counts, not just on the
+          // glyphs — this is worn with gloves on.
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (c.scanInputMode == m) return;
+            c.setScanInputMode(m);
+            onChanged?.call(m);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? C.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? C.surface : C.ink2)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
+          seg(
+              ScanInputMode.rfid,
+              rfidNote == null ? 'RFID' : 'RFID (${loc.t(rfidNote!)})',
+              Icons.wifi_tethering),
+        ],
+      ),
+    );
+  }
+}

@@ -446,9 +446,14 @@ class _ScanScreenState extends State<ScanScreen>
     if (task != null) return _putawayStep(c, loc, task);
 
     return ScanCapture(
-      // Barcode capture is live for the whole scan step and nowhere else: on
-      // the customer/vehicle form the keystrokes belong to the fields there.
-      enabled: _onScanStep && !c.busy,
+      // Live on the scan step, in บาร์โค้ด mode, only. On the customer/vehicle
+      // form the keystrokes belong to the fields there; in RFID mode the
+      // imager is off duty entirely, which is the point of the toggle — one
+      // input at a time, so an operator sweeping a pallet cannot also be
+      // half-listening for a barcode.
+      enabled: _onScanStep &&
+          !c.busy &&
+          c.scanInputMode == ScanInputMode.barcode,
       onScan: c.addScan,
       child: _gateBody(c, loc, isOut, formValid, canProceed, bottom),
     );
@@ -859,11 +864,12 @@ class _ScanScreenState extends State<ScanScreen>
             ],
           ),
           const SizedBox(height: 11),
-          // No input field and no barcode/RFID toggle: the trigger reads RFID
-          // and the side button reads barcodes, each on its own channel (see
-          // ScanCapture and AppController._onReaderTag), so there is nothing
-          // left to type into or choose between. What's left is the count —
-          // the one number the operator is actually watching while they sweep.
+          const ScanModeToggle(),
+          const SizedBox(height: 11),
+          // No input field — the imager types straight into ScanCapture. The
+          // toggle above still matters though: it decides which of the two
+          // readers is armed at all. What's left here is the count, the one
+          // number the operator is actually watching while they work.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -894,10 +900,21 @@ class _ScanScreenState extends State<ScanScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.wifi_tethering, size: 16, color: C.muted),
+                    Icon(
+                        c.scanInputMode == ScanInputMode.rfid
+                            ? Icons.wifi_tethering
+                            : Icons.qr_code_scanner,
+                        size: 16,
+                        color: C.muted),
                     const SizedBox(width: 6),
                     Flexible(
-                      child: Text(loc.t('เหนี่ยวไกอ่าน RFID · หรือยิงบาร์โค้ด'),
+                      // Says what *this* mode wants, not both at once — an
+                      // instruction that covers every case tells you nothing
+                      // about the one you are in.
+                      child: Text(
+                          loc.t(c.scanInputMode == ScanInputMode.rfid
+                              ? 'เหนี่ยวไกเพื่ออ่านแท็ก RFID'
+                              : 'ยิงบาร์โค้ดกล่อง'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontSize: 12.5,

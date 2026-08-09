@@ -86,9 +86,10 @@ class _TransferScreenState extends State<TransferScreen> {
     super.dispose();
   }
 
+  /// Side effects of a mode switch. The mode itself is already set by
+  /// [ScanModeToggle] before this runs — a half-built batch from the other
+  /// mode has no meaning in this one, so it is dropped rather than carried.
   void _setMode(AppController c, ScanInputMode m) {
-    if (c.scanInputMode == m) return;
-    c.setScanInputMode(m);
     c.transferRfidHits.clear();
     _excluded.clear();
     _bulkDest = null;
@@ -247,45 +248,9 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   Widget _modeToggle(AppController c, LocaleController loc) {
-    Widget seg(ScanInputMode m, String label, IconData icon) {
-      final selected = c.scanInputMode == m;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => _setMode(c, m),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: selected ? C.ink : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
-                const SizedBox(width: 6),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? C.surface : C.ink2)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
-          seg(ScanInputMode.rfid, 'RFID (${loc.t('หลายกล่อง')})',
-              Icons.wifi_tethering),
-        ],
-      ),
+    return ScanModeToggle(
+      rfidNote: 'หลายกล่อง',
+      onChanged: (m) => _setMode(c, m),
     );
   }
 

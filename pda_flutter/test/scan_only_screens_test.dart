@@ -16,6 +16,7 @@ void main() {
     'lib/screens/cycle_count_screen.dart',
     'lib/screens/rfid_register_screen.dart',
     'lib/screens/rfid_input_screen.dart',
+    'lib/screens/login_screen.dart',
   ];
 
   /// Screens that keep a field on purpose, with the reason. Listed rather than
@@ -30,8 +31,6 @@ void main() {
         'the list-picker filter, for a box whose label will not scan',
     'lib/screens/box_register_screen.dart':
         'a brand-new box has no sticker yet, so its code must be typed once',
-    'lib/screens/login_screen.dart':
-        'a damaged badge must not strand someone at the gate',
     'lib/screens/device_setup_screen.dart':
         'server url and credentials — not a box code at all',
     'lib/screens/scan_screen.dart':
@@ -64,6 +63,40 @@ void main() {
     expect(undeclared, isEmpty,
         reason: 'a new typable field needs a reason recorded in keepsAField, '
             'or it should be a ScanCapture');
+  });
+
+  /// Barcode and RFID are different jobs — one narrow beam at arm's length
+  /// versus a sweep of everything within metres. A screen that offers both
+  /// has to let the operator say which is armed, because that decides what a
+  /// trigger pull does. Every one of them uses the same shared control, so
+  /// the switch looks and behaves identically wherever it appears.
+  test('every dual-mode screen carries the shared mode toggle', () {
+    final offenders = <String>[];
+    for (final f in Directory('lib/screens').listSync().whereType<File>()) {
+      if (!f.path.endsWith('.dart')) continue;
+      final src = f.readAsStringSync();
+      // Reads the RFID mode to decide what to show or do = offers both.
+      if (!src.contains('ScanInputMode.rfid')) continue;
+      if (!src.contains('ScanModeToggle')) offenders.add(f.path);
+    }
+    expect(offenders, isEmpty,
+        reason: 'a screen that behaves differently in RFID mode must let the '
+            'operator see and set which mode that is');
+  });
+
+  test('nobody hand-rolls their own copy of the toggle', () {
+    final offenders = <String>[];
+    for (final f in Directory('lib/screens').listSync().whereType<File>()) {
+      if (!f.path.endsWith('.dart')) continue;
+      // The tell of a local reimplementation: flipping the mode by hand
+      // instead of letting the shared toggle do it.
+      if (f.readAsStringSync().contains('c.setScanInputMode(m)')) {
+        offenders.add(f.path);
+      }
+    }
+    expect(offenders, isEmpty,
+        reason: 'use ScanModeToggle — three near-identical copies of this '
+            'control is how they drifted apart in the first place');
   });
 
   test('the scan-only list is actually checking files that exist', () {
