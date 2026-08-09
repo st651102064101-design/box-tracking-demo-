@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../controllers/app_controller.dart';
 import '../services/i18n.dart';
 import '../theme.dart';
 
@@ -438,102 +442,172 @@ class Caption extends StatelessWidget {
       );
 }
 
-/// A dropdown for one location field (zone/rack/shelf/slot) that also lets
-/// the operator type a brand-new value inline via an "+ เพิ่มใหม่" entry —
-/// selecting it opens a small text prompt, and the typed value becomes both
-/// the new dropdown option and the current selection. An empty selection
-/// ("— ไม่ระบุ —") is always available since every one of these fields is
-/// optional on the backend.
-class LocationDropdown extends StatelessWidget {
-  final String label;
-  final List<String> options;
-  final String value;
-  final ValueChanged<String> onChanged;
+/// The only way to put a location onto a box anywhere in this app: scan the
+/// barcode physically stuck to that shelf.
+///
+/// There is deliberately no dropdown, no list, and no free-text fallback. A
+/// picker can be operated from anywhere in the building — the whole warehouse
+/// fits in it, and the wrong entry is always one row away from the right one.
+/// A shelf barcode can only be read while standing at that shelf, which makes
+/// the scan the one piece of evidence that the box and the location about to
+/// be recorded are actually in the same place. Every screen that writes a
+/// location (Gate In putaway, ย้ายตำแหน่ง, box registration) goes through here
+/// so that guarantee holds everywhere rather than screen by screen.
+///
+/// [expected] turns this into a *directed* confirmation: any other valid
+/// shelf is rejected as the wrong one, not quietly accepted.
+class LocationScanField extends StatefulWidget {
+  final AppController controller;
   final LocaleController loc;
-  final bool dense;
-  const LocationDropdown({
+
+  /// When set, only this exact zone/rack/shelf/slot is accepted.
+  final Map<String, String>? expected;
+
+  /// Called with the resolved location once a scan is accepted.
+  final ValueChanged<Map<String, String>> onConfirmed;
+
+  final String? hintText;
+  final bool autofocus;
+
+  const LocationScanField({
     super.key,
-    required this.label,
-    required this.options,
-    required this.value,
-    required this.onChanged,
+    required this.controller,
     required this.loc,
-    this.dense = false,
+    required this.onConfirmed,
+    this.expected,
+    this.hintText,
+    this.autofocus = true,
   });
 
-  static const _addNew = ' __add_new__';
-  static const _empty = '';
+  @override
+  State<LocationScanField> createState() => _LocationScanFieldState();
+}
 
-  Future<void> _promptNew(BuildContext context) async {
-    final ctrl = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${loc.t('เพิ่ม')} $label'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(hintText: label),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(loc.t('ยกเลิก'))),
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-              child: Text(loc.t('เพิ่ม'))),
-        ],
-      ),
-    );
-    if (result != null && result.isNotEmpty) onChanged(result);
+class _LocationScanFieldState extends State<LocationScanField> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  Timer? _timer;
+  int _prevLen = 0;
+  String? _error;
+
+  /// This terminal's barcode engine is a keyboard wedge that doesn't reliably
+  /// send a trailing Enter, so onSubmitted alone would strand a good scan in
+  /// the field. Same two-part fallback used everywhere else in the app: a
+  /// burst of characters in one callback is scanner speed no typist reaches
+  /// and resolves at once; anything slower waits for the field to go quiet.
+  void _onChanged(String v) {
+    _timer?.cancel();
+    final text = v.trim();
+    final added = v.length - _prevLen;
+    _prevLen = v.length;
+    if (text.length < 2) return;
+    if (added > 1) {
+      _resolve(text);
+      return;
+    }
+    _timer = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _ctrl.text.trim() != text) return;
+      _resolve(text);
+    });
+  }
+
+  void _resolve(String raw) {
+    final c = widget.controller;
+    final loc = widget.loc;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    final found = c.S?.locationByCode(c.wh, code);
+    if (found == null) {
+      _reject('${loc.t('ไม่พบตำแหน่งรหัส')} "$code"');
+      return;
+    }
+    final want = widget.expected;
+    if (want != null && !_sameLocation(found, want)) {
+      _reject(
+          '${loc.t('ผิดช่อง — ระบบกำหนดให้เก็บที่')} ${locationText(want)}');
+      return;
+    }
+    c.rfid.playSound('putaway_ok');
+    HapticFeedback.mediumImpact();
+    _ctrl.clear();
+    _prevLen = 0;
+    setState(() => _error = null);
+    widget.onConfirmed(found);
+  }
+
+  void _reject(String message) {
+    widget.controller.rfid.playSound('putaway_err');
+    HapticFeedback.heavyImpact();
+    _ctrl.clear();
+    _prevLen = 0;
+    setState(() => _error = message);
+    _focus.requestFocus();
+  }
+
+  static bool _sameLocation(Map<String, String> a, Map<String, String> b) => [
+        'zone',
+        'rack',
+        'shelf',
+        'slot'
+      ].every((k) => (a[k] ?? '') == (b[k] ?? ''));
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = <String>{...options, if (value.isNotEmpty) value}.toList()
-      ..sort();
+    final loc = widget.loc;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FieldLabel(label),
-        DropdownButtonFormField<String>(
-          initialValue: value.isEmpty ? _empty : value,
-          isExpanded: true,
-          isDense: dense,
-          decoration: pdaInput('— ${loc.t('ไม่ระบุ')} —', radius: 12),
-          items: [
-            DropdownMenuItem(
-                value: _empty,
-                child: Text('— ${loc.t('ไม่ระบุ')} —',
-                    style: TextStyle(color: C.faint))),
-            ...items.map((v) => DropdownMenuItem(
-                value: v, child: Text(v, overflow: TextOverflow.ellipsis))),
-            DropdownMenuItem(
-              value: _addNew,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 16, color: C.limeText),
-                  const SizedBox(width: 4),
-                  Text(loc.t('เพิ่มใหม่'),
-                      style: TextStyle(
-                          color: C.limeText, fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ],
-          onChanged: (v) {
-            if (v == null) return;
-            if (v == _addNew) {
-              _promptNew(context);
-              return;
-            }
-            onChanged(v);
-          },
+        TextField(
+          controller: _ctrl,
+          focusNode: _focus,
+          autofocus: widget.autofocus,
+          textCapitalization: TextCapitalization.characters,
+          autocorrect: false,
+          enableSuggestions: false,
+          onChanged: _onChanged,
+          onSubmitted: _resolve,
+          style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace'),
+          decoration: pdaInput(widget.hintText ?? loc.t('ยิงบาร์โค้ดชั้นวาง'),
+                  radius: 14)
+              .copyWith(prefixIcon: Icon(Icons.qr_code_scanner)),
         ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: C.redBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(_error!,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: C.red,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4)),
+          ),
+        ],
       ],
     );
   }
 }
+
+/// "A / 1 / 2" from a zone/rack/shelf/slot map, skipping the empty levels.
+String locationText(Map<String, String> l) => [
+      l['zone'],
+      l['rack'],
+      l['shelf'],
+      l['slot'],
+    ].where((v) => (v ?? '').isNotEmpty).join(' / ');

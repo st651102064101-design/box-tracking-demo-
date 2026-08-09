@@ -104,7 +104,8 @@ class Employee {
     return c.isNotEmpty && badge.isNotEmpty && badge == c;
   }
 
-  String get initials => name.trim().isEmpty ? '?' : name.trim().substring(0, 1);
+  String get initials =>
+      name.trim().isEmpty ? '?' : name.trim().substring(0, 1);
 
   /// "หัวหน้าคลัง · คลังสินค้า" — omitting whichever half is unset.
   String get subtitle => [role, dept].where((s) => s.isNotEmpty).join(' · ');

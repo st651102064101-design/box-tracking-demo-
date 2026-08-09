@@ -82,6 +82,7 @@ class C {
   /// in both themes. Reusing [ink] for that meant the tile turned white in
   /// dark mode right along with the text color flip, which was the bug.
   static const Color heroBg = Color(0xFF1D1D1F);
+
   /// Foreground for content painted on [heroBg] — fixed white for the same
   /// reason: it must stay legible against a background that never changes.
   static const Color onHero = Color(0xFFFFFFFF);
@@ -165,15 +166,13 @@ ThemeData buildTheme() {
   // before — rather than the tofu boxes a bare `fontFamily: 'Inter'` would
   // produce on every Thai label.
   return base.copyWith(
-    textTheme: base.textTheme
-        .apply(
-          fontFamily: 'Inter',
-          fontFamilyFallback: const ['Noto Sans Thai', 'Sarabun', 'sans-serif'],
-        )
-        .apply(
-          bodyColor: C.ink,
-          displayColor: C.ink,
-        ),
+    textTheme: base.textTheme.apply(
+      fontFamily: 'Inter',
+      fontFamilyFallback: const ['Noto Sans Thai', 'Sarabun', 'sans-serif'],
+    ).apply(
+      bodyColor: C.ink,
+      displayColor: C.ink,
+    ),
   );
 }
 

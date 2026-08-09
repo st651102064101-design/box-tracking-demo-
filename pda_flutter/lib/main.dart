@@ -24,14 +24,19 @@ Future<void> main() async {
   // fire-and-forget bootstrap (auth + state fetch), UI shows the boot splash
   controller.init();
 
-  runApp(BoxTraceApp(controller: controller, locale: locale, themeCtrl: themeCtrl));
+  runApp(BoxTraceApp(
+      controller: controller, locale: locale, themeCtrl: themeCtrl));
 }
 
 class BoxTraceApp extends StatelessWidget {
   final AppController controller;
   final LocaleController locale;
   final ThemeController themeCtrl;
-  const BoxTraceApp({super.key, required this.controller, required this.locale, required this.themeCtrl});
+  const BoxTraceApp(
+      {super.key,
+      required this.controller,
+      required this.locale,
+      required this.themeCtrl});
 
   @override
   Widget build(BuildContext context) {

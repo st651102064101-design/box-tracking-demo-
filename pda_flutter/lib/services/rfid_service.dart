@@ -47,11 +47,17 @@ class RfidTagRead {
     return RfidTagRead(
       epc: event['epc']?.toString() ?? '',
       rssi: event['rssi'] as int?,
-      tid: (event['tid'] as String?)?.isNotEmpty == true ? event['tid'] as String : null,
+      tid: (event['tid'] as String?)?.isNotEmpty == true
+          ? event['tid'] as String
+          : null,
       pc: event['pc'] as int?,
-      crc: (event['crc'] as String?)?.isNotEmpty == true ? event['crc'] as String : null,
+      crc: (event['crc'] as String?)?.isNotEmpty == true
+          ? event['crc'] as String
+          : null,
       antenna: event['antenna'] as int?,
-      channel: (event['channel'] as String?)?.isNotEmpty == true ? event['channel'] as String : null,
+      channel: (event['channel'] as String?)?.isNotEmpty == true
+          ? event['channel'] as String
+          : null,
       phase: event['phase'] as int?,
       seenCount: event['seenCount'] as int?,
       readAt: readAt,
@@ -98,11 +104,14 @@ class RfidService {
   bool _flushScheduled = false;
 
   Stream<String> get tags => _tagCtrl.stream;
+
   /// Same tag reads as [tags], but with every raw SDK field attached — for the
   /// RFID test-read, register, and input screens, not for normal scan flows.
   Stream<RfidTagRead> get rawTags => _rawTagCtrl.stream;
+
   /// Alias of [rawTags] kept for screens written against the older name.
   Stream<RfidTagRead> get tagReads => _rawTagCtrl.stream;
+
   /// Every read buffered since the last frame, delivered as one list.
   ///
   /// Prefer this over [rawTags] on any screen that accumulates reads into a
@@ -137,7 +146,8 @@ class RfidService {
           break;
         case 'status':
           _state = _parseState(event['state']?.toString());
-          _statusCtrl.add(RfidStatus(_state, event['message']?.toString() ?? ''));
+          _statusCtrl
+              .add(RfidStatus(_state, event['message']?.toString() ?? ''));
           break;
       }
     }, onError: (e) {
@@ -211,12 +221,14 @@ class RfidService {
   /// Enumerate + connect to the integrated reader (MC3390R via SERVICE_SERIAL).
   Future<void> connect() async {
     if (!supported) {
-      _statusCtrl.add(const RfidStatus(RfidState.idle, 'RFID ใช้ได้เฉพาะบนเครื่อง Android'));
+      _statusCtrl.add(const RfidStatus(
+          RfidState.idle, 'RFID ใช้ได้เฉพาะบนเครื่อง Android'));
       return;
     }
     _listen();
     _state = RfidState.connecting;
-    _statusCtrl.add(const RfidStatus(RfidState.connecting, 'กำลังเชื่อมต่อเครื่องอ่าน…'));
+    _statusCtrl.add(
+        const RfidStatus(RfidState.connecting, 'กำลังเชื่อมต่อเครื่องอ่าน…'));
     try {
       await _method.invokeMethod('connect');
     } catch (e) {
@@ -226,7 +238,8 @@ class RfidService {
       // down a screen that works perfectly well with manual entry.
       _state = RfidState.error;
       final msg = e is PlatformException ? (e.message ?? '') : '';
-      _statusCtrl.add(RfidStatus(RfidState.error, msg.isEmpty ? 'ไม่พบเครื่องอ่านบนอุปกรณ์นี้' : msg));
+      _statusCtrl.add(RfidStatus(
+          RfidState.error, msg.isEmpty ? 'ไม่พบเครื่องอ่านบนอุปกรณ์นี้' : msg));
     }
   }
 

@@ -51,36 +51,24 @@ class _TransferScreenState extends State<TransferScreen> {
   bool _pickFromList = false;
   final _listSearchCtrl = TextEditingController();
 
-  String _zone = '';
-  String _rack = '';
-  String _shelf = '';
-  String _slot = '';
-
-  /// false = pick zone/rack/shelf/slot from dropdowns; true = scan/type the
-  /// master locations table's own code (a barcode stuck to the rack/shelf)
-  /// and resolve all four fields from it in one shot.
-  bool _scanLocation = false;
-  final _locScanCtrl = TextEditingController();
-  String? _locScanError;
+  /// The destination, and the only way it can ever be set: scanned off the
+  /// shelf's own barcode (see [LocationScanField]). Null until then, which is
+  /// what keeps the confirm button disabled.
+  Map<String, String>? _dest;
 
   // ── RFID mode: bulk select ────────────────────────────────────────────
   StreamSubscription<bool>? _triggerSub;
   bool _reading = false;
   final Set<String> _excluded = {}; // tags unchecked out of the sweep result
-  final Map<String, String> _boxShelf = {};
-  final Map<String, String> _boxSlot = {};
-  String _bulkZone = '';
-  String _bulkRack = '';
   bool _bulkSaving = false;
   int _bulkDone = 0;
   String? _bulkError;
 
-  /// Same scan/dropdown choice as the barcode-mode target, applied to the
-  /// batch-shared zone+rack here — the resolved code's shelf/slot become
-  /// this batch's default, still overridable per box below.
-  bool _bulkScanLocation = false;
-  final _bulkLocScanCtrl = TextEditingController();
-  String? _bulkLocScanError;
+  /// One scanned destination for the whole sweep. Per-box shelf/slot pickers
+  /// used to live here, but they were pickers — the thing this screen no
+  /// longer has. A batch going to different shelves is now several sweeps,
+  /// one per shelf, which is also what actually happens physically.
+  Map<String, String>? _bulkDest;
 
   AppController get _c => context.read<AppController>();
 
@@ -100,8 +88,6 @@ class _TransferScreenState extends State<TransferScreen> {
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _listSearchCtrl.dispose();
-    _locScanCtrl.dispose();
-    _bulkLocScanCtrl.dispose();
     _triggerSub?.cancel();
     // Leaving mid-sweep must not leave the antenna running in the
     // background, and a stale batch from this visit has no business
@@ -116,8 +102,7 @@ class _TransferScreenState extends State<TransferScreen> {
     c.setScanInputMode(m);
     c.transferRfidHits.clear();
     _excluded.clear();
-    _boxShelf.clear();
-    _boxSlot.clear();
+    _bulkDest = null;
     _bulkError = null;
     if (m == ScanInputMode.barcode) {
       WidgetsBinding.instance
@@ -162,15 +147,11 @@ class _TransferScreenState extends State<TransferScreen> {
           'ย้ายตำแหน่งได้เฉพาะกล่องที่อยู่ในคลังเท่านั้น (สถานะปัจจุบัน: ${StatusMeta.of(b.status).label})');
       return;
     }
-    final l = b.location;
     setState(() {
       _target = b;
       _error = null;
       _pickFromList = false;
-      _zone = (l['zone'] ?? '').toString();
-      _rack = (l['rack'] ?? '').toString();
-      _shelf = (l['shelf'] ?? '').toString();
-      _slot = (l['slot'] ?? '').toString();
+      _dest = null;
     });
   }
 
@@ -182,60 +163,28 @@ class _TransferScreenState extends State<TransferScreen> {
       _searchCtrl.clear();
       _listSearchCtrl.clear();
       _prevLen = 0;
-      _scanLocation = false;
-      _locScanCtrl.clear();
-      _locScanError = null;
+      _dest = null;
     });
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _searchFocus.requestFocus());
   }
 
-  void _resolveLocationCode(String raw) {
-    final loc = _c.S?.locationByCode(_c.wh, raw);
-    if (loc == null) {
-      setState(() => _locScanError = 'ไม่พบตำแหน่งที่มีรหัส "$raw"');
-      return;
-    }
-    setState(() {
-      _zone = loc['zone'] ?? '';
-      _rack = loc['rack'] ?? '';
-      _shelf = loc['shelf'] ?? '';
-      _slot = loc['slot'] ?? '';
-      _locScanError = null;
-    });
-  }
-
-  void _resolveBulkLocationCode(String raw) {
-    final loc = _c.S?.locationByCode(_c.wh, raw);
-    if (loc == null) {
-      setState(() => _bulkLocScanError = 'ไม่พบตำแหน่งที่มีรหัส "$raw"');
-      return;
-    }
-    setState(() {
-      _bulkZone = loc['zone'] ?? '';
-      _bulkRack = loc['rack'] ?? '';
-      for (final tag in _selectedTransferTags()) {
-        _boxShelf[tag] = loc['shelf'] ?? '';
-        _boxSlot[tag] = loc['slot'] ?? '';
-      }
-      _bulkLocScanError = null;
-    });
-  }
-
-  List<String> _selectedTransferTags() =>
-      _c.transferRfidHits.where((t) => !_excluded.contains(t)).toList();
-
   Future<void> _submitSingle() async {
     final c = _c;
     final b = _target;
-    if (b == null || _saving) return;
+    if (b == null || _dest == null || _saving) return;
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
+      final d = _dest!;
       await c.api.putawayBox(b.tag,
-          wh: c.wh, zone: _zone, rack: _rack, shelf: _shelf, slot: _slot);
+          wh: c.wh,
+          zone: d['zone'] ?? '',
+          rack: d['rack'] ?? '',
+          shelf: d['shelf'] ?? '',
+          slot: d['slot'] ?? '');
       if (!mounted) return;
       c.toastMsg('ย้ายตำแหน่งแล้ว', b.tag, ResultKind.ok);
       _changeTarget();
@@ -252,7 +201,7 @@ class _TransferScreenState extends State<TransferScreen> {
     final c = _c;
     final tags =
         c.transferRfidHits.where((t) => !_excluded.contains(t)).toList();
-    if (tags.isEmpty || _bulkSaving) return;
+    if (tags.isEmpty || _bulkDest == null || _bulkSaving) return;
     setState(() {
       _bulkSaving = true;
       _bulkDone = 0;
@@ -264,10 +213,10 @@ class _TransferScreenState extends State<TransferScreen> {
         await c.api.putawayBox(
           tag,
           wh: c.wh,
-          zone: _bulkZone,
-          rack: _bulkRack,
-          shelf: _boxShelf[tag] ?? '',
-          slot: _boxSlot[tag] ?? '',
+          zone: _bulkDest!['zone'] ?? '',
+          rack: _bulkDest!['rack'] ?? '',
+          shelf: _bulkDest!['shelf'] ?? '',
+          slot: _bulkDest!['slot'] ?? '',
         );
         if (mounted) setState(() => _bulkDone++);
       } catch (_) {
@@ -280,8 +229,7 @@ class _TransferScreenState extends State<TransferScreen> {
       setState(() {
         c.transferRfidHits.clear();
         _excluded.clear();
-        _boxShelf.clear();
-        _boxSlot.clear();
+        _bulkDest = null;
         _bulkSaving = false;
       });
     } else {
@@ -452,132 +400,22 @@ class _TransferScreenState extends State<TransferScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text('${loc.t('ตำแหน่งใหม่')} · ${c.selWhName}',
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w700)),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _scanLocation = !_scanLocation;
-                    _locScanError = null;
-                  }),
-                  child: Text(
-                      loc.t(
-                          _scanLocation ? 'เลือกจาก Dropdown' : 'ยิงบาร์โค้ด'),
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          color: C.ink2,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_scanLocation) ...[
-              TextField(
-                controller: _locScanCtrl,
-                autofocus: true,
-                textCapitalization: TextCapitalization.characters,
-                autocorrect: false,
-                enableSuggestions: false,
-                onSubmitted: (v) => _resolveLocationCode(v.trim()),
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'monospace'),
-                decoration:
-                    pdaInput(loc.t('ยิงบาร์โค้ดชั้นวาง/แร็ค'), radius: 12)
-                        .copyWith(prefixIcon: Icon(Icons.qr_code_scanner)),
-              ),
-              if (_locScanError != null) ...[
-                const SizedBox(height: 8),
-                Text(_locScanError!,
-                    style: TextStyle(fontSize: 12.5, color: C.red)),
-              ] else if (_zone.isNotEmpty ||
-                  _rack.isNotEmpty ||
-                  _shelf.isNotEmpty ||
-                  _slot.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: C.limeBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    [_zone, _rack, _shelf, _slot]
-                        .where((v) => v.isNotEmpty)
-                        .join(' / '),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: LocationDropdown(
-                      label: loc.t('โซน'),
-                      value: _zone,
-                      options: c.S?.locationValues(c.wh, 'zone') ?? const [],
-                      onChanged: (v) => setState(() {
-                        _zone = v;
-                        _rack = '';
-                        _shelf = '';
-                        _slot = '';
-                      }),
-                      loc: loc,
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: LocationDropdown(
-                      label: loc.t('แร็ค'),
-                      value: _rack,
-                      options: c.S?.locationValues(c.wh, 'rack', zone: _zone) ??
-                          const [],
-                      onChanged: (v) => setState(() {
-                        _rack = v;
-                        _shelf = '';
-                        _slot = '';
-                      }),
-                      loc: loc,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 11),
-              Row(
-                children: [
-                  Expanded(
-                    child: LocationDropdown(
-                      label: loc.t('ชั้น'),
-                      value: _shelf,
-                      options: c.S?.locationValues(c.wh, 'shelf',
-                              zone: _zone, rack: _rack) ??
-                          const [],
-                      onChanged: (v) => setState(() => _shelf = v),
-                      loc: loc,
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: LocationDropdown(
-                      label: loc.t('ช่อง'),
-                      value: _slot,
-                      options: c.S?.locationValues(c.wh, 'slot',
-                              zone: _zone, rack: _rack) ??
-                          const [],
-                      onChanged: (v) => setState(() => _slot = v),
-                      loc: loc,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            Text('${loc.t('ตำแหน่งใหม่')} · ${c.selWhName}',
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(loc.t('ยิงบาร์โค้ดของชั้นวางที่จะนำกล่องไปวาง'),
+                style: TextStyle(fontSize: 12, color: C.muted)),
+            const SizedBox(height: 10),
+            if (_dest == null)
+              LocationScanField(
+                controller: c,
+                loc: loc,
+                onConfirmed: (l) => setState(() => _dest = l),
+              )
+            else
+              _confirmedLocationCard(
+                  loc, _dest!, () => setState(() => _dest = null)),
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red)),
@@ -586,7 +424,7 @@ class _TransferScreenState extends State<TransferScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _saving ? null : _submitSingle,
+                onPressed: (_dest == null || _saving) ? null : _submitSingle,
                 style: FilledButton.styleFrom(
                   backgroundColor: C.ink,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -780,8 +618,6 @@ class _TransferScreenState extends State<TransferScreen> {
               onTap: () => setState(() {
                 c.transferRfidHits.clear();
                 _excluded.clear();
-                _boxShelf.clear();
-                _boxSlot.clear();
               }),
               child: Text(loc.t('ล้างรายการ'),
                   style: TextStyle(
@@ -798,102 +634,25 @@ class _TransferScreenState extends State<TransferScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                        '${loc.t('ตำแหน่งใหม่ (ทั้งหมด)')} · ${c.selWhName}',
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w700)),
-                  ),
-                  GestureDetector(
-                    onTap: () => setState(() {
-                      _bulkScanLocation = !_bulkScanLocation;
-                      _bulkLocScanError = null;
-                    }),
-                    child: Text(
-                        loc.t(_bulkScanLocation
-                            ? 'เลือกจาก Dropdown'
-                            : 'ยิงบาร์โค้ด'),
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            color: C.ink2,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (_bulkScanLocation) ...[
-                TextField(
-                  controller: _bulkLocScanCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  onSubmitted: (v) => _resolveBulkLocationCode(v.trim()),
+              Text('${loc.t('ตำแหน่งใหม่ (ทั้งหมด)')} · ${c.selWhName}',
                   style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'monospace'),
-                  decoration:
-                      pdaInput(loc.t('ยิงบาร์โค้ดชั้นวาง/แร็ค'), radius: 12)
-                          .copyWith(prefixIcon: Icon(Icons.qr_code_scanner)),
-                ),
-                if (_bulkLocScanError != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_bulkLocScanError!,
-                      style: TextStyle(fontSize: 12.5, color: C.red)),
-                ] else if (_bulkZone.isNotEmpty || _bulkRack.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: C.limeBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      [_bulkZone, _bulkRack]
-                          .where((v) => v.isNotEmpty)
-                          .join(' / '),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
-              ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: LocationDropdown(
-                        label: loc.t('โซน'),
-                        value: _bulkZone,
-                        options: c.S?.locationValues(c.wh, 'zone') ?? const [],
-                        onChanged: (v) => setState(() {
-                          _bulkZone = v;
-                          _bulkRack = '';
-                        }),
-                        loc: loc,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: LocationDropdown(
-                        label: loc.t('แร็ค'),
-                        value: _bulkRack,
-                        options: c.S?.locationValues(c.wh, 'rack',
-                                zone: _bulkZone) ??
-                            const [],
-                        onChanged: (v) => setState(() => _bulkRack = v),
-                        loc: loc,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 6),
+                      fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
               Text(
                   loc.t(
-                      'ใช้ร่วมกันทั้งชุด — ชั้น/ช่องตั้งแยกทีละกล่องด้านล่าง'),
+                      'ทั้งชุดไปที่ช่องเดียวกัน — ถ้าคนละช่อง ให้กวาดแยกทีละช่อง'),
                   style: TextStyle(fontSize: 11, color: C.faint)),
+              const SizedBox(height: 10),
+              if (_bulkDest == null)
+                LocationScanField(
+                  controller: c,
+                  loc: loc,
+                  autofocus: false,
+                  onConfirmed: (l) => setState(() => _bulkDest = l),
+                )
+              else
+                _confirmedLocationCard(
+                    loc, _bulkDest!, () => setState(() => _bulkDest = null)),
             ],
           ),
         ),
@@ -946,39 +705,6 @@ class _TransferScreenState extends State<TransferScreen> {
                       ),
                     ],
                   ),
-                  if (!excluded) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: LocationDropdown(
-                            label: loc.t('ชั้น'),
-                            value: _boxShelf[tag] ?? '',
-                            options: c.S?.locationValues(c.wh, 'shelf',
-                                    zone: _bulkZone, rack: _bulkRack) ??
-                                const [],
-                            onChanged: (v) =>
-                                setState(() => _boxShelf[tag] = v),
-                            loc: loc,
-                            dense: true,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: LocationDropdown(
-                            label: loc.t('ช่อง'),
-                            value: _boxSlot[tag] ?? '',
-                            options: c.S?.locationValues(c.wh, 'slot',
-                                    zone: _bulkZone, rack: _bulkRack) ??
-                                const [],
-                            onChanged: (v) => setState(() => _boxSlot[tag] = v),
-                            loc: loc,
-                            dense: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -993,7 +719,9 @@ class _TransferScreenState extends State<TransferScreen> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: (selected.isEmpty || _bulkSaving) ? null : _submitBulk,
+            onPressed: (selected.isEmpty || _bulkDest == null || _bulkSaving)
+                ? null
+                : _submitBulk,
             style: FilledButton.styleFrom(
               backgroundColor: C.ink,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1007,5 +735,50 @@ class _TransferScreenState extends State<TransferScreen> {
         ),
       ],
     ];
+  }
+
+  /// A scanned destination, shown back with a way to clear it. Clearing
+  /// returns to the scan field — the only route to a location on this screen.
+  Widget _confirmedLocationCard(
+      LocaleController loc, Map<String, String> dest, VoidCallback onClear) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: C.limeBg,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: C.limeBorder, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, size: 19, color: C.limeDeep),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(loc.t('ยืนยันช่องแล้ว'),
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        color: C.limeDeep,
+                        fontWeight: FontWeight.w600)),
+                Text(locationText(dest),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onClear,
+            child: Text(loc.t('ยิงใหม่'),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: C.ink2,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
   }
 }

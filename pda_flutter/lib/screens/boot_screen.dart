@@ -15,14 +15,21 @@ class BootScreen extends StatelessWidget {
           Container(
             width: 78,
             height: 78,
-            decoration: BoxDecoration(color: C.heroBg, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(
+                color: C.heroBg, borderRadius: BorderRadius.circular(20)),
             alignment: Alignment.center,
-            child: Text('◈', style: TextStyle(color: C.lime, fontSize: 38, fontWeight: FontWeight.w800)),
+            child: Text('◈',
+                style: TextStyle(
+                    color: C.lime, fontSize: 38, fontWeight: FontWeight.w800)),
           ),
           const SizedBox(height: 18),
           Text.rich(
             TextSpan(
-              style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700, letterSpacing: -0.6, color: C.ink),
+              style: TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                  color: C.ink),
               children: [
                 TextSpan(text: 'BoxTrace '),
                 TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),

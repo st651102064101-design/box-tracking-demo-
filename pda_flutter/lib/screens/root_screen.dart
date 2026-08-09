@@ -59,7 +59,9 @@ class RootScreen extends StatelessWidget {
                     // app — every screen change plays it — so it's the
                     // first thing low power mode cuts, straight to an
                     // instant swap.
-                    duration: c.lowPowerMode ? Duration.zero : const Duration(milliseconds: 220),
+                    duration: c.lowPowerMode
+                        ? Duration.zero
+                        : const Duration(milliseconds: 220),
                     child: _body(c),
                   ),
                 ),
@@ -140,10 +142,13 @@ class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
           builder: (dialogCtx) => AlertDialog(
             title: const Text('ขาดการเชื่อมต่อกับระบบหลัก'),
             content: Text(
-              c.connError ?? 'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
+              c.connError ??
+                  'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('รับทราบ')),
+              TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('รับทราบ')),
               FilledButton(
                 onPressed: () {
                   Navigator.of(dialogCtx).pop();

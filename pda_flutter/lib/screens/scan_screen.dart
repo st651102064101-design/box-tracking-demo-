@@ -61,21 +61,10 @@ class _ScanScreenState extends State<ScanScreen> {
   static const _autoSubmitMinLen = 4;
 
   // ── putaway step (after a Gate In commit in auto/manual mode) ───────────
-  final _putawayScanCtrl = TextEditingController();
-  final _putawayFocus = FocusNode();
-  Timer? _putawayScanTimer;
-  int _putawayPrevLen = 0;
-
   /// The shelf whose barcode has actually been scanned and accepted. Null
   /// until then — which is exactly what keeps "ยืนยันเก็บเข้าชั้น" disabled,
-  /// so nothing can be recorded as shelved on the strength of a form alone.
+  /// so nothing can be recorded as shelved without a scan at the shelf.
   Map<String, String>? _putawayConfirmed;
-  String? _putawayError;
-
-  /// Dropdown fallback for a shelf label that will not scan (torn, faded,
-  /// wrapped around a post). Off by default: it is the exception, and every
-  /// tap of it is a step the barcode was supposed to make unnecessary.
-  bool _putawayManualPick = false;
 
   @override
   void initState() {
@@ -99,9 +88,6 @@ class _ScanScreenState extends State<ScanScreen> {
     _inDriverCtrl.dispose();
     _inVtypeOtherCtrl.dispose();
     _scanFocus.dispose();
-    _putawayScanTimer?.cancel();
-    _putawayScanCtrl.dispose();
-    _putawayFocus.dispose();
     super.dispose();
   }
 
@@ -141,93 +127,8 @@ class _ScanScreenState extends State<ScanScreen> {
     if (c.queue.isEmpty) setState(() => _onScanStep = false);
     // A putaway task means the commit landed and these boxes now have to be
     // physically walked to a shelf — see the putaway step in build().
-    if (c.putawayTask != null) {
-      setState(() {
-        _putawayScanCtrl.clear();
-        _putawayConfirmed = null;
-        _putawayError = null;
-      });
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _putawayFocus.requestFocus());
-    }
+    if (c.putawayTask != null) setState(() => _putawayConfirmed = null);
   }
-
-  /// This terminal's barcode engine is a keyboard wedge that doesn't reliably
-  /// send a trailing Enter, so onSubmitted alone would strand a perfectly good
-  /// scan in the field. Same two-part fallback the rest of the app uses: a
-  /// burst of characters in one callback is scanner speed no typist reaches
-  /// and resolves immediately; anything slower waits for the field to go quiet.
-  void _onPutawayScanChanged(AppController c, String v) {
-    _putawayScanTimer?.cancel();
-    final text = v.trim();
-    final added = v.length - _putawayPrevLen;
-    _putawayPrevLen = v.length;
-    if (text.length < 2) return;
-    if (added > 1) {
-      _resolvePutawayLocation(c, text);
-      return;
-    }
-    _putawayScanTimer = Timer(_autoSubmitDelay, () {
-      if (!mounted || _putawayScanCtrl.text.trim() != text) return;
-      _resolvePutawayLocation(c, text);
-    });
-  }
-
-  /// Resolves a scanned shelf barcode against the master locations list and,
-  /// in a directed task, checks it is *the* shelf the system assigned rather
-  /// than merely a valid one. This is the whole point of the scan: a form can
-  /// be filled in from anywhere, a shelf barcode can only be read standing at
-  /// that shelf, so it is the one piece of evidence that the boxes and the
-  /// location the system is about to record are in the same place.
-  void _resolvePutawayLocation(AppController c, String raw) {
-    final loc = context.read<LocaleController>();
-    final task = c.putawayTask;
-    if (task == null) return;
-    final code = raw.trim();
-    if (code.isEmpty) return;
-    final found = c.S?.locationByCode(c.wh, code);
-    if (found == null) {
-      _putawayReject('${loc.t('ไม่พบตำแหน่งรหัส')} "$code"', c);
-      return;
-    }
-    if (task.isDirected && !_sameLocation(found, task.assigned!)) {
-      _putawayReject(
-          '${loc.t('ผิดช่อง — ระบบกำหนดให้เก็บที่')} ${_locText(task.assigned!)}',
-          c);
-      return;
-    }
-    c.rfid.playSound('putaway_ok');
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _putawayConfirmed = found;
-      _putawayError = null;
-      _putawayScanCtrl.clear();
-    });
-  }
-
-  void _putawayReject(String message, AppController c) {
-    c.rfid.playSound('putaway_err');
-    HapticFeedback.heavyImpact();
-    setState(() {
-      _putawayError = message;
-      _putawayConfirmed = null;
-      _putawayScanCtrl.clear();
-    });
-  }
-
-  static bool _sameLocation(Map<String, String> a, Map<String, String> b) => [
-        'zone',
-        'rack',
-        'shelf',
-        'slot'
-      ].every((k) => (a[k] ?? '') == (b[k] ?? ''));
-
-  static String _locText(Map<String, String> l) => [
-        l['zone'],
-        l['rack'],
-        l['shelf'],
-        l['slot'],
-      ].where((v) => (v ?? '').isNotEmpty).join(' / ');
 
   Future<void> _completePutaway(AppController c) async {
     final loc = context.read<LocaleController>();
@@ -238,14 +139,15 @@ class _ScanScreenState extends State<ScanScreen> {
     if (failed.isEmpty) {
       c.rfid.playSound('putaway_ok');
       HapticFeedback.mediumImpact();
-      setState(() {
-        _putawayConfirmed = null;
-        _putawayError = null;
-      });
+      setState(() => _putawayConfirmed = null);
     } else {
-      _putawayReject(
-          '${loc.t('เก็บไม่สำเร็จ')} ${failed.length} ${loc.t('ใบ')}: ${failed.join(', ')}',
-          c);
+      c.rfid.playSound('putaway_err');
+      HapticFeedback.heavyImpact();
+      // Back to the scan step: whatever went wrong, the shelf is not
+      // recorded, so the confirmation that implied it must not stand either.
+      setState(() => _putawayConfirmed = null);
+      c.toastMsg(loc.t('เก็บไม่สำเร็จ'), '${failed.length} ${loc.t('ใบ')}',
+          ResultKind.err);
     }
   }
 
@@ -289,7 +191,7 @@ class _ScanScreenState extends State<ScanScreen> {
                         color: C.muted)),
                 if (target != null) ...[
                   const SizedBox(height: 10),
-                  Text(_locText(target),
+                  Text(locationText(target),
                       style: TextStyle(
                           fontSize: 40,
                           height: 1.05,
@@ -313,57 +215,12 @@ class _ScanScreenState extends State<ScanScreen> {
                     fontWeight: FontWeight.w700,
                     color: C.muted)),
             const SizedBox(height: 8),
-            TextField(
-              controller: _putawayScanCtrl,
-              focusNode: _putawayFocus,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              autocorrect: false,
-              enableSuggestions: false,
-              onChanged: (v) => _onPutawayScanChanged(c, v),
-              onSubmitted: (v) => _resolvePutawayLocation(c, v),
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace'),
-              decoration: pdaInput(loc.t('ยิงบาร์โค้ดชั้นวาง'), radius: 14)
-                  .copyWith(prefixIcon: Icon(Icons.qr_code_scanner)),
+            LocationScanField(
+              controller: c,
+              loc: loc,
+              expected: target,
+              onConfirmed: (l) => setState(() => _putawayConfirmed = l),
             ),
-            if (_putawayError != null) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                decoration: BoxDecoration(
-                  color: C.redBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(_putawayError!,
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: C.red,
-                        fontWeight: FontWeight.w700,
-                        height: 1.4)),
-              ),
-            ],
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () =>
-                  setState(() => _putawayManualPick = !_putawayManualPick),
-              child: Text(
-                  loc.t(_putawayManualPick
-                      ? 'กลับไปยิงบาร์โค้ด'
-                      : 'บาร์โค้ดชั้นวางเสีย — เลือกจากรายการแทน'),
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      color: C.ink2,
-                      fontWeight: FontWeight.w600)),
-            ),
-            if (_putawayManualPick) ...[
-              const SizedBox(height: 10),
-              _putawayFallbackPicker(c, loc, target),
-            ],
           ] else ...[
             Container(
               width: double.infinity,
@@ -387,7 +244,7 @@ class _ScanScreenState extends State<ScanScreen> {
                                 fontSize: 12,
                                 color: C.limeDeep,
                                 fontWeight: FontWeight.w600)),
-                        Text(_locText(confirmed),
+                        Text(locationText(confirmed),
                             style: const TextStyle(
                                 fontSize: 19, fontWeight: FontWeight.w800)),
                       ],
@@ -426,111 +283,6 @@ class _ScanScreenState extends State<ScanScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  /// Zone/rack/shelf/slot dropdowns for the unscannable-label case. In a
-  /// directed task these are display-only: letting the operator hand-pick a
-  /// different shelf than the one assigned would quietly undo the whole
-  /// reason the task named a shelf, so the picker is pre-filled with the
-  /// assignment and the button just accepts it.
-  Widget _putawayFallbackPicker(
-      AppController c, LocaleController loc, Map<String, String>? target) {
-    if (target != null) {
-      return SizedBox(
-        width: double.infinity,
-        child: OutlinedButton(
-          onPressed: () {
-            c.rfid.playSound('putaway_ok');
-            HapticFeedback.mediumImpact();
-            setState(() {
-              _putawayConfirmed = target;
-              _putawayError = null;
-            });
-          },
-          child:
-              Text('${loc.t('ยืนยันด้วยมือว่าอยู่ที่')} ${_locText(target)}'),
-        ),
-      );
-    }
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: LocationDropdown(
-                label: loc.t('โซน'),
-                value: c.receiveZone,
-                options: c.S?.locationValues(c.wh, 'zone') ?? const [],
-                onChanged: c.setReceiveZone,
-                loc: loc,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: LocationDropdown(
-                label: loc.t('แร็ค'),
-                value: c.receiveRack,
-                options:
-                    c.S?.locationValues(c.wh, 'rack', zone: c.receiveZone) ??
-                        const [],
-                onChanged: c.setReceiveRack,
-                loc: loc,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            Expanded(
-              child: LocationDropdown(
-                label: loc.t('ชั้น'),
-                value: c.receiveShelf,
-                options: c.S?.locationValues(c.wh, 'shelf',
-                        zone: c.receiveZone, rack: c.receiveRack) ??
-                    const [],
-                onChanged: c.setReceiveShelf,
-                loc: loc,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: LocationDropdown(
-                label: loc.t('ช่อง'),
-                value: c.receiveSlot,
-                options: c.S?.locationValues(c.wh, 'slot',
-                        zone: c.receiveZone, rack: c.receiveRack) ??
-                    const [],
-                onChanged: c.setReceiveSlot,
-                loc: loc,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: c.receiveZone.isEmpty
-                ? null
-                : () {
-                    c.rfid.playSound('putaway_ok');
-                    HapticFeedback.mediumImpact();
-                    setState(() {
-                      _putawayConfirmed = {
-                        'zone': c.receiveZone,
-                        'rack': c.receiveRack,
-                        'shelf': c.receiveShelf,
-                        'slot': c.receiveSlot,
-                      };
-                      _putawayError = null;
-                    });
-                  },
-            child: Text(loc.t('ใช้ตำแหน่งนี้')),
-          ),
-        ),
-      ],
     );
   }
 

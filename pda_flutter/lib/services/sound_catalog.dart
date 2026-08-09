@@ -23,5 +23,6 @@ const kSoundCatalog = <SoundOption>[
   SoundOption('none', 'ไม่มีเสียง'),
 ];
 
-String soundNameFor(String id) =>
-    kSoundCatalog.firstWhere((s) => s.id == id, orElse: () => kSoundCatalog.first).name;
+String soundNameFor(String id) => kSoundCatalog
+    .firstWhere((s) => s.id == id, orElse: () => kSoundCatalog.first)
+    .name;

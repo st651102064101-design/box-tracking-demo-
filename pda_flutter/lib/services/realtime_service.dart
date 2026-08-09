@@ -73,9 +73,13 @@ class RealtimeService {
       }
       onConnectivity?.call(true);
       String? currentEvent;
-      _sub = res.stream.transform(utf8.decoder).transform(const LineSplitter()).listen(
+      _sub = res.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
         (line) {
-          if (line.isEmpty || line.startsWith(':')) return; // frame end / heartbeat comment
+          if (line.isEmpty || line.startsWith(':'))
+            return; // frame end / heartbeat comment
           if (line.startsWith('event:')) {
             currentEvent = line.substring(6).trim();
             return;
@@ -91,8 +95,10 @@ class RealtimeService {
             currentEvent = null;
           }
         },
-        onError: (_) => _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
-        onDone: () => _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
+        onError: (_) =>
+            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
+        onDone: () =>
+            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
         cancelOnError: true,
       );
     } catch (_) {
@@ -111,7 +117,8 @@ class RealtimeService {
     final delay = Duration(seconds: _retryDelays[_attempt]);
     if (_attempt < _retryDelays.length - 1) _attempt++;
     _retryTimer?.cancel();
-    _retryTimer = Timer(delay, () => unawaited(_run(baseUrl, token, onStateChanged, onConnectivity)));
+    _retryTimer = Timer(delay,
+        () => unawaited(_run(baseUrl, token, onStateChanged, onConnectivity)));
   }
 
   void dispose() {

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/api_client.dart';
+import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -37,10 +38,12 @@ class BoxRegisterScreen extends StatefulWidget {
 class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   final _tagCtrl = TextEditingController();
   final _tagFocus = FocusNode();
-  final _zoneCtrl = TextEditingController();
-  final _rackCtrl = TextEditingController();
-  final _shelfCtrl = TextEditingController();
-  final _slotCtrl = TextEditingController();
+
+  /// Where this box is being put away, and the only way it can be set:
+  /// scanned off the shelf's own barcode (see [LocationScanField]). These
+  /// were four free-text fields, which meant a whole shelf position could be
+  /// typed in from the packing bench without anyone ever going near it.
+  Map<String, String>? _dest;
 
   Timer? _autoSubmitTimer;
   static const _autoSubmitDelay = Duration(milliseconds: 180);
@@ -97,10 +100,6 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     _tagCtrl.removeListener(_onTagChanged);
     _tagCtrl.dispose();
     _tagFocus.dispose();
-    _zoneCtrl.dispose();
-    _rackCtrl.dispose();
-    _shelfCtrl.dispose();
-    _slotCtrl.dispose();
     super.dispose();
   }
 
@@ -246,7 +245,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
 
   Future<void> _submitPutaway() async {
     final tag = _tag;
-    if (tag == null || _puttingAway) return;
+    final dest = _dest;
+    if (tag == null || dest == null || _puttingAway) return;
     if (_c.wh.isEmpty) {
       setState(() => _error = 'เครื่องนี้ยังไม่ได้เลือกคลัง');
       return;
@@ -259,10 +259,10 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       await _c.api.putawayBox(
         tag,
         wh: _c.wh,
-        zone: _zoneCtrl.text.trim(),
-        rack: _rackCtrl.text.trim(),
-        shelf: _shelfCtrl.text.trim(),
-        slot: _slotCtrl.text.trim(),
+        zone: dest['zone'] ?? '',
+        rack: dest['rack'] ?? '',
+        shelf: dest['shelf'] ?? '',
+        slot: dest['slot'] ?? '',
       );
       final count = _c.prefs.bumpRfidRegisteredToday(_today);
       setState(() => _step = _Step.success);
@@ -294,10 +294,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
       _found.clear();
       _selectedEpc = null;
       _candidateFilter = 'unmatched';
-      _zoneCtrl.clear();
-      _rackCtrl.clear();
-      _shelfCtrl.clear();
-      _slotCtrl.clear();
+      _dest = null;
     });
     _tagCtrl.clear();
     _tagFocus.requestFocus();
@@ -737,66 +734,51 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
           Text('จัดเก็บที่ ${c.selWhName}',
               style: TextStyle(fontSize: 12.5, color: C.muted)),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('โซน'),
-                    TextField(
-                        controller: _zoneCtrl,
-                        decoration: pdaInput('เช่น A', radius: 12)),
-                  ],
-                ),
+          Text('ยิงบาร์โค้ดของชั้นวางที่จะนำกล่องไปวาง',
+              style: TextStyle(fontSize: 12, color: C.muted)),
+          const SizedBox(height: 8),
+          if (_dest == null)
+            LocationScanField(
+              controller: c,
+              loc: context.read<LocaleController>(),
+              autofocus: false,
+              onConfirmed: (l) => setState(() => _dest = l),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: C.limeBg,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: C.limeBorder, width: 1.5),
               ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('แร็ค'),
-                    TextField(
-                        controller: _rackCtrl,
-                        decoration: pdaInput('เช่น 1', radius: 12)),
-                  ],
-                ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, size: 19, color: C.limeDeep),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(locationText(_dest!),
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w800)),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() => _dest = null),
+                    child: Text('ยิงใหม่',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            color: C.ink2,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('ชั้น'),
-                    TextField(
-                        controller: _shelfCtrl,
-                        decoration: pdaInput('เช่น 2', radius: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('ช่อง'),
-                    TextField(
-                        controller: _slotCtrl,
-                        decoration: pdaInput('เช่น 3', radius: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _puttingAway ? null : _submitPutaway,
+              onPressed:
+                  (_dest == null || _puttingAway) ? null : _submitPutaway,
               style: FilledButton.styleFrom(
                 backgroundColor: C.lime,
                 foregroundColor: C.limeDeep,

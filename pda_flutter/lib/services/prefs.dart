@@ -15,7 +15,8 @@ class Prefs {
   final SharedPreferences _p;
   Prefs(this._p);
 
-  static Future<Prefs> load() async => Prefs(await SharedPreferences.getInstance());
+  static Future<Prefs> load() async =>
+      Prefs(await SharedPreferences.getInstance());
 
   // connection / device account
   static const _kBaseUrl = 'boxtrace_base_url';
@@ -71,7 +72,8 @@ class Prefs {
   /// behavior); set, it drops anything weaker before it ever reaches
   /// addScan/doTrack/badge matching. A raw dBm number, not a percent — this
   /// is what the reader itself reports per read, no conversion needed.
-  int? get rfidMinRssi => _p.containsKey(_kRfidMinRssi) ? _p.getInt(_kRfidMinRssi) : null;
+  int? get rfidMinRssi =>
+      _p.containsKey(_kRfidMinRssi) ? _p.getInt(_kRfidMinRssi) : null;
   set rfidMinRssi(int? v) {
     if (v == null) {
       _p.remove(_kRfidMinRssi);
@@ -98,7 +100,8 @@ class Prefs {
   /// Playback level for the RFID detection sound, 0.0-1.0. Full volume by
   /// default — matches the reader's own out-of-the-box behavior.
   double get rfidSoundVolume => _p.getDouble(_kRfidSoundVolume) ?? 1.0;
-  set rfidSoundVolume(double v) => _p.setDouble(_kRfidSoundVolume, v.clamp(0.0, 1.0));
+  set rfidSoundVolume(double v) =>
+      _p.setDouble(_kRfidSoundVolume, v.clamp(0.0, 1.0));
 
   /// "อย่าแสดงอีก" on RfidLocateScreen's max-range dialog — off by default,
   /// so a fresh device still gets told once. Per-device, not per-employee:
@@ -164,7 +167,8 @@ class Prefs {
   set password(String v) => _p.setString(_kPassword, v);
 
   String? get token => _p.getString(_kToken);
-  set token(String? v) => v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
+  set token(String? v) =>
+      v == null ? _p.remove(_kToken) : _p.setString(_kToken, v);
 
   /// Legacy fixed-post fields from before warehouse/gate moved to a per-visit
   /// pick (see lastWh/lastGate below) — kept only so an old install's saved
@@ -219,8 +223,9 @@ class Prefs {
     }
   }
 
-  set stateCache(Map<String, dynamic>? v) =>
-      v == null ? _p.remove(_kStateCache) : _p.setString(_kStateCache, jsonEncode(v));
+  set stateCache(Map<String, dynamic>? v) => v == null
+      ? _p.remove(_kStateCache)
+      : _p.setString(_kStateCache, jsonEncode(v));
 
   List<dynamic> get outbox {
     final s = _p.getString(_kOutbox);

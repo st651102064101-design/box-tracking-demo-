@@ -18,13 +18,17 @@ class Box {
   String? get rfidTid => raw['rfidTid']?.toString();
   String? get rfidEpc => raw['rfidEpc']?.toString();
 
-  Map<String, dynamic> get location =>
-      (raw['location'] is Map) ? Map<String, dynamic>.from(raw['location']) : const {};
+  Map<String, dynamic> get location => (raw['location'] is Map)
+      ? Map<String, dynamic>.from(raw['location'])
+      : const {};
 
   List<Map<String, dynamic>> get history {
     final h = raw['history'];
     if (h is List) {
-      return h.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return h
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
     return const [];
   }

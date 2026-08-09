@@ -41,12 +41,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// เวลาที่ตัวอักษรก่อนหน้ามาถึง — ใช้วัดจังหวะห่างระหว่างตัวอักษรของรอบกรอกนี้
   DateTime? _lastKeyAt;
+
   /// ความยาวข้อความหลัง onChanged ครั้งก่อน — บาง build ของคีย์บอร์ด-wedge (โดยเฉพาะ
   /// เครื่อง MC3390R ที่ต้อง fallback ไป Android เก่า) ส่งทั้งรหัสมาในเหตุการณ์ onChanged
   /// เดียว ไม่ใช่ทีละตัวอักษร ถ้าเทียบจังหวะระหว่างตัวอักษรไม่ได้เพราะตัวเดียวมาครบเลย
   /// ก็ต้องดูจากตรงนี้แทน: เพิ่มมากกว่า 1 ตัวอักษรในเหตุการณ์เดียวคือมนุษย์พิมพ์ไม่ทัน
   /// แน่นอน จึงถือเป็นหลักฐานว่าเป็นการสแกนได้เลย
   int _prevLen = 0;
+
   /// true เมื่อเจอจังหวะกดแบบคนพิมพ์ (ห่างเกิน [_scanGapMs]) อย่างน้อยหนึ่งครั้งใน
   /// รอบกรอกนี้ — ตัวสแกน (keyboard-wedge) พ่นตัวอักษรเร็วกว่านี้มาก (ปกติ <20ms/ตัว)
   /// ดังนั้นถ้าเจอช่องว่างยาวขนาดนี้แม้แต่ครั้งเดียว แสดงว่าเป็นคนพิมพ์เอง ไม่ใช่สแกน
@@ -136,7 +138,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!_looksTyped) setState(() => _looksTyped = true);
       return; // a human-speed gap was just confirmed — never auto-submit again
     }
-    if (_looksTyped) return; // an earlier gap already flagged this as manual entry
+    if (_looksTyped)
+      return; // an earlier gap already flagged this as manual entry
     // This exact gap just arrived at scanner speed, so arm a short quiet-period
     // check — reacting to a gap that already happened, never predicting one.
     _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
@@ -165,7 +168,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await showPinPad(
       context,
       title: 'ตั้งรหัส PIN สำหรับ ${e.name}',
-      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
+      subtitle:
+          'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
       allowSkip: true,
     );
     if (result == null) return; // dismissed — ask again next time
@@ -184,9 +188,11 @@ class _LoginScreenState extends State<LoginScreen> {
       context,
       title: 'ยืนยันรหัส PIN อีกครั้ง',
       subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
-      validate: (entered) async => entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      validate: (entered) async =>
+          entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
     );
-    if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
+    if (confirm == null || confirm.pin == null)
+      return; // cancelled — nothing saved
     if (!mounted) return;
     try {
       await c.api.setEmployeePin(e.id, firstPin);
@@ -292,7 +298,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final confirm = await showPinPad(
       context,
       title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      validate: (entered) async =>
+          entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
     );
     if (confirm == null || confirm.pin == null) return;
 
@@ -314,7 +321,9 @@ class _LoginScreenState extends State<LoginScreen> {
           // The server answered and refused — almost always a wrong or
           // expired code. Its own message is more specific than anything
           // guessable here, so it's shown verbatim.
-          return err.message.isEmpty ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' : err.message;
+          return err.message.isEmpty
+              ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ'
+              : err.message;
         } catch (err) {
           return c.errorMessage(err);
         }
@@ -351,7 +360,10 @@ class _LoginScreenState extends State<LoginScreen> {
         enableSuggestions: false,
         textCapitalization: TextCapitalization.characters,
         style: TextStyle(
-            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: C.onHero),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+            color: C.onHero),
         cursorColor: C.lime,
         decoration: InputDecoration(
           hintText: loc.t('ยิงบัตร หรือพิมพ์รหัสพนักงาน'),
@@ -363,7 +375,8 @@ class _LoginScreenState extends State<LoginScreen> {
           isDense: true,
           filled: true,
           fillColor: C.onHero.withValues(alpha: 0.08),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           // ปุ่มยืนยันด้วยมือเสมอ ไม่ใช่แค่ตอนพิมพ์เอง — เผื่อกรณีสแกนไม่จบ (การ์ดเสีย
           // ครึ่งใบ) หรืออุปกรณ์ไม่ต่อ Enter suffix มาให้ ผู้ใช้ก็ยังกดจบเองได้เสมอ
           suffixIcon: _badge.text.trim().isEmpty
@@ -463,7 +476,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                      loc.t(c.connected
+                          ? 'ยังไม่มีพนักงานในระบบ'
+                          : 'รอเชื่อมต่อกับระบบหลักก่อน'),
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 13.5, color: C.faint),
                     ),
@@ -477,7 +492,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                              style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: C.muted,
+                                  fontWeight: FontWeight.w600)),
                         ),
                         ...people.map((e) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
@@ -533,13 +551,19 @@ class _BadgePrompt extends StatelessWidget {
               loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700, color: C.onHero, letterSpacing: -0.3),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: C.onHero,
+                  letterSpacing: -0.3),
             ),
             const SizedBox(height: 6),
             Text(
               loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: C.onHero.withValues(alpha: 0.62), height: 1.4),
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: C.onHero.withValues(alpha: 0.62),
+                  height: 1.4),
             ),
             const SizedBox(height: 16),
             field,
@@ -578,9 +602,14 @@ class _EmployeeTile extends StatelessWidget {
             // The last person to work this device is already sorted to the
             // top; the accent border is what makes that visible at a glance
             // rather than looking like an arbitrary sort order.
-            border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
+            border: Border.all(
+                color: isLast ? C.limeBorder : C.border,
+                width: isLast ? 1.5 : 1),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1))
             ],
           ),
           child: Row(
@@ -588,10 +617,14 @@ class _EmployeeTile extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
+                decoration:
+                    BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Text(emp.initials,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink2)),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: C.ink2)),
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -602,7 +635,10 @@ class _EmployeeTile extends StatelessWidget {
                     Text(emp.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: C.ink)),
                     if (sub.isNotEmpty)
                       Text(sub,
                           maxLines: 1,

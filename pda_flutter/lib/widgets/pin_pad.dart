@@ -165,11 +165,13 @@ class _PinPadSheetState extends State<_PinPadSheet> {
             width: 36,
             height: 4,
             margin: const EdgeInsets.only(bottom: 18),
-            decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+                color: C.border2, borderRadius: BorderRadius.circular(2)),
           ),
           Text(widget.title,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.ink)),
+              style: TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w700, color: C.ink)),
           if (widget.subtitle != null) ...[
             const SizedBox(height: 6),
             Text(widget.subtitle!,
@@ -184,7 +186,8 @@ class _PinPadSheetState extends State<_PinPadSheet> {
                     child: SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: C.ink2),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: C.ink2),
                     ),
                   )
                 : Row(
@@ -198,7 +201,9 @@ class _PinPadSheetState extends State<_PinPadSheet> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: filled ? C.ink : Colors.transparent,
-                          border: Border.all(color: _error != null ? C.red : C.border2, width: 1.5),
+                          border: Border.all(
+                              color: _error != null ? C.red : C.border2,
+                              width: 1.5),
                         ),
                       );
                     }),
@@ -206,11 +211,14 @@ class _PinPadSheetState extends State<_PinPadSheet> {
           ),
           if (_forgotBusy) ...[
             const SizedBox(height: 10),
-            Text('กำลังส่งรหัส OTP…', style: TextStyle(fontSize: 12.5, color: C.muted)),
+            Text('กำลังส่งรหัส OTP…',
+                style: TextStyle(fontSize: 12.5, color: C.muted)),
           ],
           if (_error != null) ...[
             const SizedBox(height: 10),
-            Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
+            Text(_error!,
+                style: TextStyle(
+                    fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
           ],
           const SizedBox(height: 24),
           IgnorePointer(
@@ -223,7 +231,9 @@ class _PinPadSheetState extends State<_PinPadSheet> {
           if (widget.allowSkip) ...[
             const SizedBox(height: 12),
             TextButton(
-              onPressed: _busy ? null : () => Navigator.of(context).pop(const PinResult.skipped()),
+              onPressed: _busy
+                  ? null
+                  : () => Navigator.of(context).pop(const PinResult.skipped()),
               child: const Text('ข้าม / ไม่ตั้ง PIN'),
             ),
           ],
@@ -282,8 +292,13 @@ class _Keypad extends StatelessWidget {
                             height: 56,
                             child: Center(
                               child: isBackspace
-                                  ? Icon(Icons.backspace_outlined, size: 20, color: C.ink2)
-                                  : Text(k, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.ink)),
+                                  ? Icon(Icons.backspace_outlined,
+                                      size: 20, color: C.ink2)
+                                  : Text(k,
+                                      style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: C.ink)),
                             ),
                           ),
                         ),

@@ -334,12 +334,8 @@ class LocaleController extends ChangeNotifier {
     'เลือกย้าย': 'selected',
     'ล้างรายการ': 'Clear list',
     'ตำแหน่งใหม่ (ทั้งหมด)': 'New location (all)',
-    'ใช้ร่วมกันทั้งชุด — ชั้น/ช่องตั้งแยกทีละกล่องด้านล่าง':
-        'Shared by the whole batch — shelf/slot are set per box below',
     'ย้ายทั้งหมด': 'Move all',
     'เพิ่ม': 'Add',
-    'ไม่ระบุ': 'Unspecified',
-    'เพิ่มใหม่': 'Add new',
     // more hub
     'ผูกแท็ก RFID': 'Bind RFID tag',
     'ลงทะเบียนกล่องใหม่': 'Register a new box',
@@ -415,16 +411,16 @@ class LocaleController extends ChangeNotifier {
     'ยิงบาร์โค้ดชั้นวางเพื่อยืนยันว่ามาถูกช่อง':
         'Scan the shelf barcode to confirm you are at the right one',
     'ยิงบาร์โค้ดชั้นวาง': 'Scan the shelf barcode',
+    'ยิงบาร์โค้ดของชั้นวางที่จะนำกล่องไปวาง':
+        'Scan the barcode of the shelf you are putting the box on',
+    'ยิงใหม่': 'Rescan',
+    'ทั้งชุดไปที่ช่องเดียวกัน — ถ้าคนละช่อง ให้กวาดแยกทีละช่อง':
+        'The whole batch goes to one spot — sweep separately for separate spots',
     'ไม่พบตำแหน่งรหัส': 'No location with code',
     'ผิดช่อง — ระบบกำหนดให้เก็บที่': 'Wrong shelf — the system assigned',
     'ยืนยันช่องแล้ว': 'Shelf confirmed',
     'ยืนยันเก็บเข้าชั้น': 'Confirm put away',
     'เก็บไม่สำเร็จ': 'Failed to put away',
-    'บาร์โค้ดชั้นวางเสีย — เลือกจากรายการแทน':
-        'Shelf barcode unreadable — pick from a list instead',
-    'กลับไปยิงบาร์โค้ด': 'Back to scanning',
-    'ยืนยันด้วยมือว่าอยู่ที่': 'Confirm by hand that this is',
-    'ใช้ตำแหน่งนี้': 'Use this location',
     'ยังไม่เก็บตอนนี้ — พักไว้ก่อน': 'Not now — leave it pending',
     'ยังไม่เก็บเข้าชั้น?': 'Leave it unshelved?',
     'กล่องรับเข้าเรียบร้อยแล้ว แต่จะค้างสถานะ "รอจัดเก็บ" จนกว่าจะมีคนนำไปขึ้นชั้น':
