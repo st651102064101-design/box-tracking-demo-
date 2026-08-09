@@ -287,6 +287,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       if (_sweepTags.contains(tag)) continue;
       _sweepTags.add(tag);
       changed = true;
+      // Same detection tone every other RFID read in the app plays (see
+      // addScan's viaRfid branch) — this loop only reaches here once per
+      // *distinct* box, so a held trigger sweeping a pallet doesn't turn
+      // into a solid tone the way a raw per-read sound would.
+      c.rfid.playSound(c.prefs.rfidSoundId);
     }
     if (changed && mounted) setState(() {});
   }

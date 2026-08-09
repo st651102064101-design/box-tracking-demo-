@@ -12,7 +12,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   /// Physical number-key shortcuts for the MC3390R's side keypad, matching
-  /// the [1]-[6] badges each _MenuTile shows — "press 1, land on Gate Out"
+  /// the [1]-[3] badges each _MenuTile shows — "press 1, land on Gate Out"
   /// without touching the screen at all, for an operator whose hands are
   /// already full of a box. Both the top-row digit and the numeric-keypad
   /// variant are handled since which one a given handheld's keymap actually
@@ -21,13 +21,16 @@ class HomeScreen extends StatelessWidget {
   /// IN-only or OUT-only hides the tile that wouldn't work anyway, so its
   /// number does nothing rather than silently jumping to a menu item the
   /// operator can't see.
+  ///
+  /// Home itself only keeps the two things every operator needs on every
+  /// single scan (Gate In/Out) plus the one hub for everything else — ตรวจนับ
+  /// / ค้นหา/เรดาร์ / ย้ายตำแหน่ง moved into MoreHubScreen (its own number
+  /// keys pick those up from there), so this is a short list to memorize
+  /// instead of six similarly-weighted tiles.
   static const _keyActions = <int, String>{
     1: 'out',
     2: 'in',
-    3: 'transfer',
-    4: 'cycleCount',
-    5: 'locate',
-    6: 'moreHub',
+    3: 'moreHub',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -43,15 +46,6 @@ class HomeScreen extends StatelessWidget {
       case 'in':
         if (c.canScan && c.currentGateType != 'out') c.goScanIn();
         break;
-      case 'transfer':
-        if (c.canScan) c.goTransfer();
-        break;
-      case 'cycleCount':
-        c.goCycleCount();
-        break;
-      case 'locate':
-        c.goLocate();
-        break;
       case 'moreHub':
         c.goMoreHub();
         break;
@@ -63,17 +57,11 @@ class HomeScreen extends StatelessWidget {
     LogicalKeyboardKey.digit1: 1,
     LogicalKeyboardKey.digit2: 2,
     LogicalKeyboardKey.digit3: 3,
-    LogicalKeyboardKey.digit4: 4,
-    LogicalKeyboardKey.digit5: 5,
-    LogicalKeyboardKey.digit6: 6,
   };
   static final _numpad = {
     LogicalKeyboardKey.numpad1: 1,
     LogicalKeyboardKey.numpad2: 2,
     LogicalKeyboardKey.numpad3: 3,
-    LogicalKeyboardKey.numpad4: 4,
-    LogicalKeyboardKey.numpad5: 5,
-    LogicalKeyboardKey.numpad6: 6,
   };
 
   static int? _digitFor(LogicalKeyboardKey key) => _topRow[key] ?? _numpad[key];
@@ -341,11 +329,14 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
     ),
     const SizedBox(height: 12),
-    // Numbered [1]-[6] — matches the physical number-key bindings
+    // Numbered [1]-[3] — matches the physical number-key bindings
     // (HomeScreen's KeyboardListener) so the badge an operator sees is the
     // same digit that jumps here from the keyboard. Colour groups follow
     // one convention throughout: green = inbound, blue = outbound/transfer,
-    // orange = audit/search, red = tag/damage/other.
+    // red = tag/damage/other. Home only keeps Gate In/Out — everything else
+    // (ตรวจนับ / ค้นหา/เรดาร์ / ย้ายตำแหน่ง) lives inside MoreHubScreen now, so
+    // there's one menu with two entries here instead of six competing for
+    // attention.
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'in') ...[
@@ -372,40 +363,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
       const SizedBox(height: 10),
     ],
-    if (c.canScan) ...[
-      _MenuTile(
-        number: 3,
-        icon: Icons.sync_alt,
-        color: C.menuBlue,
-        bg: C.menuBlueBg,
-        title: loc.t('ย้ายตำแหน่ง'),
-        sub: 'Transfer',
-        onTap: c.goTransfer,
-      ),
-      const SizedBox(height: 10),
-    ],
     _MenuTile(
-      number: 4,
-      icon: Icons.checklist,
-      color: C.menuOrange,
-      bg: C.menuOrangeBg,
-      title: loc.t('ตรวจนับ'),
-      sub: 'Cycle Count',
-      onTap: c.goCycleCount,
-    ),
-    const SizedBox(height: 10),
-    _MenuTile(
-      number: 5,
-      icon: Icons.radar,
-      color: C.menuOrange,
-      bg: C.menuOrangeBg,
-      title: loc.t('ค้นหา/เรดาร์'),
-      sub: 'Search / Radar',
-      onTap: c.goLocate,
-    ),
-    const SizedBox(height: 10),
-    _MenuTile(
-      number: 6,
+      number: 3,
       icon: Icons.sell_outlined,
       color: C.menuRed,
       bg: C.menuRedBg,
@@ -507,31 +466,63 @@ void _showBoxListSheet(BuildContext context, AppController c,
       .where((b) => b.status == status)
       .toList()
     ..sort((a, b) => a.tag.compareTo(b.tag));
+
+  // Grouped by product type first, box tags listed underneath each — the
+  // question standing at a shelf is "which type is this", not "give me
+  // every box alphabetically with the type buried in a subtitle line", and
+  // it reaches the answer in one tap with no dropdown/picker step at all.
+  final byType = <String, List<Box>>{};
+  for (final b in boxes) {
+    byType.putIfAbsent(b.type ?? '', () => []).add(b);
+  }
+  final typeIds = byType.keys.toList()
+    ..sort((a, b) => (S?.typeName(a) ?? a).compareTo(S?.typeName(b) ?? b));
+
+  final children = <Widget>[];
+  if (boxes.isEmpty) {
+    children.add(Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Center(
+          child: Text(loc.t('ไม่มีกล่อง'),
+              style: TextStyle(fontSize: 13, color: C.faint))),
+    ));
+  } else {
+    for (final typeId in typeIds) {
+      final group = byType[typeId]!;
+      children.add(Padding(
+        padding: const EdgeInsets.fromLTRB(2, 14, 2, 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(S?.typeName(typeId) ?? typeId,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800)),
+            ),
+            Text('${group.length}',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: C.muted)),
+          ],
+        ),
+      ));
+      children.addAll(group.map((b) {
+        final sub = status == 'out'
+            ? S!.custName(b.customer)
+            : [
+                S!.whName(b.location['wh']?.toString()),
+                if ((b.location['zone'] ?? '').toString().isNotEmpty)
+                  '${loc.t('โซน')} ${b.location['zone']}',
+              ].join(' · ');
+        return _detailRow(title: b.tag, subtitle: sub);
+      }));
+    }
+  }
+
   _showDetailSheet(
     context,
     title: '$title (${boxes.length})',
-    children: boxes.isEmpty
-        ? [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                  child: Text(loc.t('ไม่มีกล่อง'),
-                      style: TextStyle(fontSize: 13, color: C.faint))),
-            ),
-          ]
-        : boxes.map((b) {
-            final sub = status == 'out'
-                ? S!.custName(b.customer)
-                : [
-                    S!.whName(b.location['wh']?.toString()),
-                    if ((b.location['zone'] ?? '').toString().isNotEmpty)
-                      '${loc.t('โซน')} ${b.location['zone']}',
-                  ].join(' · ');
-            return _detailRow(
-              title: b.tag,
-              subtitle: '${S.typeName(b.type)} · $sub',
-            );
-          }).toList(),
+    children: children,
   );
 }
 

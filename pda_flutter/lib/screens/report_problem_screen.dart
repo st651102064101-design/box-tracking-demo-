@@ -33,13 +33,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   String? _scanError;
   bool _busy = false;
   bool _sent = false;
-  final _noteCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _noteCtrl.dispose();
-    super.dispose();
-  }
 
   void _pickKind(_Kind k) {
     setState(() {
@@ -47,7 +40,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       _box = null;
       _location = null;
       _scanError = null;
-      _noteCtrl.clear();
     });
   }
 
@@ -94,7 +86,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         },
         tag: _box?.tag,
         location: _location,
-        note: _noteCtrl.text.trim(),
       );
       if (!mounted) return;
       c.rfid.playSound('putaway_ok');
@@ -115,7 +106,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       _location = null;
       _scanError = null;
       _sent = false;
-      _noteCtrl.clear();
     });
   }
 
@@ -142,7 +132,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           children: kind == null
               ? _kindPicker(c, loc)
               : target
-                  ? _confirmBody(c, loc, kind)
+                  ? _confirmBody(c, loc)
                   : _scanBody(loc, kind),
         ),
       ),
@@ -273,7 +263,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         ],
       ];
 
-  List<Widget> _confirmBody(AppController c, LocaleController loc, _Kind kind) {
+  List<Widget> _confirmBody(AppController c, LocaleController loc) {
     final b = _box;
     final l = _location;
     return [
@@ -305,20 +295,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                       style: TextStyle(fontSize: 13, color: C.muted)),
                 ],
               ),
-      ),
-      const SizedBox(height: 16),
-      FieldLabel(loc.t('รายละเอียดเพิ่มเติม (ถ้ามี)')),
-      const SizedBox(height: 6),
-      TextField(
-        controller: _noteCtrl,
-        maxLines: 2,
-        decoration: pdaInput(
-            loc.t(switch (kind) {
-              _Kind.missing => 'เช่น หาในโซนใกล้เคียงแล้วไม่พบ',
-              _Kind.unreadableTag => 'เช่น RFID ไม่ตอบ, บาร์โค้ดลอกหลุด',
-              _ => 'เช่น มีของวางเกินที่ระบบบันทึกไว้',
-            }),
-            radius: 12),
       ),
       const SizedBox(height: 16),
       SizedBox(

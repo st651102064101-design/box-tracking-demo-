@@ -35,8 +35,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('HoldReleaseScreen', () {
-    testWidgets('holds a warehoused box and calls the API with a reason',
-        (tester) async {
+    testWidgets('holds a warehoused box and calls the API', (tester) async {
       final api = FakeApi();
       final c = await makeController(api);
       await tester.pumpWidget(await _wrap(c, const HoldReleaseScreen()));
@@ -50,13 +49,12 @@ void main() {
       // Already warehouse — release isn't offered.
       expect(find.text('ปลดพัก — กลับเป็นปกติ'), findsNothing);
 
-      await tester.enterText(find.byType(TextField).last, 'มุมยุบ');
       await tester.tap(find.text('พักสินค้า (Hold)'));
       await tester.pump();
       await tester.pump();
 
       expect(api.holdCalls, [
-        {'tag': 'CRT-01', 'status': 'hold', 'reason': 'มุมยุบ'}
+        {'tag': 'CRT-01', 'status': 'hold', 'reason': ''}
       ]);
       // Back to the scan step after a successful action.
       expect(find.text('CRT-01'), findsNothing);

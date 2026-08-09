@@ -29,13 +29,6 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
   String? _scanError;
   bool _busy = false;
   String? _actionError;
-  final _reasonCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _reasonCtrl.dispose();
-    super.dispose();
-  }
 
   void _onScan(AppController c, String raw) {
     final s = c.S;
@@ -54,7 +47,6 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       _scanError = null;
       _actionError = null;
       _box = b;
-      _reasonCtrl.clear();
     });
   }
 
@@ -67,8 +59,7 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       _actionError = null;
     });
     try {
-      await c.api
-          .setBoxHold(b.tag, status: status, reason: _reasonCtrl.text.trim());
+      await c.api.setBoxHold(b.tag, status: status);
       if (!mounted) return;
       final label = switch (status) {
         'hold' => 'พักสินค้าแล้ว',
@@ -80,7 +71,6 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       if (!mounted) return;
       setState(() {
         _box = null;
-        _reasonCtrl.clear();
       });
     } catch (e) {
       if (!mounted) return;
@@ -176,14 +166,6 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
                 style: TextStyle(fontSize: 12.5, color: C.ink3)),
           ],
         ),
-      ),
-      const SizedBox(height: 16),
-      FieldLabel(loc.t('เหตุผล (ถ้ามี)')),
-      const SizedBox(height: 6),
-      TextField(
-        controller: _reasonCtrl,
-        maxLines: 2,
-        decoration: pdaInput(loc.t('เช่น มุมยุบ / รอตรวจสอบ QC'), radius: 12),
       ),
       const SizedBox(height: 16),
       if (b.status != 'hold')
