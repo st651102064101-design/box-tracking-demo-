@@ -45,7 +45,12 @@ void main() {
       final writesLocation =
           src.contains('putawayBox(') || src.contains('completePutaway(');
       if (!writesLocation) continue;
-      if (!src.contains('LocationScanField')) {
+      // Two sanctioned ways to source one, and no others. LocationScanField is
+      // the visible field; ScanCapture is the zero-touch equivalent that takes
+      // the same wedge keystrokes with nothing drawn (ScanScreen's putaway
+      // step). Both can only ever be fed by the imager, which is the property
+      // this rule is really about — not which widget does it.
+      if (!src.contains('LocationScanField') && !src.contains('ScanCapture')) {
         offenders.add(f.path);
       }
     }

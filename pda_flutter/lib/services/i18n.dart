@@ -375,8 +375,10 @@ class LocaleController extends ChangeNotifier {
     'คิวสแกน': 'Scan queue',
     'ใบ': 'boxes',
     'ล้างคิว': 'Clear queue',
-    'ยังไม่มีกล่องในคิว — ยิงบาร์โค้ดเพื่อเริ่ม':
-        'No boxes in the queue yet — scan a barcode to start',
+    'ยังไม่มีกล่องในคิว — เหนี่ยวไกหรือยิงบาร์โค้ดเพื่อเริ่ม':
+        'No boxes in the queue yet — pull the trigger or scan a barcode to start',
+    'เหนี่ยวไกอ่าน RFID · หรือยิงบาร์โค้ด':
+        'Pull the trigger for RFID · or scan a barcode',
     'คืน': 'Return',
     'ใหม่': 'New',
     'พร้อมจ่าย': 'Ready to ship',
@@ -406,6 +408,17 @@ class LocaleController extends ChangeNotifier {
     'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง':
         'Receive only — left for someone to shelve later',
     'นำสินค้าไปเก็บที่': 'Take these to',
+    'กล่องที่สแกน': 'Boxes scanned',
+    'ตำแหน่งแร็ค': 'Rack location',
+    'รอการสแกน…': 'Waiting for a scan…',
+    'เดินไปที่ช่องนี้ แล้วยิงบาร์โค้ดชั้นวางเพื่อบันทึกทันที':
+        'Walk to this bay and scan its shelf barcode — that saves it right away',
+    'หาช่องว่าง แล้วยิงบาร์โค้ดชั้นวาง — ระบบจะบันทึกให้ทันที':
+        'Find a free bay and scan its shelf barcode — it saves right away',
+    'สำเร็จ!': 'Done!',
+    'เก็บเข้าชั้นแล้ว': 'Shelved',
+    'ยิงบาร์โค้ดชั้นวางเท่านั้น': 'Shelf barcode only',
+    'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID': 'The putaway step does not accept RFID',
     'หาช่องว่าง แล้วยิงบาร์โค้ดชั้นวางที่เก็บ':
         'Find a free spot, then scan that shelf\'s barcode',
     'ยิงบาร์โค้ดชั้นวางเพื่อยืนยันว่ามาถูกช่อง':

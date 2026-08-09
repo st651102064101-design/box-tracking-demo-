@@ -1814,6 +1814,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void _onReaderTag(String epc) {
     switch (screen) {
       case Screen.scan:
+        // Waiting for a rack barcode: RFID is deliberately deaf here. A sweep
+        // aimed at the shelf in front of the operator reads the bay next to it
+        // just as happily, so a location must come from the imager's narrow
+        // beam and nothing else. Silent rather than a per-tag error tone — the
+        // trigger pull itself already got one answer, from _onReaderTrigger.
+        if (putawayTask != null) break;
         addScan(epc, viaRfid: true);
         break;
       case Screen.track:
@@ -1916,8 +1922,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // in barcode mode. The on-screen "เริ่มกวาดหา" button calls
     // startInventory() directly and never went through here, which is
     // exactly why that button worked while the trigger appeared dead.
-    if ((screen == Screen.scan ||
-            screen == Screen.track ||
+    if (screen == Screen.scan && putawayTask != null) {
+      // See the Screen.scan case in [_onReaderTag]: the putaway step wants a
+      // rack barcode, and the antenna must not even light up for it.
+      toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น',
+          'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID', ResultKind.info);
+      return;
+    }
+    // Gate scanning has no barcode/RFID toggle any more: the trigger *is* the
+    // RFID read and the imager's side button *is* the barcode, each arriving
+    // on its own channel, so there is no mode for the trigger to be wrong
+    // about. Screen.scan is therefore not in this gate — the others still
+    // carry the toggle and still need it.
+    if ((screen == Screen.track ||
             screen == Screen.transfer ||
             (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
         scanInputMode == ScanInputMode.barcode) {
