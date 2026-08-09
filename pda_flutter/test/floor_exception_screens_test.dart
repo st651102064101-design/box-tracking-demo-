@@ -141,6 +141,48 @@ void main() {
       expect(calls.first['tag'], isNull);
       expect(calls.first['location'], isNotNull);
     });
+
+    testWidgets(
+        'reports an unreadable tag by box, then offers a shortcut to re-tag',
+        (tester) async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('อ่านแท็กไม่ติด / ป้ายหาย'));
+      await tester.pump();
+      await scan(tester, 'CRT-01');
+      await tester.pump();
+
+      expect(find.text('CRT-01'), findsOneWidget);
+      await tester.tap(find.text('ส่งรายงาน'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.reportCalls, hasLength(1));
+      expect(api.reportCalls.first['kind'], 'unreadable_tag');
+      expect(api.reportCalls.first['tag'], 'CRT-01');
+      expect(find.text('บันทึกรายงานแล้ว'), findsOneWidget);
+
+      // The box still needs a working tag — offer the fast path there
+      // instead of just dropping the operator back at a menu.
+      expect(find.text('ไปผูกแท็กใหม่'), findsOneWidget);
+      await tester.tap(find.text('ไปผูกแท็กใหม่'));
+      await tester.pump();
+      expect(c.screen, Screen.rfidRegister);
+    });
+
+    testWidgets('กล่องชำรุด forwards straight into HoldReleaseScreen',
+        (tester) async {
+      final c = await makeController(FakeApi());
+      await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('กล่องชำรุด'));
+      await tester.pump();
+      expect(c.screen, Screen.holdRelease);
+    });
   });
 
   group('LocationInquiryScreen', () {

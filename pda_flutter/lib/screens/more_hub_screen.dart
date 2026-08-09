@@ -45,7 +45,12 @@ class MoreHubScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _tile(
                     icon: Icons.add_box_outlined,
-                    color: C.limeDeep,
+                    // limeDeep is a fixed near-black green — fine as text on
+                    // a bright C.lime button, but paired with limeBg (which
+                    // *does* darken in dark mode) the two collapse into
+                    // near-black-on-near-black. limeText is the token that
+                    // actually inverts for dark mode.
+                    color: C.limeText,
                     bg: C.limeBg,
                     title: loc.t('ลงทะเบียนกล่องใหม่'),
                     sub: loc.t(
@@ -64,28 +69,24 @@ class MoreHubScreen extends StatelessWidget {
                 ),
                 if (c.canScan) ...[
                   const SizedBox(height: 10),
-                  _tile(
-                    icon: Icons.pause_circle_outline,
-                    color: C.orange,
-                    bg: C.orangeBg,
-                    title: loc.t('พัก / แจ้งชำรุด'),
-                    sub: loc.t(
-                        'กล่องที่อยู่ในคลังแล้ว — ชำรุดทีหลัง, พักรอ QC, หรือปลดพัก'),
-                    onTap: c.goHoldRelease,
-                  ),
-                  const SizedBox(height: 10),
+                  // "พัก / แจ้งชำรุด" used to be its own tile here — it now
+                  // lives as a reason inside "แจ้งปัญหาหน้างาน" (its
+                  // "กล่องชำรุด" tile forwards straight into
+                  // HoldReleaseScreen), so an operator has one place to
+                  // start from for anything wrong with a box or a shelf,
+                  // not two similarly-named tiles to choose between.
                   _tile(
                     icon: Icons.report_gmailerrorred_outlined,
                     color: C.red,
                     bg: C.redBg,
                     title: loc.t('แจ้งปัญหาหน้างาน'),
-                    sub: loc.t('ของหาย / ช่องเก็บเต็ม'),
+                    sub: loc.t('ของหาย / ช่องเก็บเต็ม / กล่องชำรุด / อ่านแท็กไม่ติด'),
                     onTap: c.goReportProblem,
                   ),
                   const SizedBox(height: 10),
                   _tile(
                     icon: Icons.grid_view_outlined,
-                    color: C.limeDeep,
+                    color: C.limeText,
                     bg: C.limeBg,
                     title: loc.t('เช็คช่อง'),
                     sub: loc.t('ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่'),

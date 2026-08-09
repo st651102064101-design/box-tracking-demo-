@@ -238,7 +238,7 @@ class _ScanScreenState extends State<ScanScreen>
           onBack: () => _confirmDropPutaway(c, loc),
           title: Row(
             children: [
-              Pill(loc.t('Putaway'), color: C.limeDeep, bg: C.limeBg),
+              Pill(loc.t('Putaway'), color: C.limeText, bg: C.limeBg),
               const SizedBox(width: 7),
               Text(loc.t('นำไปเก็บเข้าชั้น')),
             ],
@@ -495,7 +495,7 @@ class _ScanScreenState extends State<ScanScreen>
         title: Row(
           children: [
             Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
-                color: isOut ? C.orange : C.limeDeep,
+                color: isOut ? C.orange : C.limeText,
                 bg: isOut ? C.orangeBg : C.limeBg),
             const SizedBox(width: 7),
             Text(loc.t(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน')),

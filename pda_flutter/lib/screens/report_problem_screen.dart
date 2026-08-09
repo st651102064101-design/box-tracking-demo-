@@ -9,16 +9,17 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
 
-enum _Kind { missing, binFull }
+enum _Kind { missing, binFull, unreadableTag }
 
 /// "แจ้งปัญหาหน้างาน" — the PDA's floor-exception buttons: "ของหาย" (a
-/// system-directed pick/putaway landed here and the box wasn't) and
-/// "ช่องเก็บเต็ม" (a suggested shelf is already full in person). Backed by
-/// POST /api/reports, which — deliberately — only ever records the report:
-/// no status change, no location change. Only a person standing in the
-/// aisle can tell "genuinely missing" apart from "mis-shelved", or "full"
-/// apart from "I miscounted"; this button is that person raising a hand,
-/// not a correction.
+/// system-directed pick/putaway landed here and the box wasn't), "ช่องเก็บเต็ม"
+/// (a suggested shelf is already full in person), and "อ่านแท็กไม่ติด" (the
+/// box is right there but its RFID/barcode won't read). Backed by
+/// POST /api/reports. "กล่องชำรุด" (damaged) is also picked from this
+/// screen's kind tiles, but isn't one of this screen's own report kinds —
+/// it forwards straight into HoldReleaseScreen (see _kindPicker), since
+/// hold/damage is a full status change with its own release path that this
+/// screen's scan-then-confirm shape doesn't fit, not a report to log.
 class ReportProblemScreen extends StatefulWidget {
   const ReportProblemScreen({super.key});
   @override
@@ -53,7 +54,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   void _onScan(AppController c, String raw) {
     final s = c.S;
     if (s == null) return;
-    if (_kind == _Kind.missing) {
+    if (_kind == _Kind.missing || _kind == _Kind.unreadableTag) {
       final b = s.box(c.resolveTag(raw));
       if (b == null) {
         setState(() => _scanError = 'ไม่พบกล่องรหัส "$raw"');
@@ -86,7 +87,11 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     });
     try {
       await c.api.report(
-        kind: _kind == _Kind.missing ? 'missing' : 'bin_full',
+        kind: switch (_kind) {
+          _Kind.missing => 'missing',
+          _Kind.unreadableTag => 'unreadable_tag',
+          _ => 'bin_full',
+        },
         tag: _box?.tag,
         location: _location,
         note: _noteCtrl.text.trim(),
@@ -135,7 +140,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         body: ListView(
           padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
           children: kind == null
-              ? _kindPicker(loc)
+              ? _kindPicker(c, loc)
               : target
                   ? _confirmBody(c, loc, kind)
                   : _scanBody(loc, kind),
@@ -144,7 +149,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _kindPicker(LocaleController loc) => [
+  List<Widget> _kindPicker(AppController c, LocaleController loc) => [
         _kindTile(
           icon: Icons.search_off,
           color: C.red,
@@ -161,6 +166,26 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           title: loc.t('ช่องเก็บเต็ม'),
           sub: loc.t('ยิงบาร์โค้ดชั้นวาง — ช่องที่ระบบแนะนำเต็มแล้วจริง'),
           onTap: () => _pickKind(_Kind.binFull),
+        ),
+        const SizedBox(height: 10),
+        // Forwards straight into HoldReleaseScreen — see the class doc
+        // comment for why this isn't one of this screen's own report kinds.
+        _kindTile(
+          icon: Icons.broken_image_outlined,
+          color: C.orange,
+          bg: C.orangeBg,
+          title: loc.t('กล่องชำรุด'),
+          sub: loc.t('เจอกล่องที่สั่งมาหยิบ แต่ชำรุด/เสียหาย ใช้งานไม่ได้'),
+          onTap: c.goHoldRelease,
+        ),
+        const SizedBox(height: 10),
+        _kindTile(
+          icon: Icons.sensors_off,
+          color: C.red,
+          bg: C.redBg,
+          title: loc.t('อ่านแท็กไม่ติด / ป้ายหาย'),
+          sub: loc.t('หากล่องเจอ แต่ RFID/บาร์โค้ดอ่านไม่ได้'),
+          onTap: () => _pickKind(_Kind.unreadableTag),
         ),
       ];
 
@@ -227,9 +252,11 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
               const SizedBox(height: 8),
               Text(
-                  loc.t(kind == _Kind.missing
-                      ? 'ยิงบาร์โค้ดกล่องที่หา'
-                      : 'ยิงบาร์โค้ดชั้นวางที่เต็ม'),
+                  loc.t(switch (kind) {
+                    _Kind.missing => 'ยิงบาร์โค้ดกล่องที่หา',
+                    _Kind.unreadableTag => 'ยิงบาร์โค้ดกล่องที่อ่านแท็กไม่ติด',
+                    _ => 'ยิงบาร์โค้ดชั้นวางที่เต็ม',
+                  }),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 14,
@@ -286,9 +313,11 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         controller: _noteCtrl,
         maxLines: 2,
         decoration: pdaInput(
-            loc.t(kind == _Kind.missing
-                ? 'เช่น หาในโซนใกล้เคียงแล้วไม่พบ'
-                : 'เช่น มีของวางเกินที่ระบบบันทึกไว้'),
+            loc.t(switch (kind) {
+              _Kind.missing => 'เช่น หาในโซนใกล้เคียงแล้วไม่พบ',
+              _Kind.unreadableTag => 'เช่น RFID ไม่ตอบ, บาร์โค้ดลอกหลุด',
+              _ => 'เช่น มีของวางเกินที่ระบบบันทึกไว้',
+            }),
             radius: 12),
       ),
       const SizedBox(height: 16),
@@ -315,13 +344,14 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   }
 
   Widget _successStep(LocaleController loc) {
+    final c = context.read<AppController>();
     return Container(
       color: C.limeBg,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 84, color: C.limeDeep),
+            Icon(Icons.check_circle, size: 84, color: C.limeText),
             const SizedBox(height: 14),
             Text(loc.t('บันทึกรายงานแล้ว'),
                 style: TextStyle(
@@ -329,12 +359,28 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                     fontWeight: FontWeight.w800,
                     color: C.limeText)),
             const SizedBox(height: 18),
+            // อ่านแท็กไม่ติด is only half done once logged — the box still
+            // needs a working tag, so the fastest next step is straight
+            // into the screen that actually fixes that, not back to a menu.
+            if (_kind == _Kind.unreadableTag)
+              FilledButton(
+                onPressed: c.goRfidRegister,
+                style: FilledButton.styleFrom(
+                  backgroundColor: C.ink,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(loc.t('ไปผูกแท็กใหม่')),
+              ),
+            const SizedBox(height: 10),
             TextButton(
               onPressed: _reset,
               child: Text(loc.t('แจ้งอีกรายการ')),
             ),
             TextButton(
-              onPressed: () => context.read<AppController>().backToHome(),
+              onPressed: c.backToHome,
               child: Text(loc.t('กลับหน้าหลัก')),
             ),
           ],

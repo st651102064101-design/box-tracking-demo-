@@ -209,7 +209,7 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
         _actionButton(
           label: loc.t('ปลดพัก — กลับเป็นปกติ'),
           icon: Icons.check_circle_outline,
-          color: C.limeDeep,
+          color: C.limeText,
           bg: C.limeBg,
           onTap: () => _act(c, 'warehouse'),
         ),
