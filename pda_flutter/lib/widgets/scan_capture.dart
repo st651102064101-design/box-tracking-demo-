@@ -1,31 +1,44 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-/// Barcode input with no text field on screen.
+/// Barcode input with no input box for the operator to get wrong.
 ///
-/// This terminal's imager is a keyboard wedge: pressing the side scan button
-/// makes the engine type the decoded barcode as ordinary key events. Every
-/// screen used to catch those with a visible [TextField], which is why they
-/// all had to worry about focus, a soft keyboard covering half the screen, and
-/// an operator having to tap the right box before a scan would land anywhere.
+/// ## Why this is a TextField and not a key handler
 ///
-/// A focus node with a raw key handler catches exactly the same keystrokes
-/// without being editable, so nothing is drawn, no keyboard opens, and there
-/// is no focus for the operator to lose or restore. The state machine above it
-/// decides what a scan *means* right now — see ScanScreen.
+/// The obvious implementation — a [Focus] node with an `onKeyEvent` handler —
+/// does not work on this hardware, and fails in the worst possible way: the
+/// imager decodes, the terminal beeps, and nothing arrives. The decoded
+/// barcode is delivered over the **text input connection**, the same channel
+/// an on-screen keyboard uses, so only a live, focused, editable text input
+/// ever sees it. A raw key handler is simply not on that path.
 ///
-/// Termination is the same two-part rule the old fields used: a trailing
-/// Enter/Tab ends the scan immediately when the engine is configured to send
-/// one, and otherwise the burst is taken as finished once the keystrokes go
-/// quiet. [minLength] drops the stray single keypress that is never a barcode.
+/// LoginScreen learned the neighbouring half of this the hard way (see its
+/// `_captureField` doc): a zero-sized field establishes no connection at all
+/// on web, because no DOM input is created, and again not one character
+/// arrives. So the field here is real and fully laid out — it just paints
+/// nothing.
+///
+/// ## Why the operator still cannot type into it
+///
+/// [TextInputType.none] means Android never raises a software keyboard for
+/// this field, so there is no way to enter a code by hand on the handheld —
+/// which is the entire point: a hand-typed box id or shelf code looks exactly
+/// like a scanned one and is wrong in ways nobody notices until the box is
+/// missing. [IgnorePointer] on top means a tap lands on whatever is behind it
+/// instead of stealing focus. Web keeps a normal text connection, since a
+/// desktop browser treats [TextInputType.none] as "no connection" and would
+/// deliver nothing — there the developer keyboard is the only input there is.
+///
+/// The field is stacked *behind* [child] and given its box, so it costs no
+/// layout: the screen above it is free to be a pure state display.
 class ScanCapture extends StatefulWidget {
   final ValueChanged<String> onScan;
 
-  /// False parks the capture — keystrokes pass through untouched. Used while
-  /// a scan is being submitted, so a second trigger pull mid-request can't
-  /// start a second one.
+  /// False parks the capture — the field drops focus and takes nothing in.
+  /// Used while a scan is being submitted, so a second trigger pull mid
+  /// request can't start a second one.
   final bool enabled;
 
   final int minLength;
@@ -44,85 +57,127 @@ class ScanCapture extends StatefulWidget {
 }
 
 class _ScanCaptureState extends State<ScanCapture> {
-  final _node = FocusNode(debugLabel: 'ScanCapture');
-  final _buf = StringBuffer();
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode(debugLabel: 'ScanCapture');
   Timer? _idle;
+  int _prevLen = 0;
 
-  /// Long enough to survive the gap between keystrokes of one wedge burst,
-  /// short enough that the scan feels instant. The engine types far faster
-  /// than this; a human never types a whole code inside it.
-  static const _idleGap = Duration(milliseconds: 140);
+  /// Long enough to survive the gap between characters of one wedge burst,
+  /// short enough that the scan feels instant. Same value the location and
+  /// badge fields have always used.
+  static const _idleGap = Duration(milliseconds: 180);
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.enabled) _node.requestFocus();
-    });
+    // Focus is the whole contract here: an unfocused field receives nothing,
+    // and there is no visible box for the operator to tap to fix that. So it
+    // is taken on arrival and taken back whenever anything else drops it.
+    _focus.addListener(_keepFocus);
+    _arm();
   }
 
   @override
   void didUpdateWidget(ScanCapture old) {
     super.didUpdateWidget(old);
-    // Re-arming after a submit: take focus back, or the next scan lands
-    // nowhere and looks like a dead trigger.
     if (widget.enabled && !old.enabled) {
-      _buf.clear();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.enabled) _node.requestFocus();
-      });
+      _ctrl.clear();
+      _prevLen = 0;
+      _arm();
+    } else if (!widget.enabled && old.enabled) {
+      _focus.unfocus();
     }
+  }
+
+  void _arm() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.enabled && !_focus.hasFocus) _focus.requestFocus();
+    });
+  }
+
+  /// A dialog, a chip tap, a keyboard dismissal — anything can take focus, and
+  /// on a screen with no visible field the operator has no way to notice it
+  /// happened or to give it back. Every loss is therefore reclaimed.
+  void _keepFocus() {
+    if (!_focus.hasFocus) _arm();
   }
 
   @override
   void dispose() {
     _idle?.cancel();
-    _node.dispose();
+    _focus.removeListener(_keepFocus);
+    _ctrl.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  void _emit() {
+  /// Two-part termination, the same one every scan field in this app uses: a
+  /// burst of characters arriving in a single callback is scanner speed no
+  /// typist reaches and resolves at once; anything slower waits for the input
+  /// to go quiet, because this engine does not reliably send a trailing Enter.
+  void _onChanged(String v) {
     _idle?.cancel();
-    final code = _buf.toString().trim();
-    _buf.clear();
-    if (code.length < widget.minLength) return;
-    if (!mounted || !widget.enabled) return;
-    widget.onScan(code);
+    final text = v.trim();
+    final added = v.length - _prevLen;
+    _prevLen = v.length;
+    if (text.length < widget.minLength) return;
+    if (added > 1) {
+      _emit(text);
+      return;
+    }
+    _idle = Timer(_idleGap, () {
+      if (!mounted || _ctrl.text.trim() != text) return;
+      _emit(text);
+    });
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
-    if (!widget.enabled) return KeyEventResult.ignored;
-    // Key-up carries the same logical key as its key-down; acting on both
-    // would double every character.
-    if (e is KeyUpEvent) return KeyEventResult.ignored;
-    final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.enter ||
-        k == LogicalKeyboardKey.numpadEnter ||
-        k == LogicalKeyboardKey.tab) {
-      _emit();
-      return KeyEventResult.handled;
-    }
-    final ch = e.character;
-    if (ch == null || ch.isEmpty) return KeyEventResult.ignored;
-    if (ch == '\n' || ch == '\r' || ch == '\t') {
-      _emit();
-      return KeyEventResult.handled;
-    }
-    // Control characters aren't part of any code the engine sends.
-    if (ch.codeUnitAt(0) < 0x20) return KeyEventResult.ignored;
-    _buf.write(ch);
+  void _emit(String code) {
     _idle?.cancel();
-    _idle = Timer(_idleGap, _emit);
-    return KeyEventResult.handled;
+    _ctrl.clear();
+    _prevLen = 0;
+    if (!mounted || !widget.enabled) return;
+    if (code.length < widget.minLength) return;
+    widget.onScan(code);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _node,
-      autofocus: widget.enabled,
-      onKeyEvent: _onKey,
-      child: widget.child,
+    return Stack(
+      children: [
+        // Behind the content and pinned to its box: real layout (so the input
+        // connection exists) with nothing painted (so there is no box to tap,
+        // mistrust, or type into).
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: double.infinity,
+                height: 24,
+                child: TextField(
+                  controller: _ctrl,
+                  focusNode: _focus,
+                  enabled: widget.enabled,
+                  autofocus: widget.enabled,
+                  keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableInteractiveSelection: false,
+                  showCursor: false,
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: _onChanged,
+                  onSubmitted: (v) => _emit(v.trim()),
+                  style: const TextStyle(
+                      fontSize: 1, color: Color(0x00000000), height: 0.01),
+                  decoration: const InputDecoration(
+                      isCollapsed: true, border: InputBorder.none),
+                ),
+              ),
+            ),
+          ),
+        ),
+        widget.child,
+      ],
     );
   }
 }

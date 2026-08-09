@@ -4,84 +4,102 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:boxtrace_pda/widgets/scan_capture.dart';
 
-/// Types [code] the way the handheld's keyboard-wedge imager does: one key
-/// event per character, no widget focused but ScanCapture's own node.
-Future<void> wedge(WidgetTester tester, String code) async {
-  for (final ch in code.split('')) {
-    await simulateKeyDownEvent(_keyFor(ch), character: ch);
-    await simulateKeyUpEvent(_keyFor(ch));
+/// The imager delivers a decoded barcode over the text input connection in one
+/// go, which is what [WidgetTester.enterText] does too — so this is the real
+/// shape of a scan, not an approximation of one.
+Future<void> scan(WidgetTester tester, String code) =>
+    tester.enterText(find.byType(TextField), code);
+
+/// A human at a keyboard instead: one character per callback.
+Future<void> typeSlowly(WidgetTester tester, String code) async {
+  for (var i = 1; i <= code.length; i++) {
+    await tester.enterText(find.byType(TextField), code.substring(0, i));
   }
 }
 
-LogicalKeyboardKey _keyFor(String ch) {
-  const digits = {
-    '0': LogicalKeyboardKey.digit0,
-    '1': LogicalKeyboardKey.digit1,
-    '2': LogicalKeyboardKey.digit2,
-    '3': LogicalKeyboardKey.digit3,
-  };
-  return digits[ch] ?? LogicalKeyboardKey.keyA;
-}
-
 void main() {
-  Future<List<String>> pump(WidgetTester tester,
-      {bool enabled = true}) async {
+  Future<List<String>> pump(WidgetTester tester, {bool enabled = true}) async {
     final scans = <String>[];
     await tester.pumpWidget(MaterialApp(
-      home: ScanCapture(
-        enabled: enabled,
-        onScan: scans.add,
-        child: const SizedBox.expand(),
+      home: Scaffold(
+        body: ScanCapture(
+          enabled: enabled,
+          onScan: scans.add,
+          child: const SizedBox.expand(child: Text('state display')),
+        ),
       ),
     ));
     await tester.pump();
     return scans;
   }
 
-  testWidgets('a wedge burst arrives as one scan once the keys go quiet',
+  testWidgets('the capture field exists and holds focus — an unfocused one '
+      'receives nothing and there is no visible box to tap to fix that',
+      (tester) async {
+    await pump(tester);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets('no software keyboard can be raised, so nothing can be typed '
+      'by hand on the handheld', (tester) async {
+    await pump(tester);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    // The guard against a hand-keyed box id that looks exactly like a scanned
+    // one. kIsWeb is false under flutter test.
+    expect(field.keyboardType, TextInputType.none);
+  });
+
+  testWidgets('a scanned burst resolves at once — no trailing Enter needed',
       (tester) async {
     final scans = await pump(tester);
-    await wedge(tester, 'A1A2');
-    // Nothing yet — the burst has to be seen to have ended first.
-    expect(scans, isEmpty);
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(scans, ['A1A2']);
+    await scan(tester, 'CRT-01');
+    expect(scans, ['CRT-01']);
   });
 
-  testWidgets('a trailing Enter ends the scan immediately', (tester) async {
+  testWidgets('the field is emptied after a scan, so the next one is not '
+      'appended to the last', (tester) async {
     final scans = await pump(tester);
-    await wedge(tester, 'A1A2');
-    await simulateKeyDownEvent(LogicalKeyboardKey.enter);
-    await simulateKeyUpEvent(LogicalKeyboardKey.enter);
-    // No timer had to expire for this one.
-    expect(scans, ['A1A2']);
-    // …and the idle fallback must not then fire a second, empty scan.
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(scans, ['A1A2']);
+    await scan(tester, 'CRT-01');
+    await scan(tester, 'CRT-02');
+    expect(scans, ['CRT-01', 'CRT-02']);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty);
   });
 
-  testWidgets('a stray single keypress is not a barcode', (tester) async {
+  testWidgets('character-at-a-time input waits for the input to go quiet',
+      (tester) async {
     final scans = await pump(tester);
-    await wedge(tester, 'A');
-    await tester.pump(const Duration(milliseconds: 200));
+    await typeSlowly(tester, 'CRT-01');
+    expect(scans, isEmpty, reason: 'the burst may not have ended yet');
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(scans, ['CRT-01']);
+  });
+
+  testWidgets('a stray single character is not a barcode', (tester) async {
+    final scans = await pump(tester);
+    await scan(tester, 'C');
+    await tester.pump(const Duration(milliseconds: 250));
     expect(scans, isEmpty);
   });
 
   testWidgets('disabled captures nothing — a scan mid-submit is dropped',
       (tester) async {
     final scans = await pump(tester, enabled: false);
-    await wedge(tester, 'A1A2');
-    await tester.pump(const Duration(milliseconds: 200));
+    await scan(tester, 'CRT-01');
+    await tester.pump(const Duration(milliseconds: 250));
     expect(scans, isEmpty);
   });
 
-  testWidgets('back-to-back bursts are two scans, not one run-on code',
-      (tester) async {
+  testWidgets('focus lost to anything else is taken back', (tester) async {
     final scans = await pump(tester);
-    await wedge(tester, 'A1A2');
-    await tester.pump(const Duration(milliseconds: 200));
-    await wedge(tester, 'A3A3');
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(scans, ['A1A2', 'A3A3']);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    field.focusNode!.unfocus();
+    await tester.pump();
+    await tester.pump();
+    expect(field.focusNode!.hasFocus, isTrue);
+    // And it is still live, which is the point of reclaiming it.
+    await scan(tester, 'CRT-01');
+    expect(scans, ['CRT-01']);
   });
 }
