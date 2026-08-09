@@ -152,7 +152,7 @@ class LocaleController extends ChangeNotifier {
     'รับเข้าครั้งแรก': 'First received at',
     'รับคืนเข้า': 'Returned to',
     'ตีเป็นสูญหาย': 'Marked lost',
-    'ย้ายตำแหน่ง': 'Relocated',
+    'ย้ายตำแหน่ง': 'Put away',
     'ลงทะเบียน': 'Registered',
     'โดย': 'by',
 
@@ -396,6 +396,17 @@ class LocaleController extends ChangeNotifier {
     'กำลังหาชั้นวางว่าง…': 'Finding an empty shelf…',
     'ไม่พบชั้นวางว่าง — จะเก็บไว้รอ Putaway แทน':
         'No empty shelf found — will stay pending putaway',
+
+    // transfer screen: scan-a-location-code alternative to dropdowns
+    'ยิงบาร์โค้ด': 'Scan barcode',
+    'เลือกจาก Dropdown': 'Pick from dropdown',
+    'ยิงบาร์โค้ดชั้นวาง/แร็ค': 'Scan the shelf/rack barcode',
+
+    // rfid locate screen: sweep census on the pick step
+    'เหนี่ยวไกกวาดหากล่องในบริเวณนี้ — หรือยิงแท็กของกล่องที่จะหา':
+        'Pull the trigger to sweep boxes in this area — or scan the tag of the box you\'re looking for',
+    'ยังไม่พบกล่อง — เหนี่ยวไกกวาดเหนือบริเวณที่จะตรวจ':
+        'No boxes found yet — pull the trigger and sweep over the area to check',
   };
 }
 

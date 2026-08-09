@@ -14,6 +14,7 @@ class StateSnapshot {
   final Map<String, dynamic> employees;
   final List<dynamic> events;
   final Map<String, dynamic> cfg;
+
   /// `code -> {wh, zone, rack, shelf, slot, type, note, ...}` — the master
   /// rack/shelf/slot list a warehouse admin defines up front (see backend's
   /// `locations` table), not just wherever a box happens to have landed.
@@ -40,9 +41,11 @@ class StateSnapshot {
       customers: m(j['customers']),
       boxtypes: m(j['boxtypes']),
       warehouses: m(j['warehouses']),
-      gates: gatesRaw.map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
+      gates:
+          gatesRaw.map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
       employees: m(j['employees']),
-      events: (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
+      events:
+          (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
       cfg: m(j['cfg']),
       locations: m(j['locations']),
     );
@@ -73,8 +76,9 @@ class StateSnapshot {
     return null;
   }
 
-  Iterable<Box> get boxes =>
-      boxesRaw.values.whereType<Map>().map((e) => Box(Map<String, dynamic>.from(e)));
+  Iterable<Box> get boxes => boxesRaw.values
+      .whereType<Map>()
+      .map((e) => Box(Map<String, dynamic>.from(e)));
 
   int get warehouseCount => boxes.where((b) => b.status == 'warehouse').length;
   int get outCount => boxes.where((b) => b.status == 'out').length;
@@ -111,7 +115,8 @@ class StateSnapshot {
   /// Return-days for a customer, falling back to config aging days.
   int returnDaysFor(String? customerId) {
     final c = customerId == null ? null : customers[customerId];
-    if (c is Map && c['returnDays'] is num) return (c['returnDays'] as num).toInt();
+    if (c is Map && c['returnDays'] is num)
+      return (c['returnDays'] as num).toInt();
     return agingDays;
   }
 
@@ -129,7 +134,8 @@ class StateSnapshot {
   Map<String, String> gateTypesOf(String whId) {
     final w = warehouses[whId];
     if (w is Map && w['gateTypes'] is Map) {
-      return (w['gateTypes'] as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
+      return (w['gateTypes'] as Map)
+          .map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
     }
     return const {};
   }
@@ -142,7 +148,8 @@ class StateSnapshot {
   /// populate TransferScreen's zone/rack/shelf/slot pickers instead of a
   /// free-typed field with nothing to keep two operators spelling the same
   /// shelf the same way.
-  List<String> locationValues(String whId, String field, {String? zone, String? rack}) {
+  List<String> locationValues(String whId, String field,
+      {String? zone, String? rack}) {
     final out = <String>{};
     for (final raw in locations.values) {
       if (raw is! Map) continue;
@@ -162,5 +169,29 @@ class StateSnapshot {
     }
     final list = out.toList()..sort();
     return list;
+  }
+
+  /// Resolve a scanned/typed location code (the master `locations` table's
+  /// own `code`, e.g. a barcode stuck to a rack or shelf) to its
+  /// zone/rack/shelf/slot — used by TransferScreen's "scan the shelf
+  /// barcode" mode as an alternative to picking each field from a dropdown.
+  /// Case-insensitive since barcode labels aren't guaranteed consistent
+  /// casing. Null when the code isn't on file for this warehouse.
+  Map<String, String>? locationByCode(String whId, String code) {
+    final needle = code.trim().toLowerCase();
+    if (needle.isEmpty) return null;
+    for (final entry in locations.entries) {
+      if (entry.key.toLowerCase() != needle) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      if ((raw['wh'] ?? '').toString() != whId) continue;
+      return {
+        'zone': (raw['zone'] ?? '').toString(),
+        'rack': (raw['rack'] ?? '').toString(),
+        'shelf': (raw['shelf'] ?? '').toString(),
+        'slot': (raw['slot'] ?? '').toString(),
+      };
+    }
+    return null;
   }
 }

@@ -299,14 +299,13 @@ class _AutoHideHeaderState extends State<AutoHideHeader> {
   bool _visible = true;
 
   bool _onScroll(ScrollNotification n) {
-    // A pixel-by-pixel reaction to every microscopic drag frame reads as
-    // jitter, not a decision — Apple's own compact-nav bars commit to a
-    // direction only once a scroll has moved a real amount. 8px is enough to
-    // filter overscroll-bounce and a barely-there drag while still feeling
-    // immediate on a deliberate swipe.
+    // Per-frame scrollDelta during a drag is small (a few px), so a high
+    // threshold here effectively meant "flick fast, or scroll all the way
+    // back to the top" before the header would reappear. 2px still filters
+    // overscroll-bounce noise but reacts to an ordinary, unhurried drag.
     if (n is ScrollUpdateNotification) {
       final delta = n.scrollDelta ?? 0;
-      if (delta.abs() < 8) return false;
+      if (delta.abs() < 2) return false;
       // Always show once back near the top — the header reappearing only
       // on an upward flick, never on arriving at the top some other way
       // (e.g. a jump-to-top tap), was the one case that felt broken to hide.
