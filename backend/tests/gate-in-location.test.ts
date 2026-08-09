@@ -42,6 +42,15 @@ beforeAll(async () => {
           location: {},
           history: [],
         },
+        'RETURN-3': {
+          tag: 'RETURN-3',
+          type: 'BT-001',
+          status: 'out',
+          labeled: true,
+          customer: 'CUST-001',
+          location: {},
+          history: [],
+        },
         // Already 'warehouse' (unlike RETURN-1/2, which are 'out' and can't
         // be put away directly) — exist purely to fill the two remaining
         // free master locations for the "every location taken" case below.
@@ -122,9 +131,9 @@ describe('POST /api/gate/in with location', () => {
     const res = await request(ctx.app)
       .post('/api/gate/in')
       .set(auth(ctx.token))
-      .send({ tags: ['OCCUPIED-1'], gate: 1, location: { zone: 'B', rack: '9', shelf: '9', slot: '9' } });
+      .send({ tags: ['RETURN-3'], gate: 1, location: { zone: 'B', rack: '9', shelf: '9', slot: '9' } });
     expect(res.status).toBe(200);
-    const box = await request(ctx.app).get('/api/boxes/OCCUPIED-1').set(auth(ctx.token));
+    const box = await request(ctx.app).get('/api/boxes/RETURN-3').set(auth(ctx.token));
     expect(box.body.location).toMatchObject({ wh: 'WH-001', zone: 'B', rack: '9', shelf: '9', slot: '9' });
     const last = box.body.history.at(-1);
     expect(last.dir).toBe('in');
@@ -144,8 +153,8 @@ describe('POST /api/gate/in with location', () => {
     expect(res.status).toBe(200);
     const box = await request(ctx.app).get('/api/boxes/RETURN-2').set(auth(ctx.token));
     expect(box.body.status).toBe('damage');
-    // Never had a location — a damaged box didn't just get shelved at the
-    // location meant for its warehouse-bound batchmates.
-    expect(box.body.location).toEqual({});
+    // Not shelved at the location meant for its warehouse-bound batchmates —
+    // a hold/damage box is parked in quarantine instead (see gate.ts).
+    expect(box.body.location).toMatchObject({ zone: 'QUARANTINE_ZONE' });
   });
 });
