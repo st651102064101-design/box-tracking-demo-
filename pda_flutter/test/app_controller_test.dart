@@ -66,7 +66,12 @@ class FakeApi extends ApiClient {
       'recorder': recorder,
       'plate': plate,
     });
-    return {'ok': true, 'received': tags, 'unknown': <String>[], 'count': tags.length};
+    return {
+      'ok': true,
+      'received': tags,
+      'unknown': <String>[],
+      'count': tags.length
+    };
   }
 
   @override
@@ -95,7 +100,12 @@ class FakeApi extends ApiClient {
       'recorder': recorder,
       'plate': plate,
     });
-    return {'ok': true, 'doNo': 'DO-TEST', 'shipped': tags, 'count': tags.length};
+    return {
+      'ok': true,
+      'doNo': 'DO-TEST',
+      'shipped': tags,
+      'count': tags.length
+    };
   }
 
   final List<Map<String, dynamic>> holdCalls = [];
@@ -132,10 +142,41 @@ class FakeApi extends ApiClient {
         .add({'kind': kind, 'tag': tag, 'location': location, 'note': note});
     return {'dir': kind, 'tag': tag};
   }
+
+  final List<Map<String, dynamic>> putawayCalls = [];
+  Object? throwOnPutaway;
+
+  @override
+  Future<Map<String, dynamic>> putawayBox(
+    String tag, {
+    required String wh,
+    String zone = '',
+    String rack = '',
+    String shelf = '',
+    String slot = '',
+  }) async {
+    if (throwOnPutaway != null) {
+      final e = throwOnPutaway!;
+      throwOnPutaway = null;
+      throw e;
+    }
+    putawayCalls.add({
+      'tag': tag,
+      'wh': wh,
+      'zone': zone,
+      'rack': rack,
+      'shelf': shelf,
+      'slot': slot
+    });
+    return {'ok': true};
+  }
 }
 
 Map<String, dynamic> box(String tag, String status,
-        {List<dynamic>? history, int cycles = 0, String? rfidTid, String? rfidEpc}) =>
+        {List<dynamic>? history,
+        int cycles = 0,
+        String? rfidTid,
+        String? rfidEpc}) =>
     {
       'tag': tag,
       'type': 'BT-CRT',
@@ -192,9 +233,11 @@ Map<String, dynamic> fixtureEmployees() => {
 Map<String, dynamic> fixtureState() => {
       'boxes': {
         'CRT-01': box('CRT-01', 'warehouse'),
-        'CRT-02': box('CRT-02', 'out', history: [
-          {'dir': 'out', 'ts': '2026-01-01T00:00:00Z'}
-        ], cycles: 1),
+        'CRT-02': box('CRT-02', 'out',
+            history: [
+              {'dir': 'out', 'ts': '2026-01-01T00:00:00Z'}
+            ],
+            cycles: 1),
         'CRT-03': box('CRT-03', 'pending'),
         'CRT-04': box('CRT-04', 'lost'),
         'CRT-05': box('CRT-05', 'damage'),
@@ -233,7 +276,8 @@ Future<AppController> makeController(FakeApi api) async {
   c.gate = '2';
   prefs.deviceWh = 'WH-1';
   prefs.deviceGate = '2';
-  prefs.deviceConfigured = true; // otherwise a restart (see init()) lands back in deviceSetup
+  prefs.deviceConfigured =
+      true; // otherwise a restart (see init()) lands back in deviceSetup
   prefs.token = 'device-token'; // already signed in as itself, as a real one is
   c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
   return c;
@@ -288,7 +332,8 @@ void main() {
       expect(c.lastResult!.kind, ResultKind.ok);
     });
 
-    test('rejects out / lost / pending / hold / damage with the right message', () async {
+    test('rejects out / lost / pending / hold / damage with the right message',
+        () async {
       final c = await makeController(FakeApi());
       c.mode = 'out';
       for (final entry in {
@@ -325,7 +370,8 @@ void main() {
       final api = FakeApi();
       final state = fixtureState();
       state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
-          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+          rfidTid: 'E28011912000708FBAD20380',
+          rfidEpc: '000000000000424F582D3031');
       api.state = state;
       final c = await makeController(api);
       c.mode = 'out';
@@ -337,7 +383,8 @@ void main() {
       final api = FakeApi();
       final state = fixtureState();
       state['boxes']['CRT-01'] = box('CRT-01', 'warehouse',
-          rfidTid: 'E28011912000708FBAD20380', rfidEpc: '000000000000424F582D3031');
+          rfidTid: 'E28011912000708FBAD20380',
+          rfidEpc: '000000000000424F582D3031');
       api.state = state;
       final c = await makeController(api);
       c.mode = 'out';
@@ -377,7 +424,8 @@ void main() {
   });
 
   group('commit', () {
-    test('inbound posts the queue to /gate/in with the operator attached', () async {
+    test('inbound posts the queue to /gate/in with the operator attached',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -395,7 +443,8 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
-    test('inbound commits fine without a plate — Gate In never requires one', () async {
+    test('inbound commits fine without a plate — Gate In never requires one',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -407,7 +456,8 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
-    test('outbound without a plate posts nothing and keeps the queue', () async {
+    test('outbound without a plate posts nothing and keeps the queue',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'out';
@@ -429,7 +479,8 @@ void main() {
       await c.doCommit();
 
       expect(api.gateOutCalls, isEmpty);
-      expect(c.queue, ['CRT-01'], reason: 'queue must survive a rejected commit');
+      expect(c.queue, ['CRT-01'],
+          reason: 'queue must survive a rejected commit');
       expect(c.toast!.title, 'เลือกลูกค้าปลายทางก่อน');
     });
 
@@ -466,11 +517,13 @@ void main() {
       expect(api.gateInCalls, isEmpty);
       expect(c.outbox, hasLength(1));
       expect(c.outbox.first.tags, ['CRT-02']);
-      expect(c.prefs.outbox, hasLength(1), reason: 'must survive an app restart');
+      expect(c.prefs.outbox, hasLength(1),
+          reason: 'must survive an app restart');
       expect(c.queue, isEmpty);
     });
 
-    test('a queued batch keeps the employee who scanned it, not whoever syncs', () async {
+    test('a queued batch keeps the employee who scanned it, not whoever syncs',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -505,7 +558,8 @@ void main() {
       expect(c.prefs.outbox, isEmpty);
     });
 
-    test('a network failure mid-commit falls back to the outbox, not data loss', () async {
+    test('a network failure mid-commit falls back to the outbox, not data loss',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -514,7 +568,8 @@ void main() {
       api.throwOnGate = Exception('connection reset');
       await c.doCommit();
 
-      expect(c.outbox, hasLength(1), reason: 'the scanned batch must not vanish');
+      expect(c.outbox, hasLength(1),
+          reason: 'the scanned batch must not vanish');
       expect(c.outbox.first.tags, ['CRT-02']);
       expect(c.queue, isEmpty);
     });
@@ -531,7 +586,8 @@ void main() {
       expect(c.outbox, isEmpty);
       expect(c.toast!.kind, ResultKind.err);
       expect(c.toast!.sub, 'ไม่พบกล่อง');
-      expect(c.queue, ['CRT-02'], reason: 'operator can retry or fix the batch');
+      expect(c.queue, ['CRT-02'],
+          reason: 'operator can retry or fix the batch');
     });
   });
 
@@ -545,7 +601,8 @@ void main() {
       expect(err, isNull);
       expect(c.emp!.id, 'EMP-0002');
       expect(c.user, 'สมชาย ใจดี');
-      expect(c.screen, Screen.home, reason: 'no shift setup step to pass through');
+      expect(c.screen, Screen.home,
+          reason: 'no shift setup step to pass through');
     });
 
     test('badge codes match regardless of case', () async {
@@ -567,20 +624,24 @@ void main() {
       expect(c.screen, Screen.login);
     });
 
-    test('a box tag swept up on the badge screen is refused, not acted on', () async {
+    test('a box tag swept up on the badge screen is refused, not acted on',
+        () async {
       final c = await makeController(FakeApi());
       c.lock();
       expect(c.identifyByScanCode('CRT-01'), isNotNull);
       expect(c.emp, isNull);
     });
 
-    test('employees on leave are hidden from the list and cannot be identified', () async {
+    test('employees on leave are hidden from the list and cannot be identified',
+        () async {
       final c = await makeController(FakeApi());
       expect(c.employees.map((e) => e.id), isNot(contains('EMP-0003')));
       expect(c.identifyByScanCode('BADGE-003'), 'ไม่พบบัตรนี้ในระบบ');
     });
 
-    test('employees from another warehouse are listed last and flagged as visiting', () async {
+    test(
+        'employees from another warehouse are listed last and flagged as visiting',
+        () async {
       final c = await makeController(FakeApi());
       expect(c.employees.last.id, 'EMP-0004');
       expect(c.isVisiting(c.employees.last), isTrue);
@@ -589,11 +650,16 @@ void main() {
           reason: 'visiting staff work the gate, they just get a note');
     });
 
-    test('an employee whose scanCode was never set badges in with their id', () async {
+    test('an employee whose scanCode was never set badges in with their id',
+        () async {
       final api = FakeApi();
       final state = fixtureState();
       (state['employees'] as Map)['EMP-0005'] = {
-        'id': 'EMP-0005', 'name': 'อารีย์ ไร้บัตร', 'wh': 'WH-1', 'access': 'operator', 'status': 'active',
+        'id': 'EMP-0005',
+        'name': 'อารีย์ ไร้บัตร',
+        'wh': 'WH-1',
+        'access': 'operator',
+        'status': 'active',
       };
       api.state = state;
       final c = await makeController(api);
@@ -603,7 +669,9 @@ void main() {
       expect(c.emp!.name, 'อารีย์ ไร้บัตร');
     });
 
-    test('lock() ends the session but leaves the device stationed and signed in', () async {
+    test(
+        'lock() ends the session but leaves the device stationed and signed in',
+        () async {
       final c = await makeController(FakeApi());
       c.lock();
 
@@ -612,8 +680,10 @@ void main() {
       expect(c.screen, Screen.login);
       expect(c.wh, 'WH-1', reason: 'a handover is not a device sign-out');
       expect(c.gate, '2');
-      expect(c.prefs.token, 'device-token', reason: 'the terminal stays authenticated as itself');
-      expect(c.employees, isNotEmpty, reason: 'the next person needs the list immediately');
+      expect(c.prefs.token, 'device-token',
+          reason: 'the terminal stays authenticated as itself');
+      expect(c.employees, isNotEmpty,
+          reason: 'the next person needs the list immediately');
     });
   });
 
@@ -631,7 +701,8 @@ void main() {
       expect(c.screen, Screen.track);
     });
 
-    test('a plain operator cannot re-point the device; a supervisor can', () async {
+    test('a plain operator cannot re-point the device; a supervisor can',
+        () async {
       final c = await makeController(FakeApi());
 
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0002'));
@@ -641,7 +712,9 @@ void main() {
       expect(c.canConfigureDevice, isTrue);
     });
 
-    test('a locked terminal can still be reconfigured — otherwise a bad URL strands it', () async {
+    test(
+        'a locked terminal can still be reconfigured — otherwise a bad URL strands it',
+        () async {
       final c = await makeController(FakeApi());
       c.lock();
       expect(c.canConfigureDevice, isTrue);
@@ -658,7 +731,8 @@ void main() {
       return c;
     }
 
-    test('an unprovisioned device boots into setup, a provisioned one into the badge screen',
+    test(
+        'an unprovisioned device boots into setup, a provisioned one into the badge screen',
         () async {
       final api = FakeApi();
       final c = await freshDevice(api);
@@ -667,7 +741,8 @@ void main() {
       await c.init();
       expect(c.screen, Screen.deviceSetup);
       expect(c.wh, 'WH-1',
-          reason: 'the only warehouse on file is not a choice worth asking about');
+          reason:
+              'the only warehouse on file is not a choice worth asking about');
 
       // Warehouse/gate are no longer fixed at setup time — they're picked
       // per-visit instead (see confirmPost/pickWh/pickGate below and
@@ -676,14 +751,16 @@ void main() {
       // setup once", so it doesn't touch prefs.deviceWh/deviceGate at all.
       c.finishDeviceSetup();
       expect(c.deviceConfigured, isTrue);
-      expect(c.screen, Screen.login, reason: 'setup ends at the badge screen, ready to work');
+      expect(c.screen, Screen.login,
+          reason: 'setup ends at the badge screen, ready to work');
 
       final c2 = AppController(api: api, prefs: c.prefs, rfid: RfidService());
       await c2.init();
       expect(c2.screen, Screen.login);
     });
 
-    test('finishing setup while already identified goes straight to home, not the badge screen',
+    test(
+        'finishing setup while already identified goes straight to home, not the badge screen',
         () async {
       final c = await freshDevice(FakeApi());
       await c.init();
@@ -699,9 +776,11 @@ void main() {
        login that has never once succeeded. completeDeviceSetup now saves
        and finishes regardless, trusting the background retry it starts (see
        _scheduleAuthRetry) to pick the connection up once it exists. */
-    test('completeDeviceSetup finishes even when the connection attempt fails', () async {
+    test('completeDeviceSetup finishes even when the connection attempt fails',
+        () async {
       final api = FakeApi();
-      final c = await freshDevice(api); // primes state before the fake goes offline
+      final c =
+          await freshDevice(api); // primes state before the fake goes offline
       expect(c.deviceConfigured, isFalse);
 
       api.throwOnState = Exception('Failed to fetch');
@@ -709,13 +788,15 @@ void main() {
 
       expect(c.deviceConfigured, isTrue,
           reason: 'saved and finished, not stuck waiting on connectivity');
-      expect(c.connected, isFalse, reason: 'the connection genuinely never succeeded');
+      expect(c.connected, isFalse,
+          reason: 'the connection genuinely never succeeded');
       expect(c.connError, isNotNull);
       expect(c.toast!.title, 'บันทึกแล้ว — ยังไม่เชื่อมต่อ',
           reason: 'told honestly, not reported as if it had connected');
     });
 
-    test('completeDeviceSetup finishes normally when the connection succeeds', () async {
+    test('completeDeviceSetup finishes normally when the connection succeeds',
+        () async {
       final api = FakeApi();
       final c = await freshDevice(api);
 
@@ -731,8 +812,16 @@ void main() {
         ..state = {
           'boxes': {},
           'warehouses': {
-            'WH-A': {'id': 'WH-A', 'name': 'คลัง A', 'gates': [1, 2]},
-            'WH-B': {'id': 'WH-B', 'name': 'คลัง B', 'gates': [9]},
+            'WH-A': {
+              'id': 'WH-A',
+              'name': 'คลัง A',
+              'gates': [1, 2]
+            },
+            'WH-B': {
+              'id': 'WH-B',
+              'name': 'คลัง B',
+              'gates': [9]
+            },
           },
           'gates': {'1': 'WH-A', '2': 'WH-A', '9': 'WH-B'},
           'employees': {},
@@ -748,7 +837,8 @@ void main() {
       expect(c.gate, isEmpty, reason: 'two gates is a real choice');
     });
 
-    test('no operator survives a restart — a shift always starts with a badge', () async {
+    test('no operator survives a restart — a shift always starts with a badge',
+        () async {
       final api = FakeApi();
       final c = await makeController(api);
       expect(c.emp, isNotNull);
@@ -765,8 +855,16 @@ void main() {
     Map<String, dynamic> pickerState() => {
           'boxes': {},
           'warehouses': {
-            'WH-A': {'id': 'WH-A', 'name': 'คลัง A', 'gates': [1, 2]},
-            'WH-B': {'id': 'WH-B', 'name': 'คลัง B', 'gates': [9]},
+            'WH-A': {
+              'id': 'WH-A',
+              'name': 'คลัง A',
+              'gates': [1, 2]
+            },
+            'WH-B': {
+              'id': 'WH-B',
+              'name': 'คลัง B',
+              'gates': [9]
+            },
           },
           'gates': {'1': 'WH-A', '2': 'WH-A', '9': 'WH-B'},
           'employees': {
@@ -789,15 +887,18 @@ void main() {
           'cfg': {'agingDays': 15},
         };
 
-    Future<AppController> controllerWithState(Map<String, dynamic> state) async {
+    Future<AppController> controllerWithState(
+        Map<String, dynamic> state) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await Prefs.load();
-      final c = AppController(api: FakeApi()..state = state, prefs: prefs, rfid: RfidService());
+      final c = AppController(
+          api: FakeApi()..state = state, prefs: prefs, rfid: RfidService());
       await c.refresh();
       return c;
     }
 
-    test('badging in with more than one warehouse on file waits for a pick', () async {
+    test('badging in with more than one warehouse on file waits for a pick',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
 
@@ -805,7 +906,9 @@ void main() {
       expect(c.pendingWh, isNull);
     });
 
-    test('badging in with one warehouse skips the warehouse picker and shows gates', () async {
+    test(
+        'badging in with one warehouse skips the warehouse picker and shows gates',
+        () async {
       final state = pickerState();
       (state['warehouses'] as Map).remove('WH-B');
       state['gates'] = {'1': 'WH-A', '2': 'WH-A'};
@@ -818,7 +921,8 @@ void main() {
       expect(c.wh, isEmpty);
     });
 
-    test('picking a warehouse with one gate confirms the post immediately', () async {
+    test('picking a warehouse with one gate confirms the post immediately',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
 
@@ -829,7 +933,8 @@ void main() {
       expect(c.gate, '9');
     });
 
-    test('picking a warehouse with two gates waits for the gate, then confirms', () async {
+    test('picking a warehouse with two gates waits for the gate, then confirms',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
 
@@ -844,7 +949,8 @@ void main() {
       expect(c.pendingWh, isNull);
     });
 
-    test('a single warehouse with a single gate skips the picker entirely', () async {
+    test('a single warehouse with a single gate skips the picker entirely',
+        () async {
       final state = pickerState();
       (state['warehouses'] as Map).remove('WH-A');
       state['gates'] = {'9': 'WH-B'};
@@ -860,14 +966,17 @@ void main() {
       expect(c.lastGate, '9');
     });
 
-    test('a viewer never has to pick a post — search is warehouse-agnostic', () async {
+    test('a viewer never has to pick a post — search is warehouse-agnostic',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-VIEW'));
 
       expect(c.postConfirmed, isTrue);
     });
 
-    test('confirming a post is remembered as ล่าสุด and reusable via useLastPost', () async {
+    test(
+        'confirming a post is remembered as ล่าสุด and reusable via useLastPost',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
       c.confirmPost('WH-A', 1);
@@ -877,7 +986,8 @@ void main() {
 
       c.lock();
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
-      expect(c.postConfirmed, isFalse, reason: 'a fresh badge-in always asks again');
+      expect(c.postConfirmed, isFalse,
+          reason: 'a fresh badge-in always asks again');
 
       c.useLastPost();
       expect(c.postConfirmed, isTrue);
@@ -885,14 +995,17 @@ void main() {
       expect(c.gate, '1');
     });
 
-    test('useLastPost warns instead of confirming when the remembered warehouse is gone', () async {
+    test(
+        'useLastPost warns instead of confirming when the remembered warehouse is gone',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
       c.confirmPost('WH-A', 1);
 
       final state2 = pickerState();
       (state2['warehouses'] as Map).remove('WH-A');
-      final c2 = AppController(api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
+      final c2 = AppController(
+          api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
       await c2.refresh();
 
       c2.useLastPost();
@@ -901,7 +1014,9 @@ void main() {
       expect(c2.toast!.title, 'ไม่พบคลังเดิม');
     });
 
-    test('useLastPost warns instead of confirming when the remembered gate is gone', () async {
+    test(
+        'useLastPost warns instead of confirming when the remembered gate is gone',
+        () async {
       final c = await controllerWithState(pickerState());
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-OP'));
       c.confirmPost('WH-A', 1);
@@ -909,7 +1024,8 @@ void main() {
       final state2 = pickerState();
       (state2['warehouses']['WH-A'] as Map)['gates'] = [2];
       state2['gates'] = {'2': 'WH-A', '9': 'WH-B'};
-      final c2 = AppController(api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
+      final c2 = AppController(
+          api: FakeApi()..state = state2, prefs: c.prefs, rfid: RfidService());
       await c2.refresh();
 
       c2.useLastPost();
@@ -927,7 +1043,9 @@ void main() {
       expect((c.prefs.stateCache!['boxes'] as Map), hasLength(6));
     });
 
-    test('a device that boots with the backend down still lists employees and boxes', () async {
+    test(
+        'a device that boots with the backend down still lists employees and boxes',
+        () async {
       final api = FakeApi();
       final c = await makeController(api); // primes the cache
       api.throwOnState = Exception('Failed to fetch');
@@ -936,7 +1054,8 @@ void main() {
       await c2.init();
 
       expect(c2.connError, isNotNull, reason: 'the failure is still reported');
-      expect(c2.boxCount, 6, reason: 'but the cached snapshot keeps the device usable');
+      expect(c2.boxCount, 6,
+          reason: 'but the cached snapshot keeps the device usable');
       expect(c2.employees, isNotEmpty);
       expect(c2.identifyByScanCode('BADGE-001'), isNull);
     });
@@ -952,7 +1071,9 @@ void main() {
   });
 
   group('navigation', () {
-    test('leaving settings returns to the badge screen when nobody is signed in', () async {
+    test(
+        'leaving settings returns to the badge screen when nobody is signed in',
+        () async {
       final c = await makeController(FakeApi());
       c.lock();
       c.go(Screen.settings);
@@ -987,7 +1108,8 @@ void main() {
       expect(types['3'], 'both');
     });
 
-    test('a gate missing from gateTypes is simply absent, not defaulted here — the UI layer treats that as both',
+    test(
+        'a gate missing from gateTypes is simply absent, not defaulted here — the UI layer treats that as both',
         () async {
       final c = await makeController(FakeApi());
       expect(c.S!.gateTypesOf('WH-1').containsKey('99'), isFalse);
@@ -996,7 +1118,8 @@ void main() {
 
   group('Employee model', () {
     test("treats the WMS's '-' placeholder as unset", () {
-      final e = Employee.fromJson({'id': 'EMP-9', 'name': 'ทดสอบ', 'dept': '-', 'role': ''});
+      final e = Employee.fromJson(
+          {'id': 'EMP-9', 'name': 'ทดสอบ', 'dept': '-', 'role': ''});
       expect(e.dept, isEmpty);
       expect(e.subtitle, isEmpty);
     });

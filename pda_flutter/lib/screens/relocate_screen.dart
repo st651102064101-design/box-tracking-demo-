@@ -10,6 +10,7 @@ import '../services/api_client.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_capture.dart';
 
 /// Move a box that is already in the warehouse to a different shelf position.
 ///
@@ -40,7 +41,13 @@ class _RelocateScreenState extends State<RelocateScreen> {
   bool _saving = false;
   String? _error;
 
-  String? _zone, _rack, _shelf, _slot;
+  /// The destination, resolved only by scanning that shelf's own barcode —
+  /// no dropdown, no typed zone/rack/shelf/slot. A picked-from-a-list or
+  /// typed destination is exactly how a box ends up on the location the
+  /// system *thinks* it's on rather than the shelf the operator is actually
+  /// standing at; scanning is the only way this screen will accept one.
+  Location? _dest;
+  String? _placeScanError;
 
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<bool>? _triggerSub;
@@ -59,7 +66,8 @@ class _RelocateScreenState extends State<RelocateScreen> {
     _triggerSub = rfid.triggers.listen((p) {
       if (mounted) setState(() => _sweeping = p);
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _searchFocus.requestFocus());
   }
 
   @override
@@ -79,20 +87,13 @@ class _RelocateScreenState extends State<RelocateScreen> {
     if (b != null) _pick(b);
   }
 
-  LocationCascade get _cascade => LocationCascade(_c.S?.locations ?? const {});
-
   void _pick(Box b) {
-    final l = b.location;
     setState(() {
       _target = b;
       _step = _Step.place;
       _error = null;
-      // Seeded with where the box is now, so a move that only changes the
-      // slot doesn't make the operator re-pick zone/rack/shelf from scratch.
-      _zone = (l['zone'] ?? '').toString().isEmpty ? null : l['zone'].toString();
-      _rack = (l['rack'] ?? '').toString().isEmpty ? null : l['rack'].toString();
-      _shelf = (l['shelf'] ?? '').toString().isEmpty ? null : l['shelf'].toString();
-      _slot = (l['slot'] ?? '').toString().isEmpty ? null : l['slot'].toString();
+      _dest = null;
+      _placeScanError = null;
     });
     unawaited(_c.rfid.stopInventory());
   }
@@ -102,9 +103,37 @@ class _RelocateScreenState extends State<RelocateScreen> {
       _step = _Step.pick;
       _target = null;
       _error = null;
+      _dest = null;
+      _placeScanError = null;
       _searchCtrl.clear();
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _searchFocus.requestFocus());
+  }
+
+  /// A shelf barcode arrived while step 2 was up. Locations are keyed by
+  /// their own scannable code (see StateSnapshot.locations) — same
+  /// resolution ReportProblemScreen's "ช่องเก็บเต็ม" path and
+  /// LocationInquiryScreen already use.
+  void _onPlaceScan(AppController c, String raw) {
+    final s = c.S;
+    if (s == null) return;
+    final needle = raw.trim().toLowerCase();
+    Location? found;
+    for (final entry in s.locations.entries) {
+      if (entry.key.toLowerCase() != needle) continue;
+      if (entry.value.wh != c.wh) continue;
+      found = entry.value;
+      break;
+    }
+    if (found == null) {
+      setState(() => _placeScanError = 'ไม่พบตำแหน่งรหัส "$raw"');
+      return;
+    }
+    setState(() {
+      _placeScanError = null;
+      _dest = found;
+    });
   }
 
   Future<void> _toggleSweep() async {
@@ -116,7 +145,8 @@ class _RelocateScreenState extends State<RelocateScreen> {
       return;
     }
     if (c.rfidCharging) {
-      c.toastMsg('ยิงแท็กไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน', ResultKind.warn);
+      c.toastMsg('ยิงแท็กไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน',
+          ResultKind.warn);
       return;
     }
     setState(() => _sweeping = true);
@@ -125,13 +155,8 @@ class _RelocateScreenState extends State<RelocateScreen> {
 
   Future<void> _save() async {
     final b = _target;
-    if (b == null || _saving) return;
-    // Every level empty would file a move to "somewhere in this warehouse",
-    // which is not a relocation — it's erasing the position the box had.
-    if (_zone == null && _rack == null && _shelf == null && _slot == null) {
-      setState(() => _error = 'เลือกตำแหน่งปลายทางอย่างน้อยหนึ่งระดับก่อน');
-      return;
-    }
+    final dest = _dest;
+    if (b == null || dest == null || _saving) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -139,19 +164,23 @@ class _RelocateScreenState extends State<RelocateScreen> {
     try {
       await _c.api.putawayBox(
         b.tag,
-        wh: _c.wh,
-        zone: _zone ?? '',
-        rack: _rack ?? '',
-        shelf: _shelf ?? '',
-        slot: _slot ?? '',
+        wh: dest.wh,
+        zone: dest.zone,
+        rack: dest.rack,
+        shelf: dest.shelf,
+        slot: dest.slot,
       );
       await _c.refresh();
       if (!mounted) return;
-      final where = [_zone, _rack, _shelf, _slot].whereType<String>().join(' · ');
+      final where = [dest.zone, dest.rack, dest.shelf, dest.slot]
+          .where((v) => v.isNotEmpty)
+          .join(' · ');
       _c.toastMsg('ย้ายตำแหน่งแล้ว', '${b.tag} → $where', ResultKind.ok);
       _changeTarget();
     } catch (e) {
-      if (mounted) setState(() => _error = e is ApiException ? e.message : 'ย้ายตำแหน่งไม่สำเร็จ');
+      if (mounted)
+        setState(() =>
+            _error = e is ApiException ? e.message : 'ย้ายตำแหน่งไม่สำเร็จ');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -160,15 +189,26 @@ class _RelocateScreenState extends State<RelocateScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
-    return Column(
+    final body = Column(
       children: [
         StickyHeader(
           onBack: _step == _Step.place ? _changeTarget : c.backToHome,
           title: const Text('ย้ายตำแหน่งกล่อง'),
-          subtitle: Text(_step == _Step.pick ? 'เลือกกล่องที่จะย้าย' : 'เลือกตำแหน่งปลายทาง'),
+          subtitle: Text(_step == _Step.pick
+              ? 'เลือกกล่องที่จะย้าย'
+              : 'เลือกตำแหน่งปลายทาง'),
         ),
         Expanded(child: _step == _Step.pick ? _pickBody(c) : _placeBody(c)),
       ],
+    );
+    if (_step != _Step.place) return body;
+    // Destination is scan-only: live for the whole place step, and again
+    // the instant a save fails, so a mis-scan or a rejected shelf doesn't
+    // leave the imager parked.
+    return ScanCapture(
+      enabled: _dest == null && !_saving,
+      onScan: (raw) => _onPlaceScan(c, raw),
+      child: body,
     );
   }
 
@@ -179,13 +219,18 @@ class _RelocateScreenState extends State<RelocateScreen> {
     final all = c.S?.boxes.toList() ?? const <Box>[];
     // Only boxes actually in the warehouse can be moved within it — one that
     // is out with a customer has no shelf position to change.
-    final movable = all.where((b) => b.status == 'warehouse' || b.status == 'hold').toList();
+    final movable = all
+        .where((b) => b.status == 'warehouse' || b.status == 'hold')
+        .toList();
     final results = q.isEmpty
         ? const <Box>[]
-        : movable.where((b) {
-            final type = c.S!.typeName(b.type).toLowerCase();
-            return b.tag.toLowerCase().contains(q) || type.contains(q);
-          }).take(30).toList();
+        : movable
+            .where((b) {
+              final type = c.S!.typeName(b.type).toLowerCase();
+              return b.tag.toLowerCase().contains(q) || type.contains(q);
+            })
+            .take(30)
+            .toList();
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
@@ -200,20 +245,27 @@ class _RelocateScreenState extends State<RelocateScreen> {
           onSubmitted: (_) {
             if (results.length == 1) _pick(results.first);
           },
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+          style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace'),
           decoration: InputDecoration(
             hintText: 'ยิงบาร์โค้ด / พิมพ์รหัสกล่อง',
-            hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+            hintStyle:
+                TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
             prefixIcon: Icon(Icons.search, color: C.muted),
             isDense: true,
             filled: true,
             fillColor: C.surface,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.ink, width: 1.5)),
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: C.ink, width: 1.5)),
           ),
         ),
         const SizedBox(height: 10),
@@ -223,14 +275,19 @@ class _RelocateScreenState extends State<RelocateScreen> {
             child: OutlinedButton.icon(
               onPressed: _toggleSweep,
               icon: Icon(_sweeping ? Icons.stop : Icons.nfc, size: 18),
-              label: Text(_sweeping ? 'กำลังยิง… แตะเพื่อหยุด' : 'ยิงแท็ก RFID เพื่อเลือกกล่อง',
-                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+              label: Text(
+                  _sweeping
+                      ? 'กำลังยิง… แตะเพื่อหยุด'
+                      : 'ยิงแท็ก RFID เพื่อเลือกกล่อง',
+                  style: const TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.w700)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _sweeping ? C.red : C.ink,
                 backgroundColor: _sweeping ? C.orangeBg : null,
                 side: BorderSide(color: _sweeping ? C.orangeBorder : C.border2),
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -238,14 +295,16 @@ class _RelocateScreenState extends State<RelocateScreen> {
         if (q.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-            child: Text('ยิงแท็ก/บาร์โค้ดของกล่อง หรือพิมพ์รหัสเพื่อค้นหา\nย้ายได้เฉพาะกล่องที่อยู่ในคลังเท่านั้น',
+            child: Text(
+                'ยิงแท็ก/บาร์โค้ดของกล่อง หรือพิมพ์รหัสเพื่อค้นหา\nย้ายได้เฉพาะกล่องที่อยู่ในคลังเท่านั้น',
                 style: TextStyle(fontSize: 13, color: C.faint, height: 1.5)),
           )
         else if (results.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
             child: Text('ไม่พบกล่องในคลังที่ตรงกับ "$q"',
-                style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
           )
         else
           Container(
@@ -267,13 +326,17 @@ class _RelocateScreenState extends State<RelocateScreen> {
                 return InkWell(
                   onTap: () => _pick(b),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      border: i == results.length - 1 ? null : Border(bottom: BorderSide(color: C.border)),
+                      border: i == results.length - 1
+                          ? null
+                          : Border(bottom: BorderSide(color: C.border)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 18, color: C.muted),
+                        Icon(Icons.inventory_2_outlined,
+                            size: 18, color: C.muted),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -282,7 +345,9 @@ class _RelocateScreenState extends State<RelocateScreen> {
                             children: [
                               Text(b.tag,
                                   style: const TextStyle(
-                                      fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'monospace')),
                               Text(
                                 '${c.S!.typeName(b.type)}${where.isEmpty ? ' · ยังไม่ระบุตำแหน่ง' : ' · $where'}',
                                 style: TextStyle(fontSize: 12, color: C.muted),
@@ -306,57 +371,12 @@ class _RelocateScreenState extends State<RelocateScreen> {
   Widget _placeBody(AppController c) {
     final bottom = MediaQuery.of(context).padding.bottom;
     final b = _target!;
-    final cascade = _cascade;
-    final wh = c.wh;
     final l = b.location;
     final from = [l['zone'], l['rack'], l['shelf'], l['slot']]
         .map((e) => (e ?? '').toString())
         .where((e) => e.isNotEmpty)
         .join(' · ');
-
-    String? clamp(String? v, List<String> opts) => (v != null && opts.contains(v)) ? v : null;
-
-    // Same rule as the receiving flow's putaway step: a level typed here has
-    // to become a real Location Master row, not free text on this one box, or
-    // it would never show up as an option anywhere else.
-    Future<String?> addLevel(String field, String typed) async {
-      final v = typed.toUpperCase();
-      final zone = field == 'zone' ? v : _zone;
-      final rack = field == 'rack' ? v : _rack;
-      final shelf = field == 'shelf' ? v : _shelf;
-      final slot = field == 'slot' ? v : _slot;
-      final code = [zone, rack, shelf, slot].whereType<String>().where((s) => s.isNotEmpty).join('-');
-      if (code.isEmpty) return null;
-      try {
-        await _c.api.createLocation(code: code, wh: wh, zone: zone, rack: rack, shelf: shelf, slot: slot);
-        await _c.refresh();
-        return v;
-      } catch (e) {
-        if (mounted) {
-          _c.toastMsg('เพิ่มตำแหน่งไม่สำเร็จ', e is ApiException ? e.message : '', ResultKind.err);
-        }
-        return null;
-      }
-    }
-
-    Widget dd(String label, String field, String? value, List<String> options,
-        void Function(String?) onChanged) {
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FieldLabel(label),
-            AddableDropdown(
-              value: clamp(value, options),
-              options: options,
-              hint: '— ไม่ระบุ —',
-              onChanged: onChanged,
-              onAdd: (typed) => addLevel(field, typed),
-            ),
-          ],
-        ),
-      );
-    }
+    final dest = _dest;
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
@@ -373,86 +393,118 @@ class _RelocateScreenState extends State<RelocateScreen> {
                   children: [
                     Text(b.tag,
                         style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
-                    Text('${c.S!.typeName(b.type)} · จาก ${from.isEmpty ? "ยังไม่ระบุตำแหน่ง" : from}',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace')),
+                    Text(
+                        '${c.S!.typeName(b.type)} · จาก ${from.isEmpty ? "ยังไม่ระบุตำแหน่ง" : from}',
                         style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
               ),
               TextButton(
                 onPressed: _changeTarget,
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero, minimumSize: Size.zero),
                 child: Text('เปลี่ยนกล่อง',
-                    style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w700)),
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        color: C.orange,
+                        fontWeight: FontWeight.w700)),
               ),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        Panel(
-          padding: const EdgeInsets.all(16),
-          radius: 18,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const FieldLabel('ตำแหน่งปลายทาง'),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  dd('โซน', 'zone', _zone, cascade.zones(wh), (v) {
-                    setState(() {
-                      _zone = v;
-                      _rack = null;
-                      _shelf = null;
-                      _slot = null;
-                    });
-                  }),
-                  const SizedBox(width: 9),
-                  dd('แร็ค', 'rack', _rack, cascade.racks(wh, _zone), (v) {
-                    setState(() {
-                      _rack = v;
-                      _shelf = null;
-                      _slot = null;
-                    });
-                  }),
-                ],
-              ),
-              const SizedBox(height: 11),
-              Row(
-                children: [
-                  dd('ชั้น', 'shelf', _shelf, cascade.shelves(wh, _zone, _rack), (v) {
-                    setState(() {
-                      _shelf = v;
-                      _slot = null;
-                    });
-                  }),
-                  const SizedBox(width: 9),
-                  dd('ช่อง', 'slot', _slot, cascade.slots(wh, _zone, _rack, _shelf),
-                      (v) => setState(() => _slot = v)),
-                ],
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red)),
+        if (dest == null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
+            decoration: BoxDecoration(
+              color: C.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: C.border, width: 1.5),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
+                const SizedBox(height: 8),
+                Text('ยิงบาร์โค้ดชั้นวางปลายทาง',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: C.muted,
+                        fontWeight: FontWeight.w600)),
               ],
-            ],
+            ),
           ),
-        ),
+          if (_placeScanError != null) ...[
+            const SizedBox(height: 10),
+            Text(_placeScanError!,
+                style: TextStyle(
+                    fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
+          ],
+        ] else
+          Panel(
+            padding: const EdgeInsets.all(16),
+            radius: 18,
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, size: 20, color: C.limeDeep),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('ตำแหน่งปลายทาง',
+                          style: TextStyle(fontSize: 12, color: C.muted)),
+                      Text(
+                          [dest.zone, dest.rack, dest.shelf, dest.slot]
+                              .where((v) => v.isNotEmpty)
+                              .join(' / '),
+                          style: const TextStyle(
+                              fontSize: 19, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _dest = null;
+                    _placeScanError = null;
+                  }),
+                  style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  child: Text('ยิงใหม่',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: C.orange,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(_error!, style: TextStyle(fontSize: 12.5, color: C.red)),
+        ],
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: _saving ? null : _save,
+            onPressed: (dest == null || _saving) ? null : _save,
             style: FilledButton.styleFrom(
               backgroundColor: C.lime,
               foregroundColor: C.limeDeep,
               disabledBackgroundColor: C.neutralBg,
               disabledForegroundColor: C.faint,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13)),
             ),
             child: Text(_saving ? 'กำลังบันทึก…' : 'ยืนยันย้ายตำแหน่ง',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           ),
         ),
       ],
