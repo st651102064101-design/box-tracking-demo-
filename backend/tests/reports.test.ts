@@ -19,6 +19,14 @@ beforeAll(async () => {
           location: { wh: 'WH-001', zone: 'A', rack: '1', shelf: '1', slot: '' },
           history: [],
         },
+        'WH-2': {
+          tag: 'WH-2',
+          type: 'BT-001',
+          status: 'warehouse',
+          labeled: true,
+          location: { wh: 'WH-001', zone: 'A', rack: '1', shelf: '2', slot: '' },
+          history: [],
+        },
       },
       customers: {},
       boxtypes: { 'BT-001': { id: 'BT-001', name: 'ลังพลาสติก', value: 450 } },
@@ -75,6 +83,34 @@ describe('POST /api/reports', () => {
       .get('/api/boxes/suggest-location?wh=WH-001')
       .set(auth(ctx.token));
     expect(suggestion.body.suggestion?.rack).not.toBe('2');
+  });
+
+  it('records an unreadable-tag report without touching the box itself', async () => {
+    const res = await request(ctx.app)
+      .post('/api/reports')
+      .set(auth(ctx.token))
+      .send({ kind: 'unreadable_tag', tag: 'WH-2' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ dir: 'unreadable_tag', tag: 'WH-2' });
+
+    const box = await request(ctx.app).get('/api/boxes/WH-2').set(auth(ctx.token));
+    // Unlike "missing", this box is fine — only its tag is unreadable — so
+    // its status must stay exactly as it was, not flip to lost or hold.
+    expect(box.body.status).toBe('warehouse');
+    expect(box.body.history.at(-1)).toMatchObject({ dir: 'unreadable_tag', tag: 'WH-2' });
+
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(
+      state.body.events.some((e: { dir: string; tag: string }) => e.dir === 'unreadable_tag' && e.tag === 'WH-2'),
+    ).toBe(true);
+  });
+
+  it('rejects an unreadable-tag report with no box tag', async () => {
+    const res = await request(ctx.app)
+      .post('/api/reports')
+      .set(auth(ctx.token))
+      .send({ kind: 'unreadable_tag', location: { wh: 'WH-001', zone: 'A', rack: '1', shelf: '1' } });
+    expect(res.status).toBe(400);
   });
 
   it('404s a missing-box report against an unknown tag', async () => {

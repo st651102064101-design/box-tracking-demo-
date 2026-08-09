@@ -11,11 +11,12 @@ import { bump } from '../lib/bus.js';
 /**
  * The PDA's floor-exception buttons — "ของหาย" (a system-directed pick or
  * putaway landed the operator at a location and the box/space wasn't what
- * was expected) and "ช่องเก็บเต็ม" (a suggested shelf is already full in
- * person, whatever the system believes). Each one actually changes state,
- * not just logs a note — see the two branches below — because a report an
- * operator can only ever watch land in a feed and never see act on anything
- * trains them to stop bothering to send it:
+ * was expected), "ช่องเก็บเต็ม" (a suggested shelf is already full in
+ * person, whatever the system believes), and "อ่านแท็กไม่ติด" (the box is
+ * right there but its RFID/barcode won't read). The first two actually
+ * change state, not just log a note — see the branches below — because a
+ * report an operator can only ever watch land in a feed and never see act
+ * on anything trains them to stop bothering to send it:
  *   - "missing": the box is immediately marked lost (same shape as the
  *     dashboard's own markLost()), so it drops out of pick eligibility and
  *     shows up wherever lost boxes already do (loss KPIs, the lost filter,
@@ -25,6 +26,10 @@ import { bump } from '../lib/bus.js';
  *     flag) gets `reportedFullAt` stamped into its `data`, and
  *     suggest-location excludes it until someone clears the flag from the
  *     dashboard's Location Master table.
+ *   - "unreadable_tag": deliberately leaves the box untouched — the box is
+ *     right there and fine, only its tag needs replacing, which the PDA
+ *     sends the operator straight into RfidRegisterScreen (replace:true) to
+ *     do. This endpoint only needs to log the report for the trail.
  *
  * Still written to `events` (the same feed cycle-count closes and gate
  * in/out already land in — see composeState in services/state.ts) so a
@@ -47,12 +52,17 @@ const locationShape = z.object({
 });
 
 const reportSchema = z.object({
-  kind: z.enum(['missing', 'bin_full']),
+  kind: z.enum(['missing', 'bin_full', 'unreadable_tag']),
   tag: z.string().trim().toUpperCase().optional(),
   location: locationShape.optional(),
   note: z.string().trim().max(500).optional().default(''),
 }).refine((v) => Boolean(v.tag) || Boolean(v.location), {
   message: 'ต้องระบุกล่องหรือตำแหน่งอย่างน้อยหนึ่งอย่าง',
+}).refine((v) => v.kind !== 'unreadable_tag' || Boolean(v.tag), {
+  // Unlike bin_full (which can be reported from a location alone, before any
+  // box is in hand), "อ่าน Tag ไม่ติด" is always about a specific box the
+  // operator is standing in front of — there's nothing else to flag.
+  message: 'ต้องระบุกล่องสำหรับรายงานอ่านแท็กไม่ติด',
 });
 
 reportsRouter.post(
@@ -139,7 +149,12 @@ reportsRouter.post(
     }
 
     await writeAuditLog(db, {
-      action: input.kind === 'missing' ? 'แจ้งของหาย → ตีสูญหาย' : 'แจ้งช่องเก็บเต็ม',
+      action:
+        input.kind === 'missing'
+          ? 'แจ้งของหาย → ตีสูญหาย'
+          : input.kind === 'unreadable_tag'
+            ? 'แจ้งอ่านแท็กไม่ติด'
+            : 'แจ้งช่องเก็บเต็ม',
       actor: req.user!.username,
       itemId: input.tag ?? flaggedLocationCode ?? 'location',
       itemName: input.tag ?? [input.location?.zone, input.location?.rack, input.location?.shelf, input.location?.slot]
