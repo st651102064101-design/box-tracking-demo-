@@ -42,7 +42,9 @@ class HomeScreen extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.3)),
                             ),
                             const SizedBox(width: 4),
                             Icon(Icons.expand_more, size: 17, color: C.chevron),
@@ -65,7 +67,10 @@ class HomeScreen extends StatelessWidget {
               // AppController.connected/retryOrConfigure.
               OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
               const SizedBox(width: 8),
-              RoundIconButton(icon: Icons.settings_outlined, onTap: () => c.go(Screen.settings), size: 38),
+              RoundIconButton(
+                  icon: Icons.settings_outlined,
+                  onTap: () => c.go(Screen.settings),
+                  size: 38),
             ],
           ),
         ),
@@ -77,7 +82,8 @@ class HomeScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 15, vertical: 12),
                     decoration: BoxDecoration(
                       color: C.orangeBg,
                       borderRadius: BorderRadius.circular(14),
@@ -85,11 +91,17 @@ class HomeScreen extends StatelessWidget {
                     ),
                     child: Text(
                       'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง',
-                      style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w600, height: 1.45),
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: C.orange,
+                          fontWeight: FontWeight.w600,
+                          height: 1.45),
                     ),
                   ),
                 ),
-              ...(c.postConfirmed ? _confirmedBody(context, c) : _postPickerBody(c)),
+              ...(c.postConfirmed
+                  ? _confirmedBody(context, c)
+                  : _postPickerBody(c)),
             ],
           ),
         ),
@@ -111,7 +123,8 @@ List<Widget> _postPickerBody(AppController c) {
   }
   final pendingWh = c.pendingWh;
   if (pendingWh == null) {
-    final showLast = c.hasLastSelection && whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
+    final showLast = c.hasLastSelection &&
+        whs.any((w) => (w['id'] ?? '').toString() == c.lastWh);
     return [
       const SizedBox(height: 16),
       const Caption('เลือกคลัง'),
@@ -152,7 +165,10 @@ List<Widget> _postPickerBody(AppController c) {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Text('เปลี่ยนคลัง',
-                style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: C.muted,
+                    fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -181,7 +197,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
           child: _Stat(
             value: '${c.warehouseCount}',
             label: 'ในคลัง',
-            onTap: () => _showBoxListSheet(context, c, title: 'กล่องในคลัง', status: 'warehouse'),
+            onTap: () => _showBoxListSheet(context, c,
+                title: 'กล่องในคลัง', status: 'warehouse'),
           ),
         ),
         const SizedBox(width: 9),
@@ -190,7 +207,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
             value: '${c.outCount}',
             label: 'ออกอยู่',
             valueColor: C.orange,
-            onTap: () => _showBoxListSheet(context, c, title: 'กล่องที่ออกอยู่', status: 'out'),
+            onTap: () => _showBoxListSheet(context, c,
+                title: 'กล่องที่ออกอยู่', status: 'out'),
           ),
         ),
         const SizedBox(width: 9),
@@ -212,7 +230,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     if (!c.canScan)
       Padding(
         padding: const EdgeInsets.only(top: 14),
-        child: _Note('บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
+        child: _Note(
+            'บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้'),
       ),
     const SizedBox(height: 16),
     // Grouped by where a box is in its life, not by which screen happens to
@@ -377,7 +396,9 @@ List<Widget> _menuGroups(AppController c) {
   final groups = <Widget>[
     if (inbound.isNotEmpty)
       _MenuGroup(
-        emoji: '📦',
+        icon: Icons.move_to_inbox_outlined,
+        iconColor: C.limeText,
+        iconBg: C.limeBg,
         title: 'รับกล่องเข้า',
         subtitle: 'Inbound / Return',
         initiallyOpen: true,
@@ -385,21 +406,27 @@ List<Widget> _menuGroups(AppController c) {
       ),
     if (outbound.isNotEmpty)
       _MenuGroup(
-        emoji: '🚚',
+        icon: Icons.local_shipping_outlined,
+        iconColor: C.orange,
+        iconBg: C.orangeBg,
         title: 'จ่ายกล่องออก',
         subtitle: 'Outbound / Transfer',
         initiallyOpen: true,
         children: outbound,
       ),
     _MenuGroup(
-      emoji: '🔍',
+      icon: Icons.search,
+      iconColor: C.ink2,
+      iconBg: C.neutralBg,
       title: 'ค้นหา & ติดตาม',
       subtitle: 'Search & Audit',
       children: search,
     ),
     if (audit.isNotEmpty)
       _MenuGroup(
-        emoji: '📋',
+        icon: Icons.fact_check_outlined,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
         title: 'ตรวจนับ & แจ้งปัญหา',
         subtitle: 'Count & Issues',
         badge: pendingDamage > 0 ? '$pendingDamage' : null,
@@ -418,13 +445,23 @@ List<Widget> _menuGroups(AppController c) {
 /// One collapsible stage of the menu. Stateful only so each group remembers
 /// its own open/closed state as the operator works — the rest of this screen
 /// is stateless and rebuilds on every notifyListeners().
+///
+/// A real icon, never an emoji: an emoji glyph renders however the OS font
+/// happens to draw it — different weight, different color, no way to tint it
+/// to match the rest of the UI — which is exactly why every other icon in
+/// this app (see _MenuItem right below) is a Material Icon in a colored
+/// tile instead. This group header follows the same convention now.
 class _MenuGroup extends StatefulWidget {
-  final String emoji, title, subtitle;
+  final IconData icon;
+  final Color iconColor, iconBg;
+  final String title, subtitle;
   final String? badge;
   final bool initiallyOpen;
   final List<Widget> children;
   const _MenuGroup({
-    required this.emoji,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
     required this.title,
     required this.subtitle,
     required this.children,
@@ -456,7 +493,14 @@ class _MenuGroupState extends State<_MenuGroup> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Text(widget.emoji, style: const TextStyle(fontSize: 19)),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                        color: widget.iconBg,
+                        borderRadius: BorderRadius.circular(11)),
+                    child: Icon(widget.icon, color: widget.iconColor, size: 20),
+                  ),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Column(
@@ -464,16 +508,20 @@ class _MenuGroupState extends State<_MenuGroup> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(widget.title,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                        Text(widget.subtitle, style: TextStyle(fontSize: 11.5, color: C.faint)),
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w800)),
+                        Text(widget.subtitle,
+                            style: TextStyle(fontSize: 11.5, color: C.faint)),
                       ],
                     ),
                   ),
                   if (widget.badge != null) ...[
-                    Pill(widget.badge!, color: C.orange, bg: C.orangeBg, fontSize: 11),
+                    Pill(widget.badge!,
+                        color: C.orange, bg: C.orangeBg, fontSize: 11),
                     const SizedBox(width: 8),
                   ],
-                  Icon(_open ? Icons.expand_less : Icons.expand_more, size: 22, color: C.chevron),
+                  Icon(_open ? Icons.expand_less : Icons.expand_more,
+                      size: 22, color: C.chevron),
                 ],
               ),
             ),
@@ -520,7 +568,8 @@ class _MenuItem extends StatelessWidget {
               Container(
                 width: 42,
                 height: 42,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                    color: iconBg, borderRadius: BorderRadius.circular(12)),
                 child: Icon(icon, color: iconColor, size: 22),
               ),
               const SizedBox(width: 13),
@@ -529,7 +578,9 @@ class _MenuItem extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 15.5, fontWeight: FontWeight.w700)),
                     Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
@@ -547,16 +598,20 @@ class _MenuItem extends StatelessWidget {
 /// scroll-capped growth, safe-area bottom padding. Kept as one function so
 /// a screen too short for the full list (see the earlier "BOTTOM
 /// OVERFLOWED" fix on the handover sheet) is fixed everywhere at once.
-void _showDetailSheet(BuildContext context, {required String title, required List<Widget> children}) {
+void _showDetailSheet(BuildContext context,
+    {required String title, required List<Widget> children}) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
+      margin: EdgeInsets.fromLTRB(
+          12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.78),
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(
+          color: C.surface, borderRadius: BorderRadius.circular(22)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,19 +621,24 @@ void _showDetailSheet(BuildContext context, {required String title, required Lis
               width: 36,
               height: 4,
               margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                  color: C.border2, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          Flexible(child: SingleChildScrollView(child: Column(children: children))),
+          Flexible(
+              child: SingleChildScrollView(child: Column(children: children))),
         ],
       ),
     ),
   );
 }
 
-Widget _detailRow({required String title, required String subtitle, Widget? trailing}) {
+Widget _detailRow(
+    {required String title, required String subtitle, Widget? trailing}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Container(
@@ -596,7 +656,10 @@ Widget _detailRow({required String title, required String subtitle, Widget? trai
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'monospace')),
                 Text(subtitle, style: TextStyle(fontSize: 12, color: C.muted)),
               ],
             ),
@@ -610,9 +673,12 @@ Widget _detailRow({required String title, required String subtitle, Widget? trai
 
 /// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
 /// number, not just the count. [status] matches Box.status directly.
-void _showBoxListSheet(BuildContext context, AppController c, {required String title, required String status}) {
+void _showBoxListSheet(BuildContext context, AppController c,
+    {required String title, required String status}) {
   final S = c.S;
-  final boxes = (S?.boxes ?? const <Box>[]).where((b) => b.status == status).toList()
+  final boxes = (S?.boxes ?? const <Box>[])
+      .where((b) => b.status == status)
+      .toList()
     ..sort((a, b) => a.tag.compareTo(b.tag));
   _showDetailSheet(
     context,
@@ -621,7 +687,9 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('ไม่มีกล่อง', style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(
+                  child: Text('ไม่มีกล่อง',
+                      style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : boxes.map((b) {
@@ -629,7 +697,8 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
                 ? S!.custName(b.customer)
                 : [
                     S!.whName(b.location['wh']?.toString()),
-                    if ((b.location['zone'] ?? '').toString().isNotEmpty) 'โซน ${b.location['zone']}',
+                    if ((b.location['zone'] ?? '').toString().isNotEmpty)
+                      'โซน ${b.location['zone']}',
                   ].join(' · ');
             return _detailRow(
               title: b.tag,
@@ -641,20 +710,18 @@ void _showBoxListSheet(BuildContext context, AppController c, {required String t
 
 /// "วันนี้" stat tap — every in/out event from today, newest first.
 void _showTodayEventsSheet(BuildContext context, AppController c) {
-  final events = (c.S?.events ?? const [])
-      .whereType<Map>()
-      .where((e) {
-        final dir = e['dir'];
-        if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
-        final ts = e['ts']?.toString();
-        if (ts == null) return false;
-        final d = DateTime.tryParse(ts)?.toLocal();
-        if (d == null) return false;
-        final n = DateTime.now();
-        return d.year == n.year && d.month == n.month && d.day == n.day;
-      })
-      .toList()
-    ..sort((a, b) => (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
+  final events = (c.S?.events ?? const []).whereType<Map>().where((e) {
+    final dir = e['dir'];
+    if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
+    final ts = e['ts']?.toString();
+    if (ts == null) return false;
+    final d = DateTime.tryParse(ts)?.toLocal();
+    if (d == null) return false;
+    final n = DateTime.now();
+    return d.year == n.year && d.month == n.month && d.day == n.day;
+  }).toList()
+    ..sort((a, b) =>
+        (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
   _showDetailSheet(
     context,
     title: 'วันนี้ (${events.length})',
@@ -662,7 +729,9 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
         ? [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('ยังไม่มีรายการวันนี้', style: TextStyle(fontSize: 13, color: C.faint))),
+              child: Center(
+                  child: Text('ยังไม่มีรายการวันนี้',
+                      style: TextStyle(fontSize: 13, color: C.faint))),
             ),
           ]
         : events.map((e) {
@@ -677,7 +746,8 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
               title: (e['tag'] ?? '').toString(),
               subtitle: [time, if (who.isNotEmpty) who].join(' · '),
               trailing: Pill(isOut ? 'ออก' : 'เข้า',
-                  color: isOut ? C.orange : C.limeText, bg: isOut ? C.orangeBg : C.limeBg),
+                  color: isOut ? C.orange : C.limeText,
+                  bg: isOut ? C.orangeBg : C.limeBg),
             );
           }).toList(),
   );
@@ -700,56 +770,61 @@ void _openHandover(BuildContext context, AppController c) {
     // over on a screen too short even for that.
     isScrollControlled: true,
     builder: (sheetCtx) => Container(
-      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
+      margin: EdgeInsets.fromLTRB(
+          12, 12, 12, 12 + MediaQuery.of(sheetCtx).padding.bottom),
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(
+          color: C.surface, borderRadius: BorderRadius.circular(22)),
       child: SingleChildScrollView(
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Same drag-handle bar the PIN pad sheet uses — this sheet drags
-          // down to dismiss same as any modal sheet, but with padding.all
-          // the same on every edge there was nothing visually marking that
-          // affordance the way iOS's own sheets always do.
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: C.border2, borderRadius: BorderRadius.circular(2)),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Same drag-handle bar the PIN pad sheet uses — this sheet drags
+            // down to dismiss same as any modal sheet, but with padding.all
+            // the same on every edge there was nothing visually marking that
+            // affordance the way iOS's own sheets always do.
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: C.border2, borderRadius: BorderRadius.circular(2)),
+              ),
             ),
-          ),
-          Text(c.user, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          Text(
-            [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
-                .where((s) => s.isNotEmpty)
-                .join(' · '),
-            style: TextStyle(fontSize: 12.5, color: C.muted),
-          ),
-          const SizedBox(height: 16),
-          _SheetAction(
-            icon: Icons.swap_horiz,
-            label: 'เปลี่ยนคน / จบงาน',
-            sub: 'กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม',
-            onTap: () {
-              Navigator.of(sheetCtx).pop();
-              c.lock();
-            },
-          ),
-          if (c.canScan) ...[
-            const SizedBox(height: 10),
+            Text(c.user,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            Text(
+              [c.emp?.subtitle ?? '', '${c.selWhName} · ประตู ${c.gate}']
+                  .where((s) => s.isNotEmpty)
+                  .join(' · '),
+              style: TextStyle(fontSize: 12.5, color: C.muted),
+            ),
+            const SizedBox(height: 16),
             _SheetAction(
-              icon: Icons.sync_alt,
-              label: 'เปลี่ยนคลัง/ประตู',
-              sub: 'เลือกจุดทำงานใหม่สำหรับกะนี้',
+              icon: Icons.swap_horiz,
+              label: 'เปลี่ยนคน / จบงาน',
+              sub: 'กลับไปหน้ายิงบัตร — เครื่องยังประจำประตูเดิม',
               onTap: () {
                 Navigator.of(sheetCtx).pop();
-                c.reselectPost();
+                c.lock();
               },
             ),
+            if (c.canScan) ...[
+              const SizedBox(height: 10),
+              _SheetAction(
+                icon: Icons.sync_alt,
+                label: 'เปลี่ยนคลัง/ประตู',
+                sub: 'เลือกจุดทำงานใหม่สำหรับกะนี้',
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  c.reselectPost();
+                },
+              ),
+            ],
           ],
-        ],
         ),
       ),
     ),
@@ -761,7 +836,8 @@ class _WhPickTile extends StatelessWidget {
   final VoidCallback onTap;
   final String? tag;
   final IconData? icon;
-  const _WhPickTile({required this.name, required this.onTap, this.tag, this.icon});
+  const _WhPickTile(
+      {required this.name, required this.onTap, this.tag, this.icon});
   @override
   Widget build(BuildContext context) {
     final highlighted = tag != null;
@@ -797,7 +873,11 @@ class _WhPickTile extends StatelessWidget {
                 Pill(tag!, color: C.lime, bg: C.onHero.withValues(alpha: 0.14)),
                 const SizedBox(width: 8),
               ],
-              Icon(Icons.chevron_right, size: 20, color: highlighted ? C.onHero.withValues(alpha: 0.5) : C.chevron),
+              Icon(Icons.chevron_right,
+                  size: 20,
+                  color: highlighted
+                      ? C.onHero.withValues(alpha: 0.5)
+                      : C.chevron),
             ],
           ),
         ),
@@ -810,7 +890,8 @@ class _GatePickChip extends StatelessWidget {
   final String label;
   final String type;
   final VoidCallback onTap;
-  const _GatePickChip({required this.label, required this.type, required this.onTap});
+  const _GatePickChip(
+      {required this.label, required this.type, required this.onTap});
 
   // ขาเข้า/ขาออก ต้องเป็นสีตรงข้ามกันชัดเจน (เขียว vs แดง) ส่วนไม้ tone อ่อนของ
   // C.lime/C.orange ที่ใช้ในการ์ดเมนูหลักไม่ต่างกันพอเมื่อโชว์เป็น label เล็กๆ
@@ -820,12 +901,18 @@ class _GatePickChip extends StatelessWidget {
   // 'in' | 'out' | 'both' -> spans สีตรงข้ามกัน; 'both' โชว์ทั้งสองคำต่อกัน
   List<TextSpan> get _typeSpans {
     const style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
-    final inSpan = TextSpan(text: 'เข้า', style: style.copyWith(color: _inColor));
-    final outSpan = TextSpan(text: 'ออก', style: style.copyWith(color: _outColor));
+    final inSpan =
+        TextSpan(text: 'เข้า', style: style.copyWith(color: _inColor));
+    final outSpan =
+        TextSpan(text: 'ออก', style: style.copyWith(color: _outColor));
     return switch (type) {
       'in' => [inSpan],
       'out' => [outSpan],
-      _ => [inSpan, TextSpan(text: '·', style: TextStyle(fontSize: 11, color: C.border2)), outSpan],
+      _ => [
+          inSpan,
+          TextSpan(text: '·', style: TextStyle(fontSize: 11, color: C.border2)),
+          outSpan
+        ],
     };
   }
 
@@ -841,12 +928,15 @@ class _GatePickChip extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 64),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: C.border2)),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: C.border2)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('ประตู $label',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text.rich(TextSpan(children: _typeSpans)),
             ],
@@ -861,7 +951,11 @@ class _SheetAction extends StatelessWidget {
   final IconData icon;
   final String label, sub;
   final VoidCallback onTap;
-  const _SheetAction({required this.icon, required this.label, required this.sub, required this.onTap});
+  const _SheetAction(
+      {required this.icon,
+      required this.label,
+      required this.sub,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -882,7 +976,9 @@ class _SheetAction extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
                     Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
                   ],
                 ),
@@ -907,7 +1003,8 @@ class _Note extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           border: Border.all(color: C.border),
         ),
-        child: Text(text, style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4)),
+        child: Text(text,
+            style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4)),
       );
 }
 
@@ -926,7 +1023,8 @@ class _Stat extends StatelessWidget {
   final String value, label;
   final Color? valueColor;
   final VoidCallback? onTap;
-  const _Stat({required this.value, required this.label, this.valueColor, this.onTap});
+  const _Stat(
+      {required this.value, required this.label, this.valueColor, this.onTap});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -947,7 +1045,11 @@ class _Stat extends StatelessWidget {
                       letterSpacing: -0.6,
                       color: valueColor ?? C.ink,
                       fontFeatures: const [FontFeature.tabularFigures()])),
-              Text(label, style: TextStyle(fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -974,8 +1076,17 @@ class _TodayStat extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 5),
-              Text('วันนี้', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink2, height: 1.35)),
-              Text('↓$inN · ↑$outN', style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w500)),
+              Text('วันนี้',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: C.ink2,
+                      height: 1.35)),
+              Text('↓$inN · ↑$outN',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -995,7 +1106,9 @@ List<_PendingItem> _pendingItems(AppController c) {
   final items = <_PendingItem>[
     ...c.outbox.map((tx) {
       final at = DateTime.tryParse(tx.ts) ?? DateTime.now();
-      final title = tx.type == 'in' ? 'รับคืน ${tx.tags.length} กล่อง' : 'ส่งออก ${tx.tags.length} กล่อง';
+      final title = tx.type == 'in'
+          ? 'รับคืน ${tx.tags.length} กล่อง'
+          : 'ส่งออก ${tx.tags.length} กล่อง';
       final who = c.S?.custName(tx.customer ?? '') ?? tx.customer;
       final subtitle = [
         if (tx.type == 'out' && (who ?? '').isNotEmpty) '→ $who',
@@ -1005,15 +1118,20 @@ List<_PendingItem> _pendingItems(AppController c) {
       return _PendingItem(at, title, subtitle);
     }),
     ...c.damagedFlags.where((f) => !f.synced).map(
-          (f) => _PendingItem(f.createdAt, 'แจ้งเสียหาย ${f.barcode}',
-              f.rfidEpcs.isEmpty ? 'ไม่มี RFID' : '${f.rfidEpcs.length} แท็ก RFID'),
+          (f) => _PendingItem(
+              f.createdAt,
+              'แจ้งเสียหาย ${f.barcode}',
+              f.rfidEpcs.isEmpty
+                  ? 'ไม่มี RFID'
+                  : '${f.rfidEpcs.length} แท็ก RFID'),
         ),
   ];
   items.sort((a, b) => b.at.compareTo(a.at)); // newest first
   return items;
 }
 
-String _fmtHm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+String _fmtHm(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 class _OutboxBanner extends StatelessWidget {
   final AppController c;
@@ -1027,7 +1145,10 @@ class _OutboxBanner extends StatelessWidget {
         context,
         title: 'รอซิงก์ (${items.length})',
         children: items.isEmpty
-            ? [Text('ไม่มีรายการค้าง', style: TextStyle(fontSize: 13, color: C.faint))]
+            ? [
+                Text('ไม่มีรายการค้าง',
+                    style: TextStyle(fontSize: 13, color: C.faint))
+              ]
             : items
                 .map((i) => _detailRow(
                       title: i.title,
@@ -1047,7 +1168,8 @@ class _OutboxBanner extends StatelessWidget {
             Container(
               width: 34,
               height: 34,
-              decoration: BoxDecoration(color: C.orange, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                  color: C.orange, borderRadius: BorderRadius.circular(10)),
               alignment: Alignment.center,
               child: Text('${items.length}',
                   style: TextStyle(
@@ -1058,19 +1180,28 @@ class _OutboxBanner extends StatelessWidget {
             ),
             const SizedBox(width: 11),
             Expanded(
-              child: Text('รายการค้าง sync (ออฟไลน์) — แตะเพื่อดูว่าทำอะไรไปแล้วบ้าง',
-                  style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.4, fontWeight: FontWeight.w500)),
+              child: Text(
+                  'รายการค้าง sync (ออฟไลน์) — แตะเพื่อดูว่าทำอะไรไปแล้วบ้าง',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: C.ink3,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500)),
             ),
             const SizedBox(width: 8),
             FilledButton(
               onPressed: onSync,
               style: FilledButton.styleFrom(
                 backgroundColor: C.ink,
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
                 minimumSize: Size.zero,
               ),
-              child: const Text('Sync', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+              child: const Text('Sync',
+                  style:
+                      TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
