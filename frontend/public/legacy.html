@@ -8197,43 +8197,51 @@ function openReportProblemModal() {
   openModal(_reportProblemHtml());
 }
 window.openReportProblemModal = openReportProblemModal;
+// Plain scan fields, same as every other "ยิงบาร์โค้ด" input in the app
+// (Putaway's #slotPaScan, Gate In/Out, …) — no datalist/autocomplete
+// dropdown to pick from and no note field to type into. A scanner burst is
+// auto-detected by autoScanBind and submits on its own; Enter covers the
+// keyboard-typed fallback. Matches the PDA's own report_problem_screen,
+// which is scan-only for exactly the same reason.
 function _reportPick(kind) {
   _reportKind = kind;
   $('#modalSheet').innerHTML = _reportProblemHtml();
   var body = $('#reportProblemBody');
   if (kind === 'missing') {
-    var eligible = Object.keys(S.boxes).filter(function(t){var b=S.boxes[t];return b.status!=='pending'&&b.status!=='lost';});
-    body.innerHTML = '<div class="field"><label>รหัสกล่อง (Tag)</label>'
-      +'<input id="reportMissingTag" list="reportMissingTagList" placeholder="พิมพ์หรือเลือกรหัสกล่อง" autocomplete="off" style="text-transform:uppercase;">'
-      +'<datalist id="reportMissingTagList">'+eligible.map(function(t){return '<option value="'+esc(t)+'">';}).join('')+'</datalist></div>'
-      +'<div class="field"><label>รายละเอียดเพิ่มเติม (ถ้ามี)</label><textarea id="reportMissingNote" rows="2" placeholder="เช่น หาในโซนใกล้เคียงแล้วไม่พบ"></textarea></div>'
-      +'<button type="button" class="btn red" style="width:100%;" onclick="_reportSubmitMissing()">ส่งรายงาน — ตีกล่องหาย</button>';
+    body.innerHTML = '<div class="inv-scan-bar" style="margin-bottom:4px;"><span class="iss-ic">⊟</span>'
+      +'<input id="reportMissingTag" placeholder="ยิงบาร์โค้ดกล่องที่หา" autocomplete="off" style="text-transform:uppercase;">'
+      +'<button class="btn red sm" id="btnReportMissingGo">ส่งรายงาน</button></div>'
+      +'<div class="small muted" style="margin-top:6px;">ยิงแล้วส่งรายงานทันที — ระบบสั่งมาที่นี่แต่ไม่พบของ</div>';
     var f = $('#reportMissingTag'); if (f) f.focus();
+    $('#reportMissingTag').addEventListener('keydown', function(e){ if (e.key === 'Enter') _reportSubmitMissing(); });
+    autoScanBind($('#reportMissingTag'), _reportSubmitMissing);
+    $('#btnReportMissingGo').onclick = _reportSubmitMissing;
   } else if (kind === 'bin_full') {
-    var openCodes = Object.keys(S.locations).filter(function(c){return !S.locations[c].reportedFullAt;});
-    body.innerHTML = '<div class="field"><label>รหัสตำแหน่ง (Location code)</label>'
-      +'<input id="reportFullCode" list="reportFullCodeList" placeholder="พิมพ์หรือเลือกรหัสตำแหน่ง" autocomplete="off" style="text-transform:uppercase;">'
-      +'<datalist id="reportFullCodeList">'+openCodes.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist></div>'
-      +'<button type="button" class="btn red" style="width:100%;" onclick="_reportSubmitFull()">ส่งรายงาน — แจ้งช่องเต็ม</button>';
+    body.innerHTML = '<div class="inv-scan-bar" style="margin-bottom:4px;"><span class="iss-ic">⊟</span>'
+      +'<input id="reportFullCode" placeholder="ยิงบาร์โค้ดชั้นวางที่เต็ม" autocomplete="off" style="text-transform:uppercase;">'
+      +'<button class="btn red sm" id="btnReportFullGo">ส่งรายงาน</button></div>'
+      +'<div class="small muted" style="margin-top:6px;">ยิงแล้วส่งรายงานทันที — ช่องที่ระบบแนะนำเต็มแล้วจริง</div>';
     var f2 = $('#reportFullCode'); if (f2) f2.focus();
+    $('#reportFullCode').addEventListener('keydown', function(e){ if (e.key === 'Enter') _reportSubmitFull(); });
+    autoScanBind($('#reportFullCode'), _reportSubmitFull);
+    $('#btnReportFullGo').onclick = _reportSubmitFull;
   }
 }
 window._reportPick = _reportPick;
 // Same shape/effect as markLost() — kept separate rather than calling it
 // directly because markLost's own confirmA() would double the "are you
-// sure" the deliberate kind-pick -> fill-in -> ส่งรายงาน flow already is.
+// sure" the deliberate kind-pick -> scan flow already is.
 function _reportSubmitMissing() {
   var tag = val('reportMissingTag').toUpperCase();
-  if (!tag) return toast('กรอกรหัสกล่อง', null, 'err');
+  if (!tag) return toast('ยิงบาร์โค้ดกล่องก่อน', null, 'err');
   var b = S.boxes[tag];
   if (!b) return toast('ไม่พบกล่อง', tag, 'err');
   if (b.status === 'pending') return toast('กล่องนี้ยังไม่ผ่านการรับเข้า', 'แจ้งหายได้เฉพาะกล่องที่อยู่ในระบบแล้ว', 'err');
   if (b.status === 'lost') return toast('กล่องนี้ถูกแจ้งหายอยู่แล้ว', tag, 'err');
-  var note = val('reportMissingNote');
   var before = {status: b.status};
   b.status = 'lost'; b.lostAt = iso(); b.lostReason = 'reported-missing'; b.lastSeenAt = iso();
-  b.history.push({dir:'lost',ts:iso(),customer:b.customer,do:b.do,reason:'แจ้งของหาย (เว็บ)'+(note?' — '+note:'')});
-  S.events.push({dir:'missing',tag:tag,location:b.location||null,note:note,ts:iso(),recorder:USER});
+  b.history.push({dir:'lost',ts:iso(),customer:b.customer,do:b.do,reason:'แจ้งของหาย (เว็บ)'});
+  S.events.push({dir:'missing',tag:tag,location:b.location||null,note:'',ts:iso(),recorder:USER});
   auditEntry('แจ้งของหาย → ตีสูญหาย', USER, tag, typeName(b.type), before, {status:'lost'});
   closeModal();
   toast('บันทึกรายงานแล้ว', tag+' ถูกตีเป็นสูญหาย', 'warn');
@@ -8242,7 +8250,7 @@ function _reportSubmitMissing() {
 window._reportSubmitMissing = _reportSubmitMissing;
 function _reportSubmitFull() {
   var code = val('reportFullCode').toUpperCase();
-  if (!code) return toast('กรอกรหัสตำแหน่ง', null, 'err');
+  if (!code) return toast('ยิงบาร์โค้ดตำแหน่งก่อน', null, 'err');
   var l = S.locations[code];
   if (!l) return toast('ไม่พบตำแหน่งนี้', code, 'err');
   if (l.reportedFullAt) return toast('ช่องนี้ถูกแจ้งเต็มอยู่แล้ว', code, 'err');
