@@ -176,6 +176,7 @@ export async function gateIn(db, input) {
     const plate = input.plate ?? '';
     const driver = input.driver ?? '';
     const vehicleType = input.vehicleType ?? '';
+    const conditions = input.conditions ?? {};
     const wh = await warehouseOfGate(db, gate);
     const inTs = iso();
     const { resolved, missing } = await resolveBoxesByCodes(db, tags);
@@ -191,9 +192,22 @@ export async function gateIn(db, input) {
             const row = found.get(tag);
             const b = { ...row.data };
             const wasOut = b.status === 'out';
-            b.status = 'warehouse';
+            // A box the operator flagged while scanning it in lands on 'hold' or
+            // 'damage' instead of 'warehouse' — same statuses the box list already
+            // filters by (see legacy.html's filtBoxStatus) — so it can't ship back
+            // out (gateOut's NOT_SHIPPABLE map) until someone clears the flag.
+            const condition = conditions[tag];
+            const status = condition ?? 'warehouse';
+            b.status = status;
             b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
             b.lastSeenAt = inTs;
+            // Only a box actually landing on 'warehouse' gets the chosen shelf —
+            // see the docstring on GateInInput.location.
+            const location = !condition && input.location
+                ? { wh, zone: input.location.zone ?? '', rack: input.location.rack ?? '', shelf: input.location.shelf ?? '', slot: input.location.slot ?? '', gate: null, ts: inTs }
+                : undefined;
+            if (location)
+                b.location = location;
             b.plate = plate;
             b.driver = driver;
             b.vehicleType = vehicleType;
@@ -220,12 +234,14 @@ export async function gateIn(db, input) {
                 plate,
                 driver,
                 vehicleType,
+                ...(condition ? { condition } : {}),
+                ...(location ? { loc: location } : {}),
             });
             b.history = history;
             await tx
                 .update(boxes)
                 .set({
-                status: 'warehouse',
+                status,
                 cycles: (row.cycles ?? 0) + (wasOut ? 1 : 0),
                 lastSeenAt: new Date(inTs),
                 customer: null,
@@ -235,6 +251,7 @@ export async function gateIn(db, input) {
                 outWh: null,
                 outAt: null,
                 dueAt: null,
+                ...(location ? { location } : {}),
                 data: b,
                 updatedAt: new Date(),
             })
@@ -256,6 +273,8 @@ export async function gateIn(db, input) {
                     plate,
                     driver,
                     vehicleType,
+                    ...(condition ? { condition } : {}),
+                    ...(location ? { loc: location } : {}),
                 },
             });
             received.push(tag);

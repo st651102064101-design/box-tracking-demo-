@@ -184,6 +184,34 @@ export const inventory = pgTable('inventory', {
     data: jsonb('data').notNull().default({}),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+/* ─── cycle counts (ตรวจนับ) ───────────────────────────────────────────────
+ * A stock-take session over one warehouse (optionally narrowed to one zone).
+ * `expected` is frozen at open time rather than recomputed on close: the
+ * whole point of a count is comparing what was *believed* to be on the shelf
+ * against what was actually found, and a box gated out mid-count would
+ * otherwise quietly erase its own discrepancy.
+ *
+ * Deliberately its own table rather than another row in the generic
+ * `inventory` id/data bag — a count is queried by warehouse, zone and status
+ * (find the open session for this post), and those need real columns to be
+ * indexable rather than jsonb probes. */
+export const cycleCounts = pgTable('cycle_counts', {
+    id: text('id').primaryKey(),
+    wh: text('wh').notNull(),
+    zone: text('zone').notNull().default(''),
+    status: text('status').notNull().default('open'), // 'open' | 'closed'
+    startedBy: text('started_by'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** Box tags the system believed were here when the session opened. */
+    expected: jsonb('expected').notNull().default([]),
+    /** Expected tags that were actually scanned. */
+    counted: jsonb('counted').notNull().default([]),
+    /** Scanned here but not expected here — the other half of a discrepancy. */
+    unexpected: jsonb('unexpected').notNull().default([]),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 /* ─── event streams ───────────────────────────────────────────────────────*/
 export const events = pgTable('events', {
     id: serial('id').primaryKey(),
@@ -217,6 +245,7 @@ export const schema = {
     doRecords,
     putaway,
     inventory,
+    cycleCounts,
     events,
     auditLog,
 };
