@@ -29,6 +29,9 @@ enum Screen {
   transfer,
   cycleCount,
   moreHub,
+  holdRelease,
+  reportProblem,
+  locationInquiry,
 }
 
 /// Which physical input a trigger pull means right now, on any screen that
@@ -1149,6 +1152,27 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
+    notifyListeners();
+  }
+
+  /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. The only way to hold, flag
+  /// damaged, or release a box outside the moment it's received at Gate In
+  /// (see scan_screen.dart's own _ConditionPicker for that path).
+  void goHoldRelease() {
+    screen = Screen.holdRelease;
+    notifyListeners();
+  }
+
+  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
+  void goReportProblem() {
+    screen = Screen.reportProblem;
+    notifyListeners();
+  }
+
+  /// "เช็คช่อง" — LocationInquiryScreen, the reverse of "หากล่อง": scan a
+  /// shelf and see what the system believes is on it.
+  void goLocationInquiry() {
+    screen = Screen.locationInquiry;
     notifyListeners();
   }
 

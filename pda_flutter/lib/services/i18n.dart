@@ -442,6 +442,46 @@ class LocaleController extends ChangeNotifier {
         'The boxes are received, but stay "awaiting putaway" until someone shelves them',
     'เก็บต่อ': 'Keep going',
     'พักไว้ก่อน': 'Leave it pending',
+
+    // more hub: hold/release, report problem, location inquiry
+    'พัก / แจ้งชำรุด': 'Hold / flag damage',
+    'กล่องที่อยู่ในคลังแล้ว — ชำรุดทีหลัง, พักรอ QC, หรือปลดพัก':
+        'A box already in the warehouse — damaged later, held for QC, or released',
+    'แจ้งปัญหาหน้างาน': 'Report a floor problem',
+    'ของหาย / ช่องเก็บเต็ม': 'Missing box / bin full',
+    'เช็คช่อง': 'Check a bin',
+    'ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่':
+        'Scan a shelf barcode to see what should be there',
+    'ยิงบาร์โค้ดกล่องที่จะพักหรือแจ้งชำรุด':
+        'Scan the box to hold or flag as damaged',
+    'เลือกการทำงาน': 'Choose an action',
+    'เหตุผล (ถ้ามี)': 'Reason (optional)',
+    'เช่น มุมยุบ / รอตรวจสอบ QC': 'e.g. dented corner / pending QC',
+    'พักสินค้า (Hold)': 'Hold',
+    'แจ้งชำรุด': 'Flag as damaged',
+    'ปลดพัก — กลับเป็นปกติ': 'Release — back to normal',
+    'ของหาย': 'Missing box',
+    'ยิงบาร์โค้ดกล่อง — ระบบสั่งมาที่นี่แต่ไม่พบของ':
+        'Scan the box — the system sent you here but nothing was found',
+    'ช่องเก็บเต็ม': 'Bin full',
+    'ยิงบาร์โค้ดชั้นวาง — ช่องที่ระบบแนะนำเต็มแล้วจริง':
+        'Scan the shelf — the suggested bin is genuinely full',
+    'ยิงบาร์โค้ดกล่องที่หา': 'Scan the box you\'re reporting',
+    'ยิงบาร์โค้ดชั้นวางที่เต็ม': 'Scan the full shelf',
+    'รายละเอียดเพิ่มเติม (ถ้ามี)': 'More detail (optional)',
+    'เช่น หาในโซนใกล้เคียงแล้วไม่พบ':
+        'e.g. checked nearby zones too, still not found',
+    'เช่น มีของวางเกินที่ระบบบันทึกไว้':
+        'e.g. more sitting here than the system has on record',
+    'ส่งรายงาน': 'Send report',
+    'บันทึกรายงานแล้ว': 'Report recorded',
+    'แจ้งอีกรายการ': 'Report another',
+    'กลับหน้าหลัก': 'Back to home',
+    'ยิงบาร์โค้ดชั้นวางเพื่อดูของที่ควรอยู่':
+        'Scan a shelf barcode to see what belongs there',
+    'ระบบบันทึกว่ามี': 'The system has',
+    'ใบที่นี่': 'box(es) recorded here',
+    'ระบบไม่พบกล่องบันทึกไว้ที่ช่องนี้': 'No box is recorded at this bin',
   };
 }
 

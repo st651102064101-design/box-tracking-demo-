@@ -7,13 +7,11 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 /// "ผูก Tag / ชำรุด / อื่นๆ" — the sixth primary-menu slot, for the
-/// floor actions that don't each need their own button: commissioning an
-/// RFID tag, intaking a brand-new box, and looking a box up by code/status
-/// (Track). There's no standalone "แจ้งชำรุด" action here on purpose — the
-/// backend has no endpoint to flag a box damaged outside of the Gate In
-/// queue's own per-box condition picker (see scan_screen.dart's
-/// _ConditionPicker), so that's called out below rather than faked with a
-/// button that goes nowhere.
+/// floor actions that don't each need their own button on Home: commissioning
+/// an RFID tag, intaking a brand-new box, looking a box up (Track),
+/// holding/damaging/releasing a box already in the warehouse, the "ของหาย" /
+/// "ช่องเก็บเต็ม" floor-exception reports, and the reverse "เช็คช่อง" location
+/// lookup.
 class MoreHubScreen extends StatelessWidget {
   const MoreHubScreen({super.key});
 
@@ -64,25 +62,36 @@ class MoreHubScreen extends StatelessWidget {
                   sub: loc.t('Track — ดูสถานะ ตำแหน่ง ประวัติ'),
                   onTap: c.goTrack,
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: C.orangeBg,
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: C.orangeBorder),
+                if (c.canScan) ...[
+                  const SizedBox(height: 10),
+                  _tile(
+                    icon: Icons.pause_circle_outline,
+                    color: C.orange,
+                    bg: C.orangeBg,
+                    title: loc.t('พัก / แจ้งชำรุด'),
+                    sub: loc.t(
+                        'กล่องที่อยู่ในคลังแล้ว — ชำรุดทีหลัง, พักรอ QC, หรือปลดพัก'),
+                    onTap: c.goHoldRelease,
                   ),
-                  child: Text(
-                    loc.t(
-                        'แจ้งกล่องชำรุด — ทำได้ตอนรับเข้า (Gate In): ติ๊กสถานะ "ชำรุด" ที่การ์ดกล่องนั้นในคิวก่อนยืนยัน'),
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: C.orange,
-                        height: 1.45,
-                        fontWeight: FontWeight.w600),
+                  const SizedBox(height: 10),
+                  _tile(
+                    icon: Icons.report_gmailerrorred_outlined,
+                    color: C.red,
+                    bg: C.redBg,
+                    title: loc.t('แจ้งปัญหาหน้างาน'),
+                    sub: loc.t('ของหาย / ช่องเก็บเต็ม'),
+                    onTap: c.goReportProblem,
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  _tile(
+                    icon: Icons.grid_view_outlined,
+                    color: C.limeDeep,
+                    bg: C.limeBg,
+                    title: loc.t('เช็คช่อง'),
+                    sub: loc.t('ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่'),
+                    onTap: c.goLocationInquiry,
+                  ),
+                ],
               ],
             ),
           ),

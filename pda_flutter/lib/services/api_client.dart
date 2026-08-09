@@ -301,6 +301,38 @@ class ApiClient {
         }))) as Map<String, dynamic>;
   }
 
+  /// POST /api/boxes/:tag/hold { status, reason } — sets or clears
+  /// hold/damage on a box already in the warehouse. [status] is
+  /// 'hold'/'damage'/'warehouse' (the last being release) — see
+  /// HoldReleaseScreen, the PDA's only entry point outside Gate In's own
+  /// per-box condition picker.
+  Future<Map<String, dynamic>> setBoxHold(String tag,
+      {required String status, String reason = ''}) async {
+    return await _send(() => http.post(_u('/api/boxes/$tag/hold'),
+            headers: _headers,
+            body: jsonEncode({'status': status, 'reason': reason})))
+        as Map<String, dynamic>;
+  }
+
+  /// POST /api/reports { kind, tag?, location?, note? } — the PDA's
+  /// floor-exception buttons ("ของหาย" / "ช่องเก็บเต็ม"). Records only; never
+  /// changes a box's status or location — see ReportProblemScreen.
+  Future<Map<String, dynamic>> report({
+    required String kind,
+    String? tag,
+    Map<String, String>? location,
+    String note = '',
+  }) async {
+    return await _send(() => http.post(_u('/api/reports'),
+        headers: _headers,
+        body: jsonEncode({
+          'kind': kind,
+          if (tag != null) 'tag': tag,
+          if (location != null) 'location': location,
+          'note': note,
+        }))) as Map<String, dynamic>;
+  }
+
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN
   /// outright. Used right after a badge scan (first-time setup or a
   /// voluntary change), never as part of a forgot-PIN reset.

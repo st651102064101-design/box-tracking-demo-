@@ -159,7 +159,8 @@ class _ScanCaptureState extends State<ScanCapture> {
                   focusNode: _focus,
                   enabled: widget.enabled,
                   autofocus: widget.enabled,
-                  keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
+                  keyboardType:
+                      kIsWeb ? TextInputType.text : TextInputType.none,
                   autocorrect: false,
                   enableSuggestions: false,
                   enableInteractiveSelection: false,

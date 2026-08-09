@@ -16,6 +16,9 @@ import 'box_register_screen.dart';
 import 'transfer_screen.dart';
 import 'cycle_count_screen.dart';
 import 'more_hub_screen.dart';
+import 'hold_release_screen.dart';
+import 'report_problem_screen.dart';
+import 'location_inquiry_screen.dart';
 import 'toast_overlay.dart';
 
 /// Hosts the current screen inside a phone-width frame (max 560px, like the
@@ -105,6 +108,12 @@ class RootScreen extends StatelessWidget {
         return const CycleCountScreen(key: ValueKey('cycleCount'));
       case Screen.moreHub:
         return const MoreHubScreen(key: ValueKey('moreHub'));
+      case Screen.holdRelease:
+        return const HoldReleaseScreen(key: ValueKey('holdRelease'));
+      case Screen.reportProblem:
+        return const ReportProblemScreen(key: ValueKey('reportProblem'));
+      case Screen.locationInquiry:
+        return const LocationInquiryScreen(key: ValueKey('locationInquiry'));
     }
   }
 }
