@@ -43,11 +43,9 @@ class _ScanScreenState extends State<ScanScreen>
   /// and Gate Out.
   bool _onScanStep = false;
 
-  /// True while the reader's trigger is actually held down. In RFID mode
-  /// this collapses the toggle/status card down to a slim "กำลังอ่าน…"
-  /// strip — the operator pulled the trigger to watch boxes land in the
-  /// queue, not to keep looking at a card that already told them RFID mode
-  /// is selected.
+  /// True while the reader's trigger is actually held down. Switches the
+  /// scanner panel's status line to "กำลังอ่าน…" — the panel itself, count
+  /// included, stays up the whole time (see [_scannerPanel]).
   bool _rfidReading = false;
   StreamSubscription<bool>? _triggerSub;
 
@@ -125,7 +123,8 @@ class _ScanScreenState extends State<ScanScreen>
   /// there is no confirm button to press afterwards. The scan happened while
   /// the operator was standing at the shelf with the boxes in hand, which is
   /// the only fact a confirm tap was ever standing in for.
-  Future<void> _onRackScan(AppController c, PutawayTask task, String code) async {
+  Future<void> _onRackScan(
+      AppController c, PutawayTask task, String code) async {
     final loc = context.read<LocaleController>();
     if (c.busy || _putawaySuccess) return;
     final found = c.S?.locationByCode(c.wh, code);
@@ -135,8 +134,8 @@ class _ScanScreenState extends State<ScanScreen>
     }
     final want = task.assigned;
     if (want != null && !_sameLocation(found, want)) {
-      _rejectRack(c,
-          '${loc.t('ผิดช่อง — ระบบกำหนดให้เก็บที่')} ${locationText(want)}');
+      _rejectRack(
+          c, '${loc.t('ผิดช่อง — ระบบกำหนดให้เก็บที่')} ${locationText(want)}');
       return;
     }
     c.rfid.playSound('putaway_ok');
@@ -173,7 +172,8 @@ class _ScanScreenState extends State<ScanScreen>
       // Nothing was recorded, so the accepted scan must not stand either —
       // back to waiting for a rack.
       setState(() => _putawayConfirmed = null);
-      _rejectRack(c, '${loc.t('เก็บไม่สำเร็จ')} · ${failed.length} ${loc.t('ใบ')}');
+      _rejectRack(
+          c, '${loc.t('เก็บไม่สำเร็จ')} · ${failed.length} ${loc.t('ใบ')}');
     }
   }
 
@@ -183,9 +183,12 @@ class _ScanScreenState extends State<ScanScreen>
     setState(() => _putawayError = message);
   }
 
-  static bool _sameLocation(Map<String, String> a, Map<String, String> b) =>
-      ['zone', 'rack', 'shelf', 'slot']
-          .every((k) => (a[k] ?? '') == (b[k] ?? ''));
+  static bool _sameLocation(Map<String, String> a, Map<String, String> b) => [
+        'zone',
+        'rack',
+        'shelf',
+        'slot'
+      ].every((k) => (a[k] ?? '') == (b[k] ?? ''));
 
   /// The Directed Putaway errand, as a two-state machine rather than a form:
   /// the boxes are already known (top card, settled), the rack is what the
@@ -451,9 +454,8 @@ class _ScanScreenState extends State<ScanScreen>
       // imager is off duty entirely, which is the point of the toggle — one
       // input at a time, so an operator sweeping a pallet cannot also be
       // half-listening for a barcode.
-      enabled: _onScanStep &&
-          !c.busy &&
-          c.scanInputMode == ScanInputMode.barcode,
+      enabled:
+          _onScanStep && !c.busy && c.scanInputMode == ScanInputMode.barcode,
       onScan: c.addScan,
       child: _gateBody(c, loc, isOut, formValid, canProceed, bottom),
     );
@@ -772,44 +774,22 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Widget _scannerPanel(AppController c, LocaleController loc) {
-    // Trigger's actually held: collapse the status card to a slim strip so
-    // the boxes landing in the queue below get the screen. No longer gated on
-    // a selected mode — a held trigger is an RFID read here by definition.
-    if (_rfidReading) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: C.limeBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: C.limeBorder),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 15,
-              height: 15,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.2, color: C.limeDeep),
-            ),
-            const SizedBox(width: 11),
-            Text(loc.t('กำลังอ่านแท็ก RFID…'),
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: C.limeDeep)),
-          ],
-        ),
-      );
-    }
+    // The count is what the operator is actually watching while the trigger
+    // is held — collapsing this panel to a slim strip the moment a sweep
+    // starts hid the one number that matters most exactly when it's moving
+    // fastest. The panel now stays up the whole time; only the status line
+    // switches to say a sweep is running.
     final connected =
         c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
-    final readyText = !c.rfid.supported
-        ? loc.t('โหมดจำลอง')
-        : c.rfidStatus.state == RfidState.connected
-            ? loc.t('สแกนเนอร์พร้อม')
-            : c.rfidStatus.state == RfidState.connecting
-                ? loc.t('กำลังเชื่อมต่อ…')
-                : loc.t('สแกนเนอร์ไม่พร้อม');
+    final readyText = _rfidReading
+        ? loc.t('กำลังอ่านแท็ก RFID…')
+        : !c.rfid.supported
+            ? loc.t('โหมดจำลอง')
+            : c.rfidStatus.state == RfidState.connected
+                ? loc.t('สแกนเนอร์พร้อม')
+                : c.rfidStatus.state == RfidState.connecting
+                    ? loc.t('กำลังเชื่อมต่อ…')
+                    : loc.t('สแกนเนอร์ไม่พร้อม');
     // This card repaints on every scan while the trigger's held — a
     // gradient background is a per-frame cost that flat color isn't, and
     // this is the one background in the app redrawing at scan speed rather
@@ -1008,7 +988,9 @@ class _ScanScreenState extends State<ScanScreen>
         Padding(
           padding: EdgeInsets.symmetric(vertical: 26, horizontal: 16),
           child: Center(
-            child: Text(loc.t('ยังไม่มีกล่องในคิว — เหนี่ยวไกหรือยิงบาร์โค้ดเพื่อเริ่ม'),
+            child: Text(
+                loc.t(
+                    'ยังไม่มีกล่องในคิว — เหนี่ยวไกหรือยิงบาร์โค้ดเพื่อเริ่ม'),
                 style: TextStyle(fontSize: 13, color: C.faint)),
           ),
         )
