@@ -227,6 +227,13 @@ export interface GateInInput {
   conditions?: Record<string, 'hold' | 'damage'>;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
+  /** One shelf position for the whole batch — see gateInLocationSchema.
+   *  Omitted means "leave wherever it already was" (pending-putaway). Never
+   *  applied to a tag that landed on hold/damage instead of warehouse: a
+   *  box set aside for inspection isn't the box a shelf was just picked
+   *  for, and stamping the location on it anyway would just be wrong data
+   *  the moment the flag gets cleared and it actually gets put away. */
+  location?: { zone?: string; rack?: string; shelf?: string; slot?: string };
 }
 
 export async function gateIn(db: DB, input: GateInInput) {
@@ -262,6 +269,13 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.status = status;
       b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
       b.lastSeenAt = inTs;
+      // Only a box actually landing on 'warehouse' gets the chosen shelf —
+      // see the docstring on GateInInput.location.
+      const location =
+        !condition && input.location
+          ? { wh, zone: input.location.zone ?? '', rack: input.location.rack ?? '', shelf: input.location.shelf ?? '', slot: input.location.slot ?? '', gate: null, ts: inTs }
+          : undefined;
+      if (location) b.location = location;
       b.plate = plate;
       b.driver = driver;
       b.vehicleType = vehicleType;
@@ -289,6 +303,7 @@ export async function gateIn(db: DB, input: GateInInput) {
         driver,
         vehicleType,
         ...(condition ? { condition } : {}),
+        ...(location ? { loc: location } : {}),
       });
       b.history = history;
 
@@ -305,6 +320,7 @@ export async function gateIn(db: DB, input: GateInInput) {
           outWh: null,
           outAt: null,
           dueAt: null,
+          ...(location ? { location } : {}),
           data: b,
           updatedAt: new Date(),
         })
@@ -328,6 +344,7 @@ export async function gateIn(db: DB, input: GateInInput) {
           driver,
           vehicleType,
           ...(condition ? { condition } : {}),
+          ...(location ? { loc: location } : {}),
         },
       });
       received.push(tag);

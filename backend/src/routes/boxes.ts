@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes } from '../db/schema.js';
+import { boxes, boxTypes, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
@@ -43,6 +43,40 @@ boxesRouter.get(
     const byStatus: Record<string, number> = {};
     for (const r of rows) byStatus[r.bucket] = Number(r.count);
     res.json({ byStatus });
+  }),
+);
+
+/**
+ * The PDA's "รับเข้า" (Gate In) three-way shelf choice — "ตามที่ระบบแนะนำ" is
+ * this endpoint: the first location on [wh]'s own master list (an admin's
+ * defined rack/shelf/slot layout, see the `locations` table) that no
+ * 'warehouse' box is currently sitting on. "Empty" here means literally
+ * unoccupied, not "has spare capacity" — there's no capacity column on a
+ * location, so one box is treated as filling it. Returns `{ suggestion:
+ * null }` (200, not 404) when the warehouse has no master locations defined
+ * yet, or every one of them already has a box — both are "nothing to
+ * suggest", not an error, and the PDA falls back to its other two choices
+ * (pick by hand, or leave pending-putaway) either way.
+ */
+boxesRouter.get(
+  '/suggest-location',
+  asyncHandler(async (req, res) => {
+    const wh = typeof req.query.wh === 'string' ? req.query.wh : '';
+    if (!wh) throw httpError(400, 'ต้องระบุคลัง', 'wh_required');
+    const db = getDb();
+    const locRows = await db.select().from(locations).where(eq(locations.wh, wh));
+    if (!locRows.length) return res.json({ suggestion: null });
+
+    const boxRows = await db.select({ location: boxes.location }).from(boxes).where(eq(boxes.status, 'warehouse'));
+    const key = (l: { wh?: unknown; zone?: unknown; rack?: unknown; shelf?: unknown; slot?: unknown }) =>
+      `${l.wh ?? ''}|${l.zone ?? ''}|${l.rack ?? ''}|${l.shelf ?? ''}|${l.slot ?? ''}`;
+    const occupied = new Set(boxRows.map((r) => key((r.location ?? {}) as Record<string, unknown>)));
+
+    const free = locRows.find((loc) => !occupied.has(key(loc)));
+    if (!free) return res.json({ suggestion: null });
+    res.json({
+      suggestion: { zone: free.zone ?? '', rack: free.rack ?? '', shelf: free.shelf ?? '', slot: free.slot ?? '' },
+    });
   }),
 );
 
