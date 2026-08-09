@@ -14,8 +14,6 @@ import com.zebra.rfid.api3.*
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.max
@@ -294,81 +292,19 @@ class RfidReaderController(private val context: Context) :
     private var lastEpc: String? = null
     private var lastRssi: Int? = null
     // How many reads arrived with a TID already attached by the inventory
-    // round (the free piggyback path — see [applyReadProfile]) or resolved
-    // by the explicit access-read below when that piggyback comes back empty.
+    // round. That piggyback is now the only source of a TID — the explicit
+    // access-read fallback is gone, because it had to stop and restart
+    // inventory around every call — so this is what tells "these tags don't
+    // report a TID during inventory" apart from "the reader isn't reading".
     private var tidCount = 0L
-    // Whether the physical gun trigger is currently held.
+    // Whether the physical gun trigger is currently held — readTidExplicit
+    // stops inventory to run an access operation and uses this to decide
+    // whether to start it again afterwards.
     @Volatile private var triggerHeld = false
 
     /** Selects the read profile — see [applyReadProfile]. Fast unless a screen
-     *  that needs a TID (rfid_input_screen, the RFID raw-field test read, and
-     *  only that screen) asks otherwise. */
+     *  that needs a TID (registration, and only registration) asks otherwise. */
     @Volatile private var detailMode = false
-
-    // ── explicit TID access-read (detail mode only) ─────────────────────────
-    //
-    // ALL_TAG_FIELDS (see [applyReadProfile]) attaches TID "for free" if the
-    // inventory round itself carried one, but on this reader it usually
-    // doesn't — most Gen2 chips only report TID during inventory when the
-    // reader is explicitly configured to piggyback it, which the RFIDAPI3
-    // fast/detail split here doesn't do. The one way to actually get it is a
-    // dedicated per-tag access transaction (TagAccess.readWait against
-    // MEMORY_BANK_TID), which the SDK implements by pausing the radio's
-    // inventory activity, running the access op, then handing it back — a
-    // real, measured ~10x read-rate cost (this exact tradeoff, same number,
-    // is why an earlier version of this file removed it entirely). Detail
-    // mode now pays that cost deliberately, on its own dedicated thread so it
-    // can never block the SDK's own read-callback thread, and only for
-    // rfid_input_screen — every other screen leaves detailMode false and
-    // never touches this path.
-    private val tidChaseExec = Executors.newSingleThreadExecutor()
-    // Chase each distinct EPC once per connection, not once per read — a
-    // held trigger re-reads the same tag dozens of times a second, and
-    // without this a tag whose TID never resolves would queue a fresh
-    // access-read for every single one of those, permanently starving the
-    // radio of inventory time. Cleared whenever detail mode turns on, so a
-    // tag that failed to resolve on an earlier visit to this screen gets a
-    // fresh attempt.
-    private val tidChaseAttempted = Collections.synchronizedSet(HashSet<String>())
-    // The rest of that tag's row, captured at read time — the access-read
-    // result carries nothing but the TID itself, and emitting a TID-only
-    // update would blank out RSSI/PC/CRC/antenna/channel/phase/seenCount in
-    // the UI for that row until the next full inventory read happened to
-    // report the same tag again. Merging onto this snapshot instead means
-    // the TID appears to fill in on the row that's already there.
-    private val tidChaseFields = ConcurrentHashMap<String, Map<String, Any?>>()
-
-    /** Submits a background access-read for [epc]'s TID bank. Safe to call
-     *  repeatedly for the same tag — only the first call per connection does
-     *  any work (see [tidChaseAttempted]). No-ops quietly on any failure: an
-     *  unreadable TID bank on one tag must not take down the read stream for
-     *  every other tag still coming in. */
-    private fun chaseTid(epc: String, knownFields: Map<String, Any?>) {
-        if (!tidChaseAttempted.add(epc)) return
-        tidChaseFields[epc] = knownFields
-        tidChaseExec.execute {
-            if (!detailMode) return@execute // left the screen before this ran
-            try {
-                val rd = reader ?: return@execute
-                val access = rd.Actions.TagAccess
-                // Offset 0, 6 words (96 bits) — long enough for the TID
-                // banks in common commercial use (mfr/model header plus a
-                // full serial) without over-reading past what a tag with a
-                // shorter bank actually has.
-                val params = access.ReadAccessParams(MEMORY_BANK.MEMORY_BANK_TID, 0, 6, 0L)
-                val data = access.readWait(epc, params, AntennaInfo(shortArrayOf(1)))
-                val tid = data?.getTID()?.takeIf { it.isNotEmpty() } ?: return@execute
-                tidCount++
-                val merged = (tidChaseFields[epc] ?: mapOf("epc" to epc)).toMutableMap()
-                merged["tid"] = tid
-                emit(mapOf("type" to "tags", "tags" to listOf(merged)))
-            } catch (e: Exception) {
-                Log.w(TAG, "TID chase for $epc failed", e)
-            } finally {
-                tidChaseFields.remove(epc)
-            }
-        }
-    }
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -653,13 +589,13 @@ class RfidReaderController(private val context: Context) :
      * **Detail (rfid_input_screen only)** — that screen's whole purpose is
      * showing every field the SDK can report per tag, so `ALL_TAG_FIELDS`
      * goes on. DPO stays off regardless — see setDPOState's own comment
-     * below on why detail mode no longer has a reason to want it on. TID
-     * specifically also gets a per-tag explicit access-read when the
-     * inventory round didn't carry one — see [chaseTid] — which is the one
-     * genuinely expensive thing detail mode does: that operation measured
-     * out to ~10x this screen's own read rate (171/sec -> ~16/sec) the one
-     * time it was wired up, which is exactly why it's opt-in per screen
-     * rather than always on.
+     * below on why detail mode no longer has a reason to want it on.
+     * Deliberately does *not* chase a TID with an explicit per-tag
+     * access-read the way an earlier version of this file did: that call
+     * stops and restarts inventory around every tag, and cost this exact
+     * screen its read rate the one time it was wired up (171/sec ->
+     * ~16/sec) for a field ([tidCount] confirms) this reader's inventory
+     * round never carries anyway.
      */
     private fun applyReadProfile(rd: RFIDReader) {
         val detail = detailMode
@@ -775,14 +711,6 @@ class RfidReaderController(private val context: Context) :
     fun setDetailMode(enabled: Boolean) {
         if (detailMode == enabled) return
         detailMode = enabled
-        // Fresh attempt at every tag's TID each time this screen is opened —
-        // a tag that failed to resolve on an earlier visit (weak signal, held
-        // at a bad angle, whatever) shouldn't be permanently marked "tried
-        // and failed" for the rest of the app's lifetime.
-        if (enabled) {
-            tidChaseAttempted.clear()
-            tidChaseFields.clear()
-        }
         exec.execute {
             val rd = reader ?: return@execute
             if (rd.isConnected) applyReadProfile(rd)
@@ -887,25 +815,30 @@ class RfidReaderController(private val context: Context) :
 
                 // Every field ALL_TAG_FIELDS attaches "for free" alongside the
                 // inventory round — no extra SDK call, just more of the same
-                // struct already in hand. TID is the one field that piggyback
-                // usually doesn't carry on this reader; when it's missing,
-                // [chaseTid] goes and gets it the slow way instead of just
-                // showing "—".
+                // struct already in hand. TID deliberately is NOT chased with
+                // an explicit access-read here anymore: that call stops
+                // inventory, runs a full access transaction, then restarts it
+                // per tag, which cost a screen using detail mode ~10x its read
+                // rate the one time it was wired up here (171/sec -> ~16/sec,
+                // same drop the fast/detail profile split further up this file
+                // measured). TID stays whatever the inventory round itself
+                // carried — null on this reader, always, per that same
+                // measurement — and shows through honestly as "—" in the UI.
                 val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
                 if (inventoryTid != null) tidCount++
-                val fields = mapOf(
-                    "epc" to epc,
-                    "tid" to inventoryTid,
-                    "rssi" to lastRssi,
-                    "pc" to num { t.getPC() },
-                    "crc" to str { t.getStringCRC() },
-                    "antenna" to num { t.getAntennaID().toInt() },
-                    "channel" to str { t.getChannel() },
-                    "phase" to num { t.getPhase().toInt() },
-                    "seenCount" to num { t.getTagSeenCount() },
+                batch.add(
+                    mapOf(
+                        "epc" to epc,
+                        "tid" to inventoryTid,
+                        "rssi" to lastRssi,
+                        "pc" to num { t.getPC() },
+                        "crc" to str { t.getStringCRC() },
+                        "antenna" to num { t.getAntennaID().toInt() },
+                        "channel" to str { t.getChannel() },
+                        "phase" to num { t.getPhase().toInt() },
+                        "seenCount" to num { t.getTagSeenCount() },
+                    )
                 )
-                batch.add(fields)
-                if (inventoryTid == null) chaseTid(epc, fields)
             }
 
             // The whole read event crosses the platform channel as one message.

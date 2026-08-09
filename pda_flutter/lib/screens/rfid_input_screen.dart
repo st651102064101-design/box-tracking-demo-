@@ -142,16 +142,19 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
-    // The one screen that runs the reader's detail profile: every raw field
-    // the SDK can report per tag, TID included — this screen's whole purpose
-    // is showing exactly what a tag sends back, not the fast EPC+RSSI-only
-    // sweep every other screen uses. TID specifically costs a per-tag
-    // explicit access-read on this hardware when the inventory round doesn't
-    // carry one on its own (see RfidReaderController's chaseTid), which is a
-    // real, measured read-rate cost — accepted here on purpose, and nowhere
-    // else: [dispose] hands the reader back to the fast profile the instant
-    // this screen closes, so nothing else in the app pays for it.
-    rfid.setDetailMode(true);
+    // Runs the same fast profile (EPC+RSSI only) as every other screen now —
+    // this used to be the one place detail mode's ALL_TAG_FIELDS reporting
+    // was worth its read-rate cost, on the theory that showing every field
+    // the SDK can return justified reading slower to get them. In practice
+    // this screen exists to be compared directly against rfid_html_app —
+    // the whole point of its own rate/gap readout above — and detail mode
+    // meant it never could be: fewer reads per second than the same sweep in
+    // the HTML app, on the same hardware, is exactly the discrepancy this
+    // screen is used to catch. PC/CRC/antenna/channel/phase/seen-count show
+    // as "—" now (TID already always did — this reader's inventory round
+    // never carries one regardless of profile, see RfidReaderController's
+    // own comment on that) — full-field detail always was the trade being
+    // made here, just against the wrong thing to trade it for.
   }
 
   void _resetStats() {
