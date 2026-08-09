@@ -44,20 +44,31 @@ enum ScanInputMode { barcode, rfid }
 /// AppController.receiveLocationMode.
 enum ReceiveLocationMode { auto, manual, defer }
 
-/// What ScanScreen shows right after a Gate In commit that assigned a shelf
-/// (auto-suggested or picked by hand — not "รอ Putaway") — "here's where
-/// these N boxes actually need to go." The location is also already saved on
-/// every box's own record (gateIn wrote it server-side), so this isn't the
-/// only place it lives: whoever ends up physically shelving the batch, even
-/// if it's a different person later, can still find it by looking the box up
-/// (Track screen) — this summary is just the immediate, no-lookup-needed
-/// version for whoever is holding the device right after the scan.
-class ReceiveBatchSummary {
+/// A batch that has been received (Gate In already committed) and now has to
+/// be physically carried to a shelf — the Directed Putaway task ScanScreen
+/// puts up straight after the commit.
+///
+/// The location is deliberately NOT written at Gate In time any more. A box
+/// isn't on a shelf because someone picked that shelf on a form; it's on a
+/// shelf once someone actually walked it there. So Gate In lands the batch as
+/// warehouse-with-no-location ("รอจัดเก็บ", the same state the defer choice
+/// produces), and the shelf is written only by [AppController.completePutaway]
+/// once the operator has scanned the shelf's own barcode standing in front of
+/// it. That also means an interrupted putaway degrades into exactly the
+/// pending-putaway state the warehouse already knows how to work through,
+/// rather than into a box the system believes is shelved and isn't.
+class PutawayTask {
   final List<String> tags;
-  final Map<String, String> location;
+
+  /// Where the system says this batch goes (auto mode). Null in manual mode:
+  /// the operator finds a free spot themselves and whatever they scan on
+  /// arrival becomes the answer.
+  final Map<String, String>? assigned;
   final String whName;
-  ReceiveBatchSummary(
-      {required this.tags, required this.location, required this.whName});
+  PutawayTask(
+      {required this.tags, required this.assigned, required this.whName});
+
+  bool get isDirected => assigned != null;
 }
 
 enum ResultKind { ok, err, warn, info }
@@ -187,14 +198,48 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   String scanVal = '';
   ScanResult? lastResult;
 
-  /// Set right after a successful Gate In commit that assigned a shelf — see
-  /// [ReceiveBatchSummary]. ScanScreen shows it once, then clears it via
-  /// [dismissReceiveBatchSummary]; null the rest of the time.
-  ReceiveBatchSummary? receiveBatchSummary;
+  /// Set right after a successful Gate In commit in auto/manual mode — see
+  /// [PutawayTask]. ScanScreen switches to the putaway step while it's
+  /// non-null; null the rest of the time.
+  PutawayTask? putawayTask;
 
-  void dismissReceiveBatchSummary() {
-    receiveBatchSummary = null;
+  /// Abandons the putaway task without shelving anything. The batch stays
+  /// exactly where the commit left it — received, no location, i.e. "รอ
+  /// จัดเก็บ" — which is a real, workable warehouse state someone can pick up
+  /// later, not a loss. Deliberately not called "cancel": the receiving part
+  /// already happened and is not being undone.
+  void dropPutawayTask() {
+    putawayTask = null;
     notifyListeners();
+  }
+
+  /// Writes the shelf onto every box in the task — the point at which the
+  /// system is finally allowed to believe these boxes are on that shelf,
+  /// because the operator has just scanned the shelf's own barcode while
+  /// standing at it. Returns the tags that failed, empty on full success.
+  Future<List<String>> completePutaway(Map<String, String> location) async {
+    final task = putawayTask;
+    if (task == null) return const [];
+    busy = true;
+    notifyListeners();
+    final failed = <String>[];
+    for (final tag in task.tags) {
+      try {
+        await api.putawayBox(tag,
+            wh: wh,
+            zone: location['zone'] ?? '',
+            rack: location['rack'] ?? '',
+            shelf: location['shelf'] ?? '',
+            slot: location['slot'] ?? '');
+      } catch (_) {
+        failed.add(tag);
+      }
+    }
+    if (failed.isEmpty) putawayTask = null;
+    busy = false;
+    notifyListeners();
+    if (failed.isEmpty) await refresh();
+    return failed;
   }
 
   // out form
@@ -377,28 +422,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     suggestLocationFailed = false;
     suggestLocationFailedDetail = null;
     suggestLocationEmptyReason = null;
-  }
-
-  /// What actually gets sent to gateIn — null means "รอ Putaway" (the
-  /// pending-putaway holding pattern), same as omitting the field entirely.
-  /// [auto] silently falls back to that same null when the server had
-  /// nothing to suggest (no master locations defined, or every one taken)
-  /// rather than blocking the commit over it — a batch that can't get an
-  /// auto-suggested shelf still has to be receivable.
-  Map<String, String>? get _effectiveReceiveLocation {
-    switch (receiveLocationMode) {
-      case ReceiveLocationMode.defer:
-        return null;
-      case ReceiveLocationMode.auto:
-        return _suggestedLocation;
-      case ReceiveLocationMode.manual:
-        return {
-          'zone': receiveZone,
-          'rack': receiveRack,
-          'shelf': receiveShelf,
-          'slot': receiveSlot
-        };
-    }
   }
 
   // ── connectivity / offline ──────────────────────────────────────────────
@@ -1545,7 +1568,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
             : outVehicleType;
 
-    final receiveLocation = mode == 'in' ? _effectiveReceiveLocation : null;
+    // No `location` on the way in, in any of the three modes: receiving and
+    // shelving are separate physical acts, and the shelf is written only once
+    // the operator has confirmed it at the shelf (see [completePutaway]).
     final tx = mode == 'in'
         ? OutboxTx(
             type: 'in',
@@ -1560,7 +1585,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             driver: inDriver,
             vehicleType: effInVType,
             conditions: Map.of(queueConditions),
-            location: receiveLocation,
           )
         : OutboxTx(
             type: 'out',
@@ -1608,7 +1632,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           driver: inDriver,
           vehicleType: effInVType,
           conditions: queueConditions,
-          location: receiveLocation,
         );
       } else {
         await api.gateOut(
@@ -1624,14 +1647,26 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       }
       final custName = s?.custName(outCustomer) ?? outCustomer;
       final whNm = s?.whName(whId) ?? whId;
-      // Same exclusion gateIn itself applies server-side: a tag flagged
-      // hold/damage in this batch never actually landed on the assigned
-      // shelf, so it has no business showing up in "go put these there."
+      // A tag flagged hold/damage is set aside for inspection, not shelved —
+      // it has no business in a "go put these on a shelf" task.
       final shelvedTags =
           tx.tags.where((t) => !queueConditions.containsKey(t)).toList();
-      if (mode == 'in' && receiveLocation != null && shelvedTags.isNotEmpty) {
-        receiveBatchSummary = ReceiveBatchSummary(
-            tags: shelvedTags, location: receiveLocation, whName: whNm);
+      final wantsPutaway =
+          mode == 'in' && receiveLocationMode != ReceiveLocationMode.defer;
+      if (wantsPutaway && shelvedTags.isNotEmpty) {
+        Map<String, String>? assigned;
+        if (receiveLocationMode == ReceiveLocationMode.auto) {
+          // Asked *now*, after the commit — not when the chip was tapped.
+          // A shelf picked before these boxes were even scanned could have
+          // been filled by another terminal in the meantime. If the ask
+          // fails, `assigned` stays null and the task degrades to "find a
+          // free spot yourself", which is what a warehouse does anyway when
+          // the system can't direct it.
+          await _fetchSuggestedLocation();
+          assigned = _suggestedLocation;
+        }
+        putawayTask =
+            PutawayTask(tags: shelvedTags, assigned: assigned, whName: whNm);
       }
       _resetAfterCommit();
       await refresh();

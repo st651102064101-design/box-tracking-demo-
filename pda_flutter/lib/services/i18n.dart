@@ -400,27 +400,37 @@ class LocaleController extends ChangeNotifier {
         'Every set-up shelf is already taken — will stay pending putaway',
     'ลองใหม่': 'Retry',
 
-    // gate in: post-commit "go put these there" summary
-    'รับเข้าสำเร็จ — เอาไปเก็บที่': 'Received — go put these at',
-    'บันทึกตำแหน่งนี้ในระบบแล้ว — ถ้าเป็นคนละคนที่จัดเก็บ ค้นหากล่องภายหลังได้':
-        'This location is already saved — if someone else does the shelving, they can look the box up later',
-
-    // transfer screen: scan-a-location-code alternative to dropdowns
-    'ยิงบาร์โค้ด': 'Scan barcode',
-    'เลือกจาก Dropdown': 'Pick from dropdown',
-    'ยิงบาร์โค้ดชั้นวาง/แร็ค': 'Scan the shelf/rack barcode',
-
-    // gate in: pending-putaway detail + suggest-location error state
-    'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่ หรือเลือกเอง/รอ Putaway แทน':
-        'Could not reach the server — retry, or pick manually / defer instead',
-    'จะพักไว้ที่': 'Will stay at',
-    '— รอเจ้าหน้าที่จัดเก็บขึ้นชั้นภายหลัง': '— pending putaway by staff later',
-
-    // rfid locate screen: sweep census on the pick step
-    'เหนี่ยวไกกวาดหากล่องในบริเวณนี้ — หรือยิงแท็กของกล่องที่จะหา':
-        'Pull the trigger to sweep boxes in this area — or scan the tag of the box you\'re looking for',
-    'ยังไม่พบกล่อง — เหนี่ยวไกกวาดเหนือบริเวณที่จะตรวจ':
-        'No boxes found yet — pull the trigger and sweep over the area to check',
+    // putaway step (after a Gate In commit in auto/manual mode)
+    'Putaway': 'Putaway',
+    'นำไปเก็บเข้าชั้น': 'Put away on the shelf',
+    'ระบบจะกำหนดชั้นวางให้หลังยิงกล่องครบ แล้วพาไปเก็บทีละจุด':
+        'The system assigns a shelf once the boxes are scanned, then walks you there',
+    'ยิงกล่องให้ครบก่อน แล้วค่อยเดินไปหาช่องว่างและยิงบาร์โค้ดชั้นวางเอง':
+        'Scan the boxes first, then find a free spot and scan that shelf yourself',
+    'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง':
+        'Receive only — left for someone to shelve later',
+    'นำสินค้าไปเก็บที่': 'Take these to',
+    'หาช่องว่าง แล้วยิงบาร์โค้ดชั้นวางที่เก็บ':
+        'Find a free spot, then scan that shelf\'s barcode',
+    'ยิงบาร์โค้ดชั้นวางเพื่อยืนยันว่ามาถูกช่อง':
+        'Scan the shelf barcode to confirm you are at the right one',
+    'ยิงบาร์โค้ดชั้นวาง': 'Scan the shelf barcode',
+    'ไม่พบตำแหน่งรหัส': 'No location with code',
+    'ผิดช่อง — ระบบกำหนดให้เก็บที่': 'Wrong shelf — the system assigned',
+    'ยืนยันช่องแล้ว': 'Shelf confirmed',
+    'ยืนยันเก็บเข้าชั้น': 'Confirm put away',
+    'เก็บไม่สำเร็จ': 'Failed to put away',
+    'บาร์โค้ดชั้นวางเสีย — เลือกจากรายการแทน':
+        'Shelf barcode unreadable — pick from a list instead',
+    'กลับไปยิงบาร์โค้ด': 'Back to scanning',
+    'ยืนยันด้วยมือว่าอยู่ที่': 'Confirm by hand that this is',
+    'ใช้ตำแหน่งนี้': 'Use this location',
+    'ยังไม่เก็บตอนนี้ — พักไว้ก่อน': 'Not now — leave it pending',
+    'ยังไม่เก็บเข้าชั้น?': 'Leave it unshelved?',
+    'กล่องรับเข้าเรียบร้อยแล้ว แต่จะค้างสถานะ "รอจัดเก็บ" จนกว่าจะมีคนนำไปขึ้นชั้น':
+        'The boxes are received, but stay "awaiting putaway" until someone shelves them',
+    'เก็บต่อ': 'Keep going',
+    'พักไว้ก่อน': 'Leave it pending',
   };
 }
 

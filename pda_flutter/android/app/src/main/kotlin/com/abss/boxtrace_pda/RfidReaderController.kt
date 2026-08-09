@@ -170,6 +170,25 @@ class RfidReaderController(private val context: Context) :
                 Thread.sleep(15)
                 synth(Waveform.SQUARE, 3200.0, 25, 0.4)
             }
+            // Putaway confirmation pair. Deliberately not in the settings
+            // picker (sound_catalog.dart) for the same reason the grade_*
+            // ids aren't: these say something specific about *what just
+            // happened*, so letting them be reassigned would break the one
+            // thing they exist for — an operator on a forklift knowing
+            // "right shelf" from "wrong shelf" without looking at the screen.
+            // Rising two-tone for right, rapid low triple for wrong: distinct
+            // in shape as well as pitch, so they stay tellable apart over
+            // warehouse noise and through ear protection.
+            "putaway_ok" -> {
+                synth(Waveform.SINE, 1800.0, 70, 0.38)
+                synth(Waveform.SINE, 2700.0, 110, 0.4)
+            }
+            "putaway_err" -> {
+                repeat(3) {
+                    synth(Waveform.SQUARE, 700.0, 60, 0.4)
+                    Thread.sleep(45)
+                }
+            }
             else -> Log.w(TAG, "playSoundId: unknown id \"$id\", playing nothing")
         }
     }

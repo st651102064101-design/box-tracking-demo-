@@ -66,8 +66,38 @@ class FakeApi extends ApiClient {
       'employeeId': employeeId,
       'recorder': recorder,
       'plate': plate,
+      'location': location,
     });
     return {'ok': true, 'received': tags, 'unknown': <String>[], 'count': tags.length};
+  }
+
+  /// What suggest-location answers with. Null = the call succeeded but there
+  /// was nothing free; set [throwOnSuggest] to fail the call itself instead.
+  Map<String, String>? suggestion;
+  Object? throwOnSuggest;
+
+  @override
+  Future<SuggestLocationResult> suggestLocation(String wh) async {
+    if (throwOnSuggest != null) throw throwOnSuggest!;
+    return SuggestLocationResult(
+        suggestion: suggestion,
+        reason: suggestion == null ? 'all_occupied' : null);
+  }
+
+  final List<Map<String, dynamic>> putawayCalls = [];
+
+  @override
+  Future<Map<String, dynamic>> putawayBox(
+    String tag, {
+    required String wh,
+    String zone = '',
+    String rack = '',
+    String shelf = '',
+    String slot = '',
+  }) async {
+    putawayCalls.add(
+        {'tag': tag, 'wh': wh, 'zone': zone, 'rack': rack, 'shelf': shelf, 'slot': slot});
+    return {'ok': true};
   }
 
   @override
@@ -359,6 +389,111 @@ void main() {
       expect(api.gateInCalls.first['employeeId'], 'EMP-0001',
           reason: 'the server resolves the name from this, so it must be sent');
       expect(c.queue, isEmpty);
+    });
+
+    test('Gate In never carries a location — shelving is a separate, confirmed act',
+        () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(api.gateInCalls.first['location'], isNull,
+          reason: 'a box is shelved when someone walks it there, not when a '
+              'form is submitted');
+      expect(api.putawayCalls, isEmpty,
+          reason: 'nothing is shelved until the operator confirms at the shelf');
+    });
+
+    test('auto mode turns the committed batch into a directed putaway task', () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isTrue);
+      expect(c.putawayTask!.assigned, {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''});
+      expect(c.putawayTask!.tags, ['CRT-02', 'CRT-03']);
+    });
+
+    test('manual mode makes an undirected task — the operator finds the spot', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.manual);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isFalse);
+    });
+
+    test('รอ Putaway makes no task at all — that is the whole point of it', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.defer);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNull);
+    });
+
+    test('a suggest-location failure degrades to an undirected task, not a dead end',
+        () async {
+      final api = FakeApi();
+      api.throwOnSuggest = Exception('network down');
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(api.gateInCalls, hasLength(1), reason: 'receiving still succeeded');
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isFalse);
+    });
+
+    test('a hold/damage tag is left out of the putaway task', () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      c.setQueueCondition('CRT-03', 'damage');
+      await c.doCommit();
+
+      expect(c.putawayTask!.tags, ['CRT-02'],
+          reason: 'a box set aside for inspection is not going on a shelf');
+    });
+
+    test('completePutaway writes the confirmed shelf onto every tag', () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      await c.doCommit();
+
+      final failed = await c.completePutaway(
+          {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''});
+
+      expect(failed, isEmpty);
+      expect(api.putawayCalls.map((p) => p['tag']), ['CRT-02', 'CRT-03']);
+      expect(api.putawayCalls.first['zone'], 'A');
+      expect(c.putawayTask, isNull, reason: 'the errand is done');
     });
 
     test('inbound commits fine without a plate — Gate In never requires one', () async {
