@@ -79,7 +79,13 @@ boxesRouter.get(
       `${l.wh ?? ''}|${l.zone ?? ''}|${l.rack ?? ''}|${l.shelf ?? ''}|${l.slot ?? ''}`;
     const occupied = new Set(boxRows.map((r) => key((r.location ?? {}) as Record<string, unknown>)));
 
-    const free = locRows.find((loc) => !occupied.has(key(loc)));
+    // Skip shelves an operator flagged "ช่องเก็บเต็ม" from the PDA (POST
+    // /api/reports) — the box census still calls it free, but a person who
+    // stood there says otherwise, so it stays excluded until someone clears
+    // reportedFullAt from the dashboard's Location Master table.
+    const free = locRows.find(
+      (loc) => !occupied.has(key(loc)) && !(loc.data as Record<string, unknown> | null)?.reportedFullAt,
+    );
     if (!free) return res.json({ suggestion: null, reason: 'all_occupied' });
     res.json({
       suggestion: { zone: free.zone ?? '', rack: free.rack ?? '', shelf: free.shelf ?? '', slot: free.slot ?? '' },

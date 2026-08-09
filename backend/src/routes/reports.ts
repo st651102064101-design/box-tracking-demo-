@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, events } from '../db/schema.js';
+import { boxes, events, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -12,20 +12,27 @@ import { bump } from '../lib/bus.js';
  * The PDA's floor-exception buttons — "ของหาย" (a system-directed pick or
  * putaway landed the operator at a location and the box/space wasn't what
  * was expected) and "ช่องเก็บเต็ม" (a suggested shelf is already full in
- * person, whatever the system believes). Deliberately does nothing but
- * *record* the report: no status change, no location change, same
- * philosophy cycle-counts.ts's own close() comment states outright — only a
- * person walking the aisle can tell "genuinely missing" from "mis-shelved",
- * and this button is that person raising a hand, not a data correction.
+ * person, whatever the system believes). Each one actually changes state,
+ * not just logs a note — see the two branches below — because a report an
+ * operator can only ever watch land in a feed and never see act on anything
+ * trains them to stop bothering to send it:
+ *   - "missing": the box is immediately marked lost (same shape as the
+ *     dashboard's own markLost()), so it drops out of pick eligibility and
+ *     shows up wherever lost boxes already do (loss KPIs, the lost filter,
+ *     recoverLost()) without the dashboard needing to know reports exist.
+ *   - "bin_full": the matching Location Master row (if one exists — an
+ *     ad-hoc scanned location that was never registered has nothing to
+ *     flag) gets `reportedFullAt` stamped into its `data`, and
+ *     suggest-location excludes it until someone clears the flag from the
+ *     dashboard's Location Master table.
  *
- * Written to `events` (the same feed cycle-count closes and gate in/out
- * already land in — see composeState in services/state.ts, which is what
- * puts it on the dashboard's activity feed and the PDA's own state
- * snapshot) so a supervisor sees it land in real time, plus an audit_log
- * entry so it's traceable to who reported it and when. Not box-scoped:
- * `tag` is optional because "this shelf is full" can be reported while
- * standing at a location before the box in hand has been placed anywhere,
- * with nothing yet to look up by tag.
+ * Still written to `events` (the same feed cycle-count closes and gate
+ * in/out already land in — see composeState in services/state.ts) so a
+ * supervisor sees it land in real time, plus an audit_log entry so it's
+ * traceable to who reported it and when. Not box-scoped: `tag` is optional
+ * because "this shelf is full" can be reported while standing at a location
+ * before the box in hand has been placed anywhere, with nothing yet to look
+ * up by tag.
  */
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
@@ -72,20 +79,69 @@ reportsRouter.post(
     };
     await db.insert(events).values({ ts, data: eventData });
 
-    // Also on the box's own history, when there is one — the same "this
-    // is visible from the box's own timeline, not just a global feed"
+    // "missing" — mark the box lost right away, in the exact shape the
+    // dashboard's own markLost() writes, so every existing lost-box surface
+    // (loss KPIs, the lost filter, recoverLost()) picks it up with no
+    // frontend changes. Also on the box's own history either way — the same
+    // "this is visible from the box's own timeline, not just a global feed"
     // reasoning every other box-scoped write in boxes.ts already follows.
     if (box) {
+      const historyEntry =
+        input.kind === 'missing'
+          ? { dir: 'lost', ts: ts.toISOString(), reason: 'แจ้งของหาย (PDA)', recorder: req.user!.username }
+          : eventData;
       const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
-      const history = [...prevHistory, eventData];
-      const data = { ...(box.data as Record<string, unknown>), history };
-      await db.update(boxes).set({ history, data, updatedAt: ts }).where(eq(boxes.tag, box.tag));
+      const history = [...prevHistory, historyEntry];
+      const data: Record<string, unknown> = { ...(box.data as Record<string, unknown>), history };
+      if (input.kind === 'missing') {
+        data.status = 'lost';
+        data.lostAt = ts.toISOString();
+        data.lostReason = 'reported-missing';
+      }
+      await db
+        .update(boxes)
+        .set({
+          history,
+          data,
+          updatedAt: ts,
+          ...(input.kind === 'missing' ? { status: 'lost' } : {}),
+        })
+        .where(eq(boxes.tag, box.tag));
+    }
+
+    // "bin_full" — flag the matching Location Master row so suggest-location
+    // stops recommending it. Matched by wh/zone/rack/shelf/slot rather than
+    // a code, since the PDA only ever scans a shelf's barcode and reads
+    // those fields off it — no code round-trips through the report. A
+    // location that was never registered in the master has nothing to flag;
+    // the report still lands in `events`/audit_log either way.
+    let flaggedLocationCode: string | null = null;
+    if (input.kind === 'bin_full' && input.location) {
+      const loc = input.location;
+      const whLocs = await db.select().from(locations).where(eq(locations.wh, loc.wh));
+      const match = whLocs.find(
+        (l) =>
+          (l.zone ?? '') === loc.zone &&
+          (l.rack ?? '') === loc.rack &&
+          (l.shelf ?? '') === loc.shelf &&
+          (l.slot ?? '') === loc.slot,
+      );
+      if (match) {
+        flaggedLocationCode = match.code;
+        const locData = {
+          ...(match.data as Record<string, unknown>),
+          reportedFullAt: ts.toISOString(),
+          reportedFullBy: req.user!.username,
+          reportedFullNote: input.note,
+        };
+        await db.update(locations).set({ data: locData, updatedAt: ts }).where(eq(locations.code, match.code));
+      }
     }
 
     await writeAuditLog(db, {
-      action: input.kind === 'missing' ? 'แจ้งของหาย' : 'แจ้งช่องเก็บเต็ม',
+      action: input.kind === 'missing' ? 'แจ้งของหาย → ตีสูญหาย' : 'แจ้งช่องเก็บเต็ม',
       actor: req.user!.username,
-      itemId: input.tag ?? 'location',
+      itemId: input.tag ?? flaggedLocationCode ?? 'location',
       itemName: input.tag ?? [input.location?.zone, input.location?.rack, input.location?.shelf, input.location?.slot]
         .filter(Boolean)
         .join('/'),
@@ -94,7 +150,7 @@ reportsRouter.post(
     });
 
     bump(req.get('X-Client-Id'));
-    res.json(eventData);
+    res.json({ ...eventData, flaggedLocationCode });
   }),
 );
 

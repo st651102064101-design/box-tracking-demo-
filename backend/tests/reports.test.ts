@@ -30,7 +30,7 @@ beforeAll(async () => {
 
 /** Covers the PDA's floor-exception buttons: "ของหาย" / "ช่องเก็บเต็ม". */
 describe('POST /api/reports', () => {
-  it('records a missing-box report on the box history and the global feed', async () => {
+  it('marks the box lost immediately and records it on the box history and the global feed', async () => {
     const res = await request(ctx.app)
       .post('/api/reports')
       .set(auth(ctx.token))
@@ -39,10 +39,13 @@ describe('POST /api/reports', () => {
     expect(res.body).toMatchObject({ dir: 'missing', tag: 'WH-1' });
 
     const box = await request(ctx.app).get('/api/boxes/WH-1').set(auth(ctx.token));
-    expect(box.body.history.at(-1)).toMatchObject({ dir: 'missing', tag: 'WH-1' });
-    // Reporting is observation, never a data correction — see the route's
-    // own doc comment. Status must stay untouched.
-    expect(box.body.status).toBe('warehouse');
+    // A "ของหาย" report is treated as confirmed loss, not a note to
+    // investigate later — see the route's own doc comment. The box drops
+    // out of pick eligibility and shows up wherever lost boxes already do,
+    // the same shape the dashboard's own markLost() writes.
+    expect(box.body.status).toBe('lost');
+    expect(box.body.lostReason).toBe('reported-missing');
+    expect(box.body.history.at(-1)).toMatchObject({ dir: 'lost' });
 
     const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
     expect(state.body.events.some((e: { dir: string; tag: string }) => e.dir === 'missing' && e.tag === 'WH-1')).toBe(
@@ -50,14 +53,28 @@ describe('POST /api/reports', () => {
     );
   });
 
-  it('records a bin-full report against a location with no box tag at all', async () => {
+  it('records a bin-full report against a location with no box tag at all, and flags the matching Location Master row', async () => {
+    await request(ctx.app)
+      .post('/api/masters/locations')
+      .set(auth(ctx.token))
+      .send({ code: 'A-2-1', wh: 'WH-001', zone: 'A', rack: '2', shelf: '1', slot: '' });
+
     const res = await request(ctx.app)
       .post('/api/reports')
       .set(auth(ctx.token))
       .send({ kind: 'bin_full', location: { wh: 'WH-001', zone: 'A', rack: '2', shelf: '1' } });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ dir: 'bin_full', tag: null });
+    expect(res.body).toMatchObject({ dir: 'bin_full', tag: null, flaggedLocationCode: 'A-2-1' });
     expect(res.body.location).toMatchObject({ zone: 'A', rack: '2' });
+
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.locations['A-2-1'].reportedFullAt).toBeTruthy();
+
+    // suggest-location must skip it now, even though it's otherwise empty.
+    const suggestion = await request(ctx.app)
+      .get('/api/boxes/suggest-location?wh=WH-001')
+      .set(auth(ctx.token));
+    expect(suggestion.body.suggestion?.rack).not.toBe('2');
   });
 
   it('404s a missing-box report against an unknown tag', async () => {

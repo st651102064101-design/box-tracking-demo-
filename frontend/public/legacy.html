@@ -8097,11 +8097,33 @@ function _locStatusPill(code) {
     ? '<span class="status-pill" style="background:var(--accentSoft);color:var(--accentInk);"><span class="loc-dot o" style="width:7px;height:7px;"></span> มีของ '+n+'</span>'
     : '<span class="status-pill" style="background:var(--posSoft);color:var(--ink2);"><span class="loc-dot e" style="width:7px;height:7px;"></span> ว่าง</span>';
 }
+/* PDA's "ช่องเก็บเต็ม" report — flags a Location Master row (backend/src/
+   routes/reports.ts) so suggest-location stops recommending it. This pill
+   is the only place that flag surfaces to a human, and clearLocFull() the
+   only way it comes back off — otherwise a shelf reported full stays
+   excluded forever with no way to know why. */
+function _locFullPill(l) {
+  if (!l.reportedFullAt) return '';
+  var who = l.reportedFullBy ? ' โดย '+esc(l.reportedFullBy) : '';
+  var note = l.reportedFullNote ? ' — '+esc(l.reportedFullNote) : '';
+  return '<div style="margin-top:4px;">'
+    +'<span class="status-pill" style="background:var(--negSoft,#fde2e2);color:var(--neg,#b42318);" title="'+esc(fmtTs(l.reportedFullAt))+who+note+'">'
+    +'<span class="loc-dot" style="width:7px;height:7px;background:currentColor;border-radius:50%;display:inline-block;"></span> เต็ม (แจ้งจาก PDA'+who+')</span> '
+    +'<button class="btn ghost sm" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation();clearLocFull(\''+esc(l.code)+'\')" title="เคลียร์สถานะเต็ม — suggest-location จะแนะนำช่องนี้ได้อีกครั้ง">เคลียร์</button>'
+    +'</div>';
+}
+function clearLocFull(code) {
+  var l = S.locations[code]; if (!l || !l.reportedFullAt) return;
+  l.reportedFullAt = null; l.reportedFullBy = null; l.reportedFullNote = null;
+  save(); renderLocMaster();
+  toast('เคลียร์สถานะเต็มแล้ว', code+' — suggest-location แนะนำช่องนี้ได้อีกครั้ง', 'ok');
+}
+window.clearLocFull = clearLocFull;
 function _locRowHtml(l) {
   return '<tr style="cursor:pointer;" data-loc-code="'+esc(l.code)+'" onclick="if(event.target.type!==\'checkbox\')locRowClick(this)">'
     +'<td class="cb-td"><input type="checkbox" class="row-cb loc-cb" data-tag="'+esc(l.code)+'"></td>'
     +'<td class="mono"><b>'+esc(l.code)+'</b></td>'
-    +'<td>'+_locStatusPill(l.code)+'</td>'
+    +'<td>'+_locStatusPill(l.code)+_locFullPill(l)+'</td>'
     +'<td>'+esc(whName(l.wh))+'</td><td>'+esc(l.zone||'-')+'</td><td>'+esc(l.rack||'-')+'</td>'
     +'<td>'+esc(l.shelf||'-')+'</td><td>'+esc(l.slot||'-')+'</td>'
     +'<td class="small">'+esc(l.type||'-')+'</td><td class="small muted">'+esc(l.note||'-')+'</td>'
