@@ -1268,6 +1268,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
     <div class="who-menu" id="whoMenu" hidden></div>
   </div>
+  <button class="iconbtn no-print" id="btnReportProblem" onclick="openReportProblemModal()" title="แจ้งปัญหาหน้างาน — ของหาย / ช่องเก็บเต็ม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></span></button>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
@@ -8148,6 +8149,98 @@ function reportLocFull(code) {
     });
 }
 window.reportLocFull = reportLocFull;
+
+/* ===== "แจ้งปัญหาหน้างาน" — web's own entry point for the same two reports
+   the PDA's report_problem_screen sends, reachable from the header instead
+   of only through a box's or location's own detail screen. A desk/office
+   user reporting on a phone call from the floor has neither open in front
+   of them and shouldn't have to go find the right row first. ===== */
+var _reportKind = null;
+function _reportKindTileHtml(kind, iconSvg, title, sub) {
+  var active = _reportKind === kind;
+  return '<button type="button" class="btn '+(active?'accent':'ghost')+'" '
+    +'style="flex:1;min-width:150px;flex-direction:column;align-items:flex-start;height:auto;padding:14px;gap:4px;text-align:left;" '
+    +'onclick="_reportPick(\''+kind+'\')">'
+    +'<b style="font-size:14px;display:flex;align-items:center;gap:6px;"><span class="svgi">'+iconSvg+'</span>'+title+'</b>'
+    +'<span class="small" style="opacity:.8;font-weight:400;">'+sub+'</span></button>';
+}
+var _REPORT_MISSING_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M14.8 14.8 20 20M7.5 10h5"/></svg>';
+var _REPORT_FULL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>';
+function _reportProblemHtml() {
+  return '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></span> แจ้งปัญหาหน้างาน</h3>'
+    +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+      +'<div class="row" style="gap:10px;margin-bottom:16px;flex-wrap:wrap;">'
+        +_reportKindTileHtml('missing', _REPORT_MISSING_ICON, 'ของหาย', 'ระบบสั่งมาที่นี่แต่ไม่พบของ')
+        +_reportKindTileHtml('bin_full', _REPORT_FULL_ICON, 'ช่องเก็บเต็ม', 'ช่องที่ระบบแนะนำเต็มแล้วจริง')
+      +'</div>'
+      +'<div id="reportProblemBody"></div>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
+}
+function openReportProblemModal() {
+  _reportKind = null;
+  openModal(_reportProblemHtml());
+}
+window.openReportProblemModal = openReportProblemModal;
+function _reportPick(kind) {
+  _reportKind = kind;
+  $('#modalSheet').innerHTML = _reportProblemHtml();
+  var body = $('#reportProblemBody');
+  if (kind === 'missing') {
+    var eligible = Object.keys(S.boxes).filter(function(t){var b=S.boxes[t];return b.status!=='pending'&&b.status!=='lost';});
+    body.innerHTML = '<div class="field"><label>รหัสกล่อง (Tag)</label>'
+      +'<input id="reportMissingTag" list="reportMissingTagList" placeholder="พิมพ์หรือเลือกรหัสกล่อง" autocomplete="off" style="text-transform:uppercase;">'
+      +'<datalist id="reportMissingTagList">'+eligible.map(function(t){return '<option value="'+esc(t)+'">';}).join('')+'</datalist></div>'
+      +'<div class="field"><label>รายละเอียดเพิ่มเติม (ถ้ามี)</label><textarea id="reportMissingNote" rows="2" placeholder="เช่น หาในโซนใกล้เคียงแล้วไม่พบ"></textarea></div>'
+      +'<button type="button" class="btn red" style="width:100%;" onclick="_reportSubmitMissing()">ส่งรายงาน — ตีกล่องหาย</button>';
+    var f = $('#reportMissingTag'); if (f) f.focus();
+  } else if (kind === 'bin_full') {
+    var openCodes = Object.keys(S.locations).filter(function(c){return !S.locations[c].reportedFullAt;});
+    body.innerHTML = '<div class="field"><label>รหัสตำแหน่ง (Location code)</label>'
+      +'<input id="reportFullCode" list="reportFullCodeList" placeholder="พิมพ์หรือเลือกรหัสตำแหน่ง" autocomplete="off" style="text-transform:uppercase;">'
+      +'<datalist id="reportFullCodeList">'+openCodes.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist></div>'
+      +'<button type="button" class="btn red" style="width:100%;" onclick="_reportSubmitFull()">ส่งรายงาน — แจ้งช่องเต็ม</button>';
+    var f2 = $('#reportFullCode'); if (f2) f2.focus();
+  }
+}
+window._reportPick = _reportPick;
+// Same shape/effect as markLost() — kept separate rather than calling it
+// directly because markLost's own confirmA() would double the "are you
+// sure" the deliberate kind-pick -> fill-in -> ส่งรายงาน flow already is.
+function _reportSubmitMissing() {
+  var tag = val('reportMissingTag').toUpperCase();
+  if (!tag) return toast('กรอกรหัสกล่อง', null, 'err');
+  var b = S.boxes[tag];
+  if (!b) return toast('ไม่พบกล่อง', tag, 'err');
+  if (b.status === 'pending') return toast('กล่องนี้ยังไม่ผ่านการรับเข้า', 'แจ้งหายได้เฉพาะกล่องที่อยู่ในระบบแล้ว', 'err');
+  if (b.status === 'lost') return toast('กล่องนี้ถูกแจ้งหายอยู่แล้ว', tag, 'err');
+  var note = val('reportMissingNote');
+  var before = {status: b.status};
+  b.status = 'lost'; b.lostAt = iso(); b.lostReason = 'reported-missing'; b.lastSeenAt = iso();
+  b.history.push({dir:'lost',ts:iso(),customer:b.customer,do:b.do,reason:'แจ้งของหาย (เว็บ)'+(note?' — '+note:'')});
+  S.events.push({dir:'missing',tag:tag,location:b.location||null,note:note,ts:iso(),recorder:USER});
+  auditEntry('แจ้งของหาย → ตีสูญหาย', USER, tag, typeName(b.type), before, {status:'lost'});
+  closeModal();
+  toast('บันทึกรายงานแล้ว', tag+' ถูกตีเป็นสูญหาย', 'warn');
+  renderAll();
+}
+window._reportSubmitMissing = _reportSubmitMissing;
+function _reportSubmitFull() {
+  var code = val('reportFullCode').toUpperCase();
+  if (!code) return toast('กรอกรหัสตำแหน่ง', null, 'err');
+  var l = S.locations[code];
+  if (!l) return toast('ไม่พบตำแหน่งนี้', code, 'err');
+  if (l.reportedFullAt) return toast('ช่องนี้ถูกแจ้งเต็มอยู่แล้ว', code, 'err');
+  l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
+  S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
+  auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
+  renderLocMaster();
+  closeModal();
+  toast('บันทึกรายงานแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
+}
+window._reportSubmitFull = _reportSubmitFull;
+
 function _locRowHtml(l) {
   return '<tr style="cursor:pointer;" data-loc-code="'+esc(l.code)+'" onclick="if(event.target.type!==\'checkbox\')locRowClick(this)">'
     +'<td class="cb-td"><input type="checkbox" class="row-cb loc-cb" data-tag="'+esc(l.code)+'"></td>'
@@ -8468,11 +8561,12 @@ function openSlotPutawayModal(code){
       +'</div>'
       +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:460px;">'
         +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>ป้ายตำแหน่งนี้ — สำหรับพิมพ์ติดหน้างาน</div>'
-        // padding-bottom overridden well past the wrap's clip-path notch
-        // (bottom 12% is cut into a decorative flag-tail shape) — the
-        // default 26px wasn't enough once the barcode below grew taller,
-        // and the bars themselves were getting clipped off by that notch.
-        +'<div class="rfid-fin-wrap" style="padding-bottom:44px;"><div class="finlabel" style="padding:12px 14px 8px;">'
+        // clip-path:none turns off .rfid-fin-wrap's decorative bottom-right
+        // "flag tail" notch — a nice touch on a printed keepsake label, but
+        // on this functional scan-preview it reads as a chunk bitten out of
+        // the card (reported twice as the barcode looking "แหว่ง"/notched)
+        // even with enough padding that nothing is actually being clipped.
+        +'<div class="rfid-fin-wrap" style="clip-path:none;"><div class="finlabel" style="padding:12px 14px 8px;">'
           +'<div class="fl-head"><div><div class="fl-brand" style="font-size:15px;">LOCATION</div></div>'
             +'<div style="width:42px;height:42px;flex:0 0 auto;" title="QR ของตำแหน่งนี้">'+qrCodeSVG(code,42)+'</div>'
           +'</div>'
