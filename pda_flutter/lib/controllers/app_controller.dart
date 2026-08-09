@@ -1765,7 +1765,13 @@ class AppController extends ChangeNotifier {
         // the thing that's torn — the trigger has to actually fire there. It
         // was missing from this list, so the one screen whose whole RFID mode
         // depends on a trigger pull answered it with "หน้านี้ไม่รองรับ".
-        screen != Screen.damagedBox) {
+        screen != Screen.damagedBox &&
+        screen != Screen.relocate &&
+        screen != Screen.settings &&
+        screen != Screen.cycleCount &&
+        screen != Screen.holdRelease &&
+        screen != Screen.reportProblem &&
+        screen != Screen.locationInquiry) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // The antenna must not light up here — silently doing nothing left an
       // operator assuming a broken trigger, not a screen that was never
