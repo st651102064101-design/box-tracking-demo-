@@ -131,18 +131,36 @@ class RfidReaderController(private val context: Context) :
     //    picking it back is a no-op change for anyone who liked the old sound.
     /** Dispatches onto [beepExec] and returns immediately — the entry point
      *  for every external caller (settings preview, Dart's channel-driven ok
-     *  tones). [beep] does *not* call this: it is already running inside a
-     *  [beepExec] task of its own, and dispatching a second one here would
-     *  let that outer task's `finally { beepInFlight = false }` clear the
-     *  in-flight flag before the inner, later-queued task actually finishes
-     *  playing — defeating the whole point of the flag. It calls
-     *  [playSoundIdBlocking] directly instead. */
+     *  tones — one call per box addScan() accepts, see AppController.addScan).
+     *  [beep] does *not* call this: it is already running inside a [beepExec]
+     *  task of its own, and dispatching a second one here would let that
+     *  outer task's `finally { beepInFlight = false }` clear the in-flight
+     *  flag before the inner, later-queued task actually finishes playing —
+     *  defeating the whole point of the flag. It calls [playSoundIdBlocking]
+     *  directly instead.
+     *
+     *  Drops rather than queues when a tone is already playing, same
+     *  reasoning as [beep]: a Gate sweep can hand this ten calls in the same
+     *  frame (ten new boxes landing in one batch — see
+     *  AppController._onReaderBatch), and every one used to queue onto
+     *  [beepExec] unconditionally. Each tone blocks for its own duration, so
+     *  ten queued tones took ten tone-lengths to drain — the count on screen
+     *  had already stopped moving while the beeps kept trickling out behind
+     *  it, sounding sluggish and out of sync with what was actually
+     *  happening. Dropping the excess instead keeps every tone that *does*
+     *  play landing right on its box, at the cost of a batch of new boxes
+     *  sometimes producing fewer ticks than boxes — the same trade [beep]
+     *  already makes for the dense per-read case. */
     private fun playSoundId(id: String) {
+        if (beepInFlight) return
+        beepInFlight = true
         beepExec.execute {
             try {
                 playSoundIdBlocking(id)
             } catch (e: Exception) {
                 Log.w(TAG, "playSoundId($id) failed", e)
+            } finally {
+                beepInFlight = false
             }
         }
     }
