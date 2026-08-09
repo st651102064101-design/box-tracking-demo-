@@ -40,6 +40,14 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   _Step _step = _Step.pick;
   Box? _target;
 
+  /// Narrows the pick-list to one product type at a time — null means "all
+  /// types". A plain alphabetical-by-tag list of every tagged box in the
+  /// warehouse has no way to jump to "the one I want" short of already
+  /// knowing its exact tag; picking a type first (what an operator standing
+  /// in the aisle actually knows) cuts that list down to something scannable
+  /// at a glance.
+  String? _typeFilter;
+
   /// Pick-step RFID sweep census: every distinct tagged box the trigger has
   /// found this sweep, in first-seen order — answers "how many tagged boxes
   /// are in this area" on its own, not just "is this one specific box here."
@@ -279,6 +287,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       if (_sweepTags.contains(tag)) continue;
       _sweepTags.add(tag);
       changed = true;
+      // Same detection tone every other RFID read in the app plays (see
+      // addScan's viaRfid branch) — this loop only reaches here once per
+      // *distinct* box, so a held trigger sweeping a pallet doesn't turn
+      // into a solid tone the way a raw per-read sound would.
+      c.rfid.playSound(c.prefs.rfidSoundId);
     }
     if (changed && mounted) setState(() {});
   }
@@ -403,12 +416,29 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // Every taggable box, browsable without typing anything — this is what a
     // scan-only pick step falls back to when there's no picking ticket or
     // pallet label in hand to scan.
-    final tagged = (c.S?.boxes.toList() ?? const <Box>[])
+    final allTagged = (c.S?.boxes.toList() ?? const <Box>[])
         .where((b) =>
             (b.rfidEpc?.isNotEmpty ?? false) ||
             (b.rfidTid?.isNotEmpty ?? false))
         .toList()
       ..sort((a, b) => a.tag.compareTo(b.tag));
+
+    // Distinct types actually present, by display name — a type with zero
+    // tagged boxes right now would just be a dead-end chip. '' stands in for
+    // "no type set" so it can still be a normal map key.
+    final typeNames = <String, String>{}; // type id -> display name
+    for (final b in allTagged) {
+      final id = b.type ?? '';
+      typeNames[id] = c.S!.typeName(b.type);
+    }
+    final typeIds = typeNames.keys.toList()
+      ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
+    if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
+      _typeFilter = null; // the selected type's last box lost its tag/moved out
+    }
+    final tagged = _typeFilter == null
+        ? allTagged
+        : allTagged.where((b) => (b.type ?? '') == _typeFilter).toList();
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
@@ -461,7 +491,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             child: Column(
               children: [
                 Icon(Icons.wifi_tethering,
-                    size: 22, color: _reading ? C.limeDeep : C.muted),
+                    size: 22, color: _reading ? C.limeText : C.muted),
                 const SizedBox(height: 6),
                 Text(
                     loc.t(_reading
@@ -469,7 +499,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                         : 'เหนี่ยวไกกวาดหากล่องในบริเวณนี้ — หรือยิงแท็กของกล่องที่จะหา'),
                     style: TextStyle(
                         fontSize: 13,
-                        color: _reading ? C.limeDeep : C.muted,
+                        color: _reading ? C.limeText : C.muted,
                         fontWeight: FontWeight.w600)),
               ],
             ),
@@ -477,7 +507,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         const SizedBox(height: 14),
         if (c.scanInputMode != ScanInputMode.barcode)
           ..._sweepList(c, loc)
-        else if (tagged.isEmpty)
+        else if (allTagged.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
             child: Text(loc.t('ยังไม่มีกล่องที่ผูกแท็ก RFID ในระบบ'),
@@ -488,6 +518,46 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700, color: C.muted)),
           const SizedBox(height: 8),
+          // Pick a product type first — cuts a warehouse-wide alphabetical
+          // list down to something an operator standing in the aisle can
+          // actually scan by eye, without needing to know a tag up front.
+          if (typeIds.length > 1) ...[
+            SizedBox(
+              height: 34,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(loc.t('ทั้งหมด')),
+                      selected: _typeFilter == null,
+                      onSelected: (_) => setState(() => _typeFilter = null),
+                    ),
+                  ),
+                  for (final id in typeIds)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(typeNames[id]!),
+                        selected: _typeFilter == id,
+                        onSelected: (_) =>
+                            setState(() => _typeFilter = id),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (tagged.isEmpty)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+              child: Text(loc.t('ไม่มีกล่องประเภทนี้ที่ผูกแท็ก RFID ในระบบ'),
+                  style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
+            )
+          else
           Container(
             decoration: BoxDecoration(
               color: C.surface,

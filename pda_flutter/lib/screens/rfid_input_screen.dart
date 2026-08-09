@@ -154,7 +154,9 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     // as "—" now (TID already always did — this reader's inventory round
     // never carries one regardless of profile, see RfidReaderController's
     // own comment on that) — full-field detail always was the trade being
-    // made here, just against the wrong thing to trade it for.
+    // made here, just against the wrong thing to trade it for. (An older
+    // branch's `rfid.setTidEnrichment(true)` here is exactly the regression
+    // this comment documents — deliberately not restored by this merge.)
   }
 
   void _resetStats() {
@@ -167,12 +169,6 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
 
   @override
   void dispose() {
-    // Leaving detail mode on does nothing unless it's explicitly put back —
-    // it's a reader-side setting that persists until overwritten (same
-    // reasoning as RfidReaderController's own applyReadProfile comment) —
-    // so every other screen would silently inherit this one's slower
-    // profile if this didn't hand it back.
-    context.read<AppController>().rfid.setDetailMode(false);
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();

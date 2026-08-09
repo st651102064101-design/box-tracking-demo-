@@ -10,6 +10,27 @@ import 'package:flutter/material.dart';
 class C {
   static bool isDark = false;
 
+  /// Battery-saver / low-spec device mode — permanently on, not a per-device
+  /// toggle. The leaner path (no drop-shadows, zero-duration transitions) is
+  /// objectively smoother on the MC3390R, not a trade-off an operator should
+  /// have to opt into; a prior session's own settings toggle was removed for
+  /// the same reason (see AppController.lowPowerMode). [shadow] and [anim]
+  /// read this so every existing call site strips drop-shadows and
+  /// screen-transition/toast animation without being rewritten individually.
+  static const bool lowGraphics = true;
+
+  /// Returns [normal] unchanged, or `null` (no shadow at all) when
+  /// [lowGraphics] is on. Wrap every `boxShadow:` list literal in this
+  /// instead of writing it bare, so the low-graphics toggle actually reaches
+  /// it.
+  static List<BoxShadow>? shadow(List<BoxShadow> normal) => lowGraphics ? null : normal;
+
+  /// Returns [normal] unchanged, or [Duration.zero] when [lowGraphics] is on
+  /// — a zero-duration animation completes instantly with no intermediate
+  /// frames, the cheapest way to keep every call site's existing
+  /// AnimatedFoo widget structure unchanged.
+  static Duration anim(Duration normal) => lowGraphics ? Duration.zero : normal;
+
   // surfaces
   static Color bg = const Color(0xFFF5F5F7);
   static Color surface = const Color(0xFFFFFFFF);

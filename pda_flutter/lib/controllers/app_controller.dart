@@ -1225,7 +1225,34 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         _reject(tag, ResultKind.warn, 'อยู่ในคลังอยู่แล้ว');
         return;
       }
+      // A box shipped out from one warehouse has to come back to that same
+      // warehouse — the operator standing at this gate belongs to `wh`
+      // (whatever they picked at device setup / post confirm), and a box
+      // whose outWh says otherwise almost certainly means someone read the
+      // wrong tag or is standing at the wrong gate, not a legitimate
+      // inter-warehouse transfer (this app has no such flow). A box that's
+      // never shipped (pending/new from a supplier) has no outWh yet and
+      // isn't restricted — its first warehouse is whichever gate receives
+      // it first.
+      if (b.status == 'out' && b.outWh != null && b.outWh!.isNotEmpty && b.outWh != wh) {
+        _reject(tag, ResultKind.err,
+            'กล่องนี้ออกจากคลัง ${S?.whName(b.outWh!) ?? b.outWh} — ต้องคืนที่คลังเดิม');
+        return;
+      }
     } else {
+      // Only a box actually sitting in *this* warehouse's inventory can ship
+      // from here — same reasoning as the gate-in check above, mirrored for
+      // the outbound side. currentWh empty means "never actually
+      // established which warehouse this is" (shouldn't happen for a
+      // 'warehouse'-status box, but fail open rather than block on a data
+      // gap) — only reject when it's known and it disagrees.
+      if (b.status == 'warehouse' &&
+          b.currentWh.isNotEmpty &&
+          b.currentWh != wh) {
+        _reject(tag, ResultKind.err,
+            'กล่องนี้ไม่ใช่ของคลังนี้ (${S?.whName(b.currentWh) ?? b.currentWh})');
+        return;
+      }
       switch (b.status) {
         case 'out':
           _reject(tag, ResultKind.warn, 'ออกไปแล้ว (ยังไม่คืน)');
@@ -1920,7 +1947,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister &&
         screen != Screen.settings &&
-        screen != Screen.transfer) {
+        screen != Screen.transfer &&
+        screen != Screen.cycleCount &&
+        screen != Screen.holdRelease &&
+        screen != Screen.reportProblem &&
+        screen != Screen.locationInquiry) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // Settings is included here — its RFID diagnostics panel has its own
       // "กดค้างเพื่อทดสอบยิง" hold button, but an operator standing there and

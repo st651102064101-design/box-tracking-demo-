@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:boxtrace_pda/controllers/app_controller.dart';
 import 'package:boxtrace_pda/screens/track_screen.dart';
+import 'package:boxtrace_pda/services/i18n.dart';
 import 'package:boxtrace_pda/services/prefs.dart';
 import 'package:boxtrace_pda/services/rfid_service.dart';
 
@@ -65,8 +66,12 @@ void main() {
   testWidgets('typing a query rebuilds the screen with live suggestions', (tester) async {
     final c = await _controllerWith(5);
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: c,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppController>.value(value: c),
+          ChangeNotifierProvider<LocaleController>.value(
+              value: LocaleController(c.prefs)),
+        ],
         child: const MaterialApp(home: Scaffold(body: TrackScreen())),
       ),
     );
@@ -83,8 +88,12 @@ void main() {
   testWidgets('a search matching 100 boxes shows all 100 as grid cards, uncapped', (tester) async {
     final c = await _controllerWith(100);
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: c,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppController>.value(value: c),
+          ChangeNotifierProvider<LocaleController>.value(
+              value: LocaleController(c.prefs)),
+        ],
         child: const MaterialApp(home: Scaffold(body: TrackScreen())),
       ),
     );
@@ -110,8 +119,12 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 640)); // a narrow handheld
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: c,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppController>.value(value: c),
+          ChangeNotifierProvider<LocaleController>.value(
+              value: LocaleController(c.prefs)),
+        ],
         child: const MaterialApp(home: Scaffold(body: TrackScreen())),
       ),
     );
