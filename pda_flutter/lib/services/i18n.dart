@@ -398,6 +398,12 @@ class LocaleController extends ChangeNotifier {
         'No shelf layout set up for this warehouse yet — will stay pending putaway',
     'ชั้นวางที่ตั้งค่าไว้ถูกใช้ครบแล้ว — จะเก็บไว้รอ Putaway แทน':
         'Every set-up shelf is already taken — will stay pending putaway',
+    'ลองใหม่': 'Retry',
+
+    // gate in: post-commit "go put these there" summary
+    'รับเข้าสำเร็จ — เอาไปเก็บที่': 'Received — go put these at',
+    'บันทึกตำแหน่งนี้ในระบบแล้ว — ถ้าเป็นคนละคนที่จัดเก็บ ค้นหากล่องภายหลังได้':
+        'This location is already saved — if someone else does the shelving, they can look the box up later',
 
     // transfer screen: scan-a-location-code alternative to dropdowns
     'ยิงบาร์โค้ด': 'Scan barcode',

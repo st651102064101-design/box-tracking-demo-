@@ -44,6 +44,22 @@ enum ScanInputMode { barcode, rfid }
 /// AppController.receiveLocationMode.
 enum ReceiveLocationMode { auto, manual, defer }
 
+/// What ScanScreen shows right after a Gate In commit that assigned a shelf
+/// (auto-suggested or picked by hand — not "รอ Putaway") — "here's where
+/// these N boxes actually need to go." The location is also already saved on
+/// every box's own record (gateIn wrote it server-side), so this isn't the
+/// only place it lives: whoever ends up physically shelving the batch, even
+/// if it's a different person later, can still find it by looking the box up
+/// (Track screen) — this summary is just the immediate, no-lookup-needed
+/// version for whoever is holding the device right after the scan.
+class ReceiveBatchSummary {
+  final List<String> tags;
+  final Map<String, String> location;
+  final String whName;
+  ReceiveBatchSummary(
+      {required this.tags, required this.location, required this.whName});
+}
+
 enum ResultKind { ok, err, warn, info }
 
 class ScanResult {
@@ -171,6 +187,16 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   String scanVal = '';
   ScanResult? lastResult;
 
+  /// Set right after a successful Gate In commit that assigned a shelf — see
+  /// [ReceiveBatchSummary]. ScanScreen shows it once, then clears it via
+  /// [dismissReceiveBatchSummary]; null the rest of the time.
+  ReceiveBatchSummary? receiveBatchSummary;
+
+  void dismissReceiveBatchSummary() {
+    receiveBatchSummary = null;
+    notifyListeners();
+  }
+
   // out form
   String outCustomer = '';
   String outPlate = '';
@@ -208,6 +234,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// connectivity/deployment one.
   bool suggestLocationFailed = false;
 
+  /// The actual reason [suggestLocationFailed] is true — an ApiException's own
+  /// Thai message (a real HTTP status the server sent back: 404 means this
+  /// endpoint isn't live on whatever the app is talking to, 400/500 means
+  /// something else) when there is one, otherwise a generic "can't reach the
+  /// server" for a plain network/timeout failure. `online` being true only
+  /// means the last lightweight health poll succeeded — it says nothing about
+  /// whether this specific route exists or answers on the server actually
+  /// serving it, so showing the real error here (instead of just "offline?")
+  /// is what makes an "I'm online but this still fails" report diagnosable.
+  String? suggestLocationFailedDetail;
+
   /// 'no_master_locations' | 'all_occupied' | null — set on a successful
   /// call whenever [suggestedLocation] comes back null, so the UI can say
   /// something more specific than a flat "not found" (see
@@ -232,15 +269,25 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       final result = await api.suggestLocation(wh);
       _suggestedLocation = result.suggestion;
       suggestLocationEmptyReason = result.reason;
+    } on ApiException catch (e) {
+      _suggestedLocation = null;
+      suggestLocationEmptyReason = null;
+      suggestLocationFailed = true;
+      suggestLocationFailedDetail = 'HTTP ${e.status}: ${e.message}';
     } catch (_) {
       _suggestedLocation = null;
       suggestLocationEmptyReason = null;
       suggestLocationFailed = true;
+      suggestLocationFailedDetail = null;
     } finally {
       suggestingLocation = false;
       notifyListeners();
     }
   }
+
+  /// Re-runs the last suggest-location request — the retry the auto-mode
+  /// error message promises but, until this existed, had no button behind it.
+  void retrySuggestedLocation() => _fetchSuggestedLocation();
 
   /// When a field's own dropdown only has one real option to begin with,
   /// there's nothing for the operator to actually decide — auto-pick it and
@@ -328,6 +375,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     receiveSlot = '';
     _suggestedLocation = null;
     suggestLocationFailed = false;
+    suggestLocationFailedDetail = null;
     suggestLocationEmptyReason = null;
   }
 
@@ -1576,6 +1624,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       }
       final custName = s?.custName(outCustomer) ?? outCustomer;
       final whNm = s?.whName(whId) ?? whId;
+      // Same exclusion gateIn itself applies server-side: a tag flagged
+      // hold/damage in this batch never actually landed on the assigned
+      // shelf, so it has no business showing up in "go put these there."
+      final shelvedTags =
+          tx.tags.where((t) => !queueConditions.containsKey(t)).toList();
+      if (mode == 'in' && receiveLocation != null && shelvedTags.isNotEmpty) {
+        receiveBatchSummary = ReceiveBatchSummary(
+            tags: shelvedTags, location: receiveLocation, whName: whNm);
+      }
       _resetAfterCommit();
       await refresh();
       if (mode == 'in') {

@@ -119,6 +119,68 @@ class _ScanScreenState extends State<ScanScreen> {
     await c.doCommit();
     if (!mounted) return;
     if (c.queue.isEmpty) setState(() => _onScanStep = false);
+    final summary = c.receiveBatchSummary;
+    if (summary != null) await _showReceiveBatchSummary(c, summary);
+  }
+
+  /// "รับเข้าสำเร็จ, เอาไปเก็บที่ไหน" — shown right after a Gate In commit that
+  /// assigned a shelf (auto-suggested or picked by hand), so whoever is
+  /// holding the device — the same person walking straight to the shelf, or
+  /// someone just confirming the batch before handing it off — sees exactly
+  /// where these boxes need to go without having to look each one up. The
+  /// location is also already saved on every box's own record, so a
+  /// different person doing the actual shelving later can still find it via
+  /// ค้นหากล่อง — this dialog is just the no-lookup-needed version for right
+  /// now.
+  Future<void> _showReceiveBatchSummary(
+      AppController c, ReceiveBatchSummary summary) async {
+    final loc = context.read<LocaleController>();
+    final locText = [
+      summary.location['zone'],
+      summary.location['rack'],
+      summary.location['shelf'],
+      summary.location['slot'],
+    ].where((v) => (v ?? '').isNotEmpty).join(' / ');
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.t('รับเข้าสำเร็จ — เอาไปเก็บที่')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: C.limeBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('${summary.whName} · $locText',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
+            Text(
+                '${summary.tags.length} ${loc.t('ใบ')}: ${summary.tags.join(', ')}',
+                style: TextStyle(fontSize: 12.5, color: C.ink2, height: 1.4)),
+            const SizedBox(height: 10),
+            Text(
+                loc.t(
+                    'บันทึกตำแหน่งนี้ในระบบแล้ว — ถ้าเป็นคนละคนที่จัดเก็บ ค้นหากล่องภายหลังได้'),
+                style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              c.dismissReceiveBatchSummary();
+              Navigator.of(ctx).pop();
+            },
+            child: Text(loc.t('เข้าใจแล้ว')),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -436,12 +498,33 @@ class _ScanScreenState extends State<ScanScreen> {
                     style: TextStyle(fontSize: 12.5, color: C.muted)),
               ],
             )
-          else if (c.suggestLocationFailed)
+          else if (c.suggestLocationFailed) ...[
             Text(
                 loc.t(
                     'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ลองใหม่ หรือเลือกเอง/รอ Putaway แทน'),
-                style: TextStyle(fontSize: 12.5, color: C.red))
-          else if (c.suggestedLocation == null)
+                style: TextStyle(fontSize: 12.5, color: C.red)),
+            if (c.suggestLocationFailedDetail != null) ...[
+              const SizedBox(height: 2),
+              Text(c.suggestLocationFailedDetail!,
+                  style: TextStyle(fontSize: 11, color: C.faint)),
+            ],
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: c.retrySuggestedLocation,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, size: 14, color: C.ink2),
+                  const SizedBox(width: 4),
+                  Text(loc.t('ลองใหม่'),
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: C.ink2,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ] else if (c.suggestedLocation == null)
             Text(
                 loc.t(c.suggestLocationEmptyReason == 'no_master_locations'
                     ? 'คลังนี้ยังไม่ได้ตั้งค่าผังชั้นวาง — จะเก็บไว้รอ Putaway แทน'
