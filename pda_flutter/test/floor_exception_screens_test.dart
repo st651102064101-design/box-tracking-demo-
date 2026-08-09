@@ -6,6 +6,7 @@ import 'package:boxtrace_pda/controllers/app_controller.dart';
 import 'package:boxtrace_pda/screens/hold_release_screen.dart';
 import 'package:boxtrace_pda/screens/report_problem_screen.dart';
 import 'package:boxtrace_pda/screens/location_inquiry_screen.dart';
+import 'package:boxtrace_pda/services/i18n.dart';
 
 import 'app_controller_test.dart'
     show FakeApi, makeController, fixtureEmployees, box;
@@ -13,15 +14,19 @@ import 'app_controller_test.dart'
 /// Covers the three "floor exception" screens added alongside
 /// POST /api/boxes/:tag/hold and POST /api/reports: HoldReleaseScreen,
 /// ReportProblemScreen, and LocationInquiryScreen (the client-side reverse
-/// of "หากล่อง"/"เรดาร์"). Each is driven the way the imager actually feeds
-/// them — [scan] types into the hidden ScanCapture field the way a wedge
-/// scanner does — not by calling controller methods directly.
+/// of "หากล่อง"). Each is driven the way the imager actually feeds them —
+/// [scan] types into the hidden ScanCapture field the way a wedge scanner
+/// does — not by calling controller methods directly.
 Future<void> scan(WidgetTester tester, String code) =>
     tester.enterText(find.byType(TextField).first, code);
 
 Future<Widget> _wrap(AppController c, Widget child) async {
-  return ChangeNotifierProvider<AppController>.value(
-    value: c,
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<AppController>.value(value: c),
+      ChangeNotifierProvider<LocaleController>.value(
+          value: LocaleController(c.prefs)),
+    ],
     child: MaterialApp(home: Scaffold(body: child)),
   );
 }
@@ -55,9 +60,9 @@ void main() {
       ]);
       // Back to the scan step after a successful action.
       expect(find.text('CRT-01'), findsNothing);
-      // Let toastMsg's own auto-clear timer fire before teardown, or the
-      // test framework flags it as a leaked pending timer.
-      await tester.pump(const Duration(milliseconds: 3000));
+      // Let toastMsg's own 2.6s auto-clear timer fire before teardown, or
+      // the test framework flags it as a leaked pending timer.
+      await tester.pump(const Duration(milliseconds: 2700));
     });
 
     testWidgets('an already-held box offers release, not hold again',
@@ -112,6 +117,7 @@ void main() {
 
     testWidgets('reports a full bin by location, with no box tag',
         (tester) async {
+      final api = FakeApi();
       final state = fixtureStateWithLocation();
       final c = await makeController(FakeApi()..state = state);
       await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
@@ -127,6 +133,8 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      // Reports through this widget's own controller (built with `c`), not
+      // `api` — assert against the api actually wired to c.
       final calls = (c.api as FakeApi).reportCalls;
       expect(calls, hasLength(1));
       expect(calls.first['kind'], 'bin_full');
@@ -147,6 +155,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('A / 1 / 1'), findsOneWidget);
+      expect(find.textContaining('1'), findsWidgets); // "1 ใบที่นี่"
       expect(find.text('CRT-01'), findsOneWidget);
     });
 

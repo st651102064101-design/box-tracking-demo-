@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
-import '../models/location.dart';
 import '../services/api_client.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
@@ -28,7 +28,7 @@ class ReportProblemScreen extends StatefulWidget {
 class _ReportProblemScreenState extends State<ReportProblemScreen> {
   _Kind? _kind;
   Box? _box;
-  Location? _location;
+  Map<String, String>? _location;
   String? _scanError;
   bool _busy = false;
   bool _sent = false;
@@ -65,16 +65,8 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       });
       return;
     }
-    // bin_full — a shelf/rack barcode, not a box. Locations are keyed by
-    // their own scannable code (see StateSnapshot.locations).
-    final needle = raw.trim().toLowerCase();
-    Location? found;
-    for (final entry in s.locations.entries) {
-      if (entry.key.toLowerCase() != needle) continue;
-      if (entry.value.wh != c.wh) continue;
-      found = entry.value;
-      break;
-    }
+    // bin_full — a shelf/rack barcode, not a box.
+    final found = s.locationByCode(c.wh, raw);
     if (found == null) {
       setState(() => _scanError = 'ไม่พบตำแหน่งรหัส "$raw"');
       return;
@@ -87,6 +79,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
 
   Future<void> _submit(AppController c) async {
     if (_busy) return;
+    final loc = context.read<LocaleController>();
     setState(() {
       _busy = true;
       _scanError = null;
@@ -95,15 +88,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       await c.api.report(
         kind: _kind == _Kind.missing ? 'missing' : 'bin_full',
         tag: _box?.tag,
-        location: _location == null
-            ? null
-            : {
-                'wh': _location!.wh,
-                'zone': _location!.zone,
-                'rack': _location!.rack,
-                'shelf': _location!.shelf,
-                'slot': _location!.slot,
-              },
+        location: _location,
         note: _noteCtrl.text.trim(),
       );
       if (!mounted) return;
@@ -111,8 +96,8 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       setState(() => _sent = true);
     } catch (e) {
       if (!mounted) return;
-      setState(() =>
-          _scanError = e is ApiException ? e.message : 'บันทึกไม่สำเร็จ');
+      setState(() => _scanError =
+          e is ApiException ? e.message : loc.t('บันทึกไม่สำเร็จ'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -132,43 +117,40 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final kind = _kind;
     final target = _box != null || _location != null;
 
-    if (_sent) return _successStep();
+    if (_sent) return _successStep(loc);
 
     return ScanCapture(
       enabled: kind != null && !target && !_busy,
       onScan: (raw) => _onScan(c, raw),
-      child: Column(
-        children: [
-          StickyHeader(
-            onBack: kind == null ? c.backToHome : _reset,
-            title: const Text('แจ้งปัญหาหน้างาน'),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-              children: kind == null
-                  ? _kindPicker()
-                  : target
-                      ? _confirmBody(c, kind)
-                      : _scanBody(kind),
-            ),
-          ),
-        ],
+      child: AutoHideHeader(
+        header: StickyHeader(
+          onBack: kind == null ? c.backToHome : _reset,
+          title: Text(loc.t('แจ้งปัญหาหน้างาน')),
+        ),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+          children: kind == null
+              ? _kindPicker(loc)
+              : target
+                  ? _confirmBody(c, loc, kind)
+                  : _scanBody(loc, kind),
+        ),
       ),
     );
   }
 
-  List<Widget> _kindPicker() => [
+  List<Widget> _kindPicker(LocaleController loc) => [
         _kindTile(
           icon: Icons.search_off,
           color: C.red,
           bg: C.redBg,
-          title: 'ของหาย',
-          sub: 'ยิงบาร์โค้ดกล่อง — ระบบสั่งมาที่นี่แต่ไม่พบของ',
+          title: loc.t('ของหาย'),
+          sub: loc.t('ยิงบาร์โค้ดกล่อง — ระบบสั่งมาที่นี่แต่ไม่พบของ'),
           onTap: () => _pickKind(_Kind.missing),
         ),
         const SizedBox(height: 10),
@@ -176,8 +158,8 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           icon: Icons.inbox,
           color: C.orange,
           bg: C.orangeBg,
-          title: 'ช่องเก็บเต็ม',
-          sub: 'ยิงบาร์โค้ดชั้นวาง — ช่องที่ระบบแนะนำเต็มแล้วจริง',
+          title: loc.t('ช่องเก็บเต็ม'),
+          sub: loc.t('ยิงบาร์โค้ดชั้นวาง — ช่องที่ระบบแนะนำเต็มแล้วจริง'),
           onTap: () => _pickKind(_Kind.binFull),
         ),
       ];
@@ -219,8 +201,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                     Text(title,
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w700)),
-                    Text(sub,
-                        style: TextStyle(fontSize: 12.5, color: C.muted)),
+                    Text(sub, style: TextStyle(fontSize: 12.5, color: C.muted)),
                   ],
                 ),
               ),
@@ -232,23 +213,23 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _scanBody(_Kind kind) => [
+  List<Widget> _scanBody(LocaleController loc, _Kind kind) => [
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
           decoration: BoxDecoration(
             color: C.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: C.border, width: 1.5),
+            border: Border.all(color: C.fieldBorder, width: 1.5),
           ),
           child: Column(
             children: [
               Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
               const SizedBox(height: 8),
               Text(
-                  kind == _Kind.missing
+                  loc.t(kind == _Kind.missing
                       ? 'ยิงบาร์โค้ดกล่องที่หา'
-                      : 'ยิงบาร์โค้ดชั้นวางที่เต็ม',
+                      : 'ยิงบาร์โค้ดชั้นวางที่เต็ม'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 14,
@@ -265,15 +246,13 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         ],
       ];
 
-  String _locText(Location l) => [l.zone, l.rack, l.shelf, l.slot]
-      .where((v) => v.isNotEmpty)
-      .join(' / ');
-
-  List<Widget> _confirmBody(AppController c, _Kind kind) {
+  List<Widget> _confirmBody(AppController c, LocaleController loc, _Kind kind) {
     final b = _box;
     final l = _location;
     return [
       Panel(
+        radius: 18,
+        padding: const EdgeInsets.all(18),
         child: b != null
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +270,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_locText(l!),
+                  Text(locationText(l!),
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
@@ -301,15 +280,15 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               ),
       ),
       const SizedBox(height: 16),
-      FieldLabel('รายละเอียดเพิ่มเติม (ถ้ามี)'),
+      FieldLabel(loc.t('รายละเอียดเพิ่มเติม (ถ้ามี)')),
       const SizedBox(height: 6),
       TextField(
         controller: _noteCtrl,
         maxLines: 2,
         decoration: pdaInput(
-            kind == _Kind.missing
+            loc.t(kind == _Kind.missing
                 ? 'เช่น หาในโซนใกล้เคียงแล้วไม่พบ'
-                : 'เช่น มีของวางเกินที่ระบบบันทึกไว้',
+                : 'เช่น มีของวางเกินที่ระบบบันทึกไว้'),
             radius: 12),
       ),
       const SizedBox(height: 16),
@@ -323,7 +302,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          child: Text(_busy ? 'กำลังบันทึก…' : 'ส่งรายงาน'),
+          child: Text(_busy ? loc.t('กำลังบันทึก…') : loc.t('ส่งรายงาน')),
         ),
       ),
       if (_scanError != null) ...[
@@ -335,7 +314,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     ];
   }
 
-  Widget _successStep() {
+  Widget _successStep(LocaleController loc) {
     return Container(
       color: C.limeBg,
       child: Center(
@@ -344,16 +323,19 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           children: [
             Icon(Icons.check_circle, size: 84, color: C.limeDeep),
             const SizedBox(height: 14),
-            Text('บันทึกรายงานแล้ว',
+            Text(loc.t('บันทึกรายงานแล้ว'),
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: C.limeText)),
             const SizedBox(height: 18),
-            TextButton(onPressed: _reset, child: const Text('แจ้งอีกรายการ')),
+            TextButton(
+              onPressed: _reset,
+              child: Text(loc.t('แจ้งอีกรายการ')),
+            ),
             TextButton(
               onPressed: () => context.read<AppController>().backToHome(),
-              child: const Text('กลับหน้าหลัก'),
+              child: Text(loc.t('กลับหน้าหลัก')),
             ),
           ],
         ),

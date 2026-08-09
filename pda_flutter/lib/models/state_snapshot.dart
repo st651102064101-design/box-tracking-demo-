@@ -1,11 +1,10 @@
 import 'box.dart';
-import 'location.dart';
 
 /// Typed view over the full `S` snapshot returned by `GET /api/state`.
 ///
 /// The backend round-trips the exact object the legacy UI used, so we parse the
 /// same maps: boxes / customers / boxtypes / warehouses / gates / employees /
-/// events / cfg / locations. Everything is kept nullable-safe and falls back to empty.
+/// events / cfg. Everything is kept nullable-safe and falls back to empty.
 class StateSnapshot {
   final Map<String, dynamic> boxesRaw;
   final Map<String, dynamic> customers;
@@ -15,7 +14,11 @@ class StateSnapshot {
   final Map<String, dynamic> employees;
   final List<dynamic> events;
   final Map<String, dynamic> cfg;
-  final Map<String, Location> locations; // code -> Location (Location Master)
+
+  /// `code -> {wh, zone, rack, shelf, slot, type, note, ...}` — the master
+  /// rack/shelf/slot list a warehouse admin defines up front (see backend's
+  /// `locations` table), not just wherever a box happens to have landed.
+  final Map<String, dynamic> locations;
 
   StateSnapshot({
     required this.boxesRaw,
@@ -33,19 +36,18 @@ class StateSnapshot {
     Map<String, dynamic> m(dynamic v) =>
         v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
     final gatesRaw = m(j['gates']);
-    final locationsRaw = m(j['locations']);
     return StateSnapshot(
       boxesRaw: m(j['boxes']),
       customers: m(j['customers']),
       boxtypes: m(j['boxtypes']),
       warehouses: m(j['warehouses']),
-      gates: gatesRaw.map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
+      gates:
+          gatesRaw.map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
       employees: m(j['employees']),
-      events: (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
+      events:
+          (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
       cfg: m(j['cfg']),
-      locations: locationsRaw.map(
-        (k, v) => MapEntry(k.toString(), Location.fromJson(k.toString(), m(v))),
-      ),
+      locations: m(j['locations']),
     );
   }
 
@@ -67,18 +69,16 @@ class StateSnapshot {
     for (final entry in boxesRaw.entries) {
       final v = entry.value;
       if (v is! Map) continue;
-      // `rfid` is the one code a box carries now; the older pair is still
-      // checked so boxes registered before the change keep resolving.
-      final rfid = v['rfid']?.toString().toLowerCase();
       final tid = v['rfidTid']?.toString().toLowerCase();
       final epc = v['rfidEpc']?.toString().toLowerCase();
-      if (rfid == target || tid == target || epc == target) return entry.key;
+      if (tid == target || epc == target) return entry.key;
     }
     return null;
   }
 
-  Iterable<Box> get boxes =>
-      boxesRaw.values.whereType<Map>().map((e) => Box(Map<String, dynamic>.from(e)));
+  Iterable<Box> get boxes => boxesRaw.values
+      .whereType<Map>()
+      .map((e) => Box(Map<String, dynamic>.from(e)));
 
   int get warehouseCount => boxes.where((b) => b.status == 'warehouse').length;
   int get outCount => boxes.where((b) => b.status == 'out').length;
@@ -115,7 +115,8 @@ class StateSnapshot {
   /// Return-days for a customer, falling back to config aging days.
   int returnDaysFor(String? customerId) {
     final c = customerId == null ? null : customers[customerId];
-    if (c is Map && c['returnDays'] is num) return (c['returnDays'] as num).toInt();
+    if (c is Map && c['returnDays'] is num)
+      return (c['returnDays'] as num).toInt();
     return agingDays;
   }
 
@@ -133,8 +134,64 @@ class StateSnapshot {
   Map<String, String> gateTypesOf(String whId) {
     final w = warehouses[whId];
     if (w is Map && w['gateTypes'] is Map) {
-      return (w['gateTypes'] as Map).map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
+      return (w['gateTypes'] as Map)
+          .map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
     }
     return const {};
+  }
+
+  /// Every distinct value seen for one location field (zone/rack/shelf/slot)
+  /// in [whId] — union of the master [locations] list (what an admin defined
+  /// up front) and whatever's actually on a box's own location right now
+  /// (a shelf someone's already using that never got added to the master
+  /// list shouldn't vanish from the dropdown just because of that). Used to
+  /// populate TransferScreen's zone/rack/shelf/slot pickers instead of a
+  /// free-typed field with nothing to keep two operators spelling the same
+  /// shelf the same way.
+  List<String> locationValues(String whId, String field,
+      {String? zone, String? rack}) {
+    final out = <String>{};
+    for (final raw in locations.values) {
+      if (raw is! Map) continue;
+      if ((raw['wh'] ?? '').toString() != whId) continue;
+      if (zone != null && (raw['zone'] ?? '').toString() != zone) continue;
+      if (rack != null && (raw['rack'] ?? '').toString() != rack) continue;
+      final v = (raw[field] ?? '').toString();
+      if (v.isNotEmpty) out.add(v);
+    }
+    for (final b in boxes) {
+      final l = b.location;
+      if ((l['wh'] ?? '').toString() != whId) continue;
+      if (zone != null && (l['zone'] ?? '').toString() != zone) continue;
+      if (rack != null && (l['rack'] ?? '').toString() != rack) continue;
+      final v = (l[field] ?? '').toString();
+      if (v.isNotEmpty) out.add(v);
+    }
+    final list = out.toList()..sort();
+    return list;
+  }
+
+  /// Resolve a scanned/typed location code (the master `locations` table's
+  /// own `code`, e.g. a barcode stuck to a rack or shelf) to its
+  /// zone/rack/shelf/slot — used by TransferScreen's "scan the shelf
+  /// barcode" mode as an alternative to picking each field from a dropdown.
+  /// Case-insensitive since barcode labels aren't guaranteed consistent
+  /// casing. Null when the code isn't on file for this warehouse.
+  Map<String, String>? locationByCode(String whId, String code) {
+    final needle = code.trim().toLowerCase();
+    if (needle.isEmpty) return null;
+    for (final entry in locations.entries) {
+      if (entry.key.toLowerCase() != needle) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      if ((raw['wh'] ?? '').toString() != whId) continue;
+      return {
+        'zone': (raw['zone'] ?? '').toString(),
+        'rack': (raw['rack'] ?? '').toString(),
+        'shelf': (raw['shelf'] ?? '').toString(),
+        'slot': (raw['slot'] ?? '').toString(),
+      };
+    }
+    return null;
   }
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
@@ -27,6 +28,16 @@ class _TrackScreenState extends State<TrackScreen> {
   Timer? _autoSearchTimer;
   static const _autoSearchDelay = Duration(milliseconds: 180);
   static const _autoSearchMinLen = 3;
+
+  /// Length after the previous onChanged — same trick login_screen.dart's
+  /// badge field uses. A keyboard-wedge scan on this hardware often lands as
+  /// one onChanged burst carrying the whole code rather than a keystroke at
+  /// a time; more than one new character in a single callback is scan-speed
+  /// proof no human typing produces, so that's committed immediately instead
+  /// of waiting out [_autoSearchDelay]. That's what keeps two barcodes fired
+  /// back-to-back from concatenating: the field clears the instant the first
+  /// burst lands, before the second one can arrive on top of it.
+  int _prevLen = 0;
 
   @override
   void initState() {
@@ -52,7 +63,14 @@ class _TrackScreenState extends State<TrackScreen> {
     c.onTrackChanged(_ctrl.text);
     _autoSearchTimer?.cancel();
     final text = _ctrl.text.trim();
+    final addedChars = _ctrl.text.length - _prevLen;
+    _prevLen = _ctrl.text.length;
+    if (text.isEmpty) return;
     if (text.length < _autoSearchMinLen) return;
+    if (addedChars > 1) {
+      c.doTrack();
+      return;
+    }
     _autoSearchTimer = Timer(_autoSearchDelay, () {
       if (!mounted || _ctrl.text.trim() != text) return;
       c.doTrack();
@@ -68,170 +86,167 @@ class _TrackScreenState extends State<TrackScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
-    // keep the field in sync when a hardware read populates trackVal
+    final loc = context.watch<LocaleController>();
+    // keep the field in sync when a hardware read populates trackVal — and
+    // just as importantly, clear it back out once doTrack() empties trackVal
+    // after a completed scan resolves (see AppController.doTrack); without
+    // this half, the field kept showing the just-committed code and the next
+    // scan's characters landed after it instead of into a clean field.
     if (c.trackVal.isNotEmpty && _ctrl.text != c.trackVal) {
       _ctrl.text = c.trackVal;
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    } else if (c.trackVal.isEmpty && _ctrl.text.isNotEmpty) {
+      _ctrl.clear();
     }
     final bottom = MediaQuery.of(context).padding.bottom;
     final box = c.trackBox;
-    final results = c.trackResults;
+    final hits = c.scanInputMode == ScanInputMode.rfid
+        ? c.trackRfidHits
+        : c.trackBarcodeHits;
+    final hitsUnit =
+        c.scanInputMode == ScanInputMode.rfid ? loc.t('แท็ก') : loc.t('กล่อง');
+    final hitsIcon = c.scanInputMode == ScanInputMode.rfid
+        ? Icons.nfc
+        : Icons.qr_code_scanner;
 
-    return Column(
-      children: [
-        StickyHeader(
-          onBack: c.backToHome,
-          title: const Text('ค้นหา / ตรวจสอบกล่อง'),
-          subtitle: const Text('ยิงหรือพิมพ์รหัสกล่อง'),
-        ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-            children: [
-              _inputModeToggle(c),
-              const SizedBox(height: 11),
-              // search box — hidden entirely in RFID mode (see the toggle
-              // above): nothing to type when the reader resolves the scan
-              // directly through AppController._onReaderTag.
-              if (c.scanInputMode == ScanInputMode.barcode)
-                TextField(
-                  controller: _ctrl,
-                  focusNode: _focus,
-                  textCapitalization: TextCapitalization.characters,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  onChanged: (_) => _onChanged(c),
-                  onSubmitted: (_) => _search(c),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                  decoration: InputDecoration(
-                    hintText: 'รหัสกล่อง เช่น CRT-01',
-                    hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                    prefixIcon: Icon(Icons.search, color: C.muted),
-                    suffixIcon: SubmitArrowButton(onTap: () => _search(c)),
-                    isDense: true,
-                    filled: true,
-                    fillColor: C.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: C.ink, width: 1.5),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 22),
-                  decoration: BoxDecoration(
-                    color: C.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: C.fieldBorder, width: 1.5),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(Icons.wifi_tethering, size: 22, color: C.muted),
-                      const SizedBox(height: 6),
-                      Text('เหนี่ยวไกเพื่ออ่านแท็ก RFID',
-                          style: TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 14),
-              // Live suggestions as soon as the first character lands —
-              // scanning still works the same (a gun sends the full code +
-              // Enter in one burst, resolving straight to the card below),
-              // this is purely for someone typing by hand who shouldn't have
-              // to get the whole code exactly right before seeing anything.
-              if (c.trackSearching)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 28),
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
-                )
-              else if (box == null && c.trackSuggestions.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.only(left: 2, bottom: 8),
-                  child: Text('พบ ${c.trackSuggestions.length} กล่อง',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: C.muted)),
-                ),
-                _suggestions(c),
-              ] else if (c.trackTried && box == null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                  child: Center(
-                    child: Text(c.trackError ?? 'ไม่พบกล่อง "${c.trackVal}" ในระบบ',
-                        style: TextStyle(fontSize: 13.5, color: C.red, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              // Every distinct box resolved this visit — a manual search and
-              // holding the RFID trigger both feed the same list (newest on
-              // top), so sweeping the reader over several boxes stacks their
-              // cards instead of each read overwriting the last.
-              ...List.generate(results.length, (i) {
-                return Padding(
-                  padding: EdgeInsets.only(top: i == 0 ? 0 : 14),
-                  child: _card(c, results[i]),
-                );
-              }),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _inputModeToggle(AppController c) {
-    Widget seg(ScanInputMode m, String label, IconData icon) {
-      final selected = c.scanInputMode == m;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {
-            if (c.scanInputMode == m) return;
-            c.setScanInputMode(m);
-            if (m == ScanInputMode.barcode) {
-              WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-            } else {
-              _focus.unfocus();
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: selected ? C.ink : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return AutoHideHeader(
+      header: StickyHeader(
+        onBack: c.backToHome,
+        title: Text(loc.t('ค้นหา / ตรวจสอบกล่อง')),
+        subtitle: Text(loc.t('ยิงหรือพิมพ์รหัสกล่อง')),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
               children: [
-                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
-                const SizedBox(width: 6),
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? C.surface : C.ink2)),
+                _inputModeToggle(c, loc),
+                const SizedBox(height: 11),
+                // search box — hidden entirely in RFID mode (see the toggle
+                // above): nothing to type when the reader resolves the scan
+                // directly through AppController._onReaderTag.
+                if (c.scanInputMode == ScanInputMode.barcode)
+                  TextField(
+                    controller: _ctrl,
+                    focusNode: _focus,
+                    textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (_) => _onChanged(c),
+                    onSubmitted: (_) => _search(c),
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'monospace'),
+                    decoration: InputDecoration(
+                      hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
+                      hintStyle: TextStyle(
+                          fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+                      prefixIcon: Icon(Icons.search, color: C.muted),
+                      isDense: true,
+                      filled: true,
+                      fillColor: C.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            BorderSide(color: C.fieldBorder, width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            BorderSide(color: C.fieldBorder, width: 1.5),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: C.ink, width: 1.5),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 22),
+                    decoration: BoxDecoration(
+                      color: C.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: C.fieldBorder, width: 1.5),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.wifi_tethering, size: 22, color: C.muted),
+                        const SizedBox(height: 6),
+                        Text(loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID'),
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: C.muted,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 14),
+                // Live suggestions as soon as the first character lands —
+                // scanning still works the same (a gun sends the full code +
+                // Enter in one burst, resolving straight to the card below),
+                // this is purely for someone typing by hand who shouldn't have
+                // to get the whole code exactly right before seeing anything.
+                if (hits.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 8),
+                    child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.muted)),
+                  ),
+                  _hitsList(c, hits, hitsIcon, loc),
+                  if (box != null) const SizedBox(height: 14),
+                ] else if (box == null && c.trackSuggestions.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 8),
+                    child: Text(
+                        '${loc.t('พบ')} ${c.trackSuggestions.length} ${loc.t('กล่อง')}',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.muted)),
+                  ),
+                  _suggestions(c),
+                ] else if (c.trackTried && box == null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 24, horizontal: 16),
+                    child: Center(
+                      child: Text(
+                          '${loc.t('ไม่พบกล่อง')} "${c.trackVal}" ${loc.t('ในระบบ')}',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              color: C.red,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                if (box != null) _card(c, box, loc),
               ],
             ),
           ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          seg(ScanInputMode.barcode, 'บาร์โค้ด', Icons.qr_code_scanner),
-          seg(ScanInputMode.rfid, 'RFID', Icons.wifi_tethering),
         ],
       ),
+    );
+  }
+
+  Widget _inputModeToggle(AppController c, LocaleController loc) {
+    return ScanModeToggle(
+      onChanged: (m) {
+        if (m == ScanInputMode.barcode) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _focus.requestFocus());
+        } else {
+          _focus.unfocus();
+          // Finding boxes in a pile needs every bit of range the reader has,
+          // regardless of whatever ใกล้/ปานกลาง/ไกล pick Settings last saved.
+          c.forceMaxRfidPower();
+        }
+      },
     );
   }
 
@@ -267,11 +282,13 @@ class _TrackScreenState extends State<TrackScreen> {
               borderRadius: BorderRadius.circular(14),
               onTap: () => _tapSuggestion(c, tag),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 decoration: BoxDecoration(
                   color: C.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: sm?.color.withValues(alpha: 0.35) ?? C.border),
+                  border: Border.all(
+                      color: sm?.color.withValues(alpha: 0.35) ?? C.border),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -283,13 +300,16 @@ class _TrackScreenState extends State<TrackScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace')),
                     if (sm != null) ...[
                       const SizedBox(height: 5),
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: BoxDecoration(color: sm.color, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                            color: sm.color, shape: BoxShape.circle),
                       ),
                     ],
                   ],
@@ -302,25 +322,93 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _card(AppController c, Box b) {
+  /// Vertical list of every distinct box found this session — RFID sweep
+  /// hits (AppController.trackRfidHits) or committed barcode scans
+  /// (trackBarcodeHits), whichever the current input mode is using — one row
+  /// per tag, in the order it was first seen, tap a row to open its full
+  /// detail card below.
+  Widget _hitsList(
+      AppController c, List<String> tags, IconData icon, LocaleController loc) {
+    final S = c.S;
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(tags.length, (i) {
+          final tag = tags[i];
+          final b = S?.box(tag);
+          final sm = b != null ? StatusMeta.of(b.status) : null;
+          final selected = c.trackTried && c.trackTag == tag;
+          return InkWell(
+            onTap: () => c.viewTrackHit(tag),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? C.neutralBg : null,
+                border: i == tags.length - 1
+                    ? null
+                    : Border(bottom: BorderSide(color: C.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: C.muted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(tag,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace')),
+                        if (b != null)
+                          Text(S!.typeName(b.type),
+                              style: TextStyle(fontSize: 12, color: C.muted))
+                        else
+                          Text(loc.t('ไม่พบกล่องนี้ในระบบ'),
+                              style: TextStyle(fontSize: 12, color: C.red)),
+                      ],
+                    ),
+                  ),
+                  if (sm != null)
+                    Pill(sm.label, color: sm.color, bg: sm.bg, fontSize: 11),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _card(AppController c, Box b, LocaleController loc) {
     final S = c.S!;
     final sm = StatusMeta.of(b.status);
     String line1Label, line1;
     if (b.status == 'out') {
-      line1Label = 'ลูกค้า / DO';
-      line1 = '${S.custName(b.customer)}${b.doNo.isNotEmpty ? ' · ${b.doNo}' : ''}';
+      line1Label = loc.t('ลูกค้า / DO');
+      line1 =
+          '${S.custName(b.customer)}${b.doNo.isNotEmpty ? ' · ${b.doNo}' : ''}';
     } else if (b.status == 'lost') {
-      line1Label = 'สูญหายกับ';
+      line1Label = loc.t('สูญหายกับ');
       line1 = S.custName(b.customer);
     } else {
       final l = b.location;
       final parts = <String>[S.whName(l['wh']?.toString())];
-      if ((l['zone'] ?? '').toString().isNotEmpty) parts.add('โซน ${l['zone']}');
+      if ((l['zone'] ?? '').toString().isNotEmpty)
+        parts.add('${loc.t('โซน')} ${l['zone']}');
       if ((l['rack'] ?? '').toString().isNotEmpty) parts.add('${l['rack']}');
-      line1Label = 'ตำแหน่ง';
+      line1Label = loc.t('ตำแหน่ง');
       line1 = (l['zone'] != null || l['rack'] != null) && parts.length > 1
           ? parts.join(' · ')
-          : '${S.whName(l['wh']?.toString())} · รอจัดเก็บ';
+          : '${S.whName(l['wh']?.toString())} · ${loc.t('รอจัดเก็บ')}';
     }
 
     final hist = b.history.reversed.take(6).toList();
@@ -344,7 +432,12 @@ class _TrackScreenState extends State<TrackScreen> {
         color: C.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: C.border),
-        boxShadow: C.shadow([BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))]),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 6))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,15 +445,19 @@ class _TrackScreenState extends State<TrackScreen> {
           // header
           Container(
             padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: C.neutralBg2))),
+            decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: C.neutralBg2))),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 52,
                   height: 52,
-                  decoration: BoxDecoration(color: C.neutralBg2, borderRadius: BorderRadius.circular(15)),
-                  child: Icon(Icons.inventory_2_outlined, size: 28, color: C.ink2),
+                  decoration: BoxDecoration(
+                      color: C.neutralBg2,
+                      borderRadius: BorderRadius.circular(15)),
+                  child:
+                      Icon(Icons.inventory_2_outlined, size: 28, color: C.ink2),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -370,8 +467,12 @@ class _TrackScreenState extends State<TrackScreen> {
                     children: [
                       Text(b.tag,
                           style: const TextStyle(
-                              fontSize: 21, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.4)),
-                      Text(S.typeName(b.type), style: TextStyle(fontSize: 13, color: C.muted)),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                              letterSpacing: 0.4)),
+                      Text(S.typeName(b.type),
+                          style: TextStyle(fontSize: 13, color: C.muted)),
                     ],
                   ),
                 ),
@@ -386,9 +487,9 @@ class _TrackScreenState extends State<TrackScreen> {
               children: [
                 _row(line1Label, line1),
                 const SizedBox(height: 11),
-                _row('รอบหมุนเวียน', '${b.cycles} รอบ'),
+                _row(loc.t('รอบหมุนเวียน'), '${b.cycles} ${loc.t('รอบ')}'),
                 const SizedBox(height: 11),
-                _row('เห็นล่าสุด', c.fmtTs(b.lastSeenAt)),
+                _row(loc.t('เห็นล่าสุด'), c.fmtTs(b.lastSeenAt)),
               ],
             ),
           ),
@@ -398,31 +499,39 @@ class _TrackScreenState extends State<TrackScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6, bottom: 12),
-                    child: Caption('ประวัติล่าสุด'),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 12),
+                    child: Caption(loc.t('ประวัติล่าสุด')),
                   ),
                   ...List.generate(hist.length, (i) {
                     final h = hist[i];
                     final dir = h['dir']?.toString();
-                    final isInit = dir == 'in' && (h['note'] ?? '').toString().startsWith('รับเข้าครั้งแรก');
+                    final isInit = dir == 'in' &&
+                        (h['note'] ?? '')
+                            .toString()
+                            .startsWith('รับเข้าครั้งแรก');
                     String title;
                     if (dir == 'out') {
-                      title = 'ออก → ${S.custName(h['customer']?.toString())}';
+                      title =
+                          '${loc.t('ออก')} → ${S.custName(h['customer']?.toString())}';
                     } else if (isInit) {
-                      title = 'รับเข้าครั้งแรก ${S.whName(h['wh']?.toString())}';
+                      title =
+                          '${loc.t('รับเข้าครั้งแรก')} ${S.whName(h['wh']?.toString())}';
                     } else if (dir == 'in') {
-                      title = 'รับคืนเข้า ${S.whName(h['wh']?.toString())}';
+                      title =
+                          '${loc.t('รับคืนเข้า')} ${S.whName(h['wh']?.toString())}';
                     } else if (dir == 'lost') {
-                      title = 'ตีเป็นสูญหาย';
+                      title = loc.t('ตีเป็นสูญหาย');
                     } else if (dir == 'relocate') {
-                      title = 'ย้ายตำแหน่ง';
+                      title = loc.t('ย้ายตำแหน่ง');
                     } else {
-                      title = 'ลงทะเบียน';
+                      title = loc.t('ลงทะเบียน');
                     }
                     final meta = <String>[c.fmtTs(h['ts']?.toString())];
-                    if ((h['recorder'] ?? '').toString().isNotEmpty) meta.add('โดย ${h['recorder']}');
-                    if (dir == 'out' && (h['do'] ?? '').toString().isNotEmpty) meta.add('${h['do']}');
+                    if ((h['recorder'] ?? '').toString().isNotEmpty)
+                      meta.add('${loc.t('โดย')} ${h['recorder']}');
+                    if (dir == 'out' && (h['do'] ?? '').toString().isNotEmpty)
+                      meta.add('${h['do']}');
                     return _histRow(
                       color: histColor(dir),
                       title: title,
@@ -445,16 +554,22 @@ class _TrackScreenState extends State<TrackScreen> {
         Text(label, style: TextStyle(fontSize: 13.5, color: C.muted)),
         const Spacer(),
         ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+          constraints:
+              BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
           child: Text(value,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+              style:
+                  const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
         ),
       ],
     );
   }
 
-  Widget _histRow({required Color color, required String title, required String meta, required bool last}) {
+  Widget _histRow(
+      {required Color color,
+      required String title,
+      required String meta,
+      required bool last}) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +583,11 @@ class _TrackScreenState extends State<TrackScreen> {
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               if (!last)
-                Expanded(child: Container(width: 2, color: C.border, margin: const EdgeInsets.only(top: 2))),
+                Expanded(
+                    child: Container(
+                        width: 2,
+                        color: C.border,
+                        margin: const EdgeInsets.only(top: 2))),
             ],
           ),
           const SizedBox(width: 12),
@@ -479,7 +598,11 @@ class _TrackScreenState extends State<TrackScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.3)),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3)),
                   Text(meta, style: TextStyle(fontSize: 12, color: C.muted)),
                 ],
               ),

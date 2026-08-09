@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +8,7 @@ import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
+import '../widgets/scan_capture.dart';
 
 /// The badge screen — where every shift starts and where the device sits
 /// whenever nobody is working it.
@@ -27,119 +25,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _focus = FocusNode();
-
-  /// The scan lands here. A barcode imager in keyboard-wedge mode types the
-  /// code like a keyboard would, so the capture surface is a real (invisible)
-  /// text field rather than a raw key listener: a field is what actually holds
-  /// input focus on every platform — on web, raw key events never reach the
-  /// app at all unless something focusable owns them — and `TextInputType.none`
-  /// keeps the on-screen keyboard away on the handheld, where there is nothing
-  /// to type by hand.
-  final _badge = TextEditingController();
-  Timer? _flush;
-
-  /// เวลาที่ตัวอักษรก่อนหน้ามาถึง — ใช้วัดจังหวะห่างระหว่างตัวอักษรของรอบกรอกนี้
-  DateTime? _lastKeyAt;
-  /// ความยาวข้อความหลัง onChanged ครั้งก่อน — บาง build ของคีย์บอร์ด-wedge (โดยเฉพาะ
-  /// เครื่อง MC3390R ที่ต้อง fallback ไป Android เก่า) ส่งทั้งรหัสมาในเหตุการณ์ onChanged
-  /// เดียว ไม่ใช่ทีละตัวอักษร ถ้าเทียบจังหวะระหว่างตัวอักษรไม่ได้เพราะตัวเดียวมาครบเลย
-  /// ก็ต้องดูจากตรงนี้แทน: เพิ่มมากกว่า 1 ตัวอักษรในเหตุการณ์เดียวคือมนุษย์พิมพ์ไม่ทัน
-  /// แน่นอน จึงถือเป็นหลักฐานว่าเป็นการสแกนได้เลย
-  int _prevLen = 0;
-  /// true เมื่อเจอจังหวะกดแบบคนพิมพ์ (ห่างเกิน [_scanGapMs]) อย่างน้อยหนึ่งครั้งใน
-  /// รอบกรอกนี้ — ตัวสแกน (keyboard-wedge) พ่นตัวอักษรเร็วกว่านี้มาก (ปกติ <20ms/ตัว)
-  /// ดังนั้นถ้าเจอช่องว่างยาวขนาดนี้แม้แต่ครั้งเดียว แสดงว่าเป็นคนพิมพ์เอง ไม่ใช่สแกน
-  bool _looksTyped = false;
-
-  static const _scanGapMs = 80;
-  static const _scanFlushMs = 220;
-
-  @override
-  void initState() {
-    super.initState();
-    // A stray tap on the background is enough to drop focus, after which the
-    // reader would look dead with nothing on screen to say why. Take it back
-    // whenever it is lost, so the badge screen is always listening.
-    _focus.addListener(_keepFocus);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-  }
-
-  void _keepFocus() {
-    if (!mounted || _focus.hasFocus) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_focus.hasFocus) _focus.requestFocus();
-    });
-  }
-
-  @override
-  void dispose() {
-    _flush?.cancel();
-    _focus.removeListener(_keepFocus);
-    _focus.dispose();
-    _badge.dispose();
-    super.dispose();
-  }
-
-  void _submitBadge() {
-    _flush?.cancel();
-    final code = _badge.text;
-    _badge.clear();
-    _lastKeyAt = null;
-    _prevLen = 0;
-    if (_looksTyped) setState(() => _looksTyped = false);
+  /// A badge from the imager, and nothing else. There is no field to type
+  /// into any more: every gate movement is logged under whoever badged in, so
+  /// a hand-keyed employee id signs someone else's name to a shift. Someone
+  /// whose badge will not scan taps their own name below instead, which goes
+  /// through the same PIN gate.
+  void _submitBadge(String code) {
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
-  }
-
-  /// จังหวะตัวอักษรมาถึงคือสิ่งที่แยกสแกน-กับ-พิมพ์เองได้จริง ไม่ใช่แค่ "หยุดนิ่งกี่ ms"
-  /// อย่างเดิม — เดิมยิง submit อัตโนมัติทุกครั้งที่หยุดพิมพ์ 250ms ไม่ว่าจะพิมพ์เองหรือ
-  /// สแกน ถ้าคนพิมพ์เว้นจังหวะคิดเลขระหว่างตัวเกิน 250ms (ปกติมาก) ระบบจะยิง submit
-  /// ทั้งที่กรอกไม่ครบ
-  ///
-  /// จุดพลาดที่เจอตอนทดสอบ (สำคัญ ต้องจำไว้): ห้ามตั้งเวลานับถอยหลังไว้ล่วงหน้า
-  /// "เผื่อ" ว่าตัวถัดไปจะมาเร็ว แล้วค่อยยกเลิกทีหลังถ้าเจอจังหวะช้า — เพราะถ้าคน
-  /// พิมพ์ตัวถัดไปช้ากว่าเวลาที่ตั้งไว้ (เช่น พิมพ์ห่างกัน 400ms แต่ตั้ง timer ไว้แค่
-  /// 220ms) ตัว timer จะยิง submit ทิ้งไปก่อนที่จะได้เห็นจังหวะช้านั้นด้วยซ้ำ กลาย
-  /// เป็นส่ง submit ทีละตัวอักษรตลอดการพิมพ์ วิธีที่ถูกคือ "ห้ามตั้ง timer ล่วงหน้า
-  /// เด็ดขาด — ตั้งได้ก็ต่อเมื่อเพิ่งเห็นจังหวะจริงระหว่างตัวอักษร 2 ตัวที่พิมพ์มาแล้ว
-  /// ว่าเร็วแบบสแกนเท่านั้น" ตัวอักษรตัวแรกของรอบกรอกจึงไม่มีวันไปตั้ง timer เอง
-  /// (ยังไม่มีจังหวะให้เทียบ) ต้องรอตัวที่สองมาก่อนเสมอ
-  void _onBadgeChanged(String v) {
-    _flush?.cancel();
-    final now = DateTime.now();
-    if (v.isEmpty) {
-      _lastKeyAt = null;
-      _prevLen = 0;
-      setState(() => _looksTyped = false);
-      return;
-    }
-    final addedChars = v.length - _prevLen;
-    _prevLen = v.length;
-    final prev = _lastKeyAt;
-    _lastKeyAt = now;
-    setState(() {}); // repaint the confirm button's enabled state regardless
-    // Some keyboard-wedge implementations (seen on the MC3390R's older Android
-    // build) deliver the whole scanned code in one onChanged call instead of
-    // one call per keystroke, so there is never a second call to measure a
-    // gap between. No human adds more than one character between two frames,
-    // so more than one new character in a single callback is scan-speed proof
-    // on its own — treat it the same as a fast inter-key gap, below.
-    if (addedChars > 1) {
-      if (_looksTyped) return;
-      _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
-      return;
-    }
-    if (prev == null) return; // first char of this entry — no gap to judge yet
-    final gapMs = now.difference(prev).inMilliseconds;
-    if (gapMs > _scanGapMs) {
-      if (!_looksTyped) setState(() => _looksTyped = true);
-      return; // a human-speed gap was just confirmed — never auto-submit again
-    }
-    if (_looksTyped) return; // an earlier gap already flagged this as manual entry
-    // This exact gap just arrived at scanner speed, so arm a short quiet-period
-    // check — reacting to a gap that already happened, never predicting one.
-    _flush = Timer(const Duration(milliseconds: _scanFlushMs), _submitBadge);
   }
 
   /// Tapping a name is a shortcut for a badge scan, so it goes through the
@@ -165,7 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final result = await showPinPad(
       context,
       title: 'ตั้งรหัส PIN สำหรับ ${e.name}',
-      subtitle: 'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
+      subtitle:
+          'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน — ข้ามได้ถ้าไม่ต้องการ',
       allowSkip: true,
     );
     if (result == null) return; // dismissed — ask again next time
@@ -184,31 +78,17 @@ class _LoginScreenState extends State<LoginScreen> {
       context,
       title: 'ยืนยันรหัส PIN อีกครั้ง',
       subtitle: 'พิมพ์รหัส 4 หลักเดิมอีกครั้งเพื่อยืนยัน',
-      validate: (entered) async => entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      validate: (entered) async =>
+          entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
     );
-    if (confirm == null || confirm.pin == null) return; // cancelled — nothing saved
+    if (confirm == null || confirm.pin == null)
+      return; // cancelled — nothing saved
     if (!mounted) return;
     try {
       await c.api.setEmployeePin(e.id, firstPin);
     } catch (err) {
       if (!mounted) return;
-      // A device with no signal shouldn't strand someone at the badge screen
-      // just because they chose "set a PIN" over "ข้าม" — the shift still has
-      // to start. Treat it the same as skipping for now (server never saw
-      // this PIN, so there's nothing to verify against on another device) but
-      // still cache the hash locally so *this* device recognises it it next
-      // time, and let them in. They can set a real, synced PIN later from
-      // Settings once the terminal is back online.
-      if (err is! ApiException) {
-        c.prefs.cachePinHash(e.id, firstPin);
-        c.prefs.skipPin(e.id);
-        c.toastMsg('ออฟไลน์ — เข้าใช้งานได้ก่อน',
-            'รหัส PIN ยังไม่ถูกบันทึกที่เซิร์ฟเวอร์ ตั้งใหม่ได้จากหน้าตั้งค่าเมื่อออนไลน์', ResultKind.warn);
-        final err2 = c.identifyAs(e);
-        if (err2 != null) c.toastMsg(err2, '', ResultKind.err);
-        return;
-      }
-      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', err.message, ResultKind.err);
+      c.toastMsg('ตั้งรหัส PIN ไม่สำเร็จ', c.errorMessage(err), ResultKind.err);
       return;
     }
     c.prefs.clearPinSkip(e.id);
@@ -243,20 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // to the last PIN it confirmed for this employee on this device
           // (see Prefs.verifyPinOffline) rather than stranding them.
           if (c.prefs.verifyPinOffline(e.id, entered)) return null;
-          // No reference cached here yet (this employee has never verified
-          // on this exact device while online) — there is nothing to check
-          // a mistyped entry against, and refusing entry outright just
-          // strands a shift start over a PDA with no signal. Let them in on
-          // whatever they typed and cache it as this device's new
-          // reference; a wrong PIN typed by mistake self-corrects the
-          // moment they're online and re-verify against the real one.
-          // "ลืมรหัส PIN?" stays out of reach here regardless — that flow
-          // needs a live OTP email round trip no offline fallback can fake.
-          if (!c.prefs.hasCachedPin(e.id)) {
-            c.prefs.cachePinHash(e.id, entered);
-            return null;
-          }
-          return 'ออฟไลน์ และรหัสไม่ตรงกับที่เคยยืนยันไว้บนเครื่องนี้';
+          return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
         }
       },
       onForgot: () async {
@@ -265,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
           otpSentTo = req['sentTo']?.toString();
           return null;
         } catch (err) {
-          return err is ApiException ? err.message : 'ขอรหัส OTP ไม่สำเร็จ';
+          return err is ApiException ? err.message : c.errorMessage(err);
         }
       },
     );
@@ -289,26 +156,27 @@ class _LoginScreenState extends State<LoginScreen> {
   /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
   /// state for the whole round trip instead of popping and leaving this
   /// screen idle while it waits. [sentTo] is whatever that request found.
+  ///
+  /// Step order is new-PIN → confirm → **OTP last**, which looks backwards
+  /// but is the only way the OTP actually gets validated at the step where
+  /// it's typed. The backend exposes exactly one reset call —
+  /// `confirmPinReset(id, otp, pin)`, which checks the OTP and sets the PIN
+  /// together — and no standalone "is this OTP valid" endpoint. Asking for
+  /// the OTP first therefore couldn't check anything: a wrong code was only
+  /// discovered after the operator had already typed a new PIN twice, and
+  /// then dumped them back to the start. Collecting the PIN first lets the
+  /// OTP pad's own `validate` make the real call, so a wrong code shows
+  /// inline and the pad stays open for a retype — no lost work, no screen
+  /// change until the server has actually accepted it.
   Future<void> _forgotPin(Employee e, String? sentTo) async {
     if (!mounted) return;
     final c = context.read<AppController>();
     c.toastMsg(
       'ส่งรหัส OTP แล้ว',
-      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว — กรอกรหัส 6 หลักด้านล่าง' : 'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง',
+      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว' : 'เช็คอีเมลของคุณ',
       ResultKind.info,
     );
-    final otpResult = await showPinPad(
-      context,
-      title: 'กรอกรหัส OTP',
-      subtitle: sentTo != null
-          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
-          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
-      length: 6,
-    );
-    if (otpResult == null || otpResult.pin == null) return;
-    final otp = otpResult.pin!;
 
-    if (!mounted) return;
     final newPinResult = await showPinPad(
       context,
       title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
@@ -320,18 +188,39 @@ class _LoginScreenState extends State<LoginScreen> {
     final confirm = await showPinPad(
       context,
       title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async => entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
+      validate: (entered) async =>
+          entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
     );
     if (confirm == null || confirm.pin == null) return;
 
     if (!mounted) return;
-    try {
-      await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-    } catch (err) {
-      if (!mounted) return;
-      c.toastMsg('รีเซ็ต PIN ไม่สำเร็จ', friendlyError(err), ResultKind.err);
-      return;
-    }
+    var applied = false;
+    final otpResult = await showPinPad(
+      context,
+      title: 'กรอกรหัส OTP',
+      subtitle: sentTo != null
+          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
+          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
+      length: 6,
+      validate: (otp) async {
+        try {
+          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          // The server answered and refused — almost always a wrong or
+          // expired code. Its own message is more specific than anything
+          // guessable here, so it's shown verbatim.
+          return err.message.isEmpty
+              ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ'
+              : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (otpResult == null || !applied) return; // cancelled, or never accepted
+
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);
     if (!mounted) return;
@@ -340,64 +229,32 @@ class _LoginScreenState extends State<LoginScreen> {
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
 
-  /// The capture field, shown rather than hidden.
-  ///
-  /// A zero-sized invisible field turned out never to establish a text input
-  /// connection at all on web — no DOM input is created, so not one character
-  /// ever arrives. Showing it fixes that, and is the better design anyway: the
-  /// caret is the operator's proof that the terminal is armed and waiting for a
-  /// badge, and a damaged badge can be keyed in by hand instead of stranding
-  /// someone at the gate.
-  Widget _captureField(LocaleController loc) => TextField(
-        controller: _badge,
-        focusNode: _focus,
-        autofocus: true,
-        // On the handheld the scanner does the typing, so keep the on-screen
-        // keyboard away; web has a real keyboard and treats TextInputType.none
-        // as "no text connection", which delivers nothing at all.
-        keyboardType: kIsWeb ? TextInputType.text : TextInputType.none,
-        textAlign: TextAlign.center,
-        autocorrect: false,
-        enableSuggestions: false,
-        textCapitalization: TextCapitalization.characters,
-        style: TextStyle(
-            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: C.onHero),
-        cursorColor: C.lime,
-        decoration: InputDecoration(
-          hintText: loc.t('ยิงบัตร หรือพิมพ์รหัสพนักงาน'),
-          hintStyle: TextStyle(
-              fontSize: 13.5,
-              letterSpacing: 0,
-              fontWeight: FontWeight.w500,
-              color: C.onHero.withValues(alpha: 0.42)),
-          isDense: true,
-          filled: true,
-          fillColor: C.onHero.withValues(alpha: 0.08),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          // ปุ่มยืนยันด้วยมือเสมอ ไม่ใช่แค่ตอนพิมพ์เอง — เผื่อกรณีสแกนไม่จบ (การ์ดเสีย
-          // ครึ่งใบ) หรืออุปกรณ์ไม่ต่อ Enter suffix มาให้ ผู้ใช้ก็ยังกดจบเองได้เสมอ
-          suffixIcon: _badge.text.trim().isEmpty
-              ? null
-              : IconButton(
-                  icon: Icon(Icons.check_circle, color: C.lime),
-                  tooltip: loc.t('ยืนยัน'),
-                  onPressed: _submitBadge,
-                ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: C.onHero.withValues(alpha: 0.16)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: C.onHero.withValues(alpha: 0.16)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: C.lime, width: 1.5),
-          ),
+  /// What the field used to be: a line telling the operator the terminal is
+  /// armed. The capture itself is a ScanCapture wrapped around the whole
+  /// screen (see [build]) — invisible, unfocusable, and impossible to type
+  /// into, which is the point.
+  Widget _scanPrompt(LocaleController loc) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: C.onHero.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: C.onHero.withValues(alpha: 0.16)),
         ),
-        onChanged: _onBadgeChanged,
-        onSubmitted: (_) => _submitBadge(),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.qr_code_scanner, size: 18, color: C.lime),
+            const SizedBox(width: 9),
+            Flexible(
+              child: Text(loc.t('ยิงบัตรพนักงาน'),
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: C.onHero)),
+            ),
+          ],
+        ),
       );
 
   @override
@@ -414,92 +271,106 @@ class _LoginScreenState extends State<LoginScreen> {
     // and light/dark are gone from it entirely (moved to Settings, which is
     // the one place they're meant to live) — this screen only needs to say
     // who's badging in and whether the terminal is configured/connected.
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(22, top + 26, 22, 12),
-          child: Row(
-            children: [
-              const BrandMark(size: 40),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Wordmark(),
-                    Text(
-                      !c.deviceConfigured
-                          ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
-                          : (c.wh.isNotEmpty && c.gate.isNotEmpty)
-                              ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
-                              : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: C.muted),
-                    ),
-                  ],
-                ),
-              ),
-              // Same real, auto-detected state (and same retry-or-configure
-              // tap behaviour) as every other OnlineChip in the app — see
-              // AppController.connected/retryOrConfigure.
-              OnlineChip(online: c.connected, onTap: c.retryOrConfigure),
-            ],
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: bottom + 20),
-            child: Column(
+    return ScanCapture(
+      onScan: _submitBadge,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(22, top + 26, 22, 12),
+            child: Row(
               children: [
-                // No more inline "เชื่อมต่อไม่ได้" banner routing straight to
-                // device setup — that page is for changing the connection, not
-                // the first thing an offline terminal should shove in front of
-                // an operator who just wants to badge in. The badge flow
-                // already works fully offline (see AppController.employees,
-                // Prefs.verifyPinOffline); connectivity is now just the small
-                // icon in the header, and it only ever escalates to
-                // "ตั้งค่าระบบ" if an operator deliberately taps it and a
-                // retry still fails.
-                _BadgePrompt(field: _captureField(loc)),
-                if (people.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      loc.t(c.connected ? 'ยังไม่มีพนักงานในระบบ' : 'รอเชื่อมต่อกับระบบหลักก่อน'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13.5, color: C.faint),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(loc.t('หรือแตะชื่อของคุณ'),
-                              style: TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
-                        ),
-                        ...people.map((e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _EmployeeTile(
-                                emp: e,
-                                visiting: c.isVisiting(e),
-                                isLast: e.id == c.lastEmpId,
-                                onTap: () => _tapEmployee(e),
-                              ),
-                            )),
-                      ],
-                    ),
+                const BrandMark(size: 40),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Wordmark(),
+                      Text(
+                        !c.deviceConfigured
+                            ? loc.t('ยังไม่ได้ตั้งค่าเครื่อง')
+                            : (c.wh.isNotEmpty && c.gate.isNotEmpty)
+                                ? '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'
+                                : loc.t('ยังไม่ได้เลือกคลัง/ประตู'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: C.muted),
+                      ),
+                    ],
                   ),
+                ),
+                // Shows c.onlineDisplay (online && connected), not the manual
+                // toggle alone, so a genuinely dead connection can never still
+                // read "ออนไลน์" just because nobody happened to tap it. The tap
+                // itself (c.onlineChipTap) is the same manual online/offline
+                // toggle while actually connected, or a reconnect attempt —
+                // falling through to the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form if
+                // that still fails — while it isn't. Real connectivity loss
+                // still gets its own one-shot alert regardless of this chip —
+                // see root_screen.dart's _OfflineAlertListener.
+                OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
               ],
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottom + 20),
+              child: Column(
+                children: [
+                  // No more inline "เชื่อมต่อไม่ได้" banner routing straight to
+                  // device setup — that page is for changing the connection, not
+                  // the first thing an offline terminal should shove in front of
+                  // an operator who just wants to badge in. The badge flow
+                  // already works fully offline (see AppController.employees,
+                  // Prefs.verifyPinOffline); connectivity is now just the small
+                  // icon in the header, and it only ever escalates to
+                  // "ตั้งค่าระบบ" if an operator deliberately taps it and a
+                  // retry still fails.
+                  _BadgePrompt(field: _scanPrompt(loc)),
+                  if (people.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        loc.t(c.connected
+                            ? 'ยังไม่มีพนักงานในระบบ'
+                            : 'รอเชื่อมต่อกับระบบหลักก่อน'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13.5, color: C.faint),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(loc.t('หรือแตะชื่อของคุณ'),
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: C.muted,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          ...people.map((e) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _EmployeeTile(
+                                  emp: e,
+                                  visiting: c.isVisiting(e),
+                                  isLast: e.id == c.lastEmpId,
+                                  onTap: () => _tapEmployee(e),
+                                ),
+                              )),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -537,13 +408,19 @@ class _BadgePrompt extends StatelessWidget {
               loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700, color: C.onHero, letterSpacing: -0.3),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: C.onHero,
+                  letterSpacing: -0.3),
             ),
             const SizedBox(height: 6),
             Text(
               loc.t('ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: C.onHero.withValues(alpha: 0.62), height: 1.4),
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: C.onHero.withValues(alpha: 0.62),
+                  height: 1.4),
             ),
             const SizedBox(height: 16),
             field,
@@ -582,20 +459,29 @@ class _EmployeeTile extends StatelessWidget {
             // The last person to work this device is already sorted to the
             // top; the accent border is what makes that visible at a glance
             // rather than looking like an arbitrary sort order.
-            border: Border.all(color: isLast ? C.limeBorder : C.border, width: isLast ? 1.5 : 1),
-            boxShadow: C.shadow([
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
-            ]),
+            border: Border.all(
+                color: isLast ? C.limeBorder : C.border,
+                width: isLast ? 1.5 : 1),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1))
+            ],
           ),
           child: Row(
             children: [
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
+                decoration:
+                    BoxDecoration(color: C.neutralBg, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Text(emp.initials,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink2)),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: C.ink2)),
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -606,7 +492,10 @@ class _EmployeeTile extends StatelessWidget {
                     Text(emp.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: C.ink)),
                     if (sub.isNotEmpty)
                       Text(sub,
                           maxLines: 1,

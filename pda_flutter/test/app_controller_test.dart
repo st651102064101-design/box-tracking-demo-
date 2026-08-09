@@ -53,6 +53,7 @@ class FakeApi extends ApiClient {
     String? driver,
     String? vehicleType,
     Map<String, String>? conditions,
+    Map<String, String>? location,
   }) async {
     if (throwOnGate != null) {
       final e = throwOnGate!;
@@ -65,6 +66,7 @@ class FakeApi extends ApiClient {
       'employeeId': employeeId,
       'recorder': recorder,
       'plate': plate,
+      'location': location,
     });
     return {
       'ok': true,
@@ -72,6 +74,41 @@ class FakeApi extends ApiClient {
       'unknown': <String>[],
       'count': tags.length
     };
+  }
+
+  /// What suggest-location answers with. Null = the call succeeded but there
+  /// was nothing free; set [throwOnSuggest] to fail the call itself instead.
+  Map<String, String>? suggestion;
+  Object? throwOnSuggest;
+
+  @override
+  Future<SuggestLocationResult> suggestLocation(String wh) async {
+    if (throwOnSuggest != null) throw throwOnSuggest!;
+    return SuggestLocationResult(
+        suggestion: suggestion,
+        reason: suggestion == null ? 'all_occupied' : null);
+  }
+
+  final List<Map<String, dynamic>> putawayCalls = [];
+
+  @override
+  Future<Map<String, dynamic>> putawayBox(
+    String tag, {
+    required String wh,
+    String zone = '',
+    String rack = '',
+    String shelf = '',
+    String slot = '',
+  }) async {
+    putawayCalls.add({
+      'tag': tag,
+      'wh': wh,
+      'zone': zone,
+      'rack': rack,
+      'shelf': shelf,
+      'slot': slot
+    });
+    return {'ok': true};
   }
 
   @override
@@ -141,34 +178,6 @@ class FakeApi extends ApiClient {
     reportCalls
         .add({'kind': kind, 'tag': tag, 'location': location, 'note': note});
     return {'dir': kind, 'tag': tag};
-  }
-
-  final List<Map<String, dynamic>> putawayCalls = [];
-  Object? throwOnPutaway;
-
-  @override
-  Future<Map<String, dynamic>> putawayBox(
-    String tag, {
-    required String wh,
-    String zone = '',
-    String rack = '',
-    String shelf = '',
-    String slot = '',
-  }) async {
-    if (throwOnPutaway != null) {
-      final e = throwOnPutaway!;
-      throwOnPutaway = null;
-      throw e;
-    }
-    putawayCalls.add({
-      'tag': tag,
-      'wh': wh,
-      'zone': zone,
-      'rack': rack,
-      'shelf': shelf,
-      'slot': slot
-    });
-    return {'ok': true};
   }
 }
 
@@ -443,6 +452,119 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
+    test(
+        'Gate In never carries a location — shelving is a separate, confirmed act',
+        () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(api.gateInCalls.first['location'], isNull,
+          reason: 'a box is shelved when someone walks it there, not when a '
+              'form is submitted');
+      expect(api.putawayCalls, isEmpty,
+          reason:
+              'nothing is shelved until the operator confirms at the shelf');
+    });
+
+    test('auto mode turns the committed batch into a directed putaway task',
+        () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isTrue);
+      expect(c.putawayTask!.assigned,
+          {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''});
+      expect(c.putawayTask!.tags, ['CRT-02', 'CRT-03']);
+    });
+
+    test('manual mode makes an undirected task — the operator finds the spot',
+        () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.manual);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isFalse);
+    });
+
+    test('รอ Putaway makes no task at all — that is the whole point of it',
+        () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.defer);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNull);
+    });
+
+    test(
+        'a suggest-location failure degrades to an undirected task, not a dead end',
+        () async {
+      final api = FakeApi();
+      api.throwOnSuggest = Exception('network down');
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(api.gateInCalls, hasLength(1),
+          reason: 'receiving still succeeded');
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isFalse);
+    });
+
+    test('a hold/damage tag is left out of the putaway task', () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      c.setQueueCondition('CRT-03', 'damage');
+      await c.doCommit();
+
+      expect(c.putawayTask!.tags, ['CRT-02'],
+          reason: 'a box set aside for inspection is not going on a shelf');
+    });
+
+    test('completePutaway writes the confirmed shelf onto every tag', () async {
+      final api = FakeApi();
+      api.suggestion = {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''};
+      final c = await makeController(api);
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.auto);
+      c.addScan('CRT-02');
+      c.addScan('CRT-03');
+      await c.doCommit();
+
+      final failed = await c.completePutaway(
+          {'zone': 'A', 'rack': '1', 'shelf': '2', 'slot': ''});
+
+      expect(failed, isEmpty);
+      expect(api.putawayCalls.map((p) => p['tag']), ['CRT-02', 'CRT-03']);
+      expect(api.putawayCalls.first['zone'], 'A');
+      expect(c.putawayTask, isNull, reason: 'the errand is done');
+    });
+
     test('inbound commits fine without a plate — Gate In never requires one',
         () async {
       final api = FakeApi();
@@ -454,20 +576,6 @@ void main() {
       expect(api.gateInCalls, hasLength(1));
       expect(api.gateInCalls.first['plate'], isEmpty);
       expect(c.queue, isEmpty);
-    });
-
-    test('outbound without a plate posts nothing and keeps the queue',
-        () async {
-      final api = FakeApi();
-      final c = await makeController(api);
-      c.mode = 'out';
-      c.setOutCustomer('CUST-01');
-      c.addScan('CRT-01');
-      await c.doCommit();
-
-      expect(api.gateOutCalls, isEmpty);
-      expect(c.queue, ['CRT-01']);
-      expect(c.toast!.title, 'กรอกทะเบียนรถก่อน');
     });
 
     test('outbound requires a customer', () async {
@@ -511,7 +619,7 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.connectedForTest = false;
+      c.online = false;
       await c.doCommit();
 
       expect(api.gateInCalls, isEmpty);
@@ -529,13 +637,15 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.connectedForTest = false;
+      c.online = false;
       await c.doCommit();
 
       // Handover: someone else takes the device before connectivity returns.
       c.lock();
       c.identifyAs(c.employees.firstWhere((e) => e.id == 'EMP-0002'));
-      await c.syncNow();
+      c.toggleOnline();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       expect(api.gateInCalls, hasLength(1));
       expect(api.gateInCalls.first['employeeId'], 'EMP-0001');
@@ -548,10 +658,12 @@ void main() {
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.connectedForTest = false;
+      c.online = false;
       await c.doCommit();
 
-      await c.syncNow();
+      c.toggleOnline();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       expect(api.gateInCalls, hasLength(1));
       expect(c.outbox, isEmpty);
@@ -769,42 +881,6 @@ void main() {
       c.finishDeviceSetup();
       expect(c.deviceConfigured, isTrue);
       expect(c.screen, Screen.home);
-    });
-
-    /* Requiring a live connection here used to strand a terminal provisioned
-       with no signal on this screen forever — nothing else ever retries a
-       login that has never once succeeded. completeDeviceSetup now saves
-       and finishes regardless, trusting the background retry it starts (see
-       _scheduleAuthRetry) to pick the connection up once it exists. */
-    test('completeDeviceSetup finishes even when the connection attempt fails',
-        () async {
-      final api = FakeApi();
-      final c =
-          await freshDevice(api); // primes state before the fake goes offline
-      expect(c.deviceConfigured, isFalse);
-
-      api.throwOnState = Exception('Failed to fetch');
-      await c.completeDeviceSetup(baseUrl: 'http://unreachable:4000');
-
-      expect(c.deviceConfigured, isTrue,
-          reason: 'saved and finished, not stuck waiting on connectivity');
-      expect(c.connected, isFalse,
-          reason: 'the connection genuinely never succeeded');
-      expect(c.connError, isNotNull);
-      expect(c.toast!.title, 'บันทึกแล้ว — ยังไม่เชื่อมต่อ',
-          reason: 'told honestly, not reported as if it had connected');
-    });
-
-    test('completeDeviceSetup finishes normally when the connection succeeds',
-        () async {
-      final api = FakeApi();
-      final c = await freshDevice(api);
-
-      await c.completeDeviceSetup(baseUrl: 'http://test');
-
-      expect(c.deviceConfigured, isTrue);
-      expect(c.connected, isTrue);
-      expect(c.toast!.title, 'ตั้งค่าเครื่องแล้ว');
     });
 
     test('picking a warehouse with a single gate fills it in', () async {

@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
-import '../theme.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
 import 'device_setup_screen.dart';
 import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'track_screen.dart';
-import 'relocate_screen.dart';
 import 'settings_screen.dart';
 import 'rfid_input_screen.dart';
 import 'rfid_register_screen.dart';
 import 'rfid_locate_screen.dart';
 import 'box_register_screen.dart';
+import 'transfer_screen.dart';
 import 'cycle_count_screen.dart';
-import 'damaged_box_screen.dart';
+import 'more_hub_screen.dart';
 import 'hold_release_screen.dart';
 import 'report_problem_screen.dart';
 import 'location_inquiry_screen.dart';
@@ -61,9 +60,11 @@ class RootScreen extends StatelessWidget {
                   child: AnimatedSwitcher(
                     // Cross-fade is the single most-run animation in the
                     // app — every screen change plays it — so it's the
-                    // first thing low graphics mode cuts, straight to an
+                    // first thing low power mode cuts, straight to an
                     // instant swap.
-                    duration: C.anim(const Duration(milliseconds: 220)),
+                    duration: c.lowPowerMode
+                        ? Duration.zero
+                        : const Duration(milliseconds: 220),
                     child: _body(c),
                   ),
                 ),
@@ -101,12 +102,12 @@ class RootScreen extends StatelessWidget {
         return const RfidLocateScreen(key: ValueKey('rfidLocate'));
       case Screen.boxRegister:
         return const BoxRegisterScreen(key: ValueKey('boxRegister'));
-      case Screen.damagedBox:
-        return const DamagedBoxScreen(key: ValueKey('damagedBox'));
-      case Screen.relocate:
-        return const RelocateScreen(key: ValueKey('relocate'));
+      case Screen.transfer:
+        return const TransferScreen(key: ValueKey('transfer'));
       case Screen.cycleCount:
         return const CycleCountScreen(key: ValueKey('cycleCount'));
+      case Screen.moreHub:
+        return const MoreHubScreen(key: ValueKey('moreHub'));
       case Screen.holdRelease:
         return const HoldReleaseScreen(key: ValueKey('holdRelease'));
       case Screen.reportProblem:
@@ -150,10 +151,13 @@ class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
           builder: (dialogCtx) => AlertDialog(
             title: const Text('ขาดการเชื่อมต่อกับระบบหลัก'),
             content: Text(
-              c.connError ?? 'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
+              c.connError ??
+                  'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('รับทราบ')),
+              TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('รับทราบ')),
               FilledButton(
                 onPressed: () {
                   Navigator.of(dialogCtx).pop();

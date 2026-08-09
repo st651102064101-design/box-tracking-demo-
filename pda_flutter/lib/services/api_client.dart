@@ -12,6 +12,14 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status, $message)';
 }
 
+/// Result of [ApiClient.suggestLocation] — see that method's doc for what
+/// [reason] distinguishes when [suggestion] is null.
+class SuggestLocationResult {
+  final Map<String, String>? suggestion;
+  final String? reason;
+  SuggestLocationResult({required this.suggestion, this.reason});
+}
+
 /// Thin REST wrapper around the BoxTrace Express backend.
 ///
 /// All endpoints except `/auth` and `/health` require `Authorization: Bearer`.
@@ -25,28 +33,24 @@ class ApiClient {
   String baseUrl;
   String? token;
 
-  /// Second, independent factor the backend can require alongside the JWT
-  /// (see backend/src/middleware/auth.ts's requireApiKey) — sent whenever
-  /// non-empty, harmless to leave blank against a backend that hasn't set
-  /// API_KEY (the header is simply ignored there).
-  String? apiKey;
-
   /// Re-authenticates with the device's own service credentials and stores the
   /// new token on this client. Returns true when a usable token was obtained.
   /// Wired up by AppController; left null in tests that don't need it.
   Future<bool> Function()? reauthenticate;
 
-  ApiClient({required this.baseUrl, this.token, this.apiKey});
+  ApiClient({required this.baseUrl, this.token});
 
   Uri _u(String path) {
-    final b = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final b = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
     return Uri.parse('$b$path');
   }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
-        if (apiKey != null && apiKey!.isNotEmpty) 'X-API-Key': apiKey!,
+        if (token != null && token!.isNotEmpty)
+          'Authorization': 'Bearer $token',
       };
 
   dynamic _decode(http.Response r) {
@@ -79,7 +83,8 @@ class ApiClient {
   /// the retry picks up the *new* token instead of replaying the stale one.
   Future<dynamic> _send(Future<http.Response> Function() send) async {
     final r = await send().timeout(_timeout);
-    if (r.statusCode != 401 || _refreshing || reauthenticate == null) return _decode(r);
+    if (r.statusCode != 401 || _refreshing || reauthenticate == null)
+      return _decode(r);
 
     _refreshing = true;
     bool refreshed;
@@ -110,7 +115,8 @@ class ApiClient {
   Future<Map<String, dynamic>> login(String username, String password) async {
     final r = await http
         .post(_u('/api/auth/login'),
-            headers: _headers, body: jsonEncode({'username': username, 'password': password}))
+            headers: _headers,
+            body: jsonEncode({'username': username, 'password': password}))
         .timeout(_timeout);
     final body = _decode(r) as Map<String, dynamic>;
     token = body['token'] as String?;
@@ -119,11 +125,13 @@ class ApiClient {
 
   /// GET /api/state -> full S snapshot
   Future<Map<String, dynamic>> getState() async =>
-      await _send(() => http.get(_u('/api/state'), headers: _headers)) as Map<String, dynamic>;
+      await _send(() => http.get(_u('/api/state'), headers: _headers))
+          as Map<String, dynamic>;
 
   /// PUT /api/state -> replace whole state (used by the demo seed)
   Future<void> putState(Map<String, dynamic> state) async {
-    await _send(() => http.put(_u('/api/state'), headers: _headers, body: jsonEncode(state)));
+    await _send(() =>
+        http.put(_u('/api/state'), headers: _headers, body: jsonEncode(state)));
   }
 
   /// POST /api/gate/in { tags, gate, employeeId, recorder, plate?, driver?,
@@ -139,19 +147,49 @@ class ApiClient {
     String? driver,
     String? vehicleType,
     Map<String, String>? conditions,
+
+    /// One shelf position for the whole batch — the PDA's three-way choice
+    /// at Gate In (system-suggested empty shelf, picked by hand, or omitted
+    /// entirely to leave the batch in the pending-putaway holding pattern,
+    /// exactly as before this existed). Never applied server-side to a tag
+    /// that lands on hold/damage instead of warehouse.
+    Map<String, String>? location,
   }) async {
     return await _send(() => http.post(_u('/api/gate/in'),
         headers: _headers,
         body: jsonEncode({
           'tags': tags,
           'gate': gate,
-          if (employeeId != null && employeeId.isNotEmpty) 'employeeId': employeeId,
+          if (employeeId != null && employeeId.isNotEmpty)
+            'employeeId': employeeId,
           if (recorder != null) 'recorder': recorder,
           if (plate != null && plate.isNotEmpty) 'plate': plate,
           if (driver != null && driver.isNotEmpty) 'driver': driver,
-          if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
-          if (conditions != null && conditions.isNotEmpty) 'conditions': conditions,
+          if (vehicleType != null && vehicleType.isNotEmpty)
+            'vehicleType': vehicleType,
+          if (conditions != null && conditions.isNotEmpty)
+            'conditions': conditions,
+          if (location != null) 'location': location,
         }))) as Map<String, dynamic>;
+  }
+
+  /// GET /api/boxes/suggest-location?wh=X — the first location on [wh]'s own
+  /// master locations list with no 'warehouse' box currently sitting on it.
+  /// [SuggestLocationResult.suggestion] is null (not an error) when the
+  /// warehouse has no master list defined, or every spot on it is taken;
+  /// [SuggestLocationResult.reason] tells those two apart ('no_master_locations'
+  /// vs 'all_occupied') for a more specific message than a flat "not found".
+  Future<SuggestLocationResult> suggestLocation(String wh) async {
+    final body = await _send(() => http.get(
+        _u('/api/boxes/suggest-location?wh=${Uri.encodeQueryComponent(wh)}'),
+        headers: _headers)) as Map<String, dynamic>;
+    final s = body['suggestion'];
+    return SuggestLocationResult(
+      suggestion: s is Map
+          ? s.map((k, v) => MapEntry(k.toString(), (v ?? '').toString()))
+          : null,
+      reason: body['reason']?.toString(),
+    );
   }
 
   /// POST /api/gate/out { tags, customer, gate, doNo?, po?, employeeId, recorder, … }
@@ -175,47 +213,24 @@ class ApiClient {
           'gate': gate,
           if (doNo != null) 'doNo': doNo,
           if (po != null) 'po': po,
-          if (employeeId != null && employeeId.isNotEmpty) 'employeeId': employeeId,
+          if (employeeId != null && employeeId.isNotEmpty)
+            'employeeId': employeeId,
           if (recorder != null) 'recorder': recorder,
           if (plate != null && plate.isNotEmpty) 'plate': plate,
           if (driver != null && driver.isNotEmpty) 'driver': driver,
-          if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleType': vehicleType,
+          if (vehicleType != null && vehicleType.isNotEmpty)
+            'vehicleType': vehicleType,
         }))) as Map<String, dynamic>;
   }
 
   /// GET /api/boxes/:code — code may be a barcode or an RFID EPC/TID; the
   /// backend resolves whichever it turns out to be (see services/rfid.ts).
-  /// Routed through [_send] like every other authenticated call so a token
-  /// that expired mid-shift gets one silent reauth-and-retry instead of
-  /// surfacing as a bogus "not found" — this used to bypass [_send] entirely
-  /// and go straight to a single raw request.
   Future<Map<String, dynamic>?> getBox(String code) async {
-    try {
-      return await _send(() => http.get(_u('/api/boxes/$code'), headers: _headers))
-          as Map<String, dynamic>;
-    } on ApiException catch (e) {
-      if (e.status == 404) return null;
-      rethrow;
-    }
-  }
-
-  /// GET /api/boxes/next-tag?type=<id> — the next box tag for this type,
-  /// counted from the highest tag actually in the DB right now, not from
-  /// this device's own locally-cached box list (which may be stale if
-  /// another device just registered one). Only a suggestion for the
-  /// auto-generated tag field — [createBox] still rejects a genuine
-  /// duplicate with 'tag_taken' regardless of where the tag came from, and
-  /// callers should keep their own local fallback for the instant the
-  /// field first renders. Returns null on any failure, or if the server
-  /// found nothing suggestable (e.g. no type given).
-  Future<String?> nextBoxTag(String type) async {
-    try {
-      final r = await http.get(_u('/api/boxes/next-tag?type=${Uri.encodeQueryComponent(type)}'), headers: _headers).timeout(_timeout);
-      final d = _decode(r) as Map<String, dynamic>;
-      return d['tag'] as String?;
-    } catch (_) {
-      return null;
-    }
+    final r = await http
+        .get(_u('/api/boxes/$code'), headers: _headers)
+        .timeout(_timeout);
+    if (r.statusCode == 404) return null;
+    return _decode(r) as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/rfid { rfidTid, rfidEpc, replace? } — attach (or,
@@ -243,49 +258,24 @@ class ApiClient {
         }))) as Map<String, dynamic>;
   }
 
-  /// POST /api/boxes { tag, type, lot?, expiry? } — registers a brand-new box
-  /// straight off a supplier delivery (status 'pending', not yet labeled).
-  /// [lot]/[expiry] are optional free text (scanned or typed) that round-trip
-  /// straight into the box's data — the web app's print-label flow already
-  /// renders them when present. Throws [ApiException] with code 'tag_taken'
-  /// if the barcode is already in use, or 'unknown_box_type' if [type] isn't
-  /// a box type on file.
-  Future<Map<String, dynamic>> createBox(String tag, {required String type, String? lot, String? expiry}) async {
+  /// POST /api/boxes { tag, type } — registers a brand-new box straight off
+  /// a supplier delivery (status 'pending', not yet labeled). Throws
+  /// [ApiException] with code 'tag_taken' if the barcode is already in use,
+  /// or 'unknown_box_type' if [type] isn't a box type on file.
+  Future<Map<String, dynamic>> createBox(String tag,
+      {required String type}) async {
     return await _send(() => http.post(_u('/api/boxes'),
         headers: _headers,
-        body: jsonEncode({
-          'tag': tag,
-          'type': type,
-          if (lot != null && lot.isNotEmpty) 'lot': lot,
-          if (expiry != null && expiry.isNotEmpty) 'expiry': expiry,
-        }))) as Map<String, dynamic>;
+        body: jsonEncode({'tag': tag, 'type': type}))) as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/label — confirms the physical barcode sticker is
   /// actually on the box. Throws with code 'already_labeled' if it's
   /// already been confirmed once.
   Future<Map<String, dynamic>> labelBox(String tag) async {
-    return await _send(() => http.post(_u('/api/boxes/$tag/label'), headers: _headers)) as Map<String, dynamic>;
-  }
-
-  /// POST /api/boxes/:tag/damage — files a damage report captured offline
-  /// (see [DamagedFlag] / DamagedBoxScreen), synced once connectivity comes
-  /// back (see AppController.flushDamagedFlags).
-  ///
-  /// NOTE: this route doesn't exist on the backend yet — the client and
-  /// local queue are ready, but someone still has to add the matching
-  /// Express handler (persist a damage record against [tag], accept
-  /// [rfidEpcs] as the batch that was swept alongside it) before a sync
-  /// actually lands anywhere. Until then, flushDamagedFlags's calls here
-  /// fail like any other unreachable endpoint and simply retry next sync.
-  Future<Map<String, dynamic>> flagDamage(
-    String tag, {
-    required List<String> rfidEpcs,
-    required String note,
-  }) async {
-    return await _send(() => http.post(_u('/api/boxes/$tag/damage'),
-        headers: _headers,
-        body: jsonEncode({'rfidEpcs': rfidEpcs, 'note': note}))) as Map<String, dynamic>;
+    return await _send(
+            () => http.post(_u('/api/boxes/$tag/label'), headers: _headers))
+        as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/putaway { wh, zone?, rack?, shelf?, slot? } —
@@ -302,20 +292,26 @@ class ApiClient {
   }) async {
     return await _send(() => http.post(_u('/api/boxes/$tag/putaway'),
         headers: _headers,
-        body: jsonEncode({'wh': wh, 'zone': zone, 'rack': rack, 'shelf': shelf, 'slot': slot}))) as Map<String, dynamic>;
+        body: jsonEncode({
+          'wh': wh,
+          'zone': zone,
+          'rack': rack,
+          'shelf': shelf,
+          'slot': slot
+        }))) as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/hold { status, reason } — sets or clears
   /// hold/damage on a box already in the warehouse. [status] is
   /// 'hold'/'damage'/'warehouse' (the last being release) — see
-  /// HoldReleaseScreen, the online-immediate counterpart to
-  /// DamagedBoxScreen's offline damage-flag queue.
+  /// HoldReleaseScreen, the PDA's only entry point outside Gate In's own
+  /// per-box condition picker.
   Future<Map<String, dynamic>> setBoxHold(String tag,
       {required String status, String reason = ''}) async {
     return await _send(() => http.post(_u('/api/boxes/$tag/hold'),
-        headers: _headers,
-        body: jsonEncode(
-            {'status': status, 'reason': reason}))) as Map<String, dynamic>;
+            headers: _headers,
+            body: jsonEncode({'status': status, 'reason': reason})))
+        as Map<String, dynamic>;
   }
 
   /// POST /api/reports { kind, tag?, location?, note? } — the PDA's
@@ -349,15 +345,18 @@ class ApiClient {
   /// employee just confirmed, so their "ล่าสุด" shortcut follows them to
   /// whichever terminal they badge into next instead of staying pinned to
   /// this one device (see Employee.lastWh/lastGate).
-  Future<void> setEmployeeLastPost(String employeeId, {required String wh, required String gate}) async {
+  Future<void> setEmployeeLastPost(String employeeId,
+      {required String wh, required String gate}) async {
     await _send(() => http.put(_u('/api/employees/$employeeId/last-post'),
         headers: _headers, body: jsonEncode({'wh': wh, 'gate': gate})));
   }
 
   /// POST /api/employees/:id/pin/verify { pin } -> { ok, noPinSet? }
   Future<bool> verifyEmployeePin(String employeeId, String pin) async {
-    final body = await _send(() => http.post(_u('/api/employees/$employeeId/pin/verify'),
-        headers: _headers, body: jsonEncode({'pin': pin}))) as Map<String, dynamic>;
+    final body = await _send(() => http.post(
+        _u('/api/employees/$employeeId/pin/verify'),
+        headers: _headers,
+        body: jsonEncode({'pin': pin}))) as Map<String, dynamic>;
     return body['ok'] == true;
   }
 
@@ -365,54 +364,57 @@ class ApiClient {
   /// emails it to whatever address is on the employee's own record. Returns
   /// {sentTo, expiresAt}; throws if that employee has no email on file.
   Future<Map<String, dynamic>> requestPinReset(String employeeId) async {
-    return await _send(() => http.post(_u('/api/employees/$employeeId/pin/reset'), headers: _headers))
-        as Map<String, dynamic>;
+    return await _send(() => http.post(
+        _u('/api/employees/$employeeId/pin/reset'),
+        headers: _headers)) as Map<String, dynamic>;
   }
 
   /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that
   /// arrived by email, plus the new PIN to set once it checks out.
-  Future<void> confirmPinReset(String employeeId, {required String otp, required String pin}) async {
-    await _send(() => http.post(_u('/api/employees/$employeeId/pin/confirm-reset'),
-        headers: _headers, body: jsonEncode({'otp': otp, 'pin': pin})));
-  }
-
-  /// POST /api/masters/box-types { id, name } — adds a new box type on the
-  /// fly from the "+ เพิ่มใหม่" option in a dropdown, rather than requiring a
-  /// separate admin screen first. Throws with code 'duplicate' if [id] is
-  /// already in use.
-  Future<Map<String, dynamic>> createBoxType(String id, String name) async {
-    return await _send(() => http.post(_u('/api/masters/box-types'),
-        headers: _headers, body: jsonEncode({'id': id, 'name': name}))) as Map<String, dynamic>;
-  }
-
-  /// POST /api/masters/customers { id, name } — same "add on the fly" path
-  /// as [createBoxType], for the customer picker on Gate Out.
-  Future<Map<String, dynamic>> createCustomer(String id, String name) async {
-    return await _send(() => http.post(_u('/api/masters/customers'),
-        headers: _headers, body: jsonEncode({'id': id, 'name': name}))) as Map<String, dynamic>;
-  }
-
-  /// POST /api/masters/locations { code, wh?, zone?, rack?, shelf?, slot? } —
-  /// registers a new Location Master row so a zone/rack/shelf/slot value
-  /// typed via a dropdown's "+ เพิ่มใหม่" becomes a real, reusable option
-  /// everywhere else that reads the Location Master, not just this one box.
-  Future<Map<String, dynamic>> createLocation({
-    required String code,
-    String? wh,
-    String? zone,
-    String? rack,
-    String? shelf,
-    String? slot,
-  }) async {
-    return await _send(() => http.post(_u('/api/masters/locations'),
+  Future<void> confirmPinReset(String employeeId,
+      {required String otp, required String pin}) async {
+    await _send(() => http.post(
+        _u('/api/employees/$employeeId/pin/confirm-reset'),
         headers: _headers,
-        body: jsonEncode({
-          'code': code,
-          if (wh != null && wh.isNotEmpty) 'wh': wh,
-          if (zone != null && zone.isNotEmpty) 'zone': zone,
-          if (rack != null && rack.isNotEmpty) 'rack': rack,
-          if (shelf != null && shelf.isNotEmpty) 'shelf': shelf,
-          if (slot != null && slot.isNotEmpty) 'slot': slot,
-        }))) as Map<String, dynamic>;
+        body: jsonEncode({'otp': otp, 'pin': pin})));
+  }
+
+  // ── ตรวจนับ (cycle count) ───────────────────────────────────────────────
+  // Session-based on purpose: a count of a real aisle takes minutes and this
+  // terminal drops off Wi-Fi constantly mid-shift, so scans are posted as
+  // they're found rather than held until the end — a handheld that dies
+  // halfway doesn't take the whole count with it.
+
+  /// POST /api/cycle-counts { wh, zone } -> the session, with `expected`
+  /// frozen server-side at open time. Opening a warehouse/zone that already
+  /// has a live session returns that one instead (`resumed: true`), so two
+  /// operators sent to the same aisle land in the same count.
+  Future<Map<String, dynamic>> openCycleCount(
+      {required String wh, String zone = ''}) async {
+    return await _send(() => http.post(_u('/api/cycle-counts'),
+        headers: _headers,
+        body: jsonEncode({'wh': wh, 'zone': zone}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/cycle-counts/:id/scan { tags } — a batch, since an RFID sweep
+  /// produces tags far faster than one round trip per read could keep up
+  /// with. Codes may be barcodes, EPCs or TIDs; the server resolves all
+  /// three. Returns the updated session plus `unknown` for codes that
+  /// matched no box at all.
+  Future<Map<String, dynamic>> cycleCountScan(
+      String id, List<String> tags) async {
+    return await _send(() => http.post(_u('/api/cycle-counts/$id/scan'),
+        headers: _headers,
+        body: jsonEncode({'tags': tags}))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/cycle-counts/:id/close — finalizes and records the result to
+  /// the activity feed and audit log. Deliberately does not change any box's
+  /// status; see the route's own docstring for why that stays a separate,
+  /// deliberate action.
+  Future<Map<String, dynamic>> closeCycleCount(String id) async {
+    return await _send(() =>
+            http.post(_u('/api/cycle-counts/$id/close'), headers: _headers))
+        as Map<String, dynamic>;
   }
 }

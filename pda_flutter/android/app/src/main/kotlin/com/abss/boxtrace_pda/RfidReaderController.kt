@@ -1,15 +1,12 @@
 package com.abss.boxtrace_pda
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.ToneGenerator
-import android.os.BatteryManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -59,14 +56,12 @@ class RfidReaderController(private val context: Context) :
     // can enqueue tones far faster than a 40ms tone can play, and an unbounded
     // queue turns into a beep that keeps going long after the trigger is
     // released.
-    //
-    // [toneGen]'s volume is fixed at construction (ToneGenerator has no
-    // per-call volume knob), so choosing a different volume in Settings
-    // means rebuilding it — see [applyBeepStyle]. Guarded by [beepStyleLock]
-    // since beepExec's background thread reads it while the main thread
-    // (Settings' volume slider) can call applyBeepStyle at any time.
-    private val beepStyleLock = Any()
-    private val toneGen by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
+    /** User-configurable playback level, 0.0-1.0, see [setSoundVolume]. Applied
+     *  to the synth-based tones' gain directly; the two `classic_*` ids play
+     *  through [toneGen] instead, which is rebuilt at the matching ToneGenerator
+     *  volume (0-100) whenever this changes. */
+    @Volatile private var soundVolume = 1.0
+    private var toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME)
     private val beepExec = Executors.newSingleThreadExecutor()
     @Volatile private var beepInFlight = false
     /**
@@ -79,108 +74,12 @@ class RfidReaderController(private val context: Context) :
      * addScan() knows whether a read was new, a duplicate, or rejected.
      */
     @Volatile private var autoBeepEnabled = true
-
-    // ── Configurable sound catalog ──────────────────────────────────────────
-    //
-    // Every "a tag/box was detected" sound in the app funnels through
-    // [playSoundId] with one of the ids below. Dart owns the *display* side of
-    // this catalog (id -> Thai name, for the settings picker) in
-    // rfid_service.dart's kRfidTones; this is the *playback* side, and the
-    // two id sets must stay in sync by hand — there's no shared source of
-    // truth across the platform channel for something this small.
-    //
-    // Two playback engines:
-    //  - `synth` renders a short raw PCM waveform via AudioTrack. This is what
-    //    lets "html_tick" be a genuine, sample-accurate port of the RFID HTML
-    //    test page's WebAudio beep (square wave, 2700Hz, the same shaped
-    //    envelope) rather than an approximation — ToneGenerator's fixed tones
-    //    can't reproduce an arbitrary waveform/frequency. [gain] is a 0-1
-    //    volume multiplier baked directly into the waveform's amplitude —
-    //    the settings volume slider's contribution, since a synthesized
-    //    PCM buffer (unlike ToneGenerator) has no separate playback-volume
-    //    knob to turn after the fact.
-    //  - The two "classic_*" ids replay ToneGenerator's existing system tones,
-    //    kept as options because they're a completely different timbre (the
-    //    phone's own DTMF-style tones) and because "classic_ack" is exactly
-    //    what every barcode scan sounded like before this feature existed —
-    //    picking it back is a no-op change for anyone who liked the old sound.
-    //    ToneGenerator's volume is fixed at construction (0-100), so these
-    //    two ids route through a throwaway generator built at the current
-    //    gain rather than the shared [toneGen], mirroring [previewTone].
-    /** Dispatches onto [beepExec] and returns immediately — the entry point
-     *  for every external caller (settings preview, Dart's channel-driven ok
-     *  tones). [beep] does *not* call this: it is already running inside a
-     *  [beepExec] task of its own, and dispatching a second one here would
-     *  let that outer task's `finally { beepInFlight = false }` clear the
-     *  in-flight flag before the inner, later-queued task actually finishes
-     *  playing — defeating the whole point of the flag. It calls
-     *  [playSoundIdBlocking] directly instead. */
-    private fun playSoundId(id: String, volumePercent: Int) {
-        // The guard the doc comment above already describes but never
-        // actually applied: without it, a Gate sweep that hands this ten
-        // calls in the same frame (ten new boxes landing in one batch) queued
-        // all ten onto beepExec unconditionally. Each tone blocks for its own
-        // duration, so ten queued tones took ten tone-lengths to drain — the
-        // count on screen had already stopped moving while the beeps kept
-        // trickling out behind it. Dropping the excess instead keeps every
-        // tone that *does* play landing right on its box, at the cost of a
-        // batch of new boxes sometimes producing fewer ticks than boxes —
-        // the same trade [beep] already makes for the dense per-read case.
-        if (beepInFlight) return
-        beepInFlight = true
-        beepExec.execute {
-            try {
-                playSoundIdBlocking(id, volumePercent)
-            } catch (e: Exception) {
-                Log.w(TAG, "playSoundId($id) failed", e)
-            } finally {
-                beepInFlight = false
-            }
-        }
-    }
-
-    private fun playSoundIdBlocking(id: String, volumePercent: Int) {
-        val gain = (volumePercent.coerceIn(1, 100) / 100.0) * 0.35
-        when (id) {
-            "none" -> {}
-            "classic_beep", "beep" -> classicTone(ToneGenerator.TONE_PROP_BEEP, 40, volumePercent)
-            "classic_ack", "ack" -> classicTone(ToneGenerator.TONE_PROP_ACK, 70, volumePercent)
-            "click" -> classicTone(ToneGenerator.TONE_PROP_ACK, 40, volumePercent)
-            "dtmf" -> classicTone(ToneGenerator.TONE_DTMF_1, 70, volumePercent)
-            "ring" -> classicTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 70, volumePercent)
-            "html_tick" -> synth(Waveform.SQUARE, 2700.0, 50, gain)
-            "soft_tick" -> synth(Waveform.SINE, 1800.0, 45, gain)
-            "high_tick" -> synth(Waveform.SQUARE, 3400.0, 35, gain)
-            "low_tick" -> synth(Waveform.SQUARE, 900.0, 70, gain)
-            "ping" -> synth(Waveform.SINE, 2200.0, 90, gain)
-            "double_tick" -> {
-                synth(Waveform.SQUARE, 2400.0, 22, gain)
-                Thread.sleep(18)
-                synth(Waveform.SQUARE, 2400.0, 22, gain)
-            }
-            else -> Log.w(TAG, "playSoundId: unknown id \"$id\", playing nothing")
-        }
-    }
-
-    /** A ToneGenerator-backed catalog entry, built fresh at [volumePercent]
-     *  since ToneGenerator's loudness is fixed at construction — same
-     *  one-shot-generator pattern [playLocateBeep] already uses. */
-    private fun classicTone(tone: Int, durationMs: Int, volumePercent: Int) {
-        var gen: ToneGenerator? = null
-        try {
-            gen = ToneGenerator(AudioManager.STREAM_MUSIC, volumePercent.coerceIn(1, 100))
-            gen.startTone(tone, durationMs)
-        } finally {
-            main.postDelayed({ try { gen?.release() } catch (_: Exception) {} }, durationMs + 80L)
-        }
-    }
-
     private fun beep() {
         if (!autoBeepEnabled || beepInFlight) return
         beepInFlight = true
         beepExec.execute {
             try {
-                playSoundIdBlocking(beepToneId, beepVolume)
+                playSoundIdBlocking(rfidSoundId)
             } catch (e: Exception) {
                 Log.w(TAG, "beep failed", e)
             } finally {
@@ -190,19 +89,19 @@ class RfidReaderController(private val context: Context) :
     }
 
     /** Explicit, app-driven tone — "ok" (short tick, a genuinely new tag
-     *  landed) or "error" (longer low tone, scan rejected/invalid). Both
-     *  fixed/unconfigurable at all times: a barcode-sourced Gate detection
-     *  always sounds like this regardless of the operator's RFID tone
-     *  choice — only a trigger-pulled RFID detection uses that (see
-     *  [playSoundId]/[beepToneId], driven from Dart's addScan via
-     *  `viaRfid`), so the two channels stay audibly distinct on purpose. */
+     *  landed) or "error" (longer low tone, scan rejected/invalid). Kept as a
+     *  fixed, unconfigurable pair: only the "ok"/detection sound is meant to
+     *  be user-chosen (see [playSoundId] and [rfidSoundId]), and Dart no
+     *  longer calls this with "ok" — [playSoundId] replaced that case. The
+     *  "error" case is still exactly what it always was.
+     */
     private fun playTone(kind: String) {
         beepExec.execute {
             try {
                 if (kind == "error") {
-                    synchronized(beepStyleLock) { toneGen.startTone(ToneGenerator.TONE_CDMA_PIP, 220) }
+                    toneGen.startTone(ToneGenerator.TONE_CDMA_PIP, 220)
                 } else {
-                    synchronized(beepStyleLock) { toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 70) }
+                    toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 70)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "playTone failed", e)
@@ -210,33 +109,105 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
-    /** Which sound [beep]/[playTone]("ok") plays and at what volume, chosen
-     *  from Settings and pushed down via [applyBeepStyle] — on connect to
-     *  restore the saved choice, and again immediately on every change. */
-    @Volatile private var beepToneId = "html_tick"
-    @Volatile private var beepVolume = 100
-
-    private fun applyBeepStyle(toneId: String, volumePercent: Int) {
-        synchronized(beepStyleLock) {
-            beepToneId = toneId
-            beepVolume = volumePercent.coerceIn(1, 100)
+    // ── Configurable sound catalog ──────────────────────────────────────────
+    //
+    // Every "a tag/box was detected" sound in the app funnels through
+    // [playSoundId] with one of the ids below. Dart owns the *display* side of
+    // this catalog (id -> Thai name, for the settings picker) in
+    // sound_catalog.dart; this is the *playback* side, and the two id sets
+    // must stay in sync by hand — there's no shared source of truth across the
+    // platform channel for something this small.
+    //
+    // Two playback engines:
+    //  - `synth` renders a short raw PCM waveform via AudioTrack. This is what
+    //    lets "html_tick" be a genuine, sample-accurate port of the RFID HTML
+    //    test page's WebAudio beep (square wave, 2700Hz, the same shaped
+    //    envelope) rather than an approximation — ToneGenerator's fixed tones
+    //    can't reproduce an arbitrary waveform/frequency.
+    //  - The two "classic_*" ids replay ToneGenerator's existing system tones,
+    //    kept as options because they're a completely different timbre (the
+    //    phone's own DTMF-style tones) and because "classic_ack" is exactly
+    //    what every barcode scan sounded like before this feature existed —
+    //    picking it back is a no-op change for anyone who liked the old sound.
+    /** Dispatches onto [beepExec] and returns immediately — the entry point
+     *  for every external caller (settings preview, Dart's channel-driven ok
+     *  tones — one call per box addScan() accepts, see AppController.addScan).
+     *  [beep] does *not* call this: it is already running inside a [beepExec]
+     *  task of its own, and dispatching a second one here would let that
+     *  outer task's `finally { beepInFlight = false }` clear the in-flight
+     *  flag before the inner, later-queued task actually finishes playing —
+     *  defeating the whole point of the flag. It calls [playSoundIdBlocking]
+     *  directly instead.
+     *
+     *  Drops rather than queues when a tone is already playing, same
+     *  reasoning as [beep]: a Gate sweep can hand this ten calls in the same
+     *  frame (ten new boxes landing in one batch — see
+     *  AppController._onReaderBatch), and every one used to queue onto
+     *  [beepExec] unconditionally. Each tone blocks for its own duration, so
+     *  ten queued tones took ten tone-lengths to drain — the count on screen
+     *  had already stopped moving while the beeps kept trickling out behind
+     *  it, sounding sluggish and out of sync with what was actually
+     *  happening. Dropping the excess instead keeps every tone that *does*
+     *  play landing right on its box, at the cost of a batch of new boxes
+     *  sometimes producing fewer ticks than boxes — the same trade [beep]
+     *  already makes for the dense per-read case. */
+    private fun playSoundId(id: String) {
+        if (beepInFlight) return
+        beepInFlight = true
+        beepExec.execute {
+            try {
+                playSoundIdBlocking(id)
+            } catch (e: Exception) {
+                Log.w(TAG, "playSoundId($id) failed", e)
+            } finally {
+                beepInFlight = false
+            }
         }
     }
 
-    /**
-     * Plays [toneId] once at [volumePercent] immediately, independent of
-     * [beepToneId]/[beepVolume] — the live preview behind Settings' tone
-     * picker. Never touches the reader's standing beep style; trying a
-     * sound only changes what plays once the operator actually confirms it
-     * via [applyBeepStyle].
-     */
-    private fun previewTone(toneId: String, volumePercent: Int) {
-        beepExec.execute {
-            try {
-                playSoundIdBlocking(toneId, volumePercent)
-            } catch (e: Exception) {
-                Log.w(TAG, "previewTone failed", e)
+    private fun playSoundIdBlocking(id: String) {
+        when (id) {
+            "none" -> {}
+            "classic_beep" -> toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
+            "classic_ack" -> toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 70)
+            "html_tick" -> synth(Waveform.SQUARE, 2700.0, 50, 0.35)
+            "soft_tick" -> synth(Waveform.SINE, 1800.0, 45, 0.3)
+            "high_tick" -> synth(Waveform.SQUARE, 3400.0, 35, 0.3)
+            "low_tick" -> synth(Waveform.SQUARE, 900.0, 70, 0.35)
+            "ping" -> synth(Waveform.SINE, 2200.0, 90, 0.3)
+            "double_tick" -> {
+                synth(Waveform.SQUARE, 2400.0, 22, 0.32)
+                Thread.sleep(18)
+                synth(Waveform.SQUARE, 2400.0, 22, 0.32)
             }
+            "grade_far" -> synth(Waveform.SQUARE, 900.0, 55, 0.3)
+            "grade_warm" -> synth(Waveform.SINE, 1600.0, 45, 0.32)
+            "grade_close" -> synth(Waveform.SQUARE, 2600.0, 40, 0.35)
+            "grade_found" -> {
+                synth(Waveform.SQUARE, 3200.0, 25, 0.4)
+                Thread.sleep(15)
+                synth(Waveform.SQUARE, 3200.0, 25, 0.4)
+            }
+            // Putaway confirmation pair. Deliberately not in the settings
+            // picker (sound_catalog.dart) for the same reason the grade_*
+            // ids aren't: these say something specific about *what just
+            // happened*, so letting them be reassigned would break the one
+            // thing they exist for — an operator on a forklift knowing
+            // "right shelf" from "wrong shelf" without looking at the screen.
+            // Rising two-tone for right, rapid low triple for wrong: distinct
+            // in shape as well as pitch, so they stay tellable apart over
+            // warehouse noise and through ear protection.
+            "putaway_ok" -> {
+                synth(Waveform.SINE, 1800.0, 70, 0.38)
+                synth(Waveform.SINE, 2700.0, 110, 0.4)
+            }
+            "putaway_err" -> {
+                repeat(3) {
+                    synth(Waveform.SQUARE, 700.0, 60, 0.4)
+                    Thread.sleep(45)
+                }
+            }
+            else -> Log.w(TAG, "playSoundId: unknown id \"$id\", playing nothing")
         }
     }
 
@@ -254,6 +225,7 @@ class RfidReaderController(private val context: Context) :
      * SDK's read-callback thread.
      */
     private fun synth(wave: Waveform, freqHz: Double, durationMs: Int, gain: Double) {
+        val gain = gain * soundVolume
         val sampleRate = 44100
         val frameCount = sampleRate * durationMs / 1000
         val samples = ShortArray(frameCount)
@@ -296,36 +268,12 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
-    /**
-     * Proximity beep for the RFID locate/find-box screen: volume AND pitch
-     * both track [level] (0..1, same normalized RSSI the on-screen gauge
-     * animates against), so a faint return sounds like a faint tick and a
-     * strong one sounds loud and sharp — a true Geiger-counter tone, not a
-     * fixed click that just repeats faster.
-     *
-     * A fresh single-shot [ToneGenerator] is used per call rather than the
-     * shared [toneGen]: `ToneGenerator`'s volume is fixed at construction,
-     * so this is the only way to vary loudness call-to-call. It's disposed
-     * immediately after its tone completes — cheap relative to the ~200ms+
-     * gap this is throttled to on the Dart side.
-     */
-    private fun playLocateBeep(level: Double) {
-        beepExec.execute {
-            var gen: ToneGenerator? = null
-            try {
-                val clamped = level.coerceIn(0.0, 1.0)
-                val volume = (15 + clamped * 85).toInt().coerceIn(1, 100)
-                val durationMs = (30 + clamped * 40).toInt()
-                val tone = if (clamped > 0.75) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_BEEP
-                gen = ToneGenerator(AudioManager.STREAM_MUSIC, volume)
-                gen.startTone(tone, durationMs)
-            } catch (e: Exception) {
-                Log.w(TAG, "playLocateBeep failed", e)
-            } finally {
-                main.postDelayed({ try { gen?.release() } catch (_: Exception) {} }, 120)
-            }
-        }
-    }
+    /** Which sound [beep] (the dense per-read RFID tick) plays, chosen from
+     *  Settings and pushed down via "setRfidSoundId". Dart-driven ok tones
+     *  (barcode and Gate's discrete RFID tick) don't need a native-side
+     *  equivalent — Dart already knows which channel a detection came from
+     *  and calls [playSoundId] directly with the right id. */
+    @Volatile private var rfidSoundId = "html_tick"
 
     private val exec = Executors.newSingleThreadExecutor()
 
@@ -349,8 +297,14 @@ class RfidReaderController(private val context: Context) :
     // inventory around every call — so this is what tells "these tags don't
     // report a TID during inventory" apart from "the reader isn't reading".
     private var tidCount = 0L
-    // Whether the physical gun trigger is currently held.
+    // Whether the physical gun trigger is currently held — readTidExplicit
+    // stops inventory to run an access operation and uses this to decide
+    // whether to start it again afterwards.
     @Volatile private var triggerHeld = false
+
+    /** Selects the read profile — see [applyReadProfile]. Fast unless a screen
+     *  that needs a TID (registration, and only registration) asks otherwise. */
+    @Volatile private var detailMode = false
 
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -370,73 +324,6 @@ class RfidReaderController(private val context: Context) :
         emit(mapOf("type" to "status", "state" to state, "message" to message))
     }
 
-    // ── Charging state ────────────────────────────────────────────────────
-    //
-    // The MC3390R firmware refuses *every* inventory command while the battery
-    // is charging (RFID_CHARGING_COMMAND_NOT_ALLOWED, see startInventory). On a
-    // terminal sitting in its cradle that is indistinguishable from a broken
-    // app: the trigger does nothing, the Settings test-fire button does
-    // nothing, and the only clue is a one-off error status that never clears
-    // itself once the terminal is picked back up.
-    //
-    // Watching the charger explicitly is what turns that into a state the UI
-    // can explain and — more importantly — recover from on its own. Undocking
-    // re-runs connect() because the reader has to be re-initialised after the
-    // firmware refused commands for the whole charging window; without it the
-    // operator has to find the "เชื่อมต่อใหม่" button in Settings by hand,
-    // which is exactly the complaint this fixes.
-    @Volatile private var charging = false
-    private var chargerWatchStarted = false
-
-    private val chargingReceiver = object : BroadcastReceiver() {
-        override fun onReceive(ctx: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_POWER_CONNECTED -> applyCharging(true)
-                Intent.ACTION_POWER_DISCONNECTED -> applyCharging(false)
-            }
-        }
-    }
-
-    private fun applyCharging(nowCharging: Boolean) {
-        if (charging == nowCharging) return
-        charging = nowCharging
-        emit(mapOf("type" to "charging", "charging" to nowCharging))
-        if (nowCharging) {
-            // Say it before the operator pulls a trigger that cannot work,
-            // rather than after — this is the whole point of watching.
-            status("error", "อยู่บนแท่นชาร์จ — เครื่องอ่าน RFID ถูกปิดชั่วคราวขณะชาร์จ ถอดออกจากแท่นเพื่อใช้งาน")
-        } else {
-            status("connecting", "ถอดออกจากแท่นชาร์จแล้ว — กำลังเปิดเครื่องอ่านอีกครั้ง…")
-            connect()
-        }
-    }
-
-    /** Sticky ACTION_BATTERY_CHANGED gives the state at startup, before any transition. */
-    private fun readInitialCharging(): Boolean = try {
-        val i = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val plugged = i?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-        plugged != 0
-    } catch (e: Exception) {
-        Log.w(TAG, "readInitialCharging failed", e)
-        false
-    }
-
-    private fun startWatchingCharger() {
-        try {
-            context.registerReceiver(
-                chargingReceiver,
-                IntentFilter().apply {
-                    addAction(Intent.ACTION_POWER_CONNECTED)
-                    addAction(Intent.ACTION_POWER_DISCONNECTED)
-                },
-            )
-            charging = readInitialCharging()
-            emit(mapOf("type" to "charging", "charging" to charging))
-        } catch (e: Exception) {
-            Log.w(TAG, "startWatchingCharger failed", e)
-        }
-    }
-
     // ── MethodChannel.MethodCallHandler ───────────────────────────────────
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -448,32 +335,37 @@ class RfidReaderController(private val context: Context) :
             "setPowerIndex" -> { setPowerIndex(call.argument<Int>("index") ?: maxPower); result.success(true) }
             "setAutoBeep" -> { autoBeepEnabled = call.argument<Boolean>("enabled") ?: true; result.success(true) }
             "playTone" -> { playTone(call.argument<String>("kind") ?: "ok"); result.success(true) }
-            "playSound" -> {
-                playSoundId(call.argument<String>("soundId") ?: "none", call.argument<Int>("volume") ?: 100)
-                result.success(true)
-            }
-            "playLocateBeep" -> { playLocateBeep(call.argument<Double>("level") ?: 0.0); result.success(true) }
-            "setBeepStyle" -> {
-                applyBeepStyle(call.argument<String>("toneId") ?: "beep", call.argument<Int>("volume") ?: 100)
-                result.success(true)
-            }
-            "previewTone" -> {
-                previewTone(call.argument<String>("toneId") ?: "beep", call.argument<Int>("volume") ?: 100)
-                result.success(true)
-            }
-            // setTidEnrichment (from an older branch) intentionally NOT restored —
-            // a later commit already on this branch (see PROGRESS.md history)
-            // found TID "detail mode" costs ~10x throughput on this reader for a
-            // field that never actually arrives that way regardless, and removed
-            // the concept end-to-end. Bringing the toggle back would reintroduce
-            // exactly that regression.
+            "setRfidSoundId" -> { rfidSoundId = call.argument<String>("soundId") ?: rfidSoundId; result.success(true) }
+            "playSound" -> { playSoundId(call.argument<String>("soundId") ?: "none"); result.success(true) }
+            "setSoundVolume" -> { setSoundVolume(call.argument<Double>("volume") ?: 1.0); result.success(true) }
+            "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
+            "deviceInfo" -> result.success(deviceInfo())
             else -> result.notImplemented()
         }
     }
 
     private fun isConnected(): Boolean = reader?.isConnected == true
+
+    /**
+     * What the OS itself says this handheld actually is — independent of
+     * whether a Zebra RFID reader ever answers. device_setup_screen.dart
+     * uses this to decide whether the "Zebra MC3300 Series (MC3390R)"
+     * profile is honest to show at all: [diagnostics] only knows the reader
+     * model, and only once one has connected, so on its own it can't tell
+     * "this is genuinely an MC3390R that hasn't connected yet" apart from
+     * "this is some other Android device entirely" — Build.MANUFACTURER/
+     * MODEL/BRAND can, immediately, with no reader involved.
+     */
+    private fun deviceInfo(): Map<String, Any?> {
+        return mapOf(
+            "manufacturer" to Build.MANUFACTURER,
+            "model" to Build.MODEL,
+            "brand" to Build.BRAND,
+            "androidRelease" to Build.VERSION.RELEASE,
+        )
+    }
 
     /**
      * One call that answers "is this reader actually working?" — model, firmware,
@@ -494,7 +386,6 @@ class RfidReaderController(private val context: Context) :
         m["lastRssi"] = lastRssi
         m["lastError"] = lastError
         m["tidCount"] = tidCount
-        m["charging"] = charging
 
         val rd = reader
         if (rd != null && rd.isConnected) {
@@ -521,13 +412,6 @@ class RfidReaderController(private val context: Context) :
 
     // ── connect / configure ───────────────────────────────────────────────
     fun connect() {
-        // Idempotent, and cheap enough to just call on every connect() rather
-        // than needing its own init hook — the app has exactly one path that
-        // brings the reader up, so this is where the charger watch belongs.
-        if (!chargerWatchStarted) {
-            chargerWatchStarted = true
-            startWatchingCharger()
-        }
         if (isConnected()) {
             status("connected", "เชื่อมต่อแล้ว")
             return
@@ -686,47 +570,67 @@ class RfidReaderController(private val context: Context) :
     }
 
     /**
-     * Puts the reader into its one read profile — fast, full stop. What the
-     * terminal does 100% of the time: sweep a pallet and collect EPCs. It
+     * Put the reader into whichever of the two read profiles [detailMode]
+     * currently selects. Called on connect and again on every mode change,
+     * because these are reader-side settings that persist until overwritten —
+     * leaving detail mode does nothing unless the fast values are pushed back.
+     *
+     * **Fast (default, every screen but rfid_input_screen)** — what the
+     * terminal does 99% of the time: sweep a pallet and collect EPCs. It
      * matches rfid_html_app's configuration exactly, which is the only
      * configuration measured at full reader speed on this hardware:
      *
      *  - `setAttachTagDataWithReadEvent(false)` — no TagData rides along on the
      *    event; the read loop pulls the EPC and nothing else.
-     *  - Tag fields cut to PEAK_RSSI alone. `ALL_TAG_FIELDS` (an "everything"
-     *    profile this file used to offer rfid_input_screen so it could show
-     *    TID/PC/CRC/antenna/channel/phase per tag) made the reader report
-     *    every one of those fields on every round, and measured out to a
-     *    10x read-rate drop on this hardware (171/sec -> ~16/sec) for fields
-     *    this reader's inventory round never actually carries anyway
-     *    ([tidCount] confirms TID specifically never arrives this way) — the
-     *    exact stutter that profile existed to show off, not fix. Gone for
-     *    good: there is no longer a per-screen toggle for it.
+     *  - Tag fields cut to PEAK_RSSI alone. `ALL_TAG_FIELDS` makes the reader
+     *    report TID/PC/CRC/XPC/phase/channel/timestamps for every tag on every
+     *    round, and nothing outside the RFID test screen looks at any of it.
+     *
+     * **Detail (rfid_input_screen only)** — that screen's whole purpose is
+     * showing every field the SDK can report per tag, so `ALL_TAG_FIELDS`
+     * goes on. DPO stays off regardless — see setDPOState's own comment
+     * below on why detail mode no longer has a reason to want it on.
+     * Deliberately does *not* chase a TID with an explicit per-tag
+     * access-read the way an earlier version of this file did: that call
+     * stops and restarts inventory around every tag, and cost this exact
+     * screen its read rate the one time it was wired up (171/sec ->
+     * ~16/sec) for a field ([tidCount] confirms) this reader's inventory
+     * round never carries anyway.
      */
     private fun applyReadProfile(rd: RFIDReader) {
+        val detail = detailMode
         try {
-            rd.Events.setAttachTagDataWithReadEvent(false)
+            rd.Events.setAttachTagDataWithReadEvent(detail)
         } catch (e: Exception) {
             Log.w(TAG, "setAttachTagDataWithReadEvent failed", e)
         }
         try {
             val storage = rd.Config.getTagStorageSettings()
             // setTagFields *replaces* the reported set rather than adding to
-            // it, so this really is "RSSI only" — EPC is the tag ID itself
-            // and always comes back regardless.
-            storage.setTagFields(arrayOf(TAG_FIELD.PEAK_RSSI))
+            // it, so the fast list really is "RSSI only" — EPC is the tag ID
+            // itself and always comes back regardless.
+            storage.setTagFields(
+                if (detail) arrayOf(TAG_FIELD.ALL_TAG_FIELDS) else arrayOf(TAG_FIELD.PEAK_RSSI)
+            )
             rd.Config.setTagStorageSettings(storage)
         } catch (e: Exception) {
             Log.w(TAG, "tag-field reporting config failed", e)
         }
         try {
-            // Off — DPO trades read *rate* for battery, exactly what this
-            // profile is not willing to spend.
+            // Always off now, detail mode included. DPO trades read *rate*
+            // for battery, which only ever made sense back when detail mode
+            // also meant "one tag held still, chase its TID with an explicit
+            // access-read" — a slow, deliberate operation DPO's overhead
+            // didn't add much to. That explicit-TID path is gone (see
+            // eventReadNotify's comment on why); every current use of
+            // detail mode is rfid_input_screen sweeping tags for the rest
+            // of their fields as fast as it can, which is exactly the read
+            // rate DPO would trade away.
             rd.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE)
         } catch (e: Exception) {
             Log.w(TAG, "DPO config failed", e)
         }
-        Log.i(TAG, "read profile: fast (EPC+RSSI, DPO off)")
+        Log.i(TAG, "read profile: ${if (detail) "detail (all fields, DPO off)" else "fast (EPC+RSSI, DPO off)"}")
     }
 
     fun disconnect() {
@@ -744,14 +648,6 @@ class RfidReaderController(private val context: Context) :
     }
 
     fun startInventory() {
-        // Answer before the SDK does. The firmware would refuse this anyway
-        // (RFID_CHARGING_COMMAND_NOT_ALLOWED below), but only after a round
-        // trip that surfaces as "nothing happened" — this is what makes a
-        // trigger pull or a Settings test-fire on a cradled terminal say why.
-        if (charging) {
-            status("error", "อยู่บนแท่นชาร์จ — เครื่องอ่าน RFID ถูกปิดชั่วคราวขณะชาร์จ ถอดออกจากแท่นเพื่อใช้งาน")
-            return
-        }
         exec.execute {
             try {
                 Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
@@ -767,21 +663,13 @@ class RfidReaderController(private val context: Context) :
                     return@execute
                 }
                 Log.w(TAG, "startInventory failed${why(e)}", e)
-                // The MC3390R answers RFID_CHARGING_COMMAND_NOT_ALLOWED to
-                // every inventory command while the battery is charging, so a
-                // terminal sitting in its cradle looks exactly like a broken
-                // app. That's a known, actionable hardware state — tell the
-                // operator what to actually do about it in Thai, not the raw
-                // SDK result code/vendor string (e.g.
-                // "rfid_charging_command_not_allowed: charging in progress -
-                // command not allowed"), which is what used to reach the
-                // screen verbatim.
-                if (e is OperationFailureException &&
-                    e.getResults() == RFIDResults.RFID_CHARGING_COMMAND_NOT_ALLOWED) {
-                    status("error", "อ่าน RFID ไม่ได้ขณะกำลังชาร์จแบตเตอรี่ — ถอดเครื่องออกจากแท่นชาร์จก่อนแล้วลองใหม่")
-                } else {
-                    status("error", "เริ่มอ่านไม่ได้${why(e)}")
-                }
+                // Surfaced, not just logged: the MC3390R answers
+                // RFID_CHARGING_COMMAND_NOT_ALLOWED to every inventory command
+                // while the battery is charging, so a terminal sitting in its
+                // cradle looks exactly like a broken app. Without the reason on
+                // screen there is nothing to tell an operator to take it off
+                // the charger.
+                status("error", "เริ่มอ่านไม่ได้${why(e)}")
             }
         }
     }
@@ -803,6 +691,29 @@ class RfidReaderController(private val context: Context) :
             } catch (e: Exception) {
                 Log.w(TAG, "stopInventory failed", e)
             }
+        }
+    }
+
+    /** Sets the RFID detection sound's playback level, 0.0-1.0. Rebuilds
+     *  [toneGen] at the matching ToneGenerator volume (its own 0-100 scale) so
+     *  `classic_beep`/`classic_ack` track it too, not just the synth tones. */
+    fun setSoundVolume(volume: Double) {
+        soundVolume = volume.coerceIn(0.0, 1.0)
+        try {
+            toneGen.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "toneGen release failed", e)
+        }
+        val level = (soundVolume * ToneGenerator.MAX_VOLUME).toInt().coerceIn(1, ToneGenerator.MAX_VOLUME)
+        toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, level)
+    }
+
+    fun setDetailMode(enabled: Boolean) {
+        if (detailMode == enabled) return
+        detailMode = enabled
+        exec.execute {
+            val rd = reader ?: return@execute
+            if (rd.isConnected) applyReadProfile(rd)
         }
     }
 
@@ -844,14 +755,6 @@ class RfidReaderController(private val context: Context) :
 
     fun dispose() {
         try {
-            if (chargerWatchStarted) {
-                chargerWatchStarted = false
-                try {
-                    context.unregisterReceiver(chargingReceiver)
-                } catch (e: Exception) {
-                    Log.w(TAG, "unregisterReceiver failed", e)
-                }
-            }
             disconnect()
             reader = null
             readers?.Dispose()
@@ -875,7 +778,12 @@ class RfidReaderController(private val context: Context) :
     inner class EventHandler : RfidEventsListener {
         override fun eventReadNotify(e: RfidReadEvents?) {
             val rd = reader ?: return
-            val tags: Array<TagData>? = rd.Actions.getReadTags(100)
+            // 1000, not 100: at ~170-180 tags/sec a dense burst between two
+            // callback turns can queue more than 100 reads in the SDK's own
+            // buffer, and getReadTags(100) would silently leave the rest for
+            // next time (or never, if the trigger releases first) — this
+            // just asks for everything currently buffered in one call.
+            val tags: Array<TagData>? = rd.Actions.getReadTags(1000)
             if (tags == null || tags.isEmpty()) return
 
             // Sort by peak RSSI descending so near tags (strongest signal) come first.
@@ -887,20 +795,50 @@ class RfidReaderController(private val context: Context) :
             // paces the read loop.
             beep()
 
-            // Two getters and nothing else, per tag. Any field beyond
-            // EPC/RSSI costs a getter call wrapped in its own try/catch on
-            // the SDK's read-callback thread — the thread that should be
-            // going back for the next batch — and this reader's inventory
-            // round never carries a TID regardless (tidCount stays 0; kept
-            // in diagnostics as a standing check on that, not because
-            // anything still tries to populate it).
+            val detail = detailMode
             val batch = ArrayList<Map<String, Any?>>(sortedTags.size)
             for (t in sortedTags) {
                 tagCount++
                 val epc = t.getTagID()
                 lastEpc = epc
                 lastRssi = t.getPeakRSSI().toInt()
-                batch.add(mapOf("epc" to epc, "rssi" to lastRssi))
+
+                if (!detail) {
+                    // Fast path: two getters and nothing else. Every field
+                    // below costs a getter call wrapped in its own try/catch,
+                    // per tag, on the SDK's read-callback thread — the thread
+                    // that should be going back for the next batch. Outside
+                    // registration nothing reads them.
+                    batch.add(mapOf("epc" to epc, "rssi" to lastRssi))
+                    continue
+                }
+
+                // Every field ALL_TAG_FIELDS attaches "for free" alongside the
+                // inventory round — no extra SDK call, just more of the same
+                // struct already in hand. TID deliberately is NOT chased with
+                // an explicit access-read here anymore: that call stops
+                // inventory, runs a full access transaction, then restarts it
+                // per tag, which cost a screen using detail mode ~10x its read
+                // rate the one time it was wired up here (171/sec -> ~16/sec,
+                // same drop the fast/detail profile split further up this file
+                // measured). TID stays whatever the inventory round itself
+                // carried — null on this reader, always, per that same
+                // measurement — and shows through honestly as "—" in the UI.
+                val inventoryTid = str { t.getTID() }?.takeIf { it.isNotEmpty() }
+                if (inventoryTid != null) tidCount++
+                batch.add(
+                    mapOf(
+                        "epc" to epc,
+                        "tid" to inventoryTid,
+                        "rssi" to lastRssi,
+                        "pc" to num { t.getPC() },
+                        "crc" to str { t.getStringCRC() },
+                        "antenna" to num { t.getAntennaID().toInt() },
+                        "channel" to str { t.getChannel() },
+                        "phase" to num { t.getPhase().toInt() },
+                        "seenCount" to num { t.getTagSeenCount() },
+                    )
+                )
             }
 
             // The whole read event crosses the platform channel as one message.
@@ -918,22 +856,10 @@ class RfidReaderController(private val context: Context) :
                     when (evt) {
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED -> {
                             triggerHeld = true
-                            // Start inventory right here instead of waiting for
-                            // AppController to come back through the
-                            // MethodChannel — that round trip (native → Dart
-                            // isolate → back to native) was enough added
-                            // latency that a quick single-tag point-and-shoot
-                            // could release the trigger before Inventory.perform()
-                            // ever got called. AppController's own startInventory()
-                            // call on the "pressed" event below still arrives
-                            // shortly after; it's a harmless redundant call on an
-                            // already-running inventory.
-                            startInventory()
                             emit(mapOf("type" to "trigger", "pressed" to true))
                         }
                         HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED -> {
                             triggerHeld = false
-                            stopInventory()
                             emit(mapOf("type" to "trigger", "pressed" to false))
                         }
                         else -> {}

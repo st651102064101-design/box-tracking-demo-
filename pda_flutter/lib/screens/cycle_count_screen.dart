@@ -5,442 +5,471 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
-import '../models/location.dart';
-import '../services/rfid_service.dart';
+import '../services/api_client.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_capture.dart';
 
-/// Cycle count (ตรวจนับสต็อก) — sweep a zone/rack and compare what the
-/// antenna actually finds against what the WMS believes is stored there.
+/// "ตรวจนับ" — a stock take over one warehouse, optionally narrowed to a
+/// single zone.
 ///
-/// Deliberately **read-only**. It files nothing: there is no count-session
-/// endpoint on the backend, and inventing one client-side would mean this
-/// screen silently rewriting stock records from a single operator's sweep,
-/// which is exactly the kind of unreviewed adjustment a cycle count exists to
-/// prevent. What it produces is the variance list — ครบ / ขาด / เกิน — which
-/// is the thing a supervisor acts on. Boxes found in the wrong place can be
-/// corrected on the spot through ย้ายตำแหน่ง, and missing ones reported
-/// through แจ้งกล่องเสียหาย/สูญหาย; both already write through proper,
-/// audited endpoints.
+/// Backed by the server's cycle-count session API (`POST /api/cycle-counts`,
+/// `/scan`, `/close`): the count is a real record with an id, an actor and an
+/// audit entry, not something that evaporates when this screen closes. Scans
+/// are posted to the session as they're found rather than held until the end,
+/// so a handheld that dies mid-aisle doesn't take the whole count with it —
+/// reopening the same zone resumes the session that's already running.
 ///
-/// The scope is a location, not a box list, because that is how a count is
-/// actually walked: stand in an aisle, hold the trigger, sweep the rack.
+/// `expected` comes from the server and is frozen at open time; this screen
+/// never recomputes it locally, because the whole point of a count is
+/// comparing what was *believed* to be on the shelf against what was found.
 class CycleCountScreen extends StatefulWidget {
   const CycleCountScreen({super.key});
   @override
   State<CycleCountScreen> createState() => _CycleCountScreenState();
 }
 
-/// Where a box ended up relative to what the WMS expected in this scope.
-enum _Verdict {
-  /// Expected here, and the sweep found it.
-  matched,
-
-  /// Expected here, nothing answered. Either genuinely gone, or simply out of
-  /// antenna range — which is why this is a list to re-sweep, not a writeback.
-  missing,
-
-  /// Answered here but the WMS has it somewhere else (or nowhere).
-  unexpected,
-}
-
 class _CycleCountScreenState extends State<CycleCountScreen> {
-  String? _zone;
-  String? _rack;
+  String? _zone; // null = whole warehouse
+  bool _busy = false;
+  String? _error;
 
-  bool _counting = false;
-  bool _started = false;
+  /// The open session, straight from the server. Null until one is started.
+  Map<String, dynamic>? _session;
 
-  /// EPC/TID reads collapsed to box tags. A set because a rack sweep reads the
-  /// same tag hundreds of times and only "did it answer at all" matters here.
-  final Set<String> _seen = {};
-
-  /// Reads that resolved to no box in this WMS at all — worth surfacing
-  /// separately from "a box that belongs elsewhere", because an unknown tag is
-  /// usually an uncommissioned box rather than a misplaced one.
-  final Set<String> _unknownEpcs = {};
-
-  StreamSubscription<List<RfidTagRead>>? _tagSub;
-  StreamSubscription<bool>? _triggerSub;
+  /// Tags queued locally because a scan landed while offline or while another
+  /// post was still in flight — flushed on the next successful post so a dead
+  /// zone doesn't silently drop reads.
+  final List<String> _pending = [];
 
   AppController get _c => context.read<AppController>();
 
-  @override
-  void initState() {
-    super.initState();
-    final rfid = _c.rfid;
-    _tagSub = rfid.tagBatches.listen(_onBatch);
-    _triggerSub = rfid.triggers.listen((p) {
-      if (mounted) setState(() => _counting = p);
-      if (p) setState(() => _started = true);
+  List<String> _zonesInWh(AppController c) {
+    final all = c.S?.boxes.where(
+            (b) => b.status == 'warehouse' && b.location['wh'] == c.wh) ??
+        const <Box>[];
+    final zones = all
+        .map((b) => (b.location['zone'] ?? '').toString())
+        .where((z) => z.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return zones;
+  }
+
+  List<String> _list(String key) {
+    final v = _session?[key];
+    return v is List ? v.map((e) => e.toString()).toList() : const [];
+  }
+
+  int _summary(String key) {
+    final s = _session?['summary'];
+    if (s is Map && s[key] is num) return (s[key] as num).toInt();
+    return 0;
+  }
+
+  Future<void> _start() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
     });
-  }
-
-  @override
-  void dispose() {
-    _c.rfid.stopInventory();
-    _tagSub?.cancel();
-    _triggerSub?.cancel();
-    super.dispose();
-  }
-
-  void _onBatch(List<RfidTagRead> batch) {
-    final s = _c.S;
-    if (s == null) return;
-    var changed = false;
-    for (final r in batch) {
-      if (r.epc.isEmpty) continue;
-      final tag = s.tagForCode(r.epc);
-      if (tag == null) {
-        if (_unknownEpcs.add(r.epc)) changed = true;
-      } else if (_seen.add(tag)) {
-        changed = true;
+    try {
+      final s = await _c.api.openCycleCount(wh: _c.wh, zone: _zone ?? '');
+      if (!mounted) return;
+      setState(() => _session = s);
+      if (s['resumed'] == true) {
+        _c.toastMsg('ทำต่อรอบเดิม', '${s['id']}', ResultKind.info);
       }
+      // Nothing to focus by hand any more — ScanCapture arms itself the
+      // moment the session exists (see the enabled flag in build).
+    } catch (e) {
+      if (!mounted) return;
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (changed && mounted) setState(() {});
   }
 
-  Future<void> _toggleCount() async {
-    final c = _c;
-    if (!c.rfid.supported) return;
-    if (_counting) {
-      setState(() => _counting = false);
-      await c.rfid.stopInventory();
-      return;
-    }
-    if (c.rfidCharging) {
-      c.toastMsg('ตรวจนับไม่ได้ขณะชาร์จ', 'ยกเครื่องออกจากแท่นชาร์จก่อน', ResultKind.warn);
-      return;
-    }
-    setState(() {
-      _counting = true;
-      _started = true;
-    });
-    await c.rfid.startInventory();
+  Future<void> _submitScan(String raw) async {
+    final session = _session;
+    if (session == null || raw.isEmpty) return;
+    // Codes go up as scanned — the server resolves barcode/EPC/TID itself, so
+    // resolving locally first would only narrow what it can match.
+    _pending.add(raw);
+    if (_busy) return; // a post is already in flight; it'll pick these up
+    await _flush();
   }
 
-  void _reset() {
-    _c.rfid.stopInventory();
-    setState(() {
-      _seen.clear();
-      _unknownEpcs.clear();
-      _counting = false;
-      _started = false;
-    });
+  Future<void> _flush() async {
+    final session = _session;
+    if (session == null || _pending.isEmpty) return;
+    final batch = List<String>.from(_pending);
+    _pending.clear();
+    setState(() => _busy = true);
+    try {
+      final s = await _c.api.cycleCountScan(session['id'].toString(), batch);
+      if (!mounted) return;
+      setState(() {
+        _session = s;
+        _error = null;
+      });
+      final unknown =
+          (s['unknown'] is List) ? (s['unknown'] as List) : const [];
+      if (unknown.isNotEmpty) {
+        _c.toastMsg('ไม่พบรหัสนี้ในระบบ', unknown.join(', '), ResultKind.warn);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      // Put them back so nothing is lost — the next scan retries the lot.
+      _pending.insertAll(0, batch);
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+      if (_pending.isNotEmpty && mounted && _error == null) await _flush();
+    }
   }
 
-  /// Boxes the WMS believes are in the selected scope right now.
-  List<Box> _expected(AppController c) {
-    final all = c.S?.boxes ?? const <Box>[];
-    return all.where((b) {
-      if (b.status != 'warehouse' && b.status != 'hold') return false;
-      final l = b.location;
-      if ((l['wh'] ?? '').toString() != c.wh) return false;
-      if (_zone != null && (l['zone'] ?? '').toString() != _zone) return false;
-      if (_rack != null && (l['rack'] ?? '').toString() != _rack) return false;
-      return true;
-    }).toList()
-      ..sort((a, b) => a.tag.compareTo(b.tag));
+  Future<void> _close() async {
+    final session = _session;
+    if (session == null || _busy) return;
+    final loc = context.read<LocaleController>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.t('ปิดรอบตรวจนับ')),
+        content: Text(
+          '${loc.t('พบแล้ว')} ${_summary('counted')}/${_summary('expected')}'
+          ' · ${loc.t('ยังไม่พบ')} ${_summary('missing')}'
+          ' · ${loc.t('ไม่ควรอยู่ที่นี่')} ${_summary('unexpected')}\n\n'
+          '${loc.t('ปิดรอบแล้วจะบันทึกผลลงระบบ และเพิ่มสแกนอีกไม่ได้')}',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(loc.t('ยกเลิก'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(loc.t('ปิดรอบ'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await _c.api.closeCycleCount(session['id'].toString());
+      if (!mounted) return;
+      _c.toastMsg('บันทึกผลตรวจนับแล้ว', '${session['id']}', ResultKind.ok);
+      setState(() {
+        _session = null;
+        _pending.clear();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(
+          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
-    final cascade = LocationCascade(c.S?.locations ?? const {});
-    final expected = _expected(c);
-    final expectedTags = expected.map((b) => b.tag).toSet();
+    final session = _session;
+    final zones = _zonesInWh(c);
+    final counted = _list('counted');
+    final missing = _list('missing');
+    final unexpected = _list('unexpected');
 
-    final matched = expected.where((b) => _seen.contains(b.tag)).toList();
-    final missing = expected.where((b) => !_seen.contains(b.tag)).toList();
-    // Read here but booked somewhere else — the other half of a variance, and
-    // the half a location-scoped count would otherwise miss entirely.
-    final unexpected = _seen
-        .where((t) => !expectedTags.contains(t))
-        .map((t) => c.S?.box(t))
-        .whereType<Box>()
-        .toList()
-      ..sort((a, b) => a.tag.compareTo(b.tag));
-
-    return Column(
-      children: [
-        StickyHeader(
+    return ScanCapture(
+      // Live only once a session is open — the setup step above has zone
+      // chips and a start button, and nothing to scan into yet.
+      enabled: session != null,
+      onScan: _submitScan,
+      child: AutoHideHeader(
+        header: StickyHeader(
           onBack: c.backToHome,
-          title: const Text('ตรวจนับสต็อก'),
-          subtitle: Text('${c.selWhName}${_zone == null ? '' : ' · โซน $_zone'}${_rack == null ? '' : ' · $_rack'}'),
+          title: Text(loc.t('ตรวจนับ')),
+          subtitle: Text(session == null
+              ? c.selWhName
+              : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
         ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-            children: [
-              _scopeCard(c, cascade),
-              const SizedBox(height: 13),
-              _sweepCard(c, expected.length),
-              const SizedBox(height: 13),
-              if (_started) ...[
-                _scoreboard(matched.length, missing.length, unexpected.length),
-                const SizedBox(height: 13),
-                if (missing.isNotEmpty)
-                  _resultGroup(c, 'ขาด — ไม่พบในการกวาด', missing, _Verdict.missing),
-                if (unexpected.isNotEmpty)
-                  _resultGroup(c, 'เกิน — เจอแต่ระบบว่าอยู่ที่อื่น', unexpected, _Verdict.unexpected),
-                if (matched.isNotEmpty)
-                  _resultGroup(c, 'ครบ — ตรงกับระบบ', matched, _Verdict.matched),
-                if (_unknownEpcs.isNotEmpty) _unknownCard(),
-              ] else
-                _Note('เลือกขอบเขตที่จะนับ แล้วเหนี่ยวไกกวาดไปตามแร็ค '
-                    'ระบบจะเทียบสิ่งที่อ่านได้กับสิ่งที่ระบบบันทึกไว้ให้อัตโนมัติ'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _scopeCard(AppController c, LocationCascade cascade) {
-    final zones = cascade.zones(c.wh);
-    final racks = cascade.racks(c.wh, _zone);
-    return Panel(
-      padding: const EdgeInsets.all(16),
-      radius: 18,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const FieldLabel('ขอบเขตการนับ'),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('โซน'),
-                    _scopeDropdown(_zone, zones, 'ทั้งคลัง', (v) {
-                      setState(() {
-                        _zone = v;
-                        _rack = null;
-                      });
-                      _reset();
-                    }),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('แร็ค'),
-                    _scopeDropdown(_rack, racks, 'ทั้งโซน', (v) {
-                      setState(() => _rack = v);
-                      _reset();
-                    }),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Plain dropdown, not AddableDropdown: counting is an audit of what already
-  /// exists, so inventing a new location from this screen would be nonsense.
-  Widget _scopeDropdown(String? value, List<String> options, String allLabel, ValueChanged<String?> onChanged) {
-    return DropdownButtonFormField<String>(
-      initialValue: options.contains(value) ? value : null,
-      isExpanded: true,
-      decoration: pdaInput(allLabel, radius: 12),
-      hint: Text(allLabel, style: TextStyle(color: C.faint)),
-      items: [
-        DropdownMenuItem<String>(value: null, child: Text(allLabel, style: TextStyle(color: C.muted))),
-        ...options.map((o) => DropdownMenuItem(value: o, child: Text(o))),
-      ],
-      onChanged: onChanged,
-    );
-  }
-
-  Widget _sweepCard(AppController c, int expectedCount) {
-    return Panel(
-      padding: const EdgeInsets.all(16),
-      radius: 18,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('ระบบคาดว่ามี $expectedCount กล่องในขอบเขตนี้',
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-              ),
-              if (_started)
-                GestureDetector(
-                  onTap: _reset,
-                  child: Text('เริ่มนับใหม่',
-                      style: TextStyle(fontSize: 12.5, color: C.orange, fontWeight: FontWeight.w700)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: c.rfid.supported ? _toggleCount : null,
-              icon: Icon(_counting ? Icons.stop : Icons.wifi_tethering, size: 18),
-              label: Text(_counting ? 'กำลังกวาดนับ… แตะเพื่อหยุด' : 'เริ่มกวาดนับ (หรือเหนี่ยวไก)',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-              style: FilledButton.styleFrom(
-                backgroundColor: _counting ? C.red : C.ink,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _scoreboard(int matched, int missing, int unexpected) {
-    Widget cell(String label, int n, Color color, Color bg) => Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(13)),
-            child: Column(
-              children: [
-                Text('$n',
-                    style: TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w800, color: color, height: 1.1)),
-                const SizedBox(height: 2),
-                Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color)),
-              ],
-            ),
-          ),
-        );
-    return Row(
-      children: [
-        cell('ครบ', matched, C.limeText, C.limeBg),
-        const SizedBox(width: 9),
-        cell('ขาด', missing, C.red, C.redBg),
-        const SizedBox(width: 9),
-        cell('เกิน', unexpected, C.orange, C.orangeBg),
-      ],
-    );
-  }
-
-  Widget _resultGroup(AppController c, String title, List<Box> boxes, _Verdict verdict) {
-    late Color accent;
-    switch (verdict) {
-      case _Verdict.matched:
-        accent = C.limeText;
-        break;
-      case _Verdict.missing:
-        accent = C.red;
-        break;
-      case _Verdict.unexpected:
-        accent = C.orange;
-        break;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Panel(
-        padding: const EdgeInsets.all(14),
-        radius: 16,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        body: Column(
           children: [
-            Text('$title · ${boxes.length}',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: accent)),
-            const SizedBox(height: 8),
-            ...boxes.take(40).map((b) {
-              final l = b.location;
-              final where = [l['zone'], l['rack'], l['shelf'], l['slot']]
-                  .map((e) => (e ?? '').toString())
-                  .where((e) => e.isNotEmpty)
-                  .join(' · ');
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+                children: [
+                  if (_error != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 13, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: C.redBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.redBorder),
+                      ),
+                      child: Text(_error!,
+                          style: TextStyle(
+                              fontSize: 12.5, color: C.red, height: 1.4)),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (session == null) ...[
+                    if (zones.isNotEmpty) ...[
+                      Text(loc.t('เลือกโซนที่จะตรวจนับ'),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: C.muted)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Text(b.tag,
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
-                          Text(
-                            verdict == _Verdict.unexpected
-                                ? '${c.S!.typeName(b.type)} · ระบบว่าอยู่ ${where.isEmpty ? "ไม่ระบุตำแหน่ง" : where}'
-                                : '${c.S!.typeName(b.type)}${where.isEmpty ? '' : ' · $where'}',
-                            style: TextStyle(fontSize: 11.5, color: C.muted),
+                          _zoneChip(loc.t('ทั้งคลัง'), _zone == null,
+                              () => setState(() => _zone = null)),
+                          ...zones.map((z) => _zoneChip(
+                              z, _zone == z, () => setState(() => _zone = z))),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _start,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.ink,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(_busy
+                            ? loc.t('กำลังเริ่ม…')
+                            : loc.t('เริ่มตรวจนับ')),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                        loc.t(
+                            'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
+                        style: TextStyle(
+                            fontSize: 11.5, color: C.faint, height: 1.45)),
+                  ] else ...[
+                    // No field: the count is driven by the imager alone (see
+                    // ScanCapture around this screen). A hand-typed code in a
+                    // stock take is worse than a missed one — it reconciles a
+                    // box that nobody actually saw on the shelf.
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 18),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: C.fieldBorder, width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.checklist, color: C.muted),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(loc.t('ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: C.muted,
+                                    fontWeight: FontWeight.w600)),
                           ),
+                          if (_busy)
+                            const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
                         ],
                       ),
                     ),
+                    if (_pending.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('${loc.t('รอส่งเข้าระบบ')} ${_pending.length}',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: C.orange,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('expected')}',
+                                label: loc.t('คาดว่ามี'),
+                                color: C.ink)),
+                        const SizedBox(width: 9),
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('counted')}',
+                                label: loc.t('พบแล้ว'),
+                                color: C.menuGreen)),
+                        const SizedBox(width: 9),
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('missing')}',
+                                label: loc.t('ยังไม่พบ'),
+                                color: C.menuOrange)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _close,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.lime,
+                          foregroundColor: C.limeDeep,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(loc.t('ปิดรอบและบันทึกผล'),
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                    if (unexpected.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('ไม่ควรอยู่ที่นี่')),
+                      const SizedBox(height: 8),
+                      ...unexpected.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.red,
+                            icon: Icons.error_outline,
+                          )),
+                    ],
+                    if (missing.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('ยังไม่พบ')),
+                      const SizedBox(height: 8),
+                      ...missing.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.faint,
+                            icon: Icons.radio_button_unchecked,
+                          )),
+                    ],
+                    if (counted.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('พบแล้ว')),
+                      const SizedBox(height: 8),
+                      ...counted.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.menuGreen,
+                            icon: Icons.check_circle,
+                          )),
+                    ],
                   ],
-                ),
-              );
-            }),
-            if (boxes.length > 40)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('…และอีก ${boxes.length - 40} กล่อง',
-                    style: TextStyle(fontSize: 11.5, color: C.faint)),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _unknownCard() {
-    return Panel(
-      padding: const EdgeInsets.all(14),
-      radius: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('แท็กที่ไม่รู้จัก · ${_unknownEpcs.length}',
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: C.muted)),
-          const SizedBox(height: 4),
-          Text('อ่านเจอแต่ยังไม่ได้ผูกกับกล่องใดในระบบ — ใช้เมนู "ลงทะเบียนแท็ก RFID" เพื่อผูก',
-              style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: _unknownEpcs
-                .take(12)
-                .map((e) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: C.neutralBg, borderRadius: BorderRadius.circular(8)),
-                      child: Text(e, style: TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: C.ink2)),
-                    ))
-                .toList(),
-          ),
-        ],
+  String _typeOf(AppController c, String tag) {
+    final b = c.S?.box(tag);
+    return b == null ? '' : (c.S?.typeName(b.type) ?? '');
+  }
+
+  Widget _zoneChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? C.ink : C.neutralBg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? C.ink : C.border2),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? C.surface : C.ink2)),
+      ),
+    );
+  }
+
+  Widget _rowTile(
+      {required String tag,
+      required String sub,
+      required Color color,
+      required IconData icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+            color: C.surface,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: C.border)),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(tag,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'monospace')),
+                  if (sub.isNotEmpty)
+                    Text(sub, style: TextStyle(fontSize: 11.5, color: C.muted)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Local copy of the home screen's hint block — same visual weight, without
-/// making that private widget public just for this one use.
-class _Note extends StatelessWidget {
-  final String text;
-  const _Note(this.text);
+class _CountStat extends StatelessWidget {
+  final String value, label;
+  final Color color;
+  const _CountStat(
+      {required this.value, required this.label, required this.color});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: C.neutralBg,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: C.border),
+    return Panel(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11, color: C.muted, fontWeight: FontWeight.w500)),
+        ],
       ),
-      child: Text(text, style: TextStyle(fontSize: 12.5, color: C.ink3, height: 1.5)),
     );
   }
 }

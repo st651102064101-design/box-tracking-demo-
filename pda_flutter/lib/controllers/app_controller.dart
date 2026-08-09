@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io' show SocketException;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
 import '../models/box.dart';
-import '../models/damaged_flag.dart';
 import '../models/employee.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
@@ -26,9 +26,9 @@ enum Screen {
   rfidRegister,
   rfidLocate,
   boxRegister,
-  damagedBox,
-  relocate,
+  transfer,
   cycleCount,
+  moreHub,
   holdRelease,
   reportProblem,
   locationInquiry,
@@ -43,22 +43,35 @@ enum Screen {
 /// "barcode mode" selection still silently started RFID reads and beeped.
 enum ScanInputMode { barcode, rfid }
 
-/// Human-readable message for an arbitrary error, in Thai where the shape
-/// of the failure is common enough to name — a raw TimeoutException prints
-/// as "TimeoutException after 0:00:20.000000: Future not completed", which
-/// is what every toast/banner used to show verbatim on a dead connection.
-/// [ApiException]'s own `.message` is already meant for operators, so that
-/// passes straight through; everything else gets Dart's leading
-/// `SomethingException: ` stripped (matched only at the start, so
-/// `ClientException: Failed to fetch` doesn't get mangled into
-/// `ClientFailed`) as the last-resort fallback.
-String friendlyError(Object e) {
-  if (e is ApiException) return e.message;
-  if (e is TimeoutException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ — หมดเวลารอ ตรวจสอบที่อยู่เซิร์ฟเวอร์และเครือข่าย';
-  if (e is SocketException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบที่อยู่เซิร์ฟเวอร์และเครือข่าย';
-  final s = e.toString();
-  final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
-  return m == null ? s : s.substring(m.end);
+/// The three choices at Gate In for where a received batch ends up — see
+/// AppController.receiveLocationMode.
+enum ReceiveLocationMode { auto, manual, defer }
+
+/// A batch that has been received (Gate In already committed) and now has to
+/// be physically carried to a shelf — the Directed Putaway task ScanScreen
+/// puts up straight after the commit.
+///
+/// The location is deliberately NOT written at Gate In time any more. A box
+/// isn't on a shelf because someone picked that shelf on a form; it's on a
+/// shelf once someone actually walked it there. So Gate In lands the batch as
+/// warehouse-with-no-location ("รอจัดเก็บ", the same state the defer choice
+/// produces), and the shelf is written only by [AppController.completePutaway]
+/// once the operator has scanned the shelf's own barcode standing in front of
+/// it. That also means an interrupted putaway degrades into exactly the
+/// pending-putaway state the warehouse already knows how to work through,
+/// rather than into a box the system believes is shelved and isn't.
+class PutawayTask {
+  final List<String> tags;
+
+  /// Where the system says this batch goes (auto mode). Null in manual mode:
+  /// the operator finds a free spot themselves and whatever they scan on
+  /// arrival becomes the answer.
+  final Map<String, String>? assigned;
+  final String whName;
+  PutawayTask(
+      {required this.tags, required this.assigned, required this.whName});
+
+  bool get isDirected => assigned != null;
 }
 
 enum ResultKind { ok, err, warn, info }
@@ -96,12 +109,39 @@ class Toast {
 /// picker jumps straight to that warehouse's gate list; if there is only one
 /// gate, it confirms the post outright. See [postConfirmed],
 /// [selectPendingWh], [confirmPost].
-class AppController extends ChangeNotifier {
+class AppController extends ChangeNotifier with WidgetsBindingObserver {
   final ApiClient api;
   final Prefs prefs;
   final RfidService rfid;
 
-  AppController({required this.api, required this.prefs, required this.rfid});
+  AppController({required this.api, required this.prefs, required this.rfid}) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// A backgrounded PDA has no business still sweeping RFID — a screen
+  /// backgrounded mid-inventory (trigger held through the recents/home
+  /// button, or just left running) kept the antenna going, and with nothing
+  /// on screen to drain it the native side's tag-read events piled up
+  /// against the main thread's message queue for as long as backgrounding
+  /// lasted. Coming back to the app then meant working through that entire
+  /// backlog before it could respond to anything — which is exactly what
+  /// "freezes after being used for a while, especially after the recents
+  /// button" looks like from the outside. MainActivity.onPause/onStop does
+  /// the same stopInventory() call natively, as a second line of defense in
+  /// case the engine is too busy to run this Dart-side listener promptly.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        rfid.stopInventory();
+        break;
+      case AppLifecycleState.resumed:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
 
   // ── screen + shift ──────────────────────────────────────────────────────
   Screen screen = Screen.boot;
@@ -157,8 +197,53 @@ class AppController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
   String scanVal = '';
   ScanResult? lastResult;
+
+  /// Set right after a successful Gate In commit in auto/manual mode — see
+  /// [PutawayTask]. ScanScreen switches to the putaway step while it's
+  /// non-null; null the rest of the time.
+  PutawayTask? putawayTask;
+
+  /// Abandons the putaway task without shelving anything. The batch stays
+  /// exactly where the commit left it — received, no location, i.e. "รอ
+  /// จัดเก็บ" — which is a real, workable warehouse state someone can pick up
+  /// later, not a loss. Deliberately not called "cancel": the receiving part
+  /// already happened and is not being undone.
+  void dropPutawayTask() {
+    putawayTask = null;
+    notifyListeners();
+  }
+
+  /// Writes the shelf onto every box in the task — the point at which the
+  /// system is finally allowed to believe these boxes are on that shelf,
+  /// because the operator has just scanned the shelf's own barcode while
+  /// standing at it. Returns the tags that failed, empty on full success.
+  Future<List<String>> completePutaway(Map<String, String> location) async {
+    final task = putawayTask;
+    if (task == null) return const [];
+    busy = true;
+    notifyListeners();
+    final failed = <String>[];
+    for (final tag in task.tags) {
+      try {
+        await api.putawayBox(tag,
+            wh: wh,
+            zone: location['zone'] ?? '',
+            rack: location['rack'] ?? '',
+            shelf: location['shelf'] ?? '',
+            slot: location['slot'] ?? '');
+      } catch (_) {
+        failed.add(tag);
+      }
+    }
+    if (failed.isEmpty) putawayTask = null;
+    busy = false;
+    notifyListeners();
+    if (failed.isEmpty) await refresh();
+    return failed;
+  }
 
   // out form
   String outCustomer = '';
@@ -174,38 +259,130 @@ class AppController extends ChangeNotifier {
   String inVehicleType = '';
   String inVehicleTypeOther = '';
 
+  // ── รับเข้า: where the batch lands ──────────────────────────────────────
+  /// Which of the three choices the operator picked for this Gate In batch.
+  /// [defer] (leave in the pending-putaway holding pattern) is the default —
+  /// it's the exact behavior every Gate In had before this existed, so a
+  /// terminal an operator never touches this on still works unchanged.
+  ReceiveLocationMode receiveLocationMode = ReceiveLocationMode.defer;
+  Map<String, String>? _suggestedLocation;
+  Map<String, String>? get suggestedLocation => _suggestedLocation;
+  bool suggestingLocation = false;
+
+  /// True when the last [_fetchSuggestedLocation] call itself failed (network
+  /// error, endpoint not deployed yet, auth, …) — kept separate from
+  /// [suggestedLocation] being null, which means the request *succeeded* and
+  /// the server genuinely had no empty shelf to offer. Conflating the two
+  /// showed "ไม่พบชั้นวางว่าง" even when the real problem was the call never
+  /// reaching the server, which reads as a data problem when it's actually a
+  /// connectivity/deployment one.
+  bool suggestLocationFailed = false;
+
+  /// The actual reason [suggestLocationFailed] is true — an ApiException's own
+  /// Thai message (a real HTTP status the server sent back: 404 means this
+  /// endpoint isn't live on whatever the app is talking to, 400/500 means
+  /// something else) when there is one, otherwise a generic "can't reach the
+  /// server" for a plain network/timeout failure. `online` being true only
+  /// means the last lightweight health poll succeeded — it says nothing about
+  /// whether this specific route exists or answers on the server actually
+  /// serving it, so showing the real error here (instead of just "offline?")
+  /// is what makes an "I'm online but this still fails" report diagnosable.
+  String? suggestLocationFailedDetail;
+
+  /// 'no_master_locations' | 'all_occupied' | null — set on a successful
+  /// call whenever [suggestedLocation] comes back null, so the UI can say
+  /// something more specific than a flat "not found" (see
+  /// ApiClient.suggestLocation).
+  String? suggestLocationEmptyReason;
+
+  void setReceiveLocationMode(ReceiveLocationMode m) {
+    receiveLocationMode = m;
+    notifyListeners();
+    if (m == ReceiveLocationMode.auto) _fetchSuggestedLocation();
+  }
+
+  /// Re-asks the server for an empty shelf — called whenever "ตามที่ระบบ
+  /// แนะนำ" is picked, and again after a commit so the next batch doesn't
+  /// see a shelf that was just filled by the one before it.
+  Future<void> _fetchSuggestedLocation() async {
+    suggestingLocation = true;
+    suggestLocationFailed = false;
+    notifyListeners();
+    try {
+      final result = await api.suggestLocation(wh);
+      _suggestedLocation = result.suggestion;
+      suggestLocationEmptyReason = result.reason;
+    } on ApiException catch (e) {
+      _suggestedLocation = null;
+      suggestLocationEmptyReason = null;
+      suggestLocationFailed = true;
+      suggestLocationFailedDetail = 'HTTP ${e.status}: ${e.message}';
+    } catch (_) {
+      _suggestedLocation = null;
+      suggestLocationEmptyReason = null;
+      suggestLocationFailed = true;
+      suggestLocationFailedDetail = null;
+    } finally {
+      suggestingLocation = false;
+      notifyListeners();
+    }
+  }
+
+  /// Re-runs the last suggest-location request — the retry the auto-mode
+  /// error message promises but, until this existed, had no button behind it.
+  void retrySuggestedLocation() => _fetchSuggestedLocation();
+
+  /// Where a "รอ Putaway" batch actually sits in the meantime — just the
+  /// warehouse it's being received into, pulled from the same DB-backed `S`
+  /// every other location field on this screen reads from. There's no
+  /// separate "holding zone" concept in the data model (a box with no
+  /// location is literally just "somewhere in this warehouse, not yet
+  /// shelved" — see TrackScreen's "รอจัดเก็บ"), so this is the most specific
+  /// truthful answer to "where is it" without inventing one.
+  String get pendingPutawayLocationLabel => S?.whName(wh) ?? wh;
+
+  void _clearReceiveLocation() {
+    receiveLocationMode = ReceiveLocationMode.defer;
+    _suggestedLocation = null;
+    suggestLocationFailed = false;
+    suggestLocationFailedDetail = null;
+    suggestLocationEmptyReason = null;
+  }
+
   // ── connectivity / offline ──────────────────────────────────────────────
+  bool online = true;
   final List<OutboxTx> outbox = [];
-  final List<DamagedFlag> damagedFlags = [];
 
   // ── track ───────────────────────────────────────────────────────────────
   String trackVal = '';
   String trackTag = '';
   bool trackTried = false;
-  bool trackSearching = false;
-  String? trackError;
 
-  /// Every distinct box resolved on the track screen this visit, newest
-  /// first — populated by both a manual search ([doTrack]) and by holding
-  /// the RFID trigger ([_onReaderTag]'s `Screen.track` case), so the two
-  /// entry points build one unified list instead of the single
-  /// [trackTag]/[trackBox] slot above clobbering itself on every read.
-  /// Cleared whenever the operator (re-)enters the screen — see [goTrack].
-  final List<Box> trackResults = [];
+  /// Distinct tags found while sweeping in RFID mode on TrackScreen, in the
+  /// order first seen. A held trigger reads the same tag dozens of times a
+  /// second — only the first read of each tag lands here (see
+  /// _onReaderTag's Screen.track case), which is what makes "5 tags in the
+  /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
+  final List<String> trackRfidHits = [];
+
+  /// Same idea as [trackRfidHits] but for barcode mode: every distinct box a
+  /// scan (or a completed typed code) has resolved to, in the order found.
+  /// Without this, a keyboard-wedge scanner that doesn't clear the field
+  /// between reads left each new scan's characters landing after the
+  /// previous one's leftover text — two genuinely different barcodes
+  /// concatenating into one garbled search string instead of becoming two
+  /// results.
+  final List<String> trackBarcodeHits = [];
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
-  /// Terminal is docked on its charging cradle, where the MC3390R firmware
-  /// refuses every inventory command. Screens that arm the reader use this to
-  /// explain a dead trigger instead of appearing broken.
-  bool rfidCharging = false;
   String? connError;
   bool busy = false;
 
   Toast? toast;
   Timer? _toastTimer;
   final _rnd = Random();
-  StreamSubscription? _tagSub, _trigSub, _statusSub, _chargingSub;
+  StreamSubscription? _tagSub, _trigSub, _statusSub;
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
 
@@ -213,7 +390,6 @@ class AppController extends ChangeNotifier {
   Future<void> init() async {
     api.baseUrl = prefs.baseUrl;
     api.token = prefs.token;
-    api.apiKey = prefs.apiKey;
     api.reauthenticate = _deviceLogin;
 
     // Restore the last known warehouse state *before* touching the network:
@@ -225,11 +401,8 @@ class AppController extends ChangeNotifier {
 
     outbox
       ..clear()
-      ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
-
-    damagedFlags
-      ..clear()
-      ..addAll(prefs.damagedFlags.map((e) => DamagedFlag.fromJson(Map<String, dynamic>.from(e))));
+      ..addAll(prefs.outbox
+          .map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
 
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
@@ -247,27 +420,10 @@ class AppController extends ChangeNotifier {
       if (s.state == RfidState.connected) {
         rfid.setPowerPercent(prefs.rfidPowerPercent);
         // Same reasoning: the native read-callback tick has no way to ask
-        // Dart which tone/volume to play per read, so it has to be told once
-        // here (and again on every change — see Settings' tone picker).
-        rfid.setBeepStyle(toneId: prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
-      }
-      notifyListeners();
-    });
-    // Docking/undocking is the one reader state change that happens without
-    // anybody touching the app, and it silently disables every trigger on
-    // the device (see RfidReaderController.startInventory's charging guard).
-    // It has to announce itself on whatever screen is open, both ways.
-    _chargingSub = rfid.chargingStates.listen((isCharging) {
-      final was = rfidCharging;
-      rfidCharging = isCharging;
-      // The very first event just reports the state at startup — an operator
-      // who has not moved the terminal has nothing to be told about.
-      if (was != isCharging) {
-        if (isCharging) {
-          toastMsg('วางบนแท่นชาร์จ', 'เครื่องอ่าน RFID ปิดชั่วคราวขณะชาร์จ — ยกออกจากแท่นเพื่อยิงแท็ก', ResultKind.warn);
-        } else {
-          toastMsg('ถอดออกจากแท่นชาร์จ', 'กำลังเปิดเครื่องอ่าน RFID อีกครั้ง…', ResultKind.ok);
-        }
+        // Dart which sound to play per read, so it has to be told once here
+        // (and again on every change — see setRfidSoundId below).
+        rfid.setRfidSoundId(prefs.rfidSoundId);
+        rfid.setSoundVolume(prefs.rfidSoundVolume);
       }
       notifyListeners();
     });
@@ -317,21 +473,11 @@ class AppController extends ChangeNotifier {
   }
 
   /// Ensures the device is authenticated and the state snapshot is current.
-  ///
-  /// Every failure branch here used to leave [_liveConnected] (what actually
-  /// drives the header's online/offline icon) untouched — it only ever went
-  /// true, in [refresh]. That left a real, just-failed connection attempt
-  /// (a login or state fetch that timed out) showing a stale "online" icon
-  /// until the SSE stream's own, slower reconnect loop eventually noticed —
-  /// seconds behind what a REST call right here already knows for certain.
-  /// Now every path out of this method reconciles [_liveConnected] with
-  /// whether [connError] ended up set, the same instant it's known.
   Future<void> _ensureAuthAndState() async {
     try {
       if (api.token == null || api.token!.isEmpty) await _deviceLogin();
       await refresh();
       connError = null;
-      _stopAuthRetry();
     } on ApiException catch (e) {
       // A stale token normally self-heals inside ApiClient; this covers the
       // case where the *stored* token was rejected before any retry could run.
@@ -340,8 +486,6 @@ class AppController extends ChangeNotifier {
           await _deviceLogin();
           await refresh();
           connError = null;
-          _stopAuthRetry();
-          _syncLiveConnected();
           return;
         } catch (e2) {
           connError = _msg(e2);
@@ -349,31 +493,9 @@ class AppController extends ChangeNotifier {
       } else {
         connError = e.message;
       }
-      // A failed attempt means whatever [connected] said before is no longer
-      // trustworthy — a device that connected once and later drops (or, here,
-      // a retry that finds it's still not back) has to say so again, not keep
-      // reporting the last success it happened to have.
-      _liveConnected = false;
-      _scheduleAuthRetry();
     } catch (e) {
       connError = _msg(e);
-      _liveConnected = false;
-      _scheduleAuthRetry();
     }
-    _syncLiveConnected();
-  }
-
-  /// Reconciles [_liveConnected] with the [connError] that whatever just
-  /// called [_ensureAuthAndState] left behind — offline the moment a
-  /// connectivity failure is known, same [offlineEventId]/notify semantics
-  /// as [_onRealtimeConnectivity] going down, so the one-shot offline alert
-  /// still fires exactly once per real drop rather than being silent here
-  /// and only caught later by the SSE stream's own, slower detection.
-  void _syncLiveConnected() {
-    if (connError == null) return;
-    final wasConnected = _liveConnected;
-    _liveConnected = false;
-    if (wasConnected) offlineEventId++;
   }
 
   /// Explicit reconnect for the badge screen's small online/offline
@@ -386,44 +508,10 @@ class AppController extends ChangeNotifier {
   /// decide whether to say anything more (see login_screen's connectivity
   /// icon, which surfaces a "ตั้งค่าระบบ" prompt only when this is false).
   Future<bool> retryConnection() async {
-    await _ensureAuthAndState(); // reconciles _liveConnected itself now
+    await _ensureAuthAndState();
+    if (connError != null) _liveConnected = false;
     notifyListeners();
     return connected;
-  }
-
-  // ── background reconnect ──────────────────────────────────────────────
-  Timer? _authRetryTimer;
-  int _authRetryAttempt = 0;
-  // Same shape as RealtimeService's own backoff: short at first, capped at a
-  // minute, and — deliberately — never given up on. A terminal provisioned
-  // with no signal yet, or one that's carried out of range mid-shift, has no
-  // other way back to a working connection: nothing else in this app retries
-  // a login that has never once succeeded (see [RealtimeService._run], which
-  // only ever *checks* for a token — it never fetches one).
-  static const _authRetryDelays = [5, 10, 20, 30, 45, 60];
-
-  /// Keeps retrying [_ensureAuthAndState] in the background for as long as it
-  /// keeps failing, so a device that's offline right now — at first boot, at
-  /// setup, or mid-shift — starts working the moment connectivity actually
-  /// returns, with nobody having to notice and go poke Settings. Every screen
-  /// that depends on [S] already renders from the cached snapshot in the
-  /// meantime (see [init]), so this is purely about closing the gap silently
-  /// once the network is back.
-  void _scheduleAuthRetry() {
-    _authRetryTimer?.cancel();
-    final delay = _authRetryDelays[_authRetryAttempt.clamp(0, _authRetryDelays.length - 1)];
-    if (_authRetryAttempt < _authRetryDelays.length - 1) _authRetryAttempt++;
-    _authRetryTimer = Timer(Duration(seconds: delay), () {
-      // _ensureAuthAndState reschedules itself again on failure, or calls
-      // _stopAuthRetry on success — this timer's job ends the moment it fires.
-      unawaited(_ensureAuthAndState().then((_) => notifyListeners()));
-    });
-  }
-
-  void _stopAuthRetry() {
-    _authRetryTimer?.cancel();
-    _authRetryTimer = null;
-    _authRetryAttempt = 0;
   }
 
   Future<void> refresh() async {
@@ -469,7 +557,6 @@ class AppController extends ChangeNotifier {
       // this isn't the very first connect of the session (nothing to flush
       // yet either way, and it would race the boot-time refresh()).
       if (!wasConnected && outbox.isNotEmpty) flushOutbox();
-      if (!wasConnected && damagedFlags.any((f) => !f.synced)) flushDamagedFlags();
     } else {
       // Deliberately left null when nothing more specific is known — the
       // dialog and the reconnect sheet both have their own wording for
@@ -480,17 +567,48 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _msg(Object e) => friendlyError(e);
+  /// Human-readable message for an arbitrary error. Strips the leading
+  /// `SomethingException: ` that Dart prepends — matching only at the start so
+  /// `ClientException: Failed to fetch` doesn't get mangled into `ClientFailed`.
+  String _msg(Object e) {
+    if (e is ApiException) return e.message;
+    final s = e.toString();
+    // A dead/unreachable Base URL surfaces as some flavor of SocketException
+    // wrapped inside http's ClientException — verbatim, that's e.g.
+    // "ClientException with SocketException: No route to host (OS Error: No
+    // route to host, errno = 113), address = 192.168.1.149", which the regex
+    // below can't clean up (the wrapper reads "...Exception with Socket...:",
+    // not "...Exception: ", so it never matches) and which means nothing to
+    // an operator anyway. Same underlying cause — this terminal's network
+    // can't currently reach the address in Settings — whatever the exact OS
+    // errno, so one Thai message covers all of them.
+    if (s.contains('SocketException') ||
+        s.contains('No route to host') ||
+        s.contains('Network is unreachable') ||
+        s.contains('Connection refused') ||
+        s.contains('Failed host lookup')) {
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่าเครื่องนี้อยู่ในเครือข่าย/Wi-Fi เดียวกับเซิร์ฟเวอร์ และ Base URL ในหน้าตั้งค่าถูกต้อง';
+    }
+    if (e is TimeoutException)
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
+    final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
+    return m == null ? s : s.substring(m.end);
+  }
+
+  /// Public entry point for [_msg] — screens whose own try/catch around an
+  /// `api.*` call has nowhere else to turn a raw error into the same
+  /// operator-facing Thai text `applyConnection`/`_ensureAuthAndState` use
+  /// (see login_screen.dart's PIN flows).
+  String errorMessage(Object e) => _msg(e);
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _toastTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
-    _chargingSub?.cancel();
     _realtimeDebounce?.cancel();
-    _authRetryTimer?.cancel();
     _realtime.dispose();
     super.dispose();
   }
@@ -498,8 +616,10 @@ class AppController extends ChangeNotifier {
   // ═══════════════════════ helpers (mirror desktop) ════════════════════════
   String pad(int n, [int w = 4]) => n.toString().padLeft(w, '0');
   String _dstr(DateTime d) => '${d.year}-${pad(d.month, 2)}-${pad(d.day, 2)}';
-  String _hms(DateTime d) => '${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}';
-  String genDocNo(String p) => '$p-${_dstr(DateTime.now())}-${_hms(DateTime.now())}';
+  String _hms(DateTime d) =>
+      '${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}';
+  String genDocNo(String p) =>
+      '$p-${_dstr(DateTime.now())}-${_hms(DateTime.now())}';
 
   String fmtTs(String? s) {
     if (s == null || s.isEmpty) return '-';
@@ -513,10 +633,41 @@ class AppController extends ChangeNotifier {
 
   // Thai-keyboard → Latin fallback (physical scanners sometimes emit Thai)
   static const _thaiMap = {
-    'ๅ': '1', '/': '2', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
-    'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't', 'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
-    'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g', '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l',
-    'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b', 'ื': 'n', 'ท': 'm',
+    'ๅ': '1',
+    '/': '2',
+    'ภ': '4',
+    'ถ': '5',
+    'ุ': '6',
+    'ึ': '7',
+    'ค': '8',
+    'ต': '9',
+    'จ': '0',
+    'ๆ': 'q',
+    'ไ': 'w',
+    'ำ': 'e',
+    'พ': 'r',
+    'ะ': 't',
+    'ั': 'y',
+    'ี': 'u',
+    'ร': 'i',
+    'น': 'o',
+    'ย': 'p',
+    'ฟ': 'a',
+    'ห': 's',
+    'ก': 'd',
+    'ด': 'f',
+    'เ': 'g',
+    '้': 'h',
+    '่': 'j',
+    'า': 'k',
+    'ส': 'l',
+    'ผ': 'z',
+    'ป': 'x',
+    'แ': 'c',
+    'อ': 'v',
+    'ิ': 'b',
+    'ื': 'n',
+    'ท': 'm',
   };
   String _dethaify(String t) {
     final sb = StringBuffer();
@@ -551,7 +702,8 @@ class AppController extends ChangeNotifier {
   }
 
   // ═══════════════════════ toast ═══════════════════════════════════════════
-  void toastMsg(String title, [String sub = '', ResultKind kind = ResultKind.ok]) {
+  void toastMsg(String title,
+      [String sub = '', ResultKind kind = ResultKind.ok]) {
     _toastTimer?.cancel();
     toast = Toast(title, sub, kind);
     notifyListeners();
@@ -606,7 +758,9 @@ class AppController extends ChangeNotifier {
       return;
     }
     if (screen == Screen.deviceSetup && !deviceConfigured) return;
-    if (screen == Screen.home || screen == Screen.login || screen == Screen.boot) return;
+    if (screen == Screen.home ||
+        screen == Screen.login ||
+        screen == Screen.boot) return;
     backToHome();
   }
 
@@ -662,7 +816,8 @@ class AppController extends ChangeNotifier {
 
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
-    if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
+    if (!e.active)
+      return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
     prefs.lastEmpId = e.id;
     _resetPost();
@@ -690,7 +845,8 @@ class AppController extends ChangeNotifier {
   /// Badge read from the UI or the reader: identifies, or explains why not.
   void badgeScanned(String code) {
     final err = identifyByScanCode(code);
-    if (err != null) toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
+    if (err != null)
+      toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
   }
 
   /// Ends the current operator's session and returns to the badge screen. The
@@ -800,28 +956,16 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The last step of device_setup_screen.dart's bottom button. Warehouse/
-  /// gate are no longer fixed at setup time — they're picked per-visit
-  /// instead (see pickWh/pickGate/confirmPost) — so "configured" just means
-  /// this terminal has a server address saved and has been through setup
-  /// once; it does not require [connected] to be true (see
-  /// [completeDeviceSetup] for why).
-  ///
-  /// The toast deliberately overwrites whatever [applyConnection] just
-  /// showed, with a message that tells the truth about which case this is —
-  /// silently replacing "เชื่อมต่อไม่สำเร็จ" with an unqualified "ตั้งค่า
-  /// เครื่องแล้ว" would read as the problem having resolved itself when it
-  /// hasn't; the device is saved and will keep trying in the background
-  /// (see [_scheduleAuthRetry]), not already working.
+  /// The last step of device_setup_screen.dart's bottom button, enabled once
+  /// [connected] is true. Warehouse/gate are no longer fixed at setup time —
+  /// they're picked per-visit instead (see pickWh/pickGate/confirmPost) — so
+  /// "configured" now just means this terminal has a working connection and
+  /// has been through setup once.
   void finishDeviceSetup() {
     prefs.deviceConfigured = true;
     screen = emp != null ? Screen.home : Screen.login;
     notifyListeners();
-    if (connected) {
-      toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
-    } else {
-      toastMsg('บันทึกแล้ว — ยังไม่เชื่อมต่อ', 'ระบบจะเชื่อมต่อให้อัตโนมัติเมื่อมีสัญญาณ', ResultKind.warn);
-    }
+    toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
     _connectReader();
   }
 
@@ -833,6 +977,41 @@ class AppController extends ChangeNotifier {
   void goDeviceSetup() {
     _autoSelectSinglePost();
     go(Screen.deviceSetup);
+  }
+
+  /// What a tap on the navbar's offline chip or Settings' connection panel
+  /// does: try reconnecting with whatever's already saved first (a terminal
+  /// that reads "online" (Wi-Fi/LAN up) but can't reach the server needs more
+  /// than another silent retry to ever recover), and if that still fails,
+  /// walk straight into the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form (device setup)
+  /// so a wrong IP or an expired service account can be fixed on the spot.
+  /// A non-supervisor can't get to that form (see [canConfigureDevice]) —
+  /// they get told to ask one instead, rather than the tap silently doing
+  /// nothing.
+  Future<void> reconnectOrConfigure() async {
+    final ok = await retryConnection();
+    if (ok) return;
+    if (canConfigureDevice) {
+      goDeviceSetup();
+    } else {
+      toastMsg(
+          'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้',
+          connError ?? 'แจ้งหัวหน้างานเพื่อตรวจสอบการตั้งค่าเครื่อง',
+          ResultKind.err);
+    }
+  }
+
+  /// The navbar chip's tap target. While genuinely disconnected, a tap means
+  /// "help me reconnect" (see [reconnectOrConfigure]). While genuinely
+  /// connected, a tap now does nothing — the manual online/offline
+  /// (queue-mode) toggle it used to also drive let an operator switch a
+  /// working connection to "offline" by mistake, silently queuing every
+  /// scan instead of sending it. [toggleOnline] itself is untouched (the
+  /// outbox banner's "Sync" button still uses it to force a flush), only
+  /// this chip's tap while actually online is now a no-op instead of a trap.
+  void onlineChipTap() {
+    if (connected) return;
+    reconnectOrConfigure();
   }
 
   /// A site with one warehouse — or a warehouse with one gate — offers no real
@@ -847,7 +1026,8 @@ class AppController extends ChangeNotifier {
   // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {
     if (!canScan) {
-      toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว', ResultKind.warn);
+      toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว',
+          ResultKind.warn);
       return;
     }
     mode = m;
@@ -891,9 +1071,11 @@ class AppController extends ChangeNotifier {
   /// screen that hasn't fetched fresh employee data yet, or an employee who
   /// has only ever worked this one PDA.
   bool get hasLastSelection => lastWh.isNotEmpty && lastGate.isNotEmpty;
-  String get lastWh => emp?.lastWh.isNotEmpty == true ? emp!.lastWh : prefs.lastWh;
+  String get lastWh =>
+      emp?.lastWh.isNotEmpty == true ? emp!.lastWh : prefs.lastWh;
   String get lastWhName => S?.whName(lastWh) ?? lastWh;
-  String get lastGate => emp?.lastGate.isNotEmpty == true ? emp!.lastGate : prefs.lastGate;
+  String get lastGate =>
+      emp?.lastGate.isNotEmpty == true ? emp!.lastGate : prefs.lastGate;
 
   /// ยืนยันคลัง/ประตูล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
   /// คลังและประตูนั้นยังมีอยู่จริงตอนนี้ (กันกรณีถูกลบ/ย้ายไปหลังจากบันทึกไว้)
@@ -901,12 +1083,14 @@ class AppController extends ChangeNotifier {
     final w = lastWh, g = lastGate;
     if (w.isEmpty || g.isEmpty) return;
     if (!warehouseList.any((x) => (x['id'] ?? '').toString() == w)) {
-      toastMsg('ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      toastMsg(
+          'ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
     final gi = int.tryParse(g);
     if (gi == null || !(S?.gatesOf(w) ?? const []).contains(gi)) {
-      toastMsg('ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      toastMsg(
+          'ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
     confirmPost(w, gi);
@@ -914,13 +1098,11 @@ class AppController extends ChangeNotifier {
 
   void goTrack() {
     screen = Screen.track;
-    _trackSeq++;
     trackVal = '';
     trackTag = '';
     trackTried = false;
-    trackResults.clear();
-    trackSearching = false;
-    trackError = null;
+    trackRfidHits.clear();
+    trackBarcodeHits.clear();
     notifyListeners();
     _connectReader();
   }
@@ -953,21 +1135,53 @@ class AppController extends ChangeNotifier {
     _connectReader();
   }
 
-  /// Internal move: same POST /api/boxes/:tag/putaway the receiving flow
-  /// ends on — "relocate" and "put away" are the same write to the WMS, the
-  /// difference is only whether the box had a shelf position before.
-  void goRelocate() {
-    screen = Screen.relocate;
+  /// Relocate an already-warehoused box — TransferScreen. Reuses the exact
+  /// same PUT/POST putawayBox endpoint BoxRegisterScreen's putaway step
+  /// calls; the backend already logs a 'relocate' history entry instead of
+  /// 'putaway' whenever the box's status is already 'warehouse' (see
+  /// track_screen.dart's history rendering for the 'relocate' dir it
+  /// expects), so no new API was needed for this screen.
+  void goTransfer() {
+    screen = Screen.transfer;
     notifyListeners();
-    _connectReader();
   }
 
-  /// Cycle count (stock take). Read-only against the live snapshot — see
-  /// CycleCountScreen for why it files nothing on its own.
+  /// Reconciliation sweep over one location — CycleCountScreen. Purely
+  /// client-side: there's no cycle-count endpoint on the backend, so this
+  /// works entirely off the already-cached box list (S.boxes), comparing
+  /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
     notifyListeners();
-    _connectReader();
+  }
+
+  /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. The only way to hold, flag
+  /// damaged, or release a box outside the moment it's received at Gate In
+  /// (see scan_screen.dart's own _ConditionPicker for that path).
+  void goHoldRelease() {
+    screen = Screen.holdRelease;
+    notifyListeners();
+  }
+
+  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
+  void goReportProblem() {
+    screen = Screen.reportProblem;
+    notifyListeners();
+  }
+
+  /// "เช็คช่อง" — LocationInquiryScreen, the reverse of "หากล่อง": scan a
+  /// shelf and see what the system believes is on it.
+  void goLocationInquiry() {
+    screen = Screen.locationInquiry;
+    notifyListeners();
+  }
+
+  /// Hub for the less-frequent floor actions that don't each need their own
+  /// slot on Home's primary 6-button menu — RFID tag binding, brand-new box
+  /// intake, and the text-search box lookup (Track).
+  void goMoreHub() {
+    screen = Screen.moreHub;
+    notifyListeners();
   }
 
   void onScanChanged(String v) {
@@ -979,7 +1193,8 @@ class AppController extends ChangeNotifier {
     addScan(scanVal);
   }
 
-  /// [viaRfid] says which of the two "a box landed" sounds to play — true
+  /// [viaRfid] says which of the two independently-configured "a box
+  /// landed" sounds to play (see prefs.rfidSoundId/barcodeSoundId) — true
   /// when this call came from a trigger-pulled RFID read (AppController's
   /// own _onReaderBatch/_onReaderTag), false for a typed/scanned barcode
   /// (ScanScreen's own _submit). It changes nothing else about how the scan
@@ -990,7 +1205,8 @@ class AppController extends ChangeNotifier {
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
-      lastResult = const ScanResult(ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
+      lastResult = const ScanResult(
+          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
       notifyListeners();
       return;
     }
@@ -1051,12 +1267,12 @@ class AppController extends ChangeNotifier {
     // ticks instead of however many times the reader happened to see it.
     //
     // Barcode detections always get the same fixed tone — only the RFID
-    // channel is user-configurable (see prefs.rfidToneId/rfidVolumePercent).
+    // channel is user-configurable (see prefs.rfidSoundId / setRfidSoundId).
     // A trigger-pulled RFID read landing here still gets the operator's
     // chosen RFID sound rather than this fixed one, so an RFID detection
     // sounds the same everywhere it happens.
     if (viaRfid) {
-      rfid.playSound(prefs.rfidToneId, volumePercent: prefs.rfidVolumePercent);
+      rfid.playSound(prefs.rfidSoundId);
     } else {
       rfid.playTone('ok');
     }
@@ -1096,14 +1312,19 @@ class AppController extends ChangeNotifier {
     final s = S;
     if (s == null) return [];
     final want = m == 'in' ? 'out' : 'warehouse';
-    return s.boxes.where((b) => b.status == want && !queue.contains(b.tag)).toList();
+    return s.boxes
+        .where((b) => b.status == want && !queue.contains(b.tag))
+        .toList();
   }
 
   /// Dev/testing helpers (kept from the mockup): simulate reads without hardware.
   void simOne() {
     final e = _eligible(mode);
     if (e.isEmpty) {
-      toastMsg('ไม่มีกล่องให้จำลอง', mode == 'in' ? 'ไม่มีกล่องที่ออกอยู่' : 'ไม่มีกล่องพร้อมจ่าย', ResultKind.warn);
+      toastMsg(
+          'ไม่มีกล่องให้จำลอง',
+          mode == 'in' ? 'ไม่มีกล่องที่ออกอยู่' : 'ไม่มีกล่องพร้อมจ่าย',
+          ResultKind.warn);
       return;
     }
     addScan(e[_rnd.nextInt(e.length)].tag);
@@ -1122,13 +1343,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Always on — the leaner animation/refresh behaviour every screen already
-  /// branches on by this flag (zero-duration transitions, longer background
-  /// polling, …) reads as smoother and less janky, not as a compromise, so
-  /// there is no reason it should ever have been optional. Kept as a getter
-  /// (rather than inlining `true` at every call site) purely so those call
-  /// sites don't have to change if a real per-device toggle is ever needed
-  /// again.
+  /// Always on now — trims animations/gradients/shadows and widens
+  /// background-polling intervals everywhere that checks this, on every
+  /// device, all the time, for a consistently smooth app rather than
+  /// something an operator had to know to switch on. No longer reads
+  /// Prefs.lowPowerMode (the toggle that used to drive this is gone from
+  /// Settings) or exposes a setter.
   bool get lowPowerMode => true;
 
   /// Session-only (not persisted) — starts each fresh entry into a
@@ -1144,37 +1364,39 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ═══════════════════════ connectivity / commit ═══════════════════════════
-  /// Tap-to-retry for the online/offline chip, wherever it appears (badge
-  /// screen, Home, Gate) — one real attempt against the backend right now;
-  /// if that still fails, hands off to the same server-address screen
-  /// device setup uses instead of a second "edit connection" surface.
-  /// There is deliberately no way to force [connected] to either value from
-  /// here or anywhere else in the UI — it used to be a separate manual
-  /// toggle, which is exactly what let the chip disagree with whether the
-  /// terminal could actually reach the server.
-  Future<void> retryOrConfigure() async {
-    if (connected) return;
-    final ok = await retryConnection();
-    if (ok) return;
-    toastMsg('ยังเชื่อมต่อไม่ได้', 'เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้แล้ว', ResultKind.warn);
-    goDeviceSetup();
+  // ═══════════════════════ detection sounds ════════════════════════════════
+  /// Sets which sound plays when the reader detects an RFID tag, both the
+  /// dense per-read tick on RFID-native screens and Gate's discrete
+  /// trigger-pulled "new box" tick. Persists, pushes the id down to native
+  /// immediately (see rfid_service.dart's setRfidSoundId for why native has
+  /// to be told rather than asked each time), and previews it — the
+  /// settings picker's whole point is "pick it, hear it, done" in one tap.
+  void setRfidSoundId(String id) {
+    prefs.rfidSoundId = id;
+    rfid.setRfidSoundId(id);
+    rfid.playSound(id);
+    notifyListeners();
   }
 
-  /// The outbox banner's own "ซิงก์เลย" button — an explicit nudge for an
-  /// operator who knows signal just came back and doesn't want to wait for
-  /// the SSE stream's own backoff to notice. Reconnecting alone doesn't
-  /// flush ([_onRealtimeConnectivity]'s up-edge is the only place that does
-  /// today), so this does both: retry, then flush whatever's queued if that
-  /// retry actually landed.
-  Future<void> syncNow() async {
-    final ok = await retryConnection();
-    if (!ok) {
-      toastMsg('ยังออฟไลน์อยู่', connError ?? '', ResultKind.warn);
-      return;
+  /// Sets the RFID detection sound's playback level (0.0-1.0). Persists,
+  /// pushes it to native the same way [setRfidSoundId] does, and previews at
+  /// the new level with whatever sound is currently selected.
+  void setRfidSoundVolume(double volume) {
+    prefs.rfidSoundVolume = volume;
+    rfid.setSoundVolume(volume);
+    rfid.playSound(prefs.rfidSoundId);
+    notifyListeners();
+  }
+
+  // ═══════════════════════ connectivity / commit ═══════════════════════════
+  void toggleOnline() {
+    online = !online;
+    notifyListeners();
+    if (online) {
+      flushOutbox();
+    } else {
+      toastMsg('โหมดออฟไลน์', 'การยืนยันจะถูกพักคิวไว้', ResultKind.info);
     }
-    if (outbox.isNotEmpty) await flushOutbox();
-    if (damagedFlags.any((f) => !f.synced)) await flushDamagedFlags();
   }
 
   void _saveOutbox() => prefs.outbox = outbox.map((e) => e.toJson()).toList();
@@ -1220,94 +1442,14 @@ class AppController extends ChangeNotifier {
       toastMsg('ซิงก์สำเร็จ', '$done รายการเข้าสู่ระบบแล้ว', ResultKind.ok);
     }
     if (rejectedCount > 0) {
-      toastMsg('ตัดรายการที่ระบบปฏิเสธ', '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
+      toastMsg('ตัดรายการที่ระบบปฏิเสธ',
+          '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
     }
     if (failed.isNotEmpty) {
-      toastMsg('ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
+      toastMsg(
+          'ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
     }
     notifyListeners();
-  }
-
-  void _saveDamagedFlags() => prefs.damagedFlags = damagedFlags.map((e) => e.toJson()).toList();
-
-  /// Records a damage report captured on [DamagedBoxScreen], entirely local —
-  /// no network call on this path at all, so it works exactly the same
-  /// whether the terminal is online or not. [flushDamagedFlags] is what
-  /// eventually gets it to the server.
-  void addDamagedFlag({required String barcode, required List<String> rfidEpcs, String note = ''}) {
-    damagedFlags.insert(
-      0,
-      DamagedFlag(
-        id: '${DateTime.now().microsecondsSinceEpoch}-${_rnd.nextInt(1 << 32)}',
-        barcode: barcode,
-        rfidEpcs: rfidEpcs,
-        note: note,
-        createdAt: DateTime.now(),
-      ),
-    );
-    _saveDamagedFlags();
-    notifyListeners();
-  }
-
-  /// Same shape as [flushOutbox]: try every unsynced report, keep whatever
-  /// still fails queued for next time, toast the outcome. Synced entries
-  /// stay in the list (marked synced) rather than being removed — the
-  /// operator's own "แจ้งแล้ว" history on this device shouldn't disappear
-  /// the moment it reaches the server.
-  Future<void> flushDamagedFlags() async {
-    final pending = damagedFlags.where((f) => !f.synced).toList();
-    if (pending.isEmpty) return;
-    int done = 0;
-    for (final flag in pending) {
-      try {
-        await api.flagDamage(flag.barcode, rfidEpcs: flag.rfidEpcs, note: flag.note);
-        final i = damagedFlags.indexWhere((f) => f.id == flag.id);
-        if (i >= 0) damagedFlags[i] = damagedFlags[i].copyWith(synced: true);
-        done++;
-      } catch (_) {
-        // Left unsynced — the next connectivity-restore or manual retry
-        // (see the outbox banner's own "sync now") tries it again.
-      }
-    }
-    _saveDamagedFlags();
-    if (done > 0) toastMsg('ซิงก์รายงานความเสียหายแล้ว', '$done รายการ', ResultKind.ok);
-    notifyListeners();
-  }
-
-  /// Damage flagging works offline by design (see [addDamagedFlag]), so
-  /// unlike box registration this menu item is never hidden or guarded —
-  /// there's nothing here that requires a live connection to complete.
-  void goDamagedBox() {
-    screen = Screen.damagedBox;
-    notifyListeners();
-    _connectReader();
-  }
-
-  /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. Online-immediate hold/damage/
-  /// release for a box already in the warehouse, with a reason attached —
-  /// complements [goDamagedBox]'s offline damage-flag queue rather than
-  /// replacing it (that one doesn't cover hold at all, and works with no
-  /// connection; this one writes straight through and covers all three).
-  void goHoldRelease() {
-    screen = Screen.holdRelease;
-    notifyListeners();
-    _connectReader();
-  }
-
-  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
-  void goReportProblem() {
-    screen = Screen.reportProblem;
-    notifyListeners();
-    _connectReader();
-  }
-
-  /// "เช็คช่อง" — LocationInquiryScreen: scan a shelf and see what the
-  /// system believes is on it. The reverse of RelocateScreen's own
-  /// box-first pick step.
-  void goLocationInquiry() {
-    screen = Screen.locationInquiry;
-    notifyListeners();
-    _connectReader();
   }
 
   Future<Map<String, dynamic>> _postTx(OutboxTx tx) {
@@ -1321,6 +1463,7 @@ class AppController extends ChangeNotifier {
         driver: tx.driver,
         vehicleType: tx.vehicleType,
         conditions: tx.conditions,
+        location: tx.location,
       );
     }
     return api.gateOut(
@@ -1351,25 +1494,29 @@ class AppController extends ChangeNotifier {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
-    // ทะเบียนรถ is mandatory only on the way out — the server's gateInSchema
-    // already takes it as optional (see backend/src/validators/schemas.ts),
-    // this just stopped matching that on the Gate In side of the app.
-    if (mode == 'out' && outPlate.trim().isEmpty) {
-      toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
-      return;
-    }
+    // ทะเบียนรถ is optional on both directions — the server's own schemas
+    // already treat it that way (see backend/src/validators/schemas.ts), and
+    // ScanScreen's "ถัดไป" no longer blocks on it either; this used to be
+    // the one place that still silently disagreed with both.
     final vtypeOther = mode == 'in' ? inVehicleTypeOther : outVehicleTypeOther;
-    if ((mode == 'in' ? inVehicleType : outVehicleType) == 'อื่นๆ' && vtypeOther.trim().isEmpty) {
-      toastMsg('ระบุประเภทรถ', 'กรอกว่า "อื่นๆ" คือรถประเภทใด', ResultKind.warn);
+    if ((mode == 'in' ? inVehicleType : outVehicleType) == 'อื่นๆ' &&
+        vtypeOther.trim().isEmpty) {
+      toastMsg(
+          'ระบุประเภทรถ', 'กรอกว่า "อื่นๆ" คือรถประเภทใด', ResultKind.warn);
       return;
     }
-    final effInVType = inVehicleType == 'อื่นๆ' && inVehicleTypeOther.trim().isNotEmpty
-        ? 'อื่นๆ: ${inVehicleTypeOther.trim()}'
-        : inVehicleType;
-    final effOutVType = outVehicleType == 'อื่นๆ' && outVehicleTypeOther.trim().isNotEmpty
-        ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
-        : outVehicleType;
+    final effInVType =
+        inVehicleType == 'อื่นๆ' && inVehicleTypeOther.trim().isNotEmpty
+            ? 'อื่นๆ: ${inVehicleTypeOther.trim()}'
+            : inVehicleType;
+    final effOutVType =
+        outVehicleType == 'อื่นๆ' && outVehicleTypeOther.trim().isNotEmpty
+            ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
+            : outVehicleType;
 
+    // No `location` on the way in, in any of the three modes: receiving and
+    // shelving are separate physical acts, and the shelf is written only once
+    // the operator has confirmed it at the shelf (see [completePutaway]).
     final tx = mode == 'in'
         ? OutboxTx(
             type: 'in',
@@ -1409,14 +1556,12 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    // Real connectivity, not a manual toggle — queuing while this says
-    // "connected" but a request still fails is covered by the catch block
-    // below, which falls back to the same outbox.
-    if (!connected) {
+    if (!online) {
       outbox.add(tx);
       _saveOutbox();
       _resetAfterCommit();
-      toastMsg('บันทึกออฟไลน์', '${tx.tags.length} ใบ · รอ sync', ResultKind.info);
+      toastMsg(
+          'บันทึกออฟไลน์', '${tx.tags.length} ใบ · รอ sync', ResultKind.info);
       return;
     }
 
@@ -1448,12 +1593,34 @@ class AppController extends ChangeNotifier {
       }
       final custName = s?.custName(outCustomer) ?? outCustomer;
       final whNm = s?.whName(whId) ?? whId;
+      // A tag flagged hold/damage is set aside for inspection, not shelved —
+      // it has no business in a "go put these on a shelf" task.
+      final shelvedTags =
+          tx.tags.where((t) => !queueConditions.containsKey(t)).toList();
+      final wantsPutaway =
+          mode == 'in' && receiveLocationMode != ReceiveLocationMode.defer;
+      if (wantsPutaway && shelvedTags.isNotEmpty) {
+        Map<String, String>? assigned;
+        if (receiveLocationMode == ReceiveLocationMode.auto) {
+          // Asked *now*, after the commit — not when the chip was tapped.
+          // A shelf picked before these boxes were even scanned could have
+          // been filled by another terminal in the meantime. If the ask
+          // fails, `assigned` stays null and the task degrades to "find a
+          // free spot yourself", which is what a warehouse does anyway when
+          // the system can't direct it.
+          await _fetchSuggestedLocation();
+          assigned = _suggestedLocation;
+        }
+        putawayTask =
+            PutawayTask(tags: shelvedTags, assigned: assigned, whName: whNm);
+      }
       _resetAfterCommit();
       await refresh();
       if (mode == 'in') {
-        toastMsg('รับคืนสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
+        toastMsg('รับเข้าสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
       } else {
-        toastMsg('ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
+        toastMsg(
+            'ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
       }
     } on ApiException catch (e) {
       toastMsg('บันทึกไม่สำเร็จ', e.message, ResultKind.err);
@@ -1479,6 +1646,7 @@ class AppController extends ChangeNotifier {
     inDriver = '';
     inVehicleType = '';
     inVehicleTypeOther = '';
+    _clearReceiveLocation();
   }
 
   void _resetAfterCommit() {
@@ -1497,11 +1665,7 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setOutPlate(String v) {
-    outPlate = v;
-    notifyListeners();
-  }
-
+  void setOutPlate(String v) => outPlate = v;
   void setOutDriver(String v) => outDriver = v;
   void setOutVehicleType(String v) {
     outVehicleType = v;
@@ -1510,11 +1674,7 @@ class AppController extends ChangeNotifier {
   }
 
   void setOutVehicleTypeOther(String v) => outVehicleTypeOther = v;
-  void setInPlate(String v) {
-    inPlate = v;
-    notifyListeners();
-  }
-
+  void setInPlate(String v) => inPlate = v;
   void setInDriver(String v) => inDriver = v;
   void setInVehicleType(String v) {
     inVehicleType = v;
@@ -1534,86 +1694,29 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Bumped on every doTrack() call (and on leaving the screen) so a network
-  // reply that lands after a newer search has already started — fast
-  // repeated scans, or someone typing over a pending lookup — can't clobber
-  // trackTag/trackError with a stale result.
-  int _trackSeq = 0;
-
-  /// Resolves [trackVal] to a box. [resolveTag] + [StateSnapshot.box] only
-  /// ever matches a box's own barcode tag — S.boxesRaw is keyed by tag
-  /// alone — so an RFID read (EPC or TID) never matches there even for a
-  /// box that really is registered and tagged. When the local snapshot
-  /// comes up empty this falls back to GET /api/boxes/:code, which resolves
-  /// against tag/rfid_epc/rfid_tid server-side (services/rfid.ts) — the
-  /// same lookup gate.ts itself uses — so "not found" only fires once
-  /// neither the local snapshot nor the backend knows the box. A network
-  /// failure is kept distinct from a genuine not-found via [trackError], so
-  /// a connectivity blip can't be misread as "this box doesn't exist."
-  Future<void> doTrack() async {
+  void doTrack() {
     final raw = trackVal.trim();
     if (raw.isEmpty) {
-      _trackSeq++;
       trackTag = '';
       trackTried = false;
-      trackSearching = false;
-      trackError = null;
       notifyListeners();
       return;
     }
-    final seq = ++_trackSeq;
-    trackError = null;
-    final localTag = resolveTag(raw);
-    if (S?.box(localTag) != null) {
-      // Instant path — most searches are a barcode that's already in the
-      // local snapshot, no need to round-trip to the backend for those.
-      trackTag = localTag;
-      trackTried = true;
-      trackSearching = false;
-      notifyListeners();
-      return;
-    }
-
-    trackTag = localTag;
+    trackTag = resolveTag(raw);
     trackTried = true;
-    // Folded into the same list the RFID trigger streams into, so a manual
-    // search and a held-trigger sweep end up on one shared, deduped list —
-    // trackTag/trackBox above are untouched by this and keep driving the
-    // "not found" message the same way they always have.
-    final b = trackBox;
-    if (b != null) _pushTrackResult(b);
-    trackSearching = true;
-    notifyListeners();
-    try {
-      final data = await api.getBox(raw);
-      if (seq != _trackSeq) return; // superseded by a newer search
-      if (data != null) {
-        final tag = (data['tag'] ?? raw).toString();
-        // Fold it into the local snapshot too so the rest of the UI (which
-        // reads purely off S) has it without waiting for the next periodic
-        // /api/state refresh.
-        S?.boxesRaw[tag] = data;
-        trackTag = tag;
-      }
-    } catch (e) {
-      if (seq != _trackSeq) return;
-      trackError = 'ค้นหากล่องไม่สำเร็จ — ${_msg(e)}';
-    } finally {
-      if (seq == _trackSeq) trackSearching = false;
-      notifyListeners();
+    // A resolved, real box means this search string was a completed code —
+    // typed in full or scanned — not a still-in-progress partial. Log it as
+    // a hit (same list-of-results shape RFID mode already uses) and clear
+    // the field so the next scan starts clean instead of the wedge's next
+    // characters landing after this one's leftover text.
+    if (S?.box(trackTag) != null) {
+      if (!trackBarcodeHits.contains(trackTag)) trackBarcodeHits.add(trackTag);
+      trackVal = '';
     }
+    notifyListeners();
   }
 
   Box? get trackBox => (trackTried && S != null) ? S!.box(trackTag) : null;
-
-  /// Adds [b] to the front of [trackResults], removing any earlier entry for
-  /// the same tag first — so re-resolving a box that's already in the list
-  /// (typed again, or read again while the trigger is held) moves it to the
-  /// top instead of appending a duplicate card.
-  void _pushTrackResult(Box b) {
-    trackResults.removeWhere((x) => x.tag == b.tag);
-    trackResults.insert(0, b);
-  }
 
   /// Live typeahead for the track search box — every tag containing what's
   /// typed so far, updated on every keystroke rather than waiting for Enter.
@@ -1626,7 +1729,8 @@ class AppController extends ChangeNotifier {
     // No cap — a search for a short/common substring can genuinely match a
     // hundred boxes, and the grid this feeds (see TrackScreen._suggestions)
     // is built to show all of them rather than silently truncating to 20.
-    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
+    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()
+      ..sort();
   }
 
   void selectTrackSuggestion(String tag) {
@@ -1634,19 +1738,13 @@ class AppController extends ChangeNotifier {
     doTrack();
   }
 
-  /// The trigger-driven counterpart of [doTrack]: one tag read while the
-  /// RFID trigger is held on the track screen. Unlike [doTrack] this never
-  /// touches [trackVal]/[trackTag]/[trackTried] (those stay exclusively
-  /// driven by the manual search box, per its own contract), and a read
-  /// that doesn't resolve to a real box is dropped silently rather than
-  /// surfacing the "not found" message — with tags arriving several times a
-  /// second, flashing that message on every stray/unregistered read would
-  /// just be noise. A resolved box is pushed onto the shared [trackResults]
-  /// list (deduped by tag), same as a manual search does.
-  void _onTrackTag(String raw) {
-    final b = S?.box(resolveTag(raw));
-    if (b == null) return;
-    _pushTrackResult(b);
+  /// Opens the full detail card for one tag out of [trackRfidHits] — tapping
+  /// a row in the RFID results list. Deliberately doesn't touch trackVal (or
+  /// clear trackRfidHits): the barcode field and the RFID sweep results stay
+  /// independent, same reasoning as _onReaderTag's Screen.track case.
+  void viewTrackHit(String tag) {
+    trackTag = tag;
+    trackTried = true;
     notifyListeners();
   }
 
@@ -1658,16 +1756,14 @@ class AppController extends ChangeNotifier {
     required String baseUrl,
     String? username,
     String? password,
-    String? apiKey,
   }) async {
     prefs.baseUrl = baseUrl.trim();
-    if (username != null && username.trim().isNotEmpty) prefs.username = username.trim();
+    if (username != null && username.trim().isNotEmpty)
+      prefs.username = username.trim();
     if (password != null && password.isNotEmpty) prefs.password = password;
-    if (apiKey != null) prefs.apiKey = apiKey.trim();
     prefs.token = null;
     api
       ..baseUrl = prefs.baseUrl
-      ..apiKey = prefs.apiKey
       ..token = null;
     busy = true;
     connError = null;
@@ -1675,7 +1771,8 @@ class AppController extends ChangeNotifier {
     await _ensureAuthAndState();
     busy = false;
     if (connError == null) {
-      toastMsg('เชื่อมต่อสำเร็จ', S == null ? '' : 'พบ ${S!.boxCount} กล่อง', ResultKind.ok);
+      toastMsg('เชื่อมต่อสำเร็จ', S == null ? '' : 'พบ ${S!.boxCount} กล่อง',
+          ResultKind.ok);
     } else {
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
     }
@@ -1683,25 +1780,19 @@ class AppController extends ChangeNotifier {
   }
 
   /// The device-setup screen's single bottom button: connects with whatever
-  /// is currently in the form, then finishes setup regardless of whether
-  /// that connection attempt actually succeeded. The config (base URL,
-  /// device credentials) is already saved to prefs by [applyConnection]
-  /// before it even tries the network — a terminal being provisioned at a
-  /// site whose server happens to be down (or that isn't reachable from
-  /// wherever setup is being done) must not be stuck on this screen
-  /// forever; it should walk in offline, same as any other cold boot with a
-  /// server outage, and pick up the connection the moment the network/server
-  /// comes back (see AppController.init's cached-snapshot-first bootstrap
-  /// and _onRealtimeConnectivity's auto-reconnect). [applyConnection] has
-  /// already toasted success or failure, so no extra failure messaging here.
+  /// is currently in the form, then finishes setup automatically once that
+  /// succeeds — an operator no longer has to tap "บันทึก & เชื่อมต่อ" above and
+  /// then this button separately, which read as the button being broken when
+  /// really it was just gated on a connection nobody had triggered yet. Does
+  /// nothing further on failure — [applyConnection] already toasted why.
   Future<void> completeDeviceSetup({
     required String baseUrl,
     String? username,
     String? password,
-    String? apiKey,
   }) async {
-    await applyConnection(baseUrl: baseUrl, username: username, password: password, apiKey: apiKey);
-    finishDeviceSetup();
+    await applyConnection(
+        baseUrl: baseUrl, username: username, password: password);
+    if (connected) finishDeviceSetup();
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
@@ -1711,6 +1802,24 @@ class AppController extends ChangeNotifier {
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;
     rfid.connect();
+  }
+
+  /// Pushes the reader's transmit power to its own maximum — for any screen
+  /// whose whole point is finding/detecting tags as reliably as possible
+  /// (RfidLocateScreen's sweep, TrackScreen's RFID mode). More power is the
+  /// one lever that actually helps a weak-signal tag get decoded at all,
+  /// not just read louder — a stray "ใกล้/ปานกลาง" pick left over from
+  /// Settings would otherwise silently cap range on a screen that needs
+  /// every bit of it. Safe to call repeatedly; each call re-reads the
+  /// reader's own max index rather than assuming a cached one still applies.
+  Future<void> forceMaxRfidPower() async {
+    if (!rfid.supported) return;
+    final d = await rfid.diagnostics();
+    final maxIdx = d['powerMaxIndex'];
+    if (maxIdx is int) {
+      prefs.rfidPowerPercent = 100;
+      await rfid.setPowerIndex(maxIdx);
+    }
   }
 
   /// Stray-read filter: RFID reads through cardboard and thin stock easily
@@ -1729,20 +1838,58 @@ class AppController extends ChangeNotifier {
   void _onReaderTag(String epc) {
     switch (screen) {
       case Screen.scan:
+        // Waiting for a rack barcode: RFID is deliberately deaf here. A sweep
+        // aimed at the shelf in front of the operator reads the bay next to it
+        // just as happily, so a location must come from the imager's narrow
+        // beam and nothing else. Silent rather than a per-tag error tone — the
+        // trigger pull itself already got one answer, from _onReaderTrigger.
+        if (putawayTask != null) break;
         addScan(epc, viaRfid: true);
         break;
       case Screen.track:
-        _onTrackTag(epc);
+        // Accumulate distinct tags rather than resolving straight to a
+        // single box (the old behavior) — a sweep over a pile of boxes
+        // should list every tag found, not keep overwriting one result with
+        // whichever tag the reader last happened to see. trackVal is
+        // deliberately left untouched: it's the barcode field's own state,
+        // and populating it from an RFID read is what used to leak the last
+        // tag number into the barcode box after switching modes.
+        final tag = resolveTag(epc);
+        if (!trackRfidHits.contains(tag)) {
+          trackRfidHits.add(tag);
+          rfid.playSound(prefs.rfidSoundId);
+          notifyListeners();
+        }
         break;
-      case Screen.login:
-        // An RFID employee card and a printed badge land in the same place.
-        // Box tags swept up along with it match nobody and fall through.
-        if (identifyByScanCode(epc) == null) return;
+      case Screen.transfer:
+        // Same accumulate-distinct-tags shape as Screen.track above — a
+        // bulk transfer sweep should list every box the trigger has swept
+        // over, not resolve to just one. Only accepted while status is
+        // actually 'warehouse': a tag belonging to a box that's out with a
+        // customer or still pending intake has no business in a "move this
+        // shelf's boxes" batch, and letting it in would just fail (or
+        // silently relocate the wrong thing) once TransferScreen tries to
+        // submit it.
+        final t = resolveTag(epc);
+        final b = S?.box(t);
+        if (b != null &&
+            b.status == 'warehouse' &&
+            !transferRfidHits.contains(t)) {
+          transferRfidHits.add(t);
+          rfid.playSound(prefs.rfidSoundId);
+          notifyListeners();
+        }
         break;
       default:
         break;
     }
   }
+
+  /// Distinct box tags TransferScreen's RFID bulk-select sweep has found
+  /// this session — see the Screen.transfer case in [_onReaderTag] above.
+  /// Cleared by the screen itself whenever it resets (mode switch, screen
+  /// leave, batch submitted).
+  final List<String> transferRfidHits = [];
 
   void _onReaderTrigger(bool pressed) {
     if (!pressed) {
@@ -1754,71 +1901,171 @@ class AppController extends ChangeNotifier {
       rfid.stopInventory();
       return;
     }
+    if (screen == Screen.login) {
+      // Badge-in is barcode-only: a printed badge scans through the
+      // handheld's own keyboard-wedge/imager, which fires off the same
+      // physical trigger button independently of this SDK. This handler
+      // must never also switch that button over to an RFID sweep here —
+      // that was firing the antenna alongside every barcode scan, which is
+      // exactly the "close RFID find mode, trigger only reads barcodes"
+      // behavior this screen is supposed to have. Nothing to toast: the
+      // trigger did its job via the imager, this handler just isn't part
+      // of that path on this screen.
+      return;
+    }
     if (screen != Screen.scan &&
         screen != Screen.track &&
-        screen != Screen.login &&
         screen != Screen.rfidInput &&
         screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister &&
-        // Damage reporting identifies a box by RFID when its barcode label is
-        // the thing that's torn — the trigger has to actually fire there. It
-        // was missing from this list, so the one screen whose whole RFID mode
-        // depends on a trigger pull answered it with "หน้านี้ไม่รองรับ".
-        screen != Screen.damagedBox &&
-        screen != Screen.relocate &&
         screen != Screen.settings &&
+        screen != Screen.transfer &&
         screen != Screen.cycleCount &&
         screen != Screen.holdRelease &&
         screen != Screen.reportProblem &&
         screen != Screen.locationInquiry) {
       // A screen with no scanning purpose at all (Home, device setup, …).
-      // The antenna must not light up here — silently doing nothing left an
-      // operator assuming a broken trigger, not a screen that was never
-      // going to answer it. Settings is the one exception: its own
-      // test-fire button (settings_screen.dart's press-and-hold "กดค้างเพื่อ
-      // ทดสอบยิง") talks to the reader directly rather than through this
-      // dispatcher, precisely so a range check doesn't trip this same
-      // "wrong screen" alert.
-      if (screen != Screen.settings) {
-        toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', 'สลับไปหน้าที่ใช้งานได้ก่อน', ResultKind.warn);
-      }
+      // Settings is included here — its RFID diagnostics panel has its own
+      // "กดค้างเพื่อทดสอบยิง" hold button, but an operator standing there and
+      // pulling the *physical* trigger to test the reader should get the
+      // same result, not a "this screen doesn't support scanning" toast. The
+      // antenna must not light up here — silently doing
+      // nothing left an operator assuming a broken trigger, not a screen
+      // that was never going to answer it.
+      toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', '', ResultKind.warn);
       return;
     }
     // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger
     // does nothing at all — no read, no beep, no vibration. Previously the
     // toggle only hid the barcode field in the UI; the reader itself still
     // started and beeped on every read because this dispatcher never knew
-    // which mode was selected. RfidLocateScreen forces scanInputMode back
-    // to rfid the moment a target is picked (its .locate step has no
-    // barcode alternative), so this only ever blocks its pick step.
-    if ((screen == Screen.scan || screen == Screen.track || screen == Screen.rfidLocate) &&
-        scanInputMode == ScanInputMode.barcode) {
-      toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
+    // which mode was selected.
+    //
+    // rfidLocateSweepStep is what exempts RfidLocateScreen's sweep step:
+    // that step has no barcode alternative at all, so gating it on a
+    // *shared, app-wide* mode flag meant the trigger silently did nothing
+    // there whenever anything else had last left the mode on บาร์โค้ด —
+    // including this screen's own pick step, which now deliberately starts
+    // in barcode mode. The on-screen "เริ่มกวาดหา" button calls
+    // startInventory() directly and never went through here, which is
+    // exactly why that button worked while the trigger appeared dead.
+    if (screen == Screen.scan && gateFormStep) {
+      // ลูกค้าปลายทาง/ทะเบียนรถ/คนขับ/ประเภทรถ are plain text entry, not a scan
+      // target — a trigger pull here must not fire the antenna (which would
+      // silently start an RFID sweep behind a form nobody meant to scan
+      // into) and must not be mistaken for "the barcode field will catch
+      // it" either, because there is no barcode field on this step at all
+      // (ScanCapture itself is already off here — see the ScanCapture
+      // `enabled` check in ScanScreen.build). Same toast shape as the
+      // putaway-step block below, which exists for exactly the same reason
+      // one step later in this screen's flow.
+      toastMsg(
+          'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
+          'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
+          ResultKind.info);
       return;
     }
-    // Gate scanning and the box-locate sweep both drive their own feedback
-    // instead of the reader's dense per-read tick: Gate's is discrete
-    // ok/error tones from addScan() (see playTone calls below); locate's is
-    // haptic-only, gated to genuine target matches (see
-    // RfidLocateScreen._onBatch) — a beep on every stray read of a
-    // neighbouring pallet's tags was exactly the bug this fixes. Every
-    // other RFID screen still wants the raw per-read feedback.
-    rfid.setAutoBeep(screen != Screen.scan && screen != Screen.rfidLocate);
+    if (screen == Screen.scan && putawayTask != null) {
+      // See the Screen.scan case in [_onReaderTag]: the putaway step wants a
+      // rack barcode, and the antenna must not even light up for it.
+      toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น', 'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID',
+          ResultKind.info);
+      return;
+    }
+    if ((screen == Screen.scan ||
+            screen == Screen.track ||
+            screen == Screen.transfer ||
+            (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
+        scanInputMode == ScanInputMode.barcode) {
+      toastMsg('อยู่ในโหมดบาร์โค้ด',
+          'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
+      return;
+    }
+    if (screen == Screen.boxRegister && !boxRegisterRfidStep) {
+      // The create/label/putaway/success steps all expect a *barcode* (the
+      // box's own tag, scanned or typed) — only the rfid step's card is
+      // asking for a trigger pull. Same class of bug as the login screen
+      // fix: this dispatcher used to start an RFID sweep on every trigger
+      // pull anywhere on this screen, which meant scanning the box's
+      // barcode to create it could also silently arm the antenna. Nothing
+      // to toast: the barcode step's own field/imager already answered the
+      // trigger, this handler just isn't part of that path yet.
+      return;
+    }
+    if (screen == Screen.rfidRegister && !rfidRegisterRfidStep) {
+      // Same reasoning, one step earlier: the waitingBarcode step's own
+      // field/imager handles a trigger pull there. RfidRegisterScreen arms
+      // the reader itself the instant a barcode resolves (see its
+      // _submitBarcode), so this dispatcher isn't even the normal way that
+      // screen starts a sweep — but without this gate it would still fire
+      // one on every trigger pull during barcode entry too.
+      return;
+    }
+    // Gate scanning, the box-locate sweep, Track's own multi-tag list,
+    // Transfer's bulk-select list, and box registration's tag-candidate
+    // sweep all drive their own feedback instead of the reader's dense
+    // per-read tick: Gate's is discrete ok/error tones from addScan() (see
+    // playTone calls below); locate's is haptic-only, gated to genuine
+    // target matches (see RfidLocateScreen._onBatch); Track's, Transfer's,
+    // and box registration's are one sound per newly-found tag (see
+    // _onReaderTag's Screen.track/Screen.transfer cases and
+    // BoxRegisterScreen._onTagRead). Leaving the native tick on for any of
+    // these means a re-read of a tag already handled still beeps — the SDK
+    // fires it from its own read callback with no idea a tag is a repeat,
+    // only Dart does. Every other RFID screen still wants the raw per-read
+    // feedback.
+    rfid.setAutoBeep(screen != Screen.scan &&
+        screen != Screen.rfidLocate &&
+        screen != Screen.track &&
+        screen != Screen.transfer &&
+        screen != Screen.boxRegister);
     rfid.startInventory();
   }
+
+  /// True only while ScanScreen is on its customer/vehicle form step —
+  /// ลูกค้าปลายทาง, ทะเบียนรถ, คนขับ, ประเภทรถ — see the Screen.scan block in
+  /// [_onReaderTrigger] above. A trigger pull there must never fire the
+  /// antenna or start listening for a barcode: those fields are plain text
+  /// entry, and a stray RFID sweep or an in-flight ScanCapture read landing
+  /// on one of them while the operator is mid-type is exactly the kind of
+  /// "why did the customer field just get overwritten" report this exists to
+  /// prevent. ScanScreen flips this false the moment it moves to the scan
+  /// step and true again on the way back — see _setOnScanStep, the one place
+  /// that transition happens.
+  bool gateFormStep = false;
+
+  /// True only while BoxRegisterScreen's own rfid step (_Step.rfid) is on
+  /// top — see the Screen.boxRegister branch in [_onReaderTrigger] above.
+  /// Defaults false so the create/label steps' barcode entry never
+  /// accidentally arms the antenna; the screen flips this on entering its
+  /// rfid step and back off leaving it (skip, bind, dispose, …).
+  bool boxRegisterRfidStep = false;
+
+  /// True only while RfidLocateScreen is on its sweep step (a target box has
+  /// been picked). That step is RFID-only by definition, so the trigger must
+  /// work there regardless of what [scanInputMode] happens to be set to
+  /// app-wide — see the rfidLocate branch in [_onReaderTrigger].
+  bool rfidLocateSweepStep = false;
+
+  /// Same idea, for RfidRegisterScreen's own waitingRfid step. That screen
+  /// already arms the reader itself the instant a barcode resolves (see its
+  /// _submitBarcode — no trigger pull needed there), but the *barcode* step
+  /// still needs this false so a trigger pulled while typing/scanning a box
+  /// code doesn't also fire the antenna through this dispatcher.
+  bool rfidRegisterRfidStep = false;
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;
 
-  /// Test-only way to force [connected] without a real network round trip —
-  /// production code has exactly one legitimate way to change this
-  /// (_syncLiveConnected/_onRealtimeConnectivity, both driven by an actual
-  /// server response), which is the whole point of removing the old manual
-  /// toggle. Tests still need to simulate "offline" deterministically
-  /// without waiting on FakeApi timing.
-  @visibleForTesting
-  set connectedForTest(bool v) => _liveConnected = v;
+  /// What the navbar's online/offline chip should actually show — [online]
+  /// alone used to drive it, which meant a genuinely dead connection still
+  /// displayed "online" until someone happened to tap the chip (it starts
+  /// true and nothing else ever turned it false). Real connectivity now
+  /// overrides the manual toggle in one direction only: truly offline always
+  /// shows offline, but the operator can still use the toggle to go into
+  /// offline/queue mode on purpose while [connected] is otherwise true.
+  bool get onlineDisplay => online && connected;
   int get boxCount => S?.boxCount ?? 0;
   String get selWhName => S?.whName(wh) ?? wh;
 
@@ -1834,10 +2081,14 @@ class AppController extends ChangeNotifier {
   }
 
   int get todayIn => (S?.events ?? [])
-      .where((e) => e is Map && (e['dir'] == 'in' || e['dir'] == 'in-new') && _sameDay(e['ts']?.toString()))
+      .where((e) =>
+          e is Map &&
+          (e['dir'] == 'in' || e['dir'] == 'in-new') &&
+          _sameDay(e['ts']?.toString()))
       .length;
   int get todayOut => (S?.events ?? [])
-      .where((e) => e is Map && e['dir'] == 'out' && _sameDay(e['ts']?.toString()))
+      .where(
+          (e) => e is Map && e['dir'] == 'out' && _sameDay(e['ts']?.toString()))
       .length;
 
   List<Map<String, dynamic>> get warehouseList {

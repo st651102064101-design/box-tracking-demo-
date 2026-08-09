@@ -4,17 +4,14 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import '../models/box.dart';
 import '../services/api_client.dart';
+import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
 
-/// "พัก / แจ้งชำรุด" — the online-immediate counterpart to DamagedBoxScreen's
-/// offline damage-flag queue: scan a box already in the warehouse, then
-/// hold/flag-damaged/release it with an optional reason, written straight to
-/// POST /api/boxes/:tag/hold. DamagedBoxScreen stays the answer for "no
-/// signal right now"; this is the answer for "hold" (which that screen
-/// doesn't cover at all) and for an immediate, reason-attached write when
-/// there is a connection.
+/// "พัก / แจ้งชำรุด" — the only way to hold, flag damaged, or release a box
+/// any time other than at Gate In receiving (see scan_screen.dart's own
+/// _ConditionPicker for that path). Backed by POST /api/boxes/:tag/hold.
 ///
 /// Two steps, same shape as every other scan-then-act screen in this app:
 /// scan the box, then act on whichever of the three status buttons applies
@@ -64,6 +61,7 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
   Future<void> _act(AppController c, String status) async {
     final b = _box;
     if (b == null || _busy) return;
+    final loc = context.read<LocaleController>();
     setState(() {
       _busy = true;
       _actionError = null;
@@ -86,8 +84,8 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() =>
-          _actionError = e is ApiException ? e.message : 'บันทึกไม่สำเร็จ');
+      setState(() => _actionError =
+          e is ApiException ? e.message : loc.t('บันทึกไม่สำเร็จ'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -96,46 +94,43 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
+    final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final box = _box;
 
     return ScanCapture(
       enabled: box == null && !_busy,
       onScan: (raw) => _onScan(c, raw),
-      child: Column(
-        children: [
-          StickyHeader(
-            onBack: box == null
-                ? c.backToHome
-                : () => setState(() => _box = null),
-            title: const Text('พัก / แจ้งชำรุด'),
-            subtitle: Text(box == null ? 'ยิงบาร์โค้ดกล่อง' : 'เลือกการทำงาน'),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-              children: box == null ? _scanBody() : _actionBody(c, box),
-            ),
-          ),
-        ],
+      child: AutoHideHeader(
+        header: StickyHeader(
+          onBack:
+              box == null ? c.backToHome : () => setState(() => _box = null),
+          title: Text(loc.t('พัก / แจ้งชำรุด')),
+          subtitle:
+              Text(loc.t(box == null ? 'ยิงบาร์โค้ดกล่อง' : 'เลือกการทำงาน')),
+        ),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+          children: box == null ? _scanBody(loc) : _actionBody(c, loc, box),
+        ),
       ),
     );
   }
 
-  List<Widget> _scanBody() => [
+  List<Widget> _scanBody(LocaleController loc) => [
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
           decoration: BoxDecoration(
             color: C.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: C.border, width: 1.5),
+            border: Border.all(color: C.fieldBorder, width: 1.5),
           ),
           child: Column(
             children: [
               Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
               const SizedBox(height: 8),
-              Text('ยิงบาร์โค้ดกล่องที่จะพักหรือแจ้งชำรุด',
+              Text(loc.t('ยิงบาร์โค้ดกล่องที่จะพักหรือแจ้งชำรุด'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 14,
@@ -152,18 +147,12 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
         ],
       ];
 
-  String _locationText(Box b) {
-    final l = b.location;
-    return [l['zone'], l['rack'], l['shelf'], l['slot']]
-        .map((v) => (v ?? '').toString())
-        .where((v) => v.isNotEmpty)
-        .join(' / ');
-  }
-
-  List<Widget> _actionBody(AppController c, Box b) {
+  List<Widget> _actionBody(AppController c, LocaleController loc, Box b) {
     final sm = StatusMeta.of(b.status);
     return [
       Panel(
+        radius: 18,
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -183,23 +172,23 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
             Text(c.S?.typeName(b.type) ?? '-',
                 style: TextStyle(fontSize: 13, color: C.muted)),
             const SizedBox(height: 4),
-            Text(_locationText(b),
-                style: TextStyle(fontSize: 12.5, color: C.ink2)),
+            Text(locationText(b.location.map((k, v) => MapEntry(k, '$v'))),
+                style: TextStyle(fontSize: 12.5, color: C.ink3)),
           ],
         ),
       ),
       const SizedBox(height: 16),
-      FieldLabel('เหตุผล (ถ้ามี)'),
+      FieldLabel(loc.t('เหตุผล (ถ้ามี)')),
       const SizedBox(height: 6),
       TextField(
         controller: _reasonCtrl,
         maxLines: 2,
-        decoration: pdaInput('เช่น มุมยุบ / รอตรวจสอบ QC', radius: 12),
+        decoration: pdaInput(loc.t('เช่น มุมยุบ / รอตรวจสอบ QC'), radius: 12),
       ),
       const SizedBox(height: 16),
       if (b.status != 'hold')
         _actionButton(
-          label: 'พักสินค้า (Hold)',
+          label: loc.t('พักสินค้า (Hold)'),
           icon: Icons.pause_circle_outline,
           color: C.orange,
           bg: C.orangeBg,
@@ -208,7 +197,7 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       if (b.status != 'damage') ...[
         const SizedBox(height: 10),
         _actionButton(
-          label: 'แจ้งชำรุด',
+          label: loc.t('แจ้งชำรุด'),
           icon: Icons.report_gmailerrorred_outlined,
           color: C.red,
           bg: C.redBg,
@@ -218,7 +207,7 @@ class _HoldReleaseScreenState extends State<HoldReleaseScreen> {
       if (b.status != 'warehouse') ...[
         const SizedBox(height: 10),
         _actionButton(
-          label: 'ปลดพัก — กลับเป็นปกติ',
+          label: loc.t('ปลดพัก — กลับเป็นปกติ'),
           icon: Icons.check_circle_outline,
           color: C.limeDeep,
           bg: C.limeBg,
