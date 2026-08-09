@@ -167,12 +167,14 @@ class LocaleController extends ChangeNotifier {
     'เจอ': 'Found',
     'เลือกกล่องที่จะหา': 'Pick a box to find',
     'กวาดหาสัญญาณ': 'Sweeping for a signal',
-    'พิมพ์หรือยิงรหัสกล่อง เช่น CRT-01': 'Type or scan a box code, e.g. CRT-01',
+    'ยิงบาร์โค้ดกล่องที่จะหา': 'Scan the box you want to find',
+    'หรือเลือกจากรายการ': 'Or pick from the list',
+    'ยังไม่มีกล่องที่ผูกแท็ก RFID ในระบบ': 'No box has an RFID tag linked yet',
+    'ไม่พบกล่องรหัส': 'No box with code',
+    'ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้':
+        'No RFID tag linked yet — cannot be located',
     'เหนี่ยวไกยิงแท็กของกล่องที่จะหา':
         'Pull the trigger on the box\'s tag to find it',
-    'พิมพ์รหัสหรือประเภทกล่อง เพื่อค้นหากล่องที่จะตามหา':
-        'Type a code or box type to search for the box to find',
-    'ไม่พบกล่องที่ตรงกับ': 'No box matches',
     'ยังไม่ได้ผูกแท็ก RFID': 'No RFID tag linked yet',
     'เปลี่ยนกล่อง': 'Change box',
     'ใช้ได้เฉพาะบนเครื่องอ่าน Zebra': 'Only works on a Zebra reader',

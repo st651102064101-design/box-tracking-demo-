@@ -17,6 +17,11 @@ void main() {
     'lib/screens/rfid_register_screen.dart',
     'lib/screens/rfid_input_screen.dart',
     'lib/screens/login_screen.dart',
+    // Picking a target used to accept a typed code or box-type search. Now
+    // it only ever resolves a scanned code (a picking ticket or an existing
+    // pallet label carries a real one); with nothing to scan the operator
+    // taps a box straight off a browsable list instead of typing to filter.
+    'lib/screens/rfid_locate_screen.dart',
   ];
 
   /// Screens that keep a field on purpose, with the reason. Listed rather than
@@ -25,8 +30,6 @@ void main() {
   const keepsAField = {
     'lib/screens/track_screen.dart':
         'search — the box is not in hand, that is why you are looking it up',
-    'lib/screens/rfid_locate_screen.dart':
-        'picks the target box to go and find, which by definition is not here',
     'lib/screens/transfer_screen.dart':
         'the list-picker filter, for a box whose label will not scan',
     'lib/screens/box_register_screen.dart':
