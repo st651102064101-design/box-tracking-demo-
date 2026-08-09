@@ -34,12 +34,27 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   bool _busy = false;
   bool _sent = false;
 
+  /// "ของหาย" browse-by-type filter — same idea as RfidLocateScreen's pick
+  /// step: null means "all types". Exists because a box the system directed
+  /// you to but couldn't be found is, by definition, not there to scan — the
+  /// only way to name it is to pick it off a list, and a warehouse-wide
+  /// alphabetical list is unusable without narrowing by type first.
+  String? _typeFilter;
+
   void _pickKind(_Kind k) {
     setState(() {
       _kind = k;
       _box = null;
       _location = null;
       _scanError = null;
+      _typeFilter = null;
+    });
+  }
+
+  void _pickFromList(Box b) {
+    setState(() {
+      _scanError = null;
+      _box = b;
     });
   }
 
@@ -133,7 +148,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               ? _kindPicker(c, loc)
               : target
                   ? _confirmBody(c, loc)
-                  : _scanBody(loc, kind),
+                  : _scanBody(c, loc, kind),
         ),
       ),
     );
@@ -228,7 +243,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _scanBody(LocaleController loc, _Kind kind) => [
+  List<Widget> _scanBody(AppController c, LocaleController loc, _Kind kind) => [
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
@@ -261,7 +276,137 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               style: TextStyle(
                   fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
         ],
+        // ของหาย only: nothing to scan for a box that, by definition, isn't
+        // where it should be — browse by type instead, same shape as
+        // RfidLocateScreen's pick-from-list step.
+        if (kind == _Kind.missing) ..._typePickList(c, loc),
       ];
+
+  /// Every box this device's warehouse currently expects on a shelf, filtable
+  /// by type first (a flat alphabetical list of a whole warehouse isn't
+  /// scannable by eye) — see [_typeFilter]. Tapping one reports it missing
+  /// directly, the same as scanning it would if it were actually there.
+  List<Widget> _typePickList(AppController c, LocaleController loc) {
+    final all = (c.S?.boxes.toList() ?? const <Box>[])
+        .where((b) => b.status == 'warehouse' && b.location['wh'] == c.wh)
+        .toList()
+      ..sort((a, b) => a.tag.compareTo(b.tag));
+
+    final typeNames = <String, String>{}; // type id -> display name
+    for (final b in all) {
+      final id = b.type ?? '';
+      typeNames[id] = c.S!.typeName(b.type);
+    }
+    final typeIds = typeNames.keys.toList()
+      ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
+    if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
+      _typeFilter = null; // the selected type's last box moved out/shipped
+    }
+    final boxes = _typeFilter == null
+        ? all
+        : all.where((b) => (b.type ?? '') == _typeFilter).toList();
+
+    return [
+      const SizedBox(height: 16),
+      if (all.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+          child: Text(loc.t('ไม่มีกล่องที่คลังนี้'),
+              style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
+        )
+      else ...[
+        Text(loc.t('หรือเลือกกล่องตามประเภท'),
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: C.muted)),
+        const SizedBox(height: 8),
+        if (typeIds.length > 1) ...[
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(loc.t('ทั้งหมด')),
+                    selected: _typeFilter == null,
+                    onSelected: (_) => setState(() => _typeFilter = null),
+                  ),
+                ),
+                for (final id in typeIds)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(typeNames[id]!),
+                      selected: _typeFilter == id,
+                      onSelected: (_) => setState(() => _typeFilter = id),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (boxes.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+            child: Text(loc.t('ไม่มีกล่องประเภทนี้ที่คลังนี้'),
+                style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: C.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: C.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(boxes.length, (i) {
+                final b = boxes[i];
+                return InkWell(
+                  onTap: () => _pickFromList(b),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: i == boxes.length - 1
+                          ? null
+                          : Border(bottom: BorderSide(color: C.border)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.inventory_2_outlined,
+                            size: 18, color: C.muted),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(b.tag,
+                                  style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'monospace')),
+                              Text(c.S!.typeName(b.type),
+                                  style:
+                                      TextStyle(fontSize: 12, color: C.muted)),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 18, color: C.faint),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+    ];
+  }
 
   List<Widget> _confirmBody(AppController c, LocaleController loc) {
     final b = _box;
