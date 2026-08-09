@@ -447,4 +447,73 @@ boxesRouter.delete(
   }),
 );
 
+const holdSchema = z.object({
+  // 'warehouse' is release — the box goes back to being pickable. Kept as
+  // one endpoint/one verb rather than a separate /release route, because
+  // hold/damage/release are really one PDA screen (a status toggle with a
+  // reason), not three different actions.
+  status: z.enum(['hold', 'damage', 'warehouse']),
+  reason: z.string().trim().max(500).optional().default(''),
+});
+
+/**
+ * Sets or clears hold/damage on a box that's already in the warehouse —
+ * the PDA counterpart to a box found damaged on a shelf, or one that needs
+ * pulling from pick eligibility for QC, *after* it already cleared Gate In.
+ * Gate In's own condition flags (see ApiClient.gateIn's `conditions`) and
+ * DamagedBoxScreen's offline flag flow cover the same statuses at other
+ * moments; this is the one that applies mid-shift to a box that's already
+ * on a shelf, with an immediate (online-only) write and a reason attached.
+ *
+ * Deliberately narrow about which boxes this applies to: 'out' (already
+ * shipped) and 'pending'/'lost' boxes aren't sitting on a shelf for an
+ * operator to have found a problem with, so holding them here wouldn't mean
+ * anything a person standing in the warehouse could have observed. Only
+ * 'warehouse'/'hold'/'damage' — i.e. a box physically on hand — can move
+ * between those three.
+ */
+boxesRouter.post(
+  '/:tag/hold',
+  canWrite,
+  asyncHandler(async (req, res) => {
+    const input = holdSchema.parse(req.body);
+    const db = getDb();
+    const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
+    if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
+    if (!['warehouse', 'hold', 'damage'].includes(box.status)) {
+      throw httpError(
+        409,
+        `กล่อง ${box.tag} สถานะ "${box.status}" ไม่สามารถพัก/แจ้งชำรุดได้ — ต้องอยู่ในคลังเท่านั้น`,
+        'box_not_in_warehouse',
+      );
+    }
+    if (box.status === input.status) {
+      throw httpError(409, `กล่อง ${box.tag} อยู่ในสถานะนี้อยู่แล้ว`, 'status_unchanged');
+    }
+
+    const ts = new Date();
+    const dir = input.status === 'warehouse' ? 'release' : input.status; // 'hold' | 'damage' | 'release'
+    const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
+    const history = [
+      ...prevHistory,
+      { dir, ts: ts.toISOString(), reason: input.reason, recorder: req.user!.username },
+    ];
+    const data = { ...(box.data as Record<string, unknown>), status: input.status, history };
+    await db
+      .update(boxes)
+      .set({ status: input.status, history, data, updatedAt: ts })
+      .where(eq(boxes.tag, req.params.tag));
+    await writeAuditLog(db, {
+      action: dir === 'release' ? 'ปลดพัก' : dir === 'hold' ? 'พักสินค้า' : 'แจ้งชำรุด',
+      actor: req.user!.username,
+      itemId: box.tag,
+      itemName: box.tag,
+      before: { status: box.status },
+      after: { status: input.status, reason: input.reason },
+    });
+    bump(req.get('X-Client-Id'));
+    res.json(data);
+  }),
+);
+
 export default boxesRouter;

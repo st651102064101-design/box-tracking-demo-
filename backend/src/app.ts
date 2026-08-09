@@ -14,6 +14,7 @@ import { rfidRouter } from './routes/rfid.js';
 import { mastersRouter } from './routes/masters.js';
 import { employeePinRouter } from './routes/pin.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
+import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
@@ -111,6 +112,7 @@ export function createApp() {
   app.use('/api/masters', apiLimiter, requireApiKey, mastersRouter);
   app.use('/api/employees', apiLimiter, requireApiKey, employeePinRouter);
   app.use('/api/cycle-counts', apiLimiter, requireApiKey, cycleCountsRouter);
+  app.use('/api/reports', apiLimiter, requireApiKey, reportsRouter);
   app.use('/api/stream', streamRouter);
 
   app.use(notFound);
