@@ -20,6 +20,27 @@ async function warehouseOfGate(db: DB, gate: number): Promise<string> {
   return row?.warehouseId ?? '';
 }
 
+/**
+ * Best-effort "which warehouse does this box currently belong to" — the
+ * typed `location.wh` column when it has one (shelved), otherwise the `wh`
+ * off the box's most recent inbound history entry. A box received in "รอ
+ * Putaway" (deferred) mode reaches `status: 'warehouse'` without ever
+ * getting a location stamped (see gateIn below), so `location.wh` alone
+ * under-reports which boxes are actually this warehouse's. Empty string
+ * means genuinely unknown — callers must treat that as "don't know, don't
+ * block", not as a mismatch.
+ */
+function currentWhOf(row: typeof boxes.$inferSelect): string {
+  const locWh = (row.location as Record<string, unknown> | null)?.wh;
+  if (typeof locWh === 'string' && locWh) return locWh;
+  const history = Array.isArray(row.history) ? (row.history as Record<string, unknown>[]) : [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if ((h.dir === 'in' || h.dir === 'in-new') && typeof h.wh === 'string' && h.wh) return h.wh;
+  }
+  return '';
+}
+
 /** Who performed a scan, as recorded on every box's history and event row. */
 interface Operator {
   employeeId: string;
@@ -116,6 +137,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
   // damaged box legitimately leaves — the destination has to be a supplier,
   // not an ordinary customer, or "damage" would stop meaning anything.
   const custKind = ((cust.data as Record<string, unknown> | null)?.kind as string | undefined) ?? 'customer';
+  const wh = await warehouseOfGate(db, gate);
   const blocked = canonicalTags
     .map((tag) => ({ tag, status: found.get(tag)!.status }))
     .filter((b) => b.status !== 'warehouse' && !(b.status === 'damage' && custKind === 'supplier'));
@@ -123,8 +145,22 @@ export async function gateOut(db: DB, input: GateOutInput) {
     const detail = blocked.map((b) => `${b.tag} (${NOT_SHIPPABLE[b.status] ?? b.status})`).join(', ');
     throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
   }
-
-  const wh = await warehouseOfGate(db, gate);
+  // A box actually sitting in warehouse-A's inventory can't ship from
+  // warehouse-B's gate — same "this device belongs to one warehouse" rule
+  // the PDA enforces client-side, repeated here since a physical reader or
+  // other integration can call this endpoint with no PDA in front of it at
+  // all. currentWhOf empty means genuinely unknown — fail open, not closed,
+  // on that data gap rather than block a legitimate shipment.
+  const wrongWh = canonicalTags
+    .map((tag) => ({ tag, row: found.get(tag)! }))
+    .filter((b) => {
+      const cwh = currentWhOf(b.row);
+      return cwh !== '' && cwh !== wh;
+    });
+  if (wrongWh.length) {
+    const detail = wrongWh.map((b) => `${b.tag} (${currentWhOf(b.row)})`).join(', ');
+    throw httpError(409, `จ่ายออกไม่ได้ — ไม่ใช่กล่องของคลังนี้: ${detail}`, 'box_wrong_warehouse');
+  }
   const returnDays = cust.returnDays ?? cfg?.agingDays ?? 15;
   const outTs = iso();
   const dueTs = new Date(Date.now() + returnDays * DAY).toISOString();
@@ -272,6 +308,20 @@ export async function gateIn(db: DB, input: GateInInput) {
   if (alreadyIn.length) {
     const detail = alreadyIn.map((row) => `${row.tag} (อยู่ในคลังอยู่แล้ว)`).join(', ');
     throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
+  }
+
+  // A box shipped out from warehouse-A has to come back to warehouse-A —
+  // this gate belongs to `wh`, and outWh disagreeing almost certainly means
+  // a mis-scan or the wrong gate, not a legitimate inter-warehouse transfer
+  // (this app has no such flow). A box that's never shipped (pending/new
+  // from a supplier, no outWh yet) is unrestricted — its first warehouse is
+  // whichever gate receives it first.
+  const wrongWh = canonicalTags
+    .map((tag) => found.get(tag)!)
+    .filter((row) => row.status === 'out' && row.outWh && row.outWh !== wh);
+  if (wrongWh.length) {
+    const detail = wrongWh.map((row) => `${row.tag} (ออกจากคลัง ${row.outWh})`).join(', ');
+    throw httpError(409, `รับเข้าไม่ได้ — ต้องคืนที่คลังเดิม: ${detail}`, 'box_wrong_warehouse');
   }
 
   await db.transaction(async (tx) => {
