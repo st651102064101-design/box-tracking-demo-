@@ -22,6 +22,26 @@ class Box {
       ? Map<String, dynamic>.from(raw['location'])
       : const {};
 
+  /// The warehouse this box currently belongs to, best-effort. `location.wh`
+  /// when it has one (shelved), otherwise the `wh` off its most recent
+  /// inbound history entry — a box received in "รอ Putaway" (deferred)
+  /// mode reaches `status == 'warehouse'` without ever getting a location
+  /// stamped, so `location['wh']` alone under-reports which boxes are
+  /// actually this warehouse's. Empty string means genuinely unknown (never
+  /// received at all), not "warehouse ''" — callers should treat that as
+  /// "don't know, don't block" rather than a mismatch.
+  String get currentWh {
+    final locWh = location['wh']?.toString();
+    if (locWh != null && locWh.isNotEmpty) return locWh;
+    for (final h in history.reversed) {
+      if (h['dir'] == 'in' || h['dir'] == 'in-new') {
+        final w = h['wh']?.toString();
+        if (w != null && w.isNotEmpty) return w;
+      }
+    }
+    return '';
+  }
+
   List<Map<String, dynamic>> get history {
     final h = raw['history'];
     if (h is List) {

@@ -359,6 +359,76 @@ void main() {
     });
   });
 
+  group('addScan — warehouse ownership', () {
+    test('gate out refuses a warehouse box that belongs to another warehouse',
+        () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = {
+        ...box('CRT-01', 'warehouse'),
+        'location': {'wh': 'WH-2', 'zone': 'A', 'rack': '1'},
+      };
+      state['warehouses']['WH-2'] = {
+        'id': 'WH-2',
+        'name': 'คลัง 2',
+        'gates': [9],
+        'gateTypes': {'9': 'both'},
+      };
+      api.state = state;
+      final c = await makeController(api); // stationed at WH-1
+      c.mode = 'out';
+      c.addScan('CRT-01');
+      expect(c.queue, isEmpty);
+      expect(c.lastResult!.kind, ResultKind.err);
+      expect(c.lastResult!.msg, contains('ไม่ใช่ของคลังนี้'));
+      expect(c.lastResult!.msg, contains('คลัง 2'));
+    });
+
+    test(
+        'gate out accepts a warehouse box with no location yet (รอ Putaway), falling back to its receiving warehouse',
+        () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] = {
+        ...box('CRT-01', 'warehouse'),
+        'history': [
+          {'dir': 'in-new', 'wh': 'WH-1', 'ts': '2026-01-01T00:00:00.000Z'}
+        ],
+        // location deliberately absent — deferred-putaway boxes never get one.
+      };
+      api.state = state;
+      final c = await makeController(api); // stationed at WH-1
+      c.mode = 'out';
+      c.addScan('CRT-01');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    test('gate in refuses a returning box that shipped from another warehouse',
+        () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-02'] = {
+        ...box('CRT-02', 'out'),
+        'outWh': 'WH-2',
+      };
+      api.state = state;
+      final c = await makeController(api); // stationed at WH-1
+      c.mode = 'in';
+      c.addScan('CRT-02');
+      expect(c.queue, isEmpty);
+      expect(c.lastResult!.kind, ResultKind.err);
+      expect(c.lastResult!.msg, contains('ต้องคืนที่คลังเดิม'));
+    });
+
+    test('gate in accepts a brand-new box from a supplier regardless of warehouse',
+        () async {
+      final c = await makeController(FakeApi()); // CRT-03 is 'pending', no outWh
+      c.mode = 'in';
+      c.addScan('CRT-03');
+      expect(c.queue, ['CRT-03']);
+    });
+  });
+
   group('addScan — tag resolution & queue', () {
     test('unknown tag is rejected', () async {
       final c = await makeController(FakeApi());
