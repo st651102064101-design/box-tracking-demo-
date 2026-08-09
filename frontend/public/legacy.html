@@ -8454,7 +8454,7 @@ function openSlotPutawayModal(code){
         +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'
         +'<div><b>'+esc(whName(loc.wh))+'</b>'+(locLabel?' · '+esc(locLabel):'')+'<div class="small" style="margin-top:2px;">'+esc(occLabel)+'</div></div>'
       +'</div>'
-      +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:280px;">'
+      +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:460px;">'
         +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>ป้ายตำแหน่งนี้ — สำหรับพิมพ์ติดหน้างาน</div>'
         +'<div class="rfid-fin-wrap"><div class="finlabel" style="padding:12px 14px 8px;">'
           +'<div class="fl-head"><div><div class="fl-brand" style="font-size:15px;">LOCATION</div></div>'
@@ -8462,7 +8462,11 @@ function openSlotPutawayModal(code){
           +'</div>'
           +'<div style="text-align:center;font-weight:800;font-size:30px;letter-spacing:.03em;margin:4px 0 2px;color:#000;">'+esc(code)+'</div>'
           +'<div class="fl-div" style="margin:8px 0 10px;"></div>'
-          +'<div class="fl-bc">'+code128SVG(code,64)+'</div>'
+          // Was capped to a 280px card (barcode ~250px wide) — too narrow for
+          // a handheld scanner's imager to resolve the bar widths reliably at
+          // arm's length. Widened the card and made the bars themselves
+          // taller so the same physical label prints and scans cleanly.
+          +'<div class="fl-bc">'+code128SVG(code,88)+'</div>'
         +'</div></div>'
       +'</div>'
       +'<div class="row" style="justify-content:center;gap:8px;margin:0 0 16px;">'
