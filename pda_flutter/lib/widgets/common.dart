@@ -18,7 +18,10 @@ class BrandMark extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text('◈',
-          style: TextStyle(color: C.lime, fontSize: size * 0.5, fontWeight: FontWeight.w800)),
+          style: TextStyle(
+              color: C.lime,
+              fontSize: size * 0.5,
+              fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -31,7 +34,11 @@ class Wordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text.rich(
       TextSpan(
-        style: TextStyle(fontSize: size, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: C.ink),
+        style: TextStyle(
+            fontSize: size,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+            color: C.ink),
         children: [
           TextSpan(text: 'BoxTrace '),
           TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),
@@ -79,7 +86,8 @@ class PrimaryButton extends StatelessWidget {
   final VoidCallback? onTap;
   final Widget? trailing;
   final IconData? icon;
-  const PrimaryButton({super.key, required this.label, this.onTap, this.trailing, this.icon});
+  const PrimaryButton(
+      {super.key, required this.label, this.onTap, this.trailing, this.icon});
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
@@ -97,7 +105,12 @@ class PrimaryButton extends StatelessWidget {
             decoration: enabled
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: C.lime.withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 8))],
+                    boxShadow: [
+                      BoxShadow(
+                          color: C.lime.withOpacity(0.4),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8))
+                    ],
                   )
                 : null,
             child: Row(
@@ -109,7 +122,9 @@ class PrimaryButton extends StatelessWidget {
                 ],
                 Text(label,
                     style: TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700, color: enabled ? C.limeDeep : C.faint)),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: enabled ? C.limeDeep : C.faint)),
                 if (trailing != null) ...[const SizedBox(width: 10), trailing!],
               ],
             ),
@@ -152,7 +167,8 @@ class RoundIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final double size;
-  const RoundIconButton({super.key, required this.icon, this.onTap, this.size = 36});
+  const RoundIconButton(
+      {super.key, required this.icon, this.onTap, this.size = 36});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -161,7 +177,10 @@ class RoundIconButton extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: SizedBox(width: size, height: size, child: Icon(icon, size: size * 0.53, color: C.ink)),
+        child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, size: size * 0.53, color: C.ink)),
       ),
     );
   }
@@ -173,13 +192,17 @@ class Pill extends StatelessWidget {
   final Color color;
   final Color bg;
   final double fontSize;
-  const Pill(this.text, {super.key, required this.color, required this.bg, this.fontSize = 11});
+  const Pill(this.text,
+      {super.key, required this.color, required this.bg, this.fontSize = 11});
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: fontSize * 0.8, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w700, color: color)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: fontSize, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }
@@ -190,7 +213,12 @@ class StickyHeader extends StatelessWidget {
   final Widget title;
   final Widget? subtitle;
   final List<Widget> actions;
-  const StickyHeader({super.key, this.onBack, required this.title, this.subtitle, this.actions = const []});
+  const StickyHeader(
+      {super.key,
+      this.onBack,
+      required this.title,
+      this.subtitle,
+      this.actions = const []});
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
@@ -215,12 +243,19 @@ class StickyHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DefaultTextStyle(
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: C.ink),
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                      color: C.ink),
                   child: title,
                 ),
                 if (subtitle != null)
                   DefaultTextStyle(
-                    style: TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w400),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: C.muted,
+                        fontWeight: FontWeight.w400),
                     child: subtitle!,
                   ),
               ],
@@ -277,7 +312,9 @@ class _AutoHideHeaderState extends State<AutoHideHeader> {
       // (e.g. a jump-to-top tap), was the one case that felt broken to hide.
       final show = delta < 0 || n.metrics.pixels <= 0;
       if (show != _visible) setState(() => _visible = show);
-    } else if (n is ScrollEndNotification && n.metrics.pixels <= 0 && !_visible) {
+    } else if (n is ScrollEndNotification &&
+        n.metrics.pixels <= 0 &&
+        !_visible) {
       setState(() => _visible = true);
     }
     return false;
@@ -295,7 +332,9 @@ class _AutoHideHeaderState extends State<AutoHideHeader> {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
               opacity: _visible ? 1 : 0,
-              child: _visible ? widget.header : const SizedBox(width: double.infinity, height: 0),
+              child: _visible
+                  ? widget.header
+                  : const SizedBox(width: double.infinity, height: 0),
             ),
           ),
         ),
@@ -357,7 +396,9 @@ class FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600, color: C.ink3)),
       );
 }
 
@@ -391,6 +432,109 @@ class Caption extends StatelessWidget {
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
         style: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.5),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: C.muted,
+            letterSpacing: 0.5),
       );
+}
+
+/// A dropdown for one location field (zone/rack/shelf/slot) that also lets
+/// the operator type a brand-new value inline via an "+ เพิ่มใหม่" entry —
+/// selecting it opens a small text prompt, and the typed value becomes both
+/// the new dropdown option and the current selection. An empty selection
+/// ("— ไม่ระบุ —") is always available since every one of these fields is
+/// optional on the backend.
+class LocationDropdown extends StatelessWidget {
+  final String label;
+  final List<String> options;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final LocaleController loc;
+  final bool dense;
+  const LocationDropdown({
+    super.key,
+    required this.label,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+    required this.loc,
+    this.dense = false,
+  });
+
+  static const _addNew = ' __add_new__';
+  static const _empty = '';
+
+  Future<void> _promptNew(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${loc.t('เพิ่ม')} $label'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(hintText: label),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(loc.t('ยกเลิก'))),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: Text(loc.t('เพิ่ม'))),
+        ],
+      ),
+    );
+    if (result != null && result.isNotEmpty) onChanged(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <String>{...options, if (value.isNotEmpty) value}.toList()
+      ..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FieldLabel(label),
+        DropdownButtonFormField<String>(
+          initialValue: value.isEmpty ? _empty : value,
+          isExpanded: true,
+          isDense: dense,
+          decoration: pdaInput('— ${loc.t('ไม่ระบุ')} —', radius: 12),
+          items: [
+            DropdownMenuItem(
+                value: _empty,
+                child: Text('— ${loc.t('ไม่ระบุ')} —',
+                    style: TextStyle(color: C.faint))),
+            ...items.map((v) => DropdownMenuItem(
+                value: v, child: Text(v, overflow: TextOverflow.ellipsis))),
+            DropdownMenuItem(
+              value: _addNew,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 16, color: C.limeText),
+                  const SizedBox(width: 4),
+                  Text(loc.t('เพิ่มใหม่'),
+                      style: TextStyle(
+                          color: C.limeText, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            if (v == _addNew) {
+              _promptNew(context);
+              return;
+            }
+            onChanged(v);
+          },
+        ),
+      ],
+    );
+  }
 }

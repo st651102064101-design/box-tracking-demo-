@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
 import '../models/box.dart';
 import '../models/employee.dart';
@@ -38,6 +39,10 @@ enum Screen {
 /// a screen-local toggle that this dispatcher never saw was exactly how a
 /// "barcode mode" selection still silently started RFID reads and beeped.
 enum ScanInputMode { barcode, rfid }
+
+/// The three choices at Gate In for where a received batch ends up — see
+/// AppController.receiveLocationMode.
+enum ReceiveLocationMode { auto, manual, defer }
 
 enum ResultKind { ok, err, warn, info }
 
@@ -162,6 +167,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
     notifyListeners();
   }
+
   String scanVal = '';
   ScanResult? lastResult;
 
@@ -179,6 +185,98 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   String inVehicleType = '';
   String inVehicleTypeOther = '';
 
+  // ── รับเข้า: where the batch lands ──────────────────────────────────────
+  /// Which of the three choices the operator picked for this Gate In batch.
+  /// [defer] (leave in the pending-putaway holding pattern) is the default —
+  /// it's the exact behavior every Gate In had before this existed, so a
+  /// terminal an operator never touches this on still works unchanged.
+  ReceiveLocationMode receiveLocationMode = ReceiveLocationMode.defer;
+  String receiveZone = '';
+  String receiveRack = '';
+  String receiveShelf = '';
+  String receiveSlot = '';
+  Map<String, String>? _suggestedLocation;
+  Map<String, String>? get suggestedLocation => _suggestedLocation;
+  bool suggestingLocation = false;
+
+  void setReceiveLocationMode(ReceiveLocationMode m) {
+    receiveLocationMode = m;
+    notifyListeners();
+    if (m == ReceiveLocationMode.auto) _fetchSuggestedLocation();
+  }
+
+  /// Re-asks the server for an empty shelf — called whenever "ตามที่ระบบ
+  /// แนะนำ" is picked, and again after a commit so the next batch doesn't
+  /// see a shelf that was just filled by the one before it.
+  Future<void> _fetchSuggestedLocation() async {
+    suggestingLocation = true;
+    notifyListeners();
+    try {
+      _suggestedLocation = await api.suggestLocation(wh);
+    } catch (_) {
+      _suggestedLocation = null;
+    } finally {
+      suggestingLocation = false;
+      notifyListeners();
+    }
+  }
+
+  void setReceiveZone(String v) {
+    receiveZone = v;
+    receiveRack = '';
+    receiveShelf = '';
+    receiveSlot = '';
+    notifyListeners();
+  }
+
+  void setReceiveRack(String v) {
+    receiveRack = v;
+    receiveShelf = '';
+    receiveSlot = '';
+    notifyListeners();
+  }
+
+  void setReceiveShelf(String v) {
+    receiveShelf = v;
+    notifyListeners();
+  }
+
+  void setReceiveSlot(String v) {
+    receiveSlot = v;
+    notifyListeners();
+  }
+
+  void _clearReceiveLocation() {
+    receiveLocationMode = ReceiveLocationMode.defer;
+    receiveZone = '';
+    receiveRack = '';
+    receiveShelf = '';
+    receiveSlot = '';
+    _suggestedLocation = null;
+  }
+
+  /// What actually gets sent to gateIn — null means "รอ Putaway" (the
+  /// pending-putaway holding pattern), same as omitting the field entirely.
+  /// [auto] silently falls back to that same null when the server had
+  /// nothing to suggest (no master locations defined, or every one taken)
+  /// rather than blocking the commit over it — a batch that can't get an
+  /// auto-suggested shelf still has to be receivable.
+  Map<String, String>? get _effectiveReceiveLocation {
+    switch (receiveLocationMode) {
+      case ReceiveLocationMode.defer:
+        return null;
+      case ReceiveLocationMode.auto:
+        return _suggestedLocation;
+      case ReceiveLocationMode.manual:
+        return {
+          'zone': receiveZone,
+          'rack': receiveRack,
+          'shelf': receiveShelf,
+          'slot': receiveSlot
+        };
+    }
+  }
+
   // ── connectivity / offline ──────────────────────────────────────────────
   bool online = true;
   final List<OutboxTx> outbox = [];
@@ -187,12 +285,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   String trackVal = '';
   String trackTag = '';
   bool trackTried = false;
+
   /// Distinct tags found while sweeping in RFID mode on TrackScreen, in the
   /// order first seen. A held trigger reads the same tag dozens of times a
   /// second — only the first read of each tag lands here (see
   /// _onReaderTag's Screen.track case), which is what makes "5 tags in the
   /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
   final List<String> trackRfidHits = [];
+
   /// Same idea as [trackRfidHits] but for barcode mode: every distinct box a
   /// scan (or a completed typed code) has resolved to, in the order found.
   /// Without this, a keyboard-wedge scanner that doesn't clear the field
@@ -229,7 +329,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
     outbox
       ..clear()
-      ..addAll(prefs.outbox.map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
+      ..addAll(prefs.outbox
+          .map((e) => OutboxTx.fromJson(Map<String, dynamic>.from(e))));
 
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
@@ -416,7 +517,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         s.contains('Failed host lookup')) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่าเครื่องนี้อยู่ในเครือข่าย/Wi-Fi เดียวกับเซิร์ฟเวอร์ และ Base URL ในหน้าตั้งค่าถูกต้อง';
     }
-    if (e is TimeoutException) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
+    if (e is TimeoutException)
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
     final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
     return m == null ? s : s.substring(m.end);
   }
@@ -442,8 +544,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   // ═══════════════════════ helpers (mirror desktop) ════════════════════════
   String pad(int n, [int w = 4]) => n.toString().padLeft(w, '0');
   String _dstr(DateTime d) => '${d.year}-${pad(d.month, 2)}-${pad(d.day, 2)}';
-  String _hms(DateTime d) => '${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}';
-  String genDocNo(String p) => '$p-${_dstr(DateTime.now())}-${_hms(DateTime.now())}';
+  String _hms(DateTime d) =>
+      '${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}';
+  String genDocNo(String p) =>
+      '$p-${_dstr(DateTime.now())}-${_hms(DateTime.now())}';
 
   String fmtTs(String? s) {
     if (s == null || s.isEmpty) return '-';
@@ -457,10 +561,41 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   // Thai-keyboard → Latin fallback (physical scanners sometimes emit Thai)
   static const _thaiMap = {
-    'ๅ': '1', '/': '2', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
-    'ๆ': 'q', 'ไ': 'w', 'ำ': 'e', 'พ': 'r', 'ะ': 't', 'ั': 'y', 'ี': 'u', 'ร': 'i', 'น': 'o', 'ย': 'p',
-    'ฟ': 'a', 'ห': 's', 'ก': 'd', 'ด': 'f', 'เ': 'g', '้': 'h', '่': 'j', 'า': 'k', 'ส': 'l',
-    'ผ': 'z', 'ป': 'x', 'แ': 'c', 'อ': 'v', 'ิ': 'b', 'ื': 'n', 'ท': 'm',
+    'ๅ': '1',
+    '/': '2',
+    'ภ': '4',
+    'ถ': '5',
+    'ุ': '6',
+    'ึ': '7',
+    'ค': '8',
+    'ต': '9',
+    'จ': '0',
+    'ๆ': 'q',
+    'ไ': 'w',
+    'ำ': 'e',
+    'พ': 'r',
+    'ะ': 't',
+    'ั': 'y',
+    'ี': 'u',
+    'ร': 'i',
+    'น': 'o',
+    'ย': 'p',
+    'ฟ': 'a',
+    'ห': 's',
+    'ก': 'd',
+    'ด': 'f',
+    'เ': 'g',
+    '้': 'h',
+    '่': 'j',
+    'า': 'k',
+    'ส': 'l',
+    'ผ': 'z',
+    'ป': 'x',
+    'แ': 'c',
+    'อ': 'v',
+    'ิ': 'b',
+    'ื': 'n',
+    'ท': 'm',
   };
   String _dethaify(String t) {
     final sb = StringBuffer();
@@ -495,7 +630,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ═══════════════════════ toast ═══════════════════════════════════════════
-  void toastMsg(String title, [String sub = '', ResultKind kind = ResultKind.ok]) {
+  void toastMsg(String title,
+      [String sub = '', ResultKind kind = ResultKind.ok]) {
     _toastTimer?.cancel();
     toast = Toast(title, sub, kind);
     notifyListeners();
@@ -550,7 +686,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (screen == Screen.deviceSetup && !deviceConfigured) return;
-    if (screen == Screen.home || screen == Screen.login || screen == Screen.boot) return;
+    if (screen == Screen.home ||
+        screen == Screen.login ||
+        screen == Screen.boot) return;
     backToHome();
   }
 
@@ -606,7 +744,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
-    if (!e.active) return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
+    if (!e.active)
+      return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
     emp = e;
     prefs.lastEmpId = e.id;
     _resetPost();
@@ -634,7 +773,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Badge read from the UI or the reader: identifies, or explains why not.
   void badgeScanned(String code) {
     final err = identifyByScanCode(code);
-    if (err != null) toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
+    if (err != null)
+      toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
   }
 
   /// Ends the current operator's session and returns to the badge screen. The
@@ -782,7 +922,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (canConfigureDevice) {
       goDeviceSetup();
     } else {
-      toastMsg('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', connError ?? 'แจ้งหัวหน้างานเพื่อตรวจสอบการตั้งค่าเครื่อง', ResultKind.err);
+      toastMsg(
+          'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้',
+          connError ?? 'แจ้งหัวหน้างานเพื่อตรวจสอบการตั้งค่าเครื่อง',
+          ResultKind.err);
     }
   }
 
@@ -811,7 +954,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   // ═══════════════════════ scanning ════════════════════════════════════════
   void setMode(String m) {
     if (!canScan) {
-      toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว', ResultKind.warn);
+      toastMsg('ไม่มีสิทธิ์บันทึก', 'บัญชีนี้ดูข้อมูลได้อย่างเดียว',
+          ResultKind.warn);
       return;
     }
     mode = m;
@@ -855,9 +999,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// screen that hasn't fetched fresh employee data yet, or an employee who
   /// has only ever worked this one PDA.
   bool get hasLastSelection => lastWh.isNotEmpty && lastGate.isNotEmpty;
-  String get lastWh => emp?.lastWh.isNotEmpty == true ? emp!.lastWh : prefs.lastWh;
+  String get lastWh =>
+      emp?.lastWh.isNotEmpty == true ? emp!.lastWh : prefs.lastWh;
   String get lastWhName => S?.whName(lastWh) ?? lastWh;
-  String get lastGate => emp?.lastGate.isNotEmpty == true ? emp!.lastGate : prefs.lastGate;
+  String get lastGate =>
+      emp?.lastGate.isNotEmpty == true ? emp!.lastGate : prefs.lastGate;
 
   /// ยืนยันคลัง/ประตูล่าสุดในคลิกเดียว ข้ามหน้าเลือกคลัง/ประตูทั้งหมด — ใช้ได้ก็ต่อเมื่อ
   /// คลังและประตูนั้นยังมีอยู่จริงตอนนี้ (กันกรณีถูกลบ/ย้ายไปหลังจากบันทึกไว้)
@@ -865,12 +1011,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final w = lastWh, g = lastGate;
     if (w.isEmpty || g.isEmpty) return;
     if (!warehouseList.any((x) => (x['id'] ?? '').toString() == w)) {
-      toastMsg('ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      toastMsg(
+          'ไม่พบคลังเดิม', 'คลังนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
     final gi = int.tryParse(g);
     if (gi == null || !(S?.gatesOf(w) ?? const []).contains(gi)) {
-      toastMsg('ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
+      toastMsg(
+          'ไม่พบประตูเดิม', 'ประตูนี้อาจถูกลบหรือย้ายไปแล้ว', ResultKind.warn);
       return;
     }
     confirmPost(w, gi);
@@ -964,7 +1112,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
-      lastResult = const ScanResult(ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
+      lastResult = const ScanResult(
+          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
       notifyListeners();
       return;
     }
@@ -1070,14 +1219,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final s = S;
     if (s == null) return [];
     final want = m == 'in' ? 'out' : 'warehouse';
-    return s.boxes.where((b) => b.status == want && !queue.contains(b.tag)).toList();
+    return s.boxes
+        .where((b) => b.status == want && !queue.contains(b.tag))
+        .toList();
   }
 
   /// Dev/testing helpers (kept from the mockup): simulate reads without hardware.
   void simOne() {
     final e = _eligible(mode);
     if (e.isEmpty) {
-      toastMsg('ไม่มีกล่องให้จำลอง', mode == 'in' ? 'ไม่มีกล่องที่ออกอยู่' : 'ไม่มีกล่องพร้อมจ่าย', ResultKind.warn);
+      toastMsg(
+          'ไม่มีกล่องให้จำลอง',
+          mode == 'in' ? 'ไม่มีกล่องที่ออกอยู่' : 'ไม่มีกล่องพร้อมจ่าย',
+          ResultKind.warn);
       return;
     }
     addScan(e[_rnd.nextInt(e.length)].tag);
@@ -1195,10 +1349,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       toastMsg('ซิงก์สำเร็จ', '$done รายการเข้าสู่ระบบแล้ว', ResultKind.ok);
     }
     if (rejectedCount > 0) {
-      toastMsg('ตัดรายการที่ระบบปฏิเสธ', '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
+      toastMsg('ตัดรายการที่ระบบปฏิเสธ',
+          '$rejectedCount รายการ · ${rejectedReason ?? ''}', ResultKind.err);
     }
     if (failed.isNotEmpty) {
-      toastMsg('ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
+      toastMsg(
+          'ซิงก์ไม่ครบ', '${failed.length} รายการยังค้าง', ResultKind.warn);
     }
     notifyListeners();
   }
@@ -1214,6 +1370,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         driver: tx.driver,
         vehicleType: tx.vehicleType,
         conditions: tx.conditions,
+        location: tx.location,
       );
     }
     return api.gateOut(
@@ -1244,25 +1401,27 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       toastMsg('เลือกลูกค้าปลายทางก่อน', '', ResultKind.warn);
       return;
     }
-    // ทะเบียนรถ is mandatory only on the way out — the server's gateInSchema
-    // already takes it as optional (see backend/src/validators/schemas.ts),
-    // this just stopped matching that on the Gate In side of the app.
-    if (mode == 'out' && outPlate.trim().isEmpty) {
-      toastMsg('กรอกทะเบียนรถก่อน', 'จำเป็นต้องกรอก', ResultKind.warn);
-      return;
-    }
+    // ทะเบียนรถ is optional on both directions — the server's own schemas
+    // already treat it that way (see backend/src/validators/schemas.ts), and
+    // ScanScreen's "ถัดไป" no longer blocks on it either; this used to be
+    // the one place that still silently disagreed with both.
     final vtypeOther = mode == 'in' ? inVehicleTypeOther : outVehicleTypeOther;
-    if ((mode == 'in' ? inVehicleType : outVehicleType) == 'อื่นๆ' && vtypeOther.trim().isEmpty) {
-      toastMsg('ระบุประเภทรถ', 'กรอกว่า "อื่นๆ" คือรถประเภทใด', ResultKind.warn);
+    if ((mode == 'in' ? inVehicleType : outVehicleType) == 'อื่นๆ' &&
+        vtypeOther.trim().isEmpty) {
+      toastMsg(
+          'ระบุประเภทรถ', 'กรอกว่า "อื่นๆ" คือรถประเภทใด', ResultKind.warn);
       return;
     }
-    final effInVType = inVehicleType == 'อื่นๆ' && inVehicleTypeOther.trim().isNotEmpty
-        ? 'อื่นๆ: ${inVehicleTypeOther.trim()}'
-        : inVehicleType;
-    final effOutVType = outVehicleType == 'อื่นๆ' && outVehicleTypeOther.trim().isNotEmpty
-        ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
-        : outVehicleType;
+    final effInVType =
+        inVehicleType == 'อื่นๆ' && inVehicleTypeOther.trim().isNotEmpty
+            ? 'อื่นๆ: ${inVehicleTypeOther.trim()}'
+            : inVehicleType;
+    final effOutVType =
+        outVehicleType == 'อื่นๆ' && outVehicleTypeOther.trim().isNotEmpty
+            ? 'อื่นๆ: ${outVehicleTypeOther.trim()}'
+            : outVehicleType;
 
+    final receiveLocation = mode == 'in' ? _effectiveReceiveLocation : null;
     final tx = mode == 'in'
         ? OutboxTx(
             type: 'in',
@@ -1277,6 +1436,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             driver: inDriver,
             vehicleType: effInVType,
             conditions: Map.of(queueConditions),
+            location: receiveLocation,
           )
         : OutboxTx(
             type: 'out',
@@ -1306,7 +1466,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       outbox.add(tx);
       _saveOutbox();
       _resetAfterCommit();
-      toastMsg('บันทึกออฟไลน์', '${tx.tags.length} ใบ · รอ sync', ResultKind.info);
+      toastMsg(
+          'บันทึกออฟไลน์', '${tx.tags.length} ใบ · รอ sync', ResultKind.info);
       return;
     }
 
@@ -1323,6 +1484,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           driver: inDriver,
           vehicleType: effInVType,
           conditions: queueConditions,
+          location: receiveLocation,
         );
       } else {
         await api.gateOut(
@@ -1343,7 +1505,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       if (mode == 'in') {
         toastMsg('รับเข้าสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
       } else {
-        toastMsg('ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
+        toastMsg(
+            'ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
       }
     } on ApiException catch (e) {
       toastMsg('บันทึกไม่สำเร็จ', e.message, ResultKind.err);
@@ -1369,6 +1532,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     inDriver = '';
     inVehicleType = '';
     inVehicleTypeOther = '';
+    _clearReceiveLocation();
   }
 
   void _resetAfterCommit() {
@@ -1451,7 +1615,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // No cap — a search for a short/common substring can genuinely match a
     // hundred boxes, and the grid this feeds (see TrackScreen._suggestions)
     // is built to show all of them rather than silently truncating to 20.
-    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()..sort();
+    return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()
+      ..sort();
   }
 
   void selectTrackSuggestion(String tag) {
@@ -1479,7 +1644,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     String? password,
   }) async {
     prefs.baseUrl = baseUrl.trim();
-    if (username != null && username.trim().isNotEmpty) prefs.username = username.trim();
+    if (username != null && username.trim().isNotEmpty)
+      prefs.username = username.trim();
     if (password != null && password.isNotEmpty) prefs.password = password;
     prefs.token = null;
     api
@@ -1491,7 +1657,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     await _ensureAuthAndState();
     busy = false;
     if (connError == null) {
-      toastMsg('เชื่อมต่อสำเร็จ', S == null ? '' : 'พบ ${S!.boxCount} กล่อง', ResultKind.ok);
+      toastMsg('เชื่อมต่อสำเร็จ', S == null ? '' : 'พบ ${S!.boxCount} กล่อง',
+          ResultKind.ok);
     } else {
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
     }
@@ -1509,7 +1676,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     String? username,
     String? password,
   }) async {
-    await applyConnection(baseUrl: baseUrl, username: username, password: password);
+    await applyConnection(
+        baseUrl: baseUrl, username: username, password: password);
     if (connected) finishDeviceSetup();
   }
 
@@ -1584,7 +1752,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // submit it.
         final t = resolveTag(epc);
         final b = S?.box(t);
-        if (b != null && b.status == 'warehouse' && !transferRfidHits.contains(t)) {
+        if (b != null &&
+            b.status == 'warehouse' &&
+            !transferRfidHits.contains(t)) {
           transferRfidHits.add(t);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
@@ -1661,7 +1831,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             screen == Screen.transfer ||
             (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
         scanInputMode == ScanInputMode.barcode) {
-      toastMsg('อยู่ในโหมดบาร์โค้ด', 'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
+      toastMsg('อยู่ในโหมดบาร์โค้ด',
+          'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
       return;
     }
     if (screen == Screen.boxRegister && !boxRegisterRfidStep) {
@@ -1751,10 +1922,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   int get todayIn => (S?.events ?? [])
-      .where((e) => e is Map && (e['dir'] == 'in' || e['dir'] == 'in-new') && _sameDay(e['ts']?.toString()))
+      .where((e) =>
+          e is Map &&
+          (e['dir'] == 'in' || e['dir'] == 'in-new') &&
+          _sameDay(e['ts']?.toString()))
       .length;
   int get todayOut => (S?.events ?? [])
-      .where((e) => e is Map && e['dir'] == 'out' && _sameDay(e['ts']?.toString()))
+      .where(
+          (e) => e is Map && e['dir'] == 'out' && _sameDay(e['ts']?.toString()))
       .length;
 
   List<Map<String, dynamic>> get warehouseList {

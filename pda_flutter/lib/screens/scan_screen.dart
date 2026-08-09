@@ -380,8 +380,140 @@ class _ScanScreenState extends State<ScanScreen> {
                 onChanged: c.setInVehicleTypeOther,
                 decoration: pdaInput(loc.t('เช่น รถตู้ / รถพ่วง'), radius: 12)),
           ],
+          const SizedBox(height: 16),
+          _receiveLocationSection(c, loc),
         ],
       ),
+    );
+  }
+
+  /// The three-way choice for where a received batch lands: a system-suggested
+  /// empty shelf, a spot the operator picks by hand right now (dropdowns, same
+  /// widget TransferScreen uses), or leaving it in the pending-putaway holding
+  /// pattern — the only behavior that existed before this section did.
+  Widget _receiveLocationSection(AppController c, LocaleController loc) {
+    final mode = c.receiveLocationMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FieldLabel(loc.t('เก็บที่ไหน')),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: Text(loc.t('ตามระบบแนะนำ')),
+              selected: mode == ReceiveLocationMode.auto,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.auto),
+            ),
+            ChoiceChip(
+              label: Text(loc.t('เลือกเอง')),
+              selected: mode == ReceiveLocationMode.manual,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.manual),
+            ),
+            ChoiceChip(
+              label: Text(loc.t('รอ Putaway')),
+              selected: mode == ReceiveLocationMode.defer,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.defer),
+            ),
+          ],
+        ),
+        if (mode == ReceiveLocationMode.auto) ...[
+          const SizedBox(height: 10),
+          if (c.suggestingLocation)
+            Row(
+              children: [
+                const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 8),
+                Text(loc.t('กำลังหาชั้นวางว่าง…'),
+                    style: TextStyle(fontSize: 12.5, color: C.muted)),
+              ],
+            )
+          else if (c.suggestedLocation == null)
+            Text(loc.t('ไม่พบชั้นวางว่าง — จะเก็บไว้รอ Putaway แทน'),
+                style: TextStyle(fontSize: 12.5, color: C.red))
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: C.limeBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                [
+                  c.suggestedLocation!['zone'],
+                  c.suggestedLocation!['rack'],
+                  c.suggestedLocation!['shelf'],
+                  c.suggestedLocation!['slot'],
+                ].where((v) => (v ?? '').isNotEmpty).join(' / '),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+        ],
+        if (mode == ReceiveLocationMode.manual) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: LocationDropdown(
+                  label: loc.t('โซน'),
+                  value: c.receiveZone,
+                  options: c.S?.locationValues(c.wh, 'zone') ?? const [],
+                  onChanged: c.setReceiveZone,
+                  loc: loc,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: LocationDropdown(
+                  label: loc.t('แร็ค'),
+                  value: c.receiveRack,
+                  options:
+                      c.S?.locationValues(c.wh, 'rack', zone: c.receiveZone) ??
+                          const [],
+                  onChanged: c.setReceiveRack,
+                  loc: loc,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: LocationDropdown(
+                  label: loc.t('ชั้น'),
+                  value: c.receiveShelf,
+                  options: c.S?.locationValues(c.wh, 'shelf',
+                          zone: c.receiveZone, rack: c.receiveRack) ??
+                      const [],
+                  onChanged: c.setReceiveShelf,
+                  loc: loc,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: LocationDropdown(
+                  label: loc.t('ช่อง'),
+                  value: c.receiveSlot,
+                  options: c.S?.locationValues(c.wh, 'slot',
+                          zone: c.receiveZone, rack: c.receiveRack) ??
+                      const [],
+                  onChanged: c.setReceiveSlot,
+                  loc: loc,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 

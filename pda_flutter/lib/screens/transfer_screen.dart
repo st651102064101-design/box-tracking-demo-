@@ -405,7 +405,7 @@ class _TransferScreenState extends State<TransferScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _LocationDropdown(
+                  child: LocationDropdown(
                     label: loc.t('โซน'),
                     value: _zone,
                     options: c.S?.locationValues(c.wh, 'zone') ?? const [],
@@ -420,7 +420,7 @@ class _TransferScreenState extends State<TransferScreen> {
                 ),
                 const SizedBox(width: 9),
                 Expanded(
-                  child: _LocationDropdown(
+                  child: LocationDropdown(
                     label: loc.t('แร็ค'),
                     value: _rack,
                     options: c.S?.locationValues(c.wh, 'rack', zone: _zone) ??
@@ -439,7 +439,7 @@ class _TransferScreenState extends State<TransferScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _LocationDropdown(
+                  child: LocationDropdown(
                     label: loc.t('ชั้น'),
                     value: _shelf,
                     options: c.S?.locationValues(c.wh, 'shelf',
@@ -451,7 +451,7 @@ class _TransferScreenState extends State<TransferScreen> {
                 ),
                 const SizedBox(width: 9),
                 Expanded(
-                  child: _LocationDropdown(
+                  child: LocationDropdown(
                     label: loc.t('ช่อง'),
                     value: _slot,
                     options: c.S?.locationValues(c.wh, 'slot',
@@ -690,7 +690,7 @@ class _TransferScreenState extends State<TransferScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _LocationDropdown(
+                    child: LocationDropdown(
                       label: loc.t('โซน'),
                       value: _bulkZone,
                       options: c.S?.locationValues(c.wh, 'zone') ?? const [],
@@ -703,7 +703,7 @@ class _TransferScreenState extends State<TransferScreen> {
                   ),
                   const SizedBox(width: 9),
                   Expanded(
-                    child: _LocationDropdown(
+                    child: LocationDropdown(
                       label: loc.t('แร็ค'),
                       value: _bulkRack,
                       options:
@@ -777,7 +777,7 @@ class _TransferScreenState extends State<TransferScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _LocationDropdown(
+                          child: LocationDropdown(
                             label: loc.t('ชั้น'),
                             value: _boxShelf[tag] ?? '',
                             options: c.S?.locationValues(c.wh, 'shelf',
@@ -791,7 +791,7 @@ class _TransferScreenState extends State<TransferScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: _LocationDropdown(
+                          child: LocationDropdown(
                             label: loc.t('ช่อง'),
                             value: _boxSlot[tag] ?? '',
                             options: c.S?.locationValues(c.wh, 'slot',
@@ -833,104 +833,5 @@ class _TransferScreenState extends State<TransferScreen> {
         ),
       ],
     ];
-  }
-}
-
-/// A dropdown for one location field (zone/rack/shelf/slot) that also lets
-/// the operator type a brand-new value inline via an "+ เพิ่มใหม่" entry —
-/// selecting it opens a small text prompt, and the typed value becomes both
-/// the new dropdown option and the current selection. An empty selection
-/// ("— ไม่ระบุ —") is always available since every one of these fields is
-/// optional on the backend.
-class _LocationDropdown extends StatelessWidget {
-  final String label;
-  final List<String> options;
-  final String value;
-  final ValueChanged<String> onChanged;
-  final LocaleController loc;
-  final bool dense;
-  const _LocationDropdown({
-    required this.label,
-    required this.options,
-    required this.value,
-    required this.onChanged,
-    required this.loc,
-    this.dense = false,
-  });
-
-  static const _addNew = ' __add_new__';
-  static const _empty = '';
-
-  Future<void> _promptNew(BuildContext context) async {
-    final ctrl = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${loc.t('เพิ่ม')} $label'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(hintText: label),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(loc.t('ยกเลิก'))),
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-              child: Text(loc.t('เพิ่ม'))),
-        ],
-      ),
-    );
-    if (result != null && result.isNotEmpty) onChanged(result);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <String>{...options, if (value.isNotEmpty) value}.toList()
-      ..sort();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FieldLabel(label),
-        DropdownButtonFormField<String>(
-          initialValue: value.isEmpty ? _empty : value,
-          isExpanded: true,
-          isDense: dense,
-          decoration: pdaInput('— ${loc.t('ไม่ระบุ')} —', radius: 12),
-          items: [
-            DropdownMenuItem(
-                value: _empty,
-                child: Text('— ${loc.t('ไม่ระบุ')} —',
-                    style: TextStyle(color: C.faint))),
-            ...items.map((v) => DropdownMenuItem(
-                value: v, child: Text(v, overflow: TextOverflow.ellipsis))),
-            DropdownMenuItem(
-              value: _addNew,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 16, color: C.limeText),
-                  const SizedBox(width: 4),
-                  Text(loc.t('เพิ่มใหม่'),
-                      style: TextStyle(
-                          color: C.limeText, fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ],
-          onChanged: (v) {
-            if (v == null) return;
-            if (v == _addNew) {
-              _promptNew(context);
-              return;
-            }
-            onChanged(v);
-          },
-        ),
-      ],
-    );
   }
 }

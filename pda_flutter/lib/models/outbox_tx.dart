@@ -30,6 +30,13 @@ class OutboxTx {
   /// absent here just lands on 'warehouse' as normal.
   final Map<String, String>? conditions;
 
+  /// in-only — the shelf position chosen for this whole batch (see
+  /// ScanScreen's รับเข้า location-choice section: system-suggested,
+  /// picked by hand, or omitted for the pending-putaway holding pattern).
+  /// Null/absent means the operator chose "รอ Putaway" — exactly the
+  /// pre-existing behavior for every OutboxTx that predates this field.
+  final Map<String, String>? location;
+
   OutboxTx({
     required this.type,
     required this.tags,
@@ -44,6 +51,7 @@ class OutboxTx {
     this.vehicleType,
     this.note,
     this.conditions,
+    this.location,
   });
 
   Map<String, dynamic> toJson() => {
@@ -59,7 +67,9 @@ class OutboxTx {
         if (driver != null) 'driver': driver,
         if (vehicleType != null) 'vehicleType': vehicleType,
         if (note != null) 'note': note,
-        if (conditions != null && conditions!.isNotEmpty) 'conditions': conditions,
+        if (conditions != null && conditions!.isNotEmpty)
+          'conditions': conditions,
+        if (location != null) 'location': location,
       };
 
   factory OutboxTx.fromJson(Map<String, dynamic> j) => OutboxTx(
@@ -75,6 +85,9 @@ class OutboxTx {
         driver: j['driver']?.toString(),
         vehicleType: j['vehicleType']?.toString(),
         note: j['note']?.toString(),
-        conditions: (j['conditions'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())),
+        conditions: (j['conditions'] as Map?)
+            ?.map((k, v) => MapEntry(k.toString(), v.toString())),
+        location: (j['location'] as Map?)
+            ?.map((k, v) => MapEntry(k.toString(), v.toString())),
       );
 }
