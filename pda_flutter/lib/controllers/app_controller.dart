@@ -1922,11 +1922,27 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // in barcode mode. The on-screen "เริ่มกวาดหา" button calls
     // startInventory() directly and never went through here, which is
     // exactly why that button worked while the trigger appeared dead.
+    if (screen == Screen.scan && gateFormStep) {
+      // ลูกค้าปลายทาง/ทะเบียนรถ/คนขับ/ประเภทรถ are plain text entry, not a scan
+      // target — a trigger pull here must not fire the antenna (which would
+      // silently start an RFID sweep behind a form nobody meant to scan
+      // into) and must not be mistaken for "the barcode field will catch
+      // it" either, because there is no barcode field on this step at all
+      // (ScanCapture itself is already off here — see the ScanCapture
+      // `enabled` check in ScanScreen.build). Same toast shape as the
+      // putaway-step block below, which exists for exactly the same reason
+      // one step later in this screen's flow.
+      toastMsg(
+          'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
+          'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
+          ResultKind.info);
+      return;
+    }
     if (screen == Screen.scan && putawayTask != null) {
       // See the Screen.scan case in [_onReaderTag]: the putaway step wants a
       // rack barcode, and the antenna must not even light up for it.
-      toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น',
-          'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID', ResultKind.info);
+      toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น', 'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID',
+          ResultKind.info);
       return;
     }
     if ((screen == Screen.scan ||
@@ -1978,6 +1994,18 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         screen != Screen.boxRegister);
     rfid.startInventory();
   }
+
+  /// True only while ScanScreen is on its customer/vehicle form step —
+  /// ลูกค้าปลายทาง, ทะเบียนรถ, คนขับ, ประเภทรถ — see the Screen.scan block in
+  /// [_onReaderTrigger] above. A trigger pull there must never fire the
+  /// antenna or start listening for a barcode: those fields are plain text
+  /// entry, and a stray RFID sweep or an in-flight ScanCapture read landing
+  /// on one of them while the operator is mid-type is exactly the kind of
+  /// "why did the customer field just get overwritten" report this exists to
+  /// prevent. ScanScreen flips this false the moment it moves to the scan
+  /// step and true again on the way back — see _setOnScanStep, the one place
+  /// that transition happens.
+  bool gateFormStep = false;
 
   /// True only while BoxRegisterScreen's own rfid step (_Step.rfid) is on
   /// top — see the Screen.boxRegister branch in [_onReaderTrigger] above.

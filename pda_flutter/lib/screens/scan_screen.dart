@@ -72,16 +72,42 @@ class _ScanScreenState extends State<ScanScreen>
   /// scan. The whole point of the two-card layout is that the operator can
   /// tell which one the machine wants from across an aisle, and a pulse reads
   /// at that distance where a border colour alone does not.
-  late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 900))
-    ..repeat(reverse: true);
+  ///
+  /// Created eagerly in [initState], not via a `late final` field
+  /// initializer: this session may never render the putaway step at all
+  /// (most don't), and a lazy initializer only runs on first *read* —
+  /// meaning [dispose]'s unconditional `_pulse.dispose()` would itself be
+  /// that first read. Constructing an AnimationController that late crashes:
+  /// `vsync: this` needs to walk a live element tree
+  /// (TickerMode.getValuesNotifier), and by the time dispose() runs that
+  /// tree is already deactivating.
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    _triggerSub = context.read<AppController>().rfid.triggers.listen((pressed) {
+    final c = context.read<AppController>();
+    // Starts true: the screen opens on the customer/vehicle form, and the
+    // trigger must not fire until that's done — see AppController.
+    // gateFormStep and the toast it drives in _onReaderTrigger.
+    c.gateFormStep = true;
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _triggerSub = c.rfid.triggers.listen((pressed) {
       if (mounted) setState(() => _rfidReading = pressed);
     });
+  }
+
+  /// The one place `_onScanStep` ever changes. Keeps AppController.
+  /// gateFormStep in lockstep with it — that field is what
+  /// AppController._onReaderTrigger reads to block the physical trigger
+  /// while ลูกค้าปลายทาง/ทะเบียนรถ are still being filled in, and a screen-local
+  /// bool the controller never sees would leave that block silently stale
+  /// the moment this one drifted from it.
+  void _setOnScanStep(AppController c, bool v) {
+    _onScanStep = v;
+    c.gateFormStep = !v;
   }
 
   @override
@@ -107,12 +133,12 @@ class _ScanScreenState extends State<ScanScreen>
   Future<void> _onPrimary(AppController c, bool formValid) async {
     if (!_onScanStep) {
       if (!formValid) return;
-      setState(() => _onScanStep = true);
+      setState(() => _setOnScanStep(c, true));
       return;
     }
     await c.doCommit();
     if (!mounted) return;
-    if (c.queue.isEmpty) setState(() => _onScanStep = false);
+    if (c.queue.isEmpty) setState(() => _setOnScanStep(c, false));
     // A putaway task means the commit landed and these boxes now have to be
     // physically walked to a shelf — see the putaway step in build().
     if (c.putawayTask != null) setState(() => _putawayConfirmed = null);
@@ -165,7 +191,7 @@ class _ScanScreenState extends State<ScanScreen>
         // next thing this operator does is pull the trigger again.
         setState(() {
           _putawaySuccess = false;
-          _onScanStep = true;
+          _setOnScanStep(c, true);
         });
       });
     } else {
@@ -493,7 +519,7 @@ class _ScanScreenState extends State<ScanScreen>
                   ? [isOut ? _outForm(c, loc) : _inForm(c, loc)]
                   : [
                       GestureDetector(
-                        onTap: () => setState(() => _onScanStep = false),
+                        onTap: () => setState(() => _setOnScanStep(c, false)),
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 9),
                           child: Row(
