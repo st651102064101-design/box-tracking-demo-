@@ -1,8 +1,5 @@
 node_modules/
-frontend/node_modules/
 .DS_Store
 
-# local dev config + on-disk PGlite database — contains JWT_SECRET, never commit
+# local dev config — contains SMTP_PASS, never commit
 .env
-backend/.env
-backend/.pglite-dev/
