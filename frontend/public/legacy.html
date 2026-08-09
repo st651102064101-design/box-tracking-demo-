@@ -8132,14 +8132,19 @@ window.clearLocFull = clearLocFull;
    event/audit shape as POST /api/reports so a report from either channel
    lands in the same feed. */
 function reportLocFull(code) {
-  var l = S.locations[code]; if (!l || l.reportedFullAt) return;
-  confirmA('แจ้งช่อง '+code+' เต็ม?','ระบบจะไม่แนะนำช่องนี้ให้จัดเก็บอีก จนกว่าจะกด "เคลียร์"','ยืนยันแจ้งเต็ม',false)
-    .then(function(ok){if(!ok)return;
+  var l = S.locations[code]; if (!l || l.reportedFullAt) return Promise.resolve(false);
+  // Returns the confirm promise so callers that need to re-render *after*
+  // the flag actually lands (e.g. the Putaway modal re-opening itself to
+  // show the "เต็ม" banner) don't fire before the operator has even
+  // answered the confirm dialog.
+  return confirmA('แจ้งช่อง '+code+' เต็ม?','ระบบจะไม่แนะนำช่องนี้ให้จัดเก็บอีก จนกว่าจะกด "เคลียร์"','ยืนยันแจ้งเต็ม',false)
+    .then(function(ok){if(!ok)return false;
       l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
       S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
       auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
       renderLocMaster();
       toast('แจ้งเต็มแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
+      return true;
     });
 }
 window.reportLocFull = reportLocFull;
@@ -8450,13 +8455,24 @@ function openSlotPutawayModal(code){
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 3.5 3H6.5L10 9 9 3Z"/><path d="M12 15v6"/></svg></span> Putaway → '+esc(code)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
+      +(loc.reportedFullAt
+        ? '<div class="banner bad" style="margin:0 0 12px;">'
+          +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span></span>'
+          +'<div><b>ช่องนี้ถูกแจ้งว่าเต็ม</b>'+(loc.reportedFullBy?' โดย '+esc(loc.reportedFullBy):'')+(loc.reportedFullAt?' · '+esc(fmtTs(loc.reportedFullAt)):'')
+            +'<div class="small" style="margin-top:2px;">suggest-location จะข้ามช่องนี้จนกว่าจะกดเคลียร์ — <a href="javascript:void 0" onclick="clearLocFull(\''+esc(code)+'\');openSlotPutawayModal(\''+esc(code)+'\');">เคลียร์เลย</a></div></div>'
+        +'</div>'
+        : '')
       +'<div class="banner '+(occBoxes.length?'warn':'info')+'" style="margin:0 0 16px;">'
         +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'
         +'<div><b>'+esc(whName(loc.wh))+'</b>'+(locLabel?' · '+esc(locLabel):'')+'<div class="small" style="margin-top:2px;">'+esc(occLabel)+'</div></div>'
       +'</div>'
       +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:460px;">'
         +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>ป้ายตำแหน่งนี้ — สำหรับพิมพ์ติดหน้างาน</div>'
-        +'<div class="rfid-fin-wrap"><div class="finlabel" style="padding:12px 14px 8px;">'
+        // padding-bottom overridden well past the wrap's clip-path notch
+        // (bottom 12% is cut into a decorative flag-tail shape) — the
+        // default 26px wasn't enough once the barcode below grew taller,
+        // and the bars themselves were getting clipped off by that notch.
+        +'<div class="rfid-fin-wrap" style="padding-bottom:44px;"><div class="finlabel" style="padding:12px 14px 8px;">'
           +'<div class="fl-head"><div><div class="fl-brand" style="font-size:15px;">LOCATION</div></div>'
             +'<div style="width:42px;height:42px;flex:0 0 auto;" title="QR ของตำแหน่งนี้">'+qrCodeSVG(code,42)+'</div>'
           +'</div>'
@@ -8469,9 +8485,10 @@ function openSlotPutawayModal(code){
           +'<div class="fl-bc">'+code128SVG(code,88)+'</div>'
         +'</div></div>'
       +'</div>'
-      +'<div class="row" style="justify-content:center;gap:8px;margin:0 0 16px;">'
+      +'<div class="row" style="justify-content:center;gap:8px;margin:0 0 16px;flex-wrap:wrap;">'
         +'<button type="button" class="btn ghost sm" onclick="downloadSlotLabelPNG(\''+esc(code)+'\',\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลด PNG</button>'
         +'<button type="button" class="btn ghost sm" onclick="printLocationLabels([{code:\''+esc(code)+'\',sub:\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\'}])"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายช่องนี้</button>'
+        +(loc.reportedFullAt ? '' : '<button type="button" class="btn ghost sm" style="color:var(--neg);" onclick="reportLocFull(\''+esc(code)+'\').then(function(done){if(done)openSlotPutawayModal(\''+esc(code)+'\');})" title="เหมือนปุ่ม &quot;ช่องเก็บเต็ม&quot; บน PDA — suggest-location จะข้ามช่องนี้จนกว่าจะเคลียร์"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span> แจ้งช่องนี้เต็ม</button>')
       +'</div>'
       +'<div class="inv-scan-bar" style="margin-bottom:10px;"><span class="iss-ic">⊟</span>'
         +'<input id="slotPaScan" placeholder="ยิงบาร์โค้ด / บาร์โค้ดกล่องที่จะจัดเก็บ" autocomplete="off">'
