@@ -72,6 +72,18 @@ void main() {
             'or it should be a ScanCapture');
   });
 
+  /// Screens that read/set ScanInputMode.rfid without the shared toggle, and
+  /// why: they don't actually offer the operator a choice between barcode
+  /// and RFID on a given step, so there's no switch to show.
+  const noToggleNeeded = {
+    'lib/screens/rfid_locate_screen.dart':
+        'find-by-scan only now (no RFID toggle on the pick step — see the '
+            'module docstring); it flips ScanInputMode.rfid itself once a '
+            'target (or, in Multi-Track, a list of targets) is picked, purely '
+            'to arm the trigger for the locate/locateMulti step that follows, '
+            'never as an operator-visible mode choice',
+  };
+
   /// Barcode and RFID are different jobs — one narrow beam at arm's length
   /// versus a sweep of everything within metres. A screen that offers both
   /// has to let the operator say which is armed, because that decides what a
@@ -81,6 +93,7 @@ void main() {
     final offenders = <String>[];
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
       if (!f.path.endsWith('.dart')) continue;
+      if (noToggleNeeded.containsKey(f.path)) continue;
       final src = f.readAsStringSync();
       // Reads the RFID mode to decide what to show or do = offers both.
       if (!src.contains('ScanInputMode.rfid')) continue;

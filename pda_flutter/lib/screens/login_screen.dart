@@ -218,6 +218,21 @@ class _LoginScreenState extends State<LoginScreen> {
           return c.errorMessage(err);
         }
       },
+      // "ส่งรหัสอีกครั้ง" — re-mints a fresh OTP the same way onForgot above
+      // did, gated to once per 3 minutes so it can't be used to spam the
+      // employee's inbox. The rate limiter is the server's own
+      // (pinResetLimiter, 10/15min) — this is just the client-side cooldown
+      // that keeps the button itself from being tapped every second.
+      resendCooldown: const Duration(minutes: 3),
+      onResend: () async {
+        try {
+          final req = await c.api.requestPinReset(e.id);
+          sentTo = req['sentTo']?.toString();
+          return null;
+        } catch (err) {
+          return err is ApiException ? err.message : c.errorMessage(err);
+        }
+      },
     );
     if (otpResult == null || !applied) return; // cancelled, or never accepted
 

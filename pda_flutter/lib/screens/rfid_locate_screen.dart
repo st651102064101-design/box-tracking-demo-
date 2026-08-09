@@ -30,7 +30,7 @@ class RfidLocateScreen extends StatefulWidget {
   State<RfidLocateScreen> createState() => _RfidLocateScreenState();
 }
 
-enum _Step { pick, locate }
+enum _Step { pick, locate, locateMulti }
 
 class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// Set when a scanned code doesn't resolve to a taggable box — shown under
@@ -48,11 +48,21 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// at a glance.
   String? _typeFilter;
 
-  /// Pick-step RFID sweep census: every distinct tagged box the trigger has
-  /// found this sweep, in first-seen order — answers "how many tagged boxes
-  /// are in this area" on its own, not just "is this one specific box here."
-  /// Tapping an entry still moves into the locate/gauge step for that box.
-  final List<String> _sweepTags = [];
+  /// "ค้นหาพร้อมกัน (Multi-Track)" — off by default (single box, today's
+  /// flow). On, each scanned/tapped box is added to [_multiTargets] instead
+  /// of jumping straight into the single-target gauge; "เริ่มค้นหา" then
+  /// moves into [_Step.locateMulti], which shows one proximity bar per box
+  /// instead of the one big gauge. There is no true bearing/angle here (see
+  /// the module docstring) — this is the same signal-strength idea as the
+  /// single-target gauge, just N of them side by side.
+  bool _multiMode = false;
+  final List<Box> _multiTargets = [];
+
+  /// Per-target rolling signal state for the locateMulti step — same decay
+  /// idea as the single-target [_rssi]/[_lastHitAt], keyed by tag so each
+  /// bar decays independently instead of all sharing one clock.
+  final Map<String, int?> _multiRssi = {};
+  final Map<String, DateTime?> _multiLastHit = {};
 
   StreamSubscription<List<RfidTagRead>>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
@@ -199,8 +209,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   void _handleBack() => _changeTarget(context.read<AppController>());
 
   void _onBatch(List<RfidTagRead> batch) {
-    if (_step == _Step.pick) {
-      _onPickBatch(batch);
+    if (_step == _Step.pick) return; // barcode-only now — see [_onScan]
+    if (_step == _Step.locateMulti) {
+      _onMultiBatch(batch);
       return;
     }
     if (_target == null) return;
@@ -265,45 +276,92 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     }
   }
 
-  /// RFID-mode picking: every distinct tagged box the trigger turns up joins
-  /// the running sweep list (AppController.resolveTag already matches by
-  /// rfidEpc/rfidTid, not just the barcode key) — this is a census of what's
-  /// in range, not a race to the first hit, so it no longer jumps straight
-  /// into the locate step on its own. Tapping an entry in that list is what
-  /// moves on to locate/gauge for that one box.
-  void _onPickBatch(List<RfidTagRead> batch) {
-    final c = context.read<AppController>();
-    if (c.scanInputMode != ScanInputMode.rfid) return;
-    final s = c.S;
-    if (s == null) return;
+  /// Multi-track sweep: every batch read is checked against every box in
+  /// [_multiTargets] (not just the strongest single match, like the
+  /// single-target path above) — a held trigger over a pile can legitimately
+  /// see several of the boxes being searched for in the same batch, and each
+  /// one's bar has to move independently. Same haptic/audio grading as the
+  /// single-target gauge, but driven off whichever target read strongest in
+  /// this batch (a per-target buzz for every one of N boxes at once would
+  /// just be noise), so the operator gets one aggregate "getting warmer"
+  /// signal while still reading exact per-box status off the bars.
+  void _onMultiBatch(List<RfidTagRead> batch) {
+    if (_multiTargets.isEmpty) return;
+    final now = DateTime.now();
+    int? overallBest;
     var changed = false;
-    for (final r in batch) {
-      final tag = c.resolveTag(r.epc);
-      final b = s.box(tag);
-      if (b == null) continue;
-      final hasTag =
-          (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false);
-      if (!hasTag) continue;
-      if (_sweepTags.contains(tag)) continue;
-      _sweepTags.add(tag);
+    for (final target in _multiTargets) {
+      final wantEpc = target.rfidEpc?.toUpperCase();
+      final wantTid = target.rfidTid?.toUpperCase();
+      if ((wantEpc == null || wantEpc.isEmpty) &&
+          (wantTid == null || wantTid.isEmpty)) continue;
+      int? best;
+      for (final r in batch) {
+        final epc = r.epc.toUpperCase();
+        final tid = r.tid?.toUpperCase();
+        final isMatch =
+            (wantEpc != null && wantEpc.isNotEmpty && epc == wantEpc) ||
+                (wantTid != null && wantTid.isNotEmpty && tid == wantTid);
+        if (!isMatch) continue;
+        final rssi = r.rssi ?? _rssiClose;
+        if (best == null || rssi > best) best = rssi;
+      }
+      if (best == null) continue;
+      _multiRssi[target.tag] = best;
+      _multiLastHit[target.tag] = now;
       changed = true;
-      // Same detection tone every other RFID read in the app plays (see
-      // addScan's viaRfid branch) — this loop only reaches here once per
-      // *distinct* box, so a held trigger sweeping a pallet doesn't turn
-      // into a solid tone the way a raw per-read sound would.
-      c.rfid.playSound(c.prefs.rfidSoundId);
+      if (overallBest == null || best > overallBest) overallBest = best;
     }
-    if (changed && mounted) setState(() {});
+    if (!changed) return;
+    setState(() {});
+
+    final level = _normalize(overallBest!);
+    final minGap = Duration(milliseconds: (260 - (level * 200)).round());
+    if (_lastHapticAt == null || now.difference(_lastHapticAt!) >= minGap) {
+      _lastHapticAt = now;
+      if (level > 0.75) {
+        HapticFeedback.mediumImpact();
+      } else {
+        HapticFeedback.selectionClick();
+      }
+    }
+    final soundGap = Duration(milliseconds: (320 - (level * 220)).round());
+    if (_lastGradeSoundAt == null ||
+        now.difference(_lastGradeSoundAt!) >= soundGap) {
+      _lastGradeSoundAt = now;
+      final soundId = level > 0.75
+          ? 'grade_found'
+          : level > 0.55
+              ? 'grade_close'
+              : level > 0.25
+                  ? 'grade_warm'
+                  : 'grade_far';
+      context.read<AppController>().rfid.playSound(soundId);
+    }
   }
 
   /// Runs off a timer, not off reads, because "no read arrived" is itself the
   /// signal the meter has to show (falling back to zero) — a stream listener
   /// alone only ever fires when something *was* seen.
   void _tick() {
-    if (_rssi == null || _lastHitAt == null) return;
-    if (DateTime.now().difference(_lastHitAt!) > _staleAfter) {
+    if (_rssi != null &&
+        _lastHitAt != null &&
+        DateTime.now().difference(_lastHitAt!) > _staleAfter) {
       setState(() => _rssi = null);
     }
+    if (_multiLastHit.isEmpty) return;
+    final now = DateTime.now();
+    var changed = false;
+    for (final tag in _multiLastHit.keys.toList()) {
+      final last = _multiLastHit[tag];
+      if (last != null &&
+          now.difference(last) > _staleAfter &&
+          _multiRssi[tag] != null) {
+        _multiRssi[tag] = null;
+        changed = true;
+      }
+    }
+    if (changed && mounted) setState(() {});
   }
 
   double _normalize(int rssi) {
@@ -323,11 +381,14 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 
   /// A box's own barcode, straight off the imager — the only way the pick
-  /// step resolves a target now (see [_pickBody]). A picking ticket or an
-  /// existing pallet label both carry a real, scannable code; typing one was
-  /// the thing that let a mistyped tag jump straight into a sweep for the
-  /// wrong box. Jumps straight into the sweep step on a match, same as
-  /// tapping that box in the list below would.
+  /// step resolves a target now (no RFID toggle here anymore: this screen is
+  /// find-by-scan only, see [_pickBody] and the module docstring). A picking
+  /// ticket or an existing pallet label both carry a real, scannable code;
+  /// typing one was the thing that let a mistyped tag jump straight into a
+  /// sweep for the wrong box. In single mode this jumps straight into the
+  /// sweep step on a match, same as tapping that box in the list below
+  /// would; in [_multiMode] it's added to the running [_multiTargets] list
+  /// instead so the next scan can add another box to the same search.
   void _onScan(AppController c, String raw) {
     final loc = context.read<LocaleController>();
     final s = c.S;
@@ -345,7 +406,24 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       return;
     }
     setState(() => _scanError = null);
-    _pick(c, b);
+    if (_multiMode) {
+      _addMultiTarget(b);
+    } else {
+      _pick(c, b);
+    }
+  }
+
+  void _addMultiTarget(Box b) {
+    if (_multiTargets.any((t) => t.tag == b.tag)) return;
+    setState(() => _multiTargets.add(b));
+  }
+
+  void _removeMultiTarget(String tag) {
+    setState(() {
+      _multiTargets.removeWhere((t) => t.tag == tag);
+      _multiRssi.remove(tag);
+      _multiLastHit.remove(tag);
+    });
   }
 
   void _pick(AppController c, Box b) {
@@ -367,6 +445,25 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     c.setScanInputMode(ScanInputMode.rfid);
   }
 
+  /// Moves from the pick step's scanned [_multiTargets] list into
+  /// [_Step.locateMulti] — same rfidLocateSweepStep/scanInputMode wiring
+  /// [_pick] uses for the single-target gauge, just with N bars instead of
+  /// one.
+  void _startMultiLocate(AppController c) {
+    if (_multiTargets.isEmpty) return;
+    setState(() {
+      _step = _Step.locateMulti;
+      _multiRssi.clear();
+      _multiLastHit.clear();
+      for (final t in _multiTargets) {
+        _multiRssi[t.tag] = null;
+        _multiLastHit[t.tag] = null;
+      }
+    });
+    c.rfidLocateSweepStep = true;
+    c.setScanInputMode(ScanInputMode.rfid);
+  }
+
   void _changeTarget(AppController c) {
     c.rfid.stopInventory();
     c.rfidLocateSweepStep = false;
@@ -375,6 +472,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _target = null;
       _reading = false;
       _scanError = null;
+      // Readings, not the picked list — coming back from locateMulti keeps
+      // _multiTargets so the operator can add/remove a box and re-run
+      // without re-scanning everything, but the stale gauge levels from the
+      // last sweep have to go.
+      _multiRssi.clear();
+      _multiLastHit.clear();
     });
   }
 
@@ -385,24 +488,32 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // Kept in sync every rebuild rather than only in initState/step
     // transitions — cheap, and guarantees a system back press always
     // matches whatever the StickyHeader arrow below would do right now.
-    c.systemBackOverride = _step == _Step.locate ? _handleBack : null;
+    c.systemBackOverride =
+        (_step == _Step.locate || _step == _Step.locateMulti)
+            ? _handleBack
+            : null;
     return ScanCapture(
-      // Live on the pick step, in บาร์โค้ด mode, only — the locate step is
-      // RFID-only by definition and drives its own reader stream instead.
-      enabled: _step == _Step.pick && c.scanInputMode == ScanInputMode.barcode,
+      // Live on the pick step only — locate/locateMulti are RFID-only by
+      // definition and drive their own reader stream instead. No mode check
+      // here anymore: the pick step no longer has an RFID toggle to be in.
+      enabled: _step == _Step.pick,
       onScan: (raw) => _onScan(c, raw),
       child: AutoHideHeader(
         header: StickyHeader(
-          onBack: _step == _Step.locate ? () => _changeTarget(c) : c.backToHome,
+          onBack: _step != _Step.pick ? () => _changeTarget(c) : c.backToHome,
           title: Text(loc.t('หากล่อง / RFID')),
-          subtitle: Text(loc
-              .t(_step == _Step.pick ? 'เลือกกล่องที่จะหา' : 'กวาดหาสัญญาณ')),
+          subtitle: Text(loc.t(_step == _Step.pick
+              ? 'ยิงบาร์โค้ดกล่องที่จะหา'
+              : 'กวาดหาสัญญาณ')),
         ),
         body: Column(
           children: [
             Expanded(
-              child:
-                  _step == _Step.pick ? _pickBody(c, loc) : _locateBody(c, loc),
+              child: _step == _Step.pick
+                  ? _pickBody(c, loc)
+                  : _step == _Step.locate
+                      ? _locateBody(c, loc)
+                      : _locateMultiBody(c, loc),
             ),
           ],
         ),
@@ -443,70 +554,96 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
       children: [
-        _inputModeToggle(c, loc),
-        const SizedBox(height: 11),
-        if (c.scanInputMode == ScanInputMode.barcode) ...[
-          // No field: a picking ticket or an existing pallet label carries a
-          // real, scannable code, and typing one is what let a mistyped tag
-          // jump into a sweep for the wrong box. Nothing to scan in hand?
-          // Tap a box straight off the list below instead.
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
+        // "ค้นหาพร้อมกัน (Multi-Track)" — no RFID/barcode mode toggle here
+        // anymore (this screen is find-by-scan only): the only choice left
+        // on this step is whether one scan jumps straight to the gauge or
+        // adds to a running multi-box list. See [_onScan]/[_addMultiTarget].
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() {
+            _multiMode = !_multiMode;
+            if (!_multiMode) {
+              _multiTargets.clear();
+              _multiRssi.clear();
+              _multiLastHit.clear();
+            }
+          }),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: C.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: C.fieldBorder, width: 1.5),
+              color: _multiMode ? C.limeBg : C.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: _multiMode ? C.limeBorder : C.fieldBorder,
+                  width: 1.5),
             ),
             child: Row(
               children: [
-                Icon(Icons.qr_code_scanner, color: C.muted),
-                const SizedBox(width: 11),
+                Icon(Icons.checklist_rtl,
+                    size: 18, color: _multiMode ? C.limeText : C.muted),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(loc.t('ยิงบาร์โค้ดกล่องที่จะหา'),
+                  child: Text(loc.t('ค้นหาพร้อมกัน (Multi-Track)'),
                       style: TextStyle(
-                          fontSize: 14,
-                          color: C.muted,
-                          fontWeight: FontWeight.w600)),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _multiMode ? C.limeText : C.ink2)),
+                ),
+                Switch(
+                  value: _multiMode,
+                  onChanged: (v) => setState(() {
+                    _multiMode = v;
+                    if (!v) {
+                      _multiTargets.clear();
+                      _multiRssi.clear();
+                      _multiLastHit.clear();
+                    }
+                  }),
                 ),
               ],
             ),
           ),
-          if (_scanError != null) ...[
-            const SizedBox(height: 8),
-            Text(_scanError!,
-                style: TextStyle(
-                    fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
-          ],
-        ] else
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            decoration: BoxDecoration(
-              color: _reading ? C.limeBg : C.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: _reading ? C.limeBorder : C.fieldBorder, width: 1.5),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.wifi_tethering,
-                    size: 22, color: _reading ? C.limeText : C.muted),
-                const SizedBox(height: 6),
-                Text(
-                    loc.t(_reading
-                        ? 'กำลังกวาดหา…'
-                        : 'เหนี่ยวไกกวาดหากล่องในบริเวณนี้ — หรือยิงแท็กของกล่องที่จะหา'),
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: _reading ? C.limeText : C.muted,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
+        ),
+        const SizedBox(height: 11),
+        // No field: a picking ticket or an existing pallet label carries a
+        // real, scannable code, and typing one is what let a mistyped tag
+        // jump into a sweep for the wrong box. Nothing to scan in hand?
+        // Tap a box straight off the list below instead.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
+          decoration: BoxDecoration(
+            color: C.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: C.fieldBorder, width: 1.5),
           ),
+          child: Row(
+            children: [
+              Icon(Icons.qr_code_scanner, color: C.muted),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                    loc.t(_multiMode
+                        ? 'ยิงบาร์โค้ดกล่องที่จะหา — ยิงได้หลายกล่อง'
+                        : 'ยิงบาร์โค้ดกล่องที่จะหา'),
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: C.muted,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+        if (_scanError != null) ...[
+          const SizedBox(height: 8),
+          Text(_scanError!,
+              style: TextStyle(
+                  fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
+        ],
         const SizedBox(height: 14),
-        if (c.scanInputMode != ScanInputMode.barcode)
-          ..._sweepList(c, loc)
+        if (_multiMode)
+          ..._multiPickList(c, loc)
         else if (allTagged.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
@@ -614,17 +751,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     );
   }
 
-  /// The running census of tagged boxes the sweep has found so far — see
-  /// [_sweepTags]. Empty and non-empty states both render inline (not a
-  /// separate step) since the count itself, updating live while the trigger
-  /// is held, is the point: "how many tagged boxes are in this area."
-  List<Widget> _sweepList(AppController c, LocaleController loc) {
-    if (_sweepTags.isEmpty) {
+  /// [_multiMode]'s running list of scanned targets — Empty state prompts
+  /// for the first scan; non-empty shows every box queued for the search so
+  /// far (each removable individually) plus the button that moves into
+  /// [_Step.locateMulti] once there's at least one.
+  List<Widget> _multiPickList(AppController c, LocaleController loc) {
+    if (_multiTargets.isEmpty) {
       return [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-          child: Text(
-              loc.t('ยังไม่พบกล่อง — เหนี่ยวไกกวาดเหนือบริเวณที่จะตรวจ'),
+          child: Text(loc.t('ยังไม่มีกล่อง — ยิงบาร์โค้ดกล่องที่ต้องการหาทีละกล่อง'),
               style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
         ),
       ];
@@ -633,14 +769,19 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       Row(
         children: [
           Expanded(
-            child: Text('${loc.t('พบ')} ${_sweepTags.length} ${loc.t('กล่อง')}',
+            child: Text(
+                '${loc.t('เลือกแล้ว')} ${_multiTargets.length} ${loc.t('กล่อง')}',
                 style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: C.muted)),
           ),
           GestureDetector(
-            onTap: () => setState(() => _sweepTags.clear()),
+            onTap: () => setState(() {
+              _multiTargets.clear();
+              _multiRssi.clear();
+              _multiLastHit.clear();
+            }),
             child: Text(loc.t('ล้างรายการ'),
                 style: TextStyle(
                     fontSize: 12.5,
@@ -659,46 +800,61 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: List.generate(_sweepTags.length, (i) {
-            final tag = _sweepTags[i];
-            final b = c.S?.box(tag);
-            return InkWell(
-              onTap: b == null ? null : () => _pick(c, b),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  border: i == _sweepTags.length - 1
-                      ? null
-                      : Border(bottom: BorderSide(color: C.border)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.nfc, size: 18, color: C.muted),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(tag,
-                              style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'monospace')),
-                          if (b != null)
-                            Text(c.S!.typeName(b.type),
-                                style: TextStyle(fontSize: 12, color: C.muted)),
-                        ],
-                      ),
+          children: List.generate(_multiTargets.length, (i) {
+            final b = _multiTargets[i];
+            return Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                border: i == _multiTargets.length - 1
+                    ? null
+                    : Border(bottom: BorderSide(color: C.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.nfc, size: 18, color: C.muted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(b.tag,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace')),
+                        Text(c.S!.typeName(b.type),
+                            style: TextStyle(fontSize: 12, color: C.muted)),
+                      ],
                     ),
-                    if (b != null)
-                      Icon(Icons.chevron_right, size: 18, color: C.faint),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _removeMultiTarget(b.tag),
+                    icon: Icon(Icons.close, size: 18, color: C.faint),
+                  ),
+                ],
               ),
             );
           }),
+        ),
+      ),
+      const SizedBox(height: 14),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: () => _startMultiLocate(c),
+          icon: const Icon(Icons.wifi_tethering),
+          label:
+              Text('${loc.t('เริ่มค้นหา')} (${_multiTargets.length})'),
+          style: FilledButton.styleFrom(
+            backgroundColor: C.ink,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
         ),
       ),
     ];
@@ -879,14 +1035,201 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     return 'ยังไกล — ลองเดินไปทางอื่น';
   }
 
-  Widget _inputModeToggle(AppController c, LocaleController loc) {
-    return ScanModeToggle(
-      onChanged: (m) {
-        setState(() {
-          _sweepTags.clear();
-          _scanError = null;
-        });
-      },
+  // ── Step 3: locateMulti — Proximity Heat-Bar per box ────────────────────
+  /// The "Multi-RFID Radar" the design brief asked for, built the way the
+  /// hardware actually supports it (see the module docstring on why there's
+  /// no dot-on-a-map bearing here): one bar per box instead of one gauge for
+  /// one box, walking a strength ramp grey → amber → green exactly like the
+  /// single-target gauge, just N of them so "which of these boxes am I
+  /// closest to" reads at a glance instead of one at a time.
+  Widget _locateMultiBody(AppController c, LocaleController loc) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final connected = _status.state == RfidState.connected;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+      children: [
+        Panel(
+          padding: const EdgeInsets.all(14),
+          radius: 16,
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: connected
+                      ? C.lime
+                      : (_status.state == RfidState.connecting
+                          ? C.orange
+                          : C.red),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  !c.rfid.supported
+                      ? loc.t('ใช้ได้เฉพาะบนเครื่องอ่าน Zebra')
+                      : connected
+                          ? loc.t(_reading
+                              ? 'กำลังกวาดหา…'
+                              : 'พร้อม — กดหรือเหนี่ยวไกเพื่อเริ่ม')
+                          : _status.state == RfidState.connecting
+                              ? loc.t('กำลังเชื่อมต่อ…')
+                              : (_status.message.isEmpty
+                                  ? loc.t('ยังไม่ได้เชื่อมต่อ')
+                                  : _status.message),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _changeTarget(c),
+                child: Text(loc.t('เปลี่ยนกล่อง'),
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        color: C.ink2,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        ..._multiTargets.map((b) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _HeatBar(
+                box: b,
+                level: _multiRssi[b.tag] == null
+                    ? 0.0
+                    : _normalize(_multiRssi[b.tag]!),
+                rssi: _multiRssi[b.tag],
+                typeName: c.S!.typeName(b.type),
+              ),
+            )),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: c.rfid.supported ? () => _toggleRead(c) : null,
+            icon: Icon(_reading ? Icons.stop : Icons.wifi_tethering),
+            label: Text(loc.t(_reading ? 'หยุดกวาด' : 'เริ่มกวาดหา')),
+            style: FilledButton.styleFrom(
+              backgroundColor: _reading ? C.red : C.ink,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: C.neutralBg,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: C.border),
+          ),
+          child: Text(
+            loc.t('เดินกวาดไปเรื่อยๆ — แถบของแต่ละกล่องจะสว่างขึ้นเมื่อเข้าใกล้กล่องนั้น '
+                'พร้อมกันได้หลายกล่อง'),
+            style: TextStyle(fontSize: 12, color: C.ink3, height: 1.45),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One row of [_locateMultiBody]'s Proximity Heat-Bar — a box's tag/type on
+/// the left, a horizontal strength bar on the right using the same
+/// grey→amber→green ramp and 0-100% readout the single-target [_Gauge]
+/// uses, just laid out to stack N-high instead of taking the whole screen
+/// for one box.
+class _HeatBar extends StatelessWidget {
+  final Box box;
+  final double level; // 0..1
+  final int? rssi;
+  final String typeName;
+  const _HeatBar(
+      {required this.box,
+      required this.level,
+      required this.rssi,
+      required this.typeName});
+
+  @override
+  Widget build(BuildContext context) {
+    final found = rssi != null && level > 0.75;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: level),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (context, animated, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: found
+                  ? C.limeBorder
+                  : rssi != null
+                      ? _signalColor(animated).withValues(alpha: 0.4)
+                      : C.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(box.tag,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'monospace')),
+                  Text(typeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: C.muted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 12,
+                  child: Stack(
+                    children: [
+                      Container(color: C.neutralBg2),
+                      FractionallySizedBox(
+                        widthFactor: animated.clamp(0.0, 1.0),
+                        child: Container(color: _signalColor(animated)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 40,
+              child: Text(
+                rssi == null ? '—' : '${(animated * 100).round()}%',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: rssi == null ? C.faint : _signalColor(animated)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
