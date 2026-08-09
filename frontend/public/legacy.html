@@ -4928,9 +4928,15 @@ function markLost(tag){
   var b=S.boxes[tag];if(!b||b.status==='pending')return;
   confirmA('ตีกล่อง '+tag+' เป็นสูญหาย?','การยืนยันนี้จะเปลี่ยนสถานะเป็น "สูญหาย" — สามารถยกเลิกได้ภายหลังหากพบกล่อง','ยืนยันตีหาย',true)
     .then(function(ok){if(!ok)return;
+      var before={status:b.status};
       b.status='lost';b.lostAt=iso();b.lostReason='manual';b.lastSeenAt=iso();
       b.history.push({dir:'lost',ts:iso(),customer:b.customer,do:b.do,reason:'ตีสูญหาย (Manual)'});
-      save();toast('ตีกล่องหายแล้ว',tag+' · '+typeName(b.type),'warn');
+      // Same event shape the PDA's "ของหาย" report writes (POST /api/reports)
+      // — so a box marked lost from either channel lands in the same feed,
+      // not just the web-only audit log this action used to write to alone.
+      S.events.push({dir:'missing',tag:tag,location:b.location||null,note:'',ts:iso(),recorder:USER});
+      auditEntry('แจ้งของหาย → ตีสูญหาย',USER,tag,typeName(b.type),before,{status:'lost'});
+      toast('ตีกล่องหายแล้ว',tag+' · '+typeName(b.type),'warn');
       if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();});
 }
 function recoverLost(tag){
@@ -8114,11 +8120,29 @@ function _locFullPill(l) {
 }
 function clearLocFull(code) {
   var l = S.locations[code]; if (!l || !l.reportedFullAt) return;
+  var before = {reportedFullAt:l.reportedFullAt};
   l.reportedFullAt = null; l.reportedFullBy = null; l.reportedFullNote = null;
-  save(); renderLocMaster();
+  auditEntry('เคลียร์ช่องเก็บเต็ม', USER, code, code, before, {reportedFullAt:null});
+  renderLocMaster();
   toast('เคลียร์สถานะเต็มแล้ว', code+' — suggest-location แนะนำช่องนี้ได้อีกครั้ง', 'ok');
 }
 window.clearLocFull = clearLocFull;
+/* Web's counterpart to the PDA's "ช่องเก็บเต็ม" button — same effect
+   (suggest-location excludes this location until clearLocFull runs), same
+   event/audit shape as POST /api/reports so a report from either channel
+   lands in the same feed. */
+function reportLocFull(code) {
+  var l = S.locations[code]; if (!l || l.reportedFullAt) return;
+  confirmA('แจ้งช่อง '+code+' เต็ม?','ระบบจะไม่แนะนำช่องนี้ให้จัดเก็บอีก จนกว่าจะกด "เคลียร์"','ยืนยันแจ้งเต็ม',false)
+    .then(function(ok){if(!ok)return;
+      l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
+      S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
+      auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
+      renderLocMaster();
+      toast('แจ้งเต็มแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
+    });
+}
+window.reportLocFull = reportLocFull;
 function _locRowHtml(l) {
   return '<tr style="cursor:pointer;" data-loc-code="'+esc(l.code)+'" onclick="if(event.target.type!==\'checkbox\')locRowClick(this)">'
     +'<td class="cb-td"><input type="checkbox" class="row-cb loc-cb" data-tag="'+esc(l.code)+'"></td>'
@@ -8127,7 +8151,9 @@ function _locRowHtml(l) {
     +'<td>'+esc(whName(l.wh))+'</td><td>'+esc(l.zone||'-')+'</td><td>'+esc(l.rack||'-')+'</td>'
     +'<td>'+esc(l.shelf||'-')+'</td><td>'+esc(l.slot||'-')+'</td>'
     +'<td class="small">'+esc(l.type||'-')+'</td><td class="small muted">'+esc(l.note||'-')+'</td>'
-    +'<td class="c"><button class="btn sm ghost" data-loc-print="'+esc(l.code)+'" onclick="locPrintClick(event,this)" style="padding:4px 10px;font-size:12px;" title="พิมพ์บาร์โค้ดป้ายตำแหน่งนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span></button></td>'
+    +'<td class="c">'
+    +(l.reportedFullAt?'':'<button class="btn sm ghost" onclick="event.stopPropagation();reportLocFull(\''+esc(l.code)+'\')" style="padding:4px 10px;font-size:12px;margin-right:4px;" title="แจ้งช่องนี้เต็ม — เหมือนปุ่ม &quot;ช่องเก็บเต็ม&quot; บน PDA"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span></button>')
+    +'<button class="btn sm ghost" data-loc-print="'+esc(l.code)+'" onclick="locPrintClick(event,this)" style="padding:4px 10px;font-size:12px;" title="พิมพ์บาร์โค้ดป้ายตำแหน่งนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span></button></td>'
     +'<td class="c"><button class="del-badge" data-loc-del="'+esc(l.code)+'" onclick="locDelClick(event,this)" title="ลบตำแหน่งนี้">'+DEL_BADGE_SVG+'</button></td></tr>';
 }
 
