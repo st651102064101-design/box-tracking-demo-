@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -437,11 +438,14 @@ class _RfidPanelState extends State<_RfidPanel> {
   bool _testFiring = false;
   StreamSubscription<bool>? _triggerSub;
 
-  /// Distinct EPCs seen during the current test fire, most-recent-first —
-  /// what backs the fanned "stacked cards" display (see [_foundCardStack]).
-  /// Cleared at the start of every new test so an old sweep's tags don't
-  /// linger into the next one.
-  final List<String> _liveFound = [];
+  /// Distinct EPCs seen during the current test fire, in first-seen order,
+  /// each with how many times it has come back. A held trigger reads the
+  /// same tag dozens of times a second — the fanned card stack this used to
+  /// back tried to show every one of those as its own card and just became
+  /// an unreadable pile the moment more than two or three tags were in
+  /// range. A count is what a repeat read actually is. Cleared at the start
+  /// of every new test so an old sweep's tags don't linger into the next.
+  final LinkedHashMap<String, int> _liveFound = LinkedHashMap();
   StreamSubscription<List<RfidTagRead>>? _tagSub;
 
   @override
@@ -474,16 +478,15 @@ class _RfidPanelState extends State<_RfidPanel> {
     });
     _tagSub = rfid.tagBatches.listen((batch) {
       if (!_testFiring) return;
-      final added = batch
-          .map((r) => r.epc)
-          .where((e) => e.isNotEmpty && !_liveFound.contains(e))
-          .toSet();
-      if (added.isEmpty) return;
+      final epcs = batch.map((r) => r.epc).where((e) => e.isNotEmpty);
+      if (epcs.isEmpty) return;
       setState(() {
-        for (final epc in added) {
-          _liveFound.insert(0, epc);
+        for (final epc in epcs) {
+          // Stays in the position it was first seen — bumping a repeat to
+          // the top would make the list reorder under the operator's thumb
+          // on every re-read of whichever tag is closest to the antenna.
+          _liveFound[epc] = (_liveFound[epc] ?? 0) + 1;
         }
-        if (_liveFound.length > 8) _liveFound.removeRange(8, _liveFound.length);
       });
     });
   }
@@ -710,7 +713,7 @@ class _RfidPanelState extends State<_RfidPanel> {
                       color: C.muted),
                 ),
                 const SizedBox(height: 8),
-                _FoundCardStack(epcs: _liveFound),
+                _FoundTagList(counts: _liveFound),
               ],
             ] else
               Text(
@@ -862,73 +865,63 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 }
 
-/// Every distinct EPC found during a test fire, fanned like a hand of
-/// playing cards instead of stacked as separate toasts one below another —
-/// each card offset a few pixels further right/down and rotated slightly
-/// more than the last, most-recent tag on top. Reads as one object growing
-/// a card at a time, not a wall of alerts pushing the rest of the screen
-/// down every time a new tag turns up.
-class _FoundCardStack extends StatelessWidget {
-  final List<String> epcs; // most-recent-first
-  const _FoundCardStack({required this.epcs});
+/// Every distinct EPC found during a test fire, one row per tag with a
+/// count badge — a held trigger reads the same tag dozens of times a
+/// second, and that repeat is real information (signal is reaching it,
+/// reliably) that a flat list of one-off cards used to just discard by
+/// drawing another identical card on top.
+class _FoundTagList extends StatelessWidget {
+  final LinkedHashMap<String, int> counts; // first-seen order
+  const _FoundTagList({required this.counts});
 
   @override
   Widget build(BuildContext context) {
-    // Oldest-drawn-first so the most recent tag's card physically sits on
-    // top of the stack, matching "most-recent-first" in the data.
-    final ordered = epcs.reversed.toList();
-    const cardWidth = 168.0;
-    final maxOffset = (ordered.length - 1) * 10.0;
-    return SizedBox(
-      height: 30.0 + ordered.length * 10 + 6,
-      width: cardWidth + maxOffset,
-      child: Stack(
-        children: List.generate(ordered.length, (i) {
-          final epc = ordered[i];
-          final top = epc == epcs.first; // newest tag, drawn last = on top
-          return Positioned(
-            left: i * 10.0,
-            top: i * 10.0,
-            child: Transform.rotate(
-              angle: (i.isEven ? -1 : 1) * 0.02 * (i + 1),
-              child: Container(
-                width: cardWidth,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(
-                  color: top ? C.limeBg : C.surface,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: top ? C.limeBorder : C.border),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.nfc,
-                        size: 14, color: top ? C.limeDeep : C.muted),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(epc,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 11.5,
-                              fontFamily: 'monospace',
-                              fontWeight:
-                                  top ? FontWeight.w800 : FontWeight.w600,
-                              color: top ? C.limeDeep : C.ink2)),
-                    ),
-                  ],
-                ),
-              ),
+    final entries = counts.entries.toList();
+    return Column(
+      children: [
+        for (final e in entries) ...[
+          if (e != entries.first) const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: C.surface,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: C.border),
             ),
-          );
-        }),
-      ),
+            child: Row(
+              children: [
+                Icon(Icons.nfc, size: 14, color: C.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(e.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: C.limeBg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('×${e.value}',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: C.limeDeep,
+                          fontFeatures: const [FontFeature.tabularFigures()])),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
