@@ -541,6 +541,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 /* occupied = solid fill, not just an outline, so it reads at a glance without hovering */
 .locmap-slot.occ{background:var(--accent);border-color:var(--accent);color:var(--accentContrast);
   box-shadow:0 1px 4px color-mix(in srgb,var(--accent) 45%,transparent);}
+/* reported "ช่องเก็บเต็ม" (POST /api/reports or the web's own reportLocFull)
+   — red, and takes priority over the green occupied fill so an operator
+   scanning the rack map sees "don't put anything here" before "it has
+   boxes in it"; a slot can be both occupied AND flagged full at once. */
+.locmap-slot.full{background:var(--neg,#b42318);border-color:var(--neg,#b42318);color:#fff;
+  box-shadow:0 1px 4px color-mix(in srgb,var(--neg,#b42318) 45%,transparent);}
 /* small count badge in the corner — shows exactly how many boxes sit in that slot */
 .locmap-slot-badge{position:absolute;top:-6px;right:-6px;min-width:15px;height:15px;padding:0 3px;
   border-radius:999px;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:9px;font-weight:800;
@@ -7595,10 +7601,12 @@ function renderLocRackMap(locs, occ) {
                     + slots.map(function(l){
                       var isOcc = !!occ[l.code];
                       var count = occ[l.code]||0;
+                      var isFull = !!l.reportedFullAt;
                       var badge = isOcc ? '<span class="locmap-slot-badge">'+count+'</span>' : '';
-                      return '<div class="locmap-slot'+(isOcc?' occ':'')+'" data-loc-code="'+esc(l.code)+'" '
+                      var statusTxt = (isOcc?('มีของ '+count+' กล่อง'):'ว่าง') + (isFull?' · แจ้งเต็มแล้ว':'');
+                      return '<div class="locmap-slot'+(isOcc?' occ':'')+(isFull?' full':'')+'" data-loc-code="'+esc(l.code)+'" '
                         + 'onclick="locSlotClick(this)" '
-                        + 'title="'+esc(l.code)+' · '+(isOcc?('มีของ '+count+' กล่อง'):'ว่าง')+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
+                        + 'title="'+esc(l.code)+' · '+statusTxt+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
                         + '</div>';
                     }).join('')
                     + '</div>';
@@ -8456,9 +8464,19 @@ $('#btnAddLoc').onclick = function() {
   var conflictZone = rackConflictZone(wh, locZone, locRack);
   if (conflictZone && !(editingLoc && S.locations[editingLoc] && (S.locations[editingLoc].zone||'')===locZone))
     return toast('ชื่อแร็คซ้ำ', 'แร็ค '+locRack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
+  // Editing a location used to rebuild its object from the form fields alone,
+  // silently dropping reportedFullAt/By/Note (set by reportLocFull()/the
+  // PDA's ช่องเก็บเต็ม report, neither of which this form knows about) the
+  // next time anyone re-saved that row for an unrelated reason like a typo
+  // fix. Carry those three over from whatever was there before, same code
+  // or renamed — it's still the same physical shelf.
+  var prevLoc = editingLoc ? S.locations[editingLoc] : null;
   if (renamingLoc) delete S.locations[editingLoc];
   S.locations[code] = { code: code, wh: wh, zone: locZone, rack: locRack,
-    shelf: val('locShelf').trim(), slot: val('locSlot').trim(), type: locTypeValue('locType','locTypeOther'), note: val('locNote').trim() };
+    shelf: val('locShelf').trim(), slot: val('locSlot').trim(), type: locTypeValue('locType','locTypeOther'), note: val('locNote').trim(),
+    reportedFullAt: prevLoc ? (prevLoc.reportedFullAt||null) : null,
+    reportedFullBy: prevLoc ? (prevLoc.reportedFullBy||null) : null,
+    reportedFullNote: prevLoc ? (prevLoc.reportedFullNote||null) : null };
   save();
   ['locShelf','locSlot','locNote','locTypeOther','locZoneOther','locRackOther'].forEach(function(i){setv(i,'');});
   var lt0=$('#locType'); if(lt0)lt0.selectedIndex=0;
