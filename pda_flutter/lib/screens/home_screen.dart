@@ -314,6 +314,17 @@ List<Widget> _menuGroups(AppController c) {
       sub: 'Geiger — เดินกวาดหากล่องที่หาไม่เจอบนแร็ค',
       onTap: c.goLocate,
     ),
+    // The reverse of the two above: scan a shelf, not a box, and see what
+    // the system believes is on it right now.
+    if (c.canScan)
+      _MenuItem(
+        icon: Icons.grid_view_outlined,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'เช็คช่อง',
+        sub: 'ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่',
+        onTap: c.goLocationInquiry,
+      ),
   ];
 
   final audit = <Widget>[
@@ -339,6 +350,27 @@ List<Widget> _menuGroups(AppController c) {
             ? 'บันทึกได้แม้ออฟไลน์ — รอซิงค์ $pendingDamage รายการ'
             : 'บันทึกได้แม้ออฟไลน์ — จะซิงค์อัตโนมัติ',
         onTap: c.goDamagedBox,
+      ),
+    // Online-immediate counterpart to the offline flow above — also covers
+    // "hold" (QC / dispute), which that one doesn't, and writes a reason
+    // straight through instead of queuing.
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.pause_circle_outline,
+        iconColor: C.orange,
+        iconBg: C.orangeBg,
+        title: 'พัก / แจ้งชำรุด (ทันที)',
+        sub: 'กล่องที่อยู่ในคลังแล้ว — พักรอ QC, ชำรุด, หรือปลดพัก',
+        onTap: c.goHoldRelease,
+      ),
+    if (c.canScan && c.connected)
+      _MenuItem(
+        icon: Icons.flag_outlined,
+        iconColor: C.ink2,
+        iconBg: C.neutralBg,
+        title: 'แจ้งปัญหาหน้างาน',
+        sub: 'ของหาย / ช่องเก็บเต็ม',
+        onTap: c.goReportProblem,
       ),
   ];
 

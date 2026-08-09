@@ -97,6 +97,41 @@ class FakeApi extends ApiClient {
     });
     return {'ok': true, 'doNo': 'DO-TEST', 'shipped': tags, 'count': tags.length};
   }
+
+  final List<Map<String, dynamic>> holdCalls = [];
+  Object? throwOnHold;
+
+  @override
+  Future<Map<String, dynamic>> setBoxHold(String tag,
+      {required String status, String reason = ''}) async {
+    if (throwOnHold != null) {
+      final e = throwOnHold!;
+      throwOnHold = null;
+      throw e;
+    }
+    holdCalls.add({'tag': tag, 'status': status, 'reason': reason});
+    return {'tag': tag, 'status': status, 'history': []};
+  }
+
+  final List<Map<String, dynamic>> reportCalls = [];
+  Object? throwOnReport;
+
+  @override
+  Future<Map<String, dynamic>> report({
+    required String kind,
+    String? tag,
+    Map<String, String>? location,
+    String note = '',
+  }) async {
+    if (throwOnReport != null) {
+      final e = throwOnReport!;
+      throwOnReport = null;
+      throw e;
+    }
+    reportCalls
+        .add({'kind': kind, 'tag': tag, 'location': location, 'note': note});
+    return {'dir': kind, 'tag': tag};
+  }
 }
 
 Map<String, dynamic> box(String tag, String status,

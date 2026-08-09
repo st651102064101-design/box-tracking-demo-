@@ -29,6 +29,9 @@ enum Screen {
   damagedBox,
   relocate,
   cycleCount,
+  holdRelease,
+  reportProblem,
+  locationInquiry,
 }
 
 /// Which physical input a trigger pull means right now, on any screen that
@@ -1276,6 +1279,33 @@ class AppController extends ChangeNotifier {
   /// there's nothing here that requires a live connection to complete.
   void goDamagedBox() {
     screen = Screen.damagedBox;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. Online-immediate hold/damage/
+  /// release for a box already in the warehouse, with a reason attached —
+  /// complements [goDamagedBox]'s offline damage-flag queue rather than
+  /// replacing it (that one doesn't cover hold at all, and works with no
+  /// connection; this one writes straight through and covers all three).
+  void goHoldRelease() {
+    screen = Screen.holdRelease;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
+  void goReportProblem() {
+    screen = Screen.reportProblem;
+    notifyListeners();
+    _connectReader();
+  }
+
+  /// "เช็คช่อง" — LocationInquiryScreen: scan a shelf and see what the
+  /// system believes is on it. The reverse of RelocateScreen's own
+  /// box-first pick step.
+  void goLocationInquiry() {
+    screen = Screen.locationInquiry;
     notifyListeners();
     _connectReader();
   }
