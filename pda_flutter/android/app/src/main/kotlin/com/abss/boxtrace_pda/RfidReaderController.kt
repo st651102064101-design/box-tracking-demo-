@@ -116,11 +116,25 @@ class RfidReaderController(private val context: Context) :
      *  playing — defeating the whole point of the flag. It calls
      *  [playSoundIdBlocking] directly instead. */
     private fun playSoundId(id: String, volumePercent: Int) {
+        // The guard the doc comment above already describes but never
+        // actually applied: without it, a Gate sweep that hands this ten
+        // calls in the same frame (ten new boxes landing in one batch) queued
+        // all ten onto beepExec unconditionally. Each tone blocks for its own
+        // duration, so ten queued tones took ten tone-lengths to drain — the
+        // count on screen had already stopped moving while the beeps kept
+        // trickling out behind it. Dropping the excess instead keeps every
+        // tone that *does* play landing right on its box, at the cost of a
+        // batch of new boxes sometimes producing fewer ticks than boxes —
+        // the same trade [beep] already makes for the dense per-read case.
+        if (beepInFlight) return
+        beepInFlight = true
         beepExec.execute {
             try {
                 playSoundIdBlocking(id, volumePercent)
             } catch (e: Exception) {
                 Log.w(TAG, "playSoundId($id) failed", e)
+            } finally {
+                beepInFlight = false
             }
         }
     }
