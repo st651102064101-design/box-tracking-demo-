@@ -9,6 +9,7 @@ import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_capture.dart';
 
 /// "ตรวจนับ" — a stock take over one warehouse, optionally narrowed to a
 /// single zone.
@@ -30,13 +31,6 @@ class CycleCountScreen extends StatefulWidget {
 }
 
 class _CycleCountScreenState extends State<CycleCountScreen> {
-  final _scanCtrl = TextEditingController();
-  final _scanFocus = FocusNode();
-  Timer? _autoSubmitTimer;
-  static const _autoSubmitDelay = Duration(milliseconds: 180);
-  static const _autoSubmitMinLen = 2;
-  int _prevLen = 0;
-
   String? _zone; // null = whole warehouse
   bool _busy = false;
   String? _error;
@@ -50,14 +44,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   final List<String> _pending = [];
 
   AppController get _c => context.read<AppController>();
-
-  @override
-  void dispose() {
-    _autoSubmitTimer?.cancel();
-    _scanCtrl.dispose();
-    _scanFocus.dispose();
-    super.dispose();
-  }
 
   List<String> _zonesInWh(AppController c) {
     final all = c.S?.boxes.where(
@@ -96,7 +82,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       if (s['resumed'] == true) {
         _c.toastMsg('ทำต่อรอบเดิม', '${s['id']}', ResultKind.info);
       }
-      _scanFocus.requestFocus();
+      // Nothing to focus by hand any more — ScanCapture arms itself the
+      // moment the session exists (see the enabled flag in build).
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -106,28 +93,10 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
   }
 
-  void _onScanChanged() {
-    _autoSubmitTimer?.cancel();
-    final text = _scanCtrl.text.trim();
-    final addedChars = _scanCtrl.text.length - _prevLen;
-    _prevLen = _scanCtrl.text.length;
-    if (text.isEmpty || text.length < _autoSubmitMinLen) return;
-    if (addedChars > 1) {
-      _submitScan(text);
-      return;
-    }
-    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
-      if (!mounted || _scanCtrl.text.trim() != text) return;
-      _submitScan(text);
-    });
-  }
-
   Future<void> _submitScan(String raw) async {
     final session = _session;
     if (session == null || raw.isEmpty) return;
-    _scanCtrl.clear();
-    _prevLen = 0;
-    // Codes go up as typed — the server resolves barcode/EPC/TID itself, so
+    // Codes go up as scanned — the server resolves barcode/EPC/TID itself, so
     // resolving locally first would only narrow what it can match.
     _pending.add(raw);
     if (_busy) return; // a post is already in flight; it'll pick these up
@@ -218,205 +187,201 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     final missing = _list('missing');
     final unexpected = _list('unexpected');
 
-    return AutoHideHeader(
-      header: StickyHeader(
-        onBack: c.backToHome,
-        title: Text(loc.t('ตรวจนับ')),
-        subtitle: Text(session == null
-            ? c.selWhName
-            : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-              children: [
-                if (_error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 13, vertical: 11),
-                    decoration: BoxDecoration(
-                      color: C.redBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: C.redBorder),
+    return ScanCapture(
+      // Live only once a session is open — the setup step above has zone
+      // chips and a start button, and nothing to scan into yet.
+      enabled: session != null,
+      onScan: _submitScan,
+      child: AutoHideHeader(
+        header: StickyHeader(
+          onBack: c.backToHome,
+          title: Text(loc.t('ตรวจนับ')),
+          subtitle: Text(session == null
+              ? c.selWhName
+              : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+                children: [
+                  if (_error != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 13, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: C.redBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.redBorder),
+                      ),
+                      child: Text(_error!,
+                          style: TextStyle(
+                              fontSize: 12.5, color: C.red, height: 1.4)),
                     ),
-                    child: Text(_error!,
+                    const SizedBox(height: 12),
+                  ],
+                  if (session == null) ...[
+                    if (zones.isNotEmpty) ...[
+                      Text(loc.t('เลือกโซนที่จะตรวจนับ'),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: C.muted)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _zoneChip(loc.t('ทั้งคลัง'), _zone == null,
+                              () => setState(() => _zone = null)),
+                          ...zones.map((z) => _zoneChip(
+                              z, _zone == z, () => setState(() => _zone = z))),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _start,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.ink,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(_busy
+                            ? loc.t('กำลังเริ่ม…')
+                            : loc.t('เริ่มตรวจนับ')),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                        loc.t(
+                            'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
                         style: TextStyle(
-                            fontSize: 12.5, color: C.red, height: 1.4)),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (session == null) ...[
-                  if (zones.isNotEmpty) ...[
-                    Text(loc.t('เลือกโซนที่จะตรวจนับ'),
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: C.muted)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                            fontSize: 11.5, color: C.faint, height: 1.45)),
+                  ] else ...[
+                    // No field: the count is driven by the imager alone (see
+                    // ScanCapture around this screen). A hand-typed code in a
+                    // stock take is worse than a missed one — it reconciles a
+                    // box that nobody actually saw on the shelf.
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 18),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: C.fieldBorder, width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.checklist, color: C.muted),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(loc.t('ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: C.muted,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          if (_busy)
+                            const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                        ],
+                      ),
+                    ),
+                    if (_pending.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('${loc.t('รอส่งเข้าระบบ')} ${_pending.length}',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: C.orange,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                    const SizedBox(height: 14),
+                    Row(
                       children: [
-                        _zoneChip(loc.t('ทั้งคลัง'), _zone == null,
-                            () => setState(() => _zone = null)),
-                        ...zones.map((z) => _zoneChip(
-                            z, _zone == z, () => setState(() => _zone = z))),
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('expected')}',
+                                label: loc.t('คาดว่ามี'),
+                                color: C.ink)),
+                        const SizedBox(width: 9),
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('counted')}',
+                                label: loc.t('พบแล้ว'),
+                                color: C.menuGreen)),
+                        const SizedBox(width: 9),
+                        Expanded(
+                            child: _CountStat(
+                                value: '${_summary('missing')}',
+                                label: loc.t('ยังไม่พบ'),
+                                color: C.menuOrange)),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _busy ? null : _start,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: C.ink,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _close,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.lime,
+                          foregroundColor: C.limeDeep,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(loc.t('ปิดรอบและบันทึกผล'),
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w800)),
                       ),
-                      child: Text(
-                          _busy ? loc.t('กำลังเริ่ม…') : loc.t('เริ่มตรวจนับ')),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                      loc.t(
-                          'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
-                      style: TextStyle(
-                          fontSize: 11.5, color: C.faint, height: 1.45)),
-                ] else ...[
-                  TextField(
-                    controller: _scanCtrl,
-                    focusNode: _scanFocus,
-                    autofocus: true,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: (_) => _onScanChanged(),
-                    onSubmitted: (_) => _submitScan(_scanCtrl.text.trim()),
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace'),
-                    decoration: InputDecoration(
-                      hintText: loc.t('ยิงบาร์โค้ด หรือพิมพ์รหัส'),
-                      hintStyle: TextStyle(
-                          fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                      prefixIcon: Icon(Icons.checklist, color: C.muted),
-                      suffixIcon: _busy
-                          ? const Padding(
-                              padding: EdgeInsets.all(13),
-                              child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                            )
-                          : null,
-                      isDense: true,
-                      filled: true,
-                      fillColor: C.surface,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              BorderSide(color: C.fieldBorder, width: 1.5)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              BorderSide(color: C.fieldBorder, width: 1.5)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: C.ink, width: 1.5)),
-                    ),
-                  ),
-                  if (_pending.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text('${loc.t('รอส่งเข้าระบบ')} ${_pending.length}',
-                        style: TextStyle(
-                            fontSize: 11.5,
-                            color: C.orange,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                          child: _CountStat(
-                              value: '${_summary('expected')}',
-                              label: loc.t('คาดว่ามี'),
-                              color: C.ink)),
-                      const SizedBox(width: 9),
-                      Expanded(
-                          child: _CountStat(
-                              value: '${_summary('counted')}',
-                              label: loc.t('พบแล้ว'),
-                              color: C.menuGreen)),
-                      const SizedBox(width: 9),
-                      Expanded(
-                          child: _CountStat(
-                              value: '${_summary('missing')}',
-                              label: loc.t('ยังไม่พบ'),
-                              color: C.menuOrange)),
+                    if (unexpected.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('ไม่ควรอยู่ที่นี่')),
+                      const SizedBox(height: 8),
+                      ...unexpected.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.red,
+                            icon: Icons.error_outline,
+                          )),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _busy ? null : _close,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: C.lime,
-                        foregroundColor: C.limeDeep,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(loc.t('ปิดรอบและบันทึกผล'),
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  if (unexpected.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Caption(loc.t('ไม่ควรอยู่ที่นี่')),
-                    const SizedBox(height: 8),
-                    ...unexpected.map((tag) => _rowTile(
-                          tag: tag,
-                          sub: _typeOf(c, tag),
-                          color: C.red,
-                          icon: Icons.error_outline,
-                        )),
-                  ],
-                  if (missing.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Caption(loc.t('ยังไม่พบ')),
-                    const SizedBox(height: 8),
-                    ...missing.map((tag) => _rowTile(
-                          tag: tag,
-                          sub: _typeOf(c, tag),
-                          color: C.faint,
-                          icon: Icons.radio_button_unchecked,
-                        )),
-                  ],
-                  if (counted.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Caption(loc.t('พบแล้ว')),
-                    const SizedBox(height: 8),
-                    ...counted.map((tag) => _rowTile(
-                          tag: tag,
-                          sub: _typeOf(c, tag),
-                          color: C.menuGreen,
-                          icon: Icons.check_circle,
-                        )),
+                    if (missing.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('ยังไม่พบ')),
+                      const SizedBox(height: 8),
+                      ...missing.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.faint,
+                            icon: Icons.radio_button_unchecked,
+                          )),
+                    ],
+                    if (counted.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Caption(loc.t('พบแล้ว')),
+                      const SizedBox(height: 8),
+                      ...counted.map((tag) => _rowTile(
+                            tag: tag,
+                            sub: _typeOf(c, tag),
+                            color: C.menuGreen,
+                            icon: Icons.check_circle,
+                          )),
+                    ],
                   ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

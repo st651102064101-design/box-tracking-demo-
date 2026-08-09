@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_capture.dart';
 
 enum _Step { waitingBarcode, waitingRfid, success }
 
@@ -42,22 +43,8 @@ class RfidRegisterScreen extends StatefulWidget {
 }
 
 class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
-  final _barcodeCtrl = TextEditingController();
-  final _barcodeFocus = FocusNode();
-
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
-
-  /// Debounce timer for auto-submitting the barcode field without a trailing
-  /// Enter/Tab keystroke. A barcode gun in HID/keyboard-wedge mode injects a
-  /// whole code in a handful of milliseconds — far faster than anyone types
-  /// by hand — so "the field went quiet" is itself a reliable "a scan just
-  /// finished" signal, no reader-suffix configuration required. onSubmitted
-  /// (Enter) still fires immediately when the terminal *is* configured with
-  /// a suffix key; this is only the fallback for when it isn't.
-  Timer? _autoSubmitTimer;
-  static const _autoSubmitDelay = Duration(milliseconds: 180);
-  static const _autoSubmitMinLen = 4;
 
   _Step _step = _Step.waitingBarcode;
   String? _tag; // verified box barcode for the box currently in hand
@@ -94,7 +81,6 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     // every call, and on this reader it came back empty regardless, so every
     // read was rejected for having no TID. Binding on the EPC needs none of it.
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
-    _barcodeCtrl.addListener(_onBarcodeChanged);
   }
 
   @override
@@ -107,23 +93,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     _tagSub?.cancel();
     _statusSub?.cancel();
     _successTimer?.cancel();
-    _autoSubmitTimer?.cancel();
-    _barcodeCtrl.removeListener(_onBarcodeChanged);
-    _barcodeCtrl.dispose();
-    _barcodeFocus.dispose();
     super.dispose();
-  }
-
-  void _onBarcodeChanged() {
-    _autoSubmitTimer?.cancel();
-    final text = _barcodeCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _verifying) return;
-    _autoSubmitTimer = Timer(_autoSubmitDelay, () {
-      // Field has to still hold exactly what triggered this timer — someone
-      // still typing by hand would otherwise get cut off mid-code.
-      if (!mounted || _verifying || _barcodeCtrl.text.trim() != text) return;
-      _submitBarcode();
-    });
   }
 
   String get _today {
@@ -147,15 +117,14 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
       _found.clear();
       _selectedEpc = null;
     });
-    _barcodeCtrl.clear();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _barcodeFocus.requestFocus());
   }
 
-  Future<void> _submitBarcode() async {
-    final code = _barcodeCtrl.text.trim();
+  /// A box barcode arrived from the imager. Nothing else can call this: there
+  /// is no field to type into (see ScanCapture in [build]), because a
+  /// hand-keyed code here binds an RFID tag to the wrong box.
+  Future<void> _submitBarcode(String code) async {
+    code = code.trim();
     if (code.isEmpty || _verifying) return;
-    _autoSubmitTimer?.cancel();
     setState(() {
       _verifying = true;
       _error = null;
@@ -176,7 +145,6 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
         _found.clear();
         _selectedEpc = null;
       });
-      _barcodeCtrl.clear();
       // Arm the reader the instant the barcode lands. The operator is holding
       // a gun against a box they have already scanned; making them put a hand
       // on the screen between the two halves of one action is the whole thing
@@ -289,7 +257,7 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
           _found.clear();
           _selectedEpc = null;
         });
-        _barcodeFocus.requestFocus();
+        // ScanCapture re-arms itself for the next box — see [build].
       });
     } catch (e) {
       setState(() =>
@@ -314,37 +282,43 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final today = _c.prefs.rfidRegisteredToday(_today);
 
-    return AutoHideHeader(
-      header: StickyHeader(
-          onBack: c.backToHome, title: const Text('ลงทะเบียนแท็ก RFID')),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('ผูกสำเร็จวันนี้',
-                        style: TextStyle(fontSize: 13, color: C.muted)),
-                    Text('$today กล่อง',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: C.lime)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _barcodeCard(),
-                const SizedBox(height: 12),
-                _rfidCard(),
-                const SizedBox(height: 14),
-                _banner(),
-              ],
+    return ScanCapture(
+      // The barcode half only. The RFID half arrives on the reader's own
+      // stream, and the success step is just a hold before the next box.
+      enabled: _step == _Step.waitingBarcode && !_verifying,
+      onScan: _submitBarcode,
+      child: AutoHideHeader(
+        header: StickyHeader(
+            onBack: c.backToHome, title: const Text('ลงทะเบียนแท็ก RFID')),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 16),
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('ผูกสำเร็จวันนี้',
+                          style: TextStyle(fontSize: 13, color: C.muted)),
+                      Text('$today กล่อง',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: C.lime)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _barcodeCard(),
+                  const SizedBox(height: 12),
+                  _rfidCard(),
+                  const SizedBox(height: 14),
+                  _banner(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -410,42 +384,35 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
               ],
             )
           else
-            TextField(
-              controller: _barcodeCtrl,
-              focusNode: _barcodeFocus,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              autocorrect: false,
-              enableSuggestions: false,
-              enabled: !_verifying,
-              onSubmitted: (_) => _submitBarcode(),
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                hintText: 'ยิงบาร์โค้ด หรือพิมพ์รหัสกล่อง',
-                hintStyle: TextStyle(
-                    fontFamily: 'Roboto', color: C.faint, fontSize: 14),
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-                filled: true,
-                fillColor: C.neutralBg,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-                suffixIcon: _verifying
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2)),
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.arrow_forward),
-                        onPressed: _submitBarcode),
+            // No field: the box barcode may only come from the imager. This
+            // screen decides which physical box an RFID tag is bound to, and a
+            // typo here is invisible forever after — the tag reads back a real
+            // box id, just not the one on the shelf.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 15),
+              decoration: BoxDecoration(
+                color: C.neutralBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.qr_code_scanner, size: 19, color: C.muted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                        _verifying ? 'กำลังตรวจสอบ…' : 'ยิงบาร์โค้ดกล่อง',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: C.muted,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  if (_verifying)
+                    const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
               ),
             ),
           if (_error != null) ...[

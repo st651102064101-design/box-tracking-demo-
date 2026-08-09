@@ -9,6 +9,7 @@ import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_capture.dart';
 
 /// "ย้ายตำแหน่ง" — relocate boxes already sitting in the warehouse to a new
 /// zone/rack/shelf/slot. Reuses [ApiClient.putawayBox] (the same call
@@ -33,13 +34,6 @@ class TransferScreen extends StatefulWidget {
 
 class _TransferScreenState extends State<TransferScreen> {
   // ── barcode mode: single target ──────────────────────────────────────
-  final _searchCtrl = TextEditingController();
-  final _searchFocus = FocusNode();
-  Timer? _autoSearchTimer;
-  static const _autoSearchDelay = Duration(milliseconds: 180);
-  static const _autoSearchMinLen = 3;
-  int _prevLen = 0;
-
   Box? _target;
   String? _error;
   bool _saving = false;
@@ -75,8 +69,6 @@ class _TransferScreenState extends State<TransferScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _searchFocus.requestFocus());
     _triggerSub = _c.rfid.triggers.listen((pressed) {
       if (mounted) setState(() => _reading = pressed);
     });
@@ -84,9 +76,6 @@ class _TransferScreenState extends State<TransferScreen> {
 
   @override
   void dispose() {
-    _autoSearchTimer?.cancel();
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
     _listSearchCtrl.dispose();
     _triggerSub?.cancel();
     // Leaving mid-sweep must not leave the antenna running in the
@@ -104,36 +93,14 @@ class _TransferScreenState extends State<TransferScreen> {
     _excluded.clear();
     _bulkDest = null;
     _bulkError = null;
-    if (m == ScanInputMode.barcode) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _searchFocus.requestFocus());
-    } else {
-      _searchFocus.unfocus();
-    }
     setState(() {});
   }
 
   // ── barcode: single target ────────────────────────────────────────────
-  void _onSearchChanged() {
-    _autoSearchTimer?.cancel();
-    final text = _searchCtrl.text.trim();
-    final addedChars = _searchCtrl.text.length - _prevLen;
-    _prevLen = _searchCtrl.text.length;
-    if (text.isEmpty) return;
-    if (text.length < _autoSearchMinLen) return;
-    // Same burst-detection as track_screen/rfid_locate_screen: a scan lands
-    // as more than one new character in a single callback, which commits
-    // immediately instead of waiting out the debounce.
-    if (addedChars > 1) {
-      _resolve(text);
-      return;
-    }
-    _autoSearchTimer = Timer(_autoSearchDelay, () {
-      if (!mounted || _searchCtrl.text.trim() != text) return;
-      _resolve(text);
-    });
-  }
-
+  /// The box to move, straight off the imager. No typed path: this screen
+  /// rewrites where a box is, and a mistyped tag moves a box that nobody
+  /// touched. Picking one off the list (the other branch of this step) stays
+  /// available for a box that can't be scanned.
   void _resolve(String raw) {
     final c = _c;
     final tag = c.resolveTag(raw);
@@ -160,13 +127,9 @@ class _TransferScreenState extends State<TransferScreen> {
       _target = null;
       _error = null;
       _pickFromList = false;
-      _searchCtrl.clear();
       _listSearchCtrl.clear();
-      _prevLen = 0;
       _dest = null;
     });
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _searchFocus.requestFocus());
   }
 
   Future<void> _submitSingle() async {
@@ -248,27 +211,37 @@ class _TransferScreenState extends State<TransferScreen> {
     final bottom = MediaQuery.of(context).padding.bottom;
     final isRfid = c.scanInputMode == ScanInputMode.rfid;
 
-    return AutoHideHeader(
-      header: StickyHeader(
-        onBack: c.backToHome,
-        title: Text(loc.t('ย้ายตำแหน่ง')),
-        subtitle: Text(loc.t(isRfid
-            ? 'เหนี่ยวไกเพื่อกวาดหลายกล่องพร้อมกัน'
-            : 'ยิงหรือพิมพ์รหัสกล่องที่จะย้าย')),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
-              children: [
-                _modeToggle(c, loc),
-                const SizedBox(height: 11),
-                if (!isRfid) ..._barcodeBody(c, loc) else ..._rfidBody(c, loc),
-              ],
+    return ScanCapture(
+      // Only while the single-box step is actually waiting for one. The list
+      // picker below has its own typed filter (a box you can't scan is
+      // exactly why that branch exists) and must keep its own focus.
+      enabled: !isRfid && _target == null && !_pickFromList,
+      onScan: _resolve,
+      child: AutoHideHeader(
+        header: StickyHeader(
+          onBack: c.backToHome,
+          title: Text(loc.t('ย้ายตำแหน่ง')),
+          subtitle: Text(loc.t(isRfid
+              ? 'เหนี่ยวไกเพื่อกวาดหลายกล่องพร้อมกัน'
+              : 'ยิงบาร์โค้ดกล่องที่จะย้าย')),
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
+                children: [
+                  _modeToggle(c, loc),
+                  const SizedBox(height: 11),
+                  if (!isRfid)
+                    ..._barcodeBody(c, loc)
+                  else
+                    ..._rfidBody(c, loc),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -443,33 +416,24 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   Widget _scanField(LocaleController loc) {
-    return TextField(
-      controller: _searchCtrl,
-      focusNode: _searchFocus,
-      textCapitalization: TextCapitalization.characters,
-      autocorrect: false,
-      enableSuggestions: false,
-      onChanged: (_) => _onSearchChanged(),
-      onSubmitted: (_) => _resolve(_searchCtrl.text.trim()),
-      style: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-      decoration: InputDecoration(
-        hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
-        hintStyle:
-            TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-        prefixIcon: Icon(Icons.sync_alt, color: C.muted),
-        isDense: true,
-        filled: true,
-        fillColor: C.surface,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: C.fieldBorder, width: 1.5)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: C.ink, width: 1.5)),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.fieldBorder, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.sync_alt, color: C.muted),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Text(loc.t('ยิงบาร์โค้ดกล่องที่จะย้าย'),
+                style: TextStyle(
+                    fontSize: 14, color: C.muted, fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }
