@@ -310,19 +310,12 @@ export async function gateIn(db: DB, input: GateInInput) {
     throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
   }
 
-  // A box shipped out from warehouse-A has to come back to warehouse-A —
-  // this gate belongs to `wh`, and outWh disagreeing almost certainly means
-  // a mis-scan or the wrong gate, not a legitimate inter-warehouse transfer
-  // (this app has no such flow). A box that's never shipped (pending/new
-  // from a supplier, no outWh yet) is unrestricted — its first warehouse is
-  // whichever gate receives it first.
-  const wrongWh = canonicalTags
-    .map((tag) => found.get(tag)!)
-    .filter((row) => row.status === 'out' && row.outWh && row.outWh !== wh);
-  if (wrongWh.length) {
-    const detail = wrongWh.map((row) => `${row.tag} (ออกจากคลัง ${row.outWh})`).join(', ');
-    throw httpError(409, `รับเข้าไม่ได้ — ต้องคืนที่คลังเดิม: ${detail}`, 'box_wrong_warehouse');
-  }
+  // A box is received wherever it physically shows up: shipping out from
+  // warehouse-A and arriving at warehouse-B is a real inter-warehouse
+  // transfer, not a mis-scan, so `wh` here simply becomes the box's new
+  // warehouse regardless of outWh. Gate Out keeps its own "only ship what's
+  // actually in this warehouse" guard, which is what stops a genuine
+  // mis-scan from moving stock that isn't there.
 
   await db.transaction(async (tx) => {
     for (const tag of canonicalTags) {
@@ -354,7 +347,22 @@ export async function gateIn(db: DB, input: GateInInput) {
         !condition && input.location
           ? { wh, zone: input.location.zone ?? '', rack: input.location.rack ?? '', shelf: input.location.shelf ?? '', slot: input.location.slot ?? '', gate: null, ts: inTs }
           : undefined;
-      if (location) b.location = location;
+      let locationDirty = condition === 'hold' || condition === 'damage';
+      if (location) {
+        b.location = location;
+        locationDirty = true;
+      }
+      // Received at a different warehouse than the one it's still recorded in:
+      // the old zone/rack/shelf/slot belongs to that other building, so it can't
+      // travel with the box. Re-home the box on this warehouse with no position
+      // (pending putaway) — otherwise the stale location.wh keeps winning in
+      // currentWhOf and gateOut would refuse to ship it from the warehouse it's
+      // physically standing in.
+      const curWh = (b.location as Record<string, unknown> | null)?.wh;
+      if (!location && condition !== 'hold' && condition !== 'damage' && typeof curWh === 'string' && curWh && curWh !== wh) {
+        b.location = { wh, zone: '', rack: '', shelf: '', slot: '', gate: null, ts: inTs };
+        locationDirty = true;
+      }
       b.plate = plate;
       b.driver = driver;
       b.vehicleType = vehicleType;
@@ -399,13 +407,13 @@ export async function gateIn(db: DB, input: GateInInput) {
           outWh: null,
           outAt: null,
           dueAt: null,
-          ...(location ? { location } : {}),
           data: b,
           updatedAt: new Date(),
-          // Only touch the typed location column for the quarantine case above —
-          // an ordinary inbound (status 'warehouse') still goes through the
-          // dedicated putaway endpoint to pick a real shelf position, same as always.
-          ...(condition === 'hold' || condition === 'damage' ? { location: b.location } : {}),
+          // Only touch the typed location column when this scan actually decided
+          // a position — an explicit shelf, the quarantine park, or the re-home
+          // onto this warehouse above. An ordinary inbound with none of those
+          // still goes through the dedicated putaway endpoint, same as always.
+          ...(locationDirty ? { location: b.location } : {}),
         })
         .where(eq(boxes.tag, tag));
 
