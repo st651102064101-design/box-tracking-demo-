@@ -1667,6 +1667,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
     <button class="btn ghost" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
     <button class="btn ghost" onclick="exportGateOutQueueExcel()" title="ยังไม่ยืนยันส่งออกก็ export ได้ — เอาไว้ตรวจทานหรือแนบเอกสารก่อนยืนยัน"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+    <button class="btn ghost" onclick="exportAllSystemExcel()" title="Export กล่องทุกใบในระบบ (ไม่ใช่แค่คิวสแกน) — คอลัมน์เดียวกับที่นำเข้าไฟล์ .xlsx ด้านบนรู้จัก ใช้ทดสอบ export แล้วนำเข้ากลับได้"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export ทั้งระบบ</button>
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <span class="muted small" id="outCount"></span>
   </div>
@@ -6641,6 +6642,36 @@ function exportGateOutQueueExcel(){
   downloadXLS('gate-out-queue-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
 }
 window.exportGateOutQueueExcel=exportGateOutQueueExcel;
+/* Whole-system export, same column format as exportGateOutQueueExcel — every
+   box currently in the database (any status, not just the scan queue), each
+   row using THAT box's own type/customer/warehouse/DO/PO, not whatever is
+   sitting in the DO form right now (there's no one "current shipment" for a
+   full-database dump). Built for round-tripping: export everything, wipe it
+   (a separate, explicit step — this function only ever reads), then re-import
+   this exact file through "นำเข้าไฟล์ .xlsx" above to prove the auto-create
+   path (registerMissingBox/autoCreateCustomerIfMissing/autoCreateBoxTypeIfMissing)
+   actually rebuilds it. */
+function exportAllSystemExcel(){
+  var boxes=Object.values(S.boxes).sort(function(a,b){return a.tag<b.tag?-1:1;});
+  if(!boxes.length)return toast('ไม่มีกล่องในระบบ',null,'err');
+  var headers=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
+    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
+  var rows=boxes.map(function(b){
+    var bt=S.boxtypes[b.type]||{};
+    var custId=b.customer||'';
+    var cust=custId?custName(custId):'';
+    var custRec=custId?(S.customers[custId]||{}):{};
+    var wh=(b.location||{}).wh||b.outWh||'';
+    var ts=b.regAt||b.lastSeenAt||iso();
+    var d=new Date(ts);
+    return [barcodeCell(b.tag), typeName(b.type), bt.unit||'', OUT_COND_LABEL[outConditionMap[b.tag]||'good'],
+      cust, custRec.addr||'', custRec.phone||'', custRec.email||'',
+      custRec.returnDays||'', b.do||'', b.po||'',
+      whName(wh)||'', '', '', dstr(d), tstr(d), b.regBy||''];
+  });
+  downloadXLS('all-boxes-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
+}
+window.exportAllSystemExcel=exportAllSystemExcel;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
 /* ===== Due-date live preview (injected — no HTML edits required) =====
