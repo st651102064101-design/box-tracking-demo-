@@ -354,26 +354,11 @@ class SettingsScreen extends StatelessWidget {
       ResultKind.info,
     );
     if (!context.mounted) return;
-    // New PIN first, OTP last — see login_screen.dart's _forgotPin for the
-    // full reasoning: confirmPinReset is the only endpoint that checks an
-    // OTP, and it sets the PIN in the same call, so the OTP can only be
-    // validated at the step where it's typed if the PIN is already in hand.
-    final newPinResult = await showPinPad(context,
-        title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!context.mounted) return;
-    final confirm = await showPinPad(
-      context,
-      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
-      validate: (entered) async =>
-          entered == newPin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
-    );
-    if (confirm == null || confirm.pin == null) return;
-
-    if (!context.mounted) return;
-    var applied = false;
+    // OTP first — see login_screen.dart's _forgotPin for the full reasoning:
+    // verifyPinReset checks the code without consuming it or touching the
+    // PIN, so a wrong/expired OTP is caught right here instead of after the
+    // operator has already typed a new PIN twice. The actual write still
+    // goes through confirmPinReset at the end, carrying this verified OTP.
     final otpResult = await showPinPad(
       context,
       title: loc.t('กรอกรหัส OTP'),
@@ -383,8 +368,7 @@ class SettingsScreen extends StatelessWidget {
       length: 6,
       validate: (otp) async {
         try {
-          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-          applied = true;
+          await c.api.verifyPinReset(e.id, otp);
           return null;
         } on ApiException catch (err) {
           return err.message.isEmpty
@@ -408,7 +392,36 @@ class SettingsScreen extends StatelessWidget {
         }
       },
     );
-    if (otpResult == null || !applied) return;
+    if (otpResult == null || otpResult.pin == null) return;
+    final verifiedOtp = otpResult.pin!;
+
+    if (!context.mounted) return;
+    final newPinResult = await showPinPad(context,
+        title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!context.mounted) return;
+    var applied = false;
+    final confirm = await showPinPad(
+      context,
+      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
+      validate: (entered) async {
+        if (entered != newPin) return loc.t('รหัสไม่ตรงกัน ลองใหม่');
+        try {
+          await c.api.confirmPinReset(e.id, otp: verifiedOtp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          return err.message.isEmpty
+              ? loc.t('รหัส OTP ไม่ถูกต้องหรือหมดอายุ')
+              : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (confirm == null || !applied) return;
 
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);

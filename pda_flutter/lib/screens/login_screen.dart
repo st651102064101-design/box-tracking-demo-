@@ -157,17 +157,16 @@ class _LoginScreenState extends State<LoginScreen> {
   /// state for the whole round trip instead of popping and leaving this
   /// screen idle while it waits. [sentTo] is whatever that request found.
   ///
-  /// Step order is new-PIN → confirm → **OTP last**, which looks backwards
-  /// but is the only way the OTP actually gets validated at the step where
-  /// it's typed. The backend exposes exactly one reset call —
-  /// `confirmPinReset(id, otp, pin)`, which checks the OTP and sets the PIN
-  /// together — and no standalone "is this OTP valid" endpoint. Asking for
-  /// the OTP first therefore couldn't check anything: a wrong code was only
-  /// discovered after the operator had already typed a new PIN twice, and
-  /// then dumped them back to the start. Collecting the PIN first lets the
-  /// OTP pad's own `validate` make the real call, so a wrong code shows
-  /// inline and the pad stays open for a retype — no lost work, no screen
-  /// change until the server has actually accepted it.
+  /// Step order is **OTP first**, then new-PIN → confirm. The operator taps
+  /// "ลืมรหัส PIN?" expecting to land straight on the OTP entry they were
+  /// just emailed about — not a "set a new PIN" screen that only reveals a
+  /// wrong/expired code several taps later. `verifyPinReset(id, otp)` checks
+  /// the code against what's on file without consuming it or touching the
+  /// PIN, so a wrong code shows inline right here and the pad stays open for
+  /// a retype; only a verified OTP is allowed through to the PIN screens.
+  /// The actual PIN write still goes through `confirmPinReset(id, otp, pin)`
+  /// at the end — the only call that touches the PIN — carrying the same OTP
+  /// that was just verified.
   Future<void> _forgotPin(Employee e, String? sentTo) async {
     if (!mounted) return;
     final c = context.read<AppController>();
@@ -177,24 +176,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ResultKind.info,
     );
 
-    final newPinResult = await showPinPad(
-      context,
-      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
-    );
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!mounted) return;
-    final confirm = await showPinPad(
-      context,
-      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async =>
-          entered == newPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
-    );
-    if (confirm == null || confirm.pin == null) return;
-
-    if (!mounted) return;
-    var applied = false;
     final otpResult = await showPinPad(
       context,
       title: 'กรอกรหัส OTP',
@@ -204,8 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
       length: 6,
       validate: (otp) async {
         try {
-          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-          applied = true;
+          await c.api.verifyPinReset(e.id, otp);
           return null;
         } on ApiException catch (err) {
           // The server answered and refused — almost always a wrong or
@@ -234,7 +214,38 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       },
     );
-    if (otpResult == null || !applied) return; // cancelled, or never accepted
+    if (otpResult == null || otpResult.pin == null) return; // cancelled
+    final verifiedOtp = otpResult.pin!;
+
+    if (!mounted) return;
+    final newPinResult = await showPinPad(
+      context,
+      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
+    );
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!mounted) return;
+    var applied = false;
+    final confirm = await showPinPad(
+      context,
+      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
+      validate: (entered) async {
+        if (entered != newPin) return 'รหัสไม่ตรงกัน ลองใหม่';
+        try {
+          await c.api.confirmPinReset(e.id, otp: verifiedOtp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          return err.message.isEmpty
+              ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ'
+              : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (confirm == null || !applied) return; // cancelled, or never accepted
 
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);

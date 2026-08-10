@@ -369,6 +369,17 @@ class ApiClient {
         headers: _headers)) as Map<String, dynamic>;
   }
 
+  /// POST /api/employees/:id/pin/reset/verify { otp } — checks the OTP
+  /// against what's on file without consuming it or setting a PIN. Lets the
+  /// client gate the "set a new PIN" screen behind a correct code instead of
+  /// only learning it was wrong after a new PIN was already typed twice.
+  Future<void> verifyPinReset(String employeeId, String otp) async {
+    await _send(() => http.post(
+        _u('/api/employees/$employeeId/pin/reset/verify'),
+        headers: _headers,
+        body: jsonEncode({'otp': otp})));
+  }
+
   /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that
   /// arrived by email, plus the new PIN to set once it checks out.
   Future<void> confirmPinReset(String employeeId,
