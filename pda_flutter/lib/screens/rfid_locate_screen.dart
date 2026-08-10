@@ -233,7 +233,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // through AppController.resolveTag.
       final isMatch = epc == want ||
           tid == want ||
-          epcToAscii(epc)?.toUpperCase() == wantTag;
+          epcMatchesTag(epc, wantTag);
       if (!isMatch) continue;
       final rssi = r.rssi ??
           _rssiClose; // no RSSI field on this read: treat as a direct hit
@@ -307,7 +307,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         final tid = r.tid?.toUpperCase();
         final isMatch = epc == want ||
             tid == want ||
-            epcToAscii(epc)?.toUpperCase() == wantTag;
+            epcMatchesTag(epc, wantTag);
         if (!isMatch) continue;
         final rssi = r.rssi ?? _rssiClose;
         if (best == null || rssi > best) best = rssi;

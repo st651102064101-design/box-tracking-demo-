@@ -504,6 +504,26 @@ void main() {
       expect(c.queue, ['BOX-010']);
     });
 
+    // Some writers pad with the ASCII character '0' rather than the byte
+    // 0x00, so the decode itself comes back as '00000BOX-010'.
+    test("resolves an EPC padded with ASCII '0' characters", () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['BOX-010'] = box('BOX-010', 'warehouse');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('3030303030424F582D303130'); // '00000BOX-010'
+      expect(c.queue, ['BOX-010']);
+    });
+
+    test("an ASCII-'0'-padded EPC still finds a 6-character box id", () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'out';
+      c.addScan('30303030304352542D3031'); // '00000CRT-01'
+      expect(c.queue, ['CRT-01']);
+    });
+
     test('an ASCII-encoded EPC for a box that does not exist still fails',
         () async {
       final c = await makeController(FakeApi());

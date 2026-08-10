@@ -37,4 +37,46 @@ void main() {
       expect(epcToAscii('000000000000000000000041'), isNull); // 'A'
     });
   });
+
+  group('epcBarcode — the rightmost 7 characters', () {
+    test("drops '0' padding that decoded as text", () {
+      // 00000BOX-010 — the zeros are ASCII 0x30, part of the decoded string
+      expect(epcToAscii('3030303030424F582D303130'), '00000BOX-010');
+      expect(epcBarcode('3030303030424F582D303130'), 'BOX-010');
+    });
+
+    test('leaves a code that is already 7 or fewer characters alone', () {
+      expect(epcBarcode('000000000000424F582D3031'), 'BOX-01');
+      expect(epcBarcode('00000000000000424F582D303130'), 'BOX-010');
+    });
+
+    test('passes through a tag with no text at all', () {
+      expect(epcBarcode('E280691500007006A375143E'), isNull);
+    });
+  });
+
+  group('epcTagCandidates / epcMatchesTag', () {
+    test('offers the whole text, the 7-char slice, then shorter suffixes', () {
+      final c = epcTagCandidates('3030303030424F582D303130'); // 00000BOX-010
+      expect(c.first, '00000BOX-010');
+      expect(c, contains('BOX-010'));
+      expect(c.last.length, 2);
+    });
+
+    test('reaches a box id shorter than 7 characters', () {
+      // 00000CRT-01 — the 7-char slice would be '0CRT-01', the suffix is right
+      expect(epcMatchesTag('30303030304352542D3031', 'CRT-01'), isTrue);
+    });
+
+    test('reaches a box id longer than 7 characters', () {
+      expect(epcMatchesTag('424F582D30313030', 'BOX-0100'), isTrue);
+    });
+
+    test('is case-insensitive and rejects a tag that is not in the payload',
+        () {
+      expect(epcMatchesTag('3030303030424F582D303130', 'box-010'), isTrue);
+      expect(epcMatchesTag('3030303030424F582D303130', 'BOX-011'), isFalse);
+      expect(epcMatchesTag('E280691500007006A375143E', 'BOX-010'), isFalse);
+    });
+  });
 }

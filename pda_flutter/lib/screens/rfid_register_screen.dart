@@ -564,8 +564,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
                           color: C.faint)),
-                  if (epcToAscii(c.epc) != null)
-                    Text(epcToAscii(c.epc)!,
+                  if (epcBarcode(c.epc) != null)
+                    Text(epcBarcode(c.epc)!,
                         style: TextStyle(
                             fontSize: 12,
                             fontFamily: 'monospace',
@@ -610,8 +610,8 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                       color: selected ? C.ink : C.ink2,
                     ),
                   ),
-                  if (epcToAscii(c.epc) != null)
-                    Text(epcToAscii(c.epc)!,
+                  if (epcBarcode(c.epc) != null)
+                    Text(epcBarcode(c.epc)!,
                         style: TextStyle(
                             fontSize: 12,
                             fontFamily: 'monospace',

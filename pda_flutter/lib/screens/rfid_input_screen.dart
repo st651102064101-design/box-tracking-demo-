@@ -67,7 +67,7 @@ class _Read {
   /// The barcode written into this EPC, when there is one — see
   /// [epcToAscii]. This is the field an operator actually recognises: the
   /// box it belongs to is printed on its side in exactly these characters.
-  String? get barcode => epcToAscii(epc);
+  String? get barcode => epcBarcode(epc);
 
   String? get decimal {
     final hex = epc.replaceAll(RegExp(r'\s'), '');

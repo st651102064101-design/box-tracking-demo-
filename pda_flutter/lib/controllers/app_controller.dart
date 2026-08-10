@@ -763,14 +763,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // though the barcode it is carrying is sitting right there in the box
     // list. Decode and match that as a tag; anything that isn't a plausible
     // barcode comes back null and falls through untouched.
-    final decoded = epcToAscii(raw);
-    if (decoded != null) {
-      if (s.boxesRaw.containsKey(decoded)) return decoded;
-      final du = decoded.toUpperCase();
-      if (s.boxesRaw.containsKey(du)) return du;
-      final dl = decoded.toLowerCase();
-      final dm = s.boxesRaw.keys.where((k) => k.toLowerCase() == dl);
-      if (dm.isNotEmpty) return dm.first;
+    // Padding is not always the byte 0x00 either — some writers pad with the
+    // ASCII character '0', which decodes as part of the text ('00000BOX-010').
+    // So each candidate from epcTagCandidates (whole text, the fixed 7-char
+    // right-hand slice, then every shorter suffix) is checked against the box
+    // list and the first one that names a real box wins. A suffix that matches
+    // nothing is never adopted, so this can only ever find a box that exists.
+    for (final cand in epcTagCandidates(raw)) {
+      if (s.boxesRaw.containsKey(cand)) return cand;
+      final cu = cand.toUpperCase();
+      if (s.boxesRaw.containsKey(cu)) return cu;
+      final cl = cand.toLowerCase();
+      final hit = s.boxesRaw.keys.where((k) => k.toLowerCase() == cl);
+      if (hit.isNotEmpty) return hit.first;
     }
     if (_looksThaiGarbled(raw)) {
       final fx = _dethaify(raw);

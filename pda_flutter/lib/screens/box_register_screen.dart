@@ -704,8 +704,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                       ],
                     ],
                   ),
-                  if (epcToAscii(c.epc) != null)
-                    Text(epcToAscii(c.epc)!,
+                  if (epcBarcode(c.epc) != null)
+                    Text(epcBarcode(c.epc)!,
                         style: TextStyle(
                             fontSize: 12,
                             fontFamily: 'monospace',
