@@ -3197,17 +3197,15 @@ function requireGateSetup(dir){
   }
   return false;
 }
-/* Same idea as requireGateSetup, for the Gate ขาออก screen specifically:
-   an outbound DO can't legally exist without a destination customer, so if
-   the customer master is empty, block the screen and force the person to
-   go create one first rather than let them discover the missing dropdown
-   themselves mid-scan. */
-function requireCustomerSetup(){
-  if(Object.keys(S.customers).length)return false;
-  openForcedModal('<div class="mhead"><h3>ยังไม่มีลูกค้าในระบบ</h3></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มข้อมูลลูกค้าก่อนใช้งาน Gate ขาออก — ใบส่งของ (DO) ต้องมีลูกค้าปลายทางเสมอ</p><button class="btn accent" onclick="releaseForcedModal();closeModal();goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มลูกค้า</button></div>');
-  return true;
-}
-window.requireGateSetup=requireGateSetup;window.openForcedModal=openForcedModal;window.releaseForcedModal=releaseForcedModal;window.requireCustomerSetup=requireCustomerSetup;
+// requireCustomerSetup (the forced "ยังไม่มีลูกค้าในระบบ" modal that used to
+// block the whole Gate ขาออก screen whenever the customer master was empty)
+// is gone on purpose: Gate ขาออก's own file import can now create a missing
+// destination customer itself (see autoCreateCustomerIfMissing), so an empty
+// customer master is no longer a dead end that has to be walked away from
+// first. saveOutbound() still refuses to save with no customer picked — see
+// its own plain "เลือกลูกค้าปลายทาง" check — just without forcing navigation
+// away from the screen to get there.
+window.requireGateSetup=requireGateSetup;window.openForcedModal=openForcedModal;window.releaseForcedModal=releaseForcedModal;
 
 /* ===== nav ===== */
 function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.style.transform='translateX('+b.offsetLeft+'px)';}
@@ -3218,7 +3216,7 @@ function switchTab(name){
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
   window.scrollTo({top:0,behavior:'smooth'});
-  if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
+  if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
@@ -6707,7 +6705,6 @@ autoScanBind($('#scanOut'),scanOut);
 /* ===== saveOutbound: validate → commit boxes/history/events → persist →
    audit → reset the form → auto-print the ZPL Delivery-Order label ===== */
 function saveOutbound(){
-  if(requireCustomerSetup())return;
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
   /* กล่องชำรุด (damage) จ่ายออกได้เฉพาะปลายทางที่เป็น Supplier (ส่งคืนผู้จำหน่าย)
@@ -12027,11 +12024,14 @@ function openColumnMapModal(opts){
   var EMAIL_ALIASES = ['email','อีเมล'];
   // Same idea, for a barcode classifyOutTag() can't find at all — see
   // registerMissingBox(). box_type/unit only matter when a NEW box type also
-  // has to be created; คลัง (wh) is never required — see findWarehouseMatch's
-  // doc comment for why this app never creates a warehouse from a file.
+  // has to be created; คลัง (wh) only needs a gate range when a NEW warehouse
+  // also has to be created — see autoCreateWarehouseIfMissing.
   var BTYPE_ALIASES = ['box type','boxtype','type','ประเภทกล่อง','ประเภท'];
   var UNIT_ALIASES = ['unit','หน่วยนับ','หน่วย'];
   var WH_ALIASES = ['warehouse','wh','คลัง','คลังต้นทาง'];
+  var WHFROM_ALIASES = ['gate from','ประตูเริ่ม','ประตูเริ่มต้น'];
+  var WHTO_ALIASES = ['gate to','ประตูสิ้นสุด'];
+  var WHGATETYPE_ALIASES = ['gate type','ทิศทางประตู'];
   // "when"/"time" both land on this one reference field, same as before — a
   // file that splits date and time into two separate columns just gets asked
   // (via openColumnMapModal) which one to map here, since this field is
@@ -12057,7 +12057,10 @@ function openColumnMapModal(opts){
     {key:'email',   label:'อีเมล (กรณีต้องสร้างลูกค้าใหม่)',       required:false, aliases:EMAIL_ALIASES},
     {key:'btype',   label:'ประเภทกล่อง (กรณีต้องลงทะเบียนกล่องใหม่)', required:false, aliases:BTYPE_ALIASES},
     {key:'unit',    label:'หน่วยนับ (กรณีต้องสร้างประเภทกล่องใหม่)', required:false, aliases:UNIT_ALIASES},
-    {key:'wh',      label:'คลัง (ตำแหน่งเริ่มต้นของกล่องที่ลงทะเบียนใหม่)', required:false, aliases:WH_ALIASES}
+    {key:'wh',      label:'คลัง (ตำแหน่งเริ่มต้นของกล่องที่ลงทะเบียนใหม่)', required:false, aliases:WH_ALIASES},
+    {key:'whFrom',  label:'ประตูเริ่ม (กรณีต้องสร้างคลังใหม่)',      required:false, aliases:WHFROM_ALIASES},
+    {key:'whTo',    label:'ประตูสิ้นสุด (กรณีต้องสร้างคลังใหม่)',    required:false, aliases:WHTO_ALIASES},
+    {key:'whGateType', label:'ทิศทางประตู (both/in/out — ไม่ระบุ = both)', required:false, aliases:WHGATETYPE_ALIASES}
   ];
 
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
@@ -12173,6 +12176,30 @@ function openColumnMapModal(opts){
     for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
     return null;
   }
+  /* Same reasoning/shape as autoCreateCustomerIfMissing and
+     autoCreateBoxTypeIfMissing: mirrors #btnAddWh's own required fields
+     exactly rather than a made-up subset — a name plus a gate range
+     (from/to), gate direction defaulting to 'both' same as the manual form.
+     This app already allows gate ranges to overlap between warehouses (see
+     #btnAddWh's own comment — "อนุญาตให้ช่วงประตูซ้ำ/ทับซ้อนระหว่างคลังได้"),
+     so creating one from a file carries the same risk the manual form
+     already accepts, not a new one. */
+  function autoCreateWarehouseIfMissing(name,fromArr,toArr,gateTypeArr){
+    if(fromArr.length!==1||!/^\d+$/.test(fromArr[0])||toArr.length!==1||!/^\d+$/.test(toArr[0]))
+      return {ok:false,reason:'ต้องมีคอลัมน์ "ประตูเริ่ม" และ "ประตูสิ้นสุด" เป็นตัวเลข ค่าเดียวกันทุกแถว'};
+    var from=parseInt(fromArr[0],10), to=parseInt(toArr[0],10);
+    if(to<from)return {ok:false,reason:'"ประตูสิ้นสุด" ต้อง ≥ "ประตูเริ่ม"'};
+    var gt=gateTypeArr.length===1?gateTypeArr[0]:'both';
+    if(['both','in','out'].indexOf(gt)<0)gt='both';
+    var id=nextSeqId('WH-',Object.keys(S.warehouses));
+    var gates=[];for(var k=from;k<=to;k++)gates.push(k);
+    var gtMap={};gates.forEach(function(g){gtMap[g]=gt;});
+    S.warehouses[id]={id:id,name:name,gates:gates,gateType:gt,gateTypes:gtMap};
+    rebuildGates();
+    auditEntry('CREATE',USER,id,name,null,S.warehouses[id]);
+    save();
+    return {ok:true,id:id};
+  }
 
   /* A barcode this file names that classifyOutTag() couldn't find at all
      (never registered, as opposed to registered-but-not-shippable) gets
@@ -12190,7 +12217,7 @@ function openColumnMapModal(opts){
      was never received would defeat the entire audit trail this system
      exists to keep. Registering it here just means the *next* file (or the
      next physical scan) won't hit "ไม่พบในระบบ" for it anymore. */
-  function registerMissingBox(tag,typeText,unitText,whText){
+  function registerMissingBox(tag,typeText,unitText,whText,whFromArr,whToArr,whGateTypeArr){
     if(!typeText)return {ok:false,reason:'ไม่พบในระบบ — ใส่คอลัมน์ "ประเภทกล่อง" เพื่อให้ระบบลงทะเบียนกล่องใหม่อัตโนมัติ'};
     var typeId=findBoxTypeMatch(typeText);
     if(!typeId){
@@ -12198,10 +12225,15 @@ function openColumnMapModal(opts){
       if(!created.ok)return {ok:false,reason:'ไม่พบในระบบ — สร้างประเภทกล่อง "'+typeText+'" ใหม่ไม่ได้: '+created.reason};
       typeId=created.id;
     }
-    var whId=findWarehouseMatch(whText)||undefined;
-    var r=createBoxes({mode:'single',tag:tag,type:typeId,wh:whId});
+    var whId=findWarehouseMatch(whText);
+    var whCreateFailed=null;
+    if(!whId&&whText){
+      var whCreated=autoCreateWarehouseIfMissing(whText,whFromArr,whToArr,whGateTypeArr);
+      if(whCreated.ok)whId=whCreated.id;else whCreateFailed=whCreated.reason;
+    }
+    var r=createBoxes({mode:'single',tag:tag,type:typeId,wh:whId||undefined});
     if(!r.ok)return {ok:false,reason:'ไม่พบในระบบ — ลงทะเบียนกล่องใหม่ไม่สำเร็จ: '+r.err};
-    return {ok:true,typeId:typeId};
+    return {ok:true,typeId:typeId,whId:whId,whCreateFailed:whCreateFailed};
   }
 
   /* ---- Read the chosen file → filter blank rows → open the mapping modal ---- */
@@ -12247,7 +12279,8 @@ function openColumnMapModal(opts){
     var tc=colMap.tag, dc=colMap.dest, rc=colMap.retDays,
         pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts, whoc=colMap.who,
         btc=colMap.btype, unitc=colMap.unit, whc=colMap.wh,
-        ac=colMap.addr, phc=colMap.phone, ec=colMap.email;
+        ac=colMap.addr, phc=colMap.phone, ec=colMap.email,
+        whfc=colMap.whFrom, whtc=colMap.whTo, whgc=colMap.whGateType;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], registered=[], seen={};
     var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[], whoVals=[],
@@ -12268,7 +12301,11 @@ function openColumnMapModal(opts){
         var typeText=btc>=0?String(rows[i][btc]==null?'':rows[i][btc]).trim():'';
         var unitText=unitc>=0?String(rows[i][unitc]==null?'':rows[i][unitc]).trim():'';
         var whText=whc>=0?String(rows[i][whc]==null?'':rows[i][whc]).trim():'';
-        var reg=registerMissingBox(resolveTag(raw),typeText,unitText,whText);
+        var whFromText=whfc>=0?String(rows[i][whfc]==null?'':rows[i][whfc]).trim():'';
+        var whToText=whtc>=0?String(rows[i][whtc]==null?'':rows[i][whtc]).trim():'';
+        var whGateTypeText=whgc>=0?String(rows[i][whgc]==null?'':rows[i][whgc]).trim():'';
+        var reg=registerMissingBox(resolveTag(raw),typeText,unitText,whText,
+          whFromText?[whFromText]:[],whToText?[whToText]:[],whGateTypeText?[whGateTypeText]:[]);
         if(reg.ok){
           registered.push(raw);
           v=classifyOutTag(raw); // re-check — freshly registered box is 'pending', still not shippable this pass
