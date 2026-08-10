@@ -12193,22 +12193,43 @@ function openColumnMapModal(opts){
     return {ok:true,id:id,locCode:locCode};
   }
 
+  /* find (or, failing that, seed) a real Location Master row for a
+     warehouse — shared by autoCreateWarehouseIfMissing (brand-new
+     warehouse) and registerMissingBox (existing warehouse with no rack
+     data yet, or the box just placed into a brand-new one). Prefers an
+     existing row so a warehouse that already has real racks doesn't get a
+     second, fake โซน A row alongside them. */
+  function pickLocationForWarehouse(whId){
+    var loc=Object.values(S.locations).filter(function(l){return l.wh===whId;})[0];
+    if(loc)return {wh:whId,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot};
+    var seedCode=locBuildCode('โซน A','R-01','1','01');
+    if(!S.locations[seedCode]){
+      S.locations[seedCode]={code:seedCode,wh:whId,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01',type:'',
+        note:'สร้างอัตโนมัติตอนนำเข้าไฟล์ (คลังนี้ยังไม่เคยมีตำแหน่งแร็ค)'};
+      save();
+    }
+    return {wh:whId,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01'};
+  }
+
   /* A barcode this file names that classifyOutTag() couldn't find at all
      (never registered, as opposed to registered-but-not-shippable) gets
      registered here — using the shared createBoxes() primitive, the one
      write point every other "new box" path in this app already goes
-     through, so it gets the exact same history/audit/pending-location
-     handling as the manual "ลงทะเบียนกล่อง" form does.
+     through, so it gets the exact same history/audit handling as the
+     manual "ลงทะเบียนกล่อง" form does.
 
-     What this deliberately does NOT do: ship the box out in the same pass.
-     createBoxes() always lands a new box on status 'pending' — awaiting its
-     first real Gate เข้า — and classifyOutTag() rejects that status for
-     exactly the right reason ('ยังไม่เคยผ่าน Gate เข้าคลัง'). A spreadsheet
-     saying a box exists is not the same fact as a box having been physically
-     counted into this warehouse; manufacturing a shipment for something that
-     was never received would defeat the entire audit trail this system
-     exists to keep. Registering it here just means the *next* file (or the
-     next physical scan) won't hit "ไม่พบในระบบ" for it anymore. */
+     It is then walked straight through commitPutaway() — the same function
+     Gate เข้า's own "ยืนยันจัดเก็บ" step uses — landing it on status
+     'warehouse' at a real (or freshly seeded) rack location instead of
+     staying 'pending'. This is deliberate, not a shortcut around the audit
+     trail: the row that names this box in a Gate ขาออก import IS the
+     assertion that the box is physically in this warehouse right now
+     (that's why it carries ประเภทกล่อง/คลัง columns in the first place), so
+     requiring a separate prior Gate-เข้า scan before the very same file can
+     ship it back out just forces a needless second pass without adding any
+     real verification — the operator would be confirming the same file's
+     own claim twice. Once placed, classifyOutTag() re-check below sees
+     status 'warehouse' and the box ships in this same pass. */
   function registerMissingBox(tag,typeText,unitText,whText,whFromArr,whToArr,whGateTypeArr){
     if(!typeText)return {ok:false,reason:'ไม่พบในระบบ — ใส่คอลัมน์ "ประเภทกล่อง" เพื่อให้ระบบลงทะเบียนกล่องใหม่อัตโนมัติ'};
     var typeId=findBoxTypeMatch(typeText);
@@ -12222,24 +12243,16 @@ function openColumnMapModal(opts){
     if(!whId&&whText){
       var whCreated=autoCreateWarehouseIfMissing(whText,whFromArr,whToArr,whGateTypeArr);
       if(whCreated.ok)whId=whCreated.id;else whCreateFailed=whCreated.reason;
-    }else if(whId){
-      // An EXISTING warehouse this file matched by name might still have no
-      // Location Master rows of its own (e.g. one added by hand with no
-      // ตำแหน่งแร็ค set up yet) — same seed as a freshly created one, so a box
-      // landing here still has somewhere real to be put away to.
-      var hasLoc=Object.values(S.locations).some(function(l){return l.wh===whId;});
-      if(!hasLoc){
-        var seedCode=locBuildCode('โซน A','R-01','1','01');
-        if(!S.locations[seedCode]){
-          S.locations[seedCode]={code:seedCode,wh:whId,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01',type:'',
-            note:'สร้างอัตโนมัติตอนนำเข้าไฟล์ (คลังนี้ยังไม่เคยมีตำแหน่งแร็ค)'};
-          save();
-        }
-      }
     }
     var r=createBoxes({mode:'single',tag:tag,type:typeId,wh:whId||undefined});
     if(!r.ok)return {ok:false,reason:'ไม่พบในระบบ — ลงทะเบียนกล่องใหม่ไม่สำเร็จ: '+r.err};
-    return {ok:true,typeId:typeId,whId:whId,whCreateFailed:whCreateFailed};
+    // createBoxes() may itself have auto-detected a single existing
+    // warehouse even when this row's own คลัง column was blank — use
+    // whatever it actually landed the box on, not just whId, so that case
+    // still gets put away instead of sitting in staging unnecessarily.
+    var placedWh=(S.boxes[tag].location||{}).wh||whId;
+    if(placedWh)commitPutaway([tag],[pickLocationForWarehouse(placedWh)],placedWh);
+    return {ok:true,typeId:typeId,whId:whId,whCreateFailed:whCreateFailed,placed:!!placedWh};
   }
 
   /* ---- Read the chosen file → filter blank rows → open the mapping modal ---- */
@@ -12300,9 +12313,9 @@ function openColumnMapModal(opts){
       var v=classifyOutTag(raw);
       // A barcode this file names that doesn't exist yet at all (as opposed
       // to existing but out/lost/hold/damage — those stay rejected exactly
-      // as before) gets registered into master data here, then reclassified.
-      // It still won't ship in this pass — see registerMissingBox's doc
-      // comment for why that's the correct outcome, not a bug.
+      // as before) gets registered into master data here, put away to a
+      // real rack (see registerMissingBox's doc comment), then reclassified
+      // — so it ships in this same pass, not a follow-up file.
       if(!v.ok&&v.code==='notfound'){
         var typeText=btc>=0?String(rows[i][btc]==null?'':rows[i][btc]).trim():'';
         var unitText=unitc>=0?String(rows[i][unitc]==null?'':rows[i][unitc]).trim():'';
@@ -12314,7 +12327,7 @@ function openColumnMapModal(opts){
           whFromText?[whFromText]:[],whToText?[whToText]:[],whGateTypeText?[whGateTypeText]:[]);
         if(reg.ok){
           registered.push(raw);
-          v=classifyOutTag(raw); // re-check — freshly registered box is 'pending', still not shippable this pass
+          v=classifyOutTag(raw); // re-check — registerMissingBox already put it away, so this is now 'warehouse'
         }else{
           v={ok:false,tag:raw,reason:reg.reason};
         }
