@@ -43,6 +43,12 @@ class _ScanScreenState extends State<ScanScreen>
   /// and Gate Out.
   bool _onScanStep = false;
 
+  /// เก็บที่ไหน — collapsed by default because [ReceiveLocationMode.empty]
+  /// (the default mode) needs no input at all. "ตัวเลือกอื่น" reveals
+  /// ตามระบบแนะนำ/เลือกเอง/รอ Putaway for the operator who actually wants
+  /// one of them; most batches never touch this.
+  bool _showLocationOptions = false;
+
   /// True while the reader's trigger is actually held down. Switches the
   /// scanner panel's status line to "กำลังอ่าน…" — the panel itself, count
   /// included, stays up the whole time (see [_scannerPanel]).
@@ -729,8 +735,128 @@ class _ScanScreenState extends State<ScanScreen>
                 onChanged: c.setInVehicleTypeOther,
                 decoration: pdaInput(loc.t('เช่น รถตู้ / รถพ่วง'), radius: 12)),
           ],
+          const SizedBox(height: 16),
+          _receiveLocationSection(c, loc),
         ],
       ),
+    );
+  }
+
+  /// Which putaway strategy this batch uses. Only the choice itself lives
+  /// here — no location fields. Receiving happens at the gate; deciding and
+  /// confirming a shelf happens at the shelf, after the boxes are actually in
+  /// hand (see the putaway step in [_onPrimary]). Asking for a shelf on this
+  /// form would be asking before the system knows what is even being received.
+  ///
+  /// [ReceiveLocationMode.empty] is the default and takes no input — the
+  /// section collapses to that one fact ("จะรับเข้าไว้ในคลังก่อน") with
+  /// nothing to tap. A batch that genuinely needs ตามระบบแนะนำ/เลือกเอง/รอ
+  /// Putaway is the exception, so those three sit behind "ตัวเลือกอื่น" —
+  /// most operators on most batches never touch this section at all.
+  Widget _receiveLocationSection(AppController c, LocaleController loc) {
+    final mode = c.receiveLocationMode;
+    if (!_showLocationOptions) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 15, color: C.muted),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(loc.t('จะรับเข้าไว้ในคลังก่อน — ยังไม่ระบุตำแหน่งจัดเก็บ'),
+                style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _showLocationOptions = true),
+            style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: Text(loc.t('ตัวเลือกอื่น'),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
+    }
+
+    final hint = switch (mode) {
+      ReceiveLocationMode.auto =>
+        'ระบบจะกำหนดชั้นวางให้หลังยิงกล่องครบ แล้วพาไปเก็บทีละจุด',
+      ReceiveLocationMode.manual =>
+        'ยิงกล่องให้ครบก่อน แล้วค่อยเดินไปหาช่องว่างและยิงบาร์โค้ดชั้นวางเอง',
+      ReceiveLocationMode.empty => 'อยู่ในคลังนี้ก็พอ — ไม่ต้องระบุตำแหน่งตอนนี้',
+      ReceiveLocationMode.defer =>
+        'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            FieldLabel(loc.t('เก็บที่ไหน')),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() => _showLocationOptions = false),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: Text(loc.t('ซ่อน'),
+                  style: TextStyle(fontSize: 12.5, color: C.muted)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: Text(loc.t('ช่องว่าง')),
+              selected: mode == ReceiveLocationMode.empty,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.empty),
+            ),
+            ChoiceChip(
+              label: Text(loc.t('ตามระบบแนะนำ')),
+              selected: mode == ReceiveLocationMode.auto,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.auto),
+            ),
+            ChoiceChip(
+              label: Text(loc.t('เลือกเอง')),
+              selected: mode == ReceiveLocationMode.manual,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.manual),
+            ),
+            ChoiceChip(
+              label: Text(loc.t('รอ Putaway')),
+              selected: mode == ReceiveLocationMode.defer,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.defer),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+                mode == ReceiveLocationMode.defer
+                    ? Icons.inventory_2_outlined
+                    : Icons.info_outline,
+                size: 15,
+                color: C.muted),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                  mode == ReceiveLocationMode.defer
+                      ? '${loc.t(hint)} (${c.pendingPutawayLocationLabel})'
+                      : loc.t(hint),
+                  style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

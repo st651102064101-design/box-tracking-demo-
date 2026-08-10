@@ -97,7 +97,6 @@ class LocaleController extends ChangeNotifier {
     'เลือกประตู': 'Choose gate',
     'เปลี่ยนคลัง': 'Change warehouse',
     'ในคลัง': 'In warehouse',
-    'รับเข้าวันนี้': 'Received today',
     'กล่องในคลัง': 'Boxes in warehouse',
     'ออกอยู่': 'Out',
     'กล่องที่ออกอยู่': 'Boxes out',

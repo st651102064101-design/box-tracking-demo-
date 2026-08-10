@@ -11,14 +11,26 @@ import '../widgets/common.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  /// Physical number-key shortcut for the MC3390R's side keypad, matching
-  /// the [1] badge on the sole _MenuTile this demo build shows — "press 1,
-  /// land on Gate In" without touching the screen at all, for an operator
-  /// whose hands are already full of a box. Both the top-row digit and the
-  /// numeric-keypad variant are handled since which one a given handheld's
-  /// keymap actually sends isn't something this app controls.
+  /// Physical number-key shortcuts for the MC3390R's side keypad, matching
+  /// the [1]-[3] badges each _MenuTile shows — "press 1, land on Gate Out"
+  /// without touching the screen at all, for an operator whose hands are
+  /// already full of a box. Both the top-row digit and the numeric-keypad
+  /// variant are handled since which one a given handheld's keymap actually
+  /// sends isn't something this app controls. Only fires on key-down (not
+  /// up/repeat) and only once per tile is even visible — a gate posted
+  /// IN-only or OUT-only hides the tile that wouldn't work anyway, so its
+  /// number does nothing rather than silently jumping to a menu item the
+  /// operator can't see.
+  ///
+  /// Home itself only keeps the two things every operator needs on every
+  /// single scan (Gate In/Out) plus the one hub for everything else — ตรวจนับ
+  /// / ค้นหา/เรดาร์ / ย้ายตำแหน่ง moved into MoreHubScreen (its own number
+  /// keys pick those up from there), so this is a short list to memorize
+  /// instead of six similarly-weighted tiles.
   static const _keyActions = <int, String>{
-    1: 'in',
+    1: 'out',
+    2: 'in',
+    3: 'moreHub',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -28,8 +40,14 @@ class HomeScreen extends StatelessWidget {
     final action = _keyActions[digit];
     if (action == null) return KeyEventResult.ignored;
     switch (action) {
+      case 'out':
+        if (c.canScan && c.currentGateType != 'in') c.goScanOut();
+        break;
       case 'in':
         if (c.canScan && c.currentGateType != 'out') c.goScanIn();
+        break;
+      case 'moreHub':
+        c.goMoreHub();
         break;
     }
     return KeyEventResult.handled;
@@ -235,8 +253,6 @@ List<Widget> _postPickerBody(AppController c, LocaleController loc) {
 List<Widget> _confirmedBody(BuildContext context, AppController c) {
   final loc = context.watch<LocaleController>();
   return [
-    // This demo build only has Gate In — no ออกอยู่/out stat, and the
-    // "today" tile reports just รับเข้า, not a combined in/out count.
     Row(
       children: [
         Expanded(
@@ -250,8 +266,18 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         const SizedBox(width: 9),
         Expanded(
           child: _Stat(
-            value: '${c.todayIn}',
-            label: loc.t('รับเข้าวันนี้'),
+            value: '${c.outCount}',
+            label: loc.t('ออกอยู่'),
+            valueColor: C.orange,
+            onTap: () => _showBoxListSheet(context, c,
+                title: loc.t('กล่องที่ออกอยู่'), status: 'out'),
+          ),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: _TodayStat(
+            inN: c.todayIn,
+            outN: c.todayOut,
             onTap: () => _showTodayEventsSheet(context, c),
           ),
         ),
@@ -303,17 +329,31 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
     ),
     const SizedBox(height: 12),
-    // Numbered [1] — matches the physical number-key binding
+    // Numbered [1]-[3] — matches the physical number-key bindings
     // (HomeScreen's KeyboardListener) so the badge an operator sees is the
-    // same digit that jumps here from the keyboard.
-    //
-    // Demo build — this is the ONLY entry point the app has. Gate Out and
-    // ผูก Tag / ชำรุด / อื่นๆ (More Hub) are both removed, not just hidden;
-    // this branch exists to show Gate In alone. Still respects a gate
-    // configured OUT-only — no way to actually receive there.
-    if (c.canScan && c.currentGateType != 'out') ...[
+    // same digit that jumps here from the keyboard. Colour groups follow
+    // one convention throughout: green = inbound, blue = outbound/transfer,
+    // red = tag/damage/other. Home only keeps Gate In/Out — everything else
+    // (ตรวจนับ / ค้นหา/เรดาร์ / ย้ายตำแหน่ง) lives inside MoreHubScreen now, so
+    // there's one menu with two entries here instead of six competing for
+    // attention.
+    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
+    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
+    if (c.canScan && c.currentGateType != 'in') ...[
       _MenuTile(
         number: 1,
+        icon: Icons.local_shipping_outlined,
+        color: C.menuBlue,
+        bg: C.menuBlueBg,
+        title: loc.t('จ่ายออก'),
+        sub: 'Gate Out',
+        onTap: () => _showOutboundModeSheet(context, c),
+      ),
+      const SizedBox(height: 10),
+    ],
+    if (c.canScan && c.currentGateType != 'out') ...[
+      _MenuTile(
+        number: 2,
         icon: Icons.inventory_2_outlined,
         color: C.menuGreen,
         bg: C.menuGreenBg,
@@ -323,6 +363,15 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
       const SizedBox(height: 10),
     ],
+    _MenuTile(
+      number: 3,
+      icon: Icons.sell_outlined,
+      color: C.menuRed,
+      bg: C.menuRedBg,
+      title: loc.t('ผูก Tag / ชำรุด / อื่นๆ'),
+      sub: 'Tag / Damage / More',
+      onTap: c.goMoreHub,
+    ),
     if (c.outbox.isNotEmpty) ...[
       const SizedBox(height: 14),
       _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
@@ -407,8 +456,160 @@ Widget _detailRow(
   );
 }
 
-/// "ในคลัง" stat tap — the actual list of boxes behind that number, not
-/// just the count. [status] matches Box.status directly.
+/// "จ่ายออก" tile tap — asks *how* the operator is picking before jumping
+/// into the scan flow, same distinction a real WMS makes between
+/// System-Directed picking and Ad-Hoc/door picking:
+///  - "แนะนำการหยิบ (FIFO/FEFO)" would have the backend hand back a picking
+///    queue (oldest-in/earliest-expiry box first) instead of the operator
+///    choosing what to scan. There is no such queue on this backend yet — no
+///    picking-order field, no "next box" endpoint — so the tile stays here
+///    but disabled with a plain explanation rather than pretending to work.
+///  - "ของอยู่หน้าประตูแล้ว (ยิงอิสระ)" is exactly today's flow: go straight
+///    to ScanScreen and scan whatever's stacked at the door.
+void _showOutboundModeSheet(BuildContext context, AppController c) {
+  final loc = context.read<LocaleController>();
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) {
+      final bottom = MediaQuery.of(ctx).padding.bottom;
+      return Container(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 18),
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              alignment: Alignment.center,
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: C.border2, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Text(loc.t('จะหยิบกล่องออกแบบไหน'),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            _OutboundModeButton(
+              icon: Icons.route_outlined,
+              title: loc.t('แนะนำการหยิบ (FIFO/FEFO)'),
+              subtitle: loc
+                  .t('ระบบบอกลำดับกล่องที่ควรหยิบก่อน — ยังไม่พร้อมใช้งาน (ต้องมีระบบคิวงานจาก Backend ก่อน)'),
+              enabled: false,
+              onTap: () {},
+            ),
+            const SizedBox(height: 10),
+            _OutboundModeButton(
+              icon: Icons.qr_code_scanner,
+              title: loc.t('ของอยู่หน้าประตูแล้ว (ยิงอิสระ)'),
+              subtitle: loc.t('ยิงกล่องที่กองอยู่หน้าประตูได้เลย ไม่ต้องรอคิว'),
+              enabled: true,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                c.goScanOut();
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _OutboundModeButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _OutboundModeButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: C.neutralBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                    color: C.surface, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, size: 20, color: C.ink2),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(title,
+                              style: const TextStyle(
+                                  fontSize: 14.5, fontWeight: FontWeight.w700)),
+                        ),
+                        if (!enabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: C.neutralBg2,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text('เร็วๆ นี้',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: C.muted)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 12, color: C.muted, height: 1.35)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "ในคลัง" / "ออกอยู่" stat tap — the actual list of boxes behind that
+/// number, not just the count. [status] matches Box.status directly.
 void _showBoxListSheet(BuildContext context, AppController c,
     {required String title, required String status}) {
   final loc = context.read<LocaleController>();
@@ -823,11 +1024,49 @@ class _Stat extends StatelessWidget {
   }
 }
 
-/// The primary-menu button (just one, in this demo build). Fixed 72dp tall —
-/// inside the 64-80dp touch-target range a scanner-gun grip (thick gloves,
-/// one-handed use, walking) actually needs, not the ~48dp a phone-held-in-
-/// two-hands app can get away with — and a coloured number badge on the left
-/// matching HomeScreen's number-key binding (press "1" to jump here without
+class _TodayStat extends StatelessWidget {
+  final int inN, outN;
+  final VoidCallback? onTap;
+  const _TodayStat({required this.inN, required this.outN, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 5),
+              Text(loc.t('วันนี้'),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: C.ink2,
+                      height: 1.35)),
+              Text('↓$inN · ↑$outN',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: C.muted,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One of the 6 primary-menu buttons. Fixed 72dp tall — inside the 64-80dp
+/// touch-target range a scanner-gun grip (thick gloves, one-handed use,
+/// walking) actually needs, not the ~48dp a phone-held-in-two-hands app can
+/// get away with — and a coloured number badge on the left matching
+/// HomeScreen's number-key bindings (press "1"-"6" to jump here without
 /// touching the screen at all).
 class _MenuTile extends StatelessWidget {
   final int number;
