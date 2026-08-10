@@ -502,22 +502,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                     fontWeight: FontWeight.w800,
                     color: C.limeText)),
             const SizedBox(height: 18),
-            // อ่านแท็กไม่ติด is only half done once logged — the box still
-            // needs a working tag, so the fastest next step is straight
-            // into the screen that actually fixes that, not back to a menu.
-            if (_kind == _Kind.unreadableTag)
-              FilledButton(
-                onPressed: c.goRfidRegister,
-                style: FilledButton.styleFrom(
-                  backgroundColor: C.ink,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(loc.t('ไปผูกแท็กใหม่')),
-              ),
-            const SizedBox(height: 10),
             TextButton(
               onPressed: _reset,
               child: Text(loc.t('แจ้งอีกรายการ')),

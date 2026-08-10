@@ -14,7 +14,6 @@ void main() {
   /// of these is the regression this guards against.
   const scanOnly = [
     'lib/screens/cycle_count_screen.dart',
-    'lib/screens/rfid_register_screen.dart',
     'lib/screens/rfid_input_screen.dart',
     'lib/screens/login_screen.dart',
     // Picking a target used to accept a typed code or box-type search. Now

@@ -24,7 +24,7 @@ class _TrackScreenState extends State<TrackScreen> {
   /// immediately when a scanner's trailing keystroke (or the keyboard's
   /// Go/Done) sends it; this debounce is the fallback for scanners on this
   /// terminal that don't send that trailing Enter (see the same pattern in
-  /// scan_screen.dart / rfid_register_screen.dart).
+  /// scan_screen.dart).
   Timer? _autoSearchTimer;
   static const _autoSearchDelay = Duration(milliseconds: 180);
   static const _autoSearchMinLen = 3;

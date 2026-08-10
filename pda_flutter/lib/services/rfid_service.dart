@@ -273,10 +273,10 @@ class RfidService {
   /// speed on this hardware.
   ///
   /// Detail (`true`): full field reporting plus an explicit TID access-read.
-  /// Only [Screen.rfidRegister] turns this on, and only while it is on top,
-  /// because that read stops and restarts inventory around every call. Binding
-  /// a box needs a TID and on this reader the inventory round never carries
-  /// one, so registration cannot work without paying for it.
+  /// That read stops and restarts inventory around every call — a box's RFID
+  /// commissioning step (BoxRegisterScreen) needs a TID and on this reader
+  /// the inventory round never carries one, so binding cannot work without
+  /// paying for it.
   Future<void> setDetailMode(bool enabled) async {
     if (!supported) return;
     try {

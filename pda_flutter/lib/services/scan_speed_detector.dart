@@ -78,9 +78,8 @@ class ScanSpeedAutoSubmit {
   void _arm(String value) {
     _flush = Timer(Duration(milliseconds: flushMs), () {
       // Caller re-checks the field still holds exactly this value before
-      // actually submitting (see track_screen.dart / rfid_register_screen.dart
-      // for the pattern) — this timer firing is not itself proof nothing
-      // changed since.
+      // actually submitting (see track_screen.dart for the pattern) — this
+      // timer firing is not itself proof nothing changed since.
       onAutoSubmit();
     });
   }

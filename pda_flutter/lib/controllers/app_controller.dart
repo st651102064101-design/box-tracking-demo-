@@ -24,7 +24,6 @@ enum Screen {
   track,
   settings,
   rfidInput,
-  rfidRegister,
   rfidLocate,
   boxRegister,
   transfer,
@@ -1152,15 +1151,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _connectReader();
   }
 
-  /// Fast-path box commissioning (see RfidRegisterScreen). Lived under
-  /// Settings before — moved next to the Gate In/Out cards on Home since
-  /// it's a routine warehouse-floor action, not device configuration.
-  void goRfidRegister() {
-    screen = Screen.rfidRegister;
-    notifyListeners();
-    _connectReader();
-  }
-
   /// Receiving flow: create -> label -> tag -> putaway (see
   /// BoxRegisterScreen), copied from legacy.html's own box-registration +
   /// putaway handlers.
@@ -1982,7 +1972,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (screen != Screen.scan &&
         screen != Screen.track &&
         screen != Screen.rfidInput &&
-        screen != Screen.rfidRegister &&
         screen != Screen.rfidLocate &&
         screen != Screen.boxRegister &&
         screen != Screen.settings &&
@@ -2059,15 +2048,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // trigger, this handler just isn't part of that path yet.
       return;
     }
-    if (screen == Screen.rfidRegister && !rfidRegisterRfidStep) {
-      // Same reasoning, one step earlier: the waitingBarcode step's own
-      // field/imager handles a trigger pull there. RfidRegisterScreen arms
-      // the reader itself the instant a barcode resolves (see its
-      // _submitBarcode), so this dispatcher isn't even the normal way that
-      // screen starts a sweep — but without this gate it would still fire
-      // one on every trigger pull during barcode entry too.
-      return;
-    }
     // Gate scanning, the box-locate sweep, Track's own multi-tag list,
     // Transfer's bulk-select list, and box registration's tag-candidate
     // sweep all drive their own feedback instead of the reader's dense
@@ -2113,13 +2093,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// work there regardless of what [scanInputMode] happens to be set to
   /// app-wide — see the rfidLocate branch in [_onReaderTrigger].
   bool rfidLocateSweepStep = false;
-
-  /// Same idea, for RfidRegisterScreen's own waitingRfid step. That screen
-  /// already arms the reader itself the instant a barcode resolves (see its
-  /// _submitBarcode — no trigger pull needed there), but the *barcode* step
-  /// still needs this false so a trigger pulled while typing/scanning a box
-  /// code doesn't also fire the antenna through this dispatcher.
-  bool rfidRegisterRfidStep = false;
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;

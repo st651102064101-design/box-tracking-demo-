@@ -8,30 +8,30 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 /// "ผูก Tag / ชำรุด / อื่นๆ" — the second (and last) primary-menu slot, for
-/// every floor action besides Gate In/Out: commissioning an RFID tag,
-/// intaking a brand-new box, looking a box up (Track), ย้ายตำแหน่ง (Transfer),
-/// ตรวจนับ (Cycle Count), ค้นหา/เรดาร์ (RFID Locate), the "ของหาย" /
-/// "ช่องเก็บเต็ม" / "กล่องชำรุด" / "อ่านแท็กไม่ติด" floor-exception reports, and
-/// the reverse "เช็คช่อง" location lookup. Everything that isn't Gate In/Out
-/// lives here now — Home used to spread ย้ายตำแหน่ง/ตรวจนับ/ค้นหาเรดาร์ across
-/// three of its own tiles, which meant six similarly-weighted menu items
-/// competing for attention instead of two.
+/// every floor action besides Gate In/Out: intaking a brand-new box (which
+/// includes commissioning its RFID tag as part of that flow), looking a box
+/// up (Track), ย้ายตำแหน่ง (Transfer), ตรวจนับ (Cycle Count), ค้นหา/เรดาร์
+/// (RFID Locate), the "ของหาย" / "ช่องเก็บเต็ม" / "กล่องชำรุด" /
+/// "อ่านแท็กไม่ติด" floor-exception reports, and the reverse "เช็คช่อง"
+/// location lookup. Everything that isn't Gate In/Out lives here now — Home
+/// used to spread ย้ายตำแหน่ง/ตรวจนับ/ค้นหาเรดาร์ across three of its own
+/// tiles, which meant six similarly-weighted menu items competing for
+/// attention instead of two.
 class MoreHubScreen extends StatelessWidget {
   const MoreHubScreen({super.key});
 
-  /// Same physical number-key convention as HomeScreen — matches the [1]-[8]
+  /// Same physical number-key convention as HomeScreen — matches the [1]-[7]
   /// badges each _tile shows below. Only the tiles c.canScan actually makes
   /// visible get a live key; the others do nothing rather than jump to a
   /// screen the operator can't act on anyway.
   static const _keyActions = <int, String>{
-    1: 'rfidRegister',
-    2: 'boxRegister',
-    3: 'track',
-    4: 'transfer',
-    5: 'cycleCount',
-    6: 'locate',
-    7: 'reportProblem',
-    8: 'locationInquiry',
+    1: 'boxRegister',
+    2: 'track',
+    3: 'transfer',
+    4: 'cycleCount',
+    5: 'locate',
+    6: 'reportProblem',
+    7: 'locationInquiry',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -41,9 +41,6 @@ class MoreHubScreen extends StatelessWidget {
     final action = _keyActions[digit];
     if (action == null) return KeyEventResult.ignored;
     switch (action) {
-      case 'rfidRegister':
-        if (c.canScan) c.goRfidRegister();
-        break;
       case 'boxRegister':
         if (c.canScan) c.goBoxRegister();
         break;
@@ -119,17 +116,6 @@ class MoreHubScreen extends StatelessWidget {
                   if (c.canScan) ...[
                     _tile(
                       number: 1,
-                      icon: Icons.sell_outlined,
-                      color: C.red,
-                      bg: C.redBg,
-                      title: loc.t('ผูกแท็ก RFID'),
-                      sub: loc.t(
-                          'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที'),
-                      onTap: c.goRfidRegister,
-                    ),
-                    const SizedBox(height: 10),
-                    _tile(
-                      number: 2,
                       icon: Icons.add_box_outlined,
                       // limeDeep is a fixed near-black green — fine as text
                       // on a bright C.lime button, but paired with limeBg
@@ -146,7 +132,7 @@ class MoreHubScreen extends StatelessWidget {
                     const SizedBox(height: 10),
                   ],
                   _tile(
-                    number: 3,
+                    number: 2,
                     icon: Icons.search,
                     color: C.ink2,
                     bg: C.neutralBg,
@@ -157,7 +143,7 @@ class MoreHubScreen extends StatelessWidget {
                   if (c.canScan) ...[
                     const SizedBox(height: 10),
                     _tile(
-                      number: 4,
+                      number: 3,
                       icon: Icons.sync_alt,
                       color: C.menuBlue,
                       bg: C.menuBlueBg,
@@ -168,7 +154,7 @@ class MoreHubScreen extends StatelessWidget {
                   ],
                   const SizedBox(height: 10),
                   _tile(
-                    number: 5,
+                    number: 4,
                     icon: Icons.checklist,
                     color: C.menuOrange,
                     bg: C.menuOrangeBg,
@@ -178,7 +164,7 @@ class MoreHubScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _tile(
-                    number: 6,
+                    number: 5,
                     icon: Icons.radar,
                     color: C.menuOrange,
                     bg: C.menuOrangeBg,
@@ -195,7 +181,7 @@ class MoreHubScreen extends StatelessWidget {
                     // start from for anything wrong with a box or a shelf,
                     // not two similarly-named tiles to choose between.
                     _tile(
-                      number: 7,
+                      number: 6,
                       icon: Icons.report_gmailerrorred_outlined,
                       color: C.red,
                       bg: C.redBg,
@@ -206,7 +192,7 @@ class MoreHubScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _tile(
-                      number: 8,
+                      number: 7,
                       icon: Icons.grid_view_outlined,
                       color: C.limeText,
                       bg: C.limeBg,

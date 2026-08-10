@@ -213,9 +213,7 @@ void main() {
       expect(calls.first['location'], isNotNull);
     });
 
-    testWidgets(
-        'reports an unreadable tag by box, then offers a shortcut to re-tag',
-        (tester) async {
+    testWidgets('reports an unreadable tag by box', (tester) async {
       final api = FakeApi();
       final c = await makeController(api);
       await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
@@ -236,12 +234,9 @@ void main() {
       expect(api.reportCalls.first['tag'], 'CRT-01');
       expect(find.text('บันทึกรายงานแล้ว'), findsOneWidget);
 
-      // The box still needs a working tag — offer the fast path there
-      // instead of just dropping the operator back at a menu.
-      expect(find.text('ไปผูกแท็กใหม่'), findsOneWidget);
-      await tester.tap(find.text('ไปผูกแท็กใหม่'));
-      await tester.pump();
-      expect(c.screen, Screen.rfidRegister);
+      // The standalone RFID tag-binding screen was removed — no
+      // "ไปผูกแท็กใหม่" shortcut left here to offer.
+      expect(find.text('ไปผูกแท็กใหม่'), findsNothing);
     });
 
     testWidgets('กล่องชำรุด forwards straight into HoldReleaseScreen',

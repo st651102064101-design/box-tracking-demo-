@@ -10,7 +10,6 @@ import 'scan_screen.dart';
 import 'track_screen.dart';
 import 'settings_screen.dart';
 import 'rfid_input_screen.dart';
-import 'rfid_register_screen.dart';
 import 'rfid_locate_screen.dart';
 import 'box_register_screen.dart';
 import 'transfer_screen.dart';
@@ -96,8 +95,6 @@ class RootScreen extends StatelessWidget {
         return const SettingsScreen(key: ValueKey('settings'));
       case Screen.rfidInput:
         return const RfidInputScreen(key: ValueKey('rfidInput'));
-      case Screen.rfidRegister:
-        return const RfidRegisterScreen(key: ValueKey('rfidRegister'));
       case Screen.rfidLocate:
         return const RfidLocateScreen(key: ValueKey('rfidLocate'));
       case Screen.boxRegister:

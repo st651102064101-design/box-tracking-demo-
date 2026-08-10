@@ -13,8 +13,7 @@ import '../widgets/common.dart';
 
 enum _Step { create, label, rfid, putaway, success }
 
-/// One distinct tag the RFID sweep turned up — same shape/reasoning as
-/// RfidRegisterScreen's own _Candidate.
+/// One distinct tag the RFID sweep turned up.
 class _Candidate {
   final String epc;
   final int? rssi;
@@ -58,7 +57,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   bool _labeling = false;
   bool _puttingAway = false;
 
-  // RFID sweep — identical mechanics to RfidRegisterScreen.
+  // RFID sweep.
   StreamSubscription<RfidTagRead>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
   RfidStatus _rfidStatus = const RfidStatus(RfidState.idle, '');
@@ -155,11 +154,11 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     try {
       await _c.api.labelBox(tag);
       setState(() => _step = _Step.rfid);
-      // Unlike RfidRegisterScreen, this step does NOT arm the reader on its
-      // own the instant it opens — a pulled trigger anywhere else on this
-      // screen (create/label barcode entry) used to also start an RFID
-      // sweep, since the central trigger dispatcher only knew "screen ==
-      // boxRegister", not which of its steps was showing. boxRegisterRfidStep
+      // This step does NOT arm the reader on its own the instant it opens —
+      // a pulled trigger anywhere else on this screen (create/label barcode
+      // entry) used to also start an RFID sweep, since the central trigger
+      // dispatcher only knew "screen == boxRegister", not which of its steps
+      // was showing. boxRegisterRfidStep
       // is what tells that dispatcher this step is the one actually asking
       // for a trigger pull now (see AppController._onReaderTrigger).
       _c.boxRegisterRfidStep = true;
@@ -217,9 +216,12 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     }
   }
 
-  /// RFID commissioning is optional here (unlike RfidRegisterScreen, whose
-  /// whole job is the tag) — a box can go straight from label to putaway
-  /// without one and get tagged later from Home's own "ลงทะเบียนแท็ก RFID".
+  /// RFID commissioning is optional here — a box can go straight from label
+  /// to putaway without one. This is the ONLY place left, PDA or web, that
+  /// binds/replaces a tag (POST /api/boxes/:tag/rfid needs a real reader, so
+  /// the web app never got a button for it — see legacy.html's own comment
+  /// at "ผูก/เปลี่ยนแท็ก RFID ทำได้จาก PDA เท่านั้น"). A box skipped here has
+  /// no dedicated re-tag flow to reach later.
   void _skipRfid() {
     unawaited(_c.rfid.stopInventory());
     _goPutaway();
@@ -829,9 +831,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   }
 }
 
-/// Small filled/pulsing status dot — same widget RfidRegisterScreen defines
-/// for itself; duplicated rather than shared to keep each screen's file
-/// self-contained the way this codebase's other single-purpose screens are.
+/// Small filled/pulsing status dot.
 class _RfidDot extends StatelessWidget {
   final Color color;
   final bool pulsing;

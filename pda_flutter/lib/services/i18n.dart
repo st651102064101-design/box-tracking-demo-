@@ -114,9 +114,6 @@ class LocaleController extends ChangeNotifier {
     'ส่งออก': 'Gate Out',
     'Gate Out — จ่ายกล่องออกให้ลูกค้า':
         'Gate Out — release boxes to a customer',
-    'ลงทะเบียนแท็ก RFID': 'Register RFID tag',
-    'สแกนบาร์โค้ด แล้วยิงแท็กเพื่อผูกกับกล่องนั้นทันที':
-        'Scan a barcode, then scan a tag to link it right away',
     'หากล่อง / RFID': 'Find box / RFID',
     'เลือกกล่อง แล้วกวาดหาสัญญาณแบบ Geiger':
         'Pick a box, then sweep for its signal like a Geiger counter',
@@ -339,7 +336,6 @@ class LocaleController extends ChangeNotifier {
     'ย้ายทั้งหมด': 'Move all',
     'เพิ่ม': 'Add',
     // more hub
-    'ผูกแท็ก RFID': 'Bind RFID tag',
     'ลงทะเบียนกล่องใหม่': 'Register a new box',
     'แจ้งกล่องชำรุด — ทำได้ตอนรับเข้า (Gate In): ติ๊กสถานะ "ชำรุด" ที่การ์ดกล่องนั้นในคิวก่อนยืนยัน':
         'Flagging a box damaged is done at Gate In: tick "Damaged" on that box\'s card in the queue before confirming',

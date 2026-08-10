@@ -48,10 +48,10 @@ void main() {
   // RfidService's trigger stream has no test seam (the platform channel that
   // feeds it doesn't run under `flutter test`), which is a pre-existing gap
   // shared by every other branch in that dispatcher (putawayTask,
-  // boxRegisterRfidStep, rfidRegisterRfidStep — none of those have a trigger
-  // test either). What's covered below is the part that's actually
-  // reachable and is where a regression would really happen: gateFormStep
-  // itself flipping true/false in lockstep with the step ScanScreen is on.
+  // boxRegisterRfidStep — neither has a trigger test either). What's
+  // covered below is the part that's actually reachable and is where a
+  // regression would really happen: gateFormStep itself flipping true/false
+  // in lockstep with the step ScanScreen is on.
 
   testWidgets('moving to the scan step clears gateFormStep', (tester) async {
     final c = await pumpGateIn(tester);
