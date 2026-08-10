@@ -1249,20 +1249,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         _reject(tag, ResultKind.warn, 'อยู่ในคลังอยู่แล้ว');
         return;
       }
-      // A box shipped out from one warehouse has to come back to that same
-      // warehouse — the operator standing at this gate belongs to `wh`
-      // (whatever they picked at device setup / post confirm), and a box
-      // whose outWh says otherwise almost certainly means someone read the
-      // wrong tag or is standing at the wrong gate, not a legitimate
-      // inter-warehouse transfer (this app has no such flow). A box that's
-      // never shipped (pending/new from a supplier) has no outWh yet and
-      // isn't restricted — its first warehouse is whichever gate receives
-      // it first.
-      if (b.status == 'out' && b.outWh != null && b.outWh!.isNotEmpty && b.outWh != wh) {
-        _reject(tag, ResultKind.err,
-            'กล่องนี้ออกจากคลัง ${S?.whName(b.outWh!) ?? b.outWh} — ต้องคืนที่คลังเดิม');
-        return;
-      }
+      // A box can be received back at any gate/warehouse, not only the one
+      // it originally shipped from — receiving no longer requires an
+      // inter-warehouse transfer flow to explain the mismatch, so outWh is
+      // just historical, not a gate.
     } else {
       // Only a box actually sitting in *this* warehouse's inventory can ship
       // from here — same reasoning as the gate-in check above, mirrored for

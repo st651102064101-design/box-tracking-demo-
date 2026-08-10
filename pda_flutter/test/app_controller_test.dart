@@ -405,7 +405,8 @@ void main() {
       expect(c.queue, ['CRT-01']);
     });
 
-    test('gate in refuses a returning box that shipped from another warehouse',
+    test(
+        'gate in accepts a returning box at a warehouse other than the one it shipped from',
         () async {
       final api = FakeApi();
       final state = fixtureState();
@@ -417,9 +418,7 @@ void main() {
       final c = await makeController(api); // stationed at WH-1
       c.mode = 'in';
       c.addScan('CRT-02');
-      expect(c.queue, isEmpty);
-      expect(c.lastResult!.kind, ResultKind.err);
-      expect(c.lastResult!.msg, contains('ต้องคืนที่คลังเดิม'));
+      expect(c.queue, ['CRT-02']);
     });
 
     test('gate in accepts a brand-new box from a supplier regardless of warehouse',

@@ -292,7 +292,7 @@ class LocaleController extends ChangeNotifier {
     'รับเข้า': 'Gate In',
     'ตรวจนับ': 'Cycle Count',
     'ค้นหา/เรดาร์': 'Search / Radar',
-    'ผูก Tag / ชำรุด / อื่นๆ': 'Tag / Damage / More',
+    'เมนูอื่นๆ': 'More',
     // transfer screen
     'ยิงหรือพิมพ์รหัสกล่องที่จะย้าย': 'Scan or type the box code to move',
     'ตำแหน่งใหม่': 'New location',
