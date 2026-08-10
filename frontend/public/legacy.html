@@ -6653,19 +6653,23 @@ function exportAllSystemExcel(){
   var boxes=Object.values(S.boxes).sort(function(a,b){return a.tag<b.tag?-1:1;});
   if(!boxes.length)return toast('ไม่มีกล่องในระบบ',null,'err');
   var headers=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
-    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
+    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ประตูเริ่ม','ประตูสิ้นสุด','ทิศทางประตู',
+    'ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
   var rows=boxes.map(function(b){
     var bt=S.boxtypes[b.type]||{};
     var custId=b.customer||'';
     var cust=custId?custName(custId):'';
     var custRec=custId?(S.customers[custId]||{}):{};
-    var wh=(b.location||{}).wh||b.outWh||'';
+    var whId=(b.location||{}).wh||b.outWh||'';
+    var whRec=whId?(S.warehouses[whId]||{}):{};
+    var whGates=(whRec.gates||[]).slice().sort(function(x,y){return x-y;});
     var ts=b.regAt||b.lastSeenAt||iso();
     var d=new Date(ts);
     return [barcodeCell(b.tag), typeName(b.type), bt.unit||'', OUT_COND_LABEL[outConditionMap[b.tag]||'good'],
       cust, custRec.addr||'', custRec.phone||'', custRec.email||'',
       custRec.returnDays||'', b.do||'', b.po||'',
-      whName(wh)||'', '', '', dstr(d), tstr(d), b.regBy||''];
+      whName(whId)||'', whGates[0]||'', whGates[whGates.length-1]||'', whRec.gateType||'',
+      '', '', dstr(d), tstr(d), b.regBy||''];
   });
   downloadXLS('all-boxes-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
 }
@@ -9218,30 +9222,34 @@ window.seedDemo=seedDemo;
      จำนวน "วันที่ค้างนานสุด" ที่จะเริ่มเตือน ไม่ใช่จำนวนชิ้น เพราะของ 200 ใบที่
      เพิ่งเข้ามาเมื่อเช้าไม่ใช่คอขวด แต่ของ 3 ใบที่ค้างมา 5 วันคือคอขวด */
   var STAGES=[
-    {k:'tag', n:'รอติดบาร์โค้ด', warn:2, bad:5,
+    {k:'tag', n:'รอติดบาร์โค้ด (Unlabeled)', warn:2, bad:5,
      go:function(){ W.goInventory&&W.goInventory({status:'pending',label:'กล่องที่รอติดบาร์โค้ด'}); }},
-    {k:'inq', n:'คิวรับเข้า',
+    {k:'inq', n:'คิวรับเข้า (Inbound)',
      go:function(){ W.goInventory&&W.goInventory({status:'inboundQueue',label:'คิวรับเข้า — กล่องที่ต้องกลับเข้าคลัง'}); }},
-    {k:'put', n:'รอจัดเก็บขึ้นชั้น', warn:1, bad:3,
+    {k:'put', n:'รอจัดเก็บขึ้นชั้น (Putaway)', warn:1, bad:3,
      go:function(){ W.goInventory&&W.goInventory({status:'putaway',label:'กล่องที่รับเข้าแล้ว แต่ยังไม่ขึ้นชั้นวาง'}); }},
-    {k:'rack', n:'บนชั้นวาง',
+    {k:'rack', n:'บนชั้นวาง (Racked)',
      go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง'}); }},
-    {k:'outq', n:'คิวส่งออก',
+    {k:'outq', n:'คิวส่งออก (Outbound)',
      go:function(){ W.goInventory&&W.goInventory({status:'outboundQueue',label:'คิวส่งออก — กล่องในคลังที่พร้อมจ่ายออก'}); }},
-    {k:'cust', n:'อยู่กับลูกค้า',
+    {k:'cust', n:'อยู่กับลูกค้า (At customer)',
      go:function(){ W.goInventory&&W.goInventory({status:'awaiting',label:'กล่องที่อยู่กับลูกค้า · รอคืน'}); }},
-    {k:'over', n:'เกินกำหนดคืน',
+    {k:'over', n:'เกินกำหนดคืน (Overdue)',
      go:function(){ W.goInventory&&W.goInventory({status:'overdue',label:'กล่องเกินกำหนดคืน'}); }}
   ];
   /* ช่วงที่เป็น "ประตูจริง" สองช่วง — ติดยอดที่ผ่านประตูวันนี้กำกับไว้บนลูกศร */
   var EDGE_GATE={1:'in',4:'out'};   /* 1 = คิวรับเข้า→รอจัดเก็บ, 4 = คิวส่งออก→อยู่กับลูกค้า */
 
+  // Labels carry both languages inline now (ไทย (English)), the same
+  // convention the status dropdowns elsewhere already use — matches "เข้าวันนี้
+  // · Gate In"/"ออกวันนี้ · Gate Out" just above, which were already bilingual
+  // while these five were Thai-only.
   var EXC=[
-    {k:'hold',   n:'พักใช้งาน',  cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'hold',label:'กล่องที่พักใช้งาน (Hold)'}); }},
-    {k:'damage', n:'ชำรุด',      cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'damage',label:'กล่องชำรุด'}); }},
-    {k:'lost',   n:'สูญหาย',     cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'lost',label:'กล่องสูญหาย'}); }},
-    {k:'nearExp',n:'ใกล้หมดอายุ', cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — ตรวจวันหมดอายุ'}); }},
-    {k:'expired',n:'หมดอายุแล้ว', cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — หมดอายุแล้ว'}); }}
+    {k:'hold',   n:'พักใช้งาน (Hold)',      cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'hold',label:'กล่องที่พักใช้งาน (Hold)'}); }},
+    {k:'damage', n:'ชำรุด (Damage)',        cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'damage',label:'กล่องชำรุด'}); }},
+    {k:'lost',   n:'สูญหาย (Lost)',         cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'lost',label:'กล่องสูญหาย'}); }},
+    {k:'nearExp',n:'ใกล้หมดอายุ (Near expiry)', cls:'warn', go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — ตรวจวันหมดอายุ'}); }},
+    {k:'expired',n:'หมดอายุแล้ว (Expired)', cls:'bad',  go:function(){ W.goInventory&&W.goInventory({status:'warehouse',label:'กล่องในคลัง — หมดอายุแล้ว'}); }}
   ];
 
   /* จำแนกกล่องทุกใบครั้งเดียวต่อรอบ แล้วเก็บทั้งจำนวนและ "อายุงานค้าง" ไปพร้อมกัน */
@@ -12197,8 +12205,22 @@ function openColumnMapModal(opts){
     S.warehouses[id]={id:id,name:name,gates:gates,gateType:gt,gateTypes:gtMap};
     rebuildGates();
     auditEntry('CREATE',USER,id,name,null,S.warehouses[id]);
+    /* A warehouse with no Location Master entries at all has nowhere for
+       anything to actually be racked — Location Master (ตั้งค่า → ตำแหน่งแร็ค)
+       is a separate table from the warehouse record itself, and staying
+       empty there means every box landing in this new warehouse sits in the
+       pending-putaway staging area forever with no real shelf to move to.
+       One starting slot (โซน A · R-01 · ชั้น 1 · ช่อง 01) is seeded so there is
+       at minimum somewhere to put things — same code shape locBuildCode()
+       uses for a manually-added location, findable/editable normally
+       afterward at ตั้งค่า → ตำแหน่งแร็ค like any other. */
+    var locCode=locBuildCode('โซน A','R-01','1','01');
+    if(!S.locations[locCode]){
+      S.locations[locCode]={code:locCode,wh:id,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01',type:'',
+        note:'สร้างอัตโนมัติตอนสร้างคลังใหม่จากไฟล์นำเข้า'};
+    }
     save();
-    return {ok:true,id:id};
+    return {ok:true,id:id,locCode:locCode};
   }
 
   /* A barcode this file names that classifyOutTag() couldn't find at all
@@ -12230,6 +12252,20 @@ function openColumnMapModal(opts){
     if(!whId&&whText){
       var whCreated=autoCreateWarehouseIfMissing(whText,whFromArr,whToArr,whGateTypeArr);
       if(whCreated.ok)whId=whCreated.id;else whCreateFailed=whCreated.reason;
+    }else if(whId){
+      // An EXISTING warehouse this file matched by name might still have no
+      // Location Master rows of its own (e.g. one added by hand with no
+      // ตำแหน่งแร็ค set up yet) — same seed as a freshly created one, so a box
+      // landing here still has somewhere real to be put away to.
+      var hasLoc=Object.values(S.locations).some(function(l){return l.wh===whId;});
+      if(!hasLoc){
+        var seedCode=locBuildCode('โซน A','R-01','1','01');
+        if(!S.locations[seedCode]){
+          S.locations[seedCode]={code:seedCode,wh:whId,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01',type:'',
+            note:'สร้างอัตโนมัติตอนนำเข้าไฟล์ (คลังนี้ยังไม่เคยมีตำแหน่งแร็ค)'};
+          save();
+        }
+      }
     }
     var r=createBoxes({mode:'single',tag:tag,type:typeId,wh:whId||undefined});
     if(!r.ok)return {ok:false,reason:'ไม่พบในระบบ — ลงทะเบียนกล่องใหม่ไม่สำเร็จ: '+r.err};
