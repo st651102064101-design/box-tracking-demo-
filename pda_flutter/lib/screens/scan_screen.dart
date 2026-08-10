@@ -43,6 +43,12 @@ class _ScanScreenState extends State<ScanScreen>
   /// and Gate Out.
   bool _onScanStep = false;
 
+  /// เก็บที่ไหน — collapsed by default because [ReceiveLocationMode.empty]
+  /// (the default mode) needs no input at all. "ตัวเลือกอื่น" reveals
+  /// ตามระบบแนะนำ/เลือกเอง/รอ Putaway for the operator who actually wants
+  /// one of them; most batches never touch this.
+  bool _showLocationOptions = false;
+
   /// True while the reader's trigger is actually held down. Switches the
   /// scanner panel's status line to "กำลังอ่าน…" — the panel itself, count
   /// included, stays up the whole time (see [_scannerPanel]).
@@ -741,27 +747,75 @@ class _ScanScreenState extends State<ScanScreen>
   /// confirming a shelf happens at the shelf, after the boxes are actually in
   /// hand (see the putaway step in [_onPrimary]). Asking for a shelf on this
   /// form would be asking before the system knows what is even being received.
+  ///
+  /// [ReceiveLocationMode.empty] is the default and takes no input — the
+  /// section collapses to that one fact ("จะรับเข้าไว้ในคลังก่อน") with
+  /// nothing to tap. A batch that genuinely needs ตามระบบแนะนำ/เลือกเอง/รอ
+  /// Putaway is the exception, so those three sit behind "ตัวเลือกอื่น" —
+  /// most operators on most batches never touch this section at all.
   Widget _receiveLocationSection(AppController c, LocaleController loc) {
     final mode = c.receiveLocationMode;
+    if (!_showLocationOptions) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 15, color: C.muted),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(loc.t('จะรับเข้าไว้ในคลังก่อน — ยังไม่ระบุตำแหน่งจัดเก็บ'),
+                style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _showLocationOptions = true),
+            style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: Text(loc.t('ตัวเลือกอื่น'),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
+    }
+
     final hint = switch (mode) {
       ReceiveLocationMode.auto =>
         'ระบบจะกำหนดชั้นวางให้หลังยิงกล่องครบ แล้วพาไปเก็บทีละจุด',
       ReceiveLocationMode.manual =>
         'ยิงกล่องให้ครบก่อน แล้วค่อยเดินไปหาช่องว่างและยิงบาร์โค้ดชั้นวางเอง',
-      ReceiveLocationMode.empty =>
-        'อยู่ในคลังนี้ก็พอ — เลือกช่องจากรายการได้ถ้ารู้แล้วว่าจะเก็บที่ไหน ไม่เลือกก็ไปต่อได้',
+      ReceiveLocationMode.empty => 'อยู่ในคลังนี้ก็พอ — ไม่ต้องระบุตำแหน่งตอนนี้',
       ReceiveLocationMode.defer =>
         'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง',
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FieldLabel(loc.t('เก็บที่ไหน')),
+        Row(
+          children: [
+            FieldLabel(loc.t('เก็บที่ไหน')),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() => _showLocationOptions = false),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: Text(loc.t('ซ่อน'),
+                  style: TextStyle(fontSize: 12.5, color: C.muted)),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
+            ChoiceChip(
+              label: Text(loc.t('ช่องว่าง')),
+              selected: mode == ReceiveLocationMode.empty,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.empty),
+            ),
             ChoiceChip(
               label: Text(loc.t('ตามระบบแนะนำ')),
               selected: mode == ReceiveLocationMode.auto,
@@ -775,12 +829,6 @@ class _ScanScreenState extends State<ScanScreen>
                   c.setReceiveLocationMode(ReceiveLocationMode.manual),
             ),
             ChoiceChip(
-              label: Text(loc.t('ช่องว่าง')),
-              selected: mode == ReceiveLocationMode.empty,
-              onSelected: (_) =>
-                  c.setReceiveLocationMode(ReceiveLocationMode.empty),
-            ),
-            ChoiceChip(
               label: Text(loc.t('รอ Putaway')),
               selected: mode == ReceiveLocationMode.defer,
               onSelected: (_) =>
@@ -788,7 +836,6 @@ class _ScanScreenState extends State<ScanScreen>
             ),
           ],
         ),
-        if (mode == ReceiveLocationMode.empty) _emptyLocationPicker(c, loc),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,57 +857,6 @@ class _ScanScreenState extends State<ScanScreen>
           ],
         ),
       ],
-    );
-  }
-
-  /// The bin list behind the "ช่องว่าง" choice. Built from the cached Location
-  /// Master minus whatever a `warehouse`-status box is standing on right now
-  /// (see AppController.emptyLocations), so it is the same candidate set the
-  /// server's own suggestion comes from — just chosen by the person who knows
-  /// which aisle they are walking to.
-  Widget _emptyLocationPicker(AppController c, LocaleController loc) {
-    final free = c.emptyLocations;
-    if (free.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.warning_amber_rounded, size: 15, color: C.orange),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text(
-                  loc.t(
-                      'ไม่มีช่องว่างในคลังนี้ตอนนี้ — กด "ถัดไป" ได้เลย ระบบจะรับเข้าไว้ก่อนแล้วค่อยจัดเก็บทีหลัง'),
-                  style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
-            ),
-          ],
-        ),
-      );
-    }
-    // A bin that was free when the chip was tapped can be filled by another
-    // terminal before this batch commits; keeping the value only while it is
-    // still in the list means the form goes back to "not picked" instead of
-    // silently carrying a stale bin into the putaway task.
-    final selected =
-        free.any((l) => l.code == c.selectedEmptyLocation) ? c.selectedEmptyLocation : null;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: DropdownButtonFormField<String>(
-        value: selected,
-        isExpanded: true,
-        decoration: pdaInput(loc.t('— เลือกช่องว่าง —'), radius: 12),
-        hint: Text(loc.t('— เลือกช่องว่าง —'), style: TextStyle(color: C.faint)),
-        items: free
-            .map((l) => DropdownMenuItem(
-                  value: l.code,
-                  child: Text(
-                      '${l.code} · ${[l.zone, l.rack, l.shelf, l.slot].where((v) => v.isNotEmpty).join(' / ')}',
-                      overflow: TextOverflow.ellipsis),
-                ))
-            .toList(),
-        onChanged: (v) => c.setSelectedEmptyLocation(v ?? ''),
-      ),
     );
   }
 

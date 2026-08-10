@@ -634,6 +634,20 @@ void main() {
       expect(c.putawayTask!.isDirected, isFalse);
     });
 
+    test('ช่องว่าง (the default) makes an undirected task — nothing to resolve',
+        () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      c.mode = 'in';
+      expect(c.receiveLocationMode, ReceiveLocationMode.empty,
+          reason: 'ช่องว่าง is the default, untouched');
+      c.addScan('CRT-02');
+      await c.doCommit();
+
+      expect(c.putawayTask, isNotNull);
+      expect(c.putawayTask!.isDirected, isFalse);
+    });
+
     test('รอ Putaway makes no task at all — that is the whole point of it',
         () async {
       final api = FakeApi();
@@ -1353,69 +1367,21 @@ void main() {
     });
   });
 
-  group('gate in — ช่องว่าง (pick an empty bin)', () {
-    Map<String, dynamic> stateWithLocations() {
-      final state = fixtureState();
-      state['locations'] = {
-        'A-R01-1-01': {'code': 'A-R01-1-01', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '01'},
-        'A-R01-1-02': {'code': 'A-R01-1-02', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '02'},
-        'A-R01-1-03': {'code': 'A-R01-1-03', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '03', 'reportedFullAt': '2026-08-01T00:00:00Z'},
-        'B-R01-1-01': {'code': 'B-R01-1-01', 'wh': 'WH-2', 'zone': 'B', 'rack': 'R-01', 'shelf': '1', 'slot': '01'},
-      };
-      // a box standing on the first bin — occupied, so it must not be offered
-      final occupant = box('CRT-01', 'warehouse');
-      occupant['location'] = {'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '01'};
-      state['boxes']['CRT-01'] = occupant;
-      return state;
-    }
-
-    test('lists only the free bins of this warehouse', () async {
-      final api = FakeApi();
-      api.state = stateWithLocations();
-      final c = await makeController(api);
-      expect(c.emptyLocations.map((l) => l.code), ['A-R01-1-02']);
+  group('gate in — ช่องว่าง (default: just receive, no location asked)', () {
+    test('a fresh controller defaults to ช่องว่าง', () async {
+      final c = await makeController(FakeApi());
+      expect(c.receiveLocationMode, ReceiveLocationMode.empty);
     });
 
-    test('the picked bin becomes the putaway assignment', () async {
-      final api = FakeApi();
-      api.state = stateWithLocations();
-      final c = await makeController(api);
-      c.setReceiveLocationMode(ReceiveLocationMode.empty);
-      c.setSelectedEmptyLocation('A-R01-1-02');
-      expect(c.selectedEmptyLocationAssignment,
-          {'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '02'});
-    });
-
-    test('a bin that filled up in the meantime yields no assignment', () async {
-      final api = FakeApi();
-      api.state = stateWithLocations();
-      final c = await makeController(api);
-      c.setReceiveLocationMode(ReceiveLocationMode.empty);
-      c.setSelectedEmptyLocation('A-R01-1-01'); // occupied
-      expect(c.selectedEmptyLocationAssignment, isNull);
-    });
-
-    test('switching away from ช่องว่าง drops the pick', () async {
-      final api = FakeApi();
-      api.state = stateWithLocations();
-      final c = await makeController(api);
-      c.setReceiveLocationMode(ReceiveLocationMode.empty);
-      c.setSelectedEmptyLocation('A-R01-1-02');
-      c.setReceiveLocationMode(ReceiveLocationMode.defer);
-      expect(c.selectedEmptyLocation, '');
-    });
-
-    // Picking a bin is optional — an operator can select ช่องว่าง and proceed
-    // with nothing chosen; the batch is simply received into the warehouse
-    // with no shelf assigned yet, same outcome as [ReceiveLocationMode.defer].
-    test('ช่องว่าง with nothing picked yields no assignment, not an error',
-        () async {
-      final api = FakeApi();
-      api.state = stateWithLocations();
-      final c = await makeController(api);
-      c.setReceiveLocationMode(ReceiveLocationMode.empty);
-      expect(c.selectedEmptyLocation, '');
-      expect(c.selectedEmptyLocationAssignment, isNull);
+    test('a commit resets the next batch back to ช่องว่าง', () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'in';
+      c.setReceiveLocationMode(ReceiveLocationMode.manual);
+      c.addScan('CRT-02');
+      await c.doCommit();
+      // one operator's manual pick for one batch must not leak into the
+      // next — every fresh batch starts back at the no-input default.
+      expect(c.receiveLocationMode, ReceiveLocationMode.empty);
     });
   });
 }

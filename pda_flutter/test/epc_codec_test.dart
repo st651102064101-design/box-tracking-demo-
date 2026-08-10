@@ -45,6 +45,11 @@ void main() {
       expect(epcBarcode('3030303030424F582D303130'), 'BOX-010');
     });
 
+    test('the exact space-separated read reported on the reader', () {
+      // 30 30 30 30 30 42 4f 58 2d 30 31 30 -> "00000BOX-010" -> "BOX-010"
+      expect(epcBarcode('30 30 30 30 30 42 4f 58 2d 30 31 30'), 'BOX-010');
+    });
+
     test('leaves a code that is already 7 or fewer characters alone', () {
       expect(epcBarcode('000000000000424F582D3031'), 'BOX-01');
       expect(epcBarcode('00000000000000424F582D303130'), 'BOX-010');
