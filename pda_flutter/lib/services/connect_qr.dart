@@ -14,17 +14,20 @@ import 'dart:convert';
 class ConnectQr {
   final String baseUrl;
 
-  /// The device's own service account. Optional: an admin who leaves it out of
-  /// the QR is choosing to keep using whatever account the device already has.
-  final String? username;
-
-  /// Also optional, and off by default on the generator side — a printed QR
-  /// carrying a password is a printed password. Supported because a fleet
-  /// being provisioned from scratch otherwise still needs a typed secret per
-  /// device, which is the exact problem this whole flow exists to remove.
+  /// The device's own service account password. Optional, and off by default
+  /// on the generator side — a printed QR carrying a password is a printed
+  /// password. Supported because a fleet being provisioned from scratch
+  /// otherwise still needs a typed secret per device, which is the exact
+  /// problem this whole flow exists to remove.
+  ///
+  /// No username field: the device's account username isn't something a QR
+  /// changes — it's set once (or never touched at all) outside this flow, so
+  /// carrying it here would just be one more thing to keep in sync for no
+  /// benefit. Leaving it out of a QR is always read as "keep whatever
+  /// username this device already has".
   final String? password;
 
-  const ConnectQr({required this.baseUrl, this.username, this.password});
+  const ConnectQr({required this.baseUrl, this.password});
 
   /// Marker prefix, versioned so a future payload shape can be told apart from
   /// this one rather than silently mis-parsed.
@@ -34,11 +37,15 @@ class ConnectQr {
   ///
   /// Two accepted forms, because the second one costs nothing and covers every
   /// QR an admin might already have lying around (or generate elsewhere):
-  ///   * `BTCFG1:{"url":"…","user":"…","pass":"…"}` — what the web app prints
+  ///   * `BTCFG1:{"url":"…","pass":"…"}` — what the web app prints
   ///   * a bare `http://host:port` / `https://…` URL
   ///
   /// Anything else — a box barcode, an RFID tag, a shelf code — returns null,
   /// so a mis-aimed trigger pull is a no-op instead of a bad server address.
+  /// A stray `"user"` key in an older or hand-built payload is simply
+  /// ignored rather than rejected — this parser was never the only producer
+  /// of this format, and there's no reason to break on a field it no longer
+  /// reads.
   static ConnectQr? parse(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return null;
@@ -57,7 +64,6 @@ class ConnectQr {
       if (url == null) return null;
       return ConnectQr(
         baseUrl: url,
-        username: _blankToNull(m['user']?.toString()),
         password: _blankToNull(m['pass']?.toString()),
       );
     }

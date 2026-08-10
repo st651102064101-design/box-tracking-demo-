@@ -27,13 +27,14 @@ class DeviceSetupScreen extends StatefulWidget {
 class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _url;
 
-  /// The device's service account, when the scanned QR carried one. There are
-  /// no fields for these any more: a credential typed on a handheld keypad by
+  /// The device's service account password, when the scanned QR carried one.
+  /// There's no field for it: a credential typed on a handheld keypad by
   /// whoever happens to be holding the terminal is the same class of mistake
-  /// the server address was, and the QR already delivers both correctly. Null
-  /// means "leave whatever account this device already has alone", which is
-  /// what re-pointing a working terminal at a moved server should do.
-  String? _qrUser;
+  /// the server address was, and the QR already delivers it correctly. Null
+  /// means "leave whatever password this device already has alone", which is
+  /// what re-pointing a working terminal at a moved server should do. No
+  /// username companion — see ConnectQr's doc comment for why the QR never
+  /// carries one at all.
   String? _qrPass;
 
   /// The typed-by-hand fallback for the server address. Off by default — the
@@ -108,8 +109,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   /// Opens the scan sheet and applies whatever comes back.
   ///
-  /// The account is only taken when the QR actually carries one: an admin who
-  /// prints a URL-only QR (the default on the web side) is re-pointing a
+  /// The password is only taken when the QR actually carries one: an admin
+  /// who prints a URL-only QR (the default on the web side) is re-pointing a
   /// terminal at a moved server, and silently blanking that terminal's working
   /// service account would break it in a way that looks like the new address
   /// being wrong.
@@ -125,7 +126,6 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
       _url.text = cfg.baseUrl;
       _fromQr = true;
       _manualUrl = false;
-      if (cfg.username != null) _qrUser = cfg.username;
       if (cfg.password != null) _qrPass = cfg.password;
     });
   }
@@ -232,28 +232,14 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                           decoration: pdaInput('http://192.168.1.10:4000'),
                         ),
                       ],
-                      // The "บัญชีประจำเครื่อง" fields used to live here. They
+                      // The "บัญชีประจำเครื่อง" fields — username and, before
+                      // that, a password field too — used to live here. Both
                       // are gone on purpose: the account is a property of the
-                      // terminal, set once when it is handed out, and the QR
-                      // carries it — so the only thing the collapsed section
-                      // added was a keypad through which the person holding
-                      // the device could break a working one.
-                      if (_qrUser != null) ...[
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Icon(Icons.badge_outlined, size: 16, color: C.muted),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '${loc.t('บัญชีประจำเครื่องจาก QR')} · $_qrUser',
-                                style: TextStyle(
-                                    fontSize: 12, color: C.muted, height: 1.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      // terminal, not something to view or edit from this
+                      // screen. A scanned QR can still carry a new password
+                      // (see [_qrPass]), applied silently on save; there's
+                      // nothing to show for that beyond the connection
+                      // succeeding or failing.
                     ],
                   ),
                 ),
@@ -280,9 +266,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                   ? () => c.completeDeviceSetup(
                         baseUrl: _url.text,
                         // Null (not '') when the QR carried nothing:
-                        // applyConnection treats blank as "keep the account
-                        // this device already has".
-                        username: _qrUser,
+                        // applyConnection treats blank as "keep the password
+                        // this device already has". No username argument —
+                        // this screen never sets one; see ConnectQr.
                         password: _qrPass,
                       )
                   : null,

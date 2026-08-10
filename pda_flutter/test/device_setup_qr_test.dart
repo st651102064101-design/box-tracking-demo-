@@ -48,7 +48,7 @@ void main() {
     expect(find.byType(TextField), findsWidgets);
   });
 
-  testWidgets('scanning a connection QR fills the address and the account',
+  testWidgets('scanning a connection QR fills the address, silently',
       (tester) async {
     final c = await makeController(FakeApi());
     c.prefs.baseUrl = '';
@@ -63,25 +63,39 @@ void main() {
     expect(find.text('ยิง QR เชื่อมต่อระบบ'), findsOneWidget);
 
     // The imager delivers into the sheet's hidden ScanCapture field exactly
-    // as it does on every other scan screen.
+    // as it does on every other scan screen. A "user" key here (an older or
+    // hand-built payload) is exercised too — it must not break the parse.
     await tester.enterText(find.byType(TextField).first,
-        'BTCFG1:{"url":"http://10.0.0.5:4000","user":"pda-07"}');
+        'BTCFG1:{"url":"http://10.0.0.5:4000","user":"pda-07","pass":"secret"}');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('http://10.0.0.5:4000'), findsOneWidget);
     expect(find.text('จาก QR · แตะเพื่อสแกนใหม่'), findsOneWidget);
-    // There is no account field to fill any more — the account rode in on the
-    // QR, and the screen only says which one it took.
-    expect(find.text('บัญชีประจำเครื่องจาก QR · pda-07'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'ชื่อบัญชีเครื่อง เช่น pda-01'),
-        findsNothing);
+    // No username field, ever, and nothing shown for the password either —
+    // there's no account UI on this screen at all any more, see
+    // "there are no device-account fields to mistype" below.
+    expect(find.textContaining('บัญชี'), findsNothing);
   });
 
-  testWidgets('there are no device-account fields to mistype', (tester) async {
+  testWidgets('there are no device-account fields to mistype, before or after a scan',
+      (tester) async {
     final c = await makeController(FakeApi());
+    c.prefs.baseUrl = '';
     await tester.pumpWidget(await _wrap(c));
     await tester.pump();
+
+    expect(find.text('บัญชีประจำเครื่อง'), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is TextField && w.obscureText),
+        findsNothing);
+
+    await tester.tap(find.text('สแกน QR เพื่อเชื่อมต่อ'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.enterText(find.byType(TextField).first,
+        'BTCFG1:{"url":"http://10.0.0.5:4000","user":"pda-07","pass":"secret"}');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('บัญชีประจำเครื่อง'), findsNothing);
     expect(find.byWidgetPredicate((w) => w is TextField && w.obscureText),

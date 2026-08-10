@@ -1781,12 +1781,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// which is the whole point of badging in instead of signing in.
   Future<void> applyConnection({
     required String baseUrl,
-    String? username,
     String? password,
   }) async {
     prefs.baseUrl = baseUrl.trim();
-    if (username != null && username.trim().isNotEmpty)
-      prefs.username = username.trim();
     if (password != null && password.isNotEmpty) prefs.password = password;
     prefs.token = null;
     api
@@ -1814,11 +1811,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// nothing further on failure — [applyConnection] already toasted why.
   Future<void> completeDeviceSetup({
     required String baseUrl,
-    String? username,
     String? password,
   }) async {
-    await applyConnection(
-        baseUrl: baseUrl, username: username, password: password);
+    await applyConnection(baseUrl: baseUrl, password: password);
     if (connected) finishDeviceSetup();
   }
 
