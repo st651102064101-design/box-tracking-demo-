@@ -6611,14 +6611,20 @@ window.unqueueOut=unqueueOut;
    is for checking/handing off the list (e.g. attaching to a paper DO) while the
    queue is still editable, not a record of a completed shipment (that's already
    covered by the DO itself and the audit log once saveOutbound() runs). */
+/* วันที่/เวลา/ผู้บันทึก ในไฟล์นี้คือตอนที่กด Export (ไม่ใช่ตอนยิงแต่ละใบ — คิวนี้
+   ไม่ได้เก็บเวลาต่อรายการ) แต่ตั้งชื่อคอลัมน์ให้ตรงกับ TS_ALIASES/WHO_ALIASES ของ
+   ตัวนำเข้าไฟล์ (ดู "OUTBOUND BULK IMPORT" ด้านล่าง) โดยตั้งใจ — ไฟล์ที่ export จาก
+   ที่นี่แล้วนำกลับเข้ามาใหม่ทีหลัง (หรือแก้ไขแล้วนำเข้า) จะจับคู่คอลัมน์ให้อัตโนมัติ */
 function exportGateOutQueueExcel(){
   if(!pendingOut.length)return toast('ยังไม่มีกล่องในคิว','ยิงบาร์โค้ดกล่องก่อน export','err');
   var cust=custName(val('doCustomer'));
-  var headers=['บาร์โค้ด','ประเภทกล่อง','สภาพ','ลูกค้า/ปลายทาง','เลขที่ DO','เลขที่ PO','ทะเบียนรถ','คนขับ','ผู้บันทึก'];
-  var rows=pendingOut.map(function(t){
-    var b=S.boxes[t]||{};
-    return [barcodeCell(t), typeName(b.type), OUT_COND_LABEL[outConditionMap[t]||'good'],
-      cust, val('doNo'), val('poNo'), val('outPlate'), val('outDriver'), val('outRecorder')];
+  var recorder=val('outRecorder');
+  var d=dstr(), t=tstr();
+  var headers=['บาร์โค้ด','ประเภทกล่อง','สภาพ','ลูกค้า/ปลายทาง','เลขที่ DO','เลขที่ PO','ทะเบียนรถ','คนขับ','วันที่','เวลา','ผู้บันทึก'];
+  var rows=pendingOut.map(function(tag){
+    var b=S.boxes[tag]||{};
+    return [barcodeCell(tag), typeName(b.type), OUT_COND_LABEL[outConditionMap[tag]||'good'],
+      cust, val('doNo'), val('poNo'), val('outPlate'), val('outDriver'), d, t, recorder];
   });
   downloadXLS('gate-out-queue-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
 }
@@ -11967,7 +11973,17 @@ function openColumnMapModal(opts){
                      'กำหนดคืนภายใน (วัน)','คืนภายใน','คืนภายใน (วัน)'];
   var PLATE_ALIASES = ['plate','license plate','ทะเบียนรถ','ป้ายทะเบียน','ทะเบียน','รถ ป้ายทะเบียน'];
   var DRIVER_ALIASES = ['driver','ชื่อคนขับ','คนขับ','ชื่อคนขับ *'];
-  var TS_ALIASES = ['timestamp','date','datetime','เวลา','วันที่','timestamp (อ้างอิง)'];
+  // "when"/"time" both land on this one reference field, same as before — a
+  // file that splits date and time into two separate columns just gets asked
+  // (via openColumnMapModal) which one to map here, since this field is
+  // display-only and was never meant to hold two values at once.
+  var TS_ALIASES = ['timestamp','date','datetime','time','when','เวลา','วันที่','วันเวลา','timestamp (อ้างอิง)'];
+  // "who" — who scanned the row on the PDA/handheld, not who is confirming
+  // this batch on the web right now (that's ผู้บันทึก above the queue,
+  // already filled in from the logged-in operator) — so this is
+  // reference-only, same treatment as Timestamp, never auto-applied to
+  // #outRecorder.
+  var WHO_ALIASES = ['who','recorder','scanned by','ผู้บันทึก','ผู้ยิง','ผู้สแกน','ผู้บันทึก (อ้างอิง)'];
 
   var OUT_MAP_FIELDS = [
     {key:'tag',     label:'Barcode (รหัสกล่อง)',                 required:true,  aliases:TAG_ALIASES},
@@ -11975,7 +11991,8 @@ function openColumnMapModal(opts){
     {key:'retDays', label:'กำหนดคืนภายใน (วัน)',                  required:false, aliases:RETDAYS_ALIASES},
     {key:'plate',   label:'ทะเบียนรถ',                            required:false, aliases:PLATE_ALIASES},
     {key:'driver',  label:'ชื่อคนขับ',                            required:false, aliases:DRIVER_ALIASES},
-    {key:'ts',      label:'Timestamp (อ้างอิงเท่านั้น)',           required:false, aliases:TS_ALIASES}
+    {key:'ts',      label:'วันที่/เวลา (อ้างอิงเท่านั้น)',         required:false, aliases:TS_ALIASES},
+    {key:'who',     label:'ผู้บันทึก (อ้างอิงเท่านั้น)',           required:false, aliases:WHO_ALIASES}
   ];
 
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
@@ -12049,10 +12066,10 @@ function openColumnMapModal(opts){
      rows already has its header at [0] and blank rows filtered out (done in handleOutImportFile). */
   function processOutRows(rows,colMap,fname){
     var tc=colMap.tag, dc=colMap.dest, rc=colMap.retDays,
-        pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts;
+        pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts, whoc=colMap.who;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={};
-    var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[];
+    var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[], whoVals=[];
     for(var i=1;i<rows.length;i++){
       var raw=String(rows[i][tc]==null?'':rows[i][tc]).trim();
       if(!raw)continue;
@@ -12069,20 +12086,21 @@ function openColumnMapModal(opts){
       if(pc>=0)plateVals.push(rows[i][pc]);
       if(vc>=0)driverVals.push(rows[i][vc]);
       if(tsc>=0)tsVals.push(rows[i][tsc]);
+      if(whoc>=0)whoVals.push(rows[i][whoc]);
     }
 
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
-    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals);
+    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals);
     showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta);
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
      operator already typed, and never guesses across conflicting rows. ---- */
-  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals){
-    var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals)};
+  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals){
+    var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals),who:distinctVals(whoVals)};
 
     var d=distinctVals(destVals);
     meta.dest.values=d;
@@ -12154,7 +12172,8 @@ function openColumnMapModal(opts){
       line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
-      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (อ้างอิงเท่านั้น): '+meta.ts.map(esc).join(', ')+'</div>');
+      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">วันที่/เวลาในไฟล์ (อ้างอิงเท่านั้น): '+meta.ts.map(esc).join(', ')+'</div>');
+      if(meta.who&&meta.who.length)rows.push('<div class="small muted" style="margin:4px 0;">ผู้บันทึกในไฟล์ (อ้างอิงเท่านั้น): '+meta.who.map(esc).join(', ')+'</div>');
       if(rows.length)h+='<div class="c2-label">ข้อมูลใบส่งของจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
 
