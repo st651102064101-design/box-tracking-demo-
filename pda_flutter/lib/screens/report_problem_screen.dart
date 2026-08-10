@@ -9,17 +9,28 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
 
-enum _Kind { missing, binFull, unreadableTag }
+enum _Kind { missing, unreadableTag, damaged }
+
+enum _Mode { report, resolve }
 
 /// "แจ้งปัญหาหน้างาน" — the PDA's floor-exception buttons: "ของหาย" (a
-/// system-directed pick/putaway landed here and the box wasn't), "ช่องเก็บเต็ม"
-/// (a suggested shelf is already full in person), and "อ่านแท็กไม่ติด" (the
-/// box is right there but its RFID/barcode won't read). Backed by
-/// POST /api/reports. "กล่องชำรุด" (damaged) is also picked from this
-/// screen's kind tiles, but isn't one of this screen's own report kinds —
-/// it forwards straight into HoldReleaseScreen (see _kindPicker), since
-/// hold/damage is a full status change with its own release path that this
-/// screen's scan-then-confirm shape doesn't fit, not a report to log.
+/// system-directed pick/putaway landed here and the box wasn't), "อ่านแท็กไม่
+/// ติด / ป้ายหาย" (the box is right there but its RFID/barcode won't read),
+/// and "กล่องชำรุด" (found damaged). Backed by POST /api/reports.
+///
+/// All three kinds are box-scoped and all three flip real box state (see the
+/// backend route's own doc comment) — which means every one of them needs a
+/// way back, not just a way in. [_Mode.resolve] is the same screen with the
+/// same three kinds, just pointed at boxes that currently have that kind's
+/// report open and calling POST /api/reports/resolve instead: "เจอของแล้ว" /
+/// "อ่านแท็กติดแล้ว / ป้ายไม่หายแล้ว" / "ซ่อมแล้ว". A report an operator can
+/// only ever file and never close trains them to stop trusting the button.
+///
+/// "ช่องเก็บเต็ม" (a suggested shelf already full in person) used to be a
+/// fourth, location-scoped kind here. It was dropped entirely rather than
+/// given a resolve step — nothing box-shaped to scan back "not full" against
+/// keeps the same shape as the other three, and Location Master already
+/// covers clearing that flag from the dashboard.
 class ReportProblemScreen extends StatefulWidget {
   const ReportProblemScreen({super.key});
   @override
@@ -27,9 +38,9 @@ class ReportProblemScreen extends StatefulWidget {
 }
 
 class _ReportProblemScreenState extends State<ReportProblemScreen> {
+  _Mode _mode = _Mode.report;
   _Kind? _kind;
   Box? _box;
-  Map<String, String>? _location;
   String? _scanError;
   bool _busy = false;
   bool _sent = false;
@@ -41,11 +52,36 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   /// and a warehouse-wide alphabetical list needs a type filter to be usable.
   String? _typeFilter;
 
+  static String _apiKind(_Kind k) => switch (k) {
+        _Kind.missing => 'missing',
+        _Kind.unreadableTag => 'unreadable_tag',
+        _Kind.damaged => 'damaged',
+      };
+
+  /// Whether [b] currently has an open report of kind [k] — the boundary
+  /// between "offer to file" (report mode) and "offer to close" (resolve
+  /// mode) for that box.
+  static bool _isOpen(_Kind k, Box b) => switch (k) {
+        _Kind.missing => b.status == 'lost',
+        _Kind.damaged => b.status == 'damage',
+        _Kind.unreadableTag => b.tagIssueOpen,
+      };
+
+  void _setMode(_Mode m) {
+    if (m == _mode) return;
+    setState(() {
+      _mode = m;
+      _kind = null;
+      _box = null;
+      _scanError = null;
+      _typeFilter = null;
+    });
+  }
+
   void _pickKind(_Kind k) {
     setState(() {
       _kind = k;
       _box = null;
-      _location = null;
       _scanError = null;
       _typeFilter = null;
     });
@@ -53,50 +89,46 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
 
   void _onScan(AppController c, String raw) {
     final s = c.S;
-    if (s == null) return;
-    if (_kind == _Kind.missing || _kind == _Kind.unreadableTag) {
-      final b = s.box(c.resolveTag(raw));
-      if (b == null) {
-        setState(() => _scanError = 'ไม่พบกล่องรหัส "$raw"');
-        return;
-      }
-      setState(() {
-        _scanError = null;
-        _box = b;
-      });
+    final kind = _kind;
+    if (s == null || kind == null) return;
+    final b = s.box(c.resolveTag(raw));
+    if (b == null) {
+      setState(() => _scanError = 'ไม่พบกล่องรหัส "$raw"');
       return;
     }
-    // bin_full — a shelf/rack barcode, not a box.
-    final found = s.locationByCode(c.wh, raw);
-    if (found == null) {
-      setState(() => _scanError = 'ไม่พบตำแหน่งรหัส "$raw"');
+    if (_mode == _Mode.report && _isOpen(kind, b)) {
+      setState(() => _scanError = '${b.tag} แจ้งปัญหานี้ไว้อยู่แล้ว');
+      return;
+    }
+    if (_mode == _Mode.resolve && !_isOpen(kind, b)) {
+      setState(() => _scanError = '${b.tag} ไม่ได้เปิดปัญหานี้ไว้');
       return;
     }
     setState(() {
       _scanError = null;
-      _location = found;
+      _box = b;
     });
   }
 
   Future<void> _submit(AppController c) async {
-    if (_busy) return;
+    final kind = _kind;
+    final box = _box;
+    if (_busy || kind == null || box == null) return;
     final loc = context.read<LocaleController>();
     setState(() {
       _busy = true;
       _scanError = null;
     });
     try {
-      await c.api.report(
-        kind: switch (_kind) {
-          _Kind.missing => 'missing',
-          _Kind.unreadableTag => 'unreadable_tag',
-          _ => 'bin_full',
-        },
-        tag: _box?.tag,
-        location: _location,
-      );
+      if (_mode == _Mode.report) {
+        await c.api.report(kind: _apiKind(kind), tag: box.tag);
+      } else {
+        await c.api.resolveReport(kind: _apiKind(kind), tag: box.tag);
+      }
       if (!mounted) return;
       c.rfid.playSound('putaway_ok');
+      await c.refresh();
+      if (!mounted) return;
       setState(() => _sent = true);
     } catch (e) {
       if (!mounted) return;
@@ -111,7 +143,6 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     setState(() {
       _kind = null;
       _box = null;
-      _location = null;
       _scanError = null;
       _sent = false;
       _typeFilter = null;
@@ -124,7 +155,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final kind = _kind;
-    final target = _box != null || _location != null;
+    final target = _box != null;
 
     if (_sent) return _successStep(loc);
 
@@ -139,7 +170,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         body: ListView(
           padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
           children: kind == null
-              ? _kindPicker(c, loc)
+              ? [_modeToggle(loc), const SizedBox(height: 14), ..._kindPicker(c, loc)]
               : target
                   ? _confirmBody(c, loc)
                   : _scanBody(c, loc, kind),
@@ -148,45 +179,83 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _kindPicker(AppController c, LocaleController loc) => [
-        _kindTile(
-          icon: Icons.search_off,
-          color: C.red,
-          bg: C.redBg,
-          title: loc.t('ของหาย'),
-          sub: loc.t('ยิงบาร์โค้ดกล่อง — ระบบสั่งมาที่นี่แต่ไม่พบของ'),
-          onTap: () => _pickKind(_Kind.missing),
+  Widget _modeToggle(LocaleController loc) => Row(
+        children: [
+          Expanded(
+            child: _modeTab(loc.t('แจ้งปัญหา'), _Mode.report),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _modeTab(loc.t('ปิดปัญหา'), _Mode.resolve),
+          ),
+        ],
+      );
+
+  Widget _modeTab(String label, _Mode m) {
+    final selected = _mode == m;
+    return Material(
+      color: selected ? C.ink : C.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _setMode(m),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? C.ink : C.border),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: selected ? C.onHero : C.ink2,
+            ),
+          ),
         ),
-        const SizedBox(height: 10),
-        _kindTile(
-          icon: Icons.inbox,
-          color: C.orange,
-          bg: C.orangeBg,
-          title: loc.t('ช่องเก็บเต็ม'),
-          sub: loc.t('ยิงบาร์โค้ดชั้นวาง — ช่องที่ระบบแนะนำเต็มแล้วจริง'),
-          onTap: () => _pickKind(_Kind.binFull),
-        ),
-        const SizedBox(height: 10),
-        // Forwards straight into HoldReleaseScreen — see the class doc
-        // comment for why this isn't one of this screen's own report kinds.
-        _kindTile(
-          icon: Icons.broken_image_outlined,
-          color: C.orange,
-          bg: C.orangeBg,
-          title: loc.t('กล่องชำรุด'),
-          sub: loc.t('เจอกล่องที่สั่งมาหยิบ แต่ชำรุด/เสียหาย ใช้งานไม่ได้'),
-          onTap: c.goHoldRelease,
-        ),
-        const SizedBox(height: 10),
-        _kindTile(
-          icon: Icons.sensors_off,
-          color: C.red,
-          bg: C.redBg,
-          title: loc.t('อ่านแท็กไม่ติด / ป้ายหาย'),
-          sub: loc.t('หากล่องเจอ แต่ RFID/บาร์โค้ดอ่านไม่ได้'),
-          onTap: () => _pickKind(_Kind.unreadableTag),
-        ),
-      ];
+      ),
+    );
+  }
+
+  List<Widget> _kindPicker(AppController c, LocaleController loc) {
+    final resolve = _mode == _Mode.resolve;
+    return [
+      _kindTile(
+        icon: resolve ? Icons.check_circle_outline : Icons.search_off,
+        color: C.red,
+        bg: C.redBg,
+        title: loc.t(resolve ? 'เจอของแล้ว' : 'ของหาย'),
+        sub: loc.t(resolve
+            ? 'ยิงบาร์โค้ดกล่องที่เคยแจ้งของหาย'
+            : 'ยิงบาร์โค้ดกล่อง — ระบบสั่งมาที่นี่แต่ไม่พบของ'),
+        onTap: () => _pickKind(_Kind.missing),
+      ),
+      const SizedBox(height: 10),
+      _kindTile(
+        icon: resolve ? Icons.nfc : Icons.sensors_off,
+        color: C.red,
+        bg: C.redBg,
+        title: loc.t(resolve ? 'อ่านแท็กติดแล้ว / ป้ายไม่หายแล้ว' : 'อ่านแท็กไม่ติด / ป้ายหาย'),
+        sub: loc.t(resolve
+            ? 'ยิงบาร์โค้ดกล่องที่เคยแจ้งอ่านแท็กไม่ติด'
+            : 'หากล่องเจอ แต่ RFID/บาร์โค้ดอ่านไม่ได้'),
+        onTap: () => _pickKind(_Kind.unreadableTag),
+      ),
+      const SizedBox(height: 10),
+      _kindTile(
+        icon: resolve ? Icons.build_circle_outlined : Icons.broken_image_outlined,
+        color: C.orange,
+        bg: C.orangeBg,
+        title: loc.t(resolve ? 'ซ่อมแล้ว' : 'กล่องชำรุด'),
+        sub: loc.t(resolve
+            ? 'ยิงบาร์โค้ดกล่องที่เคยแจ้งชำรุด'
+            : 'เจอกล่องที่สั่งมาหยิบ แต่ชำรุด/เสียหาย ใช้งานไม่ได้'),
+        onTap: () => _pickKind(_Kind.damaged),
+      ),
+    ];
+  }
 
   Widget _kindTile({
     required IconData icon,
@@ -237,67 +306,76 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _scanBody(AppController c, LocaleController loc, _Kind kind) => [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
-          decoration: BoxDecoration(
-            color: C.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: C.fieldBorder, width: 1.5),
-          ),
-          child: Column(
-            children: [
-              Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
-              const SizedBox(height: 8),
-              Text(
-                  loc.t(switch (kind) {
-                    _Kind.missing => 'ยิงบาร์โค้ดกล่องที่หา',
-                    _Kind.unreadableTag => 'ยิงบาร์โค้ดกล่องที่อ่านแท็กไม่ติด',
-                    _ => 'ยิงบาร์โค้ดชั้นวางที่เต็ม',
-                  }),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: C.muted,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
+  List<Widget> _scanBody(AppController c, LocaleController loc, _Kind kind) {
+    final resolve = _mode == _Mode.resolve;
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.fieldBorder, width: 1.5),
         ),
-        if (_scanError != null) ...[
-          const SizedBox(height: 10),
-          Text(_scanError!,
-              style: TextStyle(
-                  fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
-        ],
-        // bin_full picks a shelf, not a box — there's no product type to
-        // group by and no box list that would mean anything, so it stays
-        // scan-only.
-        if (kind != _Kind.binFull) ..._boxPickList(c, loc, kind),
-      ];
+        child: Column(
+          children: [
+            Icon(Icons.qr_code_scanner, size: 26, color: C.muted),
+            const SizedBox(height: 8),
+            Text(
+                loc.t(resolve
+                    ? 'ยิงบาร์โค้ดกล่องที่จะปิดปัญหา'
+                    : switch (kind) {
+                        _Kind.unreadableTag => 'ยิงบาร์โค้ดกล่องที่อ่านแท็กไม่ติด',
+                        _Kind.damaged => 'ยิงบาร์โค้ดกล่องที่ชำรุด',
+                        _Kind.missing => 'ยิงบาร์โค้ดกล่องที่หา',
+                      }),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 14,
+                    color: C.muted,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+      if (_scanError != null) ...[
+        const SizedBox(height: 10),
+        Text(_scanError!,
+            style: TextStyle(
+                fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
+      ],
+      ..._boxPickList(c, loc, kind),
+    ];
+  }
 
-  /// Browsable box list for the two box-scoped report kinds, grouped behind a
-  /// product-type filter exactly like RfidLocateScreen's own pick step. This
-  /// matters more here than there: the box being reported is by definition
-  /// one the operator *cannot* scan — it's missing from its shelf, or its tag
-  /// won't read — so without this the only way to file the report is to
-  /// already know the tag by heart and have something else to scan it off.
+  /// Browsable box list, grouped behind a product-type filter exactly like
+  /// RfidLocateScreen's own pick step. In report mode this matters more than
+  /// there: the box being reported is by definition one the operator
+  /// *cannot* scan (it's missing, or its tag won't read), so without this the
+  /// only way to file the report is to already know the tag by heart and have
+  /// something else to scan it off. In resolve mode it's the list of boxes
+  /// that currently have this kind's report open, which is at least as
+  /// important — that's the only way to find *which* boxes still need
+  /// closing without already knowing the tag.
   List<Widget> _boxPickList(
       AppController c, LocaleController loc, _Kind kind) {
     final s = c.S;
     if (s == null) return const [];
+    final resolve = _mode == _Mode.resolve;
 
-    // Only boxes the system believes are physically on hand: reporting "I
-    // went there and it wasn't there" (or "I'm holding it but its tag won't
-    // read") makes no sense for a box that's out at a customer, was never
-    // received, or is already flagged lost.
-    final onHand = s.boxes
-        .where((b) => const {'warehouse', 'hold', 'damage'}.contains(b.status))
-        .toList()
-      ..sort((a, b) => a.tag.compareTo(b.tag));
+    // Report mode: only boxes physically on hand and without this issue
+    // already open. Resolve mode: only boxes that currently have this
+    // issue open (which for "missing"/"damaged" means status 'lost'/'damage'
+    // — deliberately outside the on-hand set, since that's exactly what
+    // opening the report moved them out of).
+    final candidates = resolve
+        ? s.boxes.where((b) => _isOpen(kind, b))
+        : s.boxes
+            .where((b) => const {'warehouse', 'hold', 'damage'}.contains(b.status))
+            .where((b) => !_isOpen(kind, b));
+    final onHand = candidates.toList()..sort((a, b) => a.tag.compareTo(b.tag));
 
-    // Distinct types actually present — a type with no on-hand box would just
-    // be a dead-end chip. '' stands in for "no type set" so it stays a
+    // Distinct types actually present — a type with no candidate box would
+    // just be a dead-end chip. '' stands in for "no type set" so it stays a
     // normal map key.
     final typeNames = <String, String>{};
     for (final b in onHand) {
@@ -306,7 +384,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     final typeIds = typeNames.keys.toList()
       ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
     if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
-      _typeFilter = null; // the selected type's last on-hand box went away
+      _typeFilter = null; // the selected type's last candidate box went away
     }
     final shown = _typeFilter == null
         ? onHand
@@ -387,7 +465,9 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                       Icon(
                           kind == _Kind.missing
                               ? Icons.inventory_2_outlined
-                              : Icons.nfc,
+                              : kind == _Kind.damaged
+                                  ? Icons.broken_image_outlined
+                                  : Icons.nfc,
                           size: 18,
                           color: C.muted),
                       const SizedBox(width: 10),
@@ -431,37 +511,33 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   }
 
   List<Widget> _confirmBody(AppController c, LocaleController loc) {
-    final b = _box;
-    final l = _location;
+    final b = _box!;
+    final resolve = _mode == _Mode.resolve;
+    final kind = _kind!;
+    final actionLabel = resolve
+        ? switch (kind) {
+            _Kind.missing => 'เจอของแล้ว',
+            _Kind.unreadableTag => 'อ่านแท็กติดแล้ว / ป้ายไม่หายแล้ว',
+            _Kind.damaged => 'ซ่อมแล้ว',
+          }
+        : 'ส่งรายงาน';
     return [
       Panel(
         radius: 18,
         padding: const EdgeInsets.all(18),
-        child: b != null
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(b.tag,
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'monospace')),
-                  const SizedBox(height: 4),
-                  Text(c.S?.typeName(b.type) ?? '-',
-                      style: TextStyle(fontSize: 13, color: C.muted)),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(locationText(l!),
-                      style: const TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text(c.selWhName,
-                      style: TextStyle(fontSize: 13, color: C.muted)),
-                ],
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(b.tag,
+                style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'monospace')),
+            const SizedBox(height: 4),
+            Text(c.S?.typeName(b.type) ?? '-',
+                style: TextStyle(fontSize: 13, color: C.muted)),
+          ],
+        ),
       ),
       const SizedBox(height: 16),
       SizedBox(
@@ -474,7 +550,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          child: Text(_busy ? loc.t('กำลังบันทึก…') : loc.t('ส่งรายงาน')),
+          child: Text(_busy ? loc.t('กำลังบันทึก…') : loc.t(actionLabel)),
         ),
       ),
       if (_scanError != null) ...[
@@ -488,6 +564,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
 
   Widget _successStep(LocaleController loc) {
     final c = context.read<AppController>();
+    final resolve = _mode == _Mode.resolve;
     return Container(
       color: C.limeBg,
       child: Center(
@@ -496,7 +573,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           children: [
             Icon(Icons.check_circle, size: 84, color: C.limeText),
             const SizedBox(height: 14),
-            Text(loc.t('บันทึกรายงานแล้ว'),
+            Text(loc.t(resolve ? 'ปิดปัญหาแล้ว' : 'บันทึกรายงานแล้ว'),
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -504,7 +581,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             const SizedBox(height: 18),
             TextButton(
               onPressed: _reset,
-              child: Text(loc.t('แจ้งอีกรายการ')),
+              child: Text(loc.t(resolve ? 'ปิดอีกรายการ' : 'แจ้งอีกรายการ')),
             ),
             TextButton(
               onPressed: c.backToHome,

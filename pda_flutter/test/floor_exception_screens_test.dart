@@ -186,31 +186,21 @@ void main() {
       expect(find.text('CRT-01'), findsOneWidget);
     });
 
-    testWidgets('reports a full bin by location, with no box tag',
+    // "ช่องเก็บเต็ม" was dropped from the floor menu entirely — no resolve
+    // step would mean anything box-shaped for a location-scoped report, and
+    // Location Master already covers clearing that flag from the dashboard.
+    // "กล่องชำรุด" stayed, alongside the two original box-scoped kinds.
+    testWidgets('offers the three box-scoped report kinds, not ช่องเก็บเต็ม',
         (tester) async {
-      final api = FakeApi();
       final state = fixtureStateWithLocation();
       final c = await makeController(FakeApi()..state = state);
       await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
       await tester.pump();
 
-      await tester.tap(find.text('ช่องเก็บเต็ม'));
-      await tester.pump();
-      await scan(tester, 'LOC-A11');
-      await tester.pump();
-
-      expect(find.text('A / 1 / 1'), findsOneWidget);
-      await tester.tap(find.text('ส่งรายงาน'));
-      await tester.pump();
-      await tester.pump();
-
-      // Reports through this widget's own controller (built with `c`), not
-      // `api` — assert against the api actually wired to c.
-      final calls = (c.api as FakeApi).reportCalls;
-      expect(calls, hasLength(1));
-      expect(calls.first['kind'], 'bin_full');
-      expect(calls.first['tag'], isNull);
-      expect(calls.first['location'], isNotNull);
+      expect(find.text('ของหาย'), findsOneWidget);
+      expect(find.text('อ่านแท็กไม่ติด / ป้ายหาย'), findsOneWidget);
+      expect(find.text('กล่องชำรุด'), findsOneWidget);
+      expect(find.text('ช่องเก็บเต็ม'), findsNothing);
     });
 
     testWidgets('reports an unreadable tag by box', (tester) async {
@@ -239,7 +229,29 @@ void main() {
       expect(find.text('ไปผูกแท็กใหม่'), findsNothing);
     });
 
-    testWidgets('กล่องชำรุด forwards straight into HoldReleaseScreen',
+    testWidgets('reports a damaged box by tag', (tester) async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('กล่องชำรุด'));
+      await tester.pump();
+      await scan(tester, 'CRT-01'); // warehouse, per fixtureState()
+      await tester.pump();
+
+      expect(find.text('CRT-01'), findsOneWidget);
+      await tester.tap(find.text('ส่งรายงาน'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.reportCalls, hasLength(1));
+      expect(api.reportCalls.first['kind'], 'damaged');
+      expect(api.reportCalls.first['tag'], 'CRT-01');
+      expect(find.text('บันทึกรายงานแล้ว'), findsOneWidget);
+    });
+
+    testWidgets('a box already flagged damaged is not offered again',
         (tester) async {
       final c = await makeController(FakeApi());
       await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
@@ -247,7 +259,57 @@ void main() {
 
       await tester.tap(find.text('กล่องชำรุด'));
       await tester.pump();
-      expect(c.screen, Screen.holdRelease);
+
+      // CRT-05 is already status 'damage' per fixtureState() — offering to
+      // file a second damage report on it would just 409 the way the
+      // backend's own duplicate check refuses it.
+      expect(find.text('CRT-05'), findsNothing);
+    });
+
+    testWidgets('ปิดปัญหา mode resolves a lost box back to normal',
+        (tester) async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('ปิดปัญหา'));
+      await tester.pump();
+      await tester.tap(find.text('เจอของแล้ว'));
+      await tester.pump();
+
+      // CRT-04 is 'lost' per fixtureState() — the only kind of box this mode
+      // should offer for "ของหาย".
+      expect(find.text('CRT-04'), findsOneWidget);
+      // CRT-01 is on-hand, not lost — nothing to resolve there.
+      expect(find.text('CRT-01'), findsNothing);
+
+      await scan(tester, 'CRT-04');
+      await tester.pump();
+      await tester.tap(find.text('เจอของแล้ว').last);
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.resolveReportCalls, [
+        {'kind': 'missing', 'tag': 'CRT-04'}
+      ]);
+      expect(find.text('ปิดปัญหาแล้ว'), findsOneWidget);
+    });
+
+    testWidgets('ปิดปัญหา mode refuses a box with nothing open',
+        (tester) async {
+      final c = await makeController(FakeApi());
+      await tester.pumpWidget(await _wrap(c, const ReportProblemScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('ปิดปัญหา'));
+      await tester.pump();
+      await tester.tap(find.text('ซ่อมแล้ว'));
+      await tester.pump();
+      await scan(tester, 'CRT-01'); // warehouse, not damaged
+      await tester.pump();
+
+      expect(find.textContaining('ไม่ได้เปิดปัญหานี้ไว้'), findsOneWidget);
     });
   });
 
@@ -309,8 +371,8 @@ Map<String, dynamic> _twoTypeState() => {
     };
 
 /// fixtureState() plus a master location LOC-A11 (occupied by CRT-01) and
-/// LOC-A99 (defined, empty) — what LocationInquiryScreen and the bin_full
-/// report path both need to resolve a scanned shelf code.
+/// LOC-A99 (defined, empty) — what LocationInquiryScreen needs to resolve a
+/// scanned shelf code.
 Map<String, dynamic> fixtureStateWithLocation() {
   final boxes = <String, dynamic>{
     'CRT-01': box('CRT-01', 'warehouse')

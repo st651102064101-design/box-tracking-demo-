@@ -8,6 +8,12 @@ class Box {
   String get tag => (raw['tag'] ?? '').toString();
   String? get type => raw['type']?.toString();
   String get status => (raw['status'] ?? 'pending').toString();
+
+  /// Set by POST /api/reports (kind: unreadable_tag), cleared by
+  /// POST /api/reports/resolve — an "อ่านแท็กไม่ติด / ป้ายหาย" report open on
+  /// this box right now. Unlike "missing"/"damaged" this doesn't move
+  /// [status], so it needs its own flag to know whether one is open.
+  bool get tagIssueOpen => raw['tagIssueOpenAt'] != null;
   int get cycles => _int(raw['cycles']);
   String get customer => (raw['customer'] ?? '').toString();
   String get doNo => (raw['do'] ?? '').toString();

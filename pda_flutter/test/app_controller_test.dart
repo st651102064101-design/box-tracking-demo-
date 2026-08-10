@@ -166,8 +166,7 @@ class FakeApi extends ApiClient {
   @override
   Future<Map<String, dynamic>> report({
     required String kind,
-    String? tag,
-    Map<String, String>? location,
+    required String tag,
     String note = '',
   }) async {
     if (throwOnReport != null) {
@@ -175,8 +174,24 @@ class FakeApi extends ApiClient {
       throwOnReport = null;
       throw e;
     }
-    reportCalls
-        .add({'kind': kind, 'tag': tag, 'location': location, 'note': note});
+    reportCalls.add({'kind': kind, 'tag': tag, 'note': note});
+    return {'dir': kind, 'tag': tag};
+  }
+
+  final List<Map<String, dynamic>> resolveReportCalls = [];
+  Object? throwOnResolveReport;
+
+  @override
+  Future<Map<String, dynamic>> resolveReport({
+    required String kind,
+    required String tag,
+  }) async {
+    if (throwOnResolveReport != null) {
+      final e = throwOnResolveReport!;
+      throwOnResolveReport = null;
+      throw e;
+    }
+    resolveReportCalls.add({'kind': kind, 'tag': tag});
     return {'dir': kind, 'tag': tag};
   }
 }
