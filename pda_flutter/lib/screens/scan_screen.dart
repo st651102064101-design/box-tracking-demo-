@@ -456,13 +456,12 @@ class _ScanScreenState extends State<ScanScreen>
             c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' ||
             c.inVehicleTypeOther.trim().isNotEmpty);
-    // "ช่องว่าง" is only a complete answer once a bin is actually picked —
-    // the same rule ลูกค้าปลายทาง follows on the ส่งออก side.
-    final emptyLocOk = isOut ||
-        c.receiveLocationMode != ReceiveLocationMode.empty ||
-        c.selectedEmptyLocation.isNotEmpty;
-    final formValid =
-        (!isOut || c.outCustomer.isNotEmpty) && vtypeOk && emptyLocOk;
+    // "ช่องว่าง" picking a specific bin is optional, not required — an
+    // operator who just wants the batch counted into the warehouse (no
+    // particular shelf decided yet) can proceed with nothing picked; the
+    // dropdown is there for whoever does know which bin they're walking to.
+    // Unlike ลูกค้าปลายทาง on the ส่งออก side, nothing here blocks "ถัดไป".
+    final formValid = (!isOut || c.outCustomer.isNotEmpty) && vtypeOk;
     // Step 1 (form): "ถัดไป" needs a valid form, nothing about the queue —
     // it's still empty at this point. Step 2 (scan): commit needs both a
     // non-empty queue and the form still valid (it was checked once to get
@@ -750,7 +749,7 @@ class _ScanScreenState extends State<ScanScreen>
       ReceiveLocationMode.manual =>
         'ยิงกล่องให้ครบก่อน แล้วค่อยเดินไปหาช่องว่างและยิงบาร์โค้ดชั้นวางเอง',
       ReceiveLocationMode.empty =>
-        'เลือกช่องที่ว่างอยู่ตอนนี้เองจากรายการ แล้วระบบจะพาไปเก็บที่ช่องนั้น',
+        'อยู่ในคลังนี้ก็พอ — เลือกช่องจากรายการได้ถ้ารู้แล้วว่าจะเก็บที่ไหน ไม่เลือกก็ไปต่อได้',
       ReceiveLocationMode.defer =>
         'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง',
     };
@@ -832,7 +831,7 @@ class _ScanScreenState extends State<ScanScreen>
             Expanded(
               child: Text(
                   loc.t(
-                      'ไม่มีช่องว่างในคลังนี้ — เลือก "เลือกเอง" หรือ "รอ Putaway" แทน'),
+                      'ไม่มีช่องว่างในคลังนี้ตอนนี้ — กด "ถัดไป" ได้เลย ระบบจะรับเข้าไว้ก่อนแล้วค่อยจัดเก็บทีหลัง'),
                   style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
             ),
           ],

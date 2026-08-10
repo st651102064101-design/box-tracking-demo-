@@ -1404,5 +1404,18 @@ void main() {
       c.setReceiveLocationMode(ReceiveLocationMode.defer);
       expect(c.selectedEmptyLocation, '');
     });
+
+    // Picking a bin is optional — an operator can select ช่องว่าง and proceed
+    // with nothing chosen; the batch is simply received into the warehouse
+    // with no shelf assigned yet, same outcome as [ReceiveLocationMode.defer].
+    test('ช่องว่าง with nothing picked yields no assignment, not an error',
+        () async {
+      final api = FakeApi();
+      api.state = stateWithLocations();
+      final c = await makeController(api);
+      c.setReceiveLocationMode(ReceiveLocationMode.empty);
+      expect(c.selectedEmptyLocation, '');
+      expect(c.selectedEmptyLocationAssignment, isNull);
+    });
   });
 }

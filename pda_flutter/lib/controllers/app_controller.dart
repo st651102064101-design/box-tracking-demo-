@@ -50,10 +50,16 @@ enum ScanInputMode { barcode, rfid }
 ///
 /// [empty] is [auto]'s "let me pick which one" sibling: same set of shelves
 /// the server would suggest from (Location Master rows in this warehouse with
-/// no box on them), but listed so the operator chooses the bin instead of
-/// taking the first free one — which is what they need when they already know
-/// the aisle they are walking to, or when the first free bin is across the
-/// building from where the pallet is standing.
+/// no box on them), listed so the operator chooses the bin instead of taking
+/// the first free one — which is what they need when they already know the
+/// aisle they are walking to, or when the first free bin is across the
+/// building from where the pallet is standing. Picking one is optional: an
+/// operator who doesn't know yet which bin, or whose warehouse has none free
+/// right now, can still proceed with nothing chosen (see
+/// AppController.emptyLocations and ScanScreen's formValid, which never
+/// blocks on this pick the way it blocks on ลูกค้าปลายทาง for an outbound
+/// batch). Committing with nothing picked degrades to exactly [defer]'s
+/// outcome: received into the warehouse, no shelf assigned yet.
 enum ReceiveLocationMode { auto, manual, empty, defer }
 
 /// A batch that has been received (Gate In already committed) and now has to
