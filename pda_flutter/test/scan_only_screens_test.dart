@@ -35,9 +35,10 @@ void main() {
     'lib/screens/box_register_screen.dart':
         'a brand-new box has no sticker yet, so its code must be typed once',
     'lib/screens/device_setup_screen.dart':
-        'the device credentials, and the typed-by-hand fallback for the server '
-            'url — not a box code at all. The url itself is normally scanned '
-            'from the QR the web app prints (see ConnectQr)',
+        'only the typed-by-hand fallback for the server url, for a site with '
+            'no screen to show the QR on — not a box code at all. Normally '
+            'the url (and the device account, which no longer has fields at '
+            'all) comes from the QR the web app prints (see ConnectQr)',
     'lib/screens/scan_screen.dart':
         'plate and driver on the vehicle form — nothing there is a box code, '
             'and the scan step itself has had no field since ScanCapture',

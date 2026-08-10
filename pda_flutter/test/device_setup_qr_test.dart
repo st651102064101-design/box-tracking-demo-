@@ -71,9 +71,21 @@ void main() {
 
     expect(find.text('http://10.0.0.5:4000'), findsOneWidget);
     expect(find.text('จาก QR · แตะเพื่อสแกนใหม่'), findsOneWidget);
-    // The account came with the QR, so its collapsed section is opened to
-    // show what was just changed rather than changing it silently.
-    expect(find.widgetWithText(TextField, 'pda-07'), findsOneWidget);
+    // There is no account field to fill any more — the account rode in on the
+    // QR, and the screen only says which one it took.
+    expect(find.text('บัญชีประจำเครื่องจาก QR · pda-07'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'ชื่อบัญชีเครื่อง เช่น pda-01'),
+        findsNothing);
+  });
+
+  testWidgets('there are no device-account fields to mistype', (tester) async {
+    final c = await makeController(FakeApi());
+    await tester.pumpWidget(await _wrap(c));
+    await tester.pump();
+
+    expect(find.text('บัญชีประจำเครื่อง'), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is TextField && w.obscureText),
+        findsNothing);
   });
 
   testWidgets('a box barcode scanned by mistake is rejected, not accepted',

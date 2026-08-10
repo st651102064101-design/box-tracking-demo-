@@ -26,9 +26,15 @@ class DeviceSetupScreen extends StatefulWidget {
 
 class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _url;
-  late final TextEditingController _account;
-  late final TextEditingController _password;
-  bool _showAccount = false;
+
+  /// The device's service account, when the scanned QR carried one. There are
+  /// no fields for these any more: a credential typed on a handheld keypad by
+  /// whoever happens to be holding the terminal is the same class of mistake
+  /// the server address was, and the QR already delivers both correctly. Null
+  /// means "leave whatever account this device already has alone", which is
+  /// what re-pointing a working terminal at a moved server should do.
+  String? _qrUser;
+  String? _qrPass;
 
   /// The typed-by-hand fallback for the server address. Off by default — the
   /// QR is the intended path (see [_ServerAddressField]); this only appears
@@ -50,8 +56,6 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     super.initState();
     final c = context.read<AppController>();
     _url = TextEditingController(text: c.prefs.baseUrl);
-    _account = TextEditingController(text: c.prefs.username);
-    _password = TextEditingController();
     _detectDevice(c);
   }
 
@@ -104,11 +108,11 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   /// Opens the scan sheet and applies whatever comes back.
   ///
-  /// The account fields are only overwritten when the QR actually carries
-  /// them: an admin who prints a URL-only QR (the default on the web side) is
-  /// re-pointing a terminal at a moved server, and silently blanking that
-  /// terminal's working service account would break it in a way that looks
-  /// like the new address being wrong.
+  /// The account is only taken when the QR actually carries one: an admin who
+  /// prints a URL-only QR (the default on the web side) is re-pointing a
+  /// terminal at a moved server, and silently blanking that terminal's working
+  /// service account would break it in a way that looks like the new address
+  /// being wrong.
   Future<void> _scanConnectQr() async {
     final cfg = await showModalBottomSheet<ConnectQr>(
       context: context,
@@ -121,17 +125,14 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
       _url.text = cfg.baseUrl;
       _fromQr = true;
       _manualUrl = false;
-      if (cfg.username != null) _account.text = cfg.username!;
-      if (cfg.password != null) _password.text = cfg.password!;
-      if (cfg.username != null || cfg.password != null) _showAccount = true;
+      if (cfg.username != null) _qrUser = cfg.username;
+      if (cfg.password != null) _qrPass = cfg.password;
     });
   }
 
   @override
   void dispose() {
     _url.dispose();
-    _account.dispose();
-    _password.dispose();
     super.dispose();
   }
 
@@ -231,50 +232,26 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                           decoration: pdaInput('http://192.168.1.10:4000'),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      // Collapsed by default: on a device that already works,
-                      // nobody should be poking at its credentials.
-                      GestureDetector(
-                        onTap: () =>
-                            setState(() => _showAccount = !_showAccount),
-                        child: Row(
-                          children: [
-                            Icon(
-                                _showAccount
-                                    ? Icons.expand_less
-                                    : Icons.expand_more,
-                                size: 18,
-                                color: C.muted),
-                            const SizedBox(width: 4),
-                            Text(loc.t('บัญชีประจำเครื่อง'),
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: C.muted,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                      if (_showAccount) ...[
+                      // The "บัญชีประจำเครื่อง" fields used to live here. They
+                      // are gone on purpose: the account is a property of the
+                      // terminal, set once when it is handed out, and the QR
+                      // carries it — so the only thing the collapsed section
+                      // added was a keypad through which the person holding
+                      // the device could break a working one.
+                      if (_qrUser != null) ...[
                         const SizedBox(height: 10),
-                        TextField(
-                          controller: _account,
-                          autocorrect: false,
-                          decoration:
-                              pdaInput(loc.t('ชื่อบัญชีเครื่อง เช่น pda-01')),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _password,
-                          obscureText: true,
-                          decoration: pdaInput(
-                              loc.t('รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)')),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          loc.t(
-                              'บัญชีนี้เป็นของเครื่อง ไม่ใช่ของพนักงาน — ตั้งครั้งเดียวตอนแจกเครื่อง'),
-                          style: TextStyle(
-                              fontSize: 11.5, color: C.faint, height: 1.4),
+                        Row(
+                          children: [
+                            Icon(Icons.badge_outlined, size: 16, color: C.muted),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${loc.t('บัญชีประจำเครื่องจาก QR')} · $_qrUser',
+                                style: TextStyle(
+                                    fontSize: 12, color: C.muted, height: 1.4),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -302,8 +279,11 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
               onTap: (canSave && !c.busy)
                   ? () => c.completeDeviceSetup(
                         baseUrl: _url.text,
-                        username: _account.text,
-                        password: _password.text,
+                        // Null (not '') when the QR carried nothing:
+                        // applyConnection treats blank as "keep the account
+                        // this device already has".
+                        username: _qrUser,
+                        password: _qrPass,
                       )
                   : null,
             ),
