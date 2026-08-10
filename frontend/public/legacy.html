@@ -2556,7 +2556,17 @@ function tagForRfidCode(code){
    recovers text that got mangled by an OS keyboard left in Thai input mode */
 function resolveTag(tag){
   if(!tag)return tag;
-  tag=String(tag).trim().replace(/^\*+|\*+$/g,'');
+  /* Code 3-of-9 (Code39) scanners/printers wrap the payload in "*" start/stop
+     characters — e.g. a label reading *BOX-011* scans or pastes into Excel
+     as the literal text "*BOX-011*". Strip those (with any stray space next
+     to them) plus zero-width/NBSP junk some scanners or Excel leave behind,
+     so both live scanning and the Gate Out .xlsx/.xlsm/.csv import resolve
+     to the bare tag "BOX-011". */
+  tag=String(tag)
+    .replace(/[​-‍﻿ ]/g,'')
+    .trim()
+    .replace(/^\*+\s*|\s*\*+$/g,'')
+    .trim();
   if(S.boxes[tag])return tag;
   var up=tag.toUpperCase();
   if(S.boxes[up])return up;
