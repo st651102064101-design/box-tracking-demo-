@@ -2137,10 +2137,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <input id="pdaQrUrl" placeholder="http://192.168.1.10:4000" autocomplete="off" spellcheck="false">
             <div class="tag" style="margin-top:5px;">ค่าเริ่มต้นคือที่อยู่ที่เปิดหน้านี้อยู่ — ถ้าเครื่อง PDA อยู่คนละวง ให้ใส่ IP ที่เครื่อง PDA มองเห็น</div>
           </div>
-          <div class="field" style="margin-top:14px;"><label>บัญชีประจำเครื่อง (ไม่บังคับ)</label>
-            <input id="pdaQrUser" placeholder="pda-01" autocomplete="off" spellcheck="false">
-            <div class="tag" style="margin-top:5px;">เว้นว่าง = เครื่องยังใช้บัญชีเดิมของตัวเอง เหมาะกับกรณีแค่ย้ายเซิร์ฟเวอร์</div>
-          </div>
+          <!-- ไม่มีช่อง "ชื่อผู้ใช้เครื่อง" — QR นี้ไม่เคยเปลี่ยนชื่อบัญชีของเครื่อง มีแต่ที่อยู่
+               เซิร์ฟเวอร์ (บังคับ) กับรหัสผ่าน (ไม่บังคับ) เท่านั้น ดู ConnectQr.parse() ฝั่งแอป -->
           <!-- ปิดไว้เป็นค่าเริ่มต้นโดยตั้งใจ: QR ที่พิมพ์ออกมาพร้อมรหัสผ่าน = รหัสผ่านที่พิมพ์แปะไว้บนกระดาษ
                เปิดใช้เฉพาะตอนแจกเครื่องใหม่ทั้งล็อต ซึ่งมิฉะนั้นต้องพิมพ์รหัสผ่านทีละเครื่องอยู่ดี -->
           <div class="field" style="margin-top:14px;">
@@ -5812,15 +5810,13 @@ var PDA_QR_PREFIX='BTCFG1:';
 var PDA_QR_MAX_BYTES=106;
 function pdaQrPayload(){
   var url=(($('#pdaQrUrl')||{}).value||'').trim().replace(/\/+$/,'');
-  var user=(($('#pdaQrUser')||{}).value||'').trim();
   var inc=$('#pdaQrIncPass')&&$('#pdaQrIncPass').checked;
   var pass=inc?(($('#pdaQrPass')||{}).value||''):'';
   if(!/^https?:\/\/[^\/\s]+/.test(url))return{err:'ที่อยู่ต้องขึ้นต้นด้วย http:// หรือ https:// และมีชื่อเครื่อง/IP'};
   var o={url:url};
-  if(user)o.user=user;
   if(pass)o.pass=pass;
   var text=PDA_QR_PREFIX+JSON.stringify(o);
-  if(qrBytesFor(text).length>PDA_QR_MAX_BYTES)return{err:'ข้อมูลยาวเกินไปสำหรับ QR หนึ่งใบ — ลดความยาวที่อยู่หรือชื่อบัญชีลง'};
+  if(qrBytesFor(text).length>PDA_QR_MAX_BYTES)return{err:'ข้อมูลยาวเกินไปสำหรับ QR หนึ่งใบ — ลดความยาวที่อยู่ลง'};
   return{text:text,url:url};
 }
 function renderPdaQr(){
@@ -5870,7 +5866,7 @@ var pdaQrWired=false;
 function initPdaQr(){
   if(!pdaQrWired){
     pdaQrWired=true;
-    ['pdaQrUrl','pdaQrUser','pdaQrPass'].forEach(function(id){
+    ['pdaQrUrl','pdaQrPass'].forEach(function(id){
       var el=$('#'+id);if(el)el.addEventListener('input',renderPdaQr);
     });
     var cb=$('#pdaQrIncPass');if(cb)cb.addEventListener('change',renderPdaQr);
