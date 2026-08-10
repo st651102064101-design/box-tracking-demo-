@@ -1645,6 +1645,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ .xlsx</button>
+        <button class="btn ghost sm" onclick="exportOutFormatExcel()" title="ดาวน์โหลดไฟล์ตัวอย่างที่มีคอลัมน์ครบทุกช่องที่การนำเข้ารองรับ — กรอกต่อแล้วนำเข้าได้เลย"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Format Excel</button>
         <input type="file" id="outImportFile" accept=".xlsx,.xls,.csv" style="display:none;">
       </div>
     </div>
@@ -1666,8 +1667,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row" style="margin-top:22px;">
     <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
     <button class="btn ghost" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
-    <button class="btn ghost" onclick="exportGateOutQueueExcel()" title="ยังไม่ยืนยันส่งออกก็ export ได้ — เอาไว้ตรวจทานหรือแนบเอกสารก่อนยืนยัน"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-    <button class="btn ghost" onclick="exportAllSystemExcel()" title="Export กล่องทุกใบในระบบ (ไม่ใช่แค่คิวสแกน) — คอลัมน์เดียวกับที่นำเข้าไฟล์ .xlsx ด้านบนรู้จัก ใช้ทดสอบ export แล้วนำเข้ากลับได้"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export ทั้งระบบ</button>
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <span class="muted small" id="outCount"></span>
   </div>
@@ -6606,74 +6605,45 @@ function renderOutResult(){
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
-/* Export the current scan queue — before ยืนยันส่งออก commits it, not after: this
-   is for checking/handing off the list (e.g. attaching to a paper DO) while the
-   queue is still editable, not a record of a completed shipment (that's already
-   covered by the DO itself and the audit log once saveOutbound() runs). */
-/* วันที่/เวลา/ผู้บันทึก ในไฟล์นี้คือตอนที่กด Export (ไม่ใช่ตอนยิงแต่ละใบ — คิวนี้
-   ไม่ได้เก็บเวลาต่อรายการ) แต่ตั้งชื่อคอลัมน์ให้ตรงกับ TS_ALIASES/WHO_ALIASES ของ
-   ตัวนำเข้าไฟล์ (ดู "OUTBOUND BULK IMPORT" ด้านล่าง) โดยตั้งใจ — ไฟล์ที่ export จาก
-   ที่นี่แล้วนำกลับเข้ามาใหม่ทีหลัง (หรือแก้ไขแล้วนำเข้า) จะจับคู่คอลัมน์ให้อัตโนมัติ */
-/* Column-format export: headers match the importer's own recognized column
-   names exactly (OUT_MAP_FIELDS' aliases, see the "OUTBOUND BULK IMPORT"
-   block below) so a file exported here re-imports with every column already
-   auto-mapped, and every cell is real data already sitting in the database
-   right now for that box/customer — not a blank template — so the file is
-   both a working reference and a ready-to-edit starting point. */
-function exportGateOutQueueExcel(){
-  if(!pendingOut.length)return toast('ยังไม่มีกล่องในคิว','ยิงบาร์โค้ดกล่องก่อน export','err');
-  var custId=val('doCustomer');
-  var cust=custName(custId);
-  var custRec=S.customers[custId]||{};
-  var recorder=val('outRecorder');
-  var d=dstr(), t=tstr();
-  var headers=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
-    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
-  var rows=pendingOut.map(function(tag){
-    var b=S.boxes[tag]||{};
-    var bt=S.boxtypes[b.type]||{};
-    return [barcodeCell(tag), typeName(b.type), bt.unit||'', OUT_COND_LABEL[outConditionMap[tag]||'good'],
-      cust, custRec.addr||'', custRec.phone||'', custRec.email||'',
-      val('doReturnDays')||custRec.returnDays||'', val('doNo'), val('poNo'),
-      whName((b.location||{}).wh)||'', val('outPlate'), val('outDriver'), d, t, recorder];
-  });
-  downloadXLS('gate-out-queue-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
-}
-window.exportGateOutQueueExcel=exportGateOutQueueExcel;
-/* Whole-system export, same column format as exportGateOutQueueExcel — every
-   box currently in the database (any status, not just the scan queue), each
-   row using THAT box's own type/customer/warehouse/DO/PO, not whatever is
-   sitting in the DO form right now (there's no one "current shipment" for a
-   full-database dump). Built for round-tripping: export everything, wipe it
-   (a separate, explicit step — this function only ever reads), then re-import
-   this exact file through "นำเข้าไฟล์ .xlsx" above to prove the auto-create
-   path (registerMissingBox/autoCreateCustomerIfMissing/autoCreateBoxTypeIfMissing)
-   actually rebuilds it. */
-function exportAllSystemExcel(){
-  var boxes=Object.values(S.boxes).sort(function(a,b){return a.tag<b.tag?-1:1;});
-  if(!boxes.length)return toast('ไม่มีกล่องในระบบ',null,'err');
-  var headers=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
-    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ประตูเริ่ม','ประตูสิ้นสุด','ทิศทางประตู',
-    'ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
+/* ===== "Format Excel" — the import template for Gate ขาออก =====
+   One downloadable file that shows every column the bulk importer above
+   understands (OUT_MAP_FIELDS' aliases, see the "OUTBOUND BULK IMPORT"
+   block below), so a file filled in from this header row re-imports with
+   every column auto-mapped and nothing left to match by hand.
+   Rows under the header are real records straight out of the database
+   (up to a handful of boxes) rather than made-up placeholders — a filled
+   example says more about the expected cell format (barcode with the *…*
+   guard, วันที่/เวลา formatting, ทิศทางประตู values) than an empty grid,
+   and it round-trips: download → edit → นำเข้าไฟล์ .xlsx. */
+var OUT_FORMAT_HEADERS=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
+  'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ประตูเริ่ม','ประตูสิ้นสุด','ทิศทางประตู',
+  'ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
+function exportOutFormatExcel(){
+  var boxes=Object.values(S.boxes).sort(function(a,b){return a.tag<b.tag?-1:1;}).slice(0,5);
   var rows=boxes.map(function(b){
     var bt=S.boxtypes[b.type]||{};
     var custId=b.customer||'';
-    var cust=custId?custName(custId):'';
     var custRec=custId?(S.customers[custId]||{}):{};
     var whId=(b.location||{}).wh||b.outWh||'';
     var whRec=whId?(S.warehouses[whId]||{}):{};
     var whGates=(whRec.gates||[]).slice().sort(function(x,y){return x-y;});
-    var ts=b.regAt||b.lastSeenAt||iso();
-    var d=new Date(ts);
+    var d=new Date(b.regAt||b.lastSeenAt||iso());
     return [barcodeCell(b.tag), typeName(b.type), bt.unit||'', OUT_COND_LABEL[outConditionMap[b.tag]||'good'],
-      cust, custRec.addr||'', custRec.phone||'', custRec.email||'',
+      custId?custName(custId):'', custRec.addr||'', custRec.phone||'', custRec.email||'',
       custRec.returnDays||'', b.do||'', b.po||'',
       whName(whId)||'', whGates[0]||'', whGates[whGates.length-1]||'', whRec.gateType||'',
       '', '', dstr(d), tstr(d), b.regBy||''];
   });
-  downloadXLS('all-boxes-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
+  /* no boxes yet (fresh database) → still hand over a usable template: the
+     header row plus one obviously-fake example row to show the cell format */
+  if(!rows.length){
+    rows=[[barcodeCell('CRT-01'),'ลังพลาสติก','ใบ','สมบูรณ์','บริษัท ตัวอย่าง จำกัด','123 ถ.ตัวอย่าง กรุงเทพฯ','081-234-5678','example@mail.com',
+      '30','DO-0001','PO-0001','คลังกลาง','1','4','both','1กก-1234','สมชาย ใจดี',dstr(),tstr(),'admin']];
+  }
+  downloadXLS('gate-out-format-'+dstr()+'.xls', OUT_FORMAT_HEADERS, rows, {barcodeCols:[0]});
+  toast('ดาวน์โหลดฟอร์แมตแล้ว','ไฟล์นี้มีคอลัมน์ครบทุกช่องที่การนำเข้ารองรับ');
 }
-window.exportAllSystemExcel=exportAllSystemExcel;
+window.exportOutFormatExcel=exportOutFormatExcel;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
 /* ===== Due-date live preview (injected — no HTML edits required) =====
