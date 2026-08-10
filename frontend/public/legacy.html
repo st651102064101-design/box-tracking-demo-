@@ -1280,7 +1280,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="dot"></span><span id="whoTxt">demo · SaaS</span></div>
     <div class="who-menu" id="whoMenu" hidden></div>
   </div>
-  <button class="iconbtn no-print" id="btnReportProblem" onclick="openReportProblemModal()" title="แจ้งปัญหาหน้างาน — ของหาย / ช่องเก็บเต็ม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></span></button>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
   <button class="iconbtn no-print" id="btnLayout" onclick="toggleLayout()" title="สลับเป็นเมนูด้านข้าง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></span></button>
@@ -8164,104 +8163,6 @@ function reportLocFull(code) {
 }
 window.reportLocFull = reportLocFull;
 
-/* ===== "แจ้งปัญหาหน้างาน" — web's own entry point for the same two reports
-   the PDA's report_problem_screen sends, reachable from the header instead
-   of only through a box's or location's own detail screen. A desk/office
-   user reporting on a phone call from the floor has neither open in front
-   of them and shouldn't have to go find the right row first. ===== */
-var _reportKind = null;
-function _reportKindTileHtml(kind, iconSvg, title, sub) {
-  var active = _reportKind === kind;
-  return '<button type="button" class="btn '+(active?'accent':'ghost')+'" '
-    +'style="flex:1;min-width:150px;flex-direction:column;align-items:flex-start;height:auto;padding:14px;gap:4px;text-align:left;" '
-    +'onclick="_reportPick(\''+kind+'\')">'
-    +'<b style="font-size:14px;display:flex;align-items:center;gap:6px;"><span class="svgi">'+iconSvg+'</span>'+title+'</b>'
-    +'<span class="small" style="opacity:.8;font-weight:400;">'+sub+'</span></button>';
-}
-var _REPORT_MISSING_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M14.8 14.8 20 20M7.5 10h5"/></svg>';
-var _REPORT_FULL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>';
-function _reportProblemHtml() {
-  return '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></span> แจ้งปัญหาหน้างาน</h3>'
-    +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-      +'<div class="row" style="gap:10px;margin-bottom:16px;flex-wrap:wrap;">'
-        +_reportKindTileHtml('missing', _REPORT_MISSING_ICON, 'ของหาย', 'ระบบสั่งมาที่นี่แต่ไม่พบของ')
-        +_reportKindTileHtml('bin_full', _REPORT_FULL_ICON, 'ช่องเก็บเต็ม', 'ช่องที่ระบบแนะนำเต็มแล้วจริง')
-      +'</div>'
-      +'<div id="reportProblemBody"></div>'
-    +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
-}
-function openReportProblemModal() {
-  _reportKind = null;
-  openModal(_reportProblemHtml());
-}
-window.openReportProblemModal = openReportProblemModal;
-// Plain scan fields, same as every other "ยิงบาร์โค้ด" input in the app
-// (Putaway's #slotPaScan, Gate In/Out, …) — no datalist/autocomplete
-// dropdown to pick from and no note field to type into. A scanner burst is
-// auto-detected by autoScanBind and submits on its own; Enter covers the
-// keyboard-typed fallback. Matches the PDA's own report_problem_screen,
-// which is scan-only for exactly the same reason.
-function _reportPick(kind) {
-  _reportKind = kind;
-  $('#modalSheet').innerHTML = _reportProblemHtml();
-  var body = $('#reportProblemBody');
-  if (kind === 'missing') {
-    body.innerHTML = '<div class="inv-scan-bar" style="margin-bottom:4px;"><span class="iss-ic">⊟</span>'
-      +'<input id="reportMissingTag" placeholder="ยิงบาร์โค้ดกล่องที่หา" autocomplete="off" style="text-transform:uppercase;">'
-      +'<button class="btn red sm" id="btnReportMissingGo">ส่งรายงาน</button></div>'
-      +'<div class="small muted" style="margin-top:6px;">ยิงแล้วส่งรายงานทันที — ระบบสั่งมาที่นี่แต่ไม่พบของ</div>';
-    var f = $('#reportMissingTag'); if (f) f.focus();
-    $('#reportMissingTag').addEventListener('keydown', function(e){ if (e.key === 'Enter') _reportSubmitMissing(); });
-    autoScanBind($('#reportMissingTag'), _reportSubmitMissing);
-    $('#btnReportMissingGo').onclick = _reportSubmitMissing;
-  } else if (kind === 'bin_full') {
-    body.innerHTML = '<div class="inv-scan-bar" style="margin-bottom:4px;"><span class="iss-ic">⊟</span>'
-      +'<input id="reportFullCode" placeholder="ยิงบาร์โค้ดชั้นวางที่เต็ม" autocomplete="off" style="text-transform:uppercase;">'
-      +'<button class="btn red sm" id="btnReportFullGo">ส่งรายงาน</button></div>'
-      +'<div class="small muted" style="margin-top:6px;">ยิงแล้วส่งรายงานทันที — ช่องที่ระบบแนะนำเต็มแล้วจริง</div>';
-    var f2 = $('#reportFullCode'); if (f2) f2.focus();
-    $('#reportFullCode').addEventListener('keydown', function(e){ if (e.key === 'Enter') _reportSubmitFull(); });
-    autoScanBind($('#reportFullCode'), _reportSubmitFull);
-    $('#btnReportFullGo').onclick = _reportSubmitFull;
-  }
-}
-window._reportPick = _reportPick;
-// Same shape/effect as markLost() — kept separate rather than calling it
-// directly because markLost's own confirmA() would double the "are you
-// sure" the deliberate kind-pick -> scan flow already is.
-function _reportSubmitMissing() {
-  var tag = val('reportMissingTag').toUpperCase();
-  if (!tag) return toast('ยิงบาร์โค้ดกล่องก่อน', null, 'err');
-  var b = S.boxes[tag];
-  if (!b) return toast('ไม่พบกล่อง', tag, 'err');
-  if (b.status === 'pending') return toast('กล่องนี้ยังไม่ผ่านการรับเข้า', 'แจ้งหายได้เฉพาะกล่องที่อยู่ในระบบแล้ว', 'err');
-  if (b.status === 'lost') return toast('กล่องนี้ถูกแจ้งหายอยู่แล้ว', tag, 'err');
-  var before = {status: b.status};
-  b.status = 'lost'; b.lostAt = iso(); b.lostReason = 'reported-missing'; b.lastSeenAt = iso();
-  b.history.push({dir:'lost',ts:iso(),customer:b.customer,do:b.do,reason:'แจ้งของหาย (เว็บ)'});
-  S.events.push({dir:'missing',tag:tag,location:b.location||null,note:'',ts:iso(),recorder:USER});
-  auditEntry('แจ้งของหาย → ตีสูญหาย', USER, tag, typeName(b.type), before, {status:'lost'});
-  closeModal();
-  toast('บันทึกรายงานแล้ว', tag+' ถูกตีเป็นสูญหาย', 'warn');
-  renderAll();
-}
-window._reportSubmitMissing = _reportSubmitMissing;
-function _reportSubmitFull() {
-  var code = val('reportFullCode').toUpperCase();
-  if (!code) return toast('ยิงบาร์โค้ดตำแหน่งก่อน', null, 'err');
-  var l = S.locations[code];
-  if (!l) return toast('ไม่พบตำแหน่งนี้', code, 'err');
-  if (l.reportedFullAt) return toast('ช่องนี้ถูกแจ้งเต็มอยู่แล้ว', code, 'err');
-  l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
-  S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
-  auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
-  renderLocMaster();
-  closeModal();
-  toast('บันทึกรายงานแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
-}
-window._reportSubmitFull = _reportSubmitFull;
 
 function _locRowHtml(l) {
   return '<tr style="cursor:pointer;" data-loc-code="'+esc(l.code)+'" onclick="if(event.target.type!==\'checkbox\')locRowClick(this)">'
