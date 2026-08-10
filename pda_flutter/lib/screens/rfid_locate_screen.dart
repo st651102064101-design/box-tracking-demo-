@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/epc_codec.dart';
 import '../models/box.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
@@ -220,13 +221,19 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // both, since a box commissioned through the current endpoint stores
     // that value in `rfid`, not in the old EPC/TID pair.
     final want = _target!.rfidCode?.toUpperCase();
+    final wantTag = _target!.tag.toUpperCase();
     if (want == null || want.isEmpty) return;
 
     int? best;
     for (final r in batch) {
       final epc = r.epc.toUpperCase();
       final tid = r.tid?.toUpperCase();
-      final isMatch = epc == want || tid == want;
+      // Also a hit when the EPC is this box's own barcode written as ASCII
+      // (how tags are encoded here) — the same read the gate screens resolve
+      // through AppController.resolveTag.
+      final isMatch = epc == want ||
+          tid == want ||
+          epcToAscii(epc)?.toUpperCase() == wantTag;
       if (!isMatch) continue;
       final rssi = r.rssi ??
           _rssiClose; // no RSSI field on this read: treat as a direct hit
@@ -292,12 +299,15 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     var changed = false;
     for (final target in _multiTargets) {
       final want = target.rfidCode?.toUpperCase();
+      final wantTag = target.tag.toUpperCase();
       if (want == null || want.isEmpty) continue;
       int? best;
       for (final r in batch) {
         final epc = r.epc.toUpperCase();
         final tid = r.tid?.toUpperCase();
-        final isMatch = epc == want || tid == want;
+        final isMatch = epc == want ||
+            tid == want ||
+            epcToAscii(epc)?.toUpperCase() == wantTag;
         if (!isMatch) continue;
         final rssi = r.rssi ?? _rssiClose;
         if (best == null || rssi > best) best = rssi;

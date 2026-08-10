@@ -489,6 +489,30 @@ void main() {
       expect(c.queue, ['CRT-01']);
     });
 
+    // Tags are encoded by writing the barcode into the EPC bank as
+    // zero-padded ASCII, so a read of BOX-010 arrives as hex. Matching that
+    // back to the box id works even when the box carries no `rfid` binding at
+    // all — the barcode is right there inside the read.
+    test('resolves a read whose EPC is the barcode written as ASCII', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['BOX-010'] = box('BOX-010', 'warehouse');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('00000000000000424F582D303130'); // 'BOX-010'
+      expect(c.queue, ['BOX-010']);
+    });
+
+    test('an ASCII-encoded EPC for a box that does not exist still fails',
+        () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'out';
+      c.addScan('0000000000004E4F50452D3939'); // 'NOPE-99'
+      expect(c.queue, isEmpty);
+      expect(c.lastResult!.kind, ResultKind.err);
+    });
+
     test('recovers a tag typed with a Thai keyboard layout', () async {
       final c = await makeController(FakeApi());
       c.mode = 'out';

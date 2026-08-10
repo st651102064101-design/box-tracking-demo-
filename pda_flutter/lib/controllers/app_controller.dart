@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart'
 import '../models/box.dart';
 import '../models/employee.dart';
 import '../models/location.dart';
+import '../services/epc_codec.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
@@ -753,6 +754,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // value (case-insensitive, since readers vary on hex casing).
     final byRfid = s.tagForCode(raw);
     if (byRfid != null) return byRfid;
+    // A tag commissioned by this system carries the box's own barcode written
+    // into the EPC bank as zero-padded ASCII (GET /api/rfid/encode/:tag), so a
+    // read of BOX-010 arrives as 00000000000000424F582D303130. That resolves
+    // through tagForCode only while `boxes.rfid` also holds it — a tag encoded
+    // and stuck on a box but never bound through the API, or bound under a
+    // different identifier, would otherwise read as "ไม่พบกล่องนี้ในระบบ" even
+    // though the barcode it is carrying is sitting right there in the box
+    // list. Decode and match that as a tag; anything that isn't a plausible
+    // barcode comes back null and falls through untouched.
+    final decoded = epcToAscii(raw);
+    if (decoded != null) {
+      if (s.boxesRaw.containsKey(decoded)) return decoded;
+      final du = decoded.toUpperCase();
+      if (s.boxesRaw.containsKey(du)) return du;
+      final dl = decoded.toLowerCase();
+      final dm = s.boxesRaw.keys.where((k) => k.toLowerCase() == dl);
+      if (dm.isNotEmpty) return dm.first;
+    }
     if (_looksThaiGarbled(raw)) {
       final fx = _dethaify(raw);
       if (s.boxesRaw.containsKey(fx)) return fx;
