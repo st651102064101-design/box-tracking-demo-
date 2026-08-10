@@ -1666,7 +1666,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row" style="margin-top:22px;">
     <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
     <button class="btn ghost" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
-    
+    <button class="btn ghost" onclick="exportGateOutQueueExcel()" title="ยังไม่ยืนยันส่งออกก็ export ได้ — เอาไว้ตรวจทานหรือแนบเอกสารก่อนยืนยัน"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <span class="muted small" id="outCount"></span>
   </div>
@@ -6607,6 +6607,22 @@ function renderOutResult(){
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
+/* Export the current scan queue — before ยืนยันส่งออก commits it, not after: this
+   is for checking/handing off the list (e.g. attaching to a paper DO) while the
+   queue is still editable, not a record of a completed shipment (that's already
+   covered by the DO itself and the audit log once saveOutbound() runs). */
+function exportGateOutQueueExcel(){
+  if(!pendingOut.length)return toast('ยังไม่มีกล่องในคิว','ยิงบาร์โค้ดกล่องก่อน export','err');
+  var cust=custName(val('doCustomer'));
+  var headers=['บาร์โค้ด','ประเภทกล่อง','สภาพ','ลูกค้า/ปลายทาง','เลขที่ DO','เลขที่ PO','ทะเบียนรถ','คนขับ','ผู้บันทึก'];
+  var rows=pendingOut.map(function(t){
+    var b=S.boxes[t]||{};
+    return [barcodeCell(t), typeName(b.type), OUT_COND_LABEL[outConditionMap[t]||'good'],
+      cust, val('doNo'), val('poNo'), val('outPlate'), val('outDriver'), val('outRecorder')];
+  });
+  downloadXLS('gate-out-queue-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
+}
+window.exportGateOutQueueExcel=exportGateOutQueueExcel;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
 /* ===== Due-date live preview (injected — no HTML edits required) =====
