@@ -11973,6 +11973,22 @@ function openColumnMapModal(opts){
                      'กำหนดคืนภายใน (วัน)','คืนภายใน','คืนภายใน (วัน)'];
   var PLATE_ALIASES = ['plate','license plate','ทะเบียนรถ','ป้ายทะเบียน','ทะเบียน','รถ ป้ายทะเบียน'];
   var DRIVER_ALIASES = ['driver','ชื่อคนขับ','คนขับ','ชื่อคนขับ *'];
+  // These three exist for exactly one purpose: a ปลายทาง in the file that
+  // doesn't match any customer master record. เพิ่มลูกค้า's own form (see
+  // #btnAddCust) won't save a customer without an address and a phone or
+  // email — those are this app's real "can't be null" fields for a customer,
+  // not just decoration — so autoCreateCustomerIfMissing() below can't create
+  // one without them either. See that function's doc comment.
+  var ADDR_ALIASES = ['address','addr','branch','ที่อยู่','สาขา','ที่อยู่/สาขา'];
+  var PHONE_ALIASES = ['phone','tel','telephone','เบอร์โทร','เบอร์โทรศัพท์','โทรศัพท์'];
+  var EMAIL_ALIASES = ['email','อีเมล'];
+  // Same idea, for a barcode classifyOutTag() can't find at all — see
+  // registerMissingBox(). box_type/unit only matter when a NEW box type also
+  // has to be created; คลัง (wh) is never required — see findWarehouseMatch's
+  // doc comment for why this app never creates a warehouse from a file.
+  var BTYPE_ALIASES = ['box type','boxtype','type','ประเภทกล่อง','ประเภท'];
+  var UNIT_ALIASES = ['unit','หน่วยนับ','หน่วย'];
+  var WH_ALIASES = ['warehouse','wh','คลัง','คลังต้นทาง'];
   // "when"/"time" both land on this one reference field, same as before — a
   // file that splits date and time into two separate columns just gets asked
   // (via openColumnMapModal) which one to map here, since this field is
@@ -11992,7 +12008,13 @@ function openColumnMapModal(opts){
     {key:'plate',   label:'ทะเบียนรถ',                            required:false, aliases:PLATE_ALIASES},
     {key:'driver',  label:'ชื่อคนขับ',                            required:false, aliases:DRIVER_ALIASES},
     {key:'ts',      label:'วันที่/เวลา (อ้างอิงเท่านั้น)',         required:false, aliases:TS_ALIASES},
-    {key:'who',     label:'ผู้บันทึก (อ้างอิงเท่านั้น)',           required:false, aliases:WHO_ALIASES}
+    {key:'who',     label:'ผู้บันทึก (อ้างอิงเท่านั้น)',           required:false, aliases:WHO_ALIASES},
+    {key:'addr',    label:'ที่อยู่/สาขา (กรณีต้องสร้างลูกค้าใหม่)', required:false, aliases:ADDR_ALIASES},
+    {key:'phone',   label:'เบอร์โทร (กรณีต้องสร้างลูกค้าใหม่)',    required:false, aliases:PHONE_ALIASES},
+    {key:'email',   label:'อีเมล (กรณีต้องสร้างลูกค้าใหม่)',       required:false, aliases:EMAIL_ALIASES},
+    {key:'btype',   label:'ประเภทกล่อง (กรณีต้องลงทะเบียนกล่องใหม่)', required:false, aliases:BTYPE_ALIASES},
+    {key:'unit',    label:'หน่วยนับ (กรณีต้องสร้างประเภทกล่องใหม่)', required:false, aliases:UNIT_ALIASES},
+    {key:'wh',      label:'คลัง (ตำแหน่งเริ่มต้นของกล่องที่ลงทะเบียนใหม่)', required:false, aliases:WH_ALIASES}
   ];
 
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
@@ -12023,6 +12045,120 @@ function openColumnMapModal(opts){
     for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
     for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
     return null;
+  }
+
+  /* A ปลายทาง in the file that doesn't match any customer master record is a
+     normal event (first shipment to a new destination), not an error — so
+     this creates one instead of just leaving the DO's customer field for the
+     operator to sort out by hand. It mirrors #btnAddCust's own handler
+     exactly, on purpose: those are this app's real "can't be null" fields
+     for a customer master record (see its onclick above), not a made-up
+     subset, and the box shipping out is real even if the paperwork for who
+     it's going to has never been entered before.
+
+     Boxes are NOT given the same treatment — see classifyOutTag/gateOut()
+     (backend/src/services/gate.ts): a barcode this file names that doesn't
+     already exist as a warehouse box is rejected, deliberately, every time.
+     A customer that's new is just new; a box that's never been received
+     into the warehouse cannot legitimately ship out of it no matter what a
+     spreadsheet claims — creating one here would manufacture inventory that
+     was never physically counted in, which is exactly the class of error
+     this whole system exists to prevent. */
+  function autoCreateCustomerIfMissing(name,retDaysArr,addrArr,phoneArr,emailArr){
+    if(retDaysArr.length!==1||!/^\d+$/.test(retDaysArr[0]))
+      return {ok:false,reason:'ต้องมีคอลัมน์ "กำหนดคืนภายใน (วัน)" ค่าเดียวกันทุกแถว'};
+    if(addrArr.length!==1||!addrArr[0])
+      return {ok:false,reason:'ต้องมีคอลัมน์ "ที่อยู่/สาขา" ค่าเดียวกันทุกแถว'};
+    if(phoneArr.length>1||emailArr.length>1)
+      return {ok:false,reason:'เบอร์โทร/อีเมลในไฟล์มีค่าต่างกัน — ต้องเหมือนกันทุกแถว'};
+    var phone=phoneArr[0]||'', email=emailArr[0]||'';
+    if(!phone&&!email)
+      return {ok:false,reason:'ต้องมีคอลัมน์ "เบอร์โทร" หรือ "อีเมล" อย่างน้อยหนึ่งอย่าง'};
+    if(phone&&!isValidThaiPhone(phone))
+      return {ok:false,reason:'เบอร์โทรในไฟล์ไม่ถูกต้อง ("'+phone+'")'};
+    if(email&&!isValidEmail(email))
+      return {ok:false,reason:'อีเมลในไฟล์ไม่ถูกต้อง ("'+email+'")'};
+    var id=nextSeqId('CUST-',Object.keys(S.customers));
+    S.customers[id]={id:id,name:name,kind:'customer',addr:addrArr[0],
+      phone:phone?normPhoneDigits(phone):'',email:email,
+      taxId:'',contactPerson:'',status:'active',
+      creditLimit:0,fineRate:0,lostFine:0,returnDays:parseInt(retDaysArr[0],10)};
+    auditEntry('CREATE',USER,id,name,null,S.customers[id]);
+    save();
+    return {ok:true,id:id};
+  }
+
+  /* find an existing box-type master record by id or by name (case-insensitive) */
+  function findBoxTypeMatch(text){
+    var t=String(text||'').trim();
+    if(!t)return null;
+    var tl=t.toLowerCase();
+    var list=Object.values(S.boxtypes||{});
+    for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
+    for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
+    return null;
+  }
+  /* Same reasoning as autoCreateCustomerIfMissing, one field smaller: #btnAddBtype
+     won't save a box type without a หน่วยนับ (unit) — that's the one other
+     "can't be null" field beyond the name this file already gives us. */
+  function autoCreateBoxTypeIfMissing(name,unit){
+    if(!unit)return {ok:false,reason:'ต้องมีคอลัมน์ "หน่วยนับ" — ประเภทกล่องใหม่ต้องระบุหน่วยนับเสมอ'};
+    var id=nextSeqId('BT-',Object.keys(S.boxtypes));
+    S.boxtypes[id]={id:id,name:name,unit:unit,value:null,dim:''};
+    auditEntry('CREATE',USER,id,name,null,S.boxtypes[id]);
+    save();
+    return {ok:true,id:id};
+  }
+
+  /* find an existing warehouse by id or by name — never creates one. A
+     warehouse master record isn't just a name: it owns a real physical gate
+     number range (#whGateFrom/#whGateTo → S.gates, the map every scan at
+     every terminal uses to know which warehouse it belongs to), which a
+     shipping manifest has no business inventing. Gate ขาออก's own warehouse
+     is also already fixed by whichever gate this terminal is assigned to
+     (ประตูประจำเครื่องนี้ above) — a "คลัง" column here is read only to place
+     a newly-registered box's pending location (see registerMissingBox), not
+     to decide where THIS shipment is leaving from. Unresolved → falls back
+     to createBoxes()'s own single-warehouse auto-detect, same as leaving it
+     blank on the manual "ลงทะเบียนกล่อง" form. */
+  function findWarehouseMatch(text){
+    var t=String(text||'').trim();
+    if(!t)return null;
+    var tl=t.toLowerCase();
+    var list=Object.values(S.warehouses||{});
+    for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
+    for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
+    return null;
+  }
+
+  /* A barcode this file names that classifyOutTag() couldn't find at all
+     (never registered, as opposed to registered-but-not-shippable) gets
+     registered here — using the shared createBoxes() primitive, the one
+     write point every other "new box" path in this app already goes
+     through, so it gets the exact same history/audit/pending-location
+     handling as the manual "ลงทะเบียนกล่อง" form does.
+
+     What this deliberately does NOT do: ship the box out in the same pass.
+     createBoxes() always lands a new box on status 'pending' — awaiting its
+     first real Gate เข้า — and classifyOutTag() rejects that status for
+     exactly the right reason ('ยังไม่เคยผ่าน Gate เข้าคลัง'). A spreadsheet
+     saying a box exists is not the same fact as a box having been physically
+     counted into this warehouse; manufacturing a shipment for something that
+     was never received would defeat the entire audit trail this system
+     exists to keep. Registering it here just means the *next* file (or the
+     next physical scan) won't hit "ไม่พบในระบบ" for it anymore. */
+  function registerMissingBox(tag,typeText,unitText,whText){
+    if(!typeText)return {ok:false,reason:'ไม่พบในระบบ — ใส่คอลัมน์ "ประเภทกล่อง" เพื่อให้ระบบลงทะเบียนกล่องใหม่อัตโนมัติ'};
+    var typeId=findBoxTypeMatch(typeText);
+    if(!typeId){
+      var created=autoCreateBoxTypeIfMissing(typeText,unitText);
+      if(!created.ok)return {ok:false,reason:'ไม่พบในระบบ — สร้างประเภทกล่อง "'+typeText+'" ใหม่ไม่ได้: '+created.reason};
+      typeId=created.id;
+    }
+    var whId=findWarehouseMatch(whText)||undefined;
+    var r=createBoxes({mode:'single',tag:tag,type:typeId,wh:whId});
+    if(!r.ok)return {ok:false,reason:'ไม่พบในระบบ — ลงทะเบียนกล่องใหม่ไม่สำเร็จ: '+r.err};
+    return {ok:true,typeId:typeId};
   }
 
   /* ---- Read the chosen file → filter blank rows → open the mapping modal ---- */
@@ -12066,10 +12202,13 @@ function openColumnMapModal(opts){
      rows already has its header at [0] and blank rows filtered out (done in handleOutImportFile). */
   function processOutRows(rows,colMap,fname){
     var tc=colMap.tag, dc=colMap.dest, rc=colMap.retDays,
-        pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts, whoc=colMap.who;
+        pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts, whoc=colMap.who,
+        btc=colMap.btype, unitc=colMap.unit, whc=colMap.wh,
+        ac=colMap.addr, phc=colMap.phone, ec=colMap.email;
 
-    var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={};
-    var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[], whoVals=[];
+    var added=[], dupInFile=[], alreadyQueued=[], failed=[], registered=[], seen={};
+    var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[], whoVals=[],
+        addrVals=[], phoneVals=[], emailVals=[];
     for(var i=1;i<rows.length;i++){
       var raw=String(rows[i][tc]==null?'':rows[i][tc]).trim();
       if(!raw)continue;
@@ -12077,30 +12216,65 @@ function openColumnMapModal(opts){
       if(seen[key]){dupInFile.push(raw);continue;}
       seen[key]=1;
       var v=classifyOutTag(raw);
-      if(!v.ok){failed.push({tag:v.tag||raw,reason:v.reason});continue;}
-      if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
-      pendingOut.push(v.tag);added.push(v.tag);
-      // only pull shipment-detail values from rows that actually made it into the queue
+      // A barcode this file names that doesn't exist yet at all (as opposed
+      // to existing but out/lost/hold/damage — those stay rejected exactly
+      // as before) gets registered into master data here, then reclassified.
+      // It still won't ship in this pass — see registerMissingBox's doc
+      // comment for why that's the correct outcome, not a bug.
+      if(!v.ok&&v.code==='notfound'){
+        var typeText=btc>=0?String(rows[i][btc]==null?'':rows[i][btc]).trim():'';
+        var unitText=unitc>=0?String(rows[i][unitc]==null?'':rows[i][unitc]).trim():'';
+        var whText=whc>=0?String(rows[i][whc]==null?'':rows[i][whc]).trim():'';
+        var reg=registerMissingBox(resolveTag(raw),typeText,unitText,whText);
+        if(reg.ok){
+          registered.push(raw);
+          v=classifyOutTag(raw); // re-check — freshly registered box is 'pending', still not shippable this pass
+        }else{
+          v={ok:false,tag:raw,reason:reg.reason};
+        }
+      }
+      // Shipment-detail values (destination, return days, plate, driver, the
+      // new-customer fields) are collected from every row with a real,
+      // non-duplicate barcode — not only rows whose box actually queued.
+      // A row whose box just got registered by registerMissingBox() above
+      // (still 'pending', correctly excluded from added) is exactly the case
+      // that most needs its ปลายทาง read: that's the row carrying the new
+      // customer's address/phone/email, and skipping it here would silently
+      // throw that data away and leave the customer un-creatable.
       if(dc>=0)destVals.push(rows[i][dc]);
       if(rc>=0)retVals.push(rows[i][rc]);
       if(pc>=0)plateVals.push(rows[i][pc]);
       if(vc>=0)driverVals.push(rows[i][vc]);
       if(tsc>=0)tsVals.push(rows[i][tsc]);
       if(whoc>=0)whoVals.push(rows[i][whoc]);
+      if(ac>=0)addrVals.push(rows[i][ac]);
+      if(phc>=0)phoneVals.push(rows[i][phc]);
+      if(ec>=0)emailVals.push(rows[i][ec]);
+
+      if(!v.ok){failed.push({tag:v.tag||raw,reason:v.reason});continue;}
+      if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
+      pendingOut.push(v.tag);added.push(v.tag);
     }
 
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
-    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals);
+    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals,addrVals,phoneVals,emailVals);
+    meta.registered=registered;
     showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta);
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
      operator already typed, and never guesses across conflicting rows. ---- */
-  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals){
+  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals,addrVals,phoneVals,emailVals){
     var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals),who:distinctVals(whoVals)};
+
+    var rdArr=distinctVals(retVals);
+    meta.retDays.values=rdArr;
+    if(rdArr.length===1&&/^\d+$/.test(rdArr[0])){
+      if(!val('doReturnDays')){setv('doReturnDays',rdArr[0]);meta.retDays.applied=true;}
+    }
 
     var d=distinctVals(destVals);
     meta.dest.values=d;
@@ -12109,13 +12283,20 @@ function openColumnMapModal(opts){
       if(custId){
         if(!val('doCustomer')){setv('doCustomer',custId);meta.dest.applied=true;}
         meta.dest.matched=true;meta.dest.custId=custId;
-      }else{meta.dest.matched=false;} // name in file doesn't exist in customer master
-    }
-
-    var rdArr=distinctVals(retVals);
-    meta.retDays.values=rdArr;
-    if(rdArr.length===1&&/^\d+$/.test(rdArr[0])){
-      if(!val('doReturnDays')){setv('doReturnDays',rdArr[0]);meta.retDays.applied=true;}
+      }else{
+        // name in file doesn't exist in customer master — try creating it
+        // (see autoCreateCustomerIfMissing) before giving up and asking the
+        // operator to pick one by hand.
+        meta.dest.matched=false;
+        var addrArr=distinctVals(addrVals||[]), phoneArr=distinctVals(phoneVals||[]), emailArr=distinctVals(emailVals||[]);
+        var created=autoCreateCustomerIfMissing(d[0],rdArr,addrArr,phoneArr,emailArr);
+        if(created.ok){
+          meta.dest.created=true;meta.dest.custId=created.id;
+          if(!val('doCustomer')){setv('doCustomer',created.id);meta.dest.applied=true;}
+        }else{
+          meta.dest.createFailed=created.reason;
+        }
+      }
     }
 
     var pArr=distinctVals(plateVals);
@@ -12154,16 +12335,23 @@ function openColumnMapModal(opts){
       +'</div>';
 
     // ---- shipment-detail feedback (destination / return days / plate / driver) ----
-    if(meta&&okN){
+    // Not gated on okN: a row can carry a brand-new customer's address/phone
+    // worth reporting (created, or failed to create) even when its own box
+    // didn't queue this time — e.g. the box itself just got registered by
+    // registerMissingBox() and is correctly sitting in "ส่งออกไม่ได้" below.
+    if(meta){
       var rows=[];
       function line(label,m){
         if(!m||!m.values||!m.values.length)return;
         if(m.values.length>1){
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill bad" style="margin-right:6px;">ค่าต่างกันในไฟล์</span>'+esc(label)+': '+m.values.map(esc).join(', ')+' — กรุณาเลือก/กรอกเองด้านบน</div>');
+        }else if(m.created){
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">สร้างลูกค้าใหม่แล้ว</span>'+esc(label)+': '+esc(m.values[0])+' ('+esc(m.custId)+')</div>');
         }else if(m.applied){
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">เติมให้แล้ว</span>'+esc(label)+': '+esc(m.values[0])+'</div>');
         }else if(m.matched===false){
-          rows.push('<div class="small" style="margin:4px 0;"><span class="pill bad" style="margin-right:6px;">ไม่พบในระบบ</span>'+esc(label)+': '+esc(m.values[0])+' — กรุณาเลือกลูกค้าเองด้านบน</div>');
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill bad" style="margin-right:6px;">ไม่พบในระบบ</span>'+esc(label)+': '+esc(m.values[0])
+            +(m.createFailed?(' — สร้างลูกค้าใหม่อัตโนมัติไม่ได้ ('+esc(m.createFailed)+') กรุณาเลือกลูกค้าเองด้านบน'):' — กรุณาเลือกลูกค้าเองด้านบน')+'</div>');
         }else{
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill" style="margin-right:6px;">มีในไฟล์</span>'+esc(label)+': '+esc(m.values[0])+' (ช่องด้านบนมีค่าอยู่แล้ว จึงไม่ทับ)</div>');
         }
@@ -12178,6 +12366,13 @@ function openColumnMapModal(opts){
     }
 
     if(okN){h+='<div class="c2-label">เพิ่มเข้าคิว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
+
+    if(meta&&meta.registered&&meta.registered.length){
+      h+='<div class="c2-label">ลงทะเบียนกล่องใหม่ในระบบแล้ว · '+meta.registered.length+' ใบ</div>'
+        +'<div style="margin-bottom:6px;"><span class="pill ok" style="margin-right:6px;">ยังไม่ผ่าน Gate เข้าคลัง</span>'
+        +'<span class="small muted">รับเข้าคลังก่อน แล้วจึงจะส่งออกได้ในรอบถัดไป</span></div>'
+        +'<div class="chiplist" style="margin-bottom:14px;">'+chips(meta.registered)+'</div>';
+    }
 
     if(Object.keys(byReason).length){
       h+='<div class="c2-label">ส่งออกไม่ได้</div>';
