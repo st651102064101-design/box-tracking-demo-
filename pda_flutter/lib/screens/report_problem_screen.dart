@@ -34,12 +34,20 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   bool _busy = false;
   bool _sent = false;
 
+  /// Narrows the box pick-list to one product type at a time — null means
+  /// "all types". Same affordance RfidLocateScreen's own pick step uses: the
+  /// box an operator is reporting is exactly the one they *can't* scan (it's
+  /// missing, or its tag won't read), so a browsable list is the only way in,
+  /// and a warehouse-wide alphabetical list needs a type filter to be usable.
+  String? _typeFilter;
+
   void _pickKind(_Kind k) {
     setState(() {
       _kind = k;
       _box = null;
       _location = null;
       _scanError = null;
+      _typeFilter = null;
     });
   }
 
@@ -106,6 +114,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       _location = null;
       _scanError = null;
       _sent = false;
+      _typeFilter = null;
     });
   }
 
@@ -133,7 +142,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               ? _kindPicker(c, loc)
               : target
                   ? _confirmBody(c, loc)
-                  : _scanBody(loc, kind),
+                  : _scanBody(c, loc, kind),
         ),
       ),
     );
@@ -228,7 +237,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     );
   }
 
-  List<Widget> _scanBody(LocaleController loc, _Kind kind) => [
+  List<Widget> _scanBody(AppController c, LocaleController loc, _Kind kind) => [
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 22),
@@ -261,7 +270,165 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               style: TextStyle(
                   fontSize: 13, color: C.red, fontWeight: FontWeight.w600)),
         ],
+        // bin_full picks a shelf, not a box — there's no product type to
+        // group by and no box list that would mean anything, so it stays
+        // scan-only.
+        if (kind != _Kind.binFull) ..._boxPickList(c, loc, kind),
       ];
+
+  /// Browsable box list for the two box-scoped report kinds, grouped behind a
+  /// product-type filter exactly like RfidLocateScreen's own pick step. This
+  /// matters more here than there: the box being reported is by definition
+  /// one the operator *cannot* scan — it's missing from its shelf, or its tag
+  /// won't read — so without this the only way to file the report is to
+  /// already know the tag by heart and have something else to scan it off.
+  List<Widget> _boxPickList(
+      AppController c, LocaleController loc, _Kind kind) {
+    final s = c.S;
+    if (s == null) return const [];
+
+    // Only boxes the system believes are physically on hand: reporting "I
+    // went there and it wasn't there" (or "I'm holding it but its tag won't
+    // read") makes no sense for a box that's out at a customer, was never
+    // received, or is already flagged lost.
+    final onHand = s.boxes
+        .where((b) => const {'warehouse', 'hold', 'damage'}.contains(b.status))
+        .toList()
+      ..sort((a, b) => a.tag.compareTo(b.tag));
+
+    // Distinct types actually present — a type with no on-hand box would just
+    // be a dead-end chip. '' stands in for "no type set" so it stays a
+    // normal map key.
+    final typeNames = <String, String>{};
+    for (final b in onHand) {
+      typeNames[b.type ?? ''] = s.typeName(b.type);
+    }
+    final typeIds = typeNames.keys.toList()
+      ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
+    if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
+      _typeFilter = null; // the selected type's last on-hand box went away
+    }
+    final shown = _typeFilter == null
+        ? onHand
+        : onHand.where((b) => (b.type ?? '') == _typeFilter).toList();
+
+    if (onHand.isEmpty) return const [];
+
+    return [
+      const SizedBox(height: 14),
+      Text(loc.t('หรือเลือกจากรายการ'),
+          style: TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w700, color: C.muted)),
+      const SizedBox(height: 8),
+      if (typeIds.length > 1) ...[
+        SizedBox(
+          height: 34,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(loc.t('ทั้งหมด')),
+                  selected: _typeFilter == null,
+                  onSelected: (_) => setState(() => _typeFilter = null),
+                ),
+              ),
+              for (final id in typeIds)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(typeNames[id]!),
+                    selected: _typeFilter == id,
+                    onSelected: (_) => setState(() => _typeFilter = id),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      if (shown.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+          child: Text(loc.t('ไม่มีกล่องประเภทนี้ในคลัง'),
+              style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
+        )
+      else
+        Container(
+          decoration: BoxDecoration(
+            color: C.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(shown.length, (i) {
+              final b = shown[i];
+              final sm = StatusMeta.of(b.status);
+              return InkWell(
+                // Same landing point a successful scan reaches — straight to
+                // the confirm step for this box, no separate flow.
+                onTap: () => setState(() {
+                  _scanError = null;
+                  _box = b;
+                }),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: i == shown.length - 1
+                        ? null
+                        : Border(bottom: BorderSide(color: C.border)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                          kind == _Kind.missing
+                              ? Icons.inventory_2_outlined
+                              : Icons.nfc,
+                          size: 18,
+                          color: C.muted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(b.tag,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'monospace')),
+                            // Type stays on every row even with a type chip
+                            // active — with "ทั้งหมด" selected it's the only
+                            // thing telling one box apart from the next — and
+                            // the shelf it should be on is exactly what an
+                            // operator checks before calling it missing. A box
+                            // still waiting on putaway has no shelf at all,
+                            // hence the join rather than a fixed separator.
+                            Text(
+                                [
+                                  s.typeName(b.type),
+                                  locationText(b.location
+                                      .map((k, v) => MapEntry(k, '$v'))),
+                                ].where((v) => v.isNotEmpty).join(' · '),
+                                style:
+                                    TextStyle(fontSize: 12, color: C.muted)),
+                          ],
+                        ),
+                      ),
+                      Pill(sm.label, color: sm.color, bg: sm.bg, fontSize: 11),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+    ];
+  }
 
   List<Widget> _confirmBody(AppController c, LocaleController loc) {
     final b = _box;
