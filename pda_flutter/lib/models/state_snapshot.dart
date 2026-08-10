@@ -69,9 +69,12 @@ class StateSnapshot {
     for (final entry in boxesRaw.entries) {
       final v = entry.value;
       if (v is! Map) continue;
+      // `rfid` first — it is what POST /api/boxes/:tag/rfid writes now; the
+      // older pair is still matched for rows bound before it existed.
+      final rfid = v['rfid']?.toString().toLowerCase();
       final tid = v['rfidTid']?.toString().toLowerCase();
       final epc = v['rfidEpc']?.toString().toLowerCase();
-      if (tid == target || epc == target) return entry.key;
+      if (rfid == target || tid == target || epc == target) return entry.key;
     }
     return null;
   }

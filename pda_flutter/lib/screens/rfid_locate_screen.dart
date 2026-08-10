@@ -215,18 +215,18 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       return;
     }
     if (_target == null) return;
-    final wantEpc = _target!.rfidEpc?.toUpperCase();
-    final wantTid = _target!.rfidTid?.toUpperCase();
-    if ((wantEpc == null || wantEpc.isEmpty) &&
-        (wantTid == null || wantTid.isEmpty)) return;
+    // A read matches on whichever identifier the box is bound by — the
+    // reader reports EPC (and sometimes TID) and `rfidCode` is compared to
+    // both, since a box commissioned through the current endpoint stores
+    // that value in `rfid`, not in the old EPC/TID pair.
+    final want = _target!.rfidCode?.toUpperCase();
+    if (want == null || want.isEmpty) return;
 
     int? best;
     for (final r in batch) {
       final epc = r.epc.toUpperCase();
       final tid = r.tid?.toUpperCase();
-      final isMatch =
-          (wantEpc != null && wantEpc.isNotEmpty && epc == wantEpc) ||
-              (wantTid != null && wantTid.isNotEmpty && tid == wantTid);
+      final isMatch = epc == want || tid == want;
       if (!isMatch) continue;
       final rssi = r.rssi ??
           _rssiClose; // no RSSI field on this read: treat as a direct hit
@@ -291,17 +291,13 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     int? overallBest;
     var changed = false;
     for (final target in _multiTargets) {
-      final wantEpc = target.rfidEpc?.toUpperCase();
-      final wantTid = target.rfidTid?.toUpperCase();
-      if ((wantEpc == null || wantEpc.isEmpty) &&
-          (wantTid == null || wantTid.isEmpty)) continue;
+      final want = target.rfidCode?.toUpperCase();
+      if (want == null || want.isEmpty) continue;
       int? best;
       for (final r in batch) {
         final epc = r.epc.toUpperCase();
         final tid = r.tid?.toUpperCase();
-        final isMatch =
-            (wantEpc != null && wantEpc.isNotEmpty && epc == wantEpc) ||
-                (wantTid != null && wantTid.isNotEmpty && tid == wantTid);
+        final isMatch = epc == want || tid == want;
         if (!isMatch) continue;
         final rssi = r.rssi ?? _rssiClose;
         if (best == null || rssi > best) best = rssi;
@@ -398,9 +394,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       setState(() => _scanError = '${loc.t('ไม่พบกล่องรหัส')} "$raw"');
       return;
     }
-    final hasTag =
-        (b.rfidEpc?.isNotEmpty ?? false) || (b.rfidTid?.isNotEmpty ?? false);
-    if (!hasTag) {
+    if (!b.hasRfid) {
       setState(() =>
           _scanError = '${b.tag} ${loc.t('ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้')}');
       return;
@@ -528,9 +522,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // scan-only pick step falls back to when there's no picking ticket or
     // pallet label in hand to scan.
     final allTagged = (c.S?.boxes.toList() ?? const <Box>[])
-        .where((b) =>
-            (b.rfidEpc?.isNotEmpty ?? false) ||
-            (b.rfidTid?.isNotEmpty ?? false))
+        .where((b) => b.hasRfid)
         .toList()
       ..sort((a, b) => a.tag.compareTo(b.tag));
 

@@ -18,6 +18,24 @@ class Box {
   String? get rfidTid => raw['rfidTid']?.toString();
   String? get rfidEpc => raw['rfidEpc']?.toString();
 
+  /// The single identifier a box is bound by today — `boxes.rfid` on the
+  /// backend, written by POST /api/boxes/:tag/rfid, which also clears the
+  /// older `rfidEpc`/`rfidTid` pair. Reading only that pair (as every call
+  /// site here used to) meant a box tagged through the current endpoint
+  /// looked untagged to this app: an RFID read resolved to nothing and the
+  /// scan came back "ไม่พบกล่องนี้ในระบบ" even though the web app showed the
+  /// tag right there on the box. The legacy pair stays as a fallback for
+  /// rows written before `rfid` existed.
+  String? get rfid => raw['rfid']?.toString();
+  String? get rfidCode {
+    for (final v in [rfid, rfidEpc, rfidTid]) {
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  bool get hasRfid => rfidCode != null;
+
   Map<String, dynamic> get location => (raw['location'] is Map)
       ? Map<String, dynamic>.from(raw['location'])
       : const {};

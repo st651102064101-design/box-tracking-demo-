@@ -185,7 +185,8 @@ Map<String, dynamic> box(String tag, String status,
         {List<dynamic>? history,
         int cycles = 0,
         String? rfidTid,
-        String? rfidEpc}) =>
+        String? rfidEpc,
+        String? rfid}) =>
     {
       'tag': tag,
       'type': 'BT-CRT',
@@ -196,6 +197,7 @@ Map<String, dynamic> box(String tag, String status,
       'history': history ?? <dynamic>[],
       if (rfidTid != null) 'rfidTid': rfidTid,
       if (rfidEpc != null) 'rfidEpc': rfidEpc,
+      if (rfid != null) 'rfid': rfid,
     };
 
 /// The WMS employee master, which is the PDA's only source of people. Covers
@@ -468,6 +470,22 @@ void main() {
       final c = await makeController(api);
       c.mode = 'out';
       c.addScan('e28011912000708fbad20380');
+      expect(c.queue, ['CRT-01']);
+    });
+
+    // POST /api/boxes/:tag/rfid writes the single `rfid` column and clears the
+    // old EPC/TID pair — a box tagged that way used to resolve to nothing here,
+    // so a real read came back "ไม่พบกล่องนี้ในระบบ" while the web app showed
+    // the tag on the very same box.
+    test('resolves a scan by the single rfid identifier', () async {
+      final api = FakeApi();
+      final state = fixtureState();
+      state['boxes']['CRT-01'] =
+          box('CRT-01', 'warehouse', rfid: '20BDD7D3728E991EDDEE503B');
+      api.state = state;
+      final c = await makeController(api);
+      c.mode = 'out';
+      c.addScan('20bdd7d3728e991eddee503b');
       expect(c.queue, ['CRT-01']);
     });
 
@@ -1288,6 +1306,59 @@ void main() {
       final e = Employee.fromJson({'id': 'EMP-9', 'name': 'ทดสอบ'});
       expect(e.badgeCode, 'EMP-9');
       expect(e.matchesCode('emp-9'), isTrue);
+    });
+  });
+
+  group('gate in — ช่องว่าง (pick an empty bin)', () {
+    Map<String, dynamic> stateWithLocations() {
+      final state = fixtureState();
+      state['locations'] = {
+        'A-R01-1-01': {'code': 'A-R01-1-01', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '01'},
+        'A-R01-1-02': {'code': 'A-R01-1-02', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '02'},
+        'A-R01-1-03': {'code': 'A-R01-1-03', 'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '03', 'reportedFullAt': '2026-08-01T00:00:00Z'},
+        'B-R01-1-01': {'code': 'B-R01-1-01', 'wh': 'WH-2', 'zone': 'B', 'rack': 'R-01', 'shelf': '1', 'slot': '01'},
+      };
+      // a box standing on the first bin — occupied, so it must not be offered
+      final occupant = box('CRT-01', 'warehouse');
+      occupant['location'] = {'wh': 'WH-1', 'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '01'};
+      state['boxes']['CRT-01'] = occupant;
+      return state;
+    }
+
+    test('lists only the free bins of this warehouse', () async {
+      final api = FakeApi();
+      api.state = stateWithLocations();
+      final c = await makeController(api);
+      expect(c.emptyLocations.map((l) => l.code), ['A-R01-1-02']);
+    });
+
+    test('the picked bin becomes the putaway assignment', () async {
+      final api = FakeApi();
+      api.state = stateWithLocations();
+      final c = await makeController(api);
+      c.setReceiveLocationMode(ReceiveLocationMode.empty);
+      c.setSelectedEmptyLocation('A-R01-1-02');
+      expect(c.selectedEmptyLocationAssignment,
+          {'zone': 'A', 'rack': 'R-01', 'shelf': '1', 'slot': '02'});
+    });
+
+    test('a bin that filled up in the meantime yields no assignment', () async {
+      final api = FakeApi();
+      api.state = stateWithLocations();
+      final c = await makeController(api);
+      c.setReceiveLocationMode(ReceiveLocationMode.empty);
+      c.setSelectedEmptyLocation('A-R01-1-01'); // occupied
+      expect(c.selectedEmptyLocationAssignment, isNull);
+    });
+
+    test('switching away from ช่องว่าง drops the pick', () async {
+      final api = FakeApi();
+      api.state = stateWithLocations();
+      final c = await makeController(api);
+      c.setReceiveLocationMode(ReceiveLocationMode.empty);
+      c.setSelectedEmptyLocation('A-R01-1-02');
+      c.setReceiveLocationMode(ReceiveLocationMode.defer);
+      expect(c.selectedEmptyLocation, '');
     });
   });
 }

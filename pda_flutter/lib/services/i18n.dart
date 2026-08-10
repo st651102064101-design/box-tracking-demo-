@@ -392,7 +392,13 @@ class LocaleController extends ChangeNotifier {
     'เก็บที่ไหน': 'Store where',
     'ตามระบบแนะนำ': 'System-suggested',
     'เลือกเอง': 'Pick manually',
+    'ช่องว่าง': 'Empty bin',
     'รอ Putaway': 'Pending putaway',
+    '— เลือกช่องว่าง —': '— pick an empty bin —',
+    'เลือกช่องที่ว่างอยู่ตอนนี้เองจากรายการ แล้วระบบจะพาไปเก็บที่ช่องนั้น':
+        'Pick one of the bins that is free right now, and putaway will direct you to it',
+    'ไม่มีช่องว่างในคลังนี้ — เลือก "เลือกเอง" หรือ "รอ Putaway" แทน':
+        'No free bin in this warehouse — use "Pick manually" or "Pending putaway" instead',
     'กำลังหาชั้นวางว่าง…': 'Finding an empty shelf…',
     'คลังนี้ยังไม่ได้ตั้งค่าผังชั้นวาง — จะเก็บไว้รอ Putaway แทน':
         'No shelf layout set up for this warehouse yet — will stay pending putaway',

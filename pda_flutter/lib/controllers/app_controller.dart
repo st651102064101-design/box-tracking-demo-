@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart'
 
 import '../models/box.dart';
 import '../models/employee.dart';
+import '../models/location.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
@@ -43,9 +44,16 @@ enum Screen {
 /// "barcode mode" selection still silently started RFID reads and beeped.
 enum ScanInputMode { barcode, rfid }
 
-/// The three choices at Gate In for where a received batch ends up — see
+/// The four choices at Gate In for where a received batch ends up — see
 /// AppController.receiveLocationMode.
-enum ReceiveLocationMode { auto, manual, defer }
+///
+/// [empty] is [auto]'s "let me pick which one" sibling: same set of shelves
+/// the server would suggest from (Location Master rows in this warehouse with
+/// no box on them), but listed so the operator chooses the bin instead of
+/// taking the first free one — which is what they need when they already know
+/// the aisle they are walking to, or when the first free bin is across the
+/// building from where the pallet is standing.
+enum ReceiveLocationMode { auto, manual, empty, defer }
 
 /// A batch that has been received (Gate In already committed) and now has to
 /// be physically carried to a shelf — the Directed Putaway task ScanScreen
@@ -295,8 +303,62 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// ApiClient.suggestLocation).
   String? suggestLocationEmptyReason;
 
+  /// The bin picked in [ReceiveLocationMode.empty] — a Location Master
+  /// `code`. Empty means "not chosen yet", which the Gate In form treats as
+  /// incomplete, exactly like an unpicked ลูกค้าปลายทาง on the ส่งออก side.
+  String selectedEmptyLocation = '';
+
+  void setSelectedEmptyLocation(String code) {
+    selectedEmptyLocation = code;
+    notifyListeners();
+  }
+
+  /// Location Master rows for this warehouse that nothing is standing on
+  /// right now, in code order. Mirrors GET /api/boxes/suggest-location's own
+  /// definition of free (occupied by a `warehouse`-status box, or flagged
+  /// "ช่องเก็บเต็ม" from the floor) — it just lists every candidate instead
+  /// of returning the first, and reads the already-cached `S` rather than
+  /// adding a round-trip to a screen an operator is standing at with a
+  /// pallet in hand.
+  List<Location> get emptyLocations {
+    final s = S;
+    if (s == null) return const [];
+    String key(Map l) =>
+        '${l['zone'] ?? ''}|${l['rack'] ?? ''}|${l['shelf'] ?? ''}|${l['slot'] ?? ''}';
+    final occupied = <String>{};
+    for (final b in s.boxes) {
+      if (b.status != 'warehouse') continue;
+      final l = b.location;
+      if ((l['wh'] ?? '').toString() != wh) continue;
+      occupied.add(key(l));
+    }
+    final out = <Location>[];
+    s.locations.forEach((code, raw) {
+      if (raw is! Map) return;
+      if ((raw['wh'] ?? '').toString() != wh) return;
+      if (raw['reportedFullAt'] != null) return;
+      if (occupied.contains(key(raw))) return;
+      out.add(Location.fromJson(code, Map<String, dynamic>.from(raw)));
+    });
+    out.sort((a, b) => a.code.compareTo(b.code));
+    return out;
+  }
+
+  /// The chosen bin as the {zone,rack,shelf,slot} map PutawayTask carries —
+  /// same shape ApiClient.suggestLocation returns, so the directed-putaway
+  /// screen needs to know nothing about which mode produced it.
+  Map<String, String>? get selectedEmptyLocationAssignment {
+    if (selectedEmptyLocation.isEmpty) return null;
+    for (final l in emptyLocations) {
+      if (l.code != selectedEmptyLocation) continue;
+      return {'zone': l.zone, 'rack': l.rack, 'shelf': l.shelf, 'slot': l.slot};
+    }
+    return null;
+  }
+
   void setReceiveLocationMode(ReceiveLocationMode m) {
     receiveLocationMode = m;
+    if (m != ReceiveLocationMode.empty) selectedEmptyLocation = '';
     notifyListeners();
     if (m == ReceiveLocationMode.auto) _fetchSuggestedLocation();
   }
@@ -343,6 +405,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _clearReceiveLocation() {
     receiveLocationMode = ReceiveLocationMode.defer;
+    selectedEmptyLocation = '';
     _suggestedLocation = null;
     suggestLocationFailed = false;
     suggestLocationFailedDetail = null;
@@ -1628,6 +1691,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           mode == 'in' && receiveLocationMode != ReceiveLocationMode.defer;
       if (wantsPutaway && shelvedTags.isNotEmpty) {
         Map<String, String>? assigned;
+        if (receiveLocationMode == ReceiveLocationMode.empty) {
+          // Resolved here rather than at pick time for the same reason auto
+          // re-asks below: another terminal may have filled this bin while
+          // these boxes were being scanned. Gone → `assigned` stays null and
+          // the task degrades to "find a free spot yourself".
+          assigned = selectedEmptyLocationAssignment;
+        }
         if (receiveLocationMode == ReceiveLocationMode.auto) {
           // Asked *now*, after the commit — not when the chip was tapped.
           // A shelf picked before these boxes were even scanned could have

@@ -512,7 +512,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   /// `replace: true` would happily steal it. Backs the "จับคู่แล้ว/ยังไม่จับคู่"
   /// filter below.
   bool _isMatched(String epc) =>
-      _c.S?.boxes.any((b) => b.rfidEpc == epc) ?? false;
+      _c.S?.boxes.any((b) => b.rfidCode == epc) ?? false;
 
   Widget _rfidCard() {
     final connected =

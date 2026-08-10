@@ -456,7 +456,13 @@ class _ScanScreenState extends State<ScanScreen>
             c.outVehicleTypeOther.trim().isNotEmpty)
         : (c.inVehicleType != 'อื่นๆ' ||
             c.inVehicleTypeOther.trim().isNotEmpty);
-    final formValid = (!isOut || c.outCustomer.isNotEmpty) && vtypeOk;
+    // "ช่องว่าง" is only a complete answer once a bin is actually picked —
+    // the same rule ลูกค้าปลายทาง follows on the ส่งออก side.
+    final emptyLocOk = isOut ||
+        c.receiveLocationMode != ReceiveLocationMode.empty ||
+        c.selectedEmptyLocation.isNotEmpty;
+    final formValid =
+        (!isOut || c.outCustomer.isNotEmpty) && vtypeOk && emptyLocOk;
     // Step 1 (form): "ถัดไป" needs a valid form, nothing about the queue —
     // it's still empty at this point. Step 2 (scan): commit needs both a
     // non-empty queue and the form still valid (it was checked once to get
@@ -743,6 +749,8 @@ class _ScanScreenState extends State<ScanScreen>
         'ระบบจะกำหนดชั้นวางให้หลังยิงกล่องครบ แล้วพาไปเก็บทีละจุด',
       ReceiveLocationMode.manual =>
         'ยิงกล่องให้ครบก่อน แล้วค่อยเดินไปหาช่องว่างและยิงบาร์โค้ดชั้นวางเอง',
+      ReceiveLocationMode.empty =>
+        'เลือกช่องที่ว่างอยู่ตอนนี้เองจากรายการ แล้วระบบจะพาไปเก็บที่ช่องนั้น',
       ReceiveLocationMode.defer =>
         'รับเข้าอย่างเดียว — พักไว้ให้คนจัดเก็บมาเอาขึ้นชั้นทีหลัง',
     };
@@ -768,6 +776,12 @@ class _ScanScreenState extends State<ScanScreen>
                   c.setReceiveLocationMode(ReceiveLocationMode.manual),
             ),
             ChoiceChip(
+              label: Text(loc.t('ช่องว่าง')),
+              selected: mode == ReceiveLocationMode.empty,
+              onSelected: (_) =>
+                  c.setReceiveLocationMode(ReceiveLocationMode.empty),
+            ),
+            ChoiceChip(
               label: Text(loc.t('รอ Putaway')),
               selected: mode == ReceiveLocationMode.defer,
               onSelected: (_) =>
@@ -775,6 +789,7 @@ class _ScanScreenState extends State<ScanScreen>
             ),
           ],
         ),
+        if (mode == ReceiveLocationMode.empty) _emptyLocationPicker(c, loc),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -796,6 +811,57 @@ class _ScanScreenState extends State<ScanScreen>
           ],
         ),
       ],
+    );
+  }
+
+  /// The bin list behind the "ช่องว่าง" choice. Built from the cached Location
+  /// Master minus whatever a `warehouse`-status box is standing on right now
+  /// (see AppController.emptyLocations), so it is the same candidate set the
+  /// server's own suggestion comes from — just chosen by the person who knows
+  /// which aisle they are walking to.
+  Widget _emptyLocationPicker(AppController c, LocaleController loc) {
+    final free = c.emptyLocations;
+    if (free.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded, size: 15, color: C.orange),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                  loc.t(
+                      'ไม่มีช่องว่างในคลังนี้ — เลือก "เลือกเอง" หรือ "รอ Putaway" แทน'),
+                  style: TextStyle(fontSize: 12, color: C.muted, height: 1.45)),
+            ),
+          ],
+        ),
+      );
+    }
+    // A bin that was free when the chip was tapped can be filled by another
+    // terminal before this batch commits; keeping the value only while it is
+    // still in the list means the form goes back to "not picked" instead of
+    // silently carrying a stale bin into the putaway task.
+    final selected =
+        free.any((l) => l.code == c.selectedEmptyLocation) ? c.selectedEmptyLocation : null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: DropdownButtonFormField<String>(
+        value: selected,
+        isExpanded: true,
+        decoration: pdaInput(loc.t('— เลือกช่องว่าง —'), radius: 12),
+        hint: Text(loc.t('— เลือกช่องว่าง —'), style: TextStyle(color: C.faint)),
+        items: free
+            .map((l) => DropdownMenuItem(
+                  value: l.code,
+                  child: Text(
+                      '${l.code} · ${[l.zone, l.rack, l.shelf, l.slot].where((v) => v.isNotEmpty).join(' / ')}',
+                      overflow: TextOverflow.ellipsis),
+                ))
+            .toList(),
+        onChanged: (v) => c.setSelectedEmptyLocation(v ?? ''),
+      ),
     );
   }
 
