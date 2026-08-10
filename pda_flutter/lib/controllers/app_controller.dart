@@ -48,13 +48,12 @@ enum ScanInputMode { barcode, rfid }
 ///
 /// [empty] — "just know it's in the warehouse" — is the default (see
 /// AppController.receiveLocationMode) and takes no input at all: nothing is
-/// picked, nothing is asked. It still puts up an undirected putaway task
-/// after commit ("find a free spot yourself"), which is the one way it
-/// differs from [defer]: [defer] skips that task entirely and leaves the
-/// batch purely pending, handled later from wherever putaway tasks are
-/// picked back up. The other three modes are opt-in, tucked behind
-/// ScanScreen's "ตัวเลือกอื่น" toggle so a terminal that never touches them
-/// keeps behaving exactly like this one.
+/// picked, nothing is asked, and committing puts up no putaway task —
+/// functionally identical to [defer] today, kept as its own value only so a
+/// distinct chip/label survives if the two are ever asked to diverge again.
+/// The other three modes are opt-in, tucked behind ScanScreen's "ตัวเลือกอื่น"
+/// toggle so a terminal that never touches them keeps behaving exactly like
+/// this one.
 enum ReceiveLocationMode { auto, manual, empty, defer }
 
 /// A batch that has been received (Gate In already committed) and now has to
@@ -1649,13 +1648,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // it has no business in a "go put these on a shelf" task.
       final shelvedTags =
           tx.tags.where((t) => !queueConditions.containsKey(t)).toList();
-      final wantsPutaway =
-          mode == 'in' && receiveLocationMode != ReceiveLocationMode.defer;
+      // Only the two modes an operator opted into through "ตัวเลือกอื่น"
+      // (auto/manual) put up a putaway task at all. [defer] always skipped
+      // it by design; [empty] — the hidden default nobody actively chose —
+      // used to still show an undirected "find a free spot yourself" task,
+      // which meant every batch that never touched "ตัวเลือกอื่น" hit a
+      // putaway screen it never asked for. Now it lands the batch straight
+      // into the warehouse with nothing further to do, same as [defer].
+      final wantsPutaway = mode == 'in' &&
+          (receiveLocationMode == ReceiveLocationMode.auto ||
+              receiveLocationMode == ReceiveLocationMode.manual);
       if (wantsPutaway && shelvedTags.isNotEmpty) {
-        // [empty] has no bin of its own to resolve — nothing was picked for
-        // it, by design (see ReceiveLocationMode.empty) — so `assigned` just
-        // stays null and the task below degrades to "find a free spot
-        // yourself", same as a failed [auto] lookup.
         Map<String, String>? assigned;
         if (receiveLocationMode == ReceiveLocationMode.auto) {
           // Asked *now*, after the commit — not when the chip was tapped.

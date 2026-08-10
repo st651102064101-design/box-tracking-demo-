@@ -634,8 +634,7 @@ void main() {
       expect(c.putawayTask!.isDirected, isFalse);
     });
 
-    test('ช่องว่าง (the default) makes an undirected task — nothing to resolve',
-        () async {
+    test('ช่องว่าง (the default) makes no putaway task at all', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
@@ -644,8 +643,9 @@ void main() {
       c.addScan('CRT-02');
       await c.doCommit();
 
-      expect(c.putawayTask, isNotNull);
-      expect(c.putawayTask!.isDirected, isFalse);
+      expect(c.putawayTask, isNull,
+          reason: 'a batch nobody directed anywhere just lands in the '
+              'warehouse — same outcome as รอ Putaway');
     });
 
     test('รอ Putaway makes no task at all — that is the whole point of it',
