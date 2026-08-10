@@ -163,6 +163,29 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
         .from(employees)).map((r) => [r.id, r]),
     );
 
+    // RFID bindings are owned by POST/DELETE /api/boxes/:tag/rfid (the PDA
+    // commissions tags there), NOT by this payload. The legacy UI only ever
+    // holds the snapshot it fetched at page load, so anything bound after
+    // that — by the PDA, or by another browser tab — is simply absent from
+    // the `S` it PUTs back. Before this capture, any save that followed
+    // (a Gate ขาออก Excel import registering one box was enough) rewrote
+    // every box row from that stale snapshot and silently unbound the lot.
+    // So: for every box that already exists here, the DB is the authority —
+    // its binding (or its deliberate absence, after a detach) is carried
+    // across the wipe untouched, whatever the payload says. The payload's own
+    // value is used only for tags this database has never seen, which keeps
+    // restoring a JSON backup into an empty database working.
+    const rfidByTag = new Map(
+      (await tx
+        .select({
+          tag: boxes.tag,
+          rfid: boxes.rfid,
+          rfidTid: boxes.rfidTid,
+          rfidEpc: boxes.rfidEpc,
+        })
+        .from(boxes)).map((r) => [r.tag, r]),
+    );
+
     // 1) wipe all domain tables (users are untouched)
     // audit_log is deliberately NOT wiped here — see the audit log section
     // below for why (backend routes now write into it directly too).
@@ -213,6 +236,18 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
     // 4) boxes
     const boxRows = Object.entries(s.boxes ?? {}).map(([tag, raw]) => {
       const b = raw as Record<string, unknown>;
+      // DB binding wins over the payload — see rfidByTag above.
+      const kept = rfidByTag.get(tag);
+      const rfid = kept
+        ? (kept.rfid ?? kept.rfidTid ?? kept.rfidEpc ?? null)
+        : ((b.rfid as string) ?? (b.rfidEpc as string) ?? (b.rfidTid as string) ?? null);
+      const rfidTid = kept ? kept.rfidTid : ((b.rfidTid as string) ?? null);
+      const rfidEpc = kept ? kept.rfidEpc : ((b.rfidEpc as string) ?? null);
+      const rfidOverridden =
+        !!kept &&
+        (rfid !== ((b.rfid as string) ?? null) ||
+          rfidTid !== ((b.rfidTid as string) ?? null) ||
+          rfidEpc !== ((b.rfidEpc as string) ?? null));
       return {
         tag,
         type: (b.type as string) ?? null,
@@ -237,12 +272,18 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
         // The legacy pair is still read for rows written before `rfid`
         // existed, so an old snapshot round-tripping through here keeps its
         // tag identity instead of being dropped.
-        rfid: (b.rfid as string) ?? (b.rfidEpc as string) ?? (b.rfidTid as string) ?? null,
-        rfidTid: (b.rfidTid as string) ?? null,
-        rfidEpc: (b.rfidEpc as string) ?? null,
+        rfid,
+        rfidTid,
+        rfidEpc,
         location: (b.location as object) ?? {},
         history: (b.history as unknown[]) ?? [],
-        data: b,
+        // `data` is what the legacy UI actually reads back through
+        // composeState, so a binding the payload disagreed with has to land
+        // there too — otherwise the next GET /api/state would hand the browser
+        // a box that looks untagged even though the typed columns still
+        // resolve it. Left untouched when nothing was overridden, so a
+        // payload still round-trips through here byte-for-byte.
+        data: rfidOverridden ? { ...b, rfid, rfidTid, rfidEpc } : b,
         updatedAt: new Date(),
       };
     });

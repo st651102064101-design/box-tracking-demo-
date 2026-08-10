@@ -249,3 +249,58 @@ describe('POST /api/boxes/:tag/rfid — EPC-only commissioning', () => {
     expect(box.body.rfidEpc).toBeNull();
   });
 });
+
+/* The Gate ขาออก Excel import (and every other legacy-UI edit) saves by PUTting
+   the browser's whole `S` snapshot back. That snapshot is fetched at page load,
+   so a tag the PDA commissioned afterwards simply isn't in it — and the wholesale
+   replace used to rewrite the box row from it, unbinding the tag. */
+describe('PUT /api/state — RFID bindings survive a stale wholesale save', () => {
+  const EPC = '000000000000424F582D53';
+
+  const SEED = {
+    boxes: {
+      'BOX-S1': { tag: 'BOX-S1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+      'BOX-S2': { tag: 'BOX-S2', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+    },
+    customers: { 'CUST-X': { id: 'CUST-X', name: 'ลูกค้า X', returnDays: 10 } },
+    warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
+    gates: { '5': 'WH-001' },
+    cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
+  };
+
+  it('keeps a binding the payload knows nothing about', async () => {
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(SEED);
+    await request(ctx.app)
+      .post('/api/boxes/BOX-S1/rfid')
+      .set(auth(ctx.token))
+      .send({ rfid: EPC });
+
+    // a snapshot taken *before* that association — no rfid on any box
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(SEED);
+
+    const box = await request(ctx.app).get('/api/boxes/BOX-S1').set(auth(ctx.token));
+    expect(box.body.rfid).toBe(EPC);
+
+    // still resolvable by the physical tag, and visible to the legacy UI
+    const byCode = await request(ctx.app).get('/api/boxes/' + EPC).set(auth(ctx.token));
+    expect(byCode.body.tag).toBe('BOX-S1');
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-S1'].rfid).toBe(EPC);
+  });
+
+  it('a detach through the RFID endpoint still sticks across the next save', async () => {
+    await request(ctx.app).delete('/api/boxes/BOX-S1/rfid').set(auth(ctx.token));
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({
+        boxes: {
+          // the stale snapshot still carries the old binding — must not resurrect it
+          'BOX-S1': { tag: 'BOX-S1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {}, rfid: EPC },
+        },
+        cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
+      });
+    const box = await request(ctx.app).get('/api/boxes/BOX-S1').set(auth(ctx.token));
+    expect(box.body.rfid).toBeNull();
+  });
+});
