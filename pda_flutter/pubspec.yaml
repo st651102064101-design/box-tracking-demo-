@@ -1,7 +1,7 @@
 name: boxtrace_pda
 description: BoxTrace PDA — Zebra MC3390R handheld terminal for the BoxTrace RFID gate backend.
 publish_to: "none"
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
