@@ -23,14 +23,11 @@ class HomeScreen extends StatelessWidget {
   /// operator can't see.
   ///
   /// Home itself only keeps the two things every operator needs on every
-  /// single scan (Gate In/Out) plus the one hub for everything else — ตรวจนับ
-  /// / ค้นหา/เรดาร์ / ย้ายตำแหน่ง moved into MoreHubScreen (its own number
-  /// keys pick those up from there), so this is a short list to memorize
-  /// instead of six similarly-weighted tiles.
+  /// single scan (Gate In/Out) — this demo build has no More Hub tile, so
+  /// there are only two entries to memorize instead of three.
   static const _keyActions = <int, String>{
     1: 'out',
     2: 'in',
-    3: 'moreHub',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -45,9 +42,6 @@ class HomeScreen extends StatelessWidget {
         break;
       case 'in':
         if (c.canScan && c.currentGateType != 'out') c.goScanIn();
-        break;
-      case 'moreHub':
-        c.goMoreHub();
         break;
     }
     return KeyEventResult.handled;
@@ -333,10 +327,8 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     // (HomeScreen's KeyboardListener) so the badge an operator sees is the
     // same digit that jumps here from the keyboard. Colour groups follow
     // one convention throughout: green = inbound, blue = outbound/transfer,
-    // red = tag/damage/other. Home only keeps Gate In/Out — everything else
-    // (ตรวจนับ / ค้นหา/เรดาร์ / ย้ายตำแหน่ง) lives inside MoreHubScreen now, so
-    // there's one menu with two entries here instead of six competing for
-    // attention.
+    // red = tag/damage/other. This demo build keeps only Gate In/Out — no
+    // More Hub tile, so there are just two entries here.
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'in') ...[
@@ -363,15 +355,6 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
       const SizedBox(height: 10),
     ],
-    _MenuTile(
-      number: 3,
-      icon: Icons.sell_outlined,
-      color: C.menuRed,
-      bg: C.menuRedBg,
-      title: loc.t('ผูก Tag / ชำรุด / อื่นๆ'),
-      sub: 'Tag / Damage / More',
-      onTap: c.goMoreHub,
-    ),
     if (c.outbox.isNotEmpty) ...[
       const SizedBox(height: 14),
       _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
