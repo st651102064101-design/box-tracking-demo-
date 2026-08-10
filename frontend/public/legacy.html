@@ -14754,6 +14754,135 @@ document.addEventListener('visibilitychange',()=>{
 
 </script>
 <script>
+/* ============================================================================
+   REALTIME SYNC — receive changes made by other browsers and by the PDA.
+   ----------------------------------------------------------------------------
+   This used to live inside the 3D digital-twin module above, which begins with
+   `if(!stage||!canvas) return;`. Removing the 3D canvas from the Overview page
+   therefore silently killed realtime for the WHOLE app — the module bailed out
+   before ever reaching this code, so a Gate In/Out scanned on the PDA never
+   reached any open browser. It lives here now, standalone and with no
+   dependency on three.js or on any element existing, so it cannot be switched
+   off again by a UI change elsewhere.
+
+   How it works: the backend calls bump() on every write (gate in/out, hold,
+   damage, lost, reports, …) and pushes an SSE 'state' frame to every open
+   page; we re-pull /api/state and adopt it. The interval poll is the fallback
+   for a wedged/blocked stream, and visibilitychange covers a backgrounded tab
+   whose timers the browser has throttled.
+   ========================================================================== */
+(function(){
+"use strict";
+const Wn=window;
+const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
+const St=()=>Wn.S||{};
+function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
+
+async function pullState(){
+  try{
+    const opt={headers:{Authorization:'Bearer '+token()},cache:'no-store'};
+    const r=await (Wn.apiFetch?Wn.apiFetch(API,opt):fetch(API,opt));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const st=j.state||j;
+    if(!st||!st.boxes)throw new Error('bad payload');
+    return st;
+  }catch(e){return null;}
+}
+
+/* What "something actually changed" means. Anything a scan can move has to be
+   in here, or a real change looks identical to the previous snapshot and is
+   skipped: box status/location (Gate In/Out, hold, damage, lost, relocate),
+   the two scan queues, the location master, and the raw event count — a
+   first-time inbound changes no box field the UI shows but must still refresh
+   the "เข้า/ออกวันนี้" counters. */
+function stateSig(st){
+  if(!st)return '';
+  const b=Object.values(st.boxes||{}).map(x=>x.tag+':'+x.status+':'+((x.location||{}).zone||'')+((x.location||{}).rack||'')+((x.location||{}).shelf||'')+((x.location||{}).slot||'')+(x.labeled===false?'!':''));
+  return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')
+    +'#'+Object.keys(st.locations||{}).length+'#'+(st.events||[]).length;
+}
+
+function adoptServerState(st){
+  /* mirror it for the next reload, but mark it as already-synced so the
+     persistence bridge does not PUT the server's own snapshot back at it */
+  const snap=JSON.stringify(st);
+  if(typeof Wn.boxtraceAdoptServerJson==='function')Wn.boxtraceAdoptServerJson(snap);
+  else try{localStorage.setItem(SKEY,snap);}catch(_){}
+  try{
+    /* read-only redraw: renderAll() would otherwise save() this snapshot
+       back to the server and clobber a concurrent write from another tab */
+    const redraw=()=>{
+      if(typeof Wn.adoptStateSnapshot==='function')Wn.adoptStateSnapshot(st);
+      else if(typeof Wn.load==='function')Wn.load();
+      if(typeof Wn.renderAll==='function')Wn.renderAll();
+    };
+    if(typeof Wn.btSuppressSave==='function')Wn.btSuppressSave(redraw);
+    else redraw();
+  }catch(e){console.warn('realtime adopt',e);}
+}
+
+let srvSig=stateSig(St()), syncing=false;
+async function syncNow(){
+  if(syncing)return;
+  syncing=true;
+  try{
+    const st=await pullState();
+    if(!st)return;
+    const ns=stateSig(st);
+    if(ns===srvSig)return;
+    srvSig=ns;adoptServerState(st);
+  }finally{ syncing=false; }
+}
+Wn.btSyncNow=syncNow;   /* so anything else can force a refresh */
+
+/* EventSource cannot carry an Authorization header, hence the token in the
+   query string. A token expires (2h) while the page stays open, and the
+   browser's own auto-retry keeps replaying the SAME url — so an expired
+   token would 401-loop forever. Rebuilding the connection from scratch picks
+   up whatever token localStorage holds now. */
+let liveStream=false, es=null;
+function connectStream(){
+  if(!window.EventSource||es)return;
+  const t=token();
+  if(!t)return;                       /* not signed in yet — the poll covers us */
+  try{ es=new EventSource('/api/stream?token='+encodeURIComponent(t)); }
+  catch(e){ es=null; return; }
+  es.addEventListener('hello',()=>{ liveStream=true; });
+  es.addEventListener('state',ev=>{
+    liveStream=true;
+    let d=null; try{ d=JSON.parse(ev.data); }catch(_){}
+    /* our own write coming back — already on screen */
+    if(d&&d.origin&&d.origin===Wn.BT_CLIENT_ID)return;
+    syncNow();
+  });
+  es.onerror=()=>{
+    liveStream=false;
+    /* CLOSED = the browser gave up retrying (401 on an expired token, or the
+       socket died during a sleep). Drop it so the next tick reconnects with a
+       fresh token instead of sitting on a dead reference. */
+    if(es&&es.readyState===EventSource.CLOSED){ try{es.close();}catch(_){} es=null; }
+  };
+}
+connectStream();
+if(!es)setTimeout(connectStream,3000);   /* login happens after this runs */
+
+let pollTick=0;
+setInterval(()=>{
+  pollTick++;
+  if(!es)connectStream();
+  if(liveStream&&(pollTick%8))return;   /* stream healthy → poll rarely */
+  syncNow();
+},POLL_MS);
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  if(!es||es.readyState===EventSource.CLOSED)connectStream();
+  syncNow();
+});
+})();
+</script>
+<script>
 /* Generic click-to-sort for every table's header row. Delegated on document
    so it works for tables re-rendered by the app's own poll/refresh cycle
    without each render function needing to know about sorting. Skips header
