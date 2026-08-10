@@ -14712,8 +14712,14 @@ function connectStream(){
   });
   es.onerror=()=>{
     /* EventSource retries by itself; drop back to fast polling until a frame
-       actually arrives again, so a silently dead pipe can't leave us blind. */
+       actually arrives again, so a silently dead pipe can't leave us blind.
+       readyState===CLOSED means the browser gave up retrying on its own
+       (auth rejected, or the connection was killed outright by a long tab
+       suspend/OS sleep on flaky warehouse Wi-Fi) — null it out so the next
+       interval tick / visibilitychange actually opens a fresh one instead of
+       silently sitting on a dead reference forever. */
     liveStream=false;
+    if(es&&es.readyState===EventSource.CLOSED){ es.close(); es=null; }
   };
 }
 connectStream();
@@ -14731,6 +14737,19 @@ setInterval(()=>{
   if(liveStream&&(pollTick%8))return;
   syncNow();
 },POLL_MS);
+
+/* A backgrounded tab gets its timers throttled by the browser (often to
+   ~once/minute), so a page left open in another tab/window can sit stale
+   for a while even with the mechanisms above — the moment it's looked at
+   again is exactly when staleness would be most visible. Force an
+   immediate resync (and a fresh stream if the old one died while hidden)
+   the instant the tab becomes visible, instead of waiting for the next
+   throttled tick. */
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  if(!es||es.readyState===EventSource.CLOSED)connectStream();
+  syncNow();
+});
 })();
 
 </script>
