@@ -1517,11 +1517,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
       <div style="flex:1;min-width:230px;">
         <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span>นำเข้ารายการจากไฟล์ Excel</h3>
-        <p class="desc" style="margin:0;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx</b> เพื่อเติมคิวส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา</p>
+        <p class="desc" style="margin:0;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .csv</b> เพื่อเติมคิวส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ .xlsx</button>
-        <input type="file" id="outImportFile" accept=".xlsx,.xls,.csv" style="display:none;">
+        <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx / .xlsm / .xls / .csv เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ .xlsx / .xlsm</button>
+        <input type="file" id="outImportFile" accept=".xlsx,.xlsm,.xls,.csv,application/vnd.ms-excel.sheet.macroEnabled.12" style="display:none;">
       </div>
     </div>
   </div>
@@ -11481,7 +11481,7 @@ function openColumnMapModal(opts){
     /* นำเข้าไฟล์ */
     "นำเข้ารายการจากไฟล์ Excel":"Import a list from Excel",
     "นำเข้ารายการรับคืนจากไฟล์ (PDA / Excel)":"Import returns from a file (PDA / Excel)",
-    "นำเข้าไฟล์ .xlsx":"Import .xlsx","นำเข้าไฟล์ .csv":"Import .csv",
+    "นำเข้าไฟล์ .xlsx":"Import .xlsx","นำเข้าไฟล์ .csv":"Import .csv","นำเข้าไฟล์ .xlsx / .xlsm":"Import .xlsx / .xlsm",
     "ยืนยันรับเข้าคลัง":"Confirm inbound",
     /* Master */
     "ประเภทGate (ตั้งทุกประตูพร้อมกัน)":"Gate type (set every gate at once)",
