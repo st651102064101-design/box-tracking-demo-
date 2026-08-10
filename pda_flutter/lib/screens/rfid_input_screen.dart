@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/epc_codec.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -63,6 +64,11 @@ class _Read {
   /// lot less like a wall of hex once it's just `5`. BigInt because a full
   /// 96-bit EPC overflows a 64-bit int. Null for anything that isn't valid
   /// hex (e.g. a manually-typed code).
+  /// The barcode written into this EPC, when there is one — see
+  /// [epcToAscii]. This is the field an operator actually recognises: the
+  /// box it belongs to is printed on its side in exactly these characters.
+  String? get barcode => epcToAscii(epc);
+
   String? get decimal {
     final hex = epc.replaceAll(RegExp(r'\s'), '');
     if (hex.isEmpty || !RegExp(r'^[0-9A-Fa-f]+$').hasMatch(hex)) return null;
@@ -345,6 +351,19 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
                                                   fontWeight: FontWeight.w700,
                                                   fontFamily: 'monospace',
                                                   letterSpacing: 0.4)),
+                                          if (r.barcode != null)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                  'บาร์โค้ด: ${r.barcode}',
+                                                  style: TextStyle(
+                                                      fontSize: 12.5,
+                                                      fontFamily: 'monospace',
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: C.limeText)),
+                                            ),
                                           if (r.decimal != null)
                                             Padding(
                                               padding:

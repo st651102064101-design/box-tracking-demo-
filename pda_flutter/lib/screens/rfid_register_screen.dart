@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/api_client.dart';
+import '../services/epc_codec.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -563,6 +564,12 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
                           color: C.faint)),
+                  if (epcToAscii(c.epc) != null)
+                    Text(epcToAscii(c.epc)!,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            color: C.faint)),
                   Text('ผูกกับกล่อง ${c.claimedByTag} อยู่แล้ว',
                       style: TextStyle(
                           fontSize: 11.5,
@@ -603,6 +610,13 @@ class _RfidRegisterScreenState extends State<RfidRegisterScreen> {
                       color: selected ? C.ink : C.ink2,
                     ),
                   ),
+                  if (epcToAscii(c.epc) != null)
+                    Text(epcToAscii(c.epc)!,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w700,
+                            color: C.limeText)),
                   Text('สัญญาณ ${c.rssi ?? '—'} · อ่านได้ ${c.hits} ครั้ง',
                       style: TextStyle(fontSize: 11.5, color: C.faint)),
                 ],

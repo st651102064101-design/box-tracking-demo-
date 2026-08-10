@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/api_client.dart';
+import '../services/epc_codec.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../theme.dart';
@@ -703,6 +704,13 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
                       ],
                     ],
                   ),
+                  if (epcToAscii(c.epc) != null)
+                    Text(epcToAscii(c.epc)!,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w700,
+                            color: C.limeText)),
                   Text('สัญญาณ ${c.rssi ?? '—'} · อ่านได้ ${c.hits} ครั้ง',
                       style: TextStyle(fontSize: 11.5, color: C.faint)),
                 ],
