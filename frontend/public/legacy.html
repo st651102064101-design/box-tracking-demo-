@@ -6615,16 +6615,28 @@ window.unqueueOut=unqueueOut;
    ไม่ได้เก็บเวลาต่อรายการ) แต่ตั้งชื่อคอลัมน์ให้ตรงกับ TS_ALIASES/WHO_ALIASES ของ
    ตัวนำเข้าไฟล์ (ดู "OUTBOUND BULK IMPORT" ด้านล่าง) โดยตั้งใจ — ไฟล์ที่ export จาก
    ที่นี่แล้วนำกลับเข้ามาใหม่ทีหลัง (หรือแก้ไขแล้วนำเข้า) จะจับคู่คอลัมน์ให้อัตโนมัติ */
+/* Column-format export: headers match the importer's own recognized column
+   names exactly (OUT_MAP_FIELDS' aliases, see the "OUTBOUND BULK IMPORT"
+   block below) so a file exported here re-imports with every column already
+   auto-mapped, and every cell is real data already sitting in the database
+   right now for that box/customer — not a blank template — so the file is
+   both a working reference and a ready-to-edit starting point. */
 function exportGateOutQueueExcel(){
   if(!pendingOut.length)return toast('ยังไม่มีกล่องในคิว','ยิงบาร์โค้ดกล่องก่อน export','err');
-  var cust=custName(val('doCustomer'));
+  var custId=val('doCustomer');
+  var cust=custName(custId);
+  var custRec=S.customers[custId]||{};
   var recorder=val('outRecorder');
   var d=dstr(), t=tstr();
-  var headers=['บาร์โค้ด','ประเภทกล่อง','สภาพ','ลูกค้า/ปลายทาง','เลขที่ DO','เลขที่ PO','ทะเบียนรถ','คนขับ','วันที่','เวลา','ผู้บันทึก'];
+  var headers=['บาร์โค้ด','ประเภทกล่อง','หน่วยนับ','สภาพ','ลูกค้า/ปลายทาง','ที่อยู่/สาขา','เบอร์โทร','อีเมล',
+    'กำหนดคืนภายใน (วัน)','เลขที่ DO','เลขที่ PO','คลัง','ทะเบียนรถ','ชื่อคนขับ','วันที่','เวลา','ผู้บันทึก'];
   var rows=pendingOut.map(function(tag){
     var b=S.boxes[tag]||{};
-    return [barcodeCell(tag), typeName(b.type), OUT_COND_LABEL[outConditionMap[tag]||'good'],
-      cust, val('doNo'), val('poNo'), val('outPlate'), val('outDriver'), d, t, recorder];
+    var bt=S.boxtypes[b.type]||{};
+    return [barcodeCell(tag), typeName(b.type), bt.unit||'', OUT_COND_LABEL[outConditionMap[tag]||'good'],
+      cust, custRec.addr||'', custRec.phone||'', custRec.email||'',
+      val('doReturnDays')||custRec.returnDays||'', val('doNo'), val('poNo'),
+      whName((b.location||{}).wh)||'', val('outPlate'), val('outDriver'), d, t, recorder];
   });
   downloadXLS('gate-out-queue-'+dstr()+'.xls', headers, rows, {barcodeCols:[0]});
 }
