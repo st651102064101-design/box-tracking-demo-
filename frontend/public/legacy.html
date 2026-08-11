@@ -508,6 +508,11 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;}
 .ivs-btn:hover{color:var(--ink);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
+/* compact numeric input embedded inside a "{n} วัน/เดือน/ปี" ivs-btn — reusable
+   date-range filter (see dfBarHtml/dfSetMode) */
+.df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
+.ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
+.df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 /* chip for a warehouse box that has no zone/rack on file yet — informational only */
 .loc-stg{display:inline-flex;align-items:center;gap:5px;background:var(--warnSoft);color:var(--warn);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;}
 .loc-stg .loc-stg-ic{font-size:13px;}
@@ -962,39 +967,22 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi purple clickable" title="ดูกล่องชำรุด" onclick="goInventory({status:'damage',label:'ชำรุด (Damage)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div><div class="n mono" id="kDamageNow">0</div><div class="l">ชำรุด (Damage)</div></div>
   </div>
 
-  <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-    <span id="ovMoveLabel">ความเคลื่อนไหววันนี้</span>
-    <span class="inv-view-sw" id="ovMoveSw" style="font-weight:400;">
-      <button type="button" class="ivs-btn active" data-period="day" onclick="setOvMovePeriod('day')">วัน</button>
-      <button type="button" class="ivs-btn" data-period="month" onclick="setOvMovePeriod('month')">เดือน</button>
-      <button type="button" class="ivs-btn" data-period="year" onclick="setOvMovePeriod('year')">ปี</button>
-    </span>
-  </div>
+  <div class="sectlabel reveal">ความเคลื่อนไหว</div>
+  <div id="df-ovMove-mount"></div>
+  <p class="muted small" id="ovMoveDesc" style="margin:0 0 10px;"></p>
   <div class="kpis reveal">
-    <div class="kpi green clickable" title="ดูกล่องที่ผ่าน Gate เข้า" onclick="showGateTodayList('in');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kInToday">0</div><div class="l" id="kInTodayLabel">เข้าวันนี้</div></div>
-    <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
+    <div class="kpi green clickable" title="ดูกล่องที่ผ่าน Gate เข้า" onclick="showGateTodayList('in');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kInToday">0</div><div class="l" id="kInTodayLabel">เข้า</div></div>
+    <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออก</div></div>
   </div>
 
   <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
-  <p class="muted small" style="margin:0 0 10px;">ตัวกรองช่วงวันที่ด้านล่าง ใช้จำกัดยอด <b>ส่งออกสะสม</b> และ <b>คืนสะสม</b> ให้นับเฉพาะรายการที่เกิดขึ้นในช่วงที่เลือก (ค้างอยู่ยังคงเป็นยอดปัจจุบันเสมอ ไม่ถูกกรอง) — เลือก "ทั้งหมด" เพื่อดูยอดสะสมทั้งหมดตั้งแต่เริ่มใช้งานระบบ</p>
-  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
-    <span class="inv-view-sw" style="flex-shrink:0;">
-      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
-      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
-      <button type="button" class="ivs-btn" data-preset="custom" onclick="setOvFlowPreset('custom')">ระบุวัน</button>
-    </span>
-    <span id="ovFlowCustomRange" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
-      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
-      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
-      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-    </span>
-  </div>
+  <div id="df-ovByCust-mount"></div>
+  <p class="muted small" id="ovByCustDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
 
   <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
+  <div id="df-ovRecent-mount"></div>
+  <p class="muted small" id="ovRecentDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal" id="ovRecentReturns"></div>
 
   <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
@@ -1083,6 +1071,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="occ-grid reveal" id="ovOccupancy"></div>
 
   <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
+  <div id="df-ovTypeFlow-mount"></div>
+  <p class="muted small" id="ovTypeFlowDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal" id="ovTypeFlow"></div>
 
   <div class="sectlabel reveal">ประวัติการผ่าน Gate ล่าสุด (30 รายการ)</div>
@@ -5364,24 +5354,147 @@ window.toggleReportsPanel=toggleReportsPanel;
    เหมือนเดิมทั้งหมด (#ovTypeFlow ก็เช่นกัน — ไม่ได้ขึ้นกับว่า element อยู่ใน
    แผงที่ซ่อนอยู่หรือไม่ แค่ id ตรงก็พอ) ย้ายตำแหน่ง HTML มาไว้ตรงนี้เพราะเป็น
    รายงานที่ต้องเห็นทันทีโดยไม่ต้องกางแผง */
-/* "ความเคลื่อนไหว" KPI period — วัน/เดือน/ปี — เปลี่ยนทั้งตัวเลข KPI สอง
-   ช่องและรายการที่เปิดจากการคลิก (showGateTodayList) ให้ตรงกันเสมอ */
-var ovMovePeriod='day';
-var OV_MOVE_LABEL={day:'วันนี้',month:'เดือนนี้',year:'ปีนี้'};
-function matchesOvPeriod(ts,period){
-  var d=new Date(ts);
-  if(isNaN(d.getTime()))return false;
-  var n=new Date();
-  if(period==='year')return d.getFullYear()===n.getFullYear();
-  if(period==='month')return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth();
-  return dstr(d)===dstr(n);
+/* ============================================================================
+   REUSABLE DATE-RANGE FILTER ("ทั้งหมด · N วัน · N เดือน · N ปี · ระบุวัน")
+   ----------------------------------------------------------------------------
+   One shared filter widget, instantiated per report by id (e.g. "ovMove",
+   "ovByCust", "ovRecent", "ovTypeFlow") — each report's HTML has its own
+   #df-{id} bar (see dfBarHtml) and keeps its own independent state in
+   DF_STATE[id], so filtering one report never affects another. A report's
+   render function calls dfInRange(id, ts) per record instead of re-deriving
+   date math itself, and registers DF_APPLY[id] so dfSetMode/dfOnCustomChange
+   know what to re-render after the filter changes.
+   ========================================================================== */
+var DF_STATE={};
+var DF_APPLY={};
+function dfGet(id){
+  if(!DF_STATE[id])DF_STATE[id]={mode:'all',day:7,month:1,year:1,from:'',to:''};
+  return DF_STATE[id];
 }
-function setOvMovePeriod(p){
-  ovMovePeriod=p;
-  $all('#ovMoveSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.period===p);});
-  renderOverview();
+/* Builds one filter bar's HTML — call once per report at boot and drop the
+   result into a placeholder <div>, e.g. $('#df-ovMove-mount').innerHTML=
+   dfBarHtml('ovMove'); keeps the markup (and any future report that wants
+   the same filter) in one place instead of copy-pasted per report. */
+function dfBarHtml(id){
+  return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
+    +'<span class="inv-view-sw" style="flex-shrink:0;">'
+    +'<button type="button" class="ivs-btn active" data-mode="all" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
+    +'<button type="button" class="ivs-btn" data-mode="day" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="7" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="month" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="year" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
+    +'<button type="button" class="ivs-btn" data-mode="custom" onclick="dfSetMode(\''+id+'\',\'custom\')">ระบุวัน</button>'
+    +'</span>'
+    +'<span id="df-'+id+'-custom" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">'
+    +'<label class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>'
+    +'<input type="date" id="df-'+id+'-from" onchange="dfOnCustomChange(\''+id+'\')" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">'
+    +'<label class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>'
+    +'<input type="date" id="df-'+id+'-to" onchange="dfOnCustomChange(\''+id+'\')" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">'
+    +'</span>'
+    +'</div>';
 }
-window.setOvMovePeriod=setOvMovePeriod;
+/* จาก/ถึง ของโหมด "ระบุวัน" ต้องเลือกได้แค่ในช่วงที่มีข้อมูลจริงเท่านั้น —
+   min= ผูกกับ event ที่เก่าที่สุดใน S.events, max= ผูกกับวันนี้ กันเลือกวันที่
+   รับประกันว่าไม่มีข้อมูลอยู่แล้ว เรียกทุกครั้งที่ render รายงานนั้น เผื่อ
+   ข้อมูลใหม่เข้ามาทำให้ขอบเขตวันเปลี่ยน */
+function dfClampCustomInputs(id){
+  var earliestEvMs=S.events.reduce(function(min,e){
+    var t=Date.parse(e.ts);return (!isNaN(t)&&(min==null||t<min))?t:min;
+  },null);
+  var fromEl=$('#df-'+id+'-from'),toEl=$('#df-'+id+'-to');
+  if(earliestEvMs!=null){
+    var minDateStr=new Date(earliestEvMs).toISOString().slice(0,10);
+    if(fromEl){fromEl.min=minDateStr;if(fromEl.value&&fromEl.value<minDateStr)fromEl.value=minDateStr;}
+    if(toEl){toEl.min=minDateStr;if(toEl.value&&toEl.value<minDateStr)toEl.value=minDateStr;}
+  }
+  var todayStr=new Date().toISOString().slice(0,10);
+  if(fromEl){fromEl.max=todayStr;if(fromEl.value&&fromEl.value>todayStr)fromEl.value=todayStr;}
+  if(toEl){toEl.max=todayStr;if(toEl.value&&toEl.value>todayStr)toEl.value=todayStr;}
+}
+/* Returns {from,to} in epoch ms, or null for "ทั้งหมด" (no filtering at all). */
+function dfRangeMs(id){
+  var st=dfGet(id);
+  if(st.mode==='all')return null;
+  var now=new Date();
+  if(st.mode==='custom'){
+    var f=st.from?Date.parse(st.from+'T00:00:00'):null;
+    var t=st.to?Date.parse(st.to+'T23:59:59'):null;
+    if(f==null&&t==null)return null;
+    return {from:f,to:t};
+  }
+  var n=Math.max(1,Number(st[st.mode])||1);
+  var from;
+  if(st.mode==='day')from=new Date(now.getFullYear(),now.getMonth(),now.getDate()-(n-1));
+  else if(st.mode==='month')from=new Date(now.getFullYear(),now.getMonth()-n+1,now.getDate());
+  else if(st.mode==='year')from=new Date(now.getFullYear()-n+1,now.getMonth(),now.getDate());
+  else return null;
+  return {from:from.getTime(),to:now.getTime()};
+}
+function dfInRange(id,ts){
+  var r=dfRangeMs(id);
+  if(!r)return true;
+  var t=Date.parse(ts);
+  if(isNaN(t))return false;
+  if(r.from!=null&&t<r.from)return false;
+  if(r.to!=null&&t>r.to)return false;
+  return true;
+}
+/* Thai one-liner describing the active filter — used in report captions and
+   modal titles so it's always clear what's being counted, since some
+   reports never apply a date filter at all (their caption just won't
+   mention one). */
+function dfDescribe(id){
+  var st=dfGet(id);
+  if(st.mode==='all')return 'ทั้งหมด';
+  if(st.mode==='day')return st.day+' วันล่าสุด';
+  if(st.mode==='month')return st.month+' เดือนล่าสุด';
+  if(st.mode==='year')return st.year+' ปีล่าสุด';
+  if(st.mode==='custom'){
+    if(st.from&&st.to)return 'จาก '+dstr(new Date(st.from))+' ถึง '+dstr(new Date(st.to));
+    if(st.from)return 'ตั้งแต่ '+dstr(new Date(st.from));
+    if(st.to)return 'ถึง '+dstr(new Date(st.to));
+    return 'ทั้งหมด';
+  }
+  return 'ทั้งหมด';
+}
+function dfSyncUI(id){
+  var st=dfGet(id);
+  $all('#df-'+id+' .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===st.mode);});
+  var customWrap=$('#df-'+id+'-custom');
+  if(customWrap)customWrap.style.display=st.mode==='custom'?'inline-flex':'none';
+  /* renderReports()/renderOverview() call this on every re-render (SSE pushes,
+     save() cycles, etc.), not just on an explicit filter change — skip an
+     input the operator currently has focus in, or a background refresh would
+     clobber a number they're mid-typing. */
+  ['day','month','year'].forEach(function(u){var el=$('#df-'+id+'-'+u+'-n');if(el&&document.activeElement!==el)el.value=st[u];});
+  dfClampCustomInputs(id);
+}
+function dfSetMode(id,mode){
+  var st=dfGet(id);
+  if(mode==='day'||mode==='month'||mode==='year'){
+    var inp=$('#df-'+id+'-'+mode+'-n');
+    if(inp){var v=Math.max(1,parseInt(inp.value,10)||1);st[mode]=v;}
+  }
+  st.mode=mode;
+  dfSyncUI(id);
+  if(DF_APPLY[id])DF_APPLY[id]();
+}
+window.dfSetMode=dfSetMode;
+function dfOnCustomChange(id){
+  var st=dfGet(id);
+  var f=$('#df-'+id+'-from'),t=$('#df-'+id+'-to');
+  st.from=f?f.value:'';st.to=t?t.value:'';
+  st.mode='custom';
+  dfSyncUI(id);
+  if(DF_APPLY[id])DF_APPLY[id]();
+}
+window.dfOnCustomChange=dfOnCustomChange;
+/* Mount the four report-level date filters into their placeholder <div>s —
+   one dfBarHtml() call per report id instead of copy-pasting the same
+   markup per section in the HTML. */
+['ovMove','ovByCust','ovRecent','ovTypeFlow'].forEach(function(id){
+  var mount=$('#df-'+id+'-mount');
+  if(mount)mount.innerHTML=dfBarHtml(id);
+});
 
 function renderOverview(){
   var all=Object.values(S.boxes);
@@ -5391,18 +5504,18 @@ function renderOverview(){
   $('#kHoldNow').textContent=nf(all.filter(function(b){return b.status==='hold';}).length);
   $('#kDamageNow').textContent=nf(all.filter(function(b){return b.status==='damage';}).length);
 
-  var periodLabel=OV_MOVE_LABEL[ovMovePeriod]||'วันนี้';
-  var moveLabelEl=$('#ovMoveLabel');if(moveLabelEl)moveLabelEl.textContent='ความเคลื่อนไหว'+periodLabel;
-  var inLabelEl=$('#kInTodayLabel');if(inLabelEl)inLabelEl.textContent='เข้า'+periodLabel;
-  var outLabelEl=$('#kOutTodayLabel');if(outLabelEl)outLabelEl.textContent='ออก'+periodLabel;
+  dfSyncUI('ovMove');
+  var moveDescEl=$('#ovMoveDesc');if(moveDescEl)moveDescEl.textContent='กรองตามวันที่ผ่าน Gate เข้า/ออกจริง — '+dfDescribe('ovMove');
 
-  var outToday=S.events.filter(function(e){return e.dir==='out'&&matchesOvPeriod(e.ts,ovMovePeriod);}).length;
-  var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&matchesOvPeriod(e.ts,ovMovePeriod);}).length;
+  var outToday=S.events.filter(function(e){return e.dir==='out'&&dfInRange('ovMove',e.ts);}).length;
+  var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dfInRange('ovMove',e.ts);}).length;
   $('#kInToday').textContent=nf(inToday);
   $('#kOutToday').textContent=nf(outToday);
 
-  // ส่งคืนล่าสุด — 8 รายการล่าสุดที่เป็นขาเข้า (รับคืน/รับใหม่)
-  var recent=S.events.filter(function(e){return e.dir==='in'||e.dir==='in-new';})
+  // ส่งคืนล่าสุด — ในช่วงที่กรองไว้ (dfInRange('ovRecent',...)) สูงสุด 8 รายการล่าสุด
+  dfSyncUI('ovRecent');
+  var rrDescEl=$('#ovRecentDesc');if(rrDescEl)rrDescEl.textContent='กรองตามวันที่รับคืน — '+dfDescribe('ovRecent');
+  var recent=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dfInRange('ovRecent',e.ts);})
     .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).slice(0,8);
   var rrHtml='<table><thead><tr><th>กล่อง</th><th>ประเภท</th><th>คลัง</th><th>เวลา</th></tr></thead><tbody>'
     +(recent.length?recent.map(function(e){
@@ -5415,6 +5528,8 @@ function renderOverview(){
     }).join(''):emptyRow(4,'ยังไม่มีการส่งคืน'))+'</tbody></table>';
   var rrEl=$('#ovRecentReturns');if(rrEl)rrEl.innerHTML=rrHtml;
 }
+DF_APPLY.ovMove=function(){renderOverview();};
+DF_APPLY.ovRecent=function(){renderOverview();};
 
 /* tab-reports — everything that used to live in the Overview tab besides the
    five status counts: money/rate KPIs, the process-board visualization, the
@@ -5452,10 +5567,14 @@ function renderReports(){
     typeBoxes[tk].push(b);
   });
 
-  // build events lookup per tag (unfiltered — the date-range filter now lives
-  // on "สรุปตามลูกค้า" below, see rangeFromMs/rangeToMs/inRange there)
+  /* ออกสะสม/คืนสะสม และรายการ "ออกครั้งล่าสุด/คืนครั้งล่าสุด" ต่อกล่อง
+     ด้านล่าง ถูกกรองตามช่วงวันที่ที่เลือกไว้ — ทั้งหมด/ในคลัง/ออกอยู่/สูญหาย
+     ที่ header (totWh/totOut/totLost) เป็นสถานะปัจจุบันเสมอ ไม่ถูกกรอง */
+  dfSyncUI('ovTypeFlow');
+  var typeFlowDescEl=$('#ovTypeFlowDesc');if(typeFlowDescEl)typeFlowDescEl.textContent='กรองยอดออกสะสม/คืนสะสมและรายการล่าสุดตามวันที่เกิดรายการ (จำนวน/สถานะปัจจุบันไม่ถูกกรอง) — '+dfDescribe('ovTypeFlow');
   var evByTag={};
   S.events.forEach(function(e){
+    if(!dfInRange('ovTypeFlow',e.ts))return;
     if(!evByTag[e.tag])evByTag[e.tag]={outs:[],ins:[]};
     if(e.dir==='out')evByTag[e.tag].outs.push(e);else if(e.dir==='in')evByTag[e.tag].ins.push(e);
   });
@@ -5614,37 +5733,14 @@ function renderReports(){
     if(!custDo[k])custDo[k]={cust:b.customer,do:b.do,po:b.po||(S.doRecords[b.do]||{}).po||'',outAt:b.outAt,dueAt:b.dueAt,sent:0,ret:0};custDo[k].sent++;});
   all.forEach(function(b){(b.history||[]).forEach(function(h){if(h.dir==='in'&&h.do){var k=(h.customer||b.customer)+'|'+h.do;if(custDo[k])custDo[k].ret++;}});});
 
-  /* Date-range filter for "สรุปตามลูกค้า" — the earliest date it makes sense
-     to pick is the earliest event actually on file; anything older can never
-     show data, so the "จาก" input's min= is clamped to that instead of
-     letting the operator pick a date that's guaranteed empty. Only ส่งออกสะสม/
-     คืนสะสม (accumulated counts) respect the range — ค้างอยู่ is a live
-     snapshot of current status, not something a date range can filter. */
-  var earliestEvMs=S.events.reduce(function(min,e){
-    var t=Date.parse(e.ts);return (!isNaN(t)&&(min==null||t<min))?t:min;
-  },null);
-  var fromEl=$('#ovFlowFrom'),toEl=$('#ovFlowTo');
-  if(earliestEvMs!=null){
-    var minDateStr=new Date(earliestEvMs).toISOString().slice(0,10);
-    if(fromEl){fromEl.min=minDateStr;if(fromEl.value&&fromEl.value<minDateStr)fromEl.value=minDateStr;}
-    if(toEl){toEl.min=minDateStr;if(toEl.value&&toEl.value<minDateStr)toEl.value=minDateStr;}
-  }
-  var todayStr=new Date().toISOString().slice(0,10);
-  if(fromEl){fromEl.max=todayStr;if(fromEl.value&&fromEl.value>todayStr)fromEl.value=todayStr;}
-  if(toEl){toEl.max=todayStr;if(toEl.value&&toEl.value>todayStr)toEl.value=todayStr;}
-  var rangeFromMs=fromEl&&fromEl.value?Date.parse(fromEl.value+'T00:00:00'):null;
-  var rangeToMs=toEl&&toEl.value?Date.parse(toEl.value+'T23:59:59'):null;
-  function inRange(ts){
-    var t=Date.parse(ts);
-    if(isNaN(t))return false;
-    if(rangeFromMs!=null&&t<rangeFromMs)return false;
-    if(rangeToMs!=null&&t>rangeToMs)return false;
-    return true;
-  }
-
+  /* Date-range filter for "สรุปตามลูกค้า" — only ส่งออกสะสม/คืนสะสม (accumulated
+     counts) respect the range; ค้างอยู่ is a live snapshot of current status,
+     not something a date range can filter. */
+  dfSyncUI('ovByCust');
+  var byCustDescEl=$('#ovByCustDesc');if(byCustDescEl)byCustDescEl.textContent='กรองยอดส่งออกสะสม/คืนสะสมตามวันที่เกิดรายการ (ค้างอยู่เป็นยอดปัจจุบันเสมอ ไม่ถูกกรอง) — '+dfDescribe('ovByCust');
   var ship={},ret={};S.events.forEach(function(e){
     if(!e.customer)return;
-    if((rangeFromMs!=null||rangeToMs!=null)&&!inRange(e.ts))return;
+    if(!dfInRange('ovByCust',e.ts))return;
     if(e.dir==='out')ship[e.customer]=(ship[e.customer]||0)+1;else ret[e.customer]=(ret[e.customer]||0)+1;
   });
   var grp={};all.forEach(function(b){if(b.customer&&b.status==='out'){grp[b.customer]=(grp[b.customer]||0)+1;}});
@@ -5686,50 +5782,8 @@ function renderReports(){
         +'<td class="small">'+(veh||'-')+(e.recorder?'<div class="tag">โดย '+esc(e.recorder)+'</div>':'')+'</td></tr>';}).join(''):emptyRow(7,'ยังไม่มีเหตุการณ์'))+'</tbody></table>';
 
 }
-/* Date-range filter for "สรุปตามลูกค้า" (#ovFlowFrom/#ovFlowTo) — renderReports()
-   re-clamps min/max and re-reads the two inputs' values on every call, so
-   just re-rendering here is enough to apply the new range. Manually editing
-   either date counts as "ระบุวัน" — only that toggle should look active once
-   the operator picked their own range by hand, and the inputs stay visible
-   since they're mid-edit. */
-function onOvFlowRangeChange(){
-  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.preset==='custom');});
-  renderReports();
-}
-window.onOvFlowRangeChange=onOvFlowRangeChange;
-function clearOvFlowRange(){
-  var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
-  if(f)f.value='';if(t)t.value='';
-  renderReports();
-}
-window.clearOvFlowRange=clearOvFlowRange;
-
-/* Quick presets — the two raw date pickers alone were hard to use for a
-   simple "last week" look-back, so a one-click chip row sits in front of
-   them; picking a preset just fills the same #ovFlowFrom/#ovFlowTo inputs
-   renderReports() already reads, so no separate filter path to keep in sync.
-   The from/to inputs themselves stay hidden unless "ระบุวัน" (custom) is the
-   active choice — presets don't need them visible to work. */
-function setOvFlowPreset(p){
-  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.preset===p);});
-  var customWrap=$('#ovFlowCustomRange');
-  if(customWrap)customWrap.style.display=p==='custom'?'inline-flex':'none';
-  var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
-  if(!f||!t)return;
-  if(p==='custom'){renderReports();return;}   // keep whatever dates were already picked, just show the fields
-  if(p==='all'){f.value='';t.value='';renderReports();return;}
-  var today=new Date();
-  var toStr=today.toISOString().slice(0,10);
-  var fromDate;
-  if(p==='7'){fromDate=new Date(today.getTime()-6*86400000);}
-  else if(p==='30'){fromDate=new Date(today.getTime()-29*86400000);}
-  else if(p==='month'){fromDate=new Date(today.getFullYear(),today.getMonth(),1);}
-  else{f.value='';t.value='';renderReports();return;}
-  f.value=fromDate.toISOString().slice(0,10);
-  t.value=toStr;
-  renderReports();
-}
-window.setOvFlowPreset=setOvFlowPreset;
+DF_APPLY.ovByCust=function(){renderReports();};
+DF_APPLY.ovTypeFlow=function(){renderReports();};
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
@@ -6586,20 +6640,21 @@ window.showTruckManifest=showTruckManifest;
    Gate ขาออก/ขาเข้า nodes, since a bare count there didn't say what actually moved ===== */
 function showGateTodayList(dir){
   var isOut=dir==='out';
-  var periodLabel=OV_MOVE_LABEL[ovMovePeriod]||'วันนี้';
+  var filterDesc=dfDescribe('ovMove');
   var evs=S.events.filter(function(e){
-    return matchesOvPeriod(e.ts,ovMovePeriod) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
+    return dfInRange('ovMove',e.ts) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
   }).sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
   var svg=isOut
     ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg>'
     :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg>';
-  var title=isOut?('กล่องที่ผ่าน Gate ขาออก'+periodLabel):('กล่องที่ผ่าน Gate ขาเข้า'+periodLabel);
+  var title=isOut?'กล่องที่ผ่าน Gate ขาออก':'กล่องที่ผ่าน Gate ขาเข้า';
   var h='<div class="mhead"><span class="svgi">'+svg+'</span><h3>'+title+'</h3><button class="x" onclick="closeModal()" aria-label="ปิด">✕</button></div>';
   h+='<div class="mbody">';
+  h+='<p class="muted small" style="margin:0 0 10px;">กรองตามวันที่ผ่าน Gate จริง — <b>'+esc(filterDesc)+'</b></p>';
   if(!evs.length){
-    h+='<p class="muted" style="text-align:center;padding:34px 0;">ยังไม่มีกล่อง'+(isOut?'ออก':'เข้า')+periodLabel+'</p>';
+    h+='<p class="muted" style="text-align:center;padding:34px 0;">ยังไม่มีกล่อง'+(isOut?'ออก':'เข้า')+'ในช่วงที่กรองไว้</p>';
   }else{
-    h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?('ที่ออก'+periodLabel):('ที่รับเข้า'+periodLabel))+'</p>';
+    h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?'ที่ออก':'ที่รับเข้า')+'ในช่วงที่กรองไว้</p>';
     h+='<input id="gateTodaySearch" placeholder="ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ" oninput="filterGateTodayList(this.value)" style="width:100%;padding:10px 12px;border:.5px solid var(--line);border-radius:10px;margin-bottom:12px;background:var(--surface);color:var(--ink);font:inherit;">';
     h+='<div id="gateTodayRows">';
     evs.forEach(function(e){
