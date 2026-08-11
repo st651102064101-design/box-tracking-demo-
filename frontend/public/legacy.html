@@ -7123,7 +7123,7 @@ function truckManifestRows(){
 function exportTruckManifestExcel(){
   var headers=['ทะเบียนรถ','คนขับ','เบอร์โทร','บาร์โค้ด','ประเภทกล่อง','ลูกค้า','DO','วันที่ออก','กำหนดคืน','สถานะ'];
   var rows=truckManifestRows().map(function(r){return [r[0],r[1],r[2],barcodeCell(r[3]),r[4],r[5],r[6],r[7],r[8],r[9]];});
-  downloadXLS('กล่องออกไปกับรถ-'+dstr()+'.xls', headers, rows, {barcodeCols:[3]});
+  downloadXLS('กล่องออกไปกับรถ-'+dstr()+'.xlsx', headers, rows, {barcodeCols:[3]});
 }
 window.exportTruckManifestExcel=exportTruckManifestExcel;
 
@@ -8396,65 +8396,59 @@ document.getElementById('filtAuditUser').addEventListener('input', renderAuditLo
 /* ===== EXCEL EXPORT HELPERS ===== */
 /* wraps a tag as *TAG* -- Code 39 barcode-font delimiters */
 function barcodeCell(tag) { return '*' + String(tag == null ? '' : tag) + '*'; }
-/* SpreadsheetML (.xls) export with optional per-column font (barcode font on บาร์โค้ด column) */
 function xmlEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-function downloadXLS(filename, headers, rows, opts) {
+/* Force real .xlsx — every export used to write "Excel XML 2003" (a plain
+   XML file merely wearing a .xls extension; Excel opens it fine but it was
+   never an actual xlsx/zip container, so anything that validates the file
+   by content rather than extension — some ERPs, some upload forms — could
+   reject it). Built with the SheetJS library already bundled for imports
+   (XLSX.utils.aoa_to_sheet/book_new/book_append_sheet, XLSX.writeFile),
+   so no new dependency. filename is normalized to .xlsx regardless of what
+   the caller passed, so a stray leftover ".xls" string never slips through. */
+function ensureXlsxName(filename){
+  return String(filename||'export').replace(/\.xlsx?$/i,'')+'.xlsx';
+}
+/* Barcode columns keep the same "*TAG*" (Code39 start/stop) text content as
+   before, and are forced to cell type 's' (string) so Excel never "helpfully"
+   reinterprets a numeric-looking tag (leading zeros, scientific notation).
+   The old export's barcode FONT styling (Free 3 of 9) doesn't carry over —
+   this SheetJS build writes cell data, not cell styles — but the asterisk-
+   wrapped text itself is unchanged, so a barcode font applied manually in
+   Excel still renders it correctly. */
+function xlsxSheetFromRows(headers, rows, opts){
   opts = opts || {};
   var barcodeCols = opts.barcodeCols || [];
-  var styles = '<Style ss:ID="hdr"><Font ss:Bold="1"/></Style>'
-    + '<Style ss:ID="bc"><Font ss:FontName="Free 3 of 9" ss:Size="14"/><NumberFormat ss:Format="@"/></Style>'
-    + '<Style ss:ID="txt"><NumberFormat ss:Format="@"/></Style>';
-  var headRow = '<Row>' + headers.map(function(h) { return '<Cell ss:StyleID="hdr"><Data ss:Type="String">' + xmlEsc(h) + '</Data></Cell>'; }).join('') + '</Row>';
-  var bodyRows = rows.map(function(r) {
-    return '<Row>' + r.map(function(v, i) {
-      var isBc = barcodeCols.indexOf(i) >= 0;
-      var isNum = typeof v === 'number' && !isBc;
-      var styleId = isBc ? 'bc' : 'txt';
-      var type = isNum ? 'Number' : 'String';
-      return '<Cell ss:StyleID="' + styleId + '"><Data ss:Type="' + type + '">' + xmlEsc(v) + '</Data></Cell>';
-    }).join('') + '</Row>';
-  }).join('');
-  var xml = '<?xml version="1.0"?>'
-    + '<?mso-application progid="Excel.Sheet"?>'
-    + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
-    + '<Styles>' + styles + '</Styles>'
-    + '<Worksheet ss:Name="Sheet1"><Table>' + headRow + bodyRows + '</Table></Worksheet>'
-    + '</Workbook>';
-  var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = filename; a.click(); toast('Export แล้ว', filename);
+  var aoa = [headers].concat(rows.map(function(r){return r.map(function(v){return v==null?'':v;});}));
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (barcodeCols.length && rows.length) {
+    var range = XLSX.utils.decode_range(ws['!ref']);
+    for (var R = range.s.r+1; R <= range.e.r; R++) {
+      barcodeCols.forEach(function(C){
+        var addr = XLSX.utils.encode_cell({r:R, c:C});
+        var cell = ws[addr];
+        if (cell) { cell.t = 's'; cell.v = String(cell.v); }
+      });
+    }
+  }
+  return ws;
+}
+function downloadXLS(filename, headers, rows, opts) {
+  downloadXLSMulti(filename, [{ name: 'Sheet1', headers: headers, rows: rows, opts: opts }]);
 }
 /* Multi-sheet variant of downloadXLS — used for reports made of several logical
    sections (e.g. Overview: KPI summary + by-customer + recent events) so the
    whole dashboard exports as one workbook with one tab per section. */
 function downloadXLSMulti(filename, sheets) {
-  var styles = '<Style ss:ID="hdr"><Font ss:Bold="1"/></Style>'
-    + '<Style ss:ID="bc"><Font ss:FontName="Free 3 of 9" ss:Size="14"/><NumberFormat ss:Format="@"/></Style>'
-    + '<Style ss:ID="txt"><NumberFormat ss:Format="@"/></Style>';
-  var sheetXml = sheets.map(function(sh) {
-    var barcodeCols = (sh.opts || {}).barcodeCols || [];
-    var headRow = '<Row>' + sh.headers.map(function(h) { return '<Cell ss:StyleID="hdr"><Data ss:Type="String">' + xmlEsc(h) + '</Data></Cell>'; }).join('') + '</Row>';
-    var bodyRows = sh.rows.map(function(r) {
-      return '<Row>' + r.map(function(v, i) {
-        var isBc = barcodeCols.indexOf(i) >= 0;
-        var isNum = typeof v === 'number' && !isBc;
-        var styleId = isBc ? 'bc' : 'txt';
-        var type = isNum ? 'Number' : 'String';
-        return '<Cell ss:StyleID="' + styleId + '"><Data ss:Type="' + type + '">' + xmlEsc(v) + '</Data></Cell>';
-      }).join('') + '</Row>';
-    }).join('');
+  if (typeof XLSX === 'undefined') { toast('ไลบรารี Excel ยังไม่พร้อม','โหลดหน้าใหม่แล้วลองอีกครั้ง','err'); return; }
+  var wb = XLSX.utils.book_new();
+  sheets.forEach(function(sh){
+    var ws = xlsxSheetFromRows(sh.headers, sh.rows, sh.opts);
     var safeName = String(sh.name || 'Sheet').replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31) || 'Sheet';
-    return '<Worksheet ss:Name="' + xmlEsc(safeName) + '"><Table>' + headRow + bodyRows + '</Table></Worksheet>';
-  }).join('');
-  var xml = '<?xml version="1.0"?>'
-    + '<?mso-application progid="Excel.Sheet"?>'
-    + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
-    + '<Styles>' + styles + '</Styles>'
-    + sheetXml
-    + '</Workbook>';
-  var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = filename; a.click(); toast('Export แล้ว', filename);
+    XLSX.utils.book_append_sheet(wb, ws, safeName);
+  });
+  var finalName = ensureXlsxName(filename);
+  XLSX.writeFile(wb, finalName);
+  toast('Export แล้ว', finalName);
 }
 window.downloadXLSMulti = downloadXLSMulti;
 
@@ -8495,7 +8489,7 @@ function exportOverviewExcel() {
       e.gate||'', whName(e.wh), custName(e.customer), e.plate||'', e.driver||'', e.recorder||''];
   });
 
-  downloadXLSMulti('ภาพรวม-' + dstr() + '.xls', [
+  downloadXLSMulti('ภาพรวม-' + dstr() + '.xlsx', [
     { name: 'สรุปภาพรวม', headers: kpiHeaders, rows: kpiRows },
     { name: 'สรุปตามลูกค้า', headers: custHeaders, rows: custRows },
     { name: 'ประวัติ Gate ล่าสุด', headers: evHeaders, rows: evRows, opts: { barcodeCols: [3] } },
@@ -8517,7 +8511,7 @@ function exportInvExcel() {
       b.status === 'out' ? custName(b.customer) : '', b.status === 'out' ? (b.do || '') : '',
       b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
-  downloadXLS('inventory-stock-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
+  downloadXLS('inventory-stock-' + dstr() + '.xlsx', headers, rows, { barcodeCols: [0] });
 }
 window.exportInvExcel = exportInvExcel;
 
@@ -8533,7 +8527,7 @@ function exportBoxExcel() {
       b.status === 'out' ? custName(b.customer) : '', b.do || '', b.po || '',
       b.cycles || 0, b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
-  downloadXLS('boxes-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
+  downloadXLS('boxes-' + dstr() + '.xlsx', headers, rows, { barcodeCols: [0] });
 }
 window.exportBoxExcel = exportBoxExcel;
 
@@ -8546,7 +8540,7 @@ function exportEmpExcel() {
       EMP_SHIFT[e.shift] || '', e.phone || '',
       EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
-  downloadXLS('employees-' + dstr() + '.xls', headers, rows);
+  downloadXLS('employees-' + dstr() + '.xlsx', headers, rows);
 }
 window.exportEmpExcel = exportEmpExcel;
 
@@ -8557,7 +8551,7 @@ function exportBtypeExcel() {
     var used = Object.values(S.boxes).filter(function(b) { return b.type === t.id; }).length;
     return [t.id, t.name, t.unit || '', t.value == null ? '' : t.value, t.dim || '', used];
   });
-  downloadXLS('box-types-' + dstr() + '.xls', headers, rows);
+  downloadXLS('box-types-' + dstr() + '.xlsx', headers, rows);
 }
 window.exportBtypeExcel = exportBtypeExcel;
 
@@ -8569,7 +8563,7 @@ function exportWhExcel() {
     var stored = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location || {}).wh === w.id; }).length;
     return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
   });
-  downloadXLS('warehouses-' + dstr() + '.xls', headers, rows);
+  downloadXLS('warehouses-' + dstr() + '.xlsx', headers, rows);
 }
 window.exportWhExcel = exportWhExcel;
 
@@ -8582,7 +8576,7 @@ function exportCustExcel() {
       c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
       c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
-  downloadXLS('customers-' + dstr() + '.xls', headers, rows);
+  downloadXLS('customers-' + dstr() + '.xlsx', headers, rows);
 }
 window.exportCustExcel = exportCustExcel;
 
@@ -8593,7 +8587,7 @@ function exportAuditExcel() {
     return [fmtTs(e.ts), e.recorder || '', e.action || '', e.itemId || '', e.itemName || '',
       e.before || '', e.after || ''];
   });
-  downloadXLS('audit-log-' + dstr() + '.xls', headers, rows);
+  downloadXLS('audit-log-' + dstr() + '.xlsx', headers, rows);
 }
 window.exportAuditExcel = exportAuditExcel;
 
@@ -8652,7 +8646,7 @@ function exportAllMastersExcel() {
       EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
 
-  downloadXLSMulti('all-masters-' + dstr() + '.xls', [
+  downloadXLSMulti('all-masters-' + dstr() + '.xlsx', [
     { name: 'กล่อง (Box)', headers: boxHeaders, rows: boxRows, opts: { barcodeCols: [0] } },
     { name: 'ประเภทกล่อง', headers: btypeHeaders, rows: btypeRows },
     { name: 'คลัง & ประตู', headers: whHeaders, rows: whRows },
@@ -8677,7 +8671,7 @@ function exportTrackExcel(tag) {
     return [barcodeCell(tag), fmtTs(h.ts), title, whName(h.wh), h.gate || '', l.zone || '', l.rack || '',
       l.shelf || '', l.slot || '', h.po || '', custName(h.customer), h.plate || '', h.driver || '', h.recorder || ''];
   });
-  downloadXLS('track-' + tag + '-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
+  downloadXLS('track-' + tag + '-' + dstr() + '.xlsx', headers, rows, { barcodeCols: [0] });
 }
 window.exportTrackExcel = exportTrackExcel;
 
