@@ -1079,7 +1079,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย / เกินกำหนดคืน</div>
   <div id="ovLost"></div>
 
-  <!-- แจ้งปัญหาหน้างานจาก PDA (ของหาย / อ่านแท็กไม่ติด-ป้ายหาย) — เฉพาะรายการที่
+  <!-- แจ้งปัญหาหน้างานจาก PDA (ของหาย) — เฉพาะรายการที่
        กล่องยังไม่กลับสถานะปกติ (ดู applyFloorReportHolds/renderFloorReports)
        เติมโดย renderFloorReports() ซึ่ง renderReports() → renderAll เรียก จึงอัปเดต
        ทันทีที่ SSE ยิง state frame เข้ามา ไม่ต้องรีเฟรชหน้า -->
@@ -5332,10 +5332,14 @@ function evDirPill(dir){
    ฟีด Gate รวมมันจมหายไปกับ traffic เข้า-ออกปกติที่มีวันละหลายร้อยรายการ
    ช่องเก็บเต็ม (bin_full) ไม่อยู่ในนี้แล้ว — ระบบตัดเรื่องแร็ค/Putaway ออกไปแล้ว
    ทั้งหมด รายงานประเภทนี้ (ถ้ายังมีของเก่าค้างจาก PDA รุ่นก่อน) จึงไม่เกี่ยวกับ
-   สถานะกล่องใดๆ อีกต่อไป ไม่ต้องแสดงให้พนักงานตามงานที่ไม่มีอยู่จริง */
-var REPORT_DIRS=['missing','unreadable_tag'];
+   สถานะกล่องใดๆ อีกต่อไป ไม่ต้องแสดงให้พนักงานตามงานที่ไม่มีอยู่จริง
+   "อ่านแท็กไม่ติด / ป้ายหาย" (unreadable_tag) เอาออกจากระบบแล้ว — เหลือรายงาน
+   จาก PDA แบบเดียวคือ "ของหาย" (missing) เท่านั้น เหตุการณ์เก่าที่ยังมี dir
+   นี้ค้างอยู่ใน S.events/ประวัติกล่องจะยังแสดง label เดิมได้ (ดู EV_DIR
+   ด้านบน) แต่จะไม่ถูกนับเป็นรายงานที่ต้องตามต่อ/ไม่ auto-hold กล่องอีกแล้ว */
+var REPORT_DIRS=['missing'];
 
-/* กล่องที่ถูกแจ้งปัญหาจาก PDA (ของหาย / อ่านแท็กไม่ติด-ป้ายหาย) ต้องไม่พร้อม
+/* กล่องที่ถูกแจ้งปัญหาจาก PDA (ของหาย) ต้องไม่พร้อม
    ส่งออกจนกว่าจะมีคนตรวจสอบจริง — พักอัตโนมัติ (status: hold) ทันทีที่พบรายงาน
    ใหม่ที่ยังไม่มีการดำเนินการใดๆ ตามหลัง เทียบเวลาระหว่างรายงานกับ history
    ล่าสุดของกล่องใบนั้น กัน auto-hold ซ้ำหลังพนักงานตรวจแล้วปลด Hold คืนด้วยมือ
@@ -5393,7 +5397,7 @@ function renderFloorReports(){
   host.innerHTML='<div class="lost-alert-card">'
     +'<div class="lost-alert-header"><div class="la-ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div>'
     +'<div><div class="la-title">แจ้งปัญหาหน้างานจาก PDA '+rs.length+' รายการ</div>'
-    +'<div class="la-sub">ของหาย / อ่านแท็กไม่ติด-ป้ายหาย — ยังไม่ได้ตรวจสอบ (พักกล่องอัตโนมัติจนกว่าจะปลด) อัปเดตสดผ่าน Server-Sent Events</div></div></div>'
+    +'<div class="la-sub">ของหาย — ยังไม่ได้ตรวจสอบ (พักกล่องอัตโนมัติจนกว่าจะปลด) อัปเดตสดผ่าน Server-Sent Events</div></div></div>'
     +'<table class="alert-table"><thead><tr>'
     +'<th>เวลา</th><th>ประเภทที่แจ้ง</th><th>กล่อง</th><th>ตำแหน่งที่แจ้ง</th><th>หมายเหตุ</th><th>สถานะกล่องตอนนี้</th><th>ผู้แจ้ง</th>'
     +'</tr></thead><tbody>'
