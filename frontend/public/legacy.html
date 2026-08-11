@@ -975,15 +975,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO — ตัวเลขสะสมนับตามช่วงวันที่ที่เลือก</span></div>
+  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
+  <p class="muted small" style="margin:0 0 10px;">ตัวกรองช่วงวันที่ด้านล่าง ใช้จำกัดยอด <b>ส่งออกสะสม</b> และ <b>คืนสะสม</b> ให้นับเฉพาะรายการที่เกิดขึ้นในช่วงที่เลือก (ค้างอยู่ยังคงเป็นยอดปัจจุบันเสมอ ไม่ถูกกรอง) — เลือก "ทั้งหมด" เพื่อดูยอดสะสมทั้งหมดตั้งแต่เริ่มใช้งานระบบ</p>
   <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
     <span class="inv-view-sw" style="flex-shrink:0;">
       <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
       <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
       <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
       <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
+      <button type="button" class="ivs-btn" data-preset="custom" onclick="setOvFlowPreset('custom')">ระบุวัน</button>
     </span>
-    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
+    <span id="ovFlowCustomRange" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
       <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
       <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
       <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
@@ -5767,13 +5769,14 @@ function renderReports(){
   renderFloorReports();
 
 }
-/* Date-range filter for "รายงานกล่องรายตัว — แยกตามประเภท" (#ovFlowFrom/#ovFlowTo)
-   — renderReports() re-clamps min/max and re-reads the two inputs' values on
-   every call, so just re-rendering here is enough to apply the new range.
-   Manually editing either date counts as "กำหนดเอง" — no preset button
-   should look active once the operator picked their own range by hand. */
+/* Date-range filter for "สรุปตามลูกค้า" (#ovFlowFrom/#ovFlowTo) — renderReports()
+   re-clamps min/max and re-reads the two inputs' values on every call, so
+   just re-rendering here is enough to apply the new range. Manually editing
+   either date counts as "ระบุวัน" — only that toggle should look active once
+   the operator picked their own range by hand, and the inputs stay visible
+   since they're mid-edit. */
 function onOvFlowRangeChange(){
-  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.remove('active');});
+  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.preset==='custom');});
   renderReports();
 }
 window.onOvFlowRangeChange=onOvFlowRangeChange;
@@ -5787,11 +5790,16 @@ window.clearOvFlowRange=clearOvFlowRange;
 /* Quick presets — the two raw date pickers alone were hard to use for a
    simple "last week" look-back, so a one-click chip row sits in front of
    them; picking a preset just fills the same #ovFlowFrom/#ovFlowTo inputs
-   renderReports() already reads, so no separate filter path to keep in sync. */
+   renderReports() already reads, so no separate filter path to keep in sync.
+   The from/to inputs themselves stay hidden unless "ระบุวัน" (custom) is the
+   active choice — presets don't need them visible to work. */
 function setOvFlowPreset(p){
   $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.preset===p);});
+  var customWrap=$('#ovFlowCustomRange');
+  if(customWrap)customWrap.style.display=p==='custom'?'inline-flex':'none';
   var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
   if(!f||!t)return;
+  if(p==='custom'){renderReports();return;}   // keep whatever dates were already picked, just show the fields
   if(p==='all'){f.value='';t.value='';renderReports();return;}
   var today=new Date();
   var toStr=today.toISOString().slice(0,10);
