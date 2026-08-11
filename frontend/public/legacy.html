@@ -11538,28 +11538,53 @@ function openColumnMapModal(opts){
     });
     return o;
   }
-  function previewText(idx){
-    if(idx<0)return '';
+  function colVals(idx){
     var vals=[];
     for(var i=1;i<opts.rows.length&&vals.length<3;i++){
       var v=String(opts.rows[i][idx]==null?'':opts.rows[i][idx]).trim();
       if(v)vals.push(v);
     }
+    return vals;
+  }
+  function previewText(idx){
+    if(idx<0)return '';
+    var vals=colVals(idx);
     return vals.length?('ตัวอย่าง: '+vals.map(esc).join(', ')):'<span style="color:var(--warn);">คอลัมน์นี้ไม่มีข้อมูล</span>';
   }
-  var rowsHtml=fields.map(function(f){
-    var def=resolveDefault(f);
+  function fieldRow(f,def){
     return '<div class="field colmap-row" style="margin-bottom:14px;">'
       +'<label>'+esc(f.label)+(f.required?' <span style="color:var(--warn);">*</span>':'')+'</label>'
       +'<select class="colmap-sel" data-field="'+f.key+'" data-required="'+(f.required?'1':'0')+'">'+optionsHtml(def)+'</select>'
       +'<div class="muted small colmap-preview" data-preview="'+f.key+'" style="margin-top:4px;min-height:16px;">'+previewText(def)+'</div>'
       +'<div class="small colmap-err" data-err="'+f.key+'" style="display:none;color:var(--bad);margin-top:4px;">กรุณาเลือกคอลัมน์สำหรับข้อมูลนี้</div>'
     +'</div>';
-  }).join('');
+  }
+  /* "จำเป็นสำหรับ[ธุรกรรม]นี้เท่านั้น" — a field that's required, or that this
+     FILE actually has real DATA for (not just a same-named but empty
+     column — a header alone doesn't make a field relevant), is directly
+     relevant; everything else (mostly the "...กรณีต้องสร้าง[ลูกค้า/ประเภทกล่อง/
+     คลัง]ใหม่" auto-create support fields, which every importer sharing this
+     modal — Gate เข้า, Gate ขาออก, and every Master Data entity — carries
+     some of) stays fully available, just tucked behind a collapsed
+     <details> instead of front-loading the operator with a wall of
+     "คอลัมน์นี้ไม่มีข้อมูล" rows for a file that plainly never meant to carry
+     them. Nothing is removed from `fields` itself, so auto-create still
+     works the moment someone expands it and maps one in. */
+  var defs=fields.map(function(f){return resolveDefault(f);});
+  var primary=[],secondary=[];
+  fields.forEach(function(f,i){(f.required||(defs[i]>=0&&colVals(defs[i]).length)?primary:secondary).push(f);});
+  var rowsHtml=primary.map(function(f){return fieldRow(f,resolveDefault(f));}).join('');
+  var moreHtml=secondary.length?(
+    '<details class="colmap-more" style="margin-top:4px;">'
+    +'<summary class="muted small" style="cursor:pointer;">ตัวเลือกเพิ่มเติม (ไม่จำเป็นสำหรับไฟล์นี้) · '+secondary.length+' รายการ</summary>'
+    +'<div style="margin-top:14px;">'+secondary.map(function(f){return fieldRow(f,resolveDefault(f));}).join('')+'</div>'
+    +'</details>'
+  ):'';
   var html='<div class="mhead"><h3>📊 จับคู่คอลัมน์ไฟล์ (Column Mapping)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody" style="max-height:66vh;overflow:auto;">'
     +'<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(opts.fname||'-')+'</b> · '+Math.max(0,opts.rows.length-1)+' แถวข้อมูล — เลือกว่าคอลัมน์ไหนในไฟล์ตรงกับข้อมูลแต่ละอย่าง ระบบเดาให้เบื้องต้นจากชื่อคอลัมน์และการใช้งานครั้งก่อน ตรวจสอบก่อนนำเข้า</p>'
     +rowsHtml
+    +moreHtml
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn pos" id="colmapConfirmBtn">ยืนยันนำเข้า</button></div>';
   openModal(html);
