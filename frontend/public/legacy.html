@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>SmartTrace — ประตูสแกน · Returnable Asset Tracking</title>
+<title>Smart Tracking — ประตูสแกน · Returnable Asset Tracking</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   SmartTrace — redesigned in the iPhone 17 Pro design language
+   Smart Tracking — redesigned in the iPhone 17 Pro design language
    Monochrome canvas + a single Cosmic Orange accent.
    Oversized display type, scroll-reveal, cinematic dark gate.
    ============================================================ */
@@ -1072,7 +1072,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <header class="chrome"><div class="chrome-inner">
   <div class="brand" onclick="switchTab('overview')">
     <div class="mark"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span></div>
-    <div><div class="nm">SmartTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
+    <div><div class="nm">Smart Tracking</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
   </div>
   <div class="spacer"></div>
   <div class="who-wrap">
@@ -2338,14 +2338,14 @@ function apiFetch(path,opt){
   return fetch(apiUrl(path),opt).then(function(r){
     if((r.status===404||r.status===405||r.status===501)&&!apiFellBack&&apiRoot()!==apiHostGuess()){
       apiFellBack=true;API_ROOT=apiHostGuess();   /* เฉพาะ session นี้ — ไม่ pin ลง localStorage กันค่าค้าง */
-      console.warn('[SmartTrace] origin นี้ไม่มี /api ('+r.status+') → ใช้ '+API_ROOT);
+      console.warn('[Smart Tracking] origin นี้ไม่มี /api ('+r.status+') → ใช้ '+API_ROOT);
       return fetch(apiUrl(path),opt);
     }
     return r;
   }).catch(function(e){
     if(!apiFellBack&&apiRoot()!==apiHostGuess()){
       apiFellBack=true;API_ROOT=apiHostGuess();
-      console.warn('[SmartTrace] เชื่อม '+location.origin+' ไม่ได้ → ใช้ '+API_ROOT);
+      console.warn('[Smart Tracking] เชื่อม '+location.origin+' ไม่ได้ → ใช้ '+API_ROOT);
       return fetch(apiUrl(path),opt);
     }
     throw e;
@@ -2378,7 +2378,7 @@ function save(){
     body:JSON.stringify(S)
   }).then(function(r){
     if(r.status===401){window.location.href='/login';}
-  }).catch(function(e){console.warn('[SmartTrace] save to server failed',e);});
+  }).catch(function(e){console.warn('[Smart Tracking] save to server failed',e);});
 }
 /* fills in any keys missing from an older/partial state blob (e.g. a backup
    exported before a feature like locations existed) so restoring it never
@@ -2402,7 +2402,7 @@ function loadFromServer(){
       return r.json();
     })
     .then(function(d){ if(d) S=normalizeState(d); })
-    .catch(function(e){console.warn('[SmartTrace] load from server failed',e);});
+    .catch(function(e){console.warn('[Smart Tracking] load from server failed',e);});
 }
 /* Swap in a snapshot the caller already holds, with the same normalisation
    loadFromServer() applies but without a second round-trip. The live-update
@@ -3472,7 +3472,7 @@ function printEmpBadge(id){
           +'<div><div style="font-size:15px;font-weight:700;letter-spacing:-.2px;">'+esc(e.name||e.id)+'</div>'
           +(meta?'<div style="font-size:11px;color:#666;margin-top:2px;">'+esc(meta)+'</div>':'')
           +(wh?'<div style="font-size:11px;color:#666;">'+esc(wh)+'</div>':'')
-          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ SmartTrace</div></div>'
+          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ Smart Tracking</div></div>'
         +'<div style="text-align:center;margin-top:10px;">'+code128SVG(code,80)+'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:1.5px;margin-top:4px;">'+esc(code)+'</div></div>'
       +'</div>'
     +'</div>'
@@ -3509,7 +3509,7 @@ function printEmpBadgeWindow(id){
     +'<div class="top"><div><div class="nm">'+esc(e.name||e.id)+'</div>'
     +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
     +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
-    +'</div><div class="brand">◈ SmartTrace</div></div>'
+    +'</div><div class="brand">◈ Smart Tracking</div></div>'
     +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
     +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
     +'</body></html>');
@@ -4486,7 +4486,7 @@ function printZPLToPrinter(zplString){
     headers:{'Content-Type':'text/plain'},
     body:zplString
   }).then(function(){return true;}).catch(function(err){
-    console.warn('[SmartTrace] ZPL print failed →',url,err);
+    console.warn('[Smart Tracking] ZPL print failed →',url,err);
     return false;
   });
 }
@@ -10762,7 +10762,7 @@ function openColumnMapModal(opts){
     "ผู้ดูแลระบบ (Admin)":"administrator rights",
     "โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้":"automatically, and will be the only one who can add or edit other employees afterwards",
     "ลงทะเบียนและเริ่มใช้งาน":"Register and start",
-    "SmartTrace — ประตูสแกน · Returnable Asset Tracking":"SmartTrace - Scan Gate - Returnable Asset Tracking",
+    "Smart Tracking — ประตูสแกน · Returnable Asset Tracking":"Smart Tracking - Scan Gate - Returnable Asset Tracking",
     "&#10005; ล้าง":"&#10005; Clear",
     "กด":"Press",
     "ต้อง":"must",

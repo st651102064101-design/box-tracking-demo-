@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SmartTrace — ประตูสแกน · Returnable Asset Tracking',
+  title: 'Smart Tracking — ประตูสแกน · Returnable Asset Tracking',
   description: 'RFID Gate / Returnable Asset Tracking (WMS)',
 };
 
