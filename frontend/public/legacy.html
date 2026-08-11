@@ -1317,7 +1317,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <thead><tr>
           <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllInv" title="เลือกทั้งหมด"></th>
           <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th>
-          <th>ผู้บันทึกล่าสุด</th><th></th>
+          <th></th>
         </tr></thead>
         <tbody id="invBody"></tbody>
       </table>
@@ -6944,10 +6944,9 @@ function renderInventory() {
       + '<td>' + invLocText(b) + '</td>'
       + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
       + '<td class="small">' + invShipRecvText(b) + '</td>'
-      + '<td class="small">' + esc(invLastRecorder(b)) + '</td>'
       + '<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
     + '</tr>';
-  }).join('') : emptyRow(8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
+  }).join('') : emptyRow(7, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
 }
 
@@ -8101,7 +8100,7 @@ function exportInvExcel() {
   // Export the live WMS box-stock view (respects status filter + search)
   var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var boxes = filteredInvBoxes().sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
-  var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'ผู้บันทึกล่าสุด', 'อัปเดตล่าสุด'];
+  var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
     return [barcodeCell(b.tag), typeName(b.type), statusLabel[b.status] || b.status,
@@ -8109,7 +8108,7 @@ function exportInvExcel() {
       b.status === 'warehouse' ? (loc.zone || '') : '', b.status === 'warehouse' ? (loc.rack || '') : '',
       b.status === 'warehouse' ? (loc.shelf || '') : '', b.status === 'warehouse' ? (loc.slot || '') : '',
       b.status === 'out' ? custName(b.customer) : '', b.status === 'out' ? (b.do || '') : '',
-      invLastRecorder(b), b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
+      b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
   downloadXLS('inventory-stock-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
 }
