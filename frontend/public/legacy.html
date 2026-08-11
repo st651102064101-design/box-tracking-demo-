@@ -1079,13 +1079,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย / เกินกำหนดคืน</div>
   <div id="ovLost"></div>
 
-  <!-- แจ้งปัญหาหน้างานจาก PDA (ของหาย) — เฉพาะรายการที่
-       กล่องยังไม่กลับสถานะปกติ (ดู applyFloorReportHolds/renderFloorReports)
-       เติมโดย renderFloorReports() ซึ่ง renderReports() → renderAll เรียก จึงอัปเดต
-       ทันทีที่ SSE ยิง state frame เข้ามา ไม่ต้องรีเฟรชหน้า -->
-  <div class="sectlabel reveal" id="reportsSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> แจ้งปัญหาหน้างาน (PDA)</div>
-  <div id="ovReports"></div>
-
   <div class="sectlabel reveal">กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง</div>
   <div class="occ-grid reveal" id="ovOccupancy"></div>
 
@@ -2102,6 +2095,7 @@ function normalizeState(d){
   d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
+  d.gatePrefs=d.gatePrefs||{};
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
 }
@@ -4515,14 +4509,28 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
   if(!g){el.innerHTML='<div class="gate-hint"><span class="gh-none">ยังไม่ได้เลือกประตู</span></div>';return;}
   var wh=gateWh(g);el.innerHTML='<div class="gate-hint"><span class="gh-chip">ประตู '+g+' → '+esc(whName(wh))+'</span></div>';}
 
-/* ---- fixed gate per terminal ---- */
-var FIXED_GATE_KEY='smarttrace_fixed_gate';
-var fixedGates={out:'',in:''};
-(function(){try{var fg=JSON.parse(localStorage.getItem(FIXED_GATE_KEY));if(fg){fixedGates=fg;}}catch(e){}})();
-function saveFixedGates(){try{localStorage.setItem(FIXED_GATE_KEY,JSON.stringify(fixedGates));}catch(e){}}
+/* ---- fixed gate per LOGGED-IN ACCOUNT (not per browser/device) ----
+   Used to live in localStorage, keyed by device — an employee moving between
+   terminals (or logging in on their phone) had to re-pick their gate every
+   time, and any account logging in on a shared terminal inherited whoever
+   set it last. Stored on S.gatePrefs[USER] instead, so it round-trips
+   through the same /api/state the rest of S already uses (see save() /
+   loadFromServer()) — the assignment now follows the account, and survives
+   a browser switch or a full state reload since it lives in S itself rather
+   than a separate localStorage read. S gets fully reassigned on reload
+   (loadFromServer() does S=normalizeState(d)), so this reads S.gatePrefs
+   fresh on every call instead of caching a reference that reload would
+   silently orphan. */
+function fixedGatesRef(){
+  if(!S.gatePrefs)S.gatePrefs={};
+  if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
+  return S.gatePrefs[USER];
+}
+function saveFixedGates(){save();}
 function refreshGateDisplays(){
   var gs=allGateNums();
   ['out','in'].forEach(function(dir){
+    var fixedGates=fixedGatesRef();
     var g=fixedGates[dir];
     if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
     if(!g){
@@ -4557,14 +4565,14 @@ function pickGate(dir){
     +'<b>ประตู '+g+'</b>'
     +'<span class="muted">'+esc(whName(gateWh(g)))+'</span>'
     +'<span style="font-size:11px;font-weight:600;color:'+(dir==='out'?'var(--neg)':'var(--pos)')+';">'+gateTypeLabel(g)+'</span>'
-    +(fixedGates[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';}).join('');
-  openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำเครื่องนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้ในเครื่องนี้ ไม่ต้องเลือกทุกครั้ง</p>'+excludedNote+opts
+    +(fixedGatesRef()[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';}).join('');
+  openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำบัญชีนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'+excludedNote+opts
     +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
 }
-function setFixedGate(dir,g){fixedGates[dir]=String(g);saveFixedGates();refreshGateDisplays();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== VEHICLE MEMORY / DO LOOKUP ===== */
@@ -5328,99 +5336,12 @@ function evDirPill(dir){
   if(!d)return '<span class="pill gray">'+esc(dir||'-')+'</span>';
   return '<span class="pill '+d.c+'">'+esc(d.t)+'</span>';
 }
-/* ชนิดที่มาจากปุ่มแจ้งปัญหาบน PDA — แยกออกมาโชว์เป็นกล่องของตัวเอง เพราะใน
-   ฟีด Gate รวมมันจมหายไปกับ traffic เข้า-ออกปกติที่มีวันละหลายร้อยรายการ
-   ช่องเก็บเต็ม (bin_full) ไม่อยู่ในนี้แล้ว — ระบบตัดเรื่องแร็ค/Putaway ออกไปแล้ว
-   ทั้งหมด รายงานประเภทนี้ (ถ้ายังมีของเก่าค้างจาก PDA รุ่นก่อน) จึงไม่เกี่ยวกับ
-   สถานะกล่องใดๆ อีกต่อไป ไม่ต้องแสดงให้พนักงานตามงานที่ไม่มีอยู่จริง
-   "อ่านแท็กไม่ติด / ป้ายหาย" (unreadable_tag) เอาออกจากระบบแล้ว — เหลือรายงาน
-   จาก PDA แบบเดียวคือ "ของหาย" (missing) เท่านั้น เหตุการณ์เก่าที่ยังมี dir
-   นี้ค้างอยู่ใน S.events/ประวัติกล่องจะยังแสดง label เดิมได้ (ดู EV_DIR
-   ด้านบน) แต่จะไม่ถูกนับเป็นรายงานที่ต้องตามต่อ/ไม่ auto-hold กล่องอีกแล้ว */
+/* PDA event dirs shown in generic event feeds (Gate history, audit log, box
+   detail timeline) — kept even though the dedicated "แจ้งปัญหาหน้างาน" alert
+   panel and its auto-hold/auto-lost side effects were removed, so old
+   'missing'/'unreadable_tag' entries still already on file render a sensible
+   label instead of falling through to the wrong default. */
 var REPORT_DIRS=['missing'];
-
-/* กล่องที่ถูกแจ้งปัญหาจาก PDA (ของหาย) ต้องไม่พร้อม
-   ส่งออกจนกว่าจะมีคนตรวจสอบจริง — พักอัตโนมัติ (status: hold) ทันทีที่พบรายงาน
-   ใหม่ที่ยังไม่มีการดำเนินการใดๆ ตามหลัง เทียบเวลาระหว่างรายงานกับ history
-   ล่าสุดของกล่องใบนั้น กัน auto-hold ซ้ำหลังพนักงานตรวจแล้วปลด Hold คืนด้วยมือ
-   (การปลด Hold จะสร้าง history entry ใหม่ที่ ts ใหม่กว่ารายงานเก่าเสมอ) เดิน
-   ตามแบบเดียวกับ applyAutoLost() ด้านบน — ฟังก์ชัน "auto" ที่ผูกสถานะกับ
-   เหตุการณ์จริง ถูกเรียกจาก renderReports() ทุกครั้งเช่นกัน ไม่ใช่แค่ตอน
-   ผู้ใช้กดปุ่มเอง */
-function applyFloorReportHolds(){
-  var changed=false;
-  S.events.filter(function(e){return REPORT_DIRS.indexOf(e.dir)>=0&&e.tag;}).forEach(function(e){
-    var b=S.boxes[e.tag];if(!b)return;
-    var lastHist=(b.history||[]).length?b.history[b.history.length-1]:null;
-    if(lastHist&&new Date(lastHist.ts)>=new Date(e.ts))return;
-    if(b.status==='warehouse'){
-      b.status='hold';b.lastSeenAt=e.ts;
-      if(!Array.isArray(b.history))b.history=[];
-      b.history.push({dir:'hold',ts:e.ts,reason:'พักอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+')',recorder:e.recorder||'PDA'});
-      auditEntry('HOLD',e.recorder||'PDA',e.tag,typeName(b.type),{status:'warehouse'},{status:'hold',reason:'แจ้งปัญหาจาก PDA'});
-      changed=true;
-    }else if(b.status==='out'){
-      /* กล่องที่ "ออกอยู่" ตอนถูกแจ้งปัญหาจาก PDA — พัก (hold) ไม่ได้เพราะอยู่กับ
-         ลูกค้าแล้ว ไม่ใช่ในคลัง เดิมรายงานประเภทนี้ค้างอยู่ในลิสต์ "แจ้งปัญหา
-         หน้างาน" ตลอดไปเพราะสถานะกล่องไม่เคยขยับ (renderFloorReports กรอง
-         เฉพาะกล่องที่กลับมา 'warehouse' ออกจากลิสต์) — ตีเป็นสูญหายอัตโนมัติแทน
-         เหมือน markLost() ที่พนักงานกดเอง เพื่อให้เรื่องถูกจัดการจริงและ
-         หลุดออกจากลิสต์ค้างในที่สุด */
-      b.status='lost';b.lostAt=e.ts;b.lostReason='pda-report';b.lastSeenAt=e.ts;
-      if(!Array.isArray(b.history))b.history=[];
-      b.history.push({dir:'lost',ts:e.ts,customer:b.customer,do:b.do,reason:'ตีสูญหายอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+') ขณะกล่องออกอยู่กับลูกค้า',recorder:e.recorder||'PDA'});
-      auditEntry('LOST',e.recorder||'PDA',e.tag,typeName(b.type),{status:'out'},{status:'lost',reason:'แจ้งปัญหาจาก PDA ขณะออกอยู่'});
-      changed=true;
-    }
-  });
-  if(changed)save();
-}
-
-/* กล่อง "แจ้งปัญหาหน้างาน" บนหน้าภาพรวม — แสดงข้อมูลตามฟอร์มที่ PDA ส่งมาจริง
-   (ชนิด, กล่อง, ตำแหน่งที่ยืนแจ้ง, หมายเหตุ, ผู้แจ้ง, เวลา) เดิมเว็บไม่มีที่ไหน
-   แสดงข้อมูลชุดนี้เลย รายงานจึงส่งเข้ามาแล้วเงียบหาย ถูกเรียกจาก renderOverview
-   ซึ่ง renderAll() เรียกอีกที = อัปเดตทันทีที่ SSE ยิง state frame เข้ามา
-
-   รายงานที่กล่องกลับมาสถานะ "ในคลัง" ปกติแล้ว (พนักงานตรวจแล้วปลด Hold เอง)
-   ถือว่าจบเรื่อง — กรองออกจากลิสต์นี้เลย ไม่ต้องค้างให้ดูรก รายการที่เหลือ
-   ทุกแถวคือของที่ "ยังต้องตามต่อ" จริงๆ เท่านั้น */
-function renderFloorReports(){
-  var host=$('#ovReports');if(!host)return;
-  var label=$('#reportsSectLabel');
-  var rs=S.events.filter(function(e){
-    if(REPORT_DIRS.indexOf(e.dir)<0)return false;
-    var b=e.tag?S.boxes[e.tag]:null;
-    return !b||b.status!=='warehouse';
-  }).slice(-30).reverse();
-  if(label)label.style.display=rs.length?'flex':'none';
-  if(!rs.length){host.innerHTML='';return;}
-  host.innerHTML='<div class="lost-alert-card">'
-    +'<div class="lost-alert-header"><div class="la-ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div>'
-    +'<div><div class="la-title">แจ้งปัญหาหน้างานจาก PDA '+rs.length+' รายการ</div>'
-    +'<div class="la-sub">ของหาย — ยังไม่ได้ตรวจสอบ (พักกล่องอัตโนมัติจนกว่าจะปลด) อัปเดตสดผ่าน Server-Sent Events</div></div></div>'
-    +'<table class="alert-table"><thead><tr>'
-    +'<th>เวลา</th><th>ประเภทที่แจ้ง</th><th>กล่อง</th><th>ตำแหน่งที่แจ้ง</th><th>หมายเหตุ</th><th>สถานะกล่องตอนนี้</th><th>ผู้แจ้ง</th>'
-    +'</tr></thead><tbody>'
-    +rs.map(function(e){
-      var l=e.location||{};
-      var code=[l.zone,l.rack,l.shelf,l.slot].filter(Boolean).join('-');
-      var b=e.tag?S.boxes[e.tag]:null;
-      /* สถานะปัจจุบันของกล่อง ไม่ใช่สถานะตอนแจ้ง — คนดูต้องรู้ว่าเรื่องถูกจัดการ
-         ไปหรือยัง เช่น แจ้งของหายแล้วกล่องถูกสแกนเจอทีหลัง สถานะจะกลับมาเป็น
-         "อยู่ในคลัง" เอง โดยที่ตัวรายงานยังอยู่ในประวัติ */
-      var stat=b?statusPill(b.status,b):'<span class="pill gray">—</span>';
-      return '<tr'+(e.tag?' style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(e.tag)+'\')"':'')+'>'
-        +'<td class="mono">'+fmtTs(e.ts)+'</td>'
-        +'<td>'+evDirPill(e.dir)+'</td>'
-        +'<td class="mono"><b>'+esc(e.tag||'—')+'</b></td>'
-        +'<td class="mono">'+esc(code||'—')+(l.wh?'<div class="tag">'+esc(whName(l.wh))+'</div>':'')+'</td>'
-        +'<td class="small">'+(e.note?esc(e.note):'<span class="muted">—</span>')+'</td>'
-        +'<td>'+stat+'</td>'
-        +'<td class="small">'+esc(e.recorder||'-')+'</td>'
-      +'</tr>';
-    }).join('')
-    +'</tbody></table></div>';
-}
 
 /* รายงานเพิ่มเติม (#tab-reports) ไม่ใช่แท็บนำทางแยกแล้ว — ย้ายมาซ้อนอยู่ท้ายหน้า
    ภาพรวม ซ่อนไว้เป็นค่าเริ่มต้น (display:none) กดปุ่ม "รายงานเพิ่มเติม" เพื่อกาง/ซ่อน
@@ -5509,7 +5430,6 @@ function renderOverview(){
    working exactly as it did before, just on its own tab. */
 function renderReports(){
   applyAutoLost();
-  applyFloorReportHolds();
   renderMdHealthBanner();
   var all=Object.values(S.boxes);
   var wh=all.filter(function(b){return b.status==='warehouse';}).length;
@@ -5770,8 +5690,6 @@ function renderReports(){
         +'<td>'+(e.customer?esc(custName(e.customer)):(e.note?'<span class="small">'+esc(e.note)+'</span>':'-'))+'</td>'
         +'<td class="small">'+(veh||'-')+(e.recorder?'<div class="tag">โดย '+esc(e.recorder)+'</div>':'')+'</td></tr>';}).join(''):emptyRow(7,'ยังไม่มีเหตุการณ์'))+'</tbody></table>';
 
-  renderFloorReports();
-
 }
 /* Date-range filter for "สรุปตามลูกค้า" (#ovFlowFrom/#ovFlowTo) — renderReports()
    re-clamps min/max and re-reads the two inputs' values on every call, so
@@ -5858,7 +5776,7 @@ function renderSetup(){
 
   // gate dropdowns
   refreshGateDisplays();
-  // (outGate / inGate are now hidden inputs managed by fixedGates)
+  // (outGate / inGate are now hidden inputs managed by fixedGatesRef())
   var hasCust=Object.keys(S.customers).length>0;
   var doCustSel=$('#doCustomer'),doCustHint=$('#doCustomerHint');
   if(doCustSel){
@@ -7581,7 +7499,7 @@ function defaultRecvLoc() {
   // ลำดับความสำคัญ: ตำแหน่งที่ใช้ล่าสุด > คลังของประตูขาเข้าที่ตั้งค่าไว้ประจำเครื่อง
   var last = lastInvLoc();
   if (last && (last.wh || last.loc)) return last;
-  var gw = gateWh(fixedGates.in);
+  var gw = gateWh(fixedGatesRef().in);
   if (gw) return { wh: gw, loc: '' };
   return { wh: '', loc: '' };
 }
