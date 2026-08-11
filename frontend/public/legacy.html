@@ -975,22 +975,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
-  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
-    <span class="inv-view-sw" style="flex-shrink:0;">
-      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
-      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
-    </span>
-    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
-      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
-      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
-      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-    </span>
-  </div>
-  <div class="tablecard reveal" id="ovTypeFlow"></div>
+  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
+  <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
 
   <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
   <div class="tablecard reveal" id="ovRecentReturns"></div>
@@ -1087,8 +1073,22 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="sectlabel reveal">กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง</div>
   <div class="occ-grid reveal" id="ovOccupancy"></div>
 
-  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
-  <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
+  <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
+  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
+    <span class="inv-view-sw" style="flex-shrink:0;">
+      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
+      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
+      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
+      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
+      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+    </span>
+  </div>
+  <div class="tablecard reveal" id="ovTypeFlow"></div>
 
   <div class="sectlabel reveal">ประวัติการผ่าน Gate ล่าสุด (30 รายการ)</div>
   <div class="tablecard reveal"><div class="twrap"><div id="ovEvents"></div></div></div>
