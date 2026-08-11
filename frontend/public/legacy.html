@@ -1273,9 +1273,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <input type="hidden" id="inGate">
     <div id="inGateHint"></div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>ประเภทรถที่เข้า</label>
+      <div class="inv-view-sw" id="inGateModeSw">
+        <button type="button" class="ivs-btn active" data-mode="return" onclick="setInGateMode('return')">คืนกล่อง (ลูกค้า)</button>
+        <button type="button" class="ivs-btn" data-mode="supplier" onclick="setInGateMode('supplier')">รับกล่อง Supplier</button>
+      </div>
+    </div>
     <div class="grid g3">
       <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
-      <div class="field"><label>รถของคู่ค้า</label><select id="inPartner"></select>
+      <div class="field" id="inPartnerFieldWrap"><label>รถของคู่ค้า</label><select id="inPartner"></select>
         <div id="inPartnerHint" style="display:none;"></div>
         <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
@@ -4822,7 +4829,7 @@ function renderVehicleTypeField(prefix){
   var opts=vehicleTypeOptions();
   if(!opts.length){
     mount.innerHTML='<input type="hidden" id="'+fieldId+'" value="'+esc(curVal)+'">'
-      +'<button type="button" class="btn ghost sm" style="width:100%;justify-content:center;" onclick="promptNewVehicleType(\''+fieldId+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> สร้างประเภทรถ</button>';
+      +'<button type="button" class="btn accent sm" style="width:100%;justify-content:center;" onclick="promptNewVehicleType(\''+fieldId+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> สร้างประเภทรถ</button>';
     return;
   }
   mount.innerHTML='<select id="'+fieldId+'" onchange="onVehicleTypeChange(\''+fieldId+'\')">'
@@ -6172,6 +6179,47 @@ function refreshStabBadges(){
     if(el)el.textContent=counts[k]?nf(counts[k]):'';
   });
 }
+/* Gate ขาเข้า: คืนกล่อง (ลูกค้า) vs รับกล่อง Supplier — เดิม "รถของคู่ค้า"
+   เป็น dropdown รวมทั้งลูกค้าและซัพพลายเออร์ให้เลือกเอง แม้ตอนคืนกล่องจริง
+   ระบบรู้อยู่แล้วว่ากล่องเป็นของลูกค้าไหนจากประวัติกล่องเอง (isNewBox ใน
+   #btnCheckIn) จึงไม่จำเป็นต้องเลือกซ้ำ — ซ่อนช่องนี้ไปเลยตอนคืนกล่อง ส่วน
+   รับกล่องใหม่จาก Supplier ไม่มีอะไรผูกไว้ล่วงหน้า จึงยังต้องเลือกอยู่
+   (กรองให้เหลือเฉพาะซัพพลายเออร์ ไม่ปนลูกค้าเข้ามาให้เลือกผิด) */
+var inGateMode='return';
+function setInGateMode(mode){
+  inGateMode=mode;
+  $all('#inGateModeSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===mode);});
+  renderInPartnerField();
+}
+window.setInGateMode=setInGateMode;
+function renderInPartnerField(){
+  var wrap=$('#inPartnerFieldWrap');
+  var inPartnerSel=$('#inPartner'),inPartnerHint=$('#inPartnerHint');
+  if(inGateMode==='return'){
+    if(wrap)wrap.style.display='none';
+    if(inPartnerSel)inPartnerSel.value='';
+    return;
+  }
+  if(wrap)wrap.style.display='';
+  if(!inPartnerSel)return;
+  var keepP=inPartnerSel.value;
+  var partners=Object.values(S.customers).filter(function(c){var k=c.kind||'customer';return k==='supplier'||k==='both';});
+  inPartnerSel.style.display=partners.length?'':'none';
+  if(inPartnerHint){
+    inPartnerHint.style.display=partners.length?'none':'block';
+    inPartnerHint.innerHTML=partners.length?'':'<button type="button" class="btn accent sm" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';
+  }
+  inPartnerSel.innerHTML=partners.length
+    ? '<option value="">— เลือกซัพพลายเออร์เจ้าของรถ —</option>'+partners.map(function(c){
+        var k=c.kind||'customer';
+        var tg=k==='both'?'ลูกค้า + ซัพพลายเออร์':'ซัพพลายเออร์';
+        return '<option value="'+esc(c.id)+'">'+esc(c.name)+' · '+tg+'</option>';}).join('')
+    : '';
+  if(keepP)inPartnerSel.value=keepP;
+  else if(partners.length===1)inPartnerSel.value=partners[0].id;
+}
+window.renderInPartnerField=renderInPartnerField;
+
 function renderSetup(){
   refreshStabBadges();
   // enforce box reg mode UI state (wrap visibility + button active)
@@ -6211,24 +6259,7 @@ function renderSetup(){
   var hasSup=Object.values(S.customers).some(isSupplierKind);
   if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
   if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
-  var inPartnerSel=$('#inPartner'),inPartnerHint=$('#inPartnerHint');
-  if(inPartnerSel){
-    var keepP=inPartnerSel.value;
-    var partners=Object.values(S.customers);
-    inPartnerSel.style.display=partners.length?'':'none';
-    if(inPartnerHint){
-      inPartnerHint.style.display=partners.length?'none':'block';
-      inPartnerHint.innerHTML=partners.length?'':'<button type="button" class="btn accent sm" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e04\u0e39\u0e48\u0e04\u0e49\u0e32</button>';
-    }
-    inPartnerSel.innerHTML=partners.length
-      ? '<option value="">\u2014 เลือกคู่ค้าเจ้าของรถ \u2014</option>'+partners.map(function(c){
-          var k=c.kind||'customer';
-          var tg=k==='supplier'?'ซัพพลายเออร์':(k==='both'?'ลูกค้า + ซัพพลายเออร์':'ลูกค้า');
-          return '<option value="'+esc(c.id)+'">'+esc(c.name)+' \u00b7 '+tg+'</option>';}).join('')
-      : '';
-    if(keepP)inPartnerSel.value=keepP;
-    else if(partners.length===1)inPartnerSel.value=partners[0].id;
-  }
+  renderInPartnerField();
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
   // box table
