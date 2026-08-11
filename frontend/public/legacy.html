@@ -7160,7 +7160,12 @@ window.filterTruckManifest=filterTruckManifest;
 function occCardClick(el) {
   var whId   = el.getAttribute('data-wh-id');
   var whName = el.getAttribute('data-wh-name');
-  goInventory({ wh: whId, label: 'กล่องในคลัง ' + whName });
+  /* This card is specifically about current physical placement ("กล่องเก็บ
+     อยู่คลังไหน"), so it needs the status filter too, not just wh — the
+     warehouse filter alone now matches by location regardless of status
+     (see filteredInvBoxes()), since that was the bug that hid every shipped
+     box the moment there was only one warehouse in the account. */
+  goInventory({ wh: whId, status: 'warehouse', label: 'กล่องในคลัง ' + whName });
 }
 window.occCardClick = occCardClick;
 
@@ -7194,9 +7199,19 @@ function filteredInvBoxes() {
       }
       return true;
     }
-    /* Filter by warehouse */
+    /* Filter by warehouse — matches by location only, NOT status. Used to
+       also require b.status==='warehouse', which meant selecting a
+       warehouse pill (or having one auto-selected — buildInvWhPills()
+       auto-picks the sole warehouse when there's only one) silently hid
+       every box that had ever left that warehouse (shipped/lost/hold/
+       damage all keep their last known b.location.wh, they just aren't
+       'warehouse' status anymore). With a single-warehouse account that
+       meant the "ทั้งหมด" (all statuses) tab could show 0 rows the moment
+       any box shipped out, even though the box genuinely still belongs to
+       that warehouse — the status TAB is what should decide status-based
+       hiding, not the warehouse pill. */
     if (invWhFilter) {
-      if (!((b.location || {}).wh === invWhFilter && b.status === 'warehouse')) return false;
+      if ((b.location || {}).wh !== invWhFilter) return false;
     }
     /* ── standard status filter ── */
     /* SOW: no Putaway/staging/RFID-pending workflow — 'unlocated',
