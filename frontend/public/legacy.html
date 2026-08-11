@@ -968,19 +968,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออกวันนี้" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-    <span>รายงานลูกค้าส่งของช้า</span>
-    <span style="display:inline-flex;align-items:center;gap:8px;font-weight:400;">
-      <label for="lateReportDays" class="muted small" style="font-weight:400;">ช้ากี่วัน</label>
-      <select id="lateReportDays" onchange="renderLateReport()" style="padding:6px 10px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-        <option value="7">7 วัน</option>
-        <option value="10">10 วัน</option>
-        <option value="30">1 เดือน</option>
-      </select>
-    </span>
-  </div>
-  <div class="tablecard reveal" id="ovLateReport"></div>
-
   <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
   <div class="tablecard reveal" id="ovTypeFlow"></div>
 
@@ -5397,12 +5384,12 @@ function toggleReportsPanel(){
 window.toggleReportsPanel=toggleReportsPanel;
 
 /* Overview tab — สถานะกล่อง ณ ตอนนี้ (ในคลัง/ออกอยู่/สูญหาย/พัก/ชำรุด) บวกยอด
-   Gate In/Out ของวันนี้, รายงานลูกค้าส่งของช้า, รายงานกล่องรายตัวแยกตามประเภท,
-   และตารางส่งคืนล่าสุด — ต่อท้ายด้วยแผงรายงานเพิ่มเติมที่ยุบ/กางได้
-   (toggleReportsPanel ด้านบน) สำหรับส่วนที่เหลือ ทุกอย่างข้างในหน้านี้ยัง render
-   โดย renderReports() เหมือนเดิมทั้งหมด (#ovLateReport/#ovTypeFlow ก็เช่นกัน —
-   ไม่ได้ขึ้นกับว่า element อยู่ในแผงที่ซ่อนอยู่หรือไม่ แค่ id ตรงก็พอ) ย้าย
-   ตำแหน่ง HTML มาไว้ตรงนี้เพราะเป็นสองรายงานที่ต้องเห็นทันทีโดยไม่ต้องกางแผง */
+   Gate In/Out ของวันนี้, รายงานกล่องรายตัวแยกตามประเภท, และตารางส่งคืนล่าสุด
+   — ต่อท้ายด้วยแผงรายงานเพิ่มเติมที่ยุบ/กางได้ (toggleReportsPanel ด้านบน)
+   สำหรับส่วนที่เหลือ ทุกอย่างข้างในหน้านี้ยัง render โดย renderReports()
+   เหมือนเดิมทั้งหมด (#ovTypeFlow ก็เช่นกัน — ไม่ได้ขึ้นกับว่า element อยู่ใน
+   แผงที่ซ่อนอยู่หรือไม่ แค่ id ตรงก็พอ) ย้ายตำแหน่ง HTML มาไว้ตรงนี้เพราะเป็น
+   รายงานที่ต้องเห็นทันทีโดยไม่ต้องกางแผง */
 function renderOverview(){
   var all=Object.values(S.boxes);
   $('#kInNow').textContent=nf(all.filter(function(b){return b.status==='warehouse';}).length);
@@ -5609,8 +5596,6 @@ function renderReports(){
   }
   $('#ovLost').innerHTML=lostHtml;
 
-  renderLateReport();
-
   // occupancy by warehouse
   var whs=Object.values(S.warehouses);
   $('#ovOccupancy').innerHTML=whs.length?whs.map(function(w){
@@ -5669,41 +5654,6 @@ function renderReports(){
   renderFloorReports();
 
 }
-/* รายงานลูกค้าส่งของช้า — กล่องที่ "ออก" อยู่นานเกินจำนวนวันที่เลือก (7/10/1 เดือน),
-   จัดกลุ่มตามลูกค้า เรียงจากช้าที่สุดก่อน */
-function renderLateReport(){
-  var sel=$('#lateReportDays');
-  var days=parseInt(sel?sel.value:'',10)||7;
-  var late=Object.values(S.boxes).filter(function(b){
-    return b.status==='out'&&b.outAt&&daysSince(b.outAt)>=days;
-  });
-  var byCust={};
-  late.forEach(function(b){
-    var cid=b.customer||'';
-    if(!byCust[cid])byCust[cid]={cust:cid,boxes:[],max:0};
-    var d=daysSince(b.outAt);
-    byCust[cid].boxes.push(b);
-    if(d>byCust[cid].max)byCust[cid].max=d;
-  });
-  var rows=Object.values(byCust).sort(function(a,b){return b.max-a.max;});
-  var html;
-  if(!rows.length){
-    html='<div class="empty" style="padding:32px 0;"><div class="e-ic">∅</div>ไม่มีลูกค้าที่ส่งของช้าเกิน '+days+' วัน</div>';
-  } else {
-    html='<table><thead><tr><th>ลูกค้า</th><th class="r">จำนวนกล่องช้า</th><th class="r">ช้าที่สุด (วัน)</th><th class="c">จัดการ</th></tr></thead><tbody>';
-    rows.forEach(function(r){
-      html+='<tr style="cursor:pointer;" onclick="goInventory({status:\'out\',cust:\''+esc(r.cust)+'\',label:\''+esc('กล่องที่ส่งของช้า — '+custName(r.cust))+'\'});">'
-        +'<td><b>'+esc(custName(r.cust))+'</b></td>'
-        +'<td class="r mono">'+nf(r.boxes.length)+'</td>'
-        +'<td class="r"><span class="days-badge over">'+r.max+' วัน</span></td>'
-        +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
-      +'</tr>';
-    });
-    html+='</tbody></table>';
-  }
-  var el=$('#ovLateReport');if(el)el.innerHTML=html;
-}
-window.renderLateReport=renderLateReport;
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
