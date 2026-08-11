@@ -8290,14 +8290,17 @@ function handleMultiSheetMasterImport(wb, fname) {
     queue.push({ cfg: cfg, rows: rows, head: head, sheetName: sheetName });
   });
   if (!queue.length) return false;
-  toast('พบ ' + queue.length + ' sheet ที่นำเข้าได้', queue.map(function(q) { return q.cfg.label; }).join(', '), 'info');
+  var total = queue.length;
+  toast('พบ ' + total + ' sheet ที่นำเข้าได้', queue.map(function(q) { return q.cfg.label; }).join(', '), 'info');
   (function next() {
     if (!queue.length) return;
+    var stepNo = total - queue.length + 1;
     var item = queue.shift();
+    var progressLabel = 'Sheet ' + stepNo + '/' + total + ' · ' + item.cfg.label;
     openColumnMapModal({
       side: 'import-' + item.cfg.key, fname: fname + ' · ' + item.sheetName,
-      head: item.head, rows: item.rows, fields: item.cfg.fields,
-      onConfirm: function(colMap) { openImportPreviewModal(item.rows, colMap, item.cfg, fname, next); }
+      head: item.head, rows: item.rows, fields: item.cfg.fields, progressLabel: progressLabel,
+      onConfirm: function(colMap) { openImportPreviewModal(item.rows, colMap, item.cfg, fname, next, progressLabel); }
     });
   })();
   return true;
@@ -8877,7 +8880,9 @@ function openColumnMapModal(opts){
       +'<div class="small colmap-err" data-err="'+f.key+'" style="display:none;color:var(--bad);margin-top:4px;">กรุณาเลือกคอลัมน์สำหรับข้อมูลนี้</div>'
     +'</div>';
   }).join('');
-  var html='<div class="mhead"><h3>📊 จับคู่คอลัมน์ไฟล์ (Column Mapping)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+  var html='<div class="mhead"><h3>📊 จับคู่คอลัมน์ไฟล์ (Column Mapping)</h3>'
+    +(opts.progressLabel?'<span class="pill info" style="white-space:nowrap;">'+esc(opts.progressLabel)+'</span>':'')
+    +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody" style="max-height:66vh;overflow:auto;">'
     +'<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(opts.fname||'-')+'</b> · '+Math.max(0,opts.rows.length-1)+' แถวข้อมูล — เลือกว่าคอลัมน์ไหนในไฟล์ตรงกับข้อมูลแต่ละอย่าง ระบบเดาให้เบื้องต้นจากชื่อคอลัมน์และการใช้งานครั้งก่อน ตรวจสอบก่อนนำเข้า</p>'
     +rowsHtml
@@ -9235,13 +9240,15 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Step 3: preview table + confirm ---- */
-  window.openImportPreviewModal=function(rows,colMap,cfg,fname,onDone){
+  window.openImportPreviewModal=function(rows,colMap,cfg,fname,onDone,progressLabel){
     var results=importParseAndValidate(rows,colMap,cfg);
     var okRows=results.filter(function(x){return !x.errors.length&&!x.dup;});
     var dupRows=results.filter(function(x){return !x.errors.length&&x.dup;});
     var errRows=results.filter(function(x){return x.errors.length;});
 
-    var h='<div class="mhead"><h3>ตรวจสอบก่อนนำเข้า · '+esc(cfg.label)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
+    var h='<div class="mhead"><h3>ตรวจสอบก่อนนำเข้า · '+esc(cfg.label)+'</h3>'
+      +(progressLabel?'<span class="pill info" style="white-space:nowrap;">'+esc(progressLabel)+'</span>':'')
+      +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
     h+='<div class="mbody" style="max-height:70vh;overflow:auto;">';
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname)+'</b> · '+results.length+' แถวข้อมูล</p>';
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'
@@ -9291,7 +9298,7 @@ function openColumnMapModal(opts){
       var overwrite=!!(ovEl&&ovEl.checked);
       var toCommit=overwrite?okRows.concat(dupRows):okRows;
       closeModal();
-      commitImportRows(toCommit,cfg,fname,errRows.length+(overwrite?0:dupRows.length),onDone);
+      commitImportRows(toCommit,cfg,fname,errRows.length+(overwrite?0:dupRows.length),onDone,progressLabel);
     };
   };
 
@@ -9301,7 +9308,7 @@ function openColumnMapModal(opts){
      rows, neither of which helps anyone). Locations get an audit entry here
      even though the manual single-add path doesn't (see cfg research —
      that's an existing gap in btnAddLoc, not something worth repeating). ---- */
-  window.commitImportRows=function(rows,cfg,fname,skippedCount,onDone){
+  window.commitImportRows=function(rows,cfg,fname,skippedCount,onDone,progressLabel){
     var addedIds=[];
     rows.forEach(function(x){
       S[cfg.targetKey][x.id]=cfg.buildRecord(x.mapped,x.id);
@@ -9321,7 +9328,7 @@ function openColumnMapModal(opts){
       save();
     }
     renderAll();
-    openImportSummaryModal(fname,addedIds,skippedCount,cfg,onDone);
+    openImportSummaryModal(fname,addedIds,skippedCount,cfg,onDone,progressLabel);
   };
 
   /* onDone (used by the Inventory page's multi-sheet import queue — see
@@ -9330,9 +9337,11 @@ function openColumnMapModal(opts){
      doesn't appear until they've actually seen this one's outcome. Clicking
      the ✕ instead (data-close, unchanged) just closes without continuing —
      treated as "stop importing the rest of the file". */
-  window.openImportSummaryModal=function(fname,addedIds,skippedCount,cfg,onDone){
+  window.openImportSummaryModal=function(fname,addedIds,skippedCount,cfg,onDone,progressLabel){
     function chips(list){return list.map(function(t){return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span></span></span>';}).join('');}
-    var h='<div class="mhead"><h3>ผลการนำเข้า · '+esc(cfg.label)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
+    var h='<div class="mhead"><h3>ผลการนำเข้า · '+esc(cfg.label)+'</h3>'
+      +(progressLabel?'<span class="pill info" style="white-space:nowrap;">'+esc(progressLabel)+'</span>':'')
+      +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
     h+='<div class="mbody" style="max-height:66vh;overflow:auto;">';
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
