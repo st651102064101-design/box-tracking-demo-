@@ -4823,6 +4823,12 @@ var outConditionMap={};
 var OUT_COND_LABEL={good:'สมบูรณ์',minor:'มีตำหนิเล็กน้อย',damaged:'ชำรุด'};
 function setOutCondition(t,v){outConditionMap[t]=v;}
 window.setOutCondition=setOutCondition;
+/* Per-box ship-date override (key=tag, value=ISO ts) — set only when the box
+   was queued via the Gate ขาออก .xlsx/.csv import and its file supplied a
+   parseable Timestamp column. saveOutbound() uses this instead of "now" so
+   รายงานลูกค้าส่งของช้า (which reads b.outAt) counts lateness from the real
+   ship date on file, not from whenever the import happened to be confirmed. */
+var pendingOutTsMap={};
 function outConditionSelectHtml(t){
   var cur=outConditionMap[t]||'good';
   return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
@@ -4835,7 +4841,7 @@ function renderOutResult(){
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];renderOutResult();}
+function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
@@ -4889,13 +4895,19 @@ function saveOutbound(){
   var c=S.customers[cust]||{};var rd=num('doReturnDays')||c.returnDays||S.cfg.agingDays;
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
-  var outTs=iso();var dueTs=new Date(Date.now()+rd*86400000).toISOString();
-  var dueDateStr=ddmmyyyy(new Date(dueTs)); // Actual Due Date in DD/MM/YYYY — same value shown live in #doDueDatePreview
+  var outTs=iso();
+  /* Boxes queued from a Gate ขาออก import that supplied a parseable Timestamp
+     column ship with THAT date instead of "now" (pendingOutTsMap), so aging
+     reports (รายงานลูกค้าส่งของช้า, due-date) count from the file's real ship
+     date rather than whenever the import happened to get confirmed. */
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
-    b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=outTs;b.outCondition=cond;
-    b.history.push({dir:'out',ts:outTs,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
-    S.events.push({ts:outTs,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder});});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};
+    var tsForBox=pendingOutTsMap[t]||outTs;
+    var dueTs=new Date(new Date(tsForBox).getTime()+rd*86400000).toISOString();
+    var dueDateStr=ddmmyyyy(new Date(dueTs));
+    b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
+    b.history.push({dir:'out',ts:tsForBox,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
+    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder});});
+  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
   S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:rd};
   save();
@@ -8683,7 +8695,7 @@ function openColumnMapModal(opts){
     {key:'retDays', label:'กำหนดคืนภายใน (วัน)',                  required:false, aliases:RETDAYS_ALIASES},
     {key:'plate',   label:'ทะเบียนรถ',                            required:false, aliases:PLATE_ALIASES},
     {key:'driver',  label:'ชื่อคนขับ',                            required:false, aliases:DRIVER_ALIASES},
-    {key:'ts',      label:'Timestamp (อ้างอิงเท่านั้น)',           required:false, aliases:TS_ALIASES}
+    {key:'ts',      label:'Timestamp (ใช้เป็นวันที่ส่งออกจริง)',    required:false, aliases:TS_ALIASES}
   ];
 
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
@@ -8762,6 +8774,28 @@ function openColumnMapModal(opts){
     r.readAsArrayBuffer(f);
   };
 
+  /* Best-effort parse of whatever a spreadsheet's Timestamp column hands us
+     (SheetJS with raw:false returns locale-formatted strings, not Date
+     objects) — tries ISO first, then common DD/MM/YYYY[ HH:mm[:ss]] since
+     that's what Thai-locale exports typically use. Returns an ISO string or
+     null if nothing parseable. */
+  function parseOutTsValue(raw){
+    var s=String(raw==null?'':raw).trim();
+    if(!s)return null;
+    var iso1=Date.parse(s);
+    if(!isNaN(iso1))return new Date(iso1).toISOString();
+    var m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if(m){
+      var d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);
+      var hh=Number(m[4]||0),mm=Number(m[5]||0),ss=Number(m[6]||0);
+      if(mo>=1&&mo<=12&&d>=1&&d<=31){
+        var dt=new Date(y,mo-1,d,hh,mm,ss);
+        if(!isNaN(dt.getTime()))return dt.toISOString();
+      }
+    }
+    return null;
+  }
+
   /* collect distinct non-empty values of one column across the accepted rows */
   function distinctVals(list){
     var seen={},out=[];
@@ -8796,7 +8830,11 @@ function openColumnMapModal(opts){
       if(rc>=0)retVals.push(rows[i][rc]);
       if(pc>=0)plateVals.push(rows[i][pc]);
       if(vc>=0)driverVals.push(rows[i][vc]);
-      if(tsc>=0)tsVals.push(rows[i][tsc]);
+      if(tsc>=0){
+        tsVals.push(rows[i][tsc]);
+        var parsedTs=parseOutTsValue(rows[i][tsc]);
+        if(parsedTs)pendingOutTsMap[v.tag]=parsedTs;
+      }
     }
 
     if(autoRegistered.length)save();
@@ -8883,7 +8921,7 @@ function openColumnMapModal(opts){
       line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
-      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (อ้างอิงเท่านั้น): '+meta.ts.map(esc).join(', ')+'</div>');
+      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (ใช้เป็นวันที่ส่งออกจริงต่อกล่อง เมื่อกดยืนยันส่งออก): '+meta.ts.map(esc).join(', ')+'</div>');
       if(rows.length)h+='<div class="c2-label">ข้อมูลใบส่งของจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
 
