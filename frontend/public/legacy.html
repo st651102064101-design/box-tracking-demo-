@@ -2176,6 +2176,7 @@ function normalizeState(d){
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
   d.gatePrefs=d.gatePrefs||{};
+  d.dfPrefs=d.dfPrefs||{};
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
 }
@@ -5517,17 +5518,25 @@ window.toggleReportsPanel=toggleReportsPanel;
    ----------------------------------------------------------------------------
    One shared filter widget, instantiated per report by id (e.g. "ovMove",
    "ovByCust", "ovRecent", "ovTypeFlow") — each report's HTML has its own
-   #df-{id} bar (see dfBarHtml) and keeps its own independent state in
-   DF_STATE[id], so filtering one report never affects another. A report's
-   render function calls dfInRange(id, ts) per record instead of re-deriving
-   date math itself, and registers DF_APPLY[id] so dfSetMode/dfOnCustomChange
-   know what to re-render after the filter changes.
-   ========================================================================== */
-var DF_STATE={};
+   #df-{id} bar (see dfBarHtml) and keeps its own independent state.
+   A report's render function calls dfInRange(id, ts) per record instead of
+   re-deriving date math itself, and registers DF_APPLY[id] so dfSetMode/
+   dfOnCustomChange know what to re-render after the filter changes.
+
+   State lives on S.dfPrefs[USER][id] — same reasoning as fixedGatesRef()
+   for the gate assignment: it round-trips through the same /api/state
+   save()/loadFromServer() the rest of app state already uses, so "7 วัน on
+   ความเคลื่อนไหว" follows the logged-in account across devices instead of
+   resetting every time someone opens the dashboard fresh, or leaking into
+   another account's session on a shared terminal. dfGet() always re-resolves
+   S.dfPrefs[USER][id] fresh (never a cached reference) since loadFromServer()
+   reassigns S wholesale on reload/SSE sync. */
 var DF_APPLY={};
 function dfGet(id){
-  if(!DF_STATE[id])DF_STATE[id]={mode:'all',day:7,month:1,year:1,from:'',to:''};
-  return DF_STATE[id];
+  if(!S.dfPrefs)S.dfPrefs={};
+  if(!S.dfPrefs[USER])S.dfPrefs[USER]={};
+  if(!S.dfPrefs[USER][id])S.dfPrefs[USER][id]={mode:'all',day:1,month:1,year:1,from:'',to:''};
+  return S.dfPrefs[USER][id];
 }
 /* Builds one filter bar's HTML — call once per report at boot and drop the
    result into a placeholder <div>, e.g. $('#df-ovMove-mount').innerHTML=
@@ -5537,7 +5546,7 @@ function dfBarHtml(id){
   return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
     +'<span class="inv-view-sw" style="flex-shrink:0;">'
     +'<button type="button" class="ivs-btn active" data-mode="all" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
-    +'<button type="button" class="ivs-btn" data-mode="day" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="7" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="day" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
     +'<button type="button" class="ivs-btn" data-mode="month" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
     +'<button type="button" class="ivs-btn" data-mode="year" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
     +'<button type="button" class="ivs-btn" data-mode="custom" onclick="dfSetMode(\''+id+'\',\'custom\')">ระบุวัน</button>'
@@ -5634,6 +5643,7 @@ function dfSetMode(id,mode){
   }
   st.mode=mode;
   dfSyncUI(id);
+  save();
   if(DF_APPLY[id])DF_APPLY[id]();
 }
 window.dfSetMode=dfSetMode;
@@ -5643,6 +5653,7 @@ function dfOnCustomChange(id){
   st.from=f?f.value:'';st.to=t?t.value:'';
   st.mode='custom';
   dfSyncUI(id);
+  save();
   if(DF_APPLY[id])DF_APPLY[id]();
 }
 window.dfOnCustomChange=dfOnCustomChange;
