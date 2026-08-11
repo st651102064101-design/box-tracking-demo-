@@ -12133,10 +12133,16 @@ function openColumnMapModal(opts){
   /* Same reasoning as autoCreateCustomerIfMissing, one field smaller: #btnAddBtype
      won't save a box type without a หน่วยนับ (unit) — that's the one other
      "can't be null" field beyond the name this file already gives us. */
+  /* Same shape as autoCreateCustomerIfMissing/autoCreateWarehouseIfMissing,
+     but never refuses: a shipping manifest that names a box's type without
+     also naming its unit shouldn't leave the whole box unregistered over
+     one missing column — DEFAULT_UNIT is the same placeholder the box type
+     stays findable/editable under at ตั้งค่า → ประเภทกล่อง afterward, same as
+     any other box type. */
+  var DEFAULT_UNIT='ชิ้น';
   function autoCreateBoxTypeIfMissing(name,unit){
-    if(!unit)return {ok:false,reason:'ต้องมีคอลัมน์ "หน่วยนับ" — ประเภทกล่องใหม่ต้องระบุหน่วยนับเสมอ'};
     var id=nextSeqId('BT-',Object.keys(S.boxtypes));
-    S.boxtypes[id]={id:id,name:name,unit:unit,value:null,dim:''};
+    S.boxtypes[id]={id:id,name:name,unit:unit||DEFAULT_UNIT,value:null,dim:''};
     auditEntry('CREATE',USER,id,name,null,S.boxtypes[id]);
     save();
     return {ok:true,id:id};
@@ -12238,12 +12244,16 @@ function openColumnMapModal(opts){
      real verification — the operator would be confirming the same file's
      own claim twice. Once placed, classifyOutTag() re-check below sees
      status 'warehouse' and the box ships in this same pass. */
+  // A box named in this file that has no ประเภทกล่อง value at all (blank
+  // cell, or that column never mapped) still gets registered — under this
+  // placeholder type, editable/re-typeable normally afterward at ตั้งค่า →
+  // ประเภทกล่อง — rather than being left as "ไม่พบในระบบ" forever just
+  // because one optional column was left out.
+  var UNSPECIFIED_TYPE='ไม่ระบุประเภท';
   function registerMissingBox(tag,typeText,unitText,whText,whFromArr,whToArr,whGateTypeArr){
-    if(!typeText)return {ok:false,reason:'ไม่พบในระบบ — ใส่คอลัมน์ "ประเภทกล่อง" เพื่อให้ระบบลงทะเบียนกล่องใหม่อัตโนมัติ'};
-    var typeId=findBoxTypeMatch(typeText);
+    var typeId=findBoxTypeMatch(typeText||UNSPECIFIED_TYPE);
     if(!typeId){
-      var created=autoCreateBoxTypeIfMissing(typeText,unitText);
-      if(!created.ok)return {ok:false,reason:'ไม่พบในระบบ — สร้างประเภทกล่อง "'+typeText+'" ใหม่ไม่ได้: '+created.reason};
+      var created=autoCreateBoxTypeIfMissing(typeText||UNSPECIFIED_TYPE,unitText);
       typeId=created.id;
     }
     var whId=findWarehouseMatch(whText);
