@@ -962,10 +962,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi purple clickable" title="ดูกล่องชำรุด" onclick="goInventory({status:'damage',label:'ชำรุด (Damage)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div><div class="n mono" id="kDamageNow">0</div><div class="l">ชำรุด (Damage)</div></div>
   </div>
 
-  <div class="sectlabel reveal">ความเคลื่อนไหววันนี้</div>
+  <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <span id="ovMoveLabel">ความเคลื่อนไหววันนี้</span>
+    <span class="inv-view-sw" id="ovMoveSw" style="font-weight:400;">
+      <button type="button" class="ivs-btn active" data-period="day" onclick="setOvMovePeriod('day')">วัน</button>
+      <button type="button" class="ivs-btn" data-period="month" onclick="setOvMovePeriod('month')">เดือน</button>
+      <button type="button" class="ivs-btn" data-period="year" onclick="setOvMovePeriod('year')">ปี</button>
+    </span>
+  </div>
   <div class="kpis reveal">
-    <div class="kpi green clickable" title="ดูกล่องที่ผ่าน Gate เข้าวันนี้" onclick="showGateTodayList('in');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kInToday">0</div><div class="l">เข้าวันนี้</div></div>
-    <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออกวันนี้" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l">ออกวันนี้</div></div>
+    <div class="kpi green clickable" title="ดูกล่องที่ผ่าน Gate เข้า" onclick="showGateTodayList('in');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kInToday">0</div><div class="l" id="kInTodayLabel">เข้าวันนี้</div></div>
+    <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
   </div>
 
   <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -4825,6 +4832,14 @@ window.setOutCondition=setOutCondition;
    รายงานลูกค้าส่งของช้า (which reads b.outAt) counts lateness from the real
    ship date on file, not from whenever the import happened to be confirmed. */
 var pendingOutTsMap={};
+/* Per-box DO/PO/recorder overrides — same idea as pendingOutTsMap, set only
+   when a Gate ขาออก import file supplied its own เลขที่ DO/PO/ผู้บันทึก column
+   for that row. saveOutbound() prefers these over the single batch-wide form
+   value, so a file that genuinely mixes DO/PO numbers or recorders per row
+   isn't flattened onto whatever's typed in the form. */
+var pendingOutDoMap={};
+var pendingOutPoMap={};
+var pendingOutRecorderMap={};
 function outConditionSelectHtml(t){
   var cur=outConditionMap[t]||'good';
   return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
@@ -4837,7 +4852,7 @@ function renderOutResult(){
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];renderOutResult();}
+function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
@@ -4895,17 +4910,26 @@ function saveOutbound(){
   /* Boxes queued from a Gate ขาออก import that supplied a parseable Timestamp
      column ship with THAT date instead of "now" (pendingOutTsMap), so aging
      reports (รายงานลูกค้าส่งของช้า, due-date) count from the file's real ship
-     date rather than whenever the import happened to get confirmed. */
+     date rather than whenever the import happened to get confirmed. Likewise
+     DO/PO/recorder fall back to whatever the import file supplied per row
+     (pendingOutDoMap/pendingOutPoMap/pendingOutRecorderMap) before falling
+     back to this batch's single form value. */
+  var extraDoRecords={};
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
     var tsForBox=pendingOutTsMap[t]||outTs;
+    var doForBox=pendingOutDoMap[t]||doNo;
+    var poForBox=pendingOutPoMap[t]||po;
+    var recorderForBox=pendingOutRecorderMap[t]||recorder;
     var dueTs=new Date(new Date(tsForBox).getTime()+rd*86400000).toISOString();
     var dueDateStr=ddmmyyyy(new Date(dueTs));
-    b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
-    b.history.push({dir:'out',ts:tsForBox,do:doNo,po:po,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
-    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorder});});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};
+    b.status='out';b.customer=cust;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
+    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
+    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox});
+    if(doForBox!==doNo)extraDoRecords[doForBox]={customer:cust,po:poForBox,plate:plate,driver:driver,tel:tel,returnDays:rd};});
+  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
   S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:rd};
+  Object.keys(extraDoRecords).forEach(function(k){S.doRecords[k]=extraDoRecords[k];});
   save();
   patchAuditGateOut(auditTags,doNo,po,cust,plate,driver,recorder);
   ['outPlate','outDriver','outDriverTel','doReturnDays'].forEach(function(i){setv(i,'');});
@@ -5399,6 +5423,25 @@ window.toggleReportsPanel=toggleReportsPanel;
    เหมือนเดิมทั้งหมด (#ovTypeFlow ก็เช่นกัน — ไม่ได้ขึ้นกับว่า element อยู่ใน
    แผงที่ซ่อนอยู่หรือไม่ แค่ id ตรงก็พอ) ย้ายตำแหน่ง HTML มาไว้ตรงนี้เพราะเป็น
    รายงานที่ต้องเห็นทันทีโดยไม่ต้องกางแผง */
+/* "ความเคลื่อนไหว" KPI period — วัน/เดือน/ปี — เปลี่ยนทั้งตัวเลข KPI สอง
+   ช่องและรายการที่เปิดจากการคลิก (showGateTodayList) ให้ตรงกันเสมอ */
+var ovMovePeriod='day';
+var OV_MOVE_LABEL={day:'วันนี้',month:'เดือนนี้',year:'ปีนี้'};
+function matchesOvPeriod(ts,period){
+  var d=new Date(ts);
+  if(isNaN(d.getTime()))return false;
+  var n=new Date();
+  if(period==='year')return d.getFullYear()===n.getFullYear();
+  if(period==='month')return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth();
+  return dstr(d)===dstr(n);
+}
+function setOvMovePeriod(p){
+  ovMovePeriod=p;
+  $all('#ovMoveSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.period===p);});
+  renderOverview();
+}
+window.setOvMovePeriod=setOvMovePeriod;
+
 function renderOverview(){
   var all=Object.values(S.boxes);
   $('#kInNow').textContent=nf(all.filter(function(b){return b.status==='warehouse';}).length);
@@ -5407,8 +5450,13 @@ function renderOverview(){
   $('#kHoldNow').textContent=nf(all.filter(function(b){return b.status==='hold';}).length);
   $('#kDamageNow').textContent=nf(all.filter(function(b){return b.status==='damage';}).length);
 
-  var outToday=S.events.filter(function(e){return e.dir==='out'&&dstr(new Date(e.ts))===dstr();}).length;
-  var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dstr(new Date(e.ts))===dstr();}).length;
+  var periodLabel=OV_MOVE_LABEL[ovMovePeriod]||'วันนี้';
+  var moveLabelEl=$('#ovMoveLabel');if(moveLabelEl)moveLabelEl.textContent='ความเคลื่อนไหว'+periodLabel;
+  var inLabelEl=$('#kInTodayLabel');if(inLabelEl)inLabelEl.textContent='เข้า'+periodLabel;
+  var outLabelEl=$('#kOutTodayLabel');if(outLabelEl)outLabelEl.textContent='ออก'+periodLabel;
+
+  var outToday=S.events.filter(function(e){return e.dir==='out'&&matchesOvPeriod(e.ts,ovMovePeriod);}).length;
+  var inToday=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&matchesOvPeriod(e.ts,ovMovePeriod);}).length;
   $('#kInToday').textContent=nf(inToday);
   $('#kOutToday').textContent=nf(outToday);
 
@@ -6531,20 +6579,20 @@ window.showTruckManifest=showTruckManifest;
    Gate ขาออก/ขาเข้า nodes, since a bare count there didn't say what actually moved ===== */
 function showGateTodayList(dir){
   var isOut=dir==='out';
-  var today=dstr();
+  var periodLabel=OV_MOVE_LABEL[ovMovePeriod]||'วันนี้';
   var evs=S.events.filter(function(e){
-    return dstr(new Date(e.ts))===today && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
+    return matchesOvPeriod(e.ts,ovMovePeriod) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
   }).sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
   var svg=isOut
     ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg>'
     :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg>';
-  var title=isOut?'กล่องที่ผ่าน Gate ขาออกวันนี้':'กล่องที่ผ่าน Gate ขาเข้าวันนี้';
+  var title=isOut?('กล่องที่ผ่าน Gate ขาออก'+periodLabel):('กล่องที่ผ่าน Gate ขาเข้า'+periodLabel);
   var h='<div class="mhead"><span class="svgi">'+svg+'</span><h3>'+title+'</h3><button class="x" onclick="closeModal()" aria-label="ปิด">✕</button></div>';
   h+='<div class="mbody">';
   if(!evs.length){
-    h+='<p class="muted" style="text-align:center;padding:34px 0;">ยังไม่มีกล่อง'+(isOut?'ออก':'เข้า')+'วันนี้</p>';
+    h+='<p class="muted" style="text-align:center;padding:34px 0;">ยังไม่มีกล่อง'+(isOut?'ออก':'เข้า')+periodLabel+'</p>';
   }else{
-    h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?'ที่ออกวันนี้':'ที่รับเข้าวันนี้')+'</p>';
+    h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?('ที่ออก'+periodLabel):('ที่รับเข้า'+periodLabel))+'</p>';
     h+='<input id="gateTodaySearch" placeholder="ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ" oninput="filterGateTodayList(this.value)" style="width:100%;padding:10px 12px;border:.5px solid var(--line);border-radius:10px;margin-bottom:12px;background:var(--surface);color:var(--ink);font:inherit;">';
     h+='<div id="gateTodayRows">';
     evs.forEach(function(e){
@@ -8695,22 +8743,82 @@ function openColumnMapModal(opts){
 (function(){
   var TAG_ALIASES = ['barcode','bar_code','บาร์โค้ด','รหัสบาร์โค้ด','rfid_tag','rfid','tag','rfidtag','rfid tag','tag id','tagid','tag_id','epc',
                      'box_id','boxid','box id','รหัส rfid','รหัสกล่อง','รหัส tag'];
+  var TYPE_ALIASES = ['type','box type','boxtype','ประเภทกล่อง','ประเภท'];
+  var UNIT_ALIASES = ['unit','หน่วยนับ','หน่วย'];
+  var COND_ALIASES = ['condition','สภาพ'];
   var DEST_ALIASES = ['destination','customer','ลูกค้า','ปลายทาง','สถานที่ที่ไป',
                      'สถานที่ที่ไป (ลูกค้า/ปลายทาง)','สถานที่ที่ไป (ลูกค้า/ปลายทาง) *','ลูกค้า/ปลายทาง'];
+  var CUSTADDR_ALIASES = ['address','ที่อยู่','สาขา','ที่อยู่/สาขา','ที่อยู่ / สาขา'];
+  var CUSTPHONE_ALIASES = ['phone','tel','เบอร์โทร','เบอร์โทรศัพท์','โทรศัพท์'];
+  var CUSTEMAIL_ALIASES = ['email','e-mail','อีเมล'];
   var RETDAYS_ALIASES = ['return days','returndays','due days','กำหนดคืน','กำหนดคืนภายใน',
                      'กำหนดคืนภายใน (วัน)','คืนภายใน','คืนภายใน (วัน)'];
+  var DONO_ALIASES = ['do','do no','dono','เลขที่ do','เลขที่ใบส่งของ'];
+  var PONO_ALIASES = ['po','po no','pono','เลขที่ po'];
+  var WH_ALIASES = ['warehouse','คลัง'];
   var PLATE_ALIASES = ['plate','license plate','ทะเบียนรถ','ป้ายทะเบียน','ทะเบียน','รถ ป้ายทะเบียน'];
   var DRIVER_ALIASES = ['driver','ชื่อคนขับ','คนขับ','ชื่อคนขับ *'];
-  var TS_ALIASES = ['timestamp','date','datetime','เวลา','วันที่','timestamp (อ้างอิง)'];
+  var TSDATE_ALIASES = ['date','วันที่'];
+  var TSTIME_ALIASES = ['time','เวลา'];
+  var TS_ALIASES = ['timestamp','datetime','timestamp (อ้างอิง)'];
+  var RECORDER_ALIASES = ['recorder','ผู้บันทึก','บันทึกโดย'];
 
+  /* Every column the operator's export can contain gets a slot here — none
+     silently dropped. Only tag is required; everything else is best-effort:
+     used when present, skipped when the file doesn't have it. */
   var OUT_MAP_FIELDS = [
-    {key:'tag',     label:'Barcode (รหัสกล่อง)',                 required:true,  aliases:TAG_ALIASES},
-    {key:'dest',    label:'สถานที่ที่ไป (ลูกค้า/ปลายทาง)',        required:false, aliases:DEST_ALIASES},
-    {key:'retDays', label:'กำหนดคืนภายใน (วัน)',                  required:false, aliases:RETDAYS_ALIASES},
-    {key:'plate',   label:'ทะเบียนรถ',                            required:false, aliases:PLATE_ALIASES},
-    {key:'driver',  label:'ชื่อคนขับ',                            required:false, aliases:DRIVER_ALIASES},
-    {key:'ts',      label:'Timestamp (ใช้เป็นวันที่ส่งออกจริง)',    required:false, aliases:TS_ALIASES}
+    {key:'tag',      label:'Barcode (รหัสกล่อง)',                 required:true,  aliases:TAG_ALIASES},
+    {key:'type',     label:'ประเภทกล่อง',                          required:false, aliases:TYPE_ALIASES},
+    {key:'unit',     label:'หน่วยนับ',                              required:false, aliases:UNIT_ALIASES},
+    {key:'condition',label:'สภาพ',                                  required:false, aliases:COND_ALIASES},
+    {key:'dest',     label:'สถานที่ที่ไป (ลูกค้า/ปลายทาง)',        required:false, aliases:DEST_ALIASES},
+    {key:'custAddr', label:'ที่อยู่/สาขา (ลูกค้า)',                 required:false, aliases:CUSTADDR_ALIASES},
+    {key:'custPhone',label:'เบอร์โทร (ลูกค้า)',                     required:false, aliases:CUSTPHONE_ALIASES},
+    {key:'custEmail',label:'อีเมล (ลูกค้า)',                        required:false, aliases:CUSTEMAIL_ALIASES},
+    {key:'retDays',  label:'กำหนดคืนภายใน (วัน)',                  required:false, aliases:RETDAYS_ALIASES},
+    {key:'doNo',     label:'เลขที่ DO',                             required:false, aliases:DONO_ALIASES},
+    {key:'poNo',     label:'เลขที่ PO',                             required:false, aliases:PONO_ALIASES},
+    {key:'wh',       label:'คลัง',                                  required:false, aliases:WH_ALIASES},
+    {key:'plate',    label:'ทะเบียนรถ',                            required:false, aliases:PLATE_ALIASES},
+    {key:'driver',   label:'ชื่อคนขับ',                            required:false, aliases:DRIVER_ALIASES},
+    {key:'tsDate',   label:'วันที่ (ส่งออกจริง)',                   required:false, aliases:TSDATE_ALIASES},
+    {key:'tsTime',   label:'เวลา (ส่งออกจริง)',                     required:false, aliases:TSTIME_ALIASES},
+    {key:'ts',       label:'Timestamp รวมวันที่+เวลา (ถ้ามีคอลัมน์เดียว)', required:false, aliases:TS_ALIASES},
+    {key:'recorder', label:'ผู้บันทึก',                             required:false, aliases:RECORDER_ALIASES}
   ];
+
+  /* find an existing box type master record by id or by name (case-insensitive) */
+  function findBoxTypeMatch(text){
+    var t=String(text||'').trim();
+    if(!t)return null;
+    var tl=t.toLowerCase();
+    var list=Object.values(S.boxtypes||{});
+    for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
+    for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
+    return null;
+  }
+
+  /* find an existing warehouse master record by id or by name (case-insensitive) */
+  function findWarehouseMatch(text){
+    var t=String(text||'').trim();
+    if(!t)return null;
+    var tl=t.toLowerCase();
+    var list=Object.values(S.warehouses||{});
+    for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
+    for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
+    return null;
+  }
+
+  var COND_TEXT_TO_CODE={
+    'สมบูรณ์':'good','ดี':'good','good':'good',
+    'มีตำหนิเล็กน้อย':'minor','ตำหนิ':'minor','minor':'minor',
+    'ชำรุด':'damaged','เสียหาย':'damaged','damaged':'damaged','damage':'damaged'
+  };
+  function classifyCondition(text){
+    var t=String(text||'').trim();
+    if(!t)return null;
+    return COND_TEXT_TO_CODE[t]||COND_TEXT_TO_CODE[t.toLowerCase()]||null;
+  }
 
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
      instead of painting a banner, so a whole file can be classified at once.
@@ -8719,15 +8827,18 @@ function openColumnMapModal(opts){
      entered into the system (no master record). The physical box already
      exists — it's just missing from S.boxes — so we create it directly in
      'warehouse' status (skipping 'pending'/Gate-เข้า) and let it ship out
-     immediately, same as any other queued row. */
-  function autoRegisterOutBox(tag){
-    var typeKey=Object.keys(S.boxtypes||{})[0]||'';
+     immediately, same as any other queued row. typeHint/whHint come from the
+     file's own ประเภทกล่อง/คลัง columns when the operator mapped them — every
+     column on file gets used somewhere, not just the barcode. */
+  function autoRegisterOutBox(tag,typeHint,whHint){
+    var typeKey=findBoxTypeMatch(typeHint)||Object.keys(S.boxtypes||{})[0]||'';
     var bt=S.boxtypes[typeKey]||{};
     var value=bt.value||S.cfg.boxValue;
+    var whKey=findWarehouseMatch(whHint)||'';
     var regTs=iso();
     var b={tag:tag,type:typeKey,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',
       outGate:null,outWh:'',outAt:null,dueAt:null,lot:'',expiry:'',supplier:'',
-      regAt:regTs,regBy:USER,location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},
+      regAt:regTs,regBy:USER,location:{wh:whKey,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},
       lastSeenAt:regTs,labeled:true,labeledAt:regTs,labeledBy:USER,
       history:[{dir:'reg',ts:regTs,recorder:USER,note:'สร้างอัตโนมัติจากไฟล์นำเข้า Gate ขาออก (ไม่พบในระบบมาก่อน)'}]};
     S.boxes[tag]=b;
@@ -8735,13 +8846,13 @@ function openColumnMapModal(opts){
     return b;
   }
 
-  function classifyOutTag(rawTag){
+  function classifyOutTag(rawTag,typeHint,whHint){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
     var tag=resolveTag(raw);
     var b=S.boxes[tag];
     var isNewlyRegistered=false;
-    if(!b){ b=autoRegisterOutBox(tag); isNewlyRegistered=true; }
+    if(!b){ b=autoRegisterOutBox(tag,typeHint,whHint); isNewlyRegistered=true; }
     if(b.status==='out')return {ok:false,code:'out',tag:tag,reason:'ออกไปแล้ว (ยังไม่คืน)'};
     if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
     if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
@@ -8759,6 +8870,27 @@ function openColumnMapModal(opts){
     for(var i=0;i<list.length;i++){if(String(list[i].id||'').toLowerCase()===tl)return list[i].id;}
     for(var j=0;j<list.length;j++){if(String(list[j].name||'').toLowerCase()===tl)return list[j].id;}
     return null;
+  }
+
+  /* Auto-create a Customer master record from the file's ลูกค้า/ปลายทาง +
+     ที่อยู่/สาขา + เบอร์โทร + อีเมล columns when the destination name doesn't
+     match anyone already on file — every column the operator mapped ends up
+     stored somewhere, not just referenced for a one-off shipment. Only fires
+     when the whole file agrees on ONE destination name (same rule as
+     applyShipmentDetails below), so a multi-customer file never gets a
+     guessed contact record. */
+  function autoCreateCustomerIfNeeded(name,addr,phone,email){
+    var nm=String(name||'').trim();
+    if(!nm)return null;
+    var id=nextSeqId('CUST-',Object.keys(S.customers));
+    var regTs=iso();
+    S.customers[id]={id:id,name:nm,kind:'customer',addr:String(addr||'').trim(),
+      phone:normPhoneDigits(String(phone||'').trim()),email:String(email||'').trim(),
+      taxId:'',contactPerson:'',status:'active',creditLimit:0,fineRate:0,lostFine:0,
+      returnDays:S.cfg.agingDays};
+    auditEntry('CREATE',USER,id,nm,null,S.customers[id]);
+    save();
+    return id;
   }
 
   /* ---- Read the chosen file → filter blank rows → open the mapping modal ---- */
@@ -8821,48 +8953,101 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Classify each row using the operator-confirmed column map → enqueue the valid ones ----
-     rows already has its header at [0] and blank rows filtered out (done in handleOutImportFile). */
+     rows already has its header at [0] and blank rows filtered out (done in handleOutImportFile).
+     Every mapped column lands somewhere per accepted tag — none silently dropped:
+     type/wh → auto-registered box's master fields; condition → outConditionMap
+     (same map the ยิงออก UI itself writes to); doNo/poNo/recorder → per-tag
+     override maps saveOutbound() reads instead of the batch-wide form value;
+     tsDate+tsTime (or a single ts column) → pendingOutTsMap, the real ship
+     timestamp. dest/custAddr/custPhone/custEmail feed applyShipmentDetails
+     below, which both fills the DO form AND — when the destination doesn't
+     match anyone on file — creates a new Customer record from them. */
   function processOutRows(rows,colMap,fname){
-    var tc=colMap.tag, dc=colMap.dest, rc=colMap.retDays,
-        pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts;
+    var tc=colMap.tag, tyc=colMap.type, whc=colMap.wh, cc=colMap.condition,
+        dc=colMap.dest, cac=colMap.custAddr, cpc=colMap.custPhone, cec=colMap.custEmail,
+        rc=colMap.retDays, doc=colMap.doNo, poc=colMap.poNo,
+        pc=colMap.plate, vc=colMap.driver,
+        tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[];
     var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[];
+    var custAddrVals=[], custPhoneVals=[], custEmailVals=[];
     for(var i=1;i<rows.length;i++){
       var raw=String(rows[i][tc]==null?'':rows[i][tc]).trim();
       if(!raw)continue;
       var key=raw.toLowerCase();
       if(seen[key]){dupInFile.push(raw);continue;}
       seen[key]=1;
-      var v=classifyOutTag(raw);
+      var typeHint=tyc>=0?rows[i][tyc]:null, whHint=whc>=0?rows[i][whc]:null;
+      var v=classifyOutTag(raw,typeHint,whHint);
       if(!v.ok){failed.push({tag:v.tag||raw,reason:v.reason});continue;}
       if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
       pendingOut.push(v.tag);added.push(v.tag);
       if(v.isNew)autoRegistered.push(v.tag);
       // only pull shipment-detail values from rows that actually made it into the queue
       if(dc>=0)destVals.push(rows[i][dc]);
+      if(cac>=0)custAddrVals.push(rows[i][cac]);
+      if(cpc>=0)custPhoneVals.push(rows[i][cpc]);
+      if(cec>=0)custEmailVals.push(rows[i][cec]);
       if(rc>=0)retVals.push(rows[i][rc]);
       if(pc>=0)plateVals.push(rows[i][pc]);
       if(vc>=0)driverVals.push(rows[i][vc]);
-      if(tsc>=0){
-        tsVals.push(rows[i][tsc]);
-        var parsedTs=parseOutTsValue(rows[i][tsc]);
-        if(parsedTs)pendingOutTsMap[v.tag]=parsedTs;
+      if(cc>=0){
+        var condCode=classifyCondition(rows[i][cc]);
+        if(condCode)outConditionMap[v.tag]=condCode;
       }
+      if(doc>=0){
+        var doRaw=String(rows[i][doc]==null?'':rows[i][doc]).trim();
+        if(doRaw)pendingOutDoMap[v.tag]=doRaw;
+      }
+      if(poc>=0){
+        var poRaw=String(rows[i][poc]==null?'':rows[i][poc]).trim();
+        if(poRaw)pendingOutPoMap[v.tag]=poRaw;
+      }
+      if(rec>=0){
+        var recRaw=String(rows[i][rec]==null?'':rows[i][rec]).trim();
+        if(recRaw)pendingOutRecorderMap[v.tag]=recRaw;
+      }
+      // date+time as two columns takes priority over a single combined Timestamp column
+      var parsedTs=null;
+      if(tdc>=0){
+        var dateRaw=String(rows[i][tdc]==null?'':rows[i][tdc]).trim();
+        var timeRaw=ttc>=0?String(rows[i][ttc]==null?'':rows[i][ttc]).trim():'';
+        parsedTs=parseOutTsValue(timeRaw?(dateRaw+' '+timeRaw):dateRaw);
+        tsVals.push(timeRaw?(dateRaw+' '+timeRaw):dateRaw);
+      } else if(tsc>=0){
+        tsVals.push(rows[i][tsc]);
+        parsedTs=parseOutTsValue(rows[i][tsc]);
+      }
+      if(parsedTs)pendingOutTsMap[v.tag]=parsedTs;
     }
 
     if(autoRegistered.length)save();
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
-    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals);
-    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered);
+    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals);
+
+    /* Confirming the column-mapping modal is the operator's confirmation —
+       don't make them find and click "ยืนยันส่งออก" again afterward. Ship
+       immediately if the form already has everything saveOutbound() needs
+       (gate is bound to the device, customer/DO/PO/etc. just got auto-filled
+       above); if some required field is still missing, saveOutbound() shows
+       its own toast explaining what and leaves the queue intact so the
+       operator can fill it in and confirm manually, same as before. */
+    var autoShipped=false;
+    if(added.length){
+      var queuedBefore=pendingOut.length;
+      saveOutbound();
+      autoShipped=queuedBefore>0&&pendingOut.length===0;
+    }
+    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped);
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
      operator already typed, and never guesses across conflicting rows. ---- */
-  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals){
+  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals){
     var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals)};
 
     var d=distinctVals(destVals);
@@ -8872,7 +9057,17 @@ function openColumnMapModal(opts){
       if(custId){
         if(!val('doCustomer')){setv('doCustomer',custId);meta.dest.applied=true;}
         meta.dest.matched=true;meta.dest.custId=custId;
-      }else{meta.dest.matched=false;} // name in file doesn't exist in customer master
+      }else{
+        // name in file doesn't exist in customer master — create one from the
+        // file's own ที่อยู่/สาขา, เบอร์โทร, อีเมล columns instead of dropping them
+        var addrArr=distinctVals(custAddrVals||[]),phoneArr=distinctVals(custPhoneVals||[]),emailArr=distinctVals(custEmailVals||[]);
+        var newCustId=autoCreateCustomerIfNeeded(d[0],addrArr[0],phoneArr[0],emailArr[0]);
+        if(newCustId){
+          if(typeof renderSetup==='function')renderSetup();
+          if(!val('doCustomer')){setv('doCustomer',newCustId);meta.dest.applied=true;}
+          meta.dest.matched=true;meta.dest.custId=newCustId;meta.dest.created=true;
+        }else{meta.dest.matched=false;}
+      }
     }
 
     var rdArr=distinctVals(retVals);
@@ -8896,7 +9091,7 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Result summary modal (same look as the app's other modals) ---- */
-  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered){
+  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped){
     var okN=added.length;
     var skipN=dupInFile.length+alreadyQueued.length+failed.length;
     var byReason={};failed.forEach(function(x){(byReason[x.reason]=byReason[x.reason]||[]).push(x.tag);});
@@ -8907,10 +9102,15 @@ function openColumnMapModal(opts){
     var h='<div class="mhead"><h3>ผลการนำเข้าไฟล์</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
     h+='<div class="mbody" style="max-height:66vh;overflow:auto;">';
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
+    if(okN&&autoShipped){
+      h+='<div class="small" style="margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--posSoft);border:1px solid var(--pos);color:var(--pos);font-weight:600;">✓ ส่งออกสำเร็จอัตโนมัติแล้ว '+okN+' ใบ — ไม่ต้องกด "ยืนยันส่งออก" อีก</div>';
+    }else if(okN&&!autoShipped){
+      h+='<div class="small" style="margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);">เติมเข้าคิวแล้ว แต่ยังส่งออกอัตโนมัติไม่ได้เพราะข้อมูลบางช่องในฟอร์มด้านบนยังไม่ครบ (ดู toast ที่เพิ่งแจ้ง) — กรอกให้ครบแล้วกด "ยืนยันส่งออก" อีกครั้ง</div>';
+    }
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);line-height:1;">'+okN+'</div>'
-      +'<div class="small" style="color:var(--pos);margin-top:4px;">เติมเข้าคิวส่งออก</div></div>'
+      +'<div class="small" style="color:var(--pos);margin-top:4px;">'+(autoShipped?'ส่งออกแล้ว':'เติมเข้าคิวส่งออก')+'</div></div>'
       +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;line-height:1;">'+skipN+'</div>'
       +'<div class="small muted" style="margin-top:4px;">ข้าม</div></div>'
@@ -8923,6 +9123,8 @@ function openColumnMapModal(opts){
         if(!m||!m.values||!m.values.length)return;
         if(m.values.length>1){
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill bad" style="margin-right:6px;">ค่าต่างกันในไฟล์</span>'+esc(label)+': '+m.values.map(esc).join(', ')+' — กรุณาเลือก/กรอกเองด้านบน</div>');
+        }else if(m.created){
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">สร้างลูกค้าใหม่แล้ว</span>'+esc(label)+': '+esc(m.values[0])+' — จากคอลัมน์ที่อยู่/เบอร์โทร/อีเมลในไฟล์</div>');
         }else if(m.applied){
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">เติมให้แล้ว</span>'+esc(label)+': '+esc(m.values[0])+'</div>');
         }else if(m.matched===false){
@@ -8935,11 +9137,11 @@ function openColumnMapModal(opts){
       line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
-      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (ใช้เป็นวันที่ส่งออกจริงต่อกล่อง เมื่อกดยืนยันส่งออก): '+meta.ts.map(esc).join(', ')+'</div>');
+      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (ใช้เป็นวันที่ส่งออกจริงต่อกล่อง): '+meta.ts.map(esc).join(', ')+'</div>');
       if(rows.length)h+='<div class="c2-label">ข้อมูลใบส่งของจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
 
-    if(okN){h+='<div class="c2-label">เพิ่มเข้าคิว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
+    if(okN){h+='<div class="c2-label">'+(autoShipped?'ส่งออกแล้ว':'เพิ่มเข้าคิว')+' · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
 
     if(autoRegistered&&autoRegistered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
@@ -8962,9 +9164,9 @@ function openColumnMapModal(opts){
     h+='</div>';
     h+='<div class="mfoot"><button class="btn accent" data-close>เข้าใจแล้ว</button></div>';
     openModal(h);
-    toast(okN?'นำเข้าสำเร็จ':'ไม่มีรายการที่เพิ่มได้',
-          okN?('เติมเข้าคิว '+okN+' ใบ'+(skipN?' · ข้าม '+skipN:'')):'ดูรายละเอียดในหน้าต่างสรุป',
-          okN?'info':'err');
+    toast(okN?(autoShipped?'ส่งออกสำเร็จ':'นำเข้าสำเร็จ'):'ไม่มีรายการที่เพิ่มได้',
+          okN?((autoShipped?'ส่งออกแล้ว ':'เติมเข้าคิว ')+okN+' ใบ'+(skipN?' · ข้าม '+skipN:'')):'ดูรายละเอียดในหน้าต่างสรุป',
+          okN?'ok':'err');
   }
 
   // wire the hidden file input
