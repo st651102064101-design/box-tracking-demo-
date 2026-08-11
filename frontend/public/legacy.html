@@ -225,8 +225,10 @@ html[data-theme="dark"] nav .pill-bg{
   nav .pill-bg{transition:none;}}
 
 main{max-width:1180px;margin:0 auto;padding:0 22px 120px;}
-.tab{display:none;}
+.tab{display:none;opacity:0;}
 .tab.active{display:block;}
+.tab.active.tab-visible{opacity:1;transition:opacity .12s ease-out;}
+@media (prefers-reduced-motion: reduce){.tab.active.tab-visible{transition:none;}}
 
 /* ============================================================ HERO / TYPE ============================================================ */
 .hero{padding:32px 0 24px;border-bottom:.5px solid var(--line);margin-bottom:36px;position:relative;}
@@ -2395,10 +2397,45 @@ function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">ในคล
   return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
 
 /* ===== toast / confirm / modal ===== */
+/* Short synthesized notification chime, one per toast() call — generated
+   with Web Audio instead of an <audio> file so there's no asset to bundle/
+   fail to load, consistent with this app running fully offline. Browsers
+   suspend a fresh AudioContext until a user gesture happens somewhere on
+   the page (autoplay policy) — most toasts already fire from a click
+   handler so this is rarely an issue, but the one-time listener below
+   resumes it the moment the operator interacts at all, and playToastSound
+   silently no-ops if audio is unavailable rather than ever breaking the
+   toast itself. */
+var _toastAudioCtx=null;
+function _toastAudioCtxGet(){
+  if(!_toastAudioCtx){
+    try{_toastAudioCtx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}
+  }
+  return _toastAudioCtx;
+}
+document.addEventListener('click',function(){var ctx=_toastAudioCtxGet();if(ctx&&ctx.state==='suspended')ctx.resume().catch(function(){});},{once:true});
+function playToastSound(kind){
+  var ctx=_toastAudioCtxGet();if(!ctx)return;
+  if(ctx.state==='suspended'){ctx.resume().catch(function(){});}
+  try{
+    var now=ctx.currentTime;
+    var freqs=kind==='err'?[420,320]:kind==='warn'?[520,440]:[660,880];
+    freqs.forEach(function(freq,i){
+      var osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';osc.frequency.value=freq;
+      var start=now+i*0.09;
+      gain.gain.setValueAtTime(0,start);
+      gain.gain.linearRampToValueAtTime(0.18,start+0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001,start+0.14);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(start);osc.stop(start+0.16);
+    });
+  }catch(e){}
+}
 function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=document.createElement('div');
   t.className='toast '+kind;var ic=kind==='err'?IC('close','tick'):kind==='info'?IC('info','tick'):kind==='warn'?IC('warn','tick'):IC('check','tick');
   t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(title)+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
-  z.appendChild(t);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},2600);}
+  z.appendChild(t);playToastSound(kind);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},2600);}
 function confirmA(title,body,okLabel,danger){return new Promise(function(res){var m=$('#alertM');
   $('#alertSheet').innerHTML='<div class="abody"><h3>'+esc(title)+'</h3><p>'+esc(body||'')+'</p></div>'+
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
@@ -2502,12 +2539,20 @@ function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.st
   },true);
 })();
 function switchTab(name){
-  $all('.tab').forEach(function(t){t.classList.remove('active');});
+  /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
+     animation — otherwise the operator sees the old (possibly scrolled-way-
+     down) page glide upward for a moment before the new tab even appears.
+     The tab swap itself gets a quick opacity fade instead (tab-visible,
+     added a frame later so the transition actually fires — display:none →
+     block can't transition, and toggling classes in the same frame as
+     adding them gets coalesced by the browser with no visible transition). */
+  window.scrollTo(0,0);
+  $all('.tab').forEach(function(t){t.classList.remove('active','tab-visible');});
   var tab=$('#tab-'+name);if(tab)tab.classList.add('active');
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
-  window.scrollTo({top:0,behavior:'smooth'});
+  if(tab)requestAnimationFrame(function(){tab.classList.add('tab-visible');});
   if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
