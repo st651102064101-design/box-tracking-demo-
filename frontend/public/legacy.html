@@ -10167,18 +10167,39 @@ function openColumnMapModal(opts){
   /* Mirrors the status gate inside scanOut() — but returns a verdict object
      instead of painting a banner, so a whole file can be classified at once.
      ⚠ Keep in sync with scanOut() if box statuses ever change. */
+  /* Register a box tag that showed up in an import file but was never
+     entered into the system (no master record). The physical box already
+     exists — it's just missing from S.boxes — so we create it directly in
+     'warehouse' status (skipping 'pending'/Gate-เข้า) and let it ship out
+     immediately, same as any other queued row. */
+  function autoRegisterOutBox(tag){
+    var typeKey=Object.keys(S.boxtypes||{})[0]||'';
+    var bt=S.boxtypes[typeKey]||{};
+    var value=bt.value||S.cfg.boxValue;
+    var regTs=iso();
+    var b={tag:tag,type:typeKey,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',
+      outGate:null,outWh:'',outAt:null,dueAt:null,lot:'',expiry:'',supplier:'',
+      regAt:regTs,regBy:USER,location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},
+      lastSeenAt:regTs,labeled:true,labeledAt:regTs,labeledBy:USER,
+      history:[{dir:'reg',ts:regTs,recorder:USER,note:'สร้างอัตโนมัติจากไฟล์นำเข้า Gate ขาออก (ไม่พบในระบบมาก่อน)'}]};
+    S.boxes[tag]=b;
+    auditEntry('CREATE',USER,tag,typeName(typeKey),null,{type:typeKey,value:value,status:'warehouse',note:'auto-created via Gate ขาออก import'});
+    return b;
+  }
+
   function classifyOutTag(rawTag){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
     var tag=resolveTag(raw);
     var b=S.boxes[tag];
-    if(!b)return {ok:false,code:'notfound',tag:raw,reason:'ไม่พบในระบบ'};
+    var isNewlyRegistered=false;
+    if(!b){ b=autoRegisterOutBox(tag); isNewlyRegistered=true; }
     if(b.status==='out')return {ok:false,code:'out',tag:tag,reason:'ออกไปแล้ว (ยังไม่คืน)'};
     if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
     if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
     if(b.status==='hold')return {ok:false,code:'hold',tag:tag,reason:'ถูกพักการใช้งาน (Hold)'};
     if(b.status==='damage')return {ok:false,code:'damage',tag:tag,reason:'สถานะชำรุด (Damage)'};
-    return {ok:true,tag:tag,type:typeName(b.type)};
+    return {ok:true,tag:tag,type:typeName(b.type),isNew:isNewlyRegistered};
   }
 
   /* find an existing customer master record by id or by name (case-insensitive) */
@@ -10235,7 +10256,7 @@ function openColumnMapModal(opts){
     var tc=colMap.tag, dc=colMap.dest, rc=colMap.retDays,
         pc=colMap.plate, vc=colMap.driver, tsc=colMap.ts;
 
-    var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={};
+    var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[];
     var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[];
     for(var i=1;i<rows.length;i++){
       var raw=String(rows[i][tc]==null?'':rows[i][tc]).trim();
@@ -10247,6 +10268,7 @@ function openColumnMapModal(opts){
       if(!v.ok){failed.push({tag:v.tag||raw,reason:v.reason});continue;}
       if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
       pendingOut.push(v.tag);added.push(v.tag);
+      if(v.isNew)autoRegistered.push(v.tag);
       // only pull shipment-detail values from rows that actually made it into the queue
       if(dc>=0)destVals.push(rows[i][dc]);
       if(rc>=0)retVals.push(rows[i][rc]);
@@ -10255,11 +10277,12 @@ function openColumnMapModal(opts){
       if(tsc>=0)tsVals.push(rows[i][tsc]);
     }
 
+    if(autoRegistered.length)save();
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
     var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals);
-    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta);
+    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered);
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
@@ -10299,7 +10322,7 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Result summary modal (same look as the app's other modals) ---- */
-  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta){
+  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered){
     var okN=added.length;
     var skipN=dupInFile.length+alreadyQueued.length+failed.length;
     var byReason={};failed.forEach(function(x){(byReason[x.reason]=byReason[x.reason]||[]).push(x.tag);});
@@ -10343,6 +10366,12 @@ function openColumnMapModal(opts){
     }
 
     if(okN){h+='<div class="c2-label">เพิ่มเข้าคิว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
+
+    if(autoRegistered&&autoRegistered.length){
+      h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังสินค้า</div>'
+        +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
+    }
 
     if(Object.keys(byReason).length){
       h+='<div class="c2-label">ส่งออกไม่ได้</div>';
