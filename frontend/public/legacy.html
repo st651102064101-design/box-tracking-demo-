@@ -6417,8 +6417,15 @@ function setupBulkTable(tbodyId,cls,allId,barId,cntId){var tbody=$('#'+tbodyId);
   tbody.addEventListener('change',function(e){var cb=e.target;if(!cb.classList.contains(cls))return;
     cb.closest('tr').classList.toggle('sel-row',cb.checked);var n=updateBulkBar(cls,barId,cntId);
     var a=$('#'+allId);if(a){var all=$all('.'+cls);a.checked=n===all.length&&all.length>0;a.indeterminate=n>0&&n<all.length;}});
-  var a=$('#'+allId);if(!a)return;var fresh=a.cloneNode(true);a.parentNode.replaceChild(fresh,a);
-  fresh.addEventListener('change',function(){$all('.'+cls).forEach(function(c){c.checked=fresh.checked;var tr=c.closest('tr');if(tr)tr.classList.toggle('sel-row',fresh.checked);});updateBulkBar(cls,barId,cntId);});}
+  var a=$('#'+allId);if(!a){updateBulkBar(cls,barId,cntId);return;}var fresh=a.cloneNode(true);a.parentNode.replaceChild(fresh,a);
+  fresh.checked=false;fresh.indeterminate=false;
+  fresh.addEventListener('change',function(){$all('.'+cls).forEach(function(c){c.checked=fresh.checked;var tr=c.closest('tr');if(tr)tr.classList.toggle('sel-row',fresh.checked);});updateBulkBar(cls,barId,cntId);});
+  /* Every call rebuilds the tbody's rows from scratch (fresh, unchecked
+     checkboxes) — without this, a bulk bar left open from BEFORE a filter/
+     search change re-rendered the table out from under it keeps showing its
+     stale "N รายการที่เลือก" count and enabled action buttons over a table
+     that now has 0 (or different) rows, since nothing else re-syncs it. */
+  updateBulkBar(cls,barId,cntId);}
 $('#bulkBoxClear').addEventListener('click',function(){clearBulk('box-cb','bulkBox','cbAllBox');});
 $('#bulkBoxLabel').addEventListener('click',function(){var t=getChecked('box-cb');if(t.length)printLabels(t);});
 /* ===== box-type (btype) bulk delete ===== */
