@@ -154,9 +154,75 @@ nav button{position:relative;color:var(--muted);font-weight:500;font-size:14px;l
   padding:9px 16px;border-radius:999px;white-space:nowrap;transition:color .3s var(--ease);z-index:1;}
 nav button .ico{margin-right:6px;font-size:13px;opacity:.85;}
 nav button:hover{color:var(--ink2);}
-nav button.active{color:var(--bg);}
-nav .pill-bg{position:absolute;border-radius:999px;background:var(--ink);
-  transition:transform .45s var(--ease),width .45s var(--ease);z-index:0;top:9px;height:36px;left:0;}
+/* the pill is glass, not an ink fill — the active label reads *through* it, so it keeps
+   the normal ink colour and only gains weight. */
+nav button.active{color:var(--ink);font-weight:600;}
+nav button.peek{color:var(--ink2);}   /* tab the pill is currently hovering over mid-drag */
+nav button.active,nav button.peek{touch-action:pan-y;}  /* let the pill drag horizontally without the page scrolling */
+
+/* ── liquid-glass pill ──────────────────────────────────────────────────────
+   Three stacked layers fake a real lens, since backdrop-filter alone cannot refract:
+     .pill-bg  — the body: faint tint + specular top edge + cast shadow
+     ::before  — an edge-only lens ring (blur masked to the rim) so text passing
+                 under the pill smears at the edges the way it does through glass
+     ::after   — the chromatic fringe: cyan on the leading edge, magenta trailing */
+nav .pill-bg{position:absolute;z-index:0;top:9px;left:0;height:36px;border-radius:999px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb,#fff 55%,transparent) 0%,
+      color-mix(in srgb,#fff 12%,transparent) 38%,
+      transparent 62%,
+      color-mix(in srgb,var(--ink) 7%,transparent) 100%),
+    color-mix(in srgb,var(--surface) 22%,transparent);
+  backdrop-filter:blur(3px) saturate(190%) brightness(1.06);
+  -webkit-backdrop-filter:blur(3px) saturate(190%) brightness(1.06);
+  border:.5px solid color-mix(in srgb,var(--ink) 16%,transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.85),      /* specular highlight along the top rim */
+    inset 0 -1px 0 rgba(255,255,255,.30),
+    0 1px 1px rgba(0,0,0,.05),
+    0 8px 18px -6px rgba(0,0,0,.22);          /* the pill floats above the bar */
+  transition:transform .45s var(--ease),width .45s var(--ease),box-shadow .3s var(--ease);}
+nav .pill-bg::before,nav .pill-bg::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;}
+nav .pill-bg::before{
+  backdrop-filter:blur(4px) saturate(130%);-webkit-backdrop-filter:blur(4px) saturate(130%);
+  -webkit-mask:radial-gradient(115% 100% at 50% 50%,transparent 55%,#000 92%);
+          mask:radial-gradient(115% 100% at 50% 50%,transparent 55%,#000 92%);}
+nav .pill-bg::after{
+  background:linear-gradient(100deg,
+    rgba(0,170,255,.55) 0%,rgba(90,220,255,.22) 6%,
+    transparent 22%,transparent 78%,
+    rgba(255,90,160,.20) 94%,rgba(255,60,120,.45) 100%);
+  -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+          mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:1.5px;
+  mix-blend-mode:screen;opacity:.9;}
+/* pressed / mid-drag: the gel lifts and stretches a touch */
+nav .pill-bg.dragging{transition:width .25s var(--ease);cursor:grabbing;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(255,255,255,.35),
+    0 2px 3px rgba(0,0,0,.07),
+    0 16px 30px -8px rgba(0,0,0,.30);}
+nav button.active{cursor:grab;}
+nav button.active:active{cursor:grabbing;}
+/* dark theme: the tint has to come from light, not from ink, or the pill turns into a hole */
+html[data-theme="dark"] nav .pill-bg{
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb,#fff 22%,transparent) 0%,
+      color-mix(in srgb,#fff 7%,transparent) 40%,
+      transparent 66%,
+      rgba(0,0,0,.18) 100%),
+    color-mix(in srgb,#fff 8%,transparent);
+  border-color:color-mix(in srgb,#fff 22%,transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.45),
+    inset 0 -1px 0 rgba(255,255,255,.12),
+    0 1px 1px rgba(0,0,0,.4),
+    0 10px 24px -8px rgba(0,0,0,.65);}
+@media (prefers-reduced-motion:reduce){
+  nav .pill-bg{transition:none;}}
 
 main{max-width:1180px;margin:0 auto;padding:0 22px 120px;}
 .tab{display:none;}
@@ -830,8 +896,31 @@ html[data-layout="sidebar"] nav{flex-direction:column;gap:4px;max-width:none;pad
 html[data-layout="sidebar"] nav button{justify-content:flex-start;width:100%;padding:11px 14px;border-radius:12px;font-size:14.5px;}
 html[data-layout="sidebar"] nav button .ico{margin-right:10px;}
 html[data-layout="sidebar"] nav button:hover:not(.active){background:color-mix(in srgb,var(--ink) 6%,transparent);}
-html[data-layout="sidebar"] nav button.active{color:var(--bg);background:var(--ink);}
-html[data-layout="sidebar"] #pillBg{display:none;}   /* the sliding pill is horizontal-only; sidebar uses a solid active fill instead */
+/* same glass as the top-bar pill, applied straight to the button so the vertical rail
+   matches — no sliding element here, the fill just moves with .active */
+html[data-layout="sidebar"] nav button.active{color:var(--ink);font-weight:600;cursor:default;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb,#fff 55%,transparent) 0%,
+      color-mix(in srgb,#fff 12%,transparent) 38%,
+      transparent 62%,
+      color-mix(in srgb,var(--ink) 7%,transparent) 100%),
+    color-mix(in srgb,var(--surface) 22%,transparent);
+  backdrop-filter:blur(3px) saturate(190%) brightness(1.06);
+  -webkit-backdrop-filter:blur(3px) saturate(190%) brightness(1.06);
+  border:.5px solid color-mix(in srgb,var(--ink) 16%,transparent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 6px 14px -6px rgba(0,0,0,.22);}
+html[data-theme="dark"][data-layout="sidebar"] nav button.active{
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb,#fff 22%,transparent) 0%,
+      color-mix(in srgb,#fff 7%,transparent) 40%,
+      transparent 66%,
+      rgba(0,0,0,.18) 100%),
+    color-mix(in srgb,#fff 8%,transparent);
+  border-color:color-mix(in srgb,#fff 22%,transparent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 18px -8px rgba(0,0,0,.65);}
+html[data-layout="sidebar"] #pillBg{display:none;}   /* the sliding pill is horizontal-only; sidebar uses the glass fill above instead */
 html[data-layout="sidebar"] main{margin-left:var(--sidebar-w);max-width:none;width:calc(100% - var(--sidebar-w));padding:0 40px 120px;}
 
 /* ── sidebar collapse (icon-only rail) — only meaningful in sidebar mode, so the
@@ -953,6 +1042,37 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
      boxes are in each of the five states right now. Each tile is the same
      goInventory() drill-in the old KPI row already used. -->
 <section class="tab active" id="tab-overview">
+  <style>
+  /* Master Data Health Check — warns when the dashboard is reading from
+     master tables (box types / customers-suppliers / warehouses & gates /
+     employees) that nobody has filled in yet. Every number on this page
+     derives from those tables, so an empty one isn't "no activity today",
+     it's "there's nothing here to compute from" — worth a distinct warning,
+     not silence. Sits at the very top of Overview (see #mdHealthBanner
+     below) so it's the first thing anyone sees on a freshly-set-up system. */
+  .mdh-banner{display:flex;align-items:flex-start;gap:12px;margin:0 0 20px;padding:14px 16px;
+    border-radius:16px;background:var(--warnSoft);border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));}
+  .mdh-banner .mdh-ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);}
+  .mdh-banner .mdh-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .mdh-body{flex:1;min-width:0;}
+  .mdh-title{font-size:13.5px;font-weight:700;color:var(--warn);letter-spacing:-.01em;}
+  .mdh-list{margin-top:3px;font-size:12.5px;color:var(--ink2);line-height:1.5;}
+  .mdh-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .mdh-action{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+    padding:6px 12px;border-radius:999px;background:var(--surface);color:var(--warn);
+    border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));transition:background .15s,border-color .15s;}
+  .mdh-action:hover{background:color-mix(in srgb,var(--warn) 10%,var(--surface));border-color:var(--warn);}
+  /* inline "not set up yet" hint reused inside KPI cards (e.g. space
+     utilisation) — same warn color, tucked into a card instead of the banner */
+  .mdh-inline{color:var(--warn);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 80%,black);}
+  /* the density KPI card itself, while rack locations are unset */
+  .mdh-inline-kpi .s{color:var(--warn);font-weight:600;}
+  .mdh-inline-kpi .v{color:var(--warn);}
+  </style>
+  <div id="mdHealthBanner"></div>
+
   <div class="hero">
     <div class="eyebrow reveal">ภาพรวมแบบเรียลไทม์</div>
     <h1 class="h-title reveal d1">กล่องทุกใบ<br>รู้อยู่ที่ไหน</h1>
@@ -997,36 +1117,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
 
   <div id="tab-reports" style="display:none;">
-  <style>
-  /* Master Data Health Check — warns when the dashboard is reading from
-     master tables (rack locations / box types / customers-suppliers /
-     employees) that nobody has filled in yet. Every number on this page
-     derives from those tables, so an empty one isn't "no activity today",
-     it's "there's nothing here to compute from" — worth a distinct warning,
-     not silence. */
-  .mdh-banner{display:flex;align-items:flex-start;gap:12px;margin:0 0 20px;padding:14px 16px;
-    border-radius:16px;background:var(--warnSoft);border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));}
-  .mdh-banner .mdh-ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
-    background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);}
-  .mdh-banner .mdh-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .mdh-body{flex:1;min-width:0;}
-  .mdh-title{font-size:13.5px;font-weight:700;color:var(--warn);letter-spacing:-.01em;}
-  .mdh-list{margin-top:3px;font-size:12.5px;color:var(--ink2);line-height:1.5;}
-  .mdh-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
-  .mdh-action{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
-    padding:6px 12px;border-radius:999px;background:var(--surface);color:var(--warn);
-    border:.5px solid color-mix(in srgb,var(--warn) 35%,var(--line));transition:background .15s,border-color .15s;}
-  .mdh-action:hover{background:color-mix(in srgb,var(--warn) 10%,var(--surface));border-color:var(--warn);}
-  /* inline "not set up yet" hint reused inside KPI cards (e.g. space
-     utilisation) — same warn color, tucked into a card instead of the banner */
-  .mdh-inline{color:var(--warn);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
-  .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 80%,black);}
-  /* the density KPI card itself, while rack locations are unset */
-  .mdh-inline-kpi .s{color:var(--warn);font-weight:600;}
-  .mdh-inline-kpi .v{color:var(--warn);}
-  </style>
-  <div id="mdHealthBanner"></div>
-
   <div class="hero">
     <div class="eyebrow reveal">รายงาน &amp; สถิติ</div>
     <h1 class="h-title reveal d1">รายละเอียดเพิ่มเติม</h1>
@@ -2346,6 +2436,70 @@ window.requireGateSetup=requireGateSetup;window.openForcedModal=openForcedModal;
 
 /* ===== nav ===== */
 function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.style.transform='translateX('+b.offsetLeft+'px)';}
+
+/* ── drag the glass pill to switch tabs ────────────────────────────────────
+   Press the active tab and drag sideways: the pill follows the finger, morphs to the
+   width of whichever tab it is over, and commits to that tab on release. A press that
+   never moves past the slop threshold stays a plain click, so nothing regresses for
+   people who just tap. Top-bar layout only — the sidebar has no sliding pill. */
+(function(){
+  var SLOP=4, drag=null, didDrag=false;
+  function tabs(){return $all('#nav button[data-tab]');}
+  function nearest(x){   /* button whose horizontal centre is closest to the pill's centre */
+    var best=null,bd=Infinity;
+    tabs().forEach(function(b){var d=Math.abs((b.offsetLeft+b.offsetWidth/2)-x);if(d<bd){bd=d;best=b;}});
+    return best;
+  }
+  function onDown(e){
+    if(e.button!==undefined&&e.button!==0)return;
+    if(typeof effectiveLayout==='function'&&effectiveLayout()!=='top')return;
+    var b=e.target.closest?e.target.closest('#nav button[data-tab]'):null;
+    if(!b||!b.classList.contains('active'))return;
+    var bg=$('#pillBg');if(!bg)return;
+    drag={pill:bg,startX:e.clientX,base:b.offsetLeft,w:b.offsetWidth,moved:false,target:b,id:e.pointerId};
+    try{$('#nav').setPointerCapture(e.pointerId);}catch(_){}
+  }
+  function onMove(e){
+    if(!drag)return;
+    var dx=e.clientX-drag.startX;
+    if(!drag.moved){
+      if(Math.abs(dx)<SLOP)return;
+      drag.moved=true;drag.pill.classList.add('dragging');
+    }
+    var list=tabs(),first=list[0],last=list[list.length-1];
+    var min=first.offsetLeft, max=last.offsetLeft+last.offsetWidth-drag.w;
+    var x=Math.max(min,Math.min(max,drag.base+dx));
+    drag.pill.style.transform='translateX('+x+'px)';
+    var hit=nearest(x+drag.w/2);
+    if(hit&&hit!==drag.target){
+      drag.target=hit;
+      drag.w=hit.offsetWidth;drag.pill.style.width=drag.w+'px';   /* morph to the new tab's width */
+      list.forEach(function(b){b.classList.toggle('peek',b===hit&&!b.classList.contains('active'));});
+    }
+    e.preventDefault();
+  }
+  function onUp(e){
+    if(!drag)return;
+    var d=drag;drag=null;
+    try{$('#nav').releasePointerCapture(d.id);}catch(_){}
+    d.pill.classList.remove('dragging');
+    tabs().forEach(function(b){b.classList.remove('peek');});
+    if(!d.moved)return;                        /* never left the slop radius — let the click through */
+    didDrag=true;                              /* swallow the click this release is about to fire */
+    if(d.target&&!d.target.classList.contains('active'))switchTab(d.target.dataset.tab);
+    else movePill($('#nav button.active')||d.target);   /* snapped back to where it started */
+  }
+  var nav=$('#nav');if(!nav)return;
+  nav.addEventListener('pointerdown',onDown);
+  nav.addEventListener('pointermove',onMove,{passive:false});
+  nav.addEventListener('pointerup',onUp);
+  nav.addEventListener('pointercancel',onUp);
+  /* a drag that ends over a different tab must not also fire that tab's click handler.
+     Only a release that actually dragged sets the flag, so plain taps are untouched. */
+  nav.addEventListener('click',function(e){
+    if(didDrag){didDrag=false;e.stopPropagation();e.preventDefault();}
+  },true);
+})();
 function switchTab(name){
   $all('.tab').forEach(function(t){t.classList.remove('active');});
   var tab=$('#tab-'+name);if(tab)tab.classList.add('active');
@@ -5262,13 +5416,17 @@ function trackCardHtml(b){
 }
 
 /* ===== MASTER DATA HEALTH CHECK =====
-   Every KPI on the dashboard is computed from these four master tables —
-   an empty one isn't "quiet today", it's "nothing to compute from yet",
-   which reads very differently to someone new to the system. Checked as
-   a plain function (not baked into renderOverview) so it can be unit-
-   tested or reused (e.g. a startup check) independent of the DOM. */
+   Every KPI on the dashboard is computed from these master tables — an
+   empty one isn't "quiet today", it's "nothing to compute from yet", which
+   reads very differently to someone new to the system. Every master table
+   the Setup tab strip covers (ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) gets
+   a check here — not a hand-picked subset — so a freshly-set-up system
+   flags whichever ones are still empty instead of silently missing one.
+   Checked as a plain function (not baked into renderOverview) so it can be
+   unit-tested or reused (e.g. a startup check) independent of the DOM. */
 var MD_HEALTH_CHECKS=[
   {key:'btype', label:'ประเภทกล่อง/สินทรัพย์', stab:'btype', test:function(){return Object.keys(S.boxtypes||{}).length>0;}},
+  {key:'wh',    label:'คลัง & ประตู',        stab:'wh',    test:function(){return Object.keys(S.warehouses||{}).length>0;}},
   {key:'cust',  label:'ลูกค้า/คู่ค้า',        stab:'cust',  test:function(){return Object.keys(S.customers||{}).length>0;}},
   {key:'emp',   label:'ผู้ใช้งานระบบ',       stab:'emp',   test:function(){return Object.keys(S.employees||{}).length>0;}}
 ];
