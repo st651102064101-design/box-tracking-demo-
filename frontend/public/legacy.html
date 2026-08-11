@@ -11318,16 +11318,20 @@ window.exportInvExcel = exportInvExcel;
 function exportBoxExcel() {
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอติดบาร์โค้ด' };
-  var headers = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'PO', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
+  // Lot/Batch, วันหมดอายุ, ซัพพลายเออร์ are real per-box fields (the table's own
+  // "Lot / หมดอายุ" column, and IMPORT_CONFIGS.box's own lot/expiry/supplier
+  // fields) that this export was silently dropping.
+  var headers = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'PO', 'Lot/Batch', 'วันหมดอายุ', 'ซัพพลายเออร์', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
     return [barcodeCell(b.tag), typeName(b.type), b.value || 0, statusLabel[b.status] || b.status,
       b.status === 'out' ? custName(b.customer) : (loc.wh ? whName(loc.wh) : ''),
       loc.zone || '', loc.rack || '', loc.shelf || '', loc.slot || '',
       b.status === 'out' ? custName(b.customer) : '', b.do || '', b.po || '',
+      b.lot || '', b.expiry || '', b.supplier || '',
       b.cycles || 0, b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
-  var example = [barcodeCell('BOX-001'), 'ลังพลาสติก', 450, 'ในคลัง', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', '', '', 0, dstr() + ' ' + tstr()];
+  var example = [barcodeCell('BOX-001'), 'ลังพลาสติก', 450, 'ในคลัง', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', '', '', '', '', '', 0, dstr() + ' ' + tstr()];
   downloadXLSSmart('boxes-' + dstr() + '.xls', headers, rows, example, { barcodeCols: [0] });
 }
 window.exportBoxExcel = exportBoxExcel;
@@ -11348,13 +11352,16 @@ window.exportEmpExcel = exportEmpExcel;
 
 function exportLocExcel() {
   var locs = Object.values(S.locations).sort(function(a, b) { return a.code < b.code ? -1 : 1; });
-  var headers = ['รหัสตำแหน่ง', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ประเภทแร็ค', 'มีของ/ว่าง'];
+  // "หมายเหตุ" is a real field on every location row (see the table's own
+  // thead in ssec-loc, and IMPORT_CONFIGS.loc's own 'note' field) — this
+  // export was silently dropping it.
+  var headers = ['รหัสตำแหน่ง', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ประเภทแร็ค', 'หมายเหตุ', 'มีของ/ว่าง'];
   var occMap = (typeof locOccupancyMap === 'function') ? locOccupancyMap() : {};
   var rows = locs.map(function(l) {
     return [l.code, l.wh && S.warehouses[l.wh] ? S.warehouses[l.wh].name : '', l.zone || '', l.rack || '',
-      l.shelf || '', l.slot || '', l.type || '', occMap[l.code] ? 'มีของ' : 'ว่าง'];
+      l.shelf || '', l.slot || '', l.type || '', l.note || '', occMap[l.code] ? 'มีของ' : 'ว่าง'];
   });
-  var example = ['WH-01-โซนA-R01-1-01', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', 'ว่าง'];
+  var example = ['WH-01-โซนA-R01-1-01', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', '', 'ว่าง'];
   downloadXLSSmart('rack-locations-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportLocExcel = exportLocExcel;
@@ -11371,15 +11378,27 @@ function exportBtypeExcel() {
 }
 window.exportBtypeExcel = exportBtypeExcel;
 
+var WH_GATE_TYPE_LABEL = { both: 'เข้า-ออกร่วมกัน', 'in': 'ขาเข้าอย่างเดียว', out: 'ขาออกอย่างเดียว' };
 function exportWhExcel() {
   var whs = Object.values(S.warehouses).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
+  // The table's own "ประเภทประตู" column (see thead in ssec-wh) is a real field
+  // this export was missing — every gate CAN carry its own direction
+  // (ทิศทางรายประตู), so this summarizes rather than assuming they all agree:
+  // one label when they do, a breakdown like "เข้า-ออกร่วมกัน 2 · ขาเข้าอย่างเดียว 1" when they don't.
+  function gateTypeSummary(w) {
+    var counts = { both: 0, 'in': 0, out: 0 };
+    (w.gates || []).forEach(function(g) { counts[gateTypeOfWh(w, g)]++; });
+    var parts = ['both', 'in', 'out'].filter(function(k) { return counts[k]; })
+      .map(function(k) { return WH_GATE_TYPE_LABEL[k] + ' ' + counts[k]; });
+    return parts.join(' · ') || WH_GATE_TYPE_LABEL[w.gateType || 'both'];
+  }
+  var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'ประเภทประตู', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
   var rows = whs.map(function(w) {
     var gs = (w.gates || []).slice().sort(function(a, b) { return a - b; });
     var stored = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location || {}).wh === w.id; }).length;
-    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
+    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gateTypeSummary(w), gs.length, stored];
   });
-  var example = ['WH-01', 'คลังกลาง', 1, 4, 4, 0];
+  var example = ['WH-01', 'คลังกลาง', 1, 4, 'เข้า-ออกร่วมกัน 4', 4, 0];
   downloadXLSSmart('warehouses-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportWhExcel = exportWhExcel;
