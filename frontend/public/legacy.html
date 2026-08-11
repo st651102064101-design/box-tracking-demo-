@@ -2333,18 +2333,13 @@ $('#modal').addEventListener('click',function(e){if(e.target.closest('[data-clos
 function openForcedModal(h){var bd=$('#modal .backdrop');if(bd)bd.removeAttribute('data-close');
   $('#modalSheet').innerHTML=h;$('#modal').classList.add('show');}
 function releaseForcedModal(){var bd=$('#modal .backdrop');if(bd)bd.setAttribute('data-close','');}
-/* checks the given gate direction ('in'/'out') and force-pops the "add warehouse & gate"
-   modal if there is nothing usable yet — returns true if it blocked (modal shown) */
+/* Gate ขาเข้า/ขาออก no longer force-block behind a non-dismissible modal when
+   no warehouse/gate is configured yet — refreshGateDisplays() already shows
+   an inline "ยังไม่มีประตูในระบบ" empty-state with an add-gate button right
+   in the gate display area, so a screen-blocking modal on top of that was
+   redundant friction. Kept as a no-op (rather than deleting the two call
+   sites in switchTab) so re-adding a block later is a one-line change. */
 function requireGateSetup(dir){
-  var allGs=allGateNums();
-  if(!allGs.length){
-    openForcedModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate'+(dir?(dir==='out'?'ขาออก':'ขาเข้า'):'')+'</p><button class="btn accent" onclick="releaseForcedModal();closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');
-    return true;
-  }
-  if(dir&&!gateNumsForDir(dir).length){
-    openForcedModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม" — ต้องแก้ประเภทประตูก่อนใช้งาน Gate'+(dir==='out'?'ขาออก':'ขาเข้า')+'</p><button class="btn accent" onclick="releaseForcedModal();closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');
-    return true;
-  }
   return false;
 }
 /* Same idea as requireGateSetup, for the Gate ขาออก screen specifically:
@@ -8820,6 +8815,23 @@ function openColumnMapModal(opts){
     return null;
   }
 
+  /* Auto-create a Warehouse master record from the file's คลัง column when
+     the name doesn't match anyone already on file — same reasoning as
+     autoCreateCustomerIfNeeded below: every column the operator mapped ends
+     up stored in master data, not just referenced for a one-off import. No
+     gates are assigned yet (a file only gives a warehouse name, never gate
+     numbers) — the record shows up in Master ▸ คลัง & ประตู for the operator
+     to finish setting up gates on afterward. */
+  function autoCreateWarehouseIfNeeded(name){
+    var nm=String(name||'').trim();
+    if(!nm)return null;
+    var id=nextSeqId('WH-',Object.keys(S.warehouses));
+    S.warehouses[id]={id:id,name:nm,gates:[]};
+    auditEntry('CREATE',USER,id,nm,null,S.warehouses[id]);
+    save();
+    return id;
+  }
+
   var COND_TEXT_TO_CODE={
     'สมบูรณ์':'good','ดี':'good','good':'good',
     'มีตำหนิเล็กน้อย':'minor','ตำหนิ':'minor','minor':'minor',
@@ -8845,7 +8857,7 @@ function openColumnMapModal(opts){
     var typeKey=findBoxTypeMatch(typeHint)||Object.keys(S.boxtypes||{})[0]||'';
     var bt=S.boxtypes[typeKey]||{};
     var value=bt.value||S.cfg.boxValue;
-    var whKey=findWarehouseMatch(whHint)||'';
+    var whKey=findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint)||'';
     var regTs=iso();
     var b={tag:tag,type:typeKey,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',
       outGate:null,outWh:'',outAt:null,dueAt:null,lot:'',expiry:'',supplier:'',
@@ -8860,6 +8872,13 @@ function openColumnMapModal(opts){
   function classifyOutTag(rawTag,typeHint,whHint){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
+    /* Resolve/create the คลัง master record for EVERY accepted row, not just
+       newly auto-registered boxes — a file that references a warehouse name
+       not yet on file should grow the master data regardless of whether the
+       box itself was already known. Existing boxes' own location.wh is left
+       untouched here (same caution as dest/customer elsewhere): this just
+       makes sure the warehouse exists in Master ▸ คลัง & ประตู. */
+    if(whHint)findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint);
     var tag=resolveTag(raw);
     var b=S.boxes[tag];
     var isNewlyRegistered=false;
