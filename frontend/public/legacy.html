@@ -9459,6 +9459,29 @@ function openColumnMapModal(opts){
     return null;
   }
 
+  /* Auto-create a Box Type master record from the file's ประเภทกล่อง column
+     when the name doesn't match anyone already on file — same reasoning as
+     autoCreateWarehouseIfNeeded/autoCreateCustomerIfNeeded. Without this, a
+     fresh account (no box types set up yet) had NO way for an import to
+     produce a usable type: findBoxTypeMatch() always missed, and the old
+     fallback — "just use whichever box type happens to be first in
+     S.boxtypes" — silently fell through to '' when there were none at all,
+     so every auto-registered box ended up with an empty/wrong type and
+     never showed up under any type in Master ▸ ประเภทกล่อง or the by-type
+     report ("(ไม่ระบุ)" instead). unit is required on a manually-added box
+     type, so a file with no หน่วยนับ column falls back to a generic 'ชิ้น'
+     rather than leaving it blank. */
+  function autoCreateBoxTypeIfNeeded(name,unit,value){
+    var nm=String(name||'').trim();
+    if(!nm)return null;
+    var id=nextSeqId('BT-',Object.keys(S.boxtypes));
+    var v=(value!=null&&value!==''&&!isNaN(Number(value)))?Number(value):null;
+    S.boxtypes[id]={id:id,name:nm,unit:String(unit||'').trim()||'ชิ้น',value:v,dim:''};
+    auditEntry('CREATE',USER,id,nm,null,S.boxtypes[id]);
+    save();
+    return id;
+  }
+
   /* find an existing warehouse master record by id or by name (case-insensitive) */
   function findWarehouseMatch(text){
     var t=String(text||'').trim();
@@ -9524,7 +9547,7 @@ function openColumnMapModal(opts){
      column on file gets used somewhere, not just the barcode. */
   function autoRegisterOutBox(tag,typeHint,whHint,invHint){
     invHint=invHint||{};
-    var typeKey=findBoxTypeMatch(typeHint)||Object.keys(S.boxtypes||{})[0]||'';
+    var typeKey=findBoxTypeMatch(typeHint)||autoCreateBoxTypeIfNeeded(typeHint,invHint.unit,invHint.value)||Object.keys(S.boxtypes||{})[0]||'';
     var bt=S.boxtypes[typeKey]||{};
     var value=(invHint.value!=null&&invHint.value!==''&&!isNaN(Number(invHint.value)))?Number(invHint.value):(bt.value||S.cfg.boxValue);
     var whKey=findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint)||'';
@@ -9543,13 +9566,15 @@ function openColumnMapModal(opts){
   function classifyOutTag(rawTag,typeHint,whHint,invHint){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
-    /* Resolve/create the คลัง master record for EVERY accepted row, not just
-       newly auto-registered boxes — a file that references a warehouse name
-       not yet on file should grow the master data regardless of whether the
-       box itself was already known. Existing boxes' own location.wh is left
-       untouched here (same caution as dest/customer elsewhere): this just
-       makes sure the warehouse exists in Master ▸ คลัง & ประตู. */
+    /* Resolve/create the คลัง/ประเภทกล่อง master records for EVERY accepted
+       row, not just newly auto-registered boxes — a file that references a
+       warehouse or box type not yet on file should grow the master data
+       regardless of whether the box itself was already known. Existing
+       boxes' own location.wh/type are left untouched here (same caution as
+       dest/customer elsewhere): this just makes sure the records exist in
+       Master ▸ คลัง & ประตู / ประเภทกล่อง. */
     if(whHint)findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint);
+    if(typeHint){var ih=invHint||{};findBoxTypeMatch(typeHint)||autoCreateBoxTypeIfNeeded(typeHint,ih.unit,ih.value);}
     var tag=resolveTag(raw);
     var b=S.boxes[tag];
     var isNewlyRegistered=false;
@@ -9664,7 +9689,7 @@ function openColumnMapModal(opts){
      below, which both fills the DO form AND — when the destination doesn't
      match anyone on file — creates a new Customer record from them. */
   function processOutRows(rows,colMap,fname){
-    var tc=colMap.tag, tyc=colMap.type, whc=colMap.wh, cc=colMap.condition,
+    var tc=colMap.tag, tyc=colMap.type, unitc=colMap.unit, whc=colMap.wh, cc=colMap.condition,
         dc=colMap.dest, cac=colMap.custAddr, cpc=colMap.custPhone, cec=colMap.custEmail,
         rc=colMap.retDays, doc=colMap.doNo, poc=colMap.poNo,
         pc=colMap.plate, vc=colMap.driver,
@@ -9704,6 +9729,7 @@ function openColumnMapModal(opts){
       var typeHint=tyc>=0?rows[i][tyc]:null, whHint=whc>=0?rows[i][whc]:null;
       var invHint={
         value:valc>=0?rows[i][valc]:null,
+        unit:unitc>=0?String(rows[i][unitc]==null?'':rows[i][unitc]).trim():'',
         lot:lotc>=0?String(rows[i][lotc]==null?'':rows[i][lotc]).trim():'',
         expiry:expc>=0?String(rows[i][expc]==null?'':rows[i][expc]).trim():'',
         supplier:supc>=0?String(rows[i][supc]==null?'':rows[i][supc]).trim():''
