@@ -5428,6 +5428,7 @@ function trackCardHtml(b){
 var MD_HEALTH_CHECKS=[
   {key:'btype', label:'ประเภทกล่อง/สินทรัพย์', stab:'btype', test:function(){return Object.keys(S.boxtypes||{}).length>0;}},
   {key:'wh',    label:'คลัง & ประตู',        stab:'wh',    test:function(){return Object.keys(S.warehouses||{}).length>0;}},
+  {key:'box',   label:'ลงทะเบียนกล่อง',      stab:'box',   test:function(){return Object.keys(S.boxes||{}).length>0;}},
   {key:'cust',  label:'ลูกค้า/คู่ค้า',        stab:'cust',  test:function(){return Object.keys(S.customers||{}).length>0;}},
   {key:'emp',   label:'ผู้ใช้งานระบบ',       stab:'emp',   test:function(){return Object.keys(S.employees||{}).length>0;}}
 ];
@@ -5635,6 +5636,19 @@ function dfSyncUI(id){
   ['day','month','year'].forEach(function(u){var el=$('#df-'+id+'-'+u+'-n');if(el&&document.activeElement!==el)el.value=st[u];});
   dfClampCustomInputs(id);
 }
+/* A filter over zero rows has nothing to filter — hides the bar (and its
+   caption) instead of showing a live control that can never change what's
+   on screen. Each report's render function passes whether it currently has
+   any underlying data (S.events / S.customers / S.boxes, whichever that
+   report is filtering) and this flips both the #df-{id} bar and the
+   #{id}Desc caption together, since a caption with no filter to describe is
+   equally pointless. Filtering back to 0 rows via the range itself is NOT
+   this — the bar stays up so the operator can widen the range again. */
+function dfSetVisible(id,hasData){
+  var bar=$('#df-'+id),desc=$('#'+id+'Desc');
+  if(bar)bar.style.display=hasData?'':'none';
+  if(desc)desc.style.display=hasData?'':'none';
+}
 function dfSetMode(id,mode){
   var st=dfGet(id);
   if(mode==='day'||mode==='month'||mode==='year'){
@@ -5673,6 +5687,8 @@ function renderOverview(){
   $('#kHoldNow').textContent=nf(all.filter(function(b){return b.status==='hold';}).length);
   $('#kDamageNow').textContent=nf(all.filter(function(b){return b.status==='damage';}).length);
 
+  var hasMoveEvents=S.events.some(function(e){return e.dir==='out'||e.dir==='in'||e.dir==='in-new';});
+  dfSetVisible('ovMove',hasMoveEvents);
   dfSyncUI('ovMove');
   var moveDescEl=$('#ovMoveDesc');if(moveDescEl)moveDescEl.textContent='กรองตามวันที่ผ่าน Gate เข้า/ออกจริง — '+dfDescribe('ovMove');
 
@@ -5682,6 +5698,8 @@ function renderOverview(){
   $('#kOutToday').textContent=nf(outToday);
 
   // ส่งคืนล่าสุด — ในช่วงที่กรองไว้ (dfInRange('ovRecent',...)) สูงสุด 8 รายการล่าสุด
+  var hasRecentEvents=S.events.some(function(e){return e.dir==='in'||e.dir==='in-new';});
+  dfSetVisible('ovRecent',hasRecentEvents);
   dfSyncUI('ovRecent');
   var rrDescEl=$('#ovRecentDesc');if(rrDescEl)rrDescEl.textContent='กรองตามวันที่รับคืน — '+dfDescribe('ovRecent');
   var recent=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dfInRange('ovRecent',e.ts);})
@@ -5739,6 +5757,7 @@ function renderReports(){
   /* ออกสะสม/คืนสะสม และรายการ "ออกครั้งล่าสุด/คืนครั้งล่าสุด" ต่อกล่อง
      ด้านล่าง ถูกกรองตามช่วงวันที่ที่เลือกไว้ — ทั้งหมด/ในคลัง/ออกอยู่/สูญหาย
      ที่ header (totWh/totOut/totLost) เป็นสถานะปัจจุบันเสมอ ไม่ถูกกรอง */
+  dfSetVisible('ovTypeFlow',Object.keys(S.boxes||{}).length>0);
   dfSyncUI('ovTypeFlow');
   var typeFlowDescEl=$('#ovTypeFlowDesc');if(typeFlowDescEl)typeFlowDescEl.textContent='กรองยอดออกสะสม/คืนสะสมและรายการล่าสุดตามวันที่เกิดรายการ (จำนวน/สถานะปัจจุบันไม่ถูกกรอง) — '+dfDescribe('ovTypeFlow');
   var evByTag={};
@@ -5905,6 +5924,7 @@ function renderReports(){
   /* Date-range filter for "สรุปตามลูกค้า" — only ส่งออกสะสม/คืนสะสม (accumulated
      counts) respect the range; ค้างอยู่ is a live snapshot of current status,
      not something a date range can filter. */
+  dfSetVisible('ovByCust',Object.keys(S.customers||{}).length>0);
   dfSyncUI('ovByCust');
   var byCustDescEl=$('#ovByCustDesc');if(byCustDescEl)byCustDescEl.textContent='กรองยอดส่งออกสะสม/คืนสะสมตามวันที่เกิดรายการ (ค้างอยู่เป็นยอดปัจจุบันเสมอ ไม่ถูกกรอง) — '+dfDescribe('ovByCust');
   var ship={},ret={};S.events.forEach(function(e){
