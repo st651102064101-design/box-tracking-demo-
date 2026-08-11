@@ -6589,6 +6589,13 @@ window.scanOut=scanOut;
    'good' ถ้ายังไม่เคยเลือก */
 var outConditionMap={};
 var OUT_COND_LABEL={good:'สมบูรณ์',minor:'มีตำหนิเล็กน้อย',damaged:'ชำรุด'};
+/* วันที่/เวลา จากไฟล์นำเข้า Gate ขาออก — เมื่อทั้งไฟล์ระบุค่าเดียวกันและอ่านเป็น
+   วันที่ได้จริง ระบบยึดค่านี้เป็นวันที่ส่งออกจริง (outAt) แทน "ตอนนี้" ที่กดยืนยัน
+   — สำคัญตอนไฟล์เป็นใบส่งของเก่าที่เพิ่งมาคีย์เข้าระบบย้อนหลัง ไม่งั้นวันที่ส่งออก/
+   กำหนดคืนจะเพี้ยนไปเป็นวันที่คีย์แทนวันที่ส่งจริง ตั้งค่าโดย applyShipmentDetails()
+   (ดูใน IIFE นำเข้าไฟล์ขาออกด้านล่าง) อ่าน+ล้างโดย saveOutbound() ทุกครั้งที่กดยืนยัน
+   เพื่อไม่ให้ค้างข้ามไปทับการยิงด้วยมือ/ไฟล์ถัดไปที่ไม่มีคอลัมน์นี้ */
+var importedOutTs=null;
 function setOutCondition(t,v){outConditionMap[t]=v;}
 window.setOutCondition=setOutCondition;
 function outConditionSelectHtml(t){
@@ -6721,7 +6728,8 @@ function saveOutbound(){
   var c=S.customers[cust]||{};var rd=num('doReturnDays')||c.returnDays||S.cfg.agingDays;
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
-  var outTs=iso();var dueTs=new Date(Date.now()+rd*86400000).toISOString();
+  var outTs=importedOutTs||iso();importedOutTs=null;
+  var dueTs=new Date(new Date(outTs).getTime()+rd*86400000).toISOString();
   var dueDateStr=ddmmyyyy(new Date(dueTs)); // Actual Due Date in DD/MM/YYYY — same value shown live in #doDueDatePreview
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
     b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=Number(gate);b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=outTs;b.outCondition=cond;
@@ -6754,7 +6762,7 @@ $('#btnShipOut').onclick=saveOutbound;
    (ยังคงประตูประจำเครื่อง และ DO/PO ที่ระบบสร้างให้อัตโนมัติไว้) ถามยืนยันถ้ามีคิวค้าง */
 function clearGateOut(){
   function doClear(){
-    pendingOut=[];outConditionMap={};
+    pendingOut=[];outConditionMap={};importedOutTs=null;
     ['outPlate','outDriver','outVehicle','outDriverTel','doReturnDays'].forEach(function(i){setv(i,'');});
     var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
     renderOutResult();renderVehicleQuick();
@@ -12363,11 +12371,53 @@ function openColumnMapModal(opts){
     showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta);
   }
 
+  /* Parse a Timestamp/date cell from the outbound import file into a real
+     Date. Handles the shapes Excel/CSV actually produce: ISO-ish
+     "YYYY-MM-DD[ HH:MM[:SS]]", Thai/common "DD/MM/YYYY[ HH:MM[:SS]]", a raw
+     Excel serial day number (falls through to raw:false in
+     handleOutImportFile for normal cases, but a plain General-formatted
+     numeric cell still lands here as a string of digits), and anything
+     Date() itself can already parse. Returns null (never throws) so a
+     malformed cell just falls back to "now" instead of breaking the import. */
+  function parseImportedTs(raw){
+    var s=String(raw==null?'':raw).trim();
+    if(!s)return null;
+    var m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if(m){
+      var d1=new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+      if(!isNaN(d1))return d1;
+    }
+    var m2=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if(m2){
+      var d2=new Date(+m2[1],+m2[2]-1,+m2[3],+(m2[4]||0),+(m2[5]||0),+(m2[6]||0));
+      if(!isNaN(d2))return d2;
+    }
+    if(/^\d+(\.\d+)?$/.test(s)){
+      var n=parseFloat(s);
+      if(n>20000&&n<80000){ // plausible Excel serial-date range (~1954–2119)
+        var d3=new Date(Date.UTC(1899,11,30)+n*86400000);
+        if(!isNaN(d3))return d3;
+      }
+    }
+    var d4=new Date(s);
+    return isNaN(d4)?null:d4;
+  }
+
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
-     operator already typed, and never guesses across conflicting rows. ---- */
+     operator already typed, and never guesses across conflicting rows. The
+     Timestamp column is the one exception to "never overwrites a field" —
+     there is no on-screen field for it, and see importedOutTs's own doc
+     comment for why saveOutbound() takes it as the real ship date instead of
+     "now" whenever the whole file agrees on one parseable value. ---- */
   function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,whoVals,addrVals,phoneVals,emailVals){
-    var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals),who:distinctVals(whoVals)};
+    var meta={dest:{},retDays:{},plate:{},driver:{},ts:{values:distinctVals(tsVals)},who:distinctVals(whoVals)};
+    importedOutTs=null;
+    if(meta.ts.values.length===1){
+      var parsed=parseImportedTs(meta.ts.values[0]);
+      if(parsed){meta.ts.applied=true;importedOutTs=iso(parsed);}
+      else meta.ts.parseFailed=true;
+    }
 
     var rdArr=distinctVals(retVals);
     meta.retDays.values=rdArr;
@@ -12459,7 +12509,15 @@ function openColumnMapModal(opts){
       line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
-      if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">วันที่/เวลาในไฟล์ (อ้างอิงเท่านั้น): '+meta.ts.map(esc).join(', ')+'</div>');
+      if(meta.ts&&meta.ts.values&&meta.ts.values.length){
+        if(meta.ts.applied){
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">ใช้เป็นวันที่ส่งออกแล้ว</span>วันที่/เวลา: '+esc(meta.ts.values[0])+' (ยึดตามไฟล์ แทนเวลาที่กดยืนยัน — กำหนดคืนคำนวณจากวันนี้ด้วย)</div>');
+        }else if(meta.ts.values.length>1){
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill bad" style="margin-right:6px;">ค่าต่างกันในไฟล์</span>วันที่/เวลา: '+meta.ts.values.map(esc).join(', ')+' — ใช้เวลาที่กดยืนยันแทน</div>');
+        }else{
+          rows.push('<div class="small muted" style="margin:4px 0;">วันที่/เวลาในไฟล์อ่านไม่ออก ("'+esc(meta.ts.values[0])+'") — ใช้เวลาที่กดยืนยันแทน</div>');
+        }
+      }
       if(meta.who&&meta.who.length)rows.push('<div class="small muted" style="margin:4px 0;">ผู้บันทึกในไฟล์ (อ้างอิงเท่านั้น): '+meta.who.map(esc).join(', ')+'</div>');
       if(rows.length)h+='<div class="c2-label">ข้อมูลใบส่งของจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
@@ -12468,8 +12526,8 @@ function openColumnMapModal(opts){
 
     if(meta&&meta.registered&&meta.registered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่ในระบบแล้ว · '+meta.registered.length+' ใบ</div>'
-        +'<div style="margin-bottom:6px;"><span class="pill ok" style="margin-right:6px;">ยังไม่ผ่าน Gate เข้าคลัง</span>'
-        +'<span class="small muted">รับเข้าคลังก่อน แล้วจึงจะส่งออกได้ในรอบถัดไป</span></div>'
+        +'<div style="margin-bottom:6px;"><span class="pill ok" style="margin-right:6px;">รับเข้าคลังและส่งออกในรอบนี้แล้ว</span>'
+        +'<span class="small muted">ระบบลงทะเบียน + จัดเก็บขึ้นแร็คให้อัตโนมัติ จึงส่งออกได้ทันทีในไฟล์เดียวกัน</span></div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(meta.registered)+'</div>';
     }
 
