@@ -5114,6 +5114,15 @@ var pendingOutTsMap={};
 var pendingOutDoMap={};
 var pendingOutPoMap={};
 var pendingOutRecorderMap={};
+/* Per-box destination-customer override — a Gate ขาออก import file that
+   ships to several different customers in one batch (common: one truck run
+   covering multiple stops) used to be impossible to auto-ship at all,
+   because saveOutbound() only ever had ONE "ลูกค้าปลายทาง" field for the
+   whole queue. Each row now resolves/auto-creates its own customer during
+   import (see processOutRows) and stores it here; saveOutbound() prefers
+   this over the single top-level doCustomer field per box, same pattern as
+   pendingOutDoMap/PoMap/RecorderMap. */
+var pendingOutCustMap={};
 function outConditionSelectHtml(t){
   var cur=outConditionMap[t]||'good';
   return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
@@ -5132,7 +5141,7 @@ function renderOutResult(){
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];renderOutResult();}
+function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
@@ -5171,7 +5180,16 @@ autoScanBind($('#scanOut'),scanOut);
 function saveOutbound(){
   if(requireCustomerSetup())return;
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
-  var cust=val('doCustomer');if(!cust)return toast('เลือกลูกค้าปลายทาง',null,'err');
+  var cust=val('doCustomer');
+  /* A Gate ขาออก import file that ships to several different customers in
+     one batch (multi-stop truck run) resolves/auto-creates its own customer
+     PER ROW during import (pendingOutCustMap) instead of forcing everything
+     onto the single "ลูกค้าปลายทาง" field above — that field now only needs
+     a value for boxes that didn't come with their own resolved customer
+     (manual scanning, or an import row where the destination column was
+     blank/unmapped). */
+  var missingCust=pendingOut.some(function(t){return !pendingOutCustMap[t]&&!cust;});
+  if(missingCust)return toast('เลือกลูกค้าปลายทาง','บางใบไม่มีลูกค้าปลายทางจากไฟล์ — เลือกลูกค้าด้านบนสำหรับใบที่เหลือ','err');
   /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
      history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
      แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
@@ -5183,7 +5201,7 @@ function saveOutbound(){
   if(!doNo)return toast('กรอกเลขที่ DO',null,'err');
   var poNoInput=$('#poNo');var po=val('poNo');
   if(!poNoInput._override){po=nextPoNoPreview();}
-  var c=S.customers[cust]||{};var rd=num('doReturnDays')||c.returnDays||S.cfg.agingDays;
+  var formRd=num('doReturnDays');
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var outTs=iso();
@@ -5191,24 +5209,29 @@ function saveOutbound(){
      column ship with THAT date instead of "now" (pendingOutTsMap), so aging
      reports (รายงานลูกค้าส่งของช้า, due-date) count from the file's real ship
      date rather than whenever the import happened to get confirmed. Likewise
-     DO/PO/recorder fall back to whatever the import file supplied per row
-     (pendingOutDoMap/pendingOutPoMap/pendingOutRecorderMap) before falling
-     back to this batch's single form value. */
+     DO/PO/recorder/customer fall back to whatever the import file supplied
+     per row (pendingOutDoMap/pendingOutPoMap/pendingOutRecorderMap/
+     pendingOutCustMap) before falling back to this batch's single form
+     value — รอบคืน (return days) follows whichever customer the box actually
+     ships to, not the form's customer if they differ. */
   var extraDoRecords={};
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
+    var custForBox=pendingOutCustMap[t]||cust;
     var tsForBox=pendingOutTsMap[t]||outTs;
     var doForBox=pendingOutDoMap[t]||doNo;
     var poForBox=pendingOutPoMap[t]||po;
     var recorderForBox=pendingOutRecorderMap[t]||recorder;
+    var cRec=S.customers[custForBox]||{};
+    var rd=formRd||cRec.returnDays||S.cfg.agingDays;
     var dueTs=new Date(new Date(tsForBox).getTime()+rd*86400000).toISOString();
     var dueDateStr=ddmmyyyy(new Date(dueTs));
-    b.status='out';b.customer=cust;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
-    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:cust,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
-    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:cust,customerName:custName(cust),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox});
-    if(doForBox!==doNo)extraDoRecords[doForBox]={customer:cust,po:poForBox,plate:plate,driver:driver,tel:tel,returnDays:rd};});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};
+    b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
+    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
+    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox});
+    if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel,returnDays:rd};});
+  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
-  S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:rd};
+  if(cust){var c=S.customers[cust]||{};S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:formRd||c.returnDays||S.cfg.agingDays};}
   Object.keys(extraDoRecords).forEach(function(k){S.doRecords[k]=extraDoRecords[k];});
   save();
   patchAuditGateOut(auditTags,doNo,po,cust,plate,driver,recorder);
@@ -8208,9 +8231,16 @@ function importInvFromRows(rows, colMap) {
 var _origShipOut = document.getElementById('btnShipOut').onclick;
 // We hook audit log into existing gate events via a wrapper in renderAll
 function patchAuditGateOut(tags, doNo, po, cust, plate, driver, recorder) {
+  /* Read each box's OWN do/po/customer off S.boxes rather than the
+     batch-level params — a Gate ขาออก import can ship different tags to
+     different customers/DOs in one confirm (see pendingOutCustMap/
+     pendingOutDoMap in saveOutbound()), so the audit trail needs to reflect
+     what actually got saved on that specific box, not what the top form
+     happened to hold. */
   tags.forEach(function(t) {
-    auditEntry('GATE_OUT', recorder, t, typeName((S.boxes[t] || {}).type),
-      null, { do: doNo, po: po, customer: custName(cust), plate: plate, driver: driver });
+    var b=S.boxes[t]||{};
+    auditEntry('GATE_OUT', recorder, t, typeName(b.type),
+      null, { do: b.do||doNo, po: b.po||po, customer: custName(b.customer||cust), plate: plate, driver: driver });
   });
 }
 function patchAuditGateIn(tags, gate, wh, recorder) {
@@ -9167,10 +9197,18 @@ function openColumnMapModal(opts){
   var TSTIME_ALIASES = ['time','เวลา'];
   var TS_ALIASES = ['timestamp','datetime','timestamp (อ้างอิง)'];
   var RECORDER_ALIASES = ['recorder','ผู้บันทึก','บันทึกโดย'];
+  var VALUE_ALIASES = ['value','price','มูลค่าต่อหน่วย (บาท)','มูลค่าต่อหน่วย','มูลค่า','ราคา'];
+  var LOT_ALIASES = ['lot','batch','lot/batch'];
+  var EXPIRY_ALIASES = ['expiry','expiry date','วันหมดอายุ (yyyy-mm-dd)','วันหมดอายุ'];
+  var SUPPLIER_ALIASES = ['supplier','รหัสซัพพลายเออร์','ซัพพลายเออร์'];
 
   /* Every column the operator's export can contain gets a slot here — none
      silently dropped. Only tag is required; everything else is best-effort:
-     used when present, skipped when the file doesn't have it. */
+     used when present, skipped when the file doesn't have it. มูลค่าต่อหน่วย/
+     Lot/วันหมดอายุ/ซัพพลายเออร์ mirror the same master fields the Inventory
+     importer (INV_MAP_FIELDS) already supports, so a single Gate ขาออก file
+     can carry every master-data column at once instead of needing a
+     separate Inventory import pass for a box's inventory attributes. */
   var OUT_MAP_FIELDS = [
     {key:'tag',      label:'Barcode (รหัสกล่อง)',                 required:true,  aliases:TAG_ALIASES},
     {key:'type',     label:'ประเภทกล่อง',                          required:false, aliases:TYPE_ALIASES},
@@ -9189,7 +9227,11 @@ function openColumnMapModal(opts){
     {key:'tsDate',   label:'วันที่ (ส่งออกจริง)',                   required:false, aliases:TSDATE_ALIASES},
     {key:'tsTime',   label:'เวลา (ส่งออกจริง)',                     required:false, aliases:TSTIME_ALIASES},
     {key:'ts',       label:'Timestamp รวมวันที่+เวลา (ถ้ามีคอลัมน์เดียว)', required:false, aliases:TS_ALIASES},
-    {key:'recorder', label:'ผู้บันทึก',                             required:false, aliases:RECORDER_ALIASES}
+    {key:'recorder', label:'ผู้บันทึก',                             required:false, aliases:RECORDER_ALIASES},
+    {key:'value',    label:'มูลค่าต่อหน่วย (บาท)',                  required:false, aliases:VALUE_ALIASES},
+    {key:'lot',      label:'Lot/Batch',                             required:false, aliases:LOT_ALIASES},
+    {key:'expiry',   label:'วันหมดอายุ (YYYY-MM-DD)',               required:false, aliases:EXPIRY_ALIASES},
+    {key:'supplier', label:'ซัพพลายเออร์',                          required:false, aliases:SUPPLIER_ALIASES}
   ];
 
   /* find an existing box type master record by id or by name (case-insensitive) */
@@ -9252,23 +9294,25 @@ function openColumnMapModal(opts){
      immediately, same as any other queued row. typeHint/whHint come from the
      file's own ประเภทกล่อง/คลัง columns when the operator mapped them — every
      column on file gets used somewhere, not just the barcode. */
-  function autoRegisterOutBox(tag,typeHint,whHint){
+  function autoRegisterOutBox(tag,typeHint,whHint,invHint){
+    invHint=invHint||{};
     var typeKey=findBoxTypeMatch(typeHint)||Object.keys(S.boxtypes||{})[0]||'';
     var bt=S.boxtypes[typeKey]||{};
-    var value=bt.value||S.cfg.boxValue;
+    var value=(invHint.value!=null&&invHint.value!==''&&!isNaN(Number(invHint.value)))?Number(invHint.value):(bt.value||S.cfg.boxValue);
     var whKey=findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint)||'';
     var regTs=iso();
     var b={tag:tag,type:typeKey,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',
-      outGate:null,outWh:'',outAt:null,dueAt:null,lot:'',expiry:'',supplier:'',
+      outGate:null,outWh:'',outAt:null,dueAt:null,
+      lot:invHint.lot||'',expiry:invHint.expiry||'',supplier:invHint.supplier||'',
       regAt:regTs,regBy:USER,location:{wh:whKey,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},
       lastSeenAt:regTs,labeled:true,labeledAt:regTs,labeledBy:USER,
       history:[{dir:'reg',ts:regTs,recorder:USER,note:'สร้างอัตโนมัติจากไฟล์นำเข้า Gate ขาออก (ไม่พบในระบบมาก่อน)'}]};
     S.boxes[tag]=b;
-    auditEntry('CREATE',USER,tag,typeName(typeKey),null,{type:typeKey,value:value,status:'warehouse',note:'auto-created via Gate ขาออก import'});
+    auditEntry('CREATE',USER,tag,typeName(typeKey),null,{type:typeKey,value:value,status:'warehouse',lot:b.lot,expiry:b.expiry,supplier:b.supplier,note:'auto-created via Gate ขาออก import'});
     return b;
   }
 
-  function classifyOutTag(rawTag,typeHint,whHint){
+  function classifyOutTag(rawTag,typeHint,whHint,invHint){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
     /* Resolve/create the คลัง master record for EVERY accepted row, not just
@@ -9281,7 +9325,7 @@ function openColumnMapModal(opts){
     var tag=resolveTag(raw);
     var b=S.boxes[tag];
     var isNewlyRegistered=false;
-    if(!b){ b=autoRegisterOutBox(tag,typeHint,whHint); isNewlyRegistered=true; }
+    if(!b){ b=autoRegisterOutBox(tag,typeHint,whHint,invHint); isNewlyRegistered=true; }
     if(b.status==='out')return {ok:false,code:'out',tag:tag,reason:'ออกไปแล้ว (ยังไม่คืน)'};
     if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
     if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
@@ -9396,11 +9440,27 @@ function openColumnMapModal(opts){
         dc=colMap.dest, cac=colMap.custAddr, cpc=colMap.custPhone, cec=colMap.custEmail,
         rc=colMap.retDays, doc=colMap.doNo, poc=colMap.poNo,
         pc=colMap.plate, vc=colMap.driver,
-        tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder;
+        tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder,
+        valc=colMap.value, lotc=colMap.lot, expc=colMap.expiry, supc=colMap.supplier;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[];
     var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[];
     var custAddrVals=[], custPhoneVals=[], custEmailVals=[];
+    /* Resolve/create the destination customer ONCE per distinct name (not
+       per row) — a file that ships the same customer across many rows
+       shouldn't call autoCreateCustomerIfNeeded() (and its own save())
+       repeatedly for one name. */
+    var custResolveCache={},custCreatedNames={};
+    function resolveDestCustomer(name,addr,phone,email){
+      var nm=String(name||'').trim();if(!nm)return null;
+      var k=nm.toLowerCase();
+      if(custResolveCache[k]!==undefined)return custResolveCache[k];
+      var existing=findCustomerMatch(nm);
+      var id=existing||autoCreateCustomerIfNeeded(nm,addr,phone,email);
+      if(id&&!existing)custCreatedNames[k]=true;
+      custResolveCache[k]=id||null;
+      return id;
+    }
     for(var i=1;i<rows.length;i++){
       var raw=String(rows[i][tc]==null?'':rows[i][tc]).trim();
       if(!raw)continue;
@@ -9414,13 +9474,23 @@ function openColumnMapModal(opts){
       if(seen[key]){dupInFile.push(resolvedRaw);continue;}
       seen[key]=1;
       var typeHint=tyc>=0?rows[i][tyc]:null, whHint=whc>=0?rows[i][whc]:null;
-      var v=classifyOutTag(raw,typeHint,whHint);
+      var invHint={
+        value:valc>=0?rows[i][valc]:null,
+        lot:lotc>=0?String(rows[i][lotc]==null?'':rows[i][lotc]).trim():'',
+        expiry:expc>=0?String(rows[i][expc]==null?'':rows[i][expc]).trim():'',
+        supplier:supc>=0?String(rows[i][supc]==null?'':rows[i][supc]).trim():''
+      };
+      var v=classifyOutTag(raw,typeHint,whHint,invHint);
       if(!v.ok){failed.push({tag:v.tag||resolvedRaw,reason:v.reason});continue;}
       if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
       pendingOut.push(v.tag);added.push(v.tag);
       if(v.isNew)autoRegistered.push(v.tag);
       // only pull shipment-detail values from rows that actually made it into the queue
-      if(dc>=0)destVals.push(rows[i][dc]);
+      if(dc>=0){
+        destVals.push(rows[i][dc]);
+        var custId=resolveDestCustomer(rows[i][dc],cac>=0?rows[i][cac]:'',cpc>=0?rows[i][cpc]:'',cec>=0?rows[i][cec]:'');
+        if(custId)pendingOutCustMap[v.tag]=custId;
+      }
       if(cac>=0)custAddrVals.push(rows[i][cac]);
       if(cpc>=0)custPhoneVals.push(rows[i][cpc]);
       if(cec>=0)custEmailVals.push(rows[i][cec]);
@@ -9461,7 +9531,7 @@ function openColumnMapModal(opts){
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
-    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals);
+    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames);
 
     /* Confirming the column-mapping modal is the operator's confirmation —
        don't make them find and click "ยืนยันส่งออก" again afterward. Ship
@@ -9482,27 +9552,31 @@ function openColumnMapModal(opts){
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
      operator already typed, and never guesses across conflicting rows. ---- */
-  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals){
+  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames){
     var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals)};
 
+    /* Every row's destination customer was already resolved/auto-created
+       per-row in processOutRows (see resolveDestCustomer/pendingOutCustMap)
+       — this just builds the summary, it doesn't re-resolve anything. With
+       ONE distinct destination, also pre-fill the top doCustomer field
+       (handy default, and the fallback for any box importable without a
+       resolved customer). With SEVERAL, each box already carries its own
+       resolved customer, so this is no longer a blocker requiring the
+       operator to pick — just a summary of who's who. */
     var d=distinctVals(destVals);
     meta.dest.values=d;
+    var resolvedNames=d.filter(function(nm){return custResolveCache&&custResolveCache[nm.toLowerCase()];});
+    meta.dest.resolvedCount=resolvedNames.length;
     if(d.length===1){
-      var custId=findCustomerMatch(d[0]);
+      var custId=custResolveCache?custResolveCache[d[0].toLowerCase()]:null;
       if(custId){
+        if(typeof renderSetup==='function')renderSetup();
         if(!val('doCustomer')){setv('doCustomer',custId);meta.dest.applied=true;}
         meta.dest.matched=true;meta.dest.custId=custId;
-      }else{
-        // name in file doesn't exist in customer master — create one from the
-        // file's own ที่อยู่/สาขา, เบอร์โทร, อีเมล columns instead of dropping them
-        var addrArr=distinctVals(custAddrVals||[]),phoneArr=distinctVals(custPhoneVals||[]),emailArr=distinctVals(custEmailVals||[]);
-        var newCustId=autoCreateCustomerIfNeeded(d[0],addrArr[0],phoneArr[0],emailArr[0]);
-        if(newCustId){
-          if(typeof renderSetup==='function')renderSetup();
-          if(!val('doCustomer')){setv('doCustomer',newCustId);meta.dest.applied=true;}
-          meta.dest.matched=true;meta.dest.custId=newCustId;meta.dest.created=true;
-        }else{meta.dest.matched=false;}
-      }
+        meta.dest.created=!!(custCreatedNames&&custCreatedNames[d[0].toLowerCase()]);
+      }else{meta.dest.matched=false;}
+    }else if(d.length>1){
+      meta.dest.multi=true;
     }
 
     var rdArr=distinctVals(retVals);
@@ -9568,7 +9642,18 @@ function openColumnMapModal(opts){
           rows.push('<div class="small" style="margin:4px 0;"><span class="pill" style="margin-right:6px;">มีในไฟล์</span>'+esc(label)+': '+esc(m.values[0])+' (ช่องด้านบนมีค่าอยู่แล้ว จึงไม่ทับ)</div>');
         }
       }
-      line('ปลายทาง',meta.dest);
+      /* ปลายทาง gets its own handling instead of the generic line() — a file
+         shipping to several different customers is no longer a problem
+         needing the operator's help (each row already resolved/auto-created
+         its own customer during import, see pendingOutCustMap), so multiple
+         distinct values here is good news, not a "ค่าต่างกันในไฟล์" warning. */
+      if(meta.dest&&meta.dest.values&&meta.dest.values.length){
+        if(meta.dest.multi){
+          rows.push('<div class="small" style="margin:4px 0;"><span class="pill ok" style="margin-right:6px;">'+meta.dest.resolvedCount+' ลูกค้า</span>ปลายทาง: '+meta.dest.values.map(esc).join(', ')+' — แต่ละใบส่งไปตามลูกค้าที่ระบุในไฟล์แล้ว ไม่ต้องเลือกเอง</div>');
+        }else{
+          line('ปลายทาง',meta.dest);
+        }
+      }
       line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
