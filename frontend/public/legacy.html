@@ -1227,7 +1227,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย / เกินกำหนดคืน</div>
   <div id="ovLost"></div>
 
-  <!-- แจ้งปัญหาหน้างานจาก PDA (ของหาย / อ่านแท็กไม่ติด-ป้ายหาย / ช่องเก็บเต็ม)
+  <!-- แจ้งปัญหาหน้างานจาก PDA (ของหาย / อ่านแท็กไม่ติด-ป้ายหาย) — เฉพาะรายการที่
+       กล่องยังไม่กลับสถานะปกติ (ดู applyFloorReportHolds/renderFloorReports)
        เติมโดย renderFloorReports() ซึ่ง renderReports() → renderAll เรียก จึงอัปเดต
        ทันทีที่ SSE ยิง state frame เข้ามา ไม่ต้องรีเฟรชหน้า -->
   <div class="sectlabel reveal" id="reportsSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> แจ้งปัญหาหน้างาน (PDA)</div>
@@ -5751,25 +5752,57 @@ function evDirPill(dir){
   return '<span class="pill '+d.c+'">'+esc(d.t)+'</span>';
 }
 /* ชนิดที่มาจากปุ่มแจ้งปัญหาบน PDA — แยกออกมาโชว์เป็นกล่องของตัวเอง เพราะใน
-   ฟีด Gate รวมมันจมหายไปกับ traffic เข้า-ออกปกติที่มีวันละหลายร้อยรายการ */
-var REPORT_DIRS=['missing','unreadable_tag','bin_full'];
+   ฟีด Gate รวมมันจมหายไปกับ traffic เข้า-ออกปกติที่มีวันละหลายร้อยรายการ
+   ช่องเก็บเต็ม (bin_full) ไม่อยู่ในนี้แล้ว — ระบบตัดเรื่องแร็ค/Putaway ออกไปแล้ว
+   ทั้งหมด รายงานประเภทนี้ (ถ้ายังมีของเก่าค้างจาก PDA รุ่นก่อน) จึงไม่เกี่ยวกับ
+   สถานะกล่องใดๆ อีกต่อไป ไม่ต้องแสดงให้พนักงานตามงานที่ไม่มีอยู่จริง */
+var REPORT_DIRS=['missing','unreadable_tag'];
+
+/* กล่องที่ถูกแจ้งปัญหาจาก PDA (ของหาย / อ่านแท็กไม่ติด-ป้ายหาย) ต้องไม่พร้อม
+   ส่งออกจนกว่าจะมีคนตรวจสอบจริง — พักอัตโนมัติ (status: hold) ทันทีที่พบรายงาน
+   ใหม่ที่ยังไม่มีการดำเนินการใดๆ ตามหลัง เทียบเวลาระหว่างรายงานกับ history
+   ล่าสุดของกล่องใบนั้น กัน auto-hold ซ้ำหลังพนักงานตรวจแล้วปลด Hold คืนด้วยมือ
+   (การปลด Hold จะสร้าง history entry ใหม่ที่ ts ใหม่กว่ารายงานเก่าเสมอ) เดิน
+   ตามแบบเดียวกับ applyAutoLost() ด้านบน — ฟังก์ชัน "auto" ที่ผูกสถานะกับ
+   เหตุการณ์จริง ถูกเรียกจาก renderReports() ทุกครั้งเช่นกัน ไม่ใช่แค่ตอน
+   ผู้ใช้กดปุ่มเอง */
+function applyFloorReportHolds(){
+  var changed=false;
+  S.events.filter(function(e){return REPORT_DIRS.indexOf(e.dir)>=0&&e.tag;}).forEach(function(e){
+    var b=S.boxes[e.tag];if(!b||b.status!=='warehouse')return;
+    var lastHist=(b.history||[]).length?b.history[b.history.length-1]:null;
+    if(lastHist&&new Date(lastHist.ts)>=new Date(e.ts))return;
+    b.status='hold';b.lastSeenAt=e.ts;
+    if(!Array.isArray(b.history))b.history=[];
+    b.history.push({dir:'hold',ts:e.ts,reason:'พักอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+')',recorder:e.recorder||'PDA'});
+    auditEntry('HOLD',e.recorder||'PDA',e.tag,typeName(b.type),{status:'warehouse'},{status:'hold',reason:'แจ้งปัญหาจาก PDA'});
+    changed=true;
+  });
+  if(changed)save();
+}
 
 /* กล่อง "แจ้งปัญหาหน้างาน" บนหน้าภาพรวม — แสดงข้อมูลตามฟอร์มที่ PDA ส่งมาจริง
    (ชนิด, กล่อง, ตำแหน่งที่ยืนแจ้ง, หมายเหตุ, ผู้แจ้ง, เวลา) เดิมเว็บไม่มีที่ไหน
    แสดงข้อมูลชุดนี้เลย รายงานจึงส่งเข้ามาแล้วเงียบหาย ถูกเรียกจาก renderOverview
-   ซึ่ง renderAll() เรียกอีกที = อัปเดตทันทีที่ SSE ยิง state frame เข้ามา */
+   ซึ่ง renderAll() เรียกอีกที = อัปเดตทันทีที่ SSE ยิง state frame เข้ามา
+
+   รายงานที่กล่องกลับมาสถานะ "ในคลัง" ปกติแล้ว (พนักงานตรวจแล้วปลด Hold เอง)
+   ถือว่าจบเรื่อง — กรองออกจากลิสต์นี้เลย ไม่ต้องค้างให้ดูรก รายการที่เหลือ
+   ทุกแถวคือของที่ "ยังต้องตามต่อ" จริงๆ เท่านั้น */
 function renderFloorReports(){
   var host=$('#ovReports');if(!host)return;
   var label=$('#reportsSectLabel');
-  var rs=S.events.filter(function(e){return REPORT_DIRS.indexOf(e.dir)>=0;}).slice(-30).reverse();
+  var rs=S.events.filter(function(e){
+    if(REPORT_DIRS.indexOf(e.dir)<0)return false;
+    var b=e.tag?S.boxes[e.tag]:null;
+    return !b||b.status!=='warehouse';
+  }).slice(-30).reverse();
   if(label)label.style.display=rs.length?'flex':'none';
   if(!rs.length){host.innerHTML='';return;}
-  var openCount=rs.filter(function(e){return e.dir!=='bin_full';}).length;
   host.innerHTML='<div class="lost-alert-card">'
     +'<div class="lost-alert-header"><div class="la-ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div>'
     +'<div><div class="la-title">แจ้งปัญหาหน้างานจาก PDA '+rs.length+' รายการ</div>'
-    +'<div class="la-sub">ของหาย / อ่านแท็กไม่ติด-ป้ายหาย / ช่องเก็บเต็ม — อัปเดตสดผ่าน Server-Sent Events'
-    +(openCount?' · ต้องตามต่อ '+openCount+' รายการ':'')+'</div></div></div>'
+    +'<div class="la-sub">ของหาย / อ่านแท็กไม่ติด-ป้ายหาย — ยังไม่ได้ตรวจสอบ (พักกล่องอัตโนมัติจนกว่าจะปลด) อัปเดตสดผ่าน Server-Sent Events</div></div></div>'
     +'<table class="alert-table"><thead><tr>'
     +'<th>เวลา</th><th>ประเภทที่แจ้ง</th><th>กล่อง</th><th>ตำแหน่งที่แจ้ง</th><th>หมายเหตุ</th><th>สถานะกล่องตอนนี้</th><th>ผู้แจ้ง</th>'
     +'</tr></thead><tbody>'
@@ -5854,6 +5887,7 @@ function renderOverview(){
    working exactly as it did before, just on its own tab. */
 function renderReports(){
   applyAutoLost();
+  applyFloorReportHolds();
   renderMdHealthBanner();
   var all=Object.values(S.boxes);
   var wh=all.filter(function(b){return b.status==='warehouse';}).length;
