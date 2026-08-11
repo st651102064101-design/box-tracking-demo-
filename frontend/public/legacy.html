@@ -3679,7 +3679,14 @@ function empBadgeStep(){
      at full length, so the card is dragged down with it and keeps that
      momentum when the clip stops — which is what produces the settle-swing. */
   if(eb.anchor.y<eb.anchorTargetY){
-    eb.anchorV+=2.4;
+    /* Motion profile, not a constant fall: accelerate hard, but never exceed the
+       speed from which we can still brake to a near-stop over the distance that
+       remains (v = sqrt(2*a*d)). Slamming the clip to a dead stop at full speed
+       made the taut rope yank the card, which railed the tilt against its clamp
+       and re-excited a big swing a second AFTER landing. Braking in leaves just
+       the small residual (+7) that makes it settle with a gentle sway. */
+    var remain=eb.anchorTargetY-eb.anchor.y;
+    eb.anchorV=Math.min(eb.anchorV+14,Math.sqrt(2*5.2*remain)+3.5);
     eb.anchor.y=Math.min(eb.anchorTargetY,eb.anchor.y+eb.anchorV);
     if(eb.anchor.y>=eb.anchorTargetY)eb.anchorV=0;
   }
@@ -3688,8 +3695,8 @@ function empBadgeStep(){
      syrup. The card is ~4.7 px/mm here, so true 9.8 m/s² would be ~12.8
      px/frame² — far too violent for a UI — but 0.95 is heavy enough to read as
      a real laminated badge while staying watchable. */
-  var g=0.95,air=0.985;
-  var breeze=Math.sin(eb.t*0.007)*0.008;
+  var g=0.8,air=0.955;
+  var breeze=Math.sin(eb.t*0.007)*0.003;
   var end=eb.pts[eb.N];
 
   if(eb.drag){
@@ -3736,10 +3743,16 @@ function empBadgeStep(){
   if(!eb.drag){
     var prev=eb.pts[eb.N-1];
     var ropeA=Math.atan2(end.x-prev.x,end.y-prev.y);
-    eb.omega+=(ropeA-eb.theta)*0.009;
-    eb.omega+=-Math.sin(eb.theta)*0.011;
-    eb.omega*=0.935;
-    eb.theta=Math.max(-1.15,Math.min(1.15,eb.theta+eb.omega));
+    eb.omega+=(ropeA-eb.theta)*0.006;
+    eb.omega+=-Math.sin(eb.theta)*0.008;
+    eb.omega*=0.85;
+    /* Cap angular VELOCITY, not just the angle. The landing transient could
+       otherwise pump omega high enough that the card pinned itself against the
+       angle clamp for several frames — which looks like a card snapping to a
+       hard stop rather than swinging. ~0.9°/frame is about 55°/s, a plausible
+       rate for a badge on a lanyard, and it keeps the sway readable. */
+    eb.omega=Math.max(-0.016,Math.min(0.016,eb.omega));
+    eb.theta=Math.max(-0.42,Math.min(0.42,eb.theta+eb.omega));
     var nx2=end.x-Math.sin(eb.theta)*half;
     eb.vx=nx2-eb.cx;eb.cx=nx2;
     eb.cy=end.y+Math.cos(eb.theta)*half;
