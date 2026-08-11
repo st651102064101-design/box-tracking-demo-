@@ -1205,7 +1205,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
       <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
-      <div class="field"><label>กำหนดคืนภายใน (วัน)</label><input id="doReturnDays" type="number" min="1" placeholder="ตามลูกค้า"></div>
+      <div class="field"><label>กำหนดคืนภายใน (วันที่)</label><div id="doReturnDatePreview" class="tag">เลือกลูกค้าก่อน</div></div>
       <div class="field" style="display:none;"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
@@ -1697,12 +1697,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <option value="supplier">ซัพพลายเออร์ (ส่งกล่องเข้ามา)</option>
           <option value="both">ทั้งลูกค้าและซัพพลายเออร์</option>
         </select></div>
-        <div class="field"><label>กำหนดคืนภายใน (วัน) <span class="req">*</span></label>
-          <div class="row" style="gap:8px;">
-            <input id="cReturnDays" type="number" min="1" placeholder="15" style="flex:1;">
-            <button type="button" class="iconbtn" id="btnCReturnCal" title="เลือกวันครบกำหนดจากปฏิทิน"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span></button>
-          </div>
-          <input id="cReturnDate" type="date" style="display:none;margin-top:8px;" title="เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ">
+        <div class="field"><label>กำหนดคืนภายใน (วันที่) <span class="req">*</span></label>
+          <input id="cReturnDate" type="date" title="วันที่ครบกำหนดคืนกล่องของลูกค้ารายนี้ — ใช้กับกล่องทุกใบที่ส่งให้ลูกค้ารายนี้">
         </div>
         <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="cPhone" type="tel" inputmode="tel" placeholder="02-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
         <div class="field"><label>อีเมล</label><input id="cEmail" type="email" inputmode="email" placeholder="contact@company.com" maxlength="254" autocomplete="email"></div>
@@ -2369,6 +2365,40 @@ function setv(id,v){var e=$('#'+id);if(e)e.value=(v==null?'':v);}
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function daysSince(s){if(!s)return 0;return Math.floor((now()-new Date(s))/86400000);}
+/* Customer-master due dates: parsed/stored as DD/MM/YYYY text (ddmmyyyy's own
+   format) so display, import and export all agree; <input type="date"> uses
+   YYYY-MM-DD, hence the two converters. */
+function parseDMY(s){var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());if(!m)return null;
+  var d=new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),23,59,59,999);return isNaN(d.getTime())?null:d;}
+function dmyToIsoDateInput(s){var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());if(!m)return '';
+  return m[3]+'-'+pad(Number(m[2]),2)+'-'+pad(Number(m[1]),2);}
+function isoDateInputToDmy(s){var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s||'').trim());if(!m)return '';
+  return pad(Number(m[3]),2)+'/'+pad(Number(m[2]),2)+'/'+m[1];}
+/* Flexible parse for values coming out of an Excel cell (customer import) —
+   accepts DD/MM/YYYY, YYYY-MM-DD, or an Excel date serial number — and always
+   normalizes to the DD/MM/YYYY text the rest of the app stores/displays. */
+function parseFlexDateToDmy(v){
+  if(v==null||v==='')return '';
+  var s=String(v).trim();
+  var d=parseDMY(s);if(d)return s;
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if(m)return pad(Number(m[3]),2)+'/'+pad(Number(m[2]),2)+'/'+m[1];
+  if(/^\d+(\.\d+)?$/.test(s)&&typeof XLSX!=='undefined'&&XLSX.SSF&&XLSX.SSF.parse_date_code){
+    var pd=XLSX.SSF.parse_date_code(Number(s));
+    if(pd)return pad(pd.d,2)+'/'+pad(pd.m,2)+'/'+pd.y;
+  }
+  return '';
+}
+/* Fixed due-date-per-customer policy: every shipment to a customer is due
+   back on THAT customer's set date (returnDate), not "N days after this
+   particular shipment" — so ship date no longer factors into the due-date
+   calc. agingDays is only a fallback for a customer with no date set yet. */
+function custDueTs(custId,shipTs){
+  var c=S.customers[custId]||{};
+  var d=parseDMY(c.returnDate);
+  if(d)return d.toISOString();
+  return new Date(new Date(shipTs).getTime()+(S.cfg.agingDays||15)*86400000).toISOString();
+}
 function emptyRow(c,t){return '<tr><td colspan="'+c+'"><div class="empty"><div class="e-ic">∅</div>'+esc(t)+'</div></td></tr>';}
 function chevSvg(id){return '<span class="chev" id="'+id+'"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5L7 5L3 8.5" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';}
 
@@ -3039,32 +3069,10 @@ window.editWh=editWh;window.delWh=delWh;
 
 /* ===== SETUP: customers CRUD ===== */
 var editingCust=null;
-/* กำหนดคืนภายใน (วัน) เดิมกรอกได้แค่ตัวเลขวันเปล่าๆ ซึ่งบางคนคิดจากวันที่ตกลง
-   กับลูกค้าไว้ (เช่น "คืนภายในวันที่ 25 ธ.ค.") ง่ายกว่าคิดเป็นจำนวนวันเอง ปุ่มปฏิทิน
-   นี้จึงเป็นแค่ "ตัวช่วยกรอก" — เลือกวันที่แล้วระบบคำนวณจำนวนวันนับจากวันนี้ให้เอง
-   ไม่ได้เก็บวันที่นั้นไว้จริง เพราะข้อมูลหลักของลูกค้าคือ "กี่วัน" ไม่ใช่วันที่ตายตัว */
-(function(){
-  var btn=$('#btnCReturnCal'),dateInp=$('#cReturnDate');
-  if(!btn||!dateInp)return;
-  btn.addEventListener('click',function(){
-    var show=dateInp.style.display==='none';
-    dateInp.style.display=show?'':'none';
-    if(show){dateInp.value='';dateInp.focus();if(dateInp.showPicker)try{dateInp.showPicker();}catch(e){}}
-  });
-  dateInp.addEventListener('change',function(){
-    if(!dateInp.value)return;
-    var today=new Date();today.setHours(0,0,0,0);
-    var target=new Date(dateInp.value+'T00:00:00');
-    var days=Math.round((target-today)/86400000);
-    if(days<1){toast('เลือกวันที่ในอนาคต',null,'err');return;}
-    setv('cReturnDays',days);
-    dateInp.style.display='none';
-  });
-})();
-var CUST_FIELDS=['cName','cPhone','cEmail','cAddr','cTaxId','cContactPerson','cCreditLimit','cFineRate','cLostFine','cReturnDays'];
+var CUST_FIELDS=['cName','cPhone','cEmail','cAddr','cTaxId','cContactPerson','cCreditLimit','cFineRate','cLostFine','cReturnDate'];
 $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
-  var rd=num('cReturnDays');if(!rd)return toast('ระบุกำหนดคืน (วัน)',null,'err');
+  var returnDate=isoDateInputToDmy(val('cReturnDate'));if(!returnDate)return toast('ระบุวันที่กำหนดคืน',null,'err');
   var phone=val('cPhone'),email=val('cEmail');if(!phone&&!email)return toast('กรอกเบอร์โทรศัพท์หรืออีเมลอย่างน้อยหนึ่งช่อง',null,'err');
   if(phone&&!isValidThaiPhone(phone))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 02-123-4567','err');
   phone=normPhoneDigits(phone);
@@ -3088,17 +3096,15 @@ $('#btnAddCust').onclick=function(){
   S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:addr,phone:phone,email:email,
     taxId:val('cTaxId'),contactPerson:val('cContactPerson'),status:val('cStatus')||'active',
     creditLimit:num('cCreditLimit')||0,fineRate:num('cFineRate')||0,lostFine:num('cLostFine')||0,
-    returnDays:rd};
+    returnDate:returnDate};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');cIdAuto.reset();
-  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';
-  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · คืนใน '+rd+' วัน');renderAll();};
+  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');cIdAuto.reset();
-  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
@@ -3114,11 +3120,10 @@ window.CUST_STATUS_LABEL=CUST_STATUS_LABEL;
    c.id) ไม่เก็บเป็นตัวเลขแยกต่างหาก กันข้อมูลสองชุดไม่ตรงกัน */
 function custHeldCount(id){return Object.values(S.boxes).filter(function(b){return b.customer===id&&b.status==='out';}).length;}
 window.custHeldCount=custHeldCount;
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDays',c.returnDays||'');
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');setv('cReturnDate',dmyToIsoDateInput(c.returnDate));
   setv('cPhone',c.phone||c.contact||'');setv('cEmail',c.email||'');setv('cAddr',c.addr||'');
   setv('cTaxId',c.taxId||'');setv('cContactPerson',c.contactPerson||'');setv('cStatus',c.status||'active');
   setv('cCreditLimit',c.creditLimit||'');setv('cFineRate',c.fineRate||'');setv('cLostFine',c.lostFine||'');
-  var cRD=$('#cReturnDate');if(cRD)cRD.style.display='none';
   var cHH=$('#custHeldHint');if(cHH){cHH.style.display='block';cHH.innerHTML='กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: <b>'+custHeldCount(id)+' ใบ</b>';}
   $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
@@ -4703,7 +4708,9 @@ window.lifecycleStepper=lifecycleStepper;
 /* ---- due / overdue / auto-lost ---- */
 function boxDueDays(b){if(b.status!=='out')return null;
   if(b.dueAt)return Math.ceil((new Date(b.dueAt)-now())/86400000);
-  var c=S.customers[b.customer]||{};var rd=c.returnDays||S.cfg.agingDays;return rd-daysSince(b.outAt);}
+  var d=parseDMY((S.customers[b.customer]||{}).returnDate);
+  if(d)return Math.ceil((d-now())/86400000);
+  return (S.cfg.agingDays||15)-daysSince(b.outAt);}
 function isOverdue(b){var d=boxDueDays(b);return d!=null&&d<0;}
 function applyAutoLost(){if(S.cfg.lostMode!=='auto')return;
   Object.values(S.boxes).forEach(function(b){if(b.status==='out'&&isOverdue(b)){
@@ -5089,9 +5096,8 @@ function lookupDO(){
   if(!val('outPlate'))setv('outPlate',rec.plate||'');
   if(!val('outDriver'))setv('outDriver',rec.driver||'');
   if(!val('outDriverTel'))setv('outDriverTel',rec.tel||'');
-  if(!val('doReturnDays'))setv('doReturnDays',rec.returnDays||'');
   if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
-  hint.innerHTML='<div class="banner info" style="margin-bottom:0;"><span class="bi"><span class="svgi pulse"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5c.5 3.4 1.6 4.5 5 5-3.4.5-4.5 1.6-5 5-.5-3.4-1.6-4.5-5-5 3.4-.5 4.5-1.6 5-5Z"/><path d="M18.5 13.5c.25 1.6.8 2.15 2.5 2.5-1.7.35-2.25.9-2.5 2.5-.25-1.6-.8-2.15-2.5-2.5 1.7-.35 2.25-.9 2.5-2.5Z"/></svg></span></span><div>พบใบส่งของเดิม <b>'+esc(doNo)+'</b> — ดึงลูกค้า/รถ/กำหนดคืนมาให้แล้ว</div>'
+  hint.innerHTML='<div class="banner info" style="margin-bottom:0;"><span class="bi"><span class="svgi pulse"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5c.5 3.4 1.6 4.5 5 5-3.4.5-4.5 1.6-5 5-.5-3.4-1.6-4.5-5-5 3.4-.5 4.5-1.6 5-5Z"/><path d="M18.5 13.5c.25 1.6.8 2.15 2.5 2.5-1.7.35-2.25.9-2.5 2.5-.25-1.6-.8-2.15-2.5-2.5 1.7-.35 2.25-.9 2.5-2.5Z"/></svg></span></span><div>พบใบส่งของเดิม <b>'+esc(doNo)+'</b> — ดึงลูกค้า/รถมาให้แล้ว</div>'
     +'<button type="button" class="btn ghost sm" onclick="$(\'#doLookupHint\').innerHTML=\'\';">ซ่อน</button></div>';
 }
 window.lookupDO=lookupDO;
@@ -5165,31 +5171,19 @@ function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
-/* ===== Due-date live preview (injected — no HTML edits required) =====
-   Sits right under #doReturnDays and shows "กำหนดคืนจริง: DD/MM/YYYY"
-   computed from "today + returnDays", recalculated on every keystroke. */
-(function(){
-  var rdField=document.getElementById('doReturnDays');if(!rdField)return;
-  var preview=document.createElement('div');
-  preview.id='doDueDatePreview';preview.className='tag';preview.style.marginTop='5px';
-  rdField.insertAdjacentElement('afterend',preview);
-  window.refreshDueDatePreview=function(){
-    var rd=num('doReturnDays');
-    if(!rd){preview.textContent='';return;}
-    var due=new Date(Date.now()+rd*86400000);
-    preview.innerHTML='กำหนดคืนจริง: <b>'+ddmmyyyy(due)+'</b>';
-  };
-  rdField.addEventListener('input',window.refreshDueDatePreview);
-})();
-
-/* Auto-populate "กำหนดคืนภายใน (วัน)" from the chosen customer — user can still override by typing. */
+/* ===== Due-date preview: the return deadline now lives entirely on the
+   customer master (S.customers[x].returnDate) — this just reflects it
+   read-only under #doReturnDatePreview, refreshed whenever the customer
+   selection changes. No per-shipment override; ship-date no longer factors
+   into the calc at all (see custDueTs). ===== */
+window.refreshDueDatePreview=function(){
+  var preview=document.getElementById('doReturnDatePreview');if(!preview)return;
+  var c=S.customers[val('doCustomer')];
+  if(c&&c.returnDate)preview.innerHTML='<b>'+esc(c.returnDate)+'</b>';
+  else preview.textContent='เลือกลูกค้าก่อน';
+};
 (function(){var cs=document.getElementById('doCustomer');if(!cs)return;
-  cs.addEventListener('change',function(){
-    var c=S.customers[cs.value];var f=$('#doReturnDays');if(!f)return;
-    if(c&&c.returnDays!=null&&c.returnDays!==''){f.value=c.returnDays;f.placeholder='ตามลูกค้า ('+c.returnDays+' วัน)';}
-    else{f.value='';f.placeholder='ตามลูกค้า';}
-    if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
-  });
+  cs.addEventListener('change',window.refreshDueDatePreview);
 })();
 $('#btnScanOut').onclick=function(){scanOut();};
 $('#scanOut').addEventListener('keydown',function(e){if(e.key==='Enter')scanOut();});
@@ -5221,7 +5215,6 @@ function saveOutbound(){
   if(!doNo)return toast('กรอกเลขที่ DO',null,'err');
   var poNoInput=$('#poNo');var po=val('poNo');
   if(!poNoInput._override){po=nextPoNoPreview();}
-  var formRd=num('doReturnDays');
   var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var outTs=iso();
@@ -5241,30 +5234,26 @@ function saveOutbound(){
      when a multi-customer import gives boxes different return-day policies.
      Uses the top-level form customer as "the" customer for that purpose,
      same as it always did before per-box due dates existed. */
-  var batchC=S.customers[cust]||{};
-  var batchRd=formRd||batchC.returnDays||S.cfg.agingDays;
-  var batchDueDateStr=ddmmyyyy(new Date(new Date(outTs).getTime()+batchRd*86400000));
+  var batchDueDateStr=ddmmyyyy(new Date(custDueTs(cust,outTs)));
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
     var custForBox=pendingOutCustMap[t]||cust;
     var tsForBox=pendingOutTsMap[t]||outTs;
     var doForBox=pendingOutDoMap[t]||doNo;
     var poForBox=pendingOutPoMap[t]||po;
     var recorderForBox=pendingOutRecorderMap[t]||recorder;
-    var cRec=S.customers[custForBox]||{};
-    var rd=formRd||cRec.returnDays||S.cfg.agingDays;
-    var dueTs=new Date(new Date(tsForBox).getTime()+rd*86400000).toISOString();
+    var dueTs=custDueTs(custForBox,tsForBox);
     var dueDateStr=ddmmyyyy(new Date(dueTs));
-    b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.returnDays=rd;b.lastSeenAt=tsForBox;b.outCondition=cond;
-    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,returnDays:rd});
+    b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.lastSeenAt=tsForBox;b.outCondition=cond;
+    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr});
     S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox});
-    if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel,returnDays:rd};});
+    if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel};});
   var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
-  if(cust){var c=S.customers[cust]||{};S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel,returnDays:formRd||c.returnDays||S.cfg.agingDays};}
+  if(cust){S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel};}
   Object.keys(extraDoRecords).forEach(function(k){S.doRecords[k]=extraDoRecords[k];});
   save();
   patchAuditGateOut(auditTags,doNo,po,cust,plate,driver,recorder);
-  ['outPlate','outDriver','outDriverTel','doReturnDays'].forEach(function(i){setv(i,'');});
+  ['outPlate','outDriver','outDriverTel'].forEach(function(i){setv(i,'');});
   if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
   doNoInput._override=false;doNoInput.readOnly=true;doNoInput.style.opacity='';
   var doOverrideBtn=$('#btnOverrideDoNo');if(doOverrideBtn)doOverrideBtn.textContent='แก้เอง';
@@ -5287,7 +5276,7 @@ $('#btnShipOut').onclick=saveOutbound;
 function clearGateOut(){
   function doClear(){
     pendingOut=[];outConditionMap={};
-    ['outPlate','outDriver','outVehicle','outDriverTel','doReturnDays'].forEach(function(i){setv(i,'');});
+    ['outPlate','outDriver','outVehicle','outDriverTel'].forEach(function(i){setv(i,'');});
     var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
     renderOutResult();renderVehicleQuick();
     toast('ล้างข้อมูลขาออกแล้ว','คิวสแกนและข้อมูลรถถูกล้าง — ประตู/DO ยังคงเดิม','info');
@@ -6342,7 +6331,7 @@ function renderSetup(){
   var cs=sortTable(csAll,uiSort.cust,'name');
   $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
-    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openMasterRowActions(\'cust\',\''+esc(c.id)+'\',\''+esc(c.name+' ('+c.id+')')+'\','+(held?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+(c.returnDays?c.returnDays+' วัน':'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
+    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openMasterRowActions(\'cust\',\''+esc(c.id)+'\',\''+esc(c.name+' ('+c.id+')')+'\','+(held?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+esc(c.returnDate||'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
@@ -6666,9 +6655,9 @@ function seedDemo(){
   Object.values(S.warehouses).forEach(function(w){(w.gates||[]).forEach(function(g){S.gates[g]=w.id;});});
   // 3 customers
   [['CUST-01','บจก. เอเชีย ฟู้ดส์','นิคมฯ บางปู','02-111-2222',15],
-   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',7],
+   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',-5],
    ['CUST-03','ห้างค้าปลีกกรุงเทพ','รามอินทรา','02-555-6666',30]]
-    .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDays:a[4]};});
+    .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDate:ddmmyyyy(new Date(Date.now()+a[4]*86400000))};});
   // 3 box types
   var types=[['BT-CRT','ลังพลาสติก 60L',450,'600x400x320','CRT'],
              ['BT-TOTE','กล่องโทเทอ 30L',320,'400x300x280','TOTE'],
@@ -6685,7 +6674,7 @@ function seedDemo(){
     rack:'R-'+pad(1+Math.floor(Math.random()*8),2),shelf:String(1+Math.floor(Math.random()*4)),
     slot:pad(1+Math.floor(Math.random()*12),2),gate:null,ts:iso(new Date(Date.now()-daysAgo*86400000))};}
   function ago(d){return iso(new Date(Date.now()-d*86400000));}
-  function due(d,rd){return iso(new Date(Date.now()-d*86400000+rd*86400000));}
+  function due(d,custId){return custDueTs(custId,ago(d));}
 
   // ── สร้าง 15 กล่อง (3 ประเภท × 5) ──────────────────────────────────────────
   // สถานะที่ต้องครอบคลุมทั้งหมด:
@@ -6706,14 +6695,14 @@ function seedDemo(){
     // --- กล่อง 02: ออกไป (ยังไม่คืน) ไม่เกินกำหนด ---
     S.seq.do++;var doNo2='DO-'+pad(S.seq.do,4);var po2='PO-2026-'+pad(ti*10+2,3);
     var tag2=pre+pad(2,2);var wh2=whs[(ti+1)%4];
-    var loc2=mkLoc(wh2,60);var cust2='CUST-01';var c2=S.customers[cust2];var rd2=c2.returnDays;
+    var loc2=mkLoc(wh2,60);var cust2='CUST-01';
     var pl2=plates[ti];var dr2=drivers[ti];
     S.boxes[tag2]={tag:tag2,type:t[0],value:t[2],status:'out',cycles:1,customer:cust2,do:doNo2,po:po2,
-      outGate:ti*5+1,outWh:wh2,outAt:ago(0),dueAt:due(0,rd2),lastSeenAt:ago(0),labeled:true,
+      outGate:ti*5+1,outWh:wh2,outAt:ago(0),dueAt:due(0,cust2),lastSeenAt:ago(0),labeled:true,
       history:[
         {dir:'reg',ts:ago(60),wh:wh2,loc:null,recorder:recorders[0]},
         {dir:'in',ts:ago(30),wh:wh2,loc:loc2,plate:pl2,driver:dr2,recorder:recorders[0],po:'PO-2025-'+pad(ti+1,3)},
-        {dir:'out',ts:ago(0),do:doNo2,po:po2,customer:cust2,gate:ti*5+1,wh:wh2,plate:pl2,driver:dr2,recorder:recorders[1],dueAt:due(0,rd2)}
+        {dir:'out',ts:ago(0),do:doNo2,po:po2,customer:cust2,gate:ti*5+1,wh:wh2,plate:pl2,driver:dr2,recorder:recorders[1],dueAt:due(0,cust2)}
       ]};
     S.events.push({ts:ago(30),dir:'in',tag:tag2,type:t[0],customer:'',gate:ti*5+1,wh:wh2,plate:pl2,driver:dr2,recorder:recorders[0]});
     S.events.push({ts:ago(0),dir:'out',tag:tag2,type:t[0],do:doNo2,po:po2,customer:cust2,gate:ti*5+1,wh:wh2,plate:pl2,driver:dr2,recorder:recorders[1]});
@@ -6721,13 +6710,13 @@ function seedDemo(){
     // --- กล่อง 03: ออกไป เกินกำหนดคืน (overdue) ---
     S.seq.do++;var doNo3='DO-'+pad(S.seq.do,4);var po3='PO-2026-'+pad(ti*10+3,3);
     var tag3=pre+pad(3,2);var wh3=whs[(ti+2)%4];
-    var cust3='CUST-02';var c3=S.customers[cust3];var rd3=c3.returnDays; // 7 วัน → overdue
+    var cust3='CUST-02'; // returnDate is already in the past → overdue
     var pl3=plates[(ti+1)%5];var dr3=drivers[(ti+1)%5];
     S.boxes[tag3]={tag:tag3,type:t[0],value:t[2],status:'out',cycles:0,customer:cust3,do:doNo3,po:po3,
-      outGate:ti*5+2,outWh:wh3,outAt:ago(12),dueAt:due(12,rd3),lastSeenAt:ago(12),labeled:true,
+      outGate:ti*5+2,outWh:wh3,outAt:ago(12),dueAt:due(12,cust3),lastSeenAt:ago(12),labeled:true,
       history:[
         {dir:'reg',ts:ago(20),wh:wh3,loc:null,recorder:recorders[2]},
-        {dir:'out',ts:ago(12),do:doNo3,po:po3,customer:cust3,gate:ti*5+2,wh:wh3,plate:pl3,driver:dr3,recorder:recorders[2],dueAt:due(12,rd3)}
+        {dir:'out',ts:ago(12),do:doNo3,po:po3,customer:cust3,gate:ti*5+2,wh:wh3,plate:pl3,driver:dr3,recorder:recorders[2],dueAt:due(12,cust3)}
       ]};
     S.events.push({ts:ago(12),dir:'out',tag:tag3,type:t[0],do:doNo3,po:po3,customer:cust3,gate:ti*5+2,wh:wh3,plate:pl3,driver:dr3,recorder:recorders[2]});
 
@@ -6741,7 +6730,7 @@ function seedDemo(){
         {dir:'reg',ts:ago(50),wh:wh4,loc:null,recorder:recorders[3]},
         {dir:'out',ts:ago(40),do:'DO-0000',po:'PO-2025-888',customer:cust4,gate:ti*5+3,wh:wh4,plate:pl4,driver:dr4,recorder:recorders[3]},
         {dir:'in',ts:ago(25),wh:wh4,loc:mkLoc(wh4,25),plate:pl4,driver:dr4,recorder:recorders[3],po:'PO-2025-888'},
-        {dir:'out',ts:ago(15),do:doNo4,po:po4,customer:cust4,gate:ti*5+3,wh:wh4,plate:pl4,driver:dr4,recorder:recorders[4],dueAt:due(15,30)},
+        {dir:'out',ts:ago(15),do:doNo4,po:po4,customer:cust4,gate:ti*5+3,wh:wh4,plate:pl4,driver:dr4,recorder:recorders[4],dueAt:due(15,cust4)},
         {dir:'in',ts:ago(0),wh:wh4,loc:loc4,plate:pl4,driver:dr4,recorder:recorders[4],po:po4}
       ]};
     S.events.push({ts:ago(40),dir:'out',tag:tag4,type:t[0],do:'DO-0000',po:'PO-2025-888',customer:cust4,gate:ti*5+3,wh:wh4,plate:pl4,driver:dr4,recorder:recorders[3]});
@@ -6752,7 +6741,7 @@ function seedDemo(){
     // --- กล่อง 05: สูญหาย (lost) ---
     var tag5=pre+pad(5,2);var wh5=whs[ti];
     S.boxes[tag5]={tag:tag5,type:t[0],value:t[2],status:'lost',cycles:1,customer:'CUST-01',do:'DO-LOST',po:'PO-2025-LOST',
-      outGate:ti*5+4,outWh:wh5,outAt:ago(60),dueAt:due(60,15),lastSeenAt:ago(60),lostAt:ago(10),lostReason:'manual',labeled:true,
+      outGate:ti*5+4,outWh:wh5,outAt:ago(60),dueAt:due(60,'CUST-01'),lastSeenAt:ago(60),lostAt:ago(10),lostReason:'manual',labeled:true,
       history:[
         {dir:'reg',ts:ago(70),wh:wh5,loc:null,recorder:recorders[0]},
         {dir:'out',ts:ago(60),do:'DO-LOST',po:'PO-2025-LOST',customer:'CUST-01',gate:ti*5+4,wh:wh5,plate:plates[4],driver:drivers[4],recorder:recorders[0]},
@@ -7840,7 +7829,6 @@ $('#bulkInvShip').addEventListener('click', function() {
         + '<div class="field"><label>ลูกค้าปลายทาง <span class="req">*</span></label>' + custSelectField('bshCust') + '</div>'
         + '<div class="field"><label>เลขที่ DO</label><input id="bshDo" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div>'
         + '<div class="field"><label>เลขที่ PO</label><input id="bshPo" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div>'
-        + '<div class="field"><label>กำหนดคืน (วัน)</label><input id="bshDays" type="number" min="1" placeholder="ตามลูกค้า"></div>'
         + '<div class="field"><label>ทะเบียนรถ</label><input id="bshPlate" placeholder="82-1234 กทม"></div>'
         + '<div class="field"><label>ผู้บันทึก</label><input id="bshRecorder" value="' + esc(USER) + '" readonly></div>'
       + '</div>'
@@ -7851,23 +7839,22 @@ $('#bulkInvShip').addEventListener('click', function() {
 });
 function commitBulkShip(tags) {
   var cust = val('bshCust'); if (!cust) return toast('เลือกลูกค้า', null, 'err');
-  var recorder = USER; var c = S.customers[cust] || {};
-  var rd = num('bshDays') || c.returnDays || S.cfg.agingDays;
+  var recorder = USER;
   var doNo = val('bshDo'); if (!doNo) { doNo = genDocNo('DO'); }
   var po = val('bshPo'); if (!po) { po = genDocNo('PO'); }
   var plate = val('bshPlate');
-  var outTs = iso(); var dueTs = new Date(Date.now() + rd * 86400000).toISOString();
+  var outTs = iso(); var dueTs = custDueTs(cust, outTs);
   var dueDateStr = ddmmyyyy(new Date(dueTs));
   var n = 0;
   tags.forEach(function(t) {
     var b = S.boxes[t]; if (!b || b.status !== 'warehouse') return;
-    b.status = 'out'; b.customer = cust; b.do = doNo; b.po = po; b.outAt = outTs; b.dueAt = dueTs; b.dueDate = dueDateStr; b.returnDays = rd; b.lastSeenAt = outTs;
-    b.history.push({ dir: 'out', ts: outTs, do: doNo, po: po, customer: cust, plate: plate, recorder: recorder, dueAt: dueTs, dueDate: dueDateStr, returnDays: rd });
+    b.status = 'out'; b.customer = cust; b.do = doNo; b.po = po; b.outAt = outTs; b.dueAt = dueTs; b.dueDate = dueDateStr; b.lastSeenAt = outTs;
+    b.history.push({ dir: 'out', ts: outTs, do: doNo, po: po, customer: cust, plate: plate, recorder: recorder, dueAt: dueTs, dueDate: dueDateStr });
     S.events.push({ ts: outTs, dir: 'out', tag: t, type: b.type, do: doNo, po: po, customer: cust, customerName: custName(cust), plate: plate, recorder: recorder });
     auditEntry('GATE_OUT', recorder, t, typeName(b.type), null, { do: doNo, po: po, customer: custName(cust), plate: plate });
     n++;
   });
-  S.doRecords[doNo] = { customer: cust, po: po, plate: plate, returnDays: rd };
+  S.doRecords[doNo] = { customer: cust, po: po, plate: plate };
   save(); closeModal(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
   printDeliveryOrderLabel(doNo, custName(cust), dueDateStr, n);
   toast('ส่งออกสำเร็จ', n + ' ใบ → ' + custName(cust) + ' · ' + doNo);
@@ -8677,11 +8664,11 @@ window.exportWhExcel = exportWhExcel;
 
 function exportCustExcel() {
   var custs = Object.values(S.customers).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
+  var headers = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วันที่)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
   var rows = custs.map(function(c) {
     var holding = custHeldCount(c.id);
     return [c.id, c.name, (CUST_KIND[c.kind]||CUST_KIND.customer).t, (CUST_STATUS[c.status]||CUST_STATUS.active).t,
-      c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
+      c.returnDate || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
       c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
   downloadXLS('customers-' + dstr() + '.xlsx', headers, rows);
@@ -8737,11 +8724,11 @@ function exportAllMastersExcel() {
   });
 
   var custs = Object.values(S.customers).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var custHeaders = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วัน)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
+  var custHeaders = ['รหัสลูกค้า', 'ชื่อลูกค้า / บริษัท', 'ประเภท', 'สถานะ', 'กำหนดคืนภายใน (วันที่)', 'ที่อยู่/สาขา', 'เบอร์โทรศัพท์', 'อีเมล', 'เลขผู้เสียภาษี', 'ผู้ติดต่อหลัก', 'วงเงินเครดิต', 'ค่าปรับ/วัน', 'ค่าปรับกล่องหาย', 'กล่องที่ถืออยู่'];
   var custRows = custs.map(function(c) {
     var holding = custHeldCount(c.id);
     return [c.id, c.name, (CUST_KIND[c.kind]||CUST_KIND.customer).t, (CUST_STATUS[c.status]||CUST_STATUS.active).t,
-      c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
+      c.returnDate || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
       c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
 
@@ -9103,7 +9090,7 @@ function openColumnMapModal(opts){
         {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
         {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท']},
         {key:'kind',          label:'ประเภทคู่ค้า (customer/supplier/both)', required:false, aliases:['kind','ประเภท','ประเภทคู่ค้า']},
-        {key:'returnDays',    label:'กำหนดคืนภายใน (วัน)', required:true, aliases:['returndays','กำหนดคืน','วัน']},
+        {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่)', required:true, aliases:['returndate','returndays','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)','กำหนดคืนภายใน (วัน)']},
         {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์']},
         {key:'email',         label:'อีเมล', required:false, aliases:['email','อีเมล']},
         {key:'addr',          label:'ที่อยู่/สาขา', required:true, aliases:['address','addr','ที่อยู่']},
@@ -9117,7 +9104,12 @@ function openColumnMapModal(opts){
       validateRow:function(m){
         var e=[];
         if(!m.name)e.push('ไม่มีชื่อลูกค้า');
-        if(!m.returnDays||isNaN(Number(m.returnDays))||Number(m.returnDays)<1)e.push('กำหนดคืน (วัน) ไม่ถูกต้อง');
+        /* File may hand us DD/MM/YYYY, YYYY-MM-DD, or an Excel date serial —
+           normalize in place so buildRecord and the preview table both see
+           the same DD/MM/YYYY text the rest of the app stores/displays. */
+        var normDate=parseFlexDateToDmy(m.returnDate);
+        if(!normDate)e.push('กำหนดคืน (วันที่) ไม่ถูกต้อง — ใส่วันที่ เช่น 31/12/2026');
+        else m.returnDate=normDate;
         if(!m.phone&&!m.email)e.push('ต้องมีเบอร์โทรหรืออีเมลอย่างน้อยหนึ่งอย่าง');
         if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
         if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
@@ -9132,7 +9124,7 @@ function openColumnMapModal(opts){
           taxId:m.taxId||'',contactPerson:m.contactPerson||'',
           status:(m.status||'active').toLowerCase(),
           creditLimit:Number(m.creditLimit)||0,fineRate:Number(m.fineRate)||0,
-          lostFine:Number(m.lostFine)||0,returnDays:Number(m.returnDays)};
+          lostFine:Number(m.lostFine)||0,returnDate:m.returnDate};
       }
     },
 
@@ -9418,8 +9410,6 @@ function openColumnMapModal(opts){
   var CUSTADDR_ALIASES = ['address','ที่อยู่','สาขา','ที่อยู่/สาขา','ที่อยู่ / สาขา'];
   var CUSTPHONE_ALIASES = ['phone','tel','เบอร์โทร','เบอร์โทรศัพท์','โทรศัพท์'];
   var CUSTEMAIL_ALIASES = ['email','e-mail','อีเมล'];
-  var RETDAYS_ALIASES = ['return days','returndays','due days','กำหนดคืน','กำหนดคืนภายใน',
-                     'กำหนดคืนภายใน (วัน)','คืนภายใน','คืนภายใน (วัน)'];
   var DONO_ALIASES = ['do','do no','dono','เลขที่ do','เลขที่ใบส่งของ'];
   var PONO_ALIASES = ['po','po no','pono','เลขที่ po'];
   var WH_ALIASES = ['warehouse','คลัง'];
@@ -9450,7 +9440,6 @@ function openColumnMapModal(opts){
     {key:'custAddr', label:'ที่อยู่/สาขา (ลูกค้า)',                 required:false, aliases:CUSTADDR_ALIASES},
     {key:'custPhone',label:'เบอร์โทร (ลูกค้า)',                     required:false, aliases:CUSTPHONE_ALIASES},
     {key:'custEmail',label:'อีเมล (ลูกค้า)',                        required:false, aliases:CUSTEMAIL_ALIASES},
-    {key:'retDays',  label:'กำหนดคืนภายใน (วัน)',                  required:false, aliases:RETDAYS_ALIASES},
     {key:'doNo',     label:'เลขที่ DO',                             required:false, aliases:DONO_ALIASES},
     {key:'poNo',     label:'เลขที่ PO',                             required:false, aliases:PONO_ALIASES},
     {key:'wh',       label:'คลัง',                                  required:false, aliases:WH_ALIASES},
@@ -9631,7 +9620,7 @@ function openColumnMapModal(opts){
     S.customers[id]={id:id,name:nm,kind:'customer',addr:String(addr||'').trim(),
       phone:normPhoneDigits(String(phone||'').trim()),email:String(email||'').trim(),
       taxId:'',contactPerson:'',status:'active',creditLimit:0,fineRate:0,lostFine:0,
-      returnDays:S.cfg.agingDays};
+      returnDate:ddmmyyyy(new Date(Date.now()+(S.cfg.agingDays||15)*86400000))};
     auditEntry('CREATE',USER,id,nm,null,S.customers[id]);
     save();
     return id;
@@ -9709,13 +9698,13 @@ function openColumnMapModal(opts){
   function processOutRows(rows,colMap,fname){
     var tc=colMap.tag, tyc=colMap.type, unitc=colMap.unit, whc=colMap.wh, cc=colMap.condition,
         dc=colMap.dest, cac=colMap.custAddr, cpc=colMap.custPhone, cec=colMap.custEmail,
-        rc=colMap.retDays, doc=colMap.doNo, poc=colMap.poNo,
+        doc=colMap.doNo, poc=colMap.poNo,
         pc=colMap.plate, vc=colMap.driver,
         tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder,
         valc=colMap.value, lotc=colMap.lot, expc=colMap.expiry, supc=colMap.supplier;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[];
-    var destVals=[], retVals=[], plateVals=[], driverVals=[], tsVals=[];
+    var destVals=[], plateVals=[], driverVals=[], tsVals=[];
     var custAddrVals=[], custPhoneVals=[], custEmailVals=[];
     /* Resolve/create the destination customer ONCE per distinct name (not
        per row) — a file that ships the same customer across many rows
@@ -9766,7 +9755,6 @@ function openColumnMapModal(opts){
       if(cac>=0)custAddrVals.push(rows[i][cac]);
       if(cpc>=0)custPhoneVals.push(rows[i][cpc]);
       if(cec>=0)custEmailVals.push(rows[i][cec]);
-      if(rc>=0)retVals.push(rows[i][rc]);
       if(pc>=0)plateVals.push(rows[i][pc]);
       if(vc>=0)driverVals.push(rows[i][vc]);
       if(cc>=0){
@@ -9803,7 +9791,7 @@ function openColumnMapModal(opts){
     renderOutResult();
     var so=$('#scanOut');if(so)so.focus();
 
-    var meta=applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames);
+    var meta=applyShipmentDetails(destVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames);
 
     /* Confirming the column-mapping modal is the operator's confirmation —
        don't make them find and click "ยืนยันส่งออก" again afterward. Ship
@@ -9834,8 +9822,8 @@ function openColumnMapModal(opts){
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
      operator already typed, and never guesses across conflicting rows. ---- */
-  function applyShipmentDetails(destVals,retVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames){
-    var meta={dest:{},retDays:{},plate:{},driver:{},ts:distinctVals(tsVals)};
+  function applyShipmentDetails(destVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames){
+    var meta={dest:{},plate:{},driver:{},ts:distinctVals(tsVals)};
 
     /* Every row's destination customer was already resolved/auto-created
        per-row in processOutRows (see resolveDestCustomer/pendingOutCustMap)
@@ -9859,12 +9847,6 @@ function openColumnMapModal(opts){
       }else{meta.dest.matched=false;}
     }else if(d.length>1){
       meta.dest.multi=true;
-    }
-
-    var rdArr=distinctVals(retVals);
-    meta.retDays.values=rdArr;
-    if(rdArr.length===1&&/^\d+$/.test(rdArr[0])){
-      if(!val('doReturnDays')){setv('doReturnDays',rdArr[0]);meta.retDays.applied=true;}
     }
 
     var pArr=distinctVals(plateVals);
@@ -9936,7 +9918,6 @@ function openColumnMapModal(opts){
           line('ปลายทาง',meta.dest);
         }
       }
-      line('กำหนดคืนภายใน (วัน)',meta.retDays);
       line('ทะเบียนรถ',meta.plate);
       line('ชื่อคนขับ',meta.driver);
       if(meta.ts&&meta.ts.length)rows.push('<div class="small muted" style="margin:4px 0;">Timestamp ในไฟล์ (ใช้เป็นวันที่ส่งออกจริงต่อกล่อง): '+meta.ts.map(esc).join(', ')+'</div>');
@@ -10808,7 +10789,7 @@ function openColumnMapModal(opts){
     "สต็อกกล่อง":"Box stock","เรียลไทม์":"Real-time","ตั้งค่า":"Setup","บันทึกเพิ่มเติม (ถ้ามี)":"Additional note (if any)",
     "ประตูประจำเครื่องนี้":"Gate for this terminal","— ยังไม่ได้ตั้งค่า —":"- not set -","เปลี่ยนประตู":"Change gate",
     "เลขที่ DO (สร้างอัตโนมัติ)":"DO No. (auto-generated)","แก้เอง":"Manual","ใช้ Auto":"Use Auto","เลขที่ PO":"PO No.",
-    "ลูกค้า / ปลายทาง":"Customer / Destination","กำหนดคืนภายใน (วัน)":"Return within (days)","ผู้บันทึก":"Recorder",
+    "ลูกค้า / ปลายทาง":"Customer / Destination","กำหนดคืนภายใน (วันที่)":"Return due date","ผู้บันทึก":"Recorder",
     "ทะเบียนรถ":"License plate","ชื่อคนขับ":"Driver name","ประเภทรถ":"Vehicle type","เบอร์โทรคนขับ":"Driver phone",
     "หมายเหตุ":"Note","สแกน":"Scan","ยืนยันส่งออก":"Confirm ship-out","แนะนำหยิบ (FIFO / FEFO)":"Pick suggestion (FIFO / FEFO)",
     "สถานะกล่องตอนนี้":"Current box status","รายงานลูกค้าส่งของช้า":"Late delivery report (customer)",
