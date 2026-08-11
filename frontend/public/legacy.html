@@ -2423,15 +2423,15 @@ function releaseForcedModal(){var bd=$('#modal .backdrop');if(bd)bd.setAttribute
 function requireGateSetup(dir){
   return false;
 }
-/* Same idea as requireGateSetup, for the Gate ขาออก screen specifically:
-   an outbound DO can't legally exist without a destination customer, so if
-   the customer master is empty, block the screen and force the person to
-   go create one first rather than let them discover the missing dropdown
-   themselves mid-scan. */
+/* Gate ขาออก no longer force-blocks behind a non-dismissible "ยังไม่มีลูกค้า
+   ในระบบ" modal when the customer master is empty — same reasoning as
+   requireGateSetup() above: the Master Data Health banner at the top of
+   Overview already flags an empty customer master with a link straight to
+   Master ▸ ลูกค้า, so a second screen-blocking modal on top was redundant
+   friction. Kept as a no-op (rather than deleting the call site) so
+   re-adding a block later is a one-line change. */
 function requireCustomerSetup(){
-  if(Object.keys(S.customers).length)return false;
-  openForcedModal('<div class="mhead"><h3>ยังไม่มีลูกค้าในระบบ</h3></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มข้อมูลลูกค้าก่อนใช้งาน Gate ขาออก — ใบส่งของ (DO) ต้องมีลูกค้าปลายทางเสมอ</p><button class="btn accent" onclick="releaseForcedModal();closeModal();goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มลูกค้า</button></div>');
-  return true;
+  return false;
 }
 window.requireGateSetup=requireGateSetup;window.openForcedModal=openForcedModal;window.releaseForcedModal=releaseForcedModal;window.requireCustomerSetup=requireCustomerSetup;
 
