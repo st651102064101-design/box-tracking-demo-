@@ -1208,7 +1208,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field"><label>กำหนดคืนภายใน (วัน)</label><input id="doReturnDays" type="number" min="1" placeholder="ตามลูกค้า"></div>
-      <div class="field"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
+      <div class="field" style="display:none;"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
@@ -1247,7 +1247,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
   <div class="row" style="margin-top:22px;">
     <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
-    <button class="btn ghost" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
+    <button class="btn ghost" id="btnAllocateSuggest" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
     
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <span class="muted small" id="outCount"></span>
@@ -1276,8 +1276,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <input type="hidden" id="inGate">
     <div id="inGateHint"></div>
     <div class="grid g3">
-      <div class="field"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
+      <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
       <div class="field"><label>รถของคู่ค้า</label><select id="inPartner"></select>
+        <div id="inPartnerHint" style="display:none;"></div>
         <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
@@ -5041,6 +5042,15 @@ function renderVehicleDatalist(){
   var tels=[...new Set(vs.map(function(v){return v.tel;}).filter(Boolean))];
   function fill(id,arr){var el=document.getElementById(id);if(el)el.innerHTML=arr.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');}
   fill('dl-plate',plates);fill('dl-driver',drivers);fill('dl-tel',tels);
+  /* A `list=` attribute makes some browsers paint a dropdown-arrow
+     affordance on the field even when the datalist behind it is empty —
+     misleading since there's nothing to suggest. Drop the attribute
+     entirely (not just empty the datalist) when there's no remembered
+     phone number yet; restore it once one exists. */
+  ['outDriverTel','inDriverTel'].forEach(function(id){
+    var inp=document.getElementById(id);if(!inp)return;
+    if(tels.length)inp.setAttribute('list','dl-tel');else inp.removeAttribute('list');
+  });
   renderLocDatalist();
 }
 function renderVehicleQuick(){
@@ -5111,6 +5121,12 @@ function outConditionSelectHtml(t){
     +'</select>';
 }
 function renderOutResult(){
+  /* "แนะนำหยิบ (FIFO/FEFO)" only ever suggests boxes currently status
+     'warehouse' — with none on hand there's nothing it could ever
+     recommend, so hide it instead of showing a button that always opens to
+     an empty result. */
+  var allocBtn=$('#btnAllocateSuggest');
+  if(allocBtn)allocBtn.style.display=Object.values(S.boxes).some(function(b){return b.status==='warehouse';})?'':'none';
   $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
   if(!pendingOut.length){$('#resultOut').innerHTML='';return;}
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
@@ -6160,16 +6176,21 @@ function renderSetup(){
   var hasSup=Object.values(S.customers).some(isSupplierKind);
   if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
   if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
-  var inPartnerSel=$('#inPartner');
+  var inPartnerSel=$('#inPartner'),inPartnerHint=$('#inPartnerHint');
   if(inPartnerSel){
     var keepP=inPartnerSel.value;
     var partners=Object.values(S.customers);
+    inPartnerSel.style.display=partners.length?'':'none';
+    if(inPartnerHint){
+      inPartnerHint.style.display=partners.length?'none':'block';
+      inPartnerHint.innerHTML=partners.length?'':'<button type="button" class="btn accent sm" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e04\u0e39\u0e48\u0e04\u0e49\u0e32</button>';
+    }
     inPartnerSel.innerHTML=partners.length
       ? '<option value="">\u2014 เลือกคู่ค้าเจ้าของรถ \u2014</option>'+partners.map(function(c){
           var k=c.kind||'customer';
           var tg=k==='supplier'?'ซัพพลายเออร์':(k==='both'?'ลูกค้า + ซัพพลายเออร์':'ลูกค้า');
           return '<option value="'+esc(c.id)+'">'+esc(c.name)+' \u00b7 '+tg+'</option>';}).join('')
-      : '<option value="">(ยังไม่มีคู่ค้า \u2014 เพิ่มที่ตั้งค่า)</option>';
+      : '';
     if(keepP)inPartnerSel.value=keepP;
     else if(partners.length===1)inPartnerSel.value=partners[0].id;
   }
@@ -9073,6 +9094,13 @@ function openColumnMapModal(opts){
       var idsSummary=addedIds.length===1?addedIds[0]:(addedIds[0]+'…'+addedIds[addedIds.length-1]);
       auditEntry('CREATE',USER,idsSummary,'นำเข้าจาก Excel: '+fname+' ('+addedIds.length+' รายการ · '+cfg.label+')',null,
         {count:addedIds.length,ids:addedIds,fname:fname});
+      /* commitImportRows only ever wrote into the in-memory S object and
+         re-rendered — it never called save(), so the imported records never
+         reached the server. They looked committed (showed up in the UI
+         immediately) but a page reload or another device's sync would wipe
+         them out, since /api/state never received the new customers/box
+         types/etc. */
+      save();
     }
     renderAll();
     openImportSummaryModal(fname,addedIds,skippedCount,cfg);
