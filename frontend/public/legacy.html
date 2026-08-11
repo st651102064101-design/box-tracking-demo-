@@ -7465,6 +7465,12 @@ function openInvModal(code) {
         + '<div class="field"><label>คลังที่เก็บ</label>' + invWhField(dp.wh) + '</div>'
         + '<div class="field"><label>โซน / แร็ค</label><input id="invLoc" list="invLocList" placeholder="เลือกจากรายการ หรือพิมพ์ตำแหน่งใหม่" value="' + esc(dp.loc || '') + '"><datalist id="invLocList">' + invDistinctValues('loc').map(function(l) { return '<option value="' + esc(l) + '">'; }).join('') + '</datalist></div>'
       + '</div>'
+      + '<div class="grid g3" style="margin-bottom:14px;">'
+        + '<div class="field"><label>มูลค่าต่อหน่วย (บาท)</label><input id="invValue" type="number" min="0" step="0.01" placeholder="0.00" value="' + (it && it.value != null ? esc(it.value) : '') + '"></div>'
+        + '<div class="field"><label>ซัพพลายเออร์</label><input id="invSupplier" list="invSupplierList" placeholder="รหัส/ชื่อซัพพลายเออร์" value="' + (it ? esc(it.supplier || '') : '') + '"><datalist id="invSupplierList">' + invDistinctValues('supplier').map(function(v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist></div>'
+        + '<div class="field"><label>Lot/Batch</label><input id="invLot" placeholder="เช่น LOT-2026-08" value="' + (it ? esc(it.lot || '') : '') + '"></div>'
+      + '</div>'
+      + '<div class="field" style="margin-bottom:14px;max-width:260px;"><label>วันหมดอายุ</label><input id="invExpiry" type="date" value="' + (it ? esc(it.expiry || '') : '') + '"></div>'
       + '<div class="field" style="margin-bottom:14px;"><label>หมายเหตุ</label><input id="invNote" placeholder="หมายเหตุเพิ่มเติม" value="' + (it ? esc(it.note || '') : '') + '"></div>'
       + '<div class="field" style="max-width:320px;">'
         + '<label>ผู้ดำเนินการ / ผู้บันทึก</label>'
@@ -7539,6 +7545,8 @@ function bindInvModalEvents(isEdit) {
       setv('invEditId', existing.code); setv('invName', existing.name);
       setv('invQty', existing.qty || 0); setv('invUnit', existing.unit || '');
       setv('invLoc', existing.loc || '');
+      setv('invValue', existing.value != null ? existing.value : '');
+      setv('invSupplier', existing.supplier || ''); setv('invLot', existing.lot || ''); setv('invExpiry', existing.expiry || '');
       var whSel = $('#invWh'); if (whSel) whSel.value = existing.wh || '';
       setv('invCategory', existing.boxTypeId || existing.category || '');
       applyInvCategoryMode(val('invCategory'), existing);
@@ -7572,9 +7580,12 @@ function saveInvForm() {
   if (editId && editId !== code) { delete S.inventory[editId]; }
   var wh = val('invWh');
   var loc = val('invLoc');
+  var valueVal = val('invValue');
   var item = {
     code: code, name: name, category: bt ? bt.name : catVal, boxTypeId: bt ? bt.id : '',
     qty: qty, unit: val('invUnit'),
+    value: bt ? (bt.value || null) : (valueVal !== '' && !isNaN(Number(valueVal)) ? Number(valueVal) : null),
+    supplier: val('invSupplier'), lot: val('invLot'), expiry: val('invExpiry'),
     wh: wh, loc: loc,
     note: val('invNote'),
     updatedAt: iso(), updatedBy: recorder
@@ -7634,6 +7645,10 @@ var INV_MAP_FIELDS = [
   { key: 'category', label: 'ประเภท', required: false, aliases: ['ประเภท', 'category'] },
   { key: 'qty', label: 'จำนวน', required: false, aliases: ['จำนวน', 'qty'] },
   { key: 'unit', label: 'หน่วย', required: false, aliases: ['หน่วย', 'unit'] },
+  { key: 'value', label: 'มูลค่าต่อหน่วย (บาท)', required: false, aliases: ['มูลค่าต่อหน่วย (บาท)', 'มูลค่าต่อหน่วย', 'มูลค่า', 'ราคา', 'value', 'price'] },
+  { key: 'supplier', label: 'ซัพพลายเออร์', required: false, aliases: ['ซัพพลายเออร์', 'รหัสซัพพลายเออร์', 'supplier'] },
+  { key: 'lot', label: 'Lot/Batch', required: false, aliases: ['lot', 'batch', 'lot/batch'] },
+  { key: 'expiry', label: 'วันหมดอายุ (YYYY-MM-DD)', required: false, aliases: ['วันหมดอายุ (yyyy-mm-dd)', 'วันหมดอายุ', 'expiry', 'expiry date'] },
   { key: 'wh', label: 'คลัง', required: false, aliases: ['คลัง', 'warehouse'] },
   { key: 'loc', label: 'โซน/แร็ค', required: false, aliases: ['โซน/แร็ค', 'โซน / แร็ค', 'location', 'loc'] },
   { key: 'note', label: 'หมายเหตุ', required: false, aliases: ['หมายเหตุ', 'note'] }
@@ -7692,11 +7707,16 @@ function importInvFromRows(rows, colMap) {
     var catRaw = ci.category >= 0 ? String(r[ci.category] || '').trim() : '';
     var bt = S.boxtypes[code] || S.boxtypes[catRaw] || null;
     if (!bt) { var byName = Object.values(S.boxtypes).find(function(t) { return t.name === catRaw; }); if (byName) bt = byName; }
+    var valueRaw = ci.value >= 0 ? String(r[ci.value] || '').trim() : '';
     var item = {
       code: code, name: nm,
       category: bt ? bt.name : catRaw, boxTypeId: bt ? bt.id : '',
       qty: bt ? boxTypeWarehouseQty(bt.id) : (ci.qty >= 0 ? (parseFloat(r[ci.qty]) || 0) : 0),
       unit: bt ? (bt.unit || '') : (ci.unit >= 0 ? String(r[ci.unit] || '').trim() : ''),
+      value: bt ? (bt.value || null) : (valueRaw !== '' && !isNaN(Number(valueRaw)) ? Number(valueRaw) : null),
+      supplier: ci.supplier >= 0 ? String(r[ci.supplier] || '').trim() : '',
+      lot: ci.lot >= 0 ? String(r[ci.lot] || '').trim() : '',
+      expiry: ci.expiry >= 0 ? String(r[ci.expiry] || '').trim() : '',
       wh: wh, loc: ci.loc >= 0 ? String(r[ci.loc] || '').trim() : '',
       note: ci.note >= 0 ? String(r[ci.note] || '').trim() : '',
       updatedAt: iso(), updatedBy: USER
@@ -8150,8 +8170,20 @@ function openColumnMapModal(opts){
     }
     return vals.length?('ตัวอย่าง: '+vals.map(esc).join(', ')):'<span style="color:var(--warn);">คอลัมน์นี้ไม่มีข้อมูล</span>';
   }
+  /* Two different target fields can independently resolve to the same source
+     column (e.g. a stale saved mapping from an earlier, differently-shaped
+     file, or two aliases that both match one ambiguous header) — silently
+     letting that stand means the operator sees "จำนวน" and "หน่วย" both
+     showing the same preview values, one of them necessarily wrong. First
+     field to claim a column keeps it; later claimants fall back to unmapped
+     so the operator has to pick explicitly instead of importing bad data. */
+  var usedIdx={};
   var rowsHtml=fields.map(function(f){
     var def=resolveDefault(f);
+    if(def>=0){
+      if(usedIdx[def])def=-1;
+      else usedIdx[def]=true;
+    }
     return '<div class="field colmap-row" style="margin-bottom:14px;">'
       +'<label>'+esc(f.label)+(f.required?' <span style="color:var(--warn);">*</span>':'')+'</label>'
       +'<select class="colmap-sel" data-field="'+f.key+'" data-required="'+(f.required?'1':'0')+'">'+optionsHtml(def)+'</select>'
