@@ -968,7 +968,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออกวันนี้" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
+  <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <span>รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></span>
+    <span style="display:inline-flex;align-items:center;gap:8px;font-weight:400;flex-wrap:wrap;">
+      <label for="ovFlowFrom" class="muted small" style="font-weight:400;">จาก</label>
+      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="padding:6px 10px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+      <label for="ovFlowTo" class="muted small" style="font-weight:400;">ถึง</label>
+      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="padding:6px 10px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+      <button type="button" class="btn ghost sm" onclick="clearOvFlowRange()">ล้าง</button>
+    </span>
+  </div>
   <div class="tablecard reveal" id="ovTypeFlow"></div>
 
   <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
@@ -1295,7 +1304,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <table>
         <thead><tr>
           <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllInv" title="เลือกทั้งหมด"></th>
-          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>พิกัดที่อยู่</th><th>สถานะ</th>
+          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th>
           <th>ผู้บันทึกล่าสุด</th><th></th>
         </tr></thead>
         <tbody id="invBody"></tbody>
@@ -3460,7 +3469,7 @@ function openBoxActionModal(tag){
       +'<div class="ts-line"><span class="k">ตำแหน่ง / ลูกค้า</span><span class="v">'+locOrCust+'</span></div>'
       +((b.lot||b.expiry)?'<div class="ts-line"><span class="k">Lot / หมดอายุ</span><span class="v">'+(b.lot?esc(b.lot):'<span class="muted">-</span>')+(b.expiry?' · '+esc(b.expiry)+' '+expiryPill(b):'')+'</span></div>':'')
       +'<div class="ts-line"><span class="k">แท็ก RFID</span><span class="v">'+((b.rfidTid||b.rfidEpc)?'<span class="mono small">'+esc(b.rfidTid||b.rfidEpc)+'</span>':'<span class="muted">ยังไม่ได้ผูก</span>')+'</span></div>'
-      +'<div class="ts-line"><span class="k">เห็นล่าสุด</span><span class="v">'+fmtTs(b.lastSeenAt)+'</span></div>'
+      +'<div class="ts-line"><span class="k">ส่ง/รับล่าสุด</span><span class="v">'+invShipRecvText(b)+'</span></div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
         +actions.map(function(a){return '<button class="'+a.cls+'" style="width:100%;justify-content:flex-start;" onclick="'+a.fn+'">'+a.label+'</button>';}).join('')
@@ -5454,10 +5463,40 @@ function renderReports(){
     if(!typeBoxes[tk])typeBoxes[tk]=[];
     typeBoxes[tk].push(b);
   });
-  // build events lookup per tag
+
+  /* Date-range filter for the flow report — the earliest date it makes sense
+     to pick is the earliest event actually on file; anything older can never
+     show data, so the "จาก" input's min= is clamped to that instead of
+     letting the operator pick a date that's guaranteed empty. */
+  var earliestEvMs=S.events.reduce(function(min,e){
+    var t=Date.parse(e.ts);return (!isNaN(t)&&(min==null||t<min))?t:min;
+  },null);
+  var fromEl=$('#ovFlowFrom'),toEl=$('#ovFlowTo');
+  if(earliestEvMs!=null){
+    var minDateStr=new Date(earliestEvMs).toISOString().slice(0,10);
+    if(fromEl){fromEl.min=minDateStr;if(fromEl.value&&fromEl.value<minDateStr)fromEl.value=minDateStr;}
+    if(toEl){toEl.min=minDateStr;if(toEl.value&&toEl.value<minDateStr)toEl.value=minDateStr;}
+  }
+  var todayStr=new Date().toISOString().slice(0,10);
+  if(fromEl){fromEl.max=todayStr;if(fromEl.value&&fromEl.value>todayStr)fromEl.value=todayStr;}
+  if(toEl){toEl.max=todayStr;if(toEl.value&&toEl.value>todayStr)toEl.value=todayStr;}
+  var rangeFromMs=fromEl&&fromEl.value?Date.parse(fromEl.value+'T00:00:00'):null;
+  var rangeToMs=toEl&&toEl.value?Date.parse(toEl.value+'T23:59:59'):null;
+  function inRange(ts){
+    var t=Date.parse(ts);
+    if(isNaN(t))return false;
+    if(rangeFromMs!=null&&t<rangeFromMs)return false;
+    if(rangeToMs!=null&&t>rangeToMs)return false;
+    return true;
+  }
+
+  // build events lookup per tag — restricted to the selected date range, if any
   var evByTag={};
-  S.events.forEach(function(e){if(!evByTag[e.tag])evByTag[e.tag]={outs:[],ins:[]};
-    if(e.dir==='out')evByTag[e.tag].outs.push(e);else if(e.dir==='in')evByTag[e.tag].ins.push(e);});
+  S.events.forEach(function(e){
+    if((rangeFromMs!=null||rangeToMs!=null)&&!inRange(e.ts))return;
+    if(!evByTag[e.tag])evByTag[e.tag]={outs:[],ins:[]};
+    if(e.dir==='out')evByTag[e.tag].outs.push(e);else if(e.dir==='in')evByTag[e.tag].ins.push(e);
+  });
 
   var tks=Object.keys(typeBoxes);
   var typeFlowHtml='';
@@ -5654,6 +5693,17 @@ function renderReports(){
   renderFloorReports();
 
 }
+/* Date-range filter for "รายงานกล่องรายตัว — แยกตามประเภท" (#ovFlowFrom/#ovFlowTo)
+   — renderReports() re-clamps min/max and re-reads the two inputs' values on
+   every call, so just re-rendering here is enough to apply the new range. */
+function onOvFlowRangeChange(){renderReports();}
+window.onOvFlowRangeChange=onOvFlowRangeChange;
+function clearOvFlowRange(){
+  var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
+  if(f)f.value='';if(t)t.value='';
+  renderReports();
+}
+window.clearOvFlowRange=clearOvFlowRange;
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
@@ -6312,8 +6362,8 @@ function isAtStaging(b) {
 }
 
 function invLocText(b) {
-  if (b.status === 'out') return '<span class="muted">— อยู่กับลูกค้า —</span>';
-  if (b.status === 'lost') return '<span class="muted">— แจ้งกล่องหาย —</span>';
+  if (b.status === 'out') return '<b>' + esc(custName(b.customer)) + '</b>' + (b.do ? '<div class="tag">' + esc(b.do) + '</div>' : '');
+  if (b.status === 'lost') return '<span class="muted">— แจ้งกล่องหาย —</span>' + (b.customer ? '<div class="tag">' + esc(custName(b.customer)) + '</div>' : '');
   /* SOW: no Putaway/staging — a box not yet through Gate In just reads
      "รอเข้าคลัง (Gate In)", labeled or not, and one that IS in the
      warehouse but has no zone/rack on file reads as plain "ในคลัง" — neither
@@ -6323,6 +6373,19 @@ function invLocText(b) {
   var loc = b.location || {};
   if (!loc.wh) return '<span class="muted">ในคลัง</span>';
   return locShort(b.location);
+}
+/* วันที่ ส่ง/รับ ล่าสุด — อ่านจาก history ตัวจริงของกล่อง (ล่าสุดที่เป็น
+   dir 'out' หรือ 'in') ไม่ใช่ lastSeenAt ทั่วไป เพื่อให้ตรงกับเหตุการณ์ที่
+   ทำให้กล่องอยู่ในสถานะปัจจุบัน — ใช้เวลาจริงจากไฟล์นำเข้า (ดู pendingOutTsMap
+   ที่ Gate ขาออก) ถ้ามี ไม่ใช่เวลาที่กดยืนยันนำเข้า */
+function invShipRecvText(b) {
+  var h = b.history || [];
+  for (var i = h.length - 1; i >= 0; i--) {
+    var e = h[i];
+    if (e.dir === 'out') return '<div>ส่ง</div><div class="mono">' + fmtTs(e.ts) + '</div>';
+    if (e.dir === 'in') return '<div>รับ</div><div class="mono">' + fmtTs(e.ts) + '</div>';
+  }
+  return '<span class="muted small">—</span>';
 }
 function canRelocateBox(b) {
   return !!b && b.status === 'warehouse';
@@ -6766,10 +6829,11 @@ function renderInventory() {
       + '<td>' + esc(typeName(b.type)) + '</td>'
       + '<td>' + invLocText(b) + '</td>'
       + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
+      + '<td class="small">' + invShipRecvText(b) + '</td>'
       + '<td class="small">' + esc(invLastRecorder(b)) + '</td>'
       + '<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
     + '</tr>';
-  }).join('') : emptyRow(7, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
+  }).join('') : emptyRow(8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
 }
 
