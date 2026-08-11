@@ -541,7 +541,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 .locmap-zonehead .locmap-del{margin-left:8px;}
 .locmap-racklabel .locmap-del{margin-left:6px;}
 .locmap-shelftag-wrap{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
-/* single-slot delete now lives inside the Putaway modal (click the slot to open it) —
+/* single-slot delete now lives inside the location edit modal (click the slot to open it) —
    no hover-reveal icon on the grid itself, so a click always means "open," never "delete" */
 /* same badge style, reused for the zone/rack/shelf delete controls in the hierarchical TABLE view —
    revealed on hovering the group-header row (tr.loc-grp-h) it sits in */
@@ -555,10 +555,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 #locBody tr:hover .del-badge{opacity:1;}
 
 
-/* Putaway modal step UI */
-.putaway-step{background:var(--surface2);border:.5px solid var(--line);border-radius:16px;padding:14px 16px;}
-.putaway-step-hd{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:12px;}
-.putaway-step-num{width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);
+/* Receive modal step UI */
+.recv-step{background:var(--surface2);border:.5px solid var(--line);border-radius:16px;padding:14px 16px;}
+.recv-step-hd{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:12px;}
+.recv-step-num{width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);
   display:grid;place-items:center;font-size:12px;font-weight:800;flex:0 0 auto;}
 .icr-pill:hover{color:var(--ink);border-color:var(--ink2);}
 .icr-pill.active{background:var(--ink);color:var(--bg);border-color:var(--ink);}
@@ -757,7 +757,7 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;}
 .ivs-btn:hover{color:var(--ink);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
-/* STG / unputaway warning chip */
+/* chip for a warehouse box that has no zone/rack on file yet — informational only */
 .loc-stg{display:inline-flex;align-items:center;gap:5px;background:var(--warnSoft);color:var(--warn);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;}
 .loc-stg .loc-stg-ic{font-size:13px;}
 .loc-none{display:inline-flex;align-items:center;gap:5px;background:var(--negSoft);color:var(--neg);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;}
@@ -794,7 +794,6 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .pill.gray{background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--muted);border:.5px solid var(--line);}
 .pill.hold{background:color-mix(in srgb,#f59e0b 18%,transparent);color:#b45309;border:.5px solid color-mix(in srgb,#f59e0b 45%,transparent);}
 .pill.dmg{background:color-mix(in srgb,#f97316 20%,transparent);color:#c2410c;border:.5px solid color-mix(in srgb,#f97316 48%,transparent);}
-.pill.putaway{background:color-mix(in srgb,#f59e0b 22%,transparent);color:#b45309;border:1px solid #f59e0b;font-weight:800;}
 .lifestep{display:flex;align-items:flex-start;width:100%;}
 .lifestep-node{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;min-width:64px;}
 .lifestep-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid var(--line);color:var(--muted);background:var(--posSoft);flex:0 0 auto;transition:all .2s var(--ease);}
@@ -1271,7 +1270,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .beta-tag{display:inline-block;margin-left:2px;padding:1px 6px;border-radius:999px;font-size:9.5px;
     font-weight:800;letter-spacing:.03em;background:var(--warnSoft);color:var(--warn);vertical-align:1px;}
   .viz-card .hero-viz{margin:0;border:none;border-radius:0;box-shadow:none;}
-  /* ชิปจุดรอ Putaway ในหน้า Location Master */
+  /* SOW: no Putaway/staging — chip style kept unused, no caller left */
   .stg-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 8px 7px 14px;border-radius:999px;
     background:var(--accentSoft);color:var(--accentInk);border:.5px solid var(--line2);white-space:nowrap;
     font-family:var(--mono);font-size:13px;font-weight:700;}
@@ -1442,7 +1441,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="hero">
     <div class="eyebrow reveal">Inbound</div>
     <h1 class="h-title reveal d1">กลับเข้าคลัง<br>เก็บเข้าชั้น</h1>
-    <p class="h-sub reveal d2">รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบพักกล่องไว้ที่ <b>จุดพักสินค้า (Staging)</b> ของคลังนั้นให้อัตโนมัติ แล้วตัดยอดว่า "คืนแล้ว" — พนักงานจัดเรียงสินค้าจะนำเข้าชั้นวางจริงที่หน้า Inventory</p>
+    <p class="h-sub reveal d2">รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบรับกล่องเข้าคลังนั้นทันทีให้อัตโนมัติ แล้วตัดยอดว่า "คืนแล้ว"</p>
   </div>
 
   <div class="card hover reveal">
@@ -1983,7 +1982,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="ssec" id="ssec-loc" style="display:none;">
     <div class="card hover">
       <h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค / ชั้นวาง (Location Master)</h3>
-      <p class="desc">ลงทะเบียนตำแหน่งชั้นวาง — รหัสป้ายสร้างอัตโนมัติ ซื้อแร็คมาใหม่ใช้ <b>Bulk Generate</b> สร้างทุก Slot ได้ในคลิกเดียว พนักงานสแกนป้ายที่ชั้นวางก่อนสแกนกล่องใน Putaway</p>
+      <p class="desc">ลงทะเบียนตำแหน่งชั้นวาง — รหัสป้ายสร้างอัตโนมัติ ซื้อแร็คมาใหม่ใช้ <b>Bulk Generate</b> สร้างทุก Slot ได้ในคลิกเดียว</p>
 
       <!-- Mode switcher -->
       <div class="inv-view-sw" id="locModeSw" style="margin-bottom:18px;">
@@ -2106,7 +2105,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="loc-legend" id="locLegend">
         <span><i class="loc-dot e"></i> ว่าง — พร้อมวางกล่อง</span>
         <span><i class="loc-dot o"></i> มีของ — มีกล่องอยู่แล้ว</span>
-        <span class="muted small" style="margin-left:auto;">คลิกที่ช่องบนผังเพื่อสแกนจัดเก็บ (Putaway) · คลิกแถวในมุมมองตารางเพื่อแก้ไขตำแหน่ง</span>
+        <span class="muted small" style="margin-left:auto;">คลิกที่ช่องบนผัง หรือคลิกแถวในมุมมองตารางเพื่อดู/แก้ไขตำแหน่ง</span>
       </div>
       <!-- Rack Map view: visual elevation grid, color = occupied/empty -->
       <div id="locMapView"></div>
@@ -4144,9 +4143,10 @@ function allocateSuggest(typeId, qty, mode, excludeTags){
   return qty?pool.slice(0,qty):pool;
 }
 /* count of boxes that are actually available to promise right now: in the
-   warehouse, already Putaway (not sitting in staging), and not Hold/Damage/Out —
-   this is the number Pick List validates new lines against so staff can never
-   be asked to pick more than physically exists and is ready to ship. */
+   warehouse and not Hold/Damage/Out — SOW: no Putaway/staging, so every
+   warehouse box is eligible the instant it's received. This is the number
+   Pick List validates new lines against so staff can never be asked to pick
+   more than physically exists and is ready to ship. */
 function availableQtyForType(typeId){
   return Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&!isStagingLoc(b.location||{})&&(!typeId||b.type===typeId);}).length;
 }
@@ -4231,7 +4231,7 @@ function openPickListModal(presetLines){
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> รายการหยิบตามพิกัด (Pick List)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
-      +'<p class="muted small" style="margin:0 0 14px;">เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่ Putaway แล้วเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ</p>'
+      +'<p class="muted small" style="margin:0 0 14px;">เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่อยู่ในคลังเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ</p>'
       +'<div class="grid g3" style="margin-bottom:10px;">'
         +'<div class="field"><label>ประเภทกล่อง</label><select id="plType">'+typeOpts+'</select></div>'
         +'<div class="field"><label>จำนวนที่ต้องการ</label><input id="plQty" type="number" min="1" value="5"><div id="plQtyHint" class="tag" style="margin-top:5px;"></div></div>'
@@ -4266,7 +4266,7 @@ function openPickListModal(presetLines){
     if(!qty||qty<1)return toast('กรอกจำนวนให้ถูกต้อง',null,'err');
     var already=pickLines.filter(function(l){return l.type===type;}).reduce(function(s,l){return s+l.qty;},0);
     var avail=availableQtyForType(type);
-    if(already+qty>avail)return toast('เกินจำนวนที่มีในสต็อก',typeName(type)+' พร้อมจ่ายจริง '+avail+' ใบ (ในคลัง+Putaway แล้วเท่านั้น) — ตอนนี้ขอไปแล้ว '+already+' ใบ','err');
+    if(already+qty>avail)return toast('เกินจำนวนที่มีในสต็อก',typeName(type)+' พร้อมจ่ายจริง '+avail+' ใบ (เฉพาะกล่องในคลัง) — ตอนนี้ขอไปแล้ว '+already+' ใบ','err');
     pickLines.push({type:type,qty:qty});renderLines();setv('plQty','5');refreshQtyHint();
   };
   $('#plBuild').onclick=function(){
@@ -4304,7 +4304,7 @@ function pickRowDone(row){return row.forced||row.tags.every(function(t){return r
 function renderPickTable(){
   var box=$('#plResult');if(!box)return;
   var shortfallHtml=(pickShortfalls&&pickShortfalls.length)?('<div class="banner warn" style="margin-bottom:10px;">สต็อกเปลี่ยนระหว่างทาง — บางรายการได้ไม่ครบ:<br>'+pickShortfalls.map(esc).join('<br>')+'</div>'):'';
-  if(!pickRows||!pickRows.length){box.innerHTML=shortfallHtml+'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" (Putaway แล้ว) ตรงเงื่อนไขนี้</div>';$('#plQueueBtn').disabled=true;return;}
+  if(!pickRows||!pickRows.length){box.innerHTML=shortfallHtml+'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตรงเงื่อนไขนี้</div>';$('#plQueueBtn').disabled=true;return;}
   box.innerHTML=shortfallHtml+'<div class="twrap" style="max-height:48vh;"><table><thead><tr><th>🟩 พิกัดชั้นวาง</th><th>📦 ชนิดกล่อง</th><th>🔢 จำนวน</th><th>🎯 ผลการหยิบ</th></tr></thead><tbody>'
     +pickRows.map(function(row,ri){
       var done=pickRowDone(row);var doneCnt=row.tags.filter(function(t){return row.confirmed[t];}).length;
@@ -4868,9 +4868,9 @@ window.labelsToPDF=labelsToPDF;
    เดิมกดเปิด modal นี้ปุ๊บ labeled=true ถูกตั้งทันทีแบบเงียบๆ ก่อนผู้ใช้ทำอะไรเลย
    ผู้ใช้เลยรู้สึกว่าปุ่มกดแล้วไม่มีอะไรเกิดขึ้นจริง (สถานะ "รอเข้าคลัง (Gate In)" ของกล่องที่เพิ่ง
    ลงทะเบียนใหม่ (pending) ไม่ขยับเลย เพราะคอลัมน์นั้นอ่านจาก status ไม่ใช่ labeled)
-   จึงเปลี่ยนเป็นต้องกดปุ่ม "ยืนยันติดป้ายเสร็จแล้ว" เอง และเพิ่มตัวเลือก Putaway
-   อัตโนมัติให้กล่องที่ยังไม่มีตำแหน่งจริงในคราวเดียวกัน */
-/* SOW: no Putaway/staging — printing a label no longer offers to
+   จึงเปลี่ยนเป็นต้องกดปุ่ม "ยืนยันติดป้ายเสร็จแล้ว" เอง
+
+   SOW: no Putaway/staging — printing a label no longer offers to
    auto-assign a rack location. A box still has to go through Gate In (or
    an already-warehouse box just stays put) to be received; this modal only
    marks the barcode as printed. */
@@ -4927,12 +4927,9 @@ window.printAllLabels=printAllLabels;
 
 /* ===== shared pills ===== */
 /* Status pill. Pass the box (or box-like group with .location) as the 2nd
-   arg when available: a box sitting in staging is technically status
-   "warehouse" in the data model, but must NEVER read as "ในคลัง" (ready to
-   ship) to a human — that's exactly the ambiguity that led to gate-out
-   mistakes. This surfaces the WMS's own formal state name, "รอ Putaway",
-   directly in the status column (not just the location column) with a bold,
-   high-contrast pill so it can't be missed or mistaken for "ในคลัง". */
+   arg when available — used only for the pending/not-yet-labeled case below.
+   SOW: no Putaway/staging — a box without a zone/rack on file is still
+   plain "ในคลัง" (ready to ship), not a distinct warning state. */
 function statusPill(s,ctx){
   if(s==='warehouse'&&ctx&&ctx.labeled===false){
     return '<span class="pill warn">รอเข้าคลัง (Gate In)</span>';
@@ -5176,7 +5173,7 @@ function renderLocDatalist(){
   fill('dl-zone',zones);fill('dl-rack',racks);fill('dl-shelf',shelves);fill('dl-slot',slots);
 }
 /* ===== cascading location dropdowns sourced from the Location Master (S.locations) =====
-   Used by any modal that lets someone pick a storage spot (relocate / bulk relocate / putaway):
+   Used by any modal that lets someone pick a storage spot (relocate / bulk relocate / receive):
    options must come from real registered racks/shelves/slots for the chosen warehouse — not a
    free-text guess — so a rack that doesn't exist can never be typed into a box's location. */
 function locFieldValues(wh, field, filt){
@@ -5366,21 +5363,6 @@ function lookupDO(){
     +'<button type="button" class="btn ghost sm" onclick="$(\'#doLookupHint\').innerHTML=\'\';">ซ่อน</button></div>';
 }
 window.lookupDO=lookupDO;
-function applyPutawayDefault(type){
-  var hint=$('#putawayHint');if(!hint)return;
-  var sug=S.putaway[type];
-  if(!sug||!(sug.zone||sug.rack||sug.shelf||sug.slot)){
-    hint.innerHTML='<div class="banner warn" style="margin-bottom:14px;"><span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span></span>'
-      +'<div>ยังไม่มีตำแหน่งเริ่มต้นสำหรับ <b>'+esc(typeName(type))+'</b> — กรอกครั้งนี้ ระบบจะจดจำไว้ใช้เป็นค่าเริ่มต้นครั้งหน้า</div></div>';
-    return;
-  }
-  setv('inZone',sug.zone||'');setv('inRack',sug.rack||'');setv('inShelf',sug.shelf||'');setv('inSlot',sug.slot||'');
-  var tail=[sug.zone&&('โซน '+sug.zone),sug.rack&&('แร็ค '+sug.rack),sug.shelf&&('ชั้น '+sug.shelf),sug.slot&&('ช่อง '+sug.slot)].filter(Boolean).join(' · ');
-  hint.innerHTML='<div class="banner info" style="margin-bottom:14px;"><span class="bi"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span></span>'
-    +'<div>เติมตำแหน่งให้อัตโนมัติแล้วตามค่าเริ่มต้นของ <b>'+esc(typeName(type))+'</b> — '+esc(tail)+'<div class="muted small" style="margin-top:2px;">วางไม่ตรง? แก้ไขช่องด้านล่างได้เลย หรือย้ายตำแหน่งทีหลังได้ที่ตั้งค่า → ลงทะเบียนกล่อง</div></div></div>';
-}
-window.applyPutawayDefault=applyPutawayDefault;
-
 /* ===== GATE OUT ===== */
 function buildQuickOut(){
   var wh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&!isStagingLoc(b.location||{});}).slice(0,6);
@@ -6344,7 +6326,6 @@ function renderSetup(){
   var whs=sortTable(whsAll,uiSort.wh,'name');
   var gtColors={'both':'var(--ink)','in':'var(--pos)','out':'var(--neg)'};
   $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
-    var pendingPutaway=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id&&isStagingLoc(b.location);}).length;
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
     var gtHtml=[gtT.both?'<span>⇄ '+gtT.both+'</span>':'',gtT['in']?'<span style="color:var(--accentInk);">↓ เข้า '+gtT['in']+'</span>':'',gtT.out?'<span style="color:var(--neg);">↑ ออก '+gtT.out+'</span>':''].filter(Boolean).join(' · ');
@@ -6591,7 +6572,7 @@ function renderLocRackMap(locs, occ) {
                       var badge = isOcc ? '<span class="locmap-slot-badge">'+count+'</span>' : '';
                       return '<div class="locmap-slot'+(isOcc?' occ':'')+'" data-loc-code="'+esc(l.code)+'" '
                         + 'onclick="locSlotClick(this)" '
-                        + 'title="'+esc(l.code)+' · '+(isOcc?('มีของ '+count+' กล่อง'):'ว่าง')+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
+                        + 'title="'+esc(l.code)+' · '+(isOcc?('มีของ '+count+' กล่อง'):'ว่าง')+' — คลิกเพื่อดู/แก้ไขตำแหน่งนี้">'+esc(l.slot||'')+badge
                         + '</div>';
                     }).join('')
                     + '</div>';
@@ -7393,125 +7374,17 @@ function printAllLocLabels() {
 window.locRowClick = locRowClick; window.locDelClick = locDelClick;
 window.locPrintClick = locPrintClick; window.printAllLocLabels = printAllLocLabels;
 
-/* ===== Rack Map: click a slot → scan RFID/barcode straight into that exact location =====
-   The map is meant to be worked from the floor: pick the physical bin you're standing at,
-   then scan whatever box goes in it — instead of typing zone/rack/shelf/slot by hand. */
-var slotPutawayQueue = [];
-function openSlotPutawayModal(code){
-  var loc = S.locations[code]; if(!loc){toast('ไม่พบตำแหน่งนี้',code,'err');return;}
-  slotPutawayQueue = [];
-  var occBoxes = Object.values(S.boxes).filter(function(b){
-    return b.status==='warehouse' && locationCode(b.location||{}) === code;
-  });
-  var locLabel = [loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
-  var occLabel = occBoxes.length ? ('มีของอยู่แล้ว '+occBoxes.length+' กล่อง: '+occBoxes.map(function(b){return b.tag;}).join(', ')) : 'ว่าง — พร้อมวางกล่อง';
-  openModal(
-    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 3.5 3H6.5L10 9 9 3Z"/><path d="M12 15v6"/></svg></span> Putaway → '+esc(code)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-      +'<div class="banner '+(occBoxes.length?'warn':'info')+'" style="margin:0 0 16px;">'
-        +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'
-        +'<div><b>'+esc(whName(loc.wh))+'</b>'+(locLabel?' · '+esc(locLabel):'')+'<div class="small" style="margin-top:2px;">'+esc(occLabel)+'</div></div>'
-      +'</div>'
-      +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:280px;">'
-        +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>ป้ายตำแหน่งนี้ — สำหรับพิมพ์ติดหน้างาน</div>'
-        +'<div class="rfid-fin-wrap"><div class="finlabel" style="padding:12px 14px 8px;">'
-          +'<div class="fl-head"><div><div class="fl-brand" style="font-size:15px;">LOCATION</div></div>'
-            +'<div style="width:42px;height:42px;flex:0 0 auto;" title="QR ของตำแหน่งนี้">'+qrCodeSVG(code,42)+'</div>'
-          +'</div>'
-          +'<div style="text-align:center;font-weight:800;font-size:30px;letter-spacing:.03em;margin:4px 0 2px;color:#000;">'+esc(code)+'</div>'
-          +'<div class="fl-div" style="margin:8px 0 10px;"></div>'
-          +'<div class="fl-bc">'+code128SVG(code,64)+'</div>'
-        +'</div></div>'
-      +'</div>'
-      +'<div class="row" style="justify-content:center;gap:8px;margin:0 0 16px;">'
-        +'<button type="button" class="btn ghost sm" onclick="downloadSlotLabelPNG(\''+esc(code)+'\',\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลด PNG</button>'
-        +'<button type="button" class="btn ghost sm" onclick="printLocationLabels([{code:\''+esc(code)+'\',sub:\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\'}])"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายช่องนี้</button>'
-      +'</div>'
-      +'<div class="inv-scan-bar" style="margin-bottom:10px;"><span class="iss-ic">⊟</span>'
-        +'<input id="slotPaScan" placeholder="ยิงบาร์โค้ด / บาร์โค้ดกล่องที่จะจัดเก็บ" autocomplete="off">'
-        +'<button class="btn pos sm" id="btnSlotPaAdd">เพิ่ม</button></div>'
-      +'<div id="slotPaResult"></div>'
-    +'</div>'
-    +'<div class="mfoot">'
-      +'<span class="muted small" id="slotPaCount" style="margin-right:auto;"></span>'
-      +(occBoxes.length ? '' : '<button class="btn ghost sm" style="color:var(--neg);" onclick="if(delLocSlot(\''+esc(code)+'\'))closeModal();" title="ลบตำแหน่งนี้ออกจากผัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ลบตำแหน่งนี้</button>')
-      +'<button class="btn gray" data-close>ยกเลิก</button>'
-      +'<button class="btn pos" onclick="commitSlotPutaway(\''+esc(code)+'\')">ยืนยันจัดเก็บ</button>'
-    +'</div>'
-  );
-  $('#btnSlotPaAdd').onclick = slotPaAdd;
-  $('#slotPaScan').addEventListener('keydown', function(e){ if(e.key==='Enter') slotPaAdd(); });
-  autoScanBind($('#slotPaScan'), slotPaAdd);
-  renderSlotPaQueue();
-  setTimeout(function(){var f=$('#slotPaScan'); if(f) f.focus();},60);
-}
-window.openSlotPutawayModal = openSlotPutawayModal;
-/* quick PNG grab of this one slot's label — no modal navigation, so an in-progress scan queue isn't disturbed */
+/* ===== Rack Map: click a slot → view/edit that location =====
+   SOW: no Putaway/staging — a box lands in the warehouse at Gate In, no forced
+   scan-into-slot step. Clicking a slot on the map just opens the same
+   view/edit as clicking its row in the table. */
+/* quick PNG grab of this one slot's label */
 function downloadSlotLabelPNG(code,sub){
   var a=document.createElement('a');a.href=locationLabelToPNG(code,sub);a.download='location-'+code+'.png';a.click();
   toast('ดาวน์โหลดป้ายแล้ว',code,'info');
 }
 window.downloadSlotLabelPNG=downloadSlotLabelPNG;
-function slotPaAdd(tag){
-  var raw = (typeof tag==='string'?tag:val('slotPaScan')).trim();
-  tag = resolveTag(raw); if(!tag) return;
-  var b = S.boxes[tag];
-  if(!b){ toast('ไม่พบกล่อง', looksThaiGarbled(raw)?tag+' — คีย์บอร์ดอาจอยู่ในโหมดภาษาไทย':tag, 'err'); setv('slotPaScan',''); return; }
-  if(b.status==='out'){ toast(tag+' ยังอยู่นอกคลัง (ที่ลูกค้า)', 'ต้องรับเข้าที่ Gate ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
-  if(b.status==='lost'){ toast(tag+' ถูกตีเป็นสูญหาย', 'กู้คืนสถานะก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
-  if(b.status==='hold'){ toast(tag+' ถูกกันไว้ (Hold)', 'ปลด Hold ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
-  if(b.status==='damage'){ toast(tag+' สถานะชำรุด (Damage)', null, 'err'); setv('slotPaScan',''); return; }
-  if(slotPutawayQueue.indexOf(tag) < 0) slotPutawayQueue.push(tag);
-  setv('slotPaScan','');
-  renderSlotPaQueue();
-  var f = $('#slotPaScan'); if(f) f.focus();
-}
-window.slotPaAdd = slotPaAdd;
-function renderSlotPaQueue(){
-  var res = $('#slotPaResult'); if(!res) return;
-  var cnt = $('#slotPaCount'); if(cnt) cnt.textContent = slotPutawayQueue.length ? ('คิวจัดเก็บ '+slotPutawayQueue.length+' ใบ') : '';
-  res.innerHTML = slotPutawayQueue.length ? '<div class="chiplist">'+slotPutawayQueue.map(function(t){
-    var b=S.boxes[t]||{};
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span><b onclick="slotPaRemove(\''+esc(t)+'\')" title="เอาออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';
-  }).join('')+'</div>' : '<div class="muted small">ยังไม่มีกล่องในคิว</div>';
-}
-function slotPaRemove(t){ slotPutawayQueue = slotPutawayQueue.filter(function(x){return x!==t;}); renderSlotPaQueue(); }
-window.slotPaRemove = slotPaRemove;
-function commitSlotPutaway(code){
-  if(!slotPutawayQueue.length) return toast('ยังไม่มีกล่องในคิว', null, 'err');
-  var loc = S.locations[code]; if(!loc) return;
-  var recorder = USER, ts = iso();
-  var locObj = {wh:loc.wh, zone:loc.zone||'', rack:loc.rack||'', shelf:loc.shelf||'', slot:loc.slot||'', gate:null, ts:ts};
-  var locStr = [locObj.zone, locObj.rack, locObj.shelf, locObj.slot].filter(Boolean).join(' · ');
-  var typesIn = {}, n = 0;
-  slotPutawayQueue.forEach(function(t){
-    var b = S.boxes[t]; if(!b) return;
-    var isPutaway = b.status === 'warehouse';
-    if(isPutaway){
-      var before = {wh:whName((b.location||{}).wh), loc:locShort(b.location)};
-      b.history.push({dir:'putaway', ts:ts, wh:locObj.wh, loc:locObj, recorder:recorder, note:'จัดเก็บเข้าตำแหน่ง '+code+' จากผังชั้นวาง'});
-      b.location = locObj; b.lastSeenAt = ts;
-      auditEntry('RELOCATE', recorder, t, typeName(b.type), before, {wh:whName(locObj.wh), loc:locStr});
-    } else {
-      var isNewBox = !(b.history||[]).some(function(h){return h.dir==='out';});
-      b.history.push({dir:'in', ts:ts, do:isNewBox?'':b.do, po:isNewBox?'':b.po, customer:isNewBox?'':b.customer, wh:locObj.wh, loc:locObj, recorder:recorder, note:(isNewBox?'Initial Inbound':'รับเข้า')+' → จัดเก็บที่ '+code});
-      S.events.push({ts:ts, dir:isNewBox?'in-new':'in', tag:t, type:b.type, do:isNewBox?'':b.do, customer:isNewBox?'':b.customer, customerName:isNewBox?'':custName(b.customer), wh:locObj.wh, recorder:recorder});
-      b.status='warehouse'; if(!isNewBox) b.cycles=(b.cycles||0)+1;
-      b.customer=''; b.do=''; b.po=''; b.outGate=null; b.outWh=''; b.outAt=null; b.dueAt=null;
-      b.location = locObj; b.lastSeenAt = ts;
-      auditEntry('GATE_IN', recorder, t, typeName(b.type), null, {wh:whName(locObj.wh), loc:locStr});
-    }
-    typesIn[b.type]=true; n++;
-  });
-  Object.keys(typesIn).forEach(function(ty){ S.putaway[ty] = {wh:locObj.wh, zone:locObj.zone, rack:locObj.rack, shelf:locObj.shelf, slot:locObj.slot}; });
-  saveLastInvLoc(locObj.wh, locStr);
-  save(); closeModal();
-  toast('จัดเก็บสำเร็จ', n+' ใบ → '+code, 'ok');
-  slotPutawayQueue = [];
-  renderAll();
-}
-window.commitSlotPutaway = commitSlotPutaway;
-function locSlotClick(el){ openSlotPutawayModal(el.getAttribute('data-loc-code')); }
+function locSlotClick(el){ editLocRow(el.getAttribute('data-loc-code')); }
 window.locSlotClick = locSlotClick;
 
 /* ── bulk select actions for location table (mirrors ลงทะเบียนกล่อง) ── */
@@ -7914,8 +7787,8 @@ window.seedDemo=seedDemo;
    LIVE FLOW BOARD (2D pane)
    ----------------------------------------------------------------------------
    ผังกระบวนการของคลังที่ทุกตัวเลขอ่านจาก S จริง — ไม่มีค่าตายตัวเหลืออยู่เลย
-   สเตจเรียงตาม lifecycle ที่โค้ดทำจริง (ลงทะเบียน → Gate In → Putaway →
-   บนชั้นวาง → Gate Out → อยู่กับลูกค้า → เกินกำหนด) และแต่ละสเตจกดเข้าไปดู
+   สเตจเรียงตาม lifecycle ที่โค้ดทำจริง (ลงทะเบียน → Gate In → ในคลัง →
+   Gate Out → อยู่กับลูกค้า → เกินกำหนด) และแต่ละสเตจกดเข้าไปดู
    รายการที่กรองไว้แล้วได้ผ่าน goInventory() ตัวเดียวกับที่ KPI การ์ดใช้
 
    ทำไมเป็น HTML ไม่ใช่ SVG อย่างของเดิม: ตัวเลข/ป้ายเป็นข้อความจริง จึงไม่ต้อง
@@ -8827,22 +8700,21 @@ autoScanBind($('#invScan'), invQuickSearch);
 
 /* ====== CREATE: สแกนรับเข้าคลัง (auto-fill type/unit + default location) ====== */
 var invReceiveQueue = [];
-/* ── Putaway Modal — Rack-First Scan Flow ──────────────────────────────────────
-   Industry standard (SAP EWM / Manhattan WMS / Zebra WarehouseEdge):
-   พนักงานเดินถึงแร็ค → สแกน barcode ที่ป้ายแร็คก่อน (Step 1)
-   → ระบบล็อกตำแหน่งปลายทาง → จึงสแกนกล่อง (Step 2) → ยืนยัน
-   ข้อมูลแร็ค/ชั้นวางจัดเก็บใน S.locations (Master ตั้งค่า) ไม่ใช่ per-box */
+/* SOW: no Putaway/staging — a box lands in "ในคลัง" the moment it's received here.
+   The rack fields below are an optional convenience (pre-filled with the last
+   location used for this box type) so the operator can note where it physically
+   sits; they are never required for the receive to succeed. */
 function openInvReceiveModal(prefilledTag) {
   invReceiveQueue = [];
-  var dp = defaultPutaway();
+  var dp = defaultRecvLoc();
   openModal(
-    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> จัดเรียงเข้าแร็ค (Putaway)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> รับเข้าคลัง</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     + '<div class="mbody">'
-      /* ── Step 1: Rack location ── */
-      + '<div class="putaway-step" id="paStep1">'
-        + '<div class="putaway-step-hd">'
-          + '<span class="putaway-step-num">1</span>'
-          + '<span>ตำแหน่งแร็คปลายทาง</span>'
+      /* ── ตำแหน่งจัดเก็บ (ไม่บังคับ) ── */
+      + '<div class="recv-step" id="paStep1">'
+        + '<div class="recv-step-hd">'
+          + '<span class="recv-step-num">1</span>'
+          + '<span>ตำแหน่งจัดเก็บ (ไม่บังคับ)</span>'
           + '<div class="spacer"></div>'
           /* toggle: scan vs manual */
           + '<div class="seg-filter" id="paRackModeSeg" style="font-size:12px;">'
@@ -8876,8 +8748,8 @@ function openInvReceiveModal(prefilledTag) {
         + '</div>'
       + '</div>'
       /* ── Step 2: Box scan ── */
-      + '<div class="putaway-step" id="paStep2" style="margin-top:14px;">'
-        + '<div class="putaway-step-hd"><span class="putaway-step-num">2</span><span>สแกนกล่องที่จะนำเข้าเก็บ</span></div>'
+      + '<div class="recv-step" id="paStep2" style="margin-top:14px;">'
+        + '<div class="recv-step-hd"><span class="recv-step-num">2</span><span>สแกนกล่องที่จะนำเข้าเก็บ</span></div>'
         + '<div class="inv-scan-bar" style="margin-bottom:10px;"><span class="iss-ic">⊟</span>'
           + '<input id="invRcvScan" placeholder="ยิงบาร์โค้ด / บาร์โค้ดกล่องที่คืน" autocomplete="off">'
           + '<button class="btn pos sm" id="btnInvRcvAdd">เพิ่ม</button></div>'
@@ -8960,7 +8832,7 @@ function openInvReceiveModal(prefilledTag) {
   $('#btnInvRcvAdd').onclick = invRcvAdd;
   $('#invRcvScan').addEventListener('keydown', function(e) { if (e.key === 'Enter') invRcvAdd(); });
   autoScanBind($('#invRcvScan'), invRcvAdd);
-  /* pre-fill with last putaway defaults → auto-switch to manual & show confirmed */
+  /* pre-fill with the last-used location → auto-switch to manual & show confirmed */
   if(dp.zone||dp.rack){
     setv('invRcvZone',dp.zone||'');setv('invRcvRack',dp.rack||'');
     setv('invRcvShelf',dp.shelf||'');setv('invRcvSlot',dp.slot||'');
@@ -9011,7 +8883,7 @@ function invRcvAdd(tag) {
   if (b.status === 'lost') { toast(tag + ' ถูกแจ้งว่าหาย — ใช้ปุ่มคืนสภาพก่อน', null, 'err'); setv('invRcvScan', ''); return; }
   if (invReceiveQueue.indexOf(tag) < 0) {
     invReceiveQueue.push(tag);
-    // auto default location from putaway/last loc on first scan
+    // optional convenience: pre-fill the last location used for this box type
     if (invReceiveQueue.length === 1 && S.putaway[b.type]) {
       var sug = S.putaway[b.type];
       if (!val('invRcvZone')) setv('invRcvZone', sug.zone || '');
@@ -9031,7 +8903,7 @@ function renderInvRcv() {
   if (!res) return;
   res.innerHTML = invReceiveQueue.length ? '<div class="lines">' + invReceiveQueue.map(function(t) {
     var b = S.boxes[t] || {}; var bt = S.boxtypes[b.type] || {};
-    var srcLabel = b.status === 'pending' ? 'กล่องใหม่ · รอเข้าคลัง (Gate In)' : b.status === 'warehouse' ? 'Putaway ในคลัง' : ('จากลูกค้า: ' + custName(b.customer));
+    var srcLabel = b.status === 'pending' ? 'กล่องใหม่ · รอเข้าคลัง (Gate In)' : b.status === 'warehouse' ? 'อยู่ในคลังแล้ว · ย้ายตำแหน่ง' : ('จากลูกค้า: ' + custName(b.customer));
     return '<div class="lineitem"><div style="flex:1;"><b class="mono">' + esc(t) + '</b>'
       + '<div class="tag">' + esc(typeName(b.type)) + ' · หน่วย: ' + esc(bt.unit || '-') + ' · ' + esc(srcLabel) + '</div></div>'
       + '<button class="del" onclick="invRcvRemove(\'' + esc(t) + '\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
@@ -9050,16 +8922,15 @@ function commitInvReceive() {
     return toast('ตำแหน่งไม่อยู่ในผังที่ลงทะเบียน', 'กรุณาเลือกโซน/แร็ค/ชั้น/ช่องจากรายการที่มีเท่านั้น', 'err');
   }
   var tags = invReceiveQueue.slice();
-  var hasPutaway = tags.some(function(t) { var b = S.boxes[t]; return b && b.status === 'warehouse'; });
-  if (hasPutaway && !loc.zone && !loc.rack) return toast('ยังไม่ได้ระบุตำแหน่งจัดเก็บ', 'กรอกโซนหรือแร็คก่อนยืนยัน Putaway มิฉะนั้นกล่องจะค้างสถานะ "รอ Putaway"', 'err');
+  /* SOW: no Putaway/staging — a location here is optional metadata, never a
+     precondition for the box to count as received/stored */
   var typesIn = {};
   tags.forEach(function(t) {
     var b = S.boxes[t];
-    var isPutaway = b.status === 'warehouse'; // already at staging, just moving to rack
-    if (isPutaway) {
-      // Putaway: STG-01 → rack. Update location only; no cycle increment, no customer clear.
+    var isRelocate = b.status === 'warehouse'; // already in the warehouse, just noting a new location
+    if (isRelocate) {
       var before = { wh: whName((b.location || {}).wh), loc: locShort(b.location) };
-      b.history.push({ dir: 'putaway', ts: inTs, wh: wh, loc: loc, recorder: recorder, note: 'จัดเรียงเข้าแร็คผ่าน Inventory' });
+      b.history.push({ dir: 'relocate', ts: inTs, wh: wh, loc: loc, recorder: recorder, note: 'ย้ายตำแหน่งผ่าน Inventory' });
       b.location = { wh: wh, zone: loc.zone, rack: loc.rack, shelf: loc.shelf, slot: loc.slot, gate: null, ts: inTs };
       b.lastSeenAt = inTs;
       auditEntry('RELOCATE', recorder, t, typeName(b.type), before, { wh: whName(wh), loc: locStr });
@@ -9122,7 +8993,7 @@ $('#bulkInvTag').addEventListener('click', function() {
 $('#bulkInvRelocate').addEventListener('click', function() {
   var tags = invBulkTargets(getChecked('inv-cb'), canRelocateBox);
   if (!tags.length) return toast('ย้ายได้เฉพาะกล่องในคลัง', 'ไม่มีใบที่เลือกอยู่ในคลัง', 'err');
-  var dp = defaultPutaway();
+  var dp = defaultRecvLoc();
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายพิกัดจัดเก็บ · ' + tags.length + ' ใบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     + '<div class="mbody">'
@@ -9307,7 +9178,7 @@ function lastInvLoc() {
 function saveLastInvLoc(wh, loc) {
   try { localStorage.setItem('invLastLoc', JSON.stringify({ wh: wh, loc: loc })); } catch (e) {}
 }
-function defaultPutaway() {
+function defaultRecvLoc() {
   // ลำดับความสำคัญ: ตำแหน่งที่ใช้ล่าสุด > คลังของประตูขาเข้าที่ตั้งค่าไว้ประจำเครื่อง
   var last = lastInvLoc();
   if (last && (last.wh || last.loc)) return last;
@@ -9336,7 +9207,7 @@ function genInvCode() { return nextSeqId('SKU-', Object.keys(S.inventory)); }
 function openInvModal(code) {
   var it = code ? S.inventory[code] : null;
   var title = it ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่';
-  var dp = it ? { wh: it.wh, loc: it.loc } : defaultPutaway();
+  var dp = it ? { wh: it.wh, loc: it.loc } : defaultRecvLoc();
   var initCat = it ? (it.boxTypeId || it.category || '') : '';
   openModal(
     '<div class="mhead"><h3>' + esc(title) + '</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
@@ -11178,8 +11049,7 @@ function openColumnMapModal(opts){
     "ป้าย":"labels",
     "ว่าง":"Empty",
     "ว่าง ·":"Empty -",
-    "ยืนยันจัดเก็บ":"Confirm putaway",
-    "สแกนกล่องที่จะนำเข้าเก็บ":"Scan the box to put away",
+    "สแกนกล่องที่จะนำเข้าเก็บ":"Scan the box to receive",
     "ยืนยันรับเข้า & เก็บเข้าคลัง":"Confirm receipt & store",
     "ตำแหน่งแร็คปลายทาง":"Destination rack location",
     "ตามคลังเสมือน 3D — แต่ละช่องเลือกได้ว่าใช้เป็นตำแหน่งจริงในผัง 3D (ใส่แร็ค) หรือกรองอย่างเดียว (ไม่มีตำแหน่งจริง)":"matching the 3D virtual warehouse - each bay can be a real position in the 3D layout (with a rack) or filter-only (no physical position)",
@@ -11261,7 +11131,6 @@ function openColumnMapModal(opts){
     "ใบ":"units",
     "Bulk Generate (ซื้อแร็คใหม่)":"Bulk Generate (buying a new rack)",
     "Generate ตำแหน่งทั้งหมด":"Generate every location",
-    "จุดรอ Putaway / รอจัดเก็บ (Staging)":"Putaway staging area",
     "เพื่อสร้างใหม่ · กด \"แก้เอง\" ถ้าต้องการระบุรหัสเอง":"to generate a new one - press \"Manual\" to enter a code yourself",
     "ไปเพิ่มคลัง & ประตู":"Go add warehouses & gates",
     "ไปแก้ไขประเภทประตู":"Go edit the gate types",
@@ -11285,7 +11154,7 @@ function openColumnMapModal(opts){
     "WMS · เฟส 1 · Returnable Asset Tracking":"WMS - Phase 1 - Returnable Asset Tracking",
     "ผังกระบวนการ — สลับเป็น 3D เพื่อเข้าคลังเสมือนที่เชื่อมข้อมูลจริง":"Process map - switch to 3D for the virtual warehouse on live data",
     "Lot / หมดอายุ":"Lot / expiry",
-    "ไม่มีกล่องสถานะ \"ในคลัง\" (Putaway แล้ว) ตรงเงื่อนไขนี้":"No boxes with status \"in warehouse\" (already put away) match this",
+    "ไม่มีกล่องสถานะ \"ในคลัง\" ตรงเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
     "ไทม์ไลน์ทั้งหมด (ใหม่ → เก่า)":"Full timeline (newest -> oldest)",
     "กล่องที่ถูกตีเป็นสูญหายแล้ว (Manual หรือ Auto-overdue)":"Boxes marked lost (manually or auto-overdue)",
     "เข้าวันนี้ · Gate In":"In today - Gate In",
@@ -11331,7 +11200,6 @@ function openColumnMapModal(opts){
     "สแกนยืนยันบาร์โค้ด":"Scan to confirm the barcode",
     "เช่น คลัง 1":"e.g. Warehouse 1",
     "สแกนบาร์โค้ดป้ายแร็ค เช่น A-R03-2-05":"Scan the shelf label barcode, e.g. A-R03-2-05",
-    "ยิงบาร์โค้ด / บาร์โค้ดกล่องที่จะจัดเก็บ":"Scan the barcode of the box to put away",
     "ค้นหา ทะเบียน / คนขับ / รหัสกล่อง / ลูกค้า / DO":"Search plate / driver / box code / customer / DO",
     "ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ":"Search box code / customer / DO / plate",
     "ยิงบาร์โค้ด / บาร์โค้ดกล่องที่คืน":"Scan the barcode of the returned box",
@@ -11440,7 +11308,7 @@ function openColumnMapModal(opts){
     "ยังไม่มีรายการ — เพิ่มอย่างน้อย 1 ประเภทก่อนสร้าง Pick List":"Nothing here yet - add at least one type before generating a pick list",
     "ดึงจากจำนวนกล่องที่ลงทะเบียนและอยู่ในคลังจริง — ไปแก้ไขจำนวนได้ที่แท็บ \"ลงทะเบียนกล่อง\"":"Taken from the boxes actually registered and in the warehouse - change the count on the \"Register box\" tab",
     "เลือกประเภทกล่องจากรายการเพื่อดึงรหัส ชื่อ หน่วย และจำนวนจากข้อมูลหลักอัตโนมัติ — หรือพิมพ์ประเภทอื่นสำหรับสินค้าทั่วไป":"Pick a box type from the list to pull its code, name, unit and count from the master data automatically - or type another type for general goods",
-    "เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่ Putaway แล้วเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ":"Add a type and the quantity to pick; the system chooses boxes by FEFO/FIFO automatically (only ones already put away), groups them by shelf location and orders the walk Zone -> Rack -> Shelf (S-shape) so it is all picked in one trip",
+    "เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่อยู่ในคลังเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ":"Add a type and the quantity to pick; the system chooses boxes by FEFO/FIFO automatically (only ones in the warehouse), groups them by shelf location and orders the walk Zone -> Rack -> Shelf (S-shape) so it is all picked in one trip",
     /* ---- ที่เพิ่มรอบนี้: คำที่ยังโผล่เป็นไทยตอนสลับ EN ---- */
     /* ปุ่ม/ฟิลด์ที่เพิ่มเข้ามาทีหลังแล้วลืมลงพจนานุกรม */
     "ล้างข้อมูล":"Clear",
@@ -11462,7 +11330,7 @@ function openColumnMapModal(opts){
     "ทุกชั้น (All Layers)":"All layers",
     "ใช้สีตามสถานะกล่องในแถบด้านล่าง":"Coloured by box status - see the legend below",
     "บนชั้นวาง":"On shelf",
-    "รอจัดเก็บ":"Awaiting putaway",
+    "รอจัดเก็บ":"Unlocated",
     "รอติด RFID":"Awaiting RFID tag",
     "ยังไม่ผูก tag เข้าระบบ":"Not yet linked to a tag",
     /* เมนูผู้บันทึก (dropdown) — "เลือกผู้บันทึกปัจจุบัน" มีอยู่แล้วด้านล่าง ไม่ใส่ซ้ำ */
@@ -11508,7 +11376,6 @@ function openColumnMapModal(opts){
     "เลือกวันครบกำหนดจากปฏิทิน":"Pick the due date from a calendar",
     "เลือกวันครบกำหนดคืน แล้วระบบจะคำนวณจำนวนวันให้อัตโนมัติ":"Pick the due date and the system works out the number of days automatically",
     "เลือกวันที่ในอนาคต":"Pick a date in the future",
-    "กรอกโซนหรือแร็คก่อน — ข้ามการจัดเก็บอัตโนมัติ กล่องยังติดแท็กสำเร็จตามปกติ":"Enter a zone or rack first - auto putaway skipped, the box was still tagged successfully",
     "ยกเลิกสูญหาย / พบแล้ว":"Cancel lost / found","จัดการ":"Actions","อัตราการคืน & การสูญหาย":"Return & loss rate",
     "สรุปตามลูกค้า":"Summary by customer","ประวัติการผ่าน Gate ล่าสุด (30 รายการ)":"Recent gate activity (30 records)",
     "ขาเข้าอย่างเดียว":"Inbound only","ขาออกอย่างเดียว":"Outbound only","เข้า-ออกร่วมกัน":"Bi-directional",
@@ -11559,14 +11426,14 @@ function openColumnMapModal(opts){
     "ประวัติการใช้งาน":"Audit Log","เปลี่ยนรหัสผ่าน":"Change password","ตั้งรหัสผ่าน":"Set password",
     "ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้":"Set/change this employee's web login account",
     "ทุกสถานะ":"All statuses","พักใช้งาน (Hold)":"On hold (Hold)","ชำรุด (Damage)":"Damaged (Damage)","สูญหาย":"Lost",
-    "จัดเรียงเข้าแร็ค (Putaway)":"Putaway to rack","ทั้งหมด":"All","รอเข้าคลัง (Gate In)":"Awaiting Gate In","ในคลัง":"In warehouse",
-    "จัดเก็บในคลังแล้ว":"Stored on rack","ผ่าน Gate เข้ามาแล้วและจัดเก็บขึ้นชั้นวางเรียบร้อย":"Gated in and already shelved on a rack",
+    "ทั้งหมด":"All","รอเข้าคลัง (Gate In)":"Awaiting Gate In","ในคลัง":"In warehouse",
+    "จัดเก็บในคลังแล้ว":"Stored in warehouse",
     "ชำรุด":"Damaged","ยังไม่ระบุตำแหน่ง":"No location","ส่งลูกค้า":"At customer","แจ้งกล่องหาย":"Report lost",
     "รายใบ":"By unit","สรุปสต็อก":"Stock summary","บาร์โค้ดตำแหน่ง":"Location barcode","เลือกทั้งหมด":"Select all",
     "รหัส RFID":"RFID code","ประเภทกล่อง":"Box type","พิกัดที่อยู่":"Location","สถานะ":"Status",
     "ผ่านประตู":"Through the gate","ออกได้เลย":"ship it out","ประตูสแกนขาออก":"Outbound scan gate",
     "กลับเข้าคลัง":"Back to warehouse","เก็บเข้าชั้น":"onto the shelf","ประตูสแกนขาเข้า":"Inbound scan gate",
-    "ยืนยันรับคืน — รอ Putaway":"Confirm receive - awaiting putaway","ใบส่งของ · ข้อมูลรถ":"Delivery Order / Vehicle Info",
+    "ใบส่งของ · ข้อมูลรถ":"Delivery Order / Vehicle Info",
     "สแกนกล่อง":"Scan box","ดูประวัติทั้งหมด":"View full history","ค้นหากล่อง":"Search box","ค้นหา":"Search",
     "วิธีใช้งาน":"How to use","วิธีใช้งาน · ค้นหากล่อง":"How to use - Search box",
     "ค้นหากล่องเดียว":"Search a single box","ค้นหาทั้งชุด":"Search a whole batch","ปุ่มลัด":"Shortcuts","ประวัติ":"History",
@@ -11593,14 +11460,12 @@ function openColumnMapModal(opts){
     "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory",
     "ติดตามกล่อง":"Track Box","ตั้งค่า (Master)":"Setup (Master)",
     "สลับโหมดสว่าง/มืด":"Toggle light/dark","ใส่ข้อมูลตัวอย่าง":"Load sample data","เมนู":"Menu",
-    "รอ Putaway":"Awaiting putaway",
     /* ---- Location Master (rack map / hierarchical table) — added while building the multi-warehouse rack map ---- */
     "บันทึกตำแหน่ง":"Save location","สร้างป้ายแบบกำหนดเอง":"Create custom label",
     "สร้างบาร์โค้ดป้ายแบบกำหนดเอง":"Create a custom barcode label",
     "ค้นหา รหัส · แร็ค · โซน · ประเภท...":"Search code, rack, zone, type...",
     "ว่าง — พร้อมวางกล่อง":"Empty - ready for boxes","มีของ — มีกล่องอยู่แล้ว":"Occupied - already has boxes",
-    "คลิกที่ช่องบนผังเพื่อสแกนจัดเก็บ (Putaway) · คลิกแถวในมุมมองตารางเพื่อแก้ไขตำแหน่ง":"Click a slot on the map to scan-and-store (Putaway) - click a row in table view to edit a location",
-    "บันทึกตำแหน่งใหม่":"Save new location","ว่าง ·":"Empty ·","มีของ":"Occupied","ลงทะเบียน":"Registered","ย่อเมนู":"Collapse","ย่อ/ขยายเมนูด้านข้าง":"Collapse/expand sidebar","ขยายเมนูด้านข้าง":"Expand sidebar","ย่อเมนูด้านข้าง":"Collapse sidebar","ลงทะเบียนกล่อง · ประเภทกล่อง · คลังและประตู · ลูกค้า · พารามิเตอร์ — ระบบเก็บประวัติเข้า·ออกเบื้องหลังให้อัตโนมัติ":"Register boxes - box types - warehouses & gates - customers - parameters. The system logs in/out history automatically in the background.","ตำแหน่งแร็ค":"Rack Locations","ตำแหน่งแร็ค / ชั้นวาง (Location Master)":"Rack Locations / Shelf (Location Master)","ลงทะเบียนตำแหน่งชั้นวาง — รหัสป้ายสร้างอัตโนมัติ ซื้อแร็คมาใหม่ใช้":"Register shelf locations - label codes are auto-generated. For newly bought racks, use","สร้างทุก Slot ได้ในคลิกเดียว พนักงานสแกนป้ายที่ชั้นวางก่อนสแกนกล่องใน Putaway":"to create every slot in one click. Staff scan the shelf label before scanning the box during Putaway","ชั้น (Shelf)":"Shelf","ช่อง (Slot)":"Slot","ผังแร็ค":"Rack map","ตาราง":"Table","ประเภทแร็ค":"Rack type","Selective (ทั่วไป)":"Selective (General)",
+    "บันทึกตำแหน่งใหม่":"Save new location","ว่าง ·":"Empty ·","มีของ":"Occupied","ลงทะเบียน":"Registered","ย่อเมนู":"Collapse","ย่อ/ขยายเมนูด้านข้าง":"Collapse/expand sidebar","ขยายเมนูด้านข้าง":"Expand sidebar","ย่อเมนูด้านข้าง":"Collapse sidebar","ลงทะเบียนกล่อง · ประเภทกล่อง · คลังและประตู · ลูกค้า · พารามิเตอร์ — ระบบเก็บประวัติเข้า·ออกเบื้องหลังให้อัตโนมัติ":"Register boxes - box types - warehouses & gates - customers - parameters. The system logs in/out history automatically in the background.","ตำแหน่งแร็ค":"Rack Locations","ตำแหน่งแร็ค / ชั้นวาง (Location Master)":"Rack Locations / Shelf (Location Master)","ลงทะเบียนตำแหน่งชั้นวาง — รหัสป้ายสร้างอัตโนมัติ ซื้อแร็คมาใหม่ใช้":"Register shelf locations - label codes are auto-generated. For newly bought racks, use","สร้างทุก Slot ได้ในคลิกเดียว":"to create every slot in one click.","ชั้น (Shelf)":"Shelf","ช่อง (Slot)":"Slot","ผังแร็ค":"Rack map","ตาราง":"Table","ประเภทแร็ค":"Rack type","Selective (ทั่วไป)":"Selective (General)",
     "โซน":"Zone","แร็ค":"Rack","ชั้น":"Shelf","จัดกลุ่ม":"Group by","เรียง":"Sort by",
     "ลำดับชั้น (คลัง > โซน > แร็ค > ชั้น)":"Hierarchy (Warehouse > Zone > Rack > Shelf)",
     "ไม่จัดกลุ่ม (รายการเดี่ยว)":"No grouping (flat list)",
@@ -11631,7 +11496,7 @@ function openColumnMapModal(opts){
     "บางใบถูกใช้ไปก่อนแล้ว":"Some boxes were already claimed","ไม่มีตำแหน่งให้พิมพ์":"No location to print","ไม่มีฟังก์ชันพิมพ์":"Print function unavailable",
     "คลังนี้ยังไม่มีตำแหน่งจัดเก็บ":"This warehouse has no storage locations yet","ส่งพิมพ์ป้าย DO แล้ว":"DO label sent to printer",
     "พิมพ์ป้าย DO ไม่สำเร็จ":"DO label print failed","เปิดหน้าต่างพิมพ์ไม่สำเร็จ":"Couldn't open print window","ไม่มีกล่องให้พิมพ์ฉลาก":"No boxes to print labels for",
-    "ดึงข้อมูลรถแล้ว":"Vehicle info recalled","ยังไม่ได้ยิงกล่อง":"No box scanned yet","มีกล่องรอ Putaway อยู่ในคิว":"A box awaiting putaway is in the queue",
+    "ดึงข้อมูลรถแล้ว":"Vehicle info recalled","ยังไม่ได้ยิงกล่อง":"No box scanned yet",
     "เลือกลูกค้าปลายทาง":"Select destination customer","เลือกประตูขาออก":"Select outbound gate","กรอกชื่อผู้บันทึก":"Enter recorder's name",
     "กรอกเลขที่ DO":"Enter DO number","กรอกทะเบียนรถ":"Enter license plate","กรอกชื่อคนขับ":"Enter driver's name",
     
@@ -11643,7 +11508,7 @@ function openColumnMapModal(opts){
     "รหัสนี้มีอยู่แล้ว":"This code already exists","บันทึกตำแหน่งแล้ว":"Location saved","ยังไม่มีตำแหน่งแร็ค":"No rack locations yet",
     "ไม่พบตำแหน่งนี้":"Location not found","ดาวน์โหลดป้ายแล้ว":"Label downloaded","ไม่พบกล่อง":"Box not found",
     "ยังไม่มีกล่องในคิว":"No boxes in queue yet","จัดเก็บสำเร็จ":"Stored successfully","เปลี่ยนธีมแล้ว":"Theme changed",
-    "ไฟล์ไม่ถูกต้อง":"Invalid file","กรองรายการตาม":"Filtered by","ยังไม่ได้ระบุตำแหน่งจัดเก็บ":"Storage location not set yet",
+    "ไฟล์ไม่ถูกต้อง":"Invalid file","กรองรายการตาม":"Filtered by",
     "ย้ายได้เฉพาะกล่องในคลัง":"Only in-warehouse boxes can be relocated","ย้ายพิกัดแล้ว":"Location updated",
     "ส่งได้เฉพาะกล่องในคลัง":"Only in-warehouse boxes can be shipped","เลือกลูกค้า":"Select customer",
     "กล่องที่เลือกถูกแจ้งกล่องหายแล้ว หรือยังไม่ติด Tag (ยังไม่ผ่าน Gate เข้าคลัง)":"Selected boxes are already marked lost, or haven't been tagged yet (haven't passed the inbound gate)",
@@ -11701,10 +11566,8 @@ function openColumnMapModal(opts){
     "ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ":
       "Scan or type the box barcode, then press Enter — the system automatically matches it to the DO/gate above",
     "แตะแล้วยิงบาร์โค้ด เช่น CRT-04":"Tap here and scan RFID, e.g. CRT-04","รายการหยิบตามพิกัด (Pick List)":"Pick suggestion by location (Pick List)",
-    "รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบพักกล่องไว้ที่":"Vehicle brings boxes back — pick the inbound gate, scan RFID — the system holds the boxes at",
-    "จุดพักสินค้า (Staging)":"the staging area (Staging)",
-    "ของคลังนั้นให้อัตโนมัติ แล้วตัดยอดว่า \"คืนแล้ว\" — พนักงานจัดเรียงสินค้าจะนำเข้าชั้นวางจริงที่หน้า Inventory":
-      "for that warehouse automatically, then marks it \"returned\" — putaway staff move it onto the real shelf from the Inventory tab",
+    "รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบรับกล่องเข้าคลังนั้นทันทีให้อัตโนมัติ แล้วตัดยอดว่า \"คืนแล้ว\"":
+      "Vehicle brings boxes back — pick the inbound gate, scan RFID — the system receives the boxes into that warehouse automatically, then marks them \"returned\"",
     "ระบุก่อนยิงได้ถ้ามีข้อมูล — ทุกช่องไม่บังคับกรอก ปล่อยว่างได้ ใช้ย้อนรอยภายหลังได้ถ้ากรอกไว้":
       "Fill in before scanning if you have the info — every field is optional, leave blank if unknown; useful for tracing later if filled in",
     
@@ -11766,16 +11629,9 @@ function openColumnMapModal(opts){
     /* ---- รอบเก็บตก: ป้ายสั้นที่ประกอบจากตัวเลข ---- */
     "สร้างเป็นชุด · ":"Batch create - ","ในคลัง ":"In warehouse ","หมดอายุอีก ":"Expires in ",
     "↓ เข้า ":"↓ In ","↑ ออก ":"↑ Out ","ค่าเริ่มต้นระบบ · ":"System default - ",
-    "มีกล่องรอจัดเก็บอยู่ในแร็คนี้ ":"boxes awaiting putaway in this rack ",
-    "ประเภทช่องรอ Putaway ":"Putaway slot type ","จุดรอ Putaway ":"Putaway staging ",
     "→ ใส่แร็ค":"→ into rack","→ กรองอย่างเดียว":"→ filter only",
     "กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: ":"Boxes currently with this customer: ",
     "พิมพ์ป้ายบาร์โค้ด (":"Print barcode label (",
-    "จัดเก็บขึ้นแร็ค (Putaway) ให้อัตโนมัติทันทีหลังยืนยันติดป้าย — ":"Automatically put away (Putaway) right after confirming the label - ",
-    "ใบยังไม่มีตำแหน่งจัดเก็บจริง":"boxes still lack a real storage location",
-    "ระบบจะจัดเก็บที่ ":"The system will store it at ",
-    " — เหลืออีก ":" - short by "," ใบไม่พอช่องว่าง จะค้างเป็น \"รอ Putaway\"":" boxes; the rest stays \"Awaiting putaway\"",
-    "ติดแท็กแล้ว ":"Tagged "," · จัดเก็บขึ้นแร็คอัตโนมัติ ":" - auto put away "," · เหลือรอ Putaway ":" - still awaiting putaway ",
     " (ช่องว่างไม่พอ)":" (not enough empty slots)"
   };
   /* ---- กฎที่ต้องดูบริบท (ทำก่อน FRAG) ----
