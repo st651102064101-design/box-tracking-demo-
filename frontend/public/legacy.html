@@ -1087,7 +1087,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <div class="navwrap"><nav id="nav">
   <span class="pill-bg" id="pillBg"></span>
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
-  <button data-tab="reports" title="รายงานเพิ่มเติม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span></span><span class="navlbl">รายงานเพิ่มเติม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
   <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังสินค้า</span></button>
@@ -1110,7 +1109,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="hero">
     <div class="eyebrow reveal">ภาพรวมแบบเรียลไทม์</div>
     <h1 class="h-title reveal d1">กล่องทุกใบ<br>รู้อยู่ที่ไหน</h1>
-    <p class="h-sub reveal d2">สถานะกล่อง แตะเพื่อดูรายการ — รายงานอื่นๆ อยู่ที่แท็บ "รายงานเพิ่มเติม"</p>
+    <p class="h-sub reveal d2">สถานะกล่อง แตะเพื่อดูรายการ — กดปุ่ม "รายงานเพิ่มเติม" ด้านล่างเพื่อดูรายละเอียดเพิ่มเติม</p>
   </div>
 
   <div class="kpis reveal" style="margin-top:8px;">
@@ -1129,13 +1128,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
   <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
   <div class="tablecard reveal" id="ovRecentReturns"></div>
-</section>
 
-<!-- ===================== REPORTS (everything moved out of Overview) ===================== -->
-<!-- Every widget the old Overview tab carried besides the five status counts
-     — moved here verbatim (same ids, same render calls) so this is a
-     relocation, not a rewrite. See renderReports() for the JS side. -->
-<section class="tab" id="tab-reports">
+  <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
+       เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
+       ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านล่างเพื่อกาง/ซ่อน ====== -->
+  <div class="row no-print reveal" style="margin-top:22px;">
+    <button class="btn ghost" id="btnToggleReports" onclick="toggleReportsPanel()">
+      <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span>
+      <span id="btnToggleReportsLbl">รายงานเพิ่มเติม</span>
+      <span class="svgi" id="btnToggleReportsChevron" style="transition:transform .2s var(--ease);"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+  </div>
+
+  <div id="tab-reports" style="display:none;">
   <style>
   /* Master Data Health Check — warns when the dashboard is reading from
      master tables (rack locations / box types / customers-suppliers /
@@ -1240,6 +1245,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row no-print reveal" style="margin-top:18px;">
     <div class="spacer"></div>
     <button class="btn ghost sm" onclick="exportOverviewExcel()">Export Excel</button>
+  </div>
   </div>
 </section>
 
@@ -5788,9 +5794,29 @@ function renderFloorReports(){
     +'</tbody></table></div>';
 }
 
+/* รายงานเพิ่มเติม (#tab-reports) ไม่ใช่แท็บนำทางแยกแล้ว — ย้ายมาซ้อนอยู่ท้ายหน้า
+   ภาพรวม ซ่อนไว้เป็นค่าเริ่มต้น (display:none) กดปุ่ม "รายงานเพิ่มเติม" เพื่อกาง/ซ่อน
+   สลับกันไปมาได้ตามต้องการ — renderReports() เรียกทุกครั้งที่กางออก เผื่อข้อมูล
+   เปลี่ยนไปหลังจากซ่อนไว้นาน (renderAll() ก็ยังเรียกมันตลอดอยู่แล้วเช่นกัน ไม่ได้
+   render ซ้ำซ้อนเพิ่มต้นทุนอะไร แค่กัน UI ค้างข้อมูลเก่าไว้ตอนกางออกครั้งแรก) */
+function toggleReportsPanel(){
+  var el=$('#tab-reports');if(!el)return;
+  var opening=el.style.display==='none';
+  el.style.display=opening?'':'none';
+  var lbl=$('#btnToggleReportsLbl');if(lbl)lbl.textContent=opening?'ซ่อนรายงานเพิ่มเติม':'รายงานเพิ่มเติม';
+  var chev=$('#btnToggleReportsChevron');if(chev)chev.style.transform=opening?'rotate(180deg)':'';
+  if(opening){
+    renderReports();
+    $all('.reveal',el).forEach(function(x){x.classList.add('in');});
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+window.toggleReportsPanel=toggleReportsPanel;
+
 /* Overview tab — สถานะกล่อง ณ ตอนนี้ (ในคลัง/ออกอยู่/สูญหาย/พัก/ชำรุด) บวกยอด
-   Gate In/Out ของวันนี้ และตารางส่งคืนล่าสุด ทุกอย่างอื่นยังอยู่ที่ renderReports()
-   (tab-reports) เหมือนเดิม */
+   Gate In/Out ของวันนี้ และตารางส่งคืนล่าสุด — ต่อท้ายด้วยแผงรายงานเพิ่มเติมที่ยุบ/
+   กางได้ (toggleReportsPanel ด้านบน), เนื้อหาข้างในยัง render โดย renderReports()
+   เหมือนเดิม */
 function renderOverview(){
   var all=Object.values(S.boxes);
   $('#kInNow').textContent=nf(all.filter(function(b){return b.status==='warehouse';}).length);
