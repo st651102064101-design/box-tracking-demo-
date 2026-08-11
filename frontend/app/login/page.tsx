@@ -73,9 +73,9 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_24px_70px_rgba(0,0,0,.10)]">
         <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-xl font-black text-white">B</div>
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-xl font-black text-white">S</div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-ink">BoxTrace</h1>
+            <h1 className="text-lg font-bold tracking-tight text-ink">SmartTrace</h1>
             <p className="-mt-0.5 text-xs text-ink-2/70">Returnable Asset Tracking</p>
           </div>
         </div>

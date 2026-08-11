@@ -7,7 +7,7 @@ import { getToken } from '@/lib/api';
 /**
  * Auth gate. When signed in, render the legacy app (served verbatim from
  * /legacy.html) in a full-viewport iframe — same-origin, so its own fetches
- * to /api/* and its 'boxtrace_jwt' localStorage read work unchanged. Kept as
+ * to /api/* and its 'smarttrace_jwt' localStorage read work unchanged. Kept as
  * an iframe rather than a redirect so the address bar stays on "/" instead
  * of switching to "/legacy.html". Otherwise redirect to the login screen.
  */
@@ -37,7 +37,7 @@ export default function Home() {
   return (
     <iframe
       src="/legacy.html"
-      title="BoxTrace"
+      title="SmartTrace"
       allow="fullscreen"
       allowFullScreen
       style={{ display: 'block', width: '100vw', height: '100vh', border: 'none' }}

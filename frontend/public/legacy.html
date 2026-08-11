@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>BoxTrace — ประตูสแกน · Returnable Asset Tracking</title>
+<title>SmartTrace — ประตูสแกน · Returnable Asset Tracking</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@
 </script>
 <style>
 /* ============================================================
-   BoxTrace — redesigned in the iPhone 17 Pro design language
+   SmartTrace — redesigned in the iPhone 17 Pro design language
    Monochrome canvas + a single Cosmic Orange accent.
    Oversized display type, scroll-reveal, cinematic dark gate.
    ============================================================ */
@@ -1152,19 +1152,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <body>
 <script>
 /* apply saved theme + nav layout immediately (before paint) to avoid a flash of the wrong shell */
-(function(){try{var t=localStorage.getItem('boxtrace_theme');
+(function(){try{var t=localStorage.getItem('smarttrace_theme');
   if(!t)t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
   document.documentElement.setAttribute('data-theme',t);}catch(e){}
-  try{var l=localStorage.getItem('boxtrace_layout')||'top';
+  try{var l=localStorage.getItem('smarttrace_layout')||'top';
   var eff=(l==='sidebar'&&window.innerWidth>=900)?'sidebar':'top';
   document.documentElement.setAttribute('data-layout',eff);}catch(e){}
-  try{if(localStorage.getItem('boxtrace_sidebar_collapsed')==='1')document.documentElement.setAttribute('data-sidebar-collapsed','1');}catch(e){}})();
+  try{if(localStorage.getItem('smarttrace_sidebar_collapsed')==='1')document.documentElement.setAttribute('data-sidebar-collapsed','1');}catch(e){}})();
 </script>
 
 <header class="chrome"><div class="chrome-inner">
   <div class="brand" onclick="switchTab('overview')">
     <div class="mark"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span></div>
-    <div><div class="nm">BoxTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
+    <div><div class="nm">SmartTrace</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
   </div>
   <div class="spacer"></div>
   <div class="who-wrap">
@@ -2319,14 +2319,14 @@ function hydrateIcons(root){(root||document).querySelectorAll('[data-ico]').forE
   el.setAttribute('data-ico-done','1');});}
 
 /* ===== STATE ===== */
-var KEY='boxtrace_p1';
+var KEY='smarttrace_p1';
 /** @type {AppState} */
 var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
-var USER='demo';try{var savedUser=localStorage.getItem('boxtrace_user');if(savedUser)USER=savedUser;}catch(e){}
+var USER='demo';try{var savedUser=localStorage.getItem('smarttrace_user');if(savedUser)USER=savedUser;}catch(e){}
 var pendingOut=[];var pendingIn=[];var trackTags=[];
 /* เดี่ยว = ผลค้นหาล่าสุดแทนที่ของเดิมเสมอ, หลายรายการ (ค่าเดิม) = สะสมไปเรื่อยๆ
    จนกว่าจะกดล้างข้อมูล — ดู trackBox() */
-var TRACK_MODE_KEY='boxtrace_track_mode';
+var TRACK_MODE_KEY='smarttrace_track_mode';
 var trackSearchMode='multi';
 try{var _tm=localStorage.getItem(TRACK_MODE_KEY);if(_tm==='single'||_tm==='multi')trackSearchMode=_tm;}catch(e){}
 function setTrackSearchMode(m){
@@ -2397,9 +2397,9 @@ function idSort(list,dir){return sortByDir(list.slice(),dir,function(x){return x
    The backend exposes GET/PUT /api/state as a drop-in bridge — same shape as
    the `S` blob this UI has always kept in memory — so only the transport
    changes here, not any call site. Auth reuses the JWT the Next.js login
-   flow already stores under 'boxtrace_jwt'. */
+   flow already stores under 'smarttrace_jwt'. */
 function authHeaders(){
-  var t=null; try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
+  var t=null; try{t=localStorage.getItem('smarttrace_jwt');}catch(e){}
   return t?{'Authorization':'Bearer '+t}:{};
 }
 /* Decodes the `role` claim out of the JWT the Next.js login flow issued —
@@ -2418,7 +2418,7 @@ function decodeJwtRole(t){
   }catch(e){return null;}
 }
 var MY_ROLE=(function(){
-  var t=null;try{t=localStorage.getItem('boxtrace_jwt');}catch(e){}
+  var t=null;try{t=localStorage.getItem('smarttrace_jwt');}catch(e){}
   return t?decodeJwtRole(t):null;
 })();
 /* ===== API root — backend จริงรันที่พอร์ต 4000 =====
@@ -2427,20 +2427,20 @@ var MY_ROLE=(function(){
    → ตอบ 404/405 แล้วหน้าจอไม่มีข้อมูล (อาการ "HTTP 405 · พบ 0 กล่อง")
    ตั้ง API root ได้ 3 ทาง เรียงตามลำดับความสำคัญ:
      1) ?api=http://192.168.3.128:4000  (จำลง localStorage ให้เลย)
-     2) localStorage 'boxtrace_api_root'
+     2) localStorage 'smarttrace_api_root'
      3) auto — ถ้า origin ปัจจุบันเรียก /api ไม่ได้ สลับไป http://<host>:4000 เอง */
 var API_PORT='4000';
 var API_ROOT=(function(){
   var q='';try{q=new URLSearchParams(location.search).get('api')||'';}catch(e){}
-  if(q){try{localStorage.setItem('boxtrace_api_root',q.replace(/\/+$/,''));}catch(e){}}
-  var saved='';try{saved=localStorage.getItem('boxtrace_api_root')||'';}catch(e){}
+  if(q){try{localStorage.setItem('smarttrace_api_root',q.replace(/\/+$/,''));}catch(e){}}
+  var saved='';try{saved=localStorage.getItem('smarttrace_api_root')||'';}catch(e){}
   if(saved)return saved.replace(/\/+$/,'');
   if(location.protocol==='file:')return 'http://localhost:'+API_PORT;
   if(location.port&&location.port!=='3000'&&location.port!==API_PORT)
     return location.protocol+'//'+location.hostname+':'+API_PORT;
   return '';
 })();
-function setApiRoot(v){API_ROOT=String(v||'').replace(/\/+$/,'');try{localStorage.setItem('boxtrace_api_root',API_ROOT);}catch(e){}}
+function setApiRoot(v){API_ROOT=String(v||'').replace(/\/+$/,'');try{localStorage.setItem('smarttrace_api_root',API_ROOT);}catch(e){}}
 function apiUrl(p){return API_ROOT+p;}
 function apiRoot(){return API_ROOT||location.origin;}
 var apiFellBack=false;
@@ -2450,14 +2450,14 @@ function apiFetch(path,opt){
   return fetch(apiUrl(path),opt).then(function(r){
     if((r.status===404||r.status===405||r.status===501)&&!apiFellBack&&apiRoot()!==apiHostGuess()){
       apiFellBack=true;API_ROOT=apiHostGuess();   /* เฉพาะ session นี้ — ไม่ pin ลง localStorage กันค่าค้าง */
-      console.warn('[BoxTrace] origin นี้ไม่มี /api ('+r.status+') → ใช้ '+API_ROOT);
+      console.warn('[SmartTrace] origin นี้ไม่มี /api ('+r.status+') → ใช้ '+API_ROOT);
       return fetch(apiUrl(path),opt);
     }
     return r;
   }).catch(function(e){
     if(!apiFellBack&&apiRoot()!==apiHostGuess()){
       apiFellBack=true;API_ROOT=apiHostGuess();
-      console.warn('[BoxTrace] เชื่อม '+location.origin+' ไม่ได้ → ใช้ '+API_ROOT);
+      console.warn('[SmartTrace] เชื่อม '+location.origin+' ไม่ได้ → ใช้ '+API_ROOT);
       return fetch(apiUrl(path),opt);
     }
     throw e;
@@ -2490,7 +2490,7 @@ function save(){
     body:JSON.stringify(S)
   }).then(function(r){
     if(r.status===401){window.location.href='/login';}
-  }).catch(function(e){console.warn('[BoxTrace] save to server failed',e);});
+  }).catch(function(e){console.warn('[SmartTrace] save to server failed',e);});
 }
 /* fills in any keys missing from an older/partial state blob (e.g. a backup
    exported before a feature like locations existed) so restoring it never
@@ -2514,7 +2514,7 @@ function loadFromServer(){
       return r.json();
     })
     .then(function(d){ if(d) S=normalizeState(d); })
-    .catch(function(e){console.warn('[BoxTrace] load from server failed',e);});
+    .catch(function(e){console.warn('[SmartTrace] load from server failed',e);});
 }
 /* Swap in a snapshot the caller already holds, with the same normalisation
    loadFromServer() applies but without a second round-trip. The live-update
@@ -3584,7 +3584,7 @@ function printEmpBadge(id){
           +'<div><div style="font-size:15px;font-weight:700;letter-spacing:-.2px;">'+esc(e.name||e.id)+'</div>'
           +(meta?'<div style="font-size:11px;color:#666;margin-top:2px;">'+esc(meta)+'</div>':'')
           +(wh?'<div style="font-size:11px;color:#666;">'+esc(wh)+'</div>':'')
-          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ BoxTrace</div></div>'
+          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ SmartTrace</div></div>'
         +'<div style="text-align:center;margin-top:10px;">'+code128SVG(code,80)+'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:1.5px;margin-top:4px;">'+esc(code)+'</div></div>'
       +'</div>'
     +'</div>'
@@ -3621,7 +3621,7 @@ function printEmpBadgeWindow(id){
     +'<div class="top"><div><div class="nm">'+esc(e.name||e.id)+'</div>'
     +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
     +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
-    +'</div><div class="brand">◈ BoxTrace</div></div>'
+    +'</div><div class="brand">◈ SmartTrace</div></div>'
     +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
     +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
     +'</body></html>');
@@ -3633,13 +3633,13 @@ window.printEmpBadgeWindow=printEmpBadgeWindow;
    tab (not just the /legacy.html iframe) to /login. Referenced from the
    "ออกจากระบบ" button (which already defensively checks for it) but never
    actually defined before — that click did nothing. */
-function boxtraceLogout(){
-  try{localStorage.removeItem('boxtrace_jwt');}catch(e){}
+function smarttraceLogout(){
+  try{localStorage.removeItem('smarttrace_jwt');}catch(e){}
   (window.top||window).location.href='/login';
 }
-window.boxtraceLogout=boxtraceLogout;
+window.smarttraceLogout=smarttraceLogout;
 function setCurrentUser(name){
-  USER=name;try{localStorage.setItem('boxtrace_user',USER);}catch(e){}
+  USER=name;try{localStorage.setItem('smarttrace_user',USER);}catch(e){}
   setv('outRecorder',USER);setv('inRecorder',USER);renderAll();}
 window.setCurrentUser=setCurrentUser;
 /* เมนูเลือกผู้บันทึก — dropdown ห้อยจากชิปบัญชี ไม่ใช่ modal เต็มจอ
@@ -3689,7 +3689,7 @@ function pickUser(){
      +'<div class="wm-sep"></div>'
      +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeWhoMenu();goSetup(\'emp\')">'+IC('plus')+' เพิ่มพนักงาน</button>'
      +'<div class="wm-sep"></div>'
-     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeWhoMenu();if(typeof window.boxtraceLogout===\'function\')window.boxtraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>';
+     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeWhoMenu();if(typeof window.smarttraceLogout===\'function\')window.smarttraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>';
   }
   menu.innerHTML=h;
   positionWhoMenu(menu);
@@ -4534,7 +4534,7 @@ function labelCardHtml(title,sub,code,extra){return '<div style="border:1px soli
    any non-ASCII characters before printing (falls back to blank if the label is all-Thai) */
 function toZplAscii(s){return String(s||'').replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim();}
 function zplLabel(code,typeLabel){
-  var brand='BOXTRACE';var caption='BARCODE';
+  var brand='SMARTTRACE';var caption='BARCODE';
   var type=toZplAscii(typeLabel).toUpperCase().slice(0,28);
   return '^XA'
     +'^PW812^LL360'                                       // 4in x 1.8in @ 203dpi — taller canvas so barcode + text never collide
@@ -4570,7 +4570,7 @@ function generateZPL(doNo, customerName, dueDate, totalBoxes){
   return '^XA'
     +'^CI28'                                              // UTF-8 input (safe even for ASCII)
     +'^PW812^LL609'
-    +'^CF0,44^FO30,26^FDBOXTRACE^FS'                       // brand
+    +'^CF0,44^FO30,26^FDSMARTTRACE^FS'                       // brand
     +'^CF0,26^FO30,78^FDDELIVERY ORDER^FS'                 // sub
     +'^CF0,58^FO30,112^FD'+dn+'^FS'                        // big DO number
     +'^FO30,182^GB540,2,2^FS'                              // divider (left column only)
@@ -4597,7 +4597,7 @@ function printZPLToPrinter(zplString){
     headers:{'Content-Type':'text/plain'},
     body:zplString
   }).then(function(){return true;}).catch(function(err){
-    console.warn('[BoxTrace] ZPL print failed →',url,err);
+    console.warn('[SmartTrace] ZPL print failed →',url,err);
     return false;
   });
 }
@@ -4769,7 +4769,7 @@ function finLabelHtml(tag,typeId,typeNm,lot,expiry){
   return '<div class="rfid-fin-card">'
     +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>Barcode Label</div>'
     +'<div class="rfid-fin-wrap"><div class="finlabel">'
-      +'<div class="fl-head"><div><div class="fl-brand">BOXTRACE</div><div class="fl-cap">BARCODE</div></div>'
+      +'<div class="fl-head"><div><div class="fl-brand">SMARTTRACE</div><div class="fl-cap">BARCODE</div></div>'
       +'<div style="display:flex;align-items:center;gap:10px;">'
         +(typeId?'<div class="fl-type">'+esc(String(typeId).toUpperCase())+'</div>':'')
         +'<div style="width:82px;height:82px;flex:0 0 auto;" title="QR code of RFID tag">'+qrCodeSVG(tag,82)+'</div>'
@@ -4790,7 +4790,7 @@ function labelToPNG(tag,typeId,typeNm,lot,expiry){
   var W=1000,H=520+extraRows*110,c=document.createElement('canvas');c.width=W;c.height=H;var g=c.getContext('2d');
   g.fillStyle='#fff';g.fillRect(0,0,W,H);
   g.textBaseline='alphabetic';g.fillStyle='#000';
-  g.font='800 40px -apple-system,Arial,sans-serif';g.fillText('BOXTRACE',32,56);
+  g.font='800 40px -apple-system,Arial,sans-serif';g.fillText('SMARTTRACE',32,56);
   g.fillStyle='#333';g.font='700 22px -apple-system,Arial,sans-serif';g.fillText('BARCODE',32,88);
   if(typeId){g.fillStyle='#000';g.font='800 28px -apple-system,Arial,sans-serif';g.textAlign='right';g.fillText(String(typeId).toUpperCase(),W-116,52);g.textAlign='left';}
   drawQRToCanvas(g,tag,W-96,10,86); // QR code of the RFID tag, top-right corner
@@ -4830,7 +4830,7 @@ function labelPrintCardHtml(b){
   }
   return '<div class="lbl-card">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
-      +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">BOXTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
+      +'<div><div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">SMARTTRACE</div><div style="font-size:12px;font-weight:700;color:#444;">BARCODE</div></div>'
       +'<div style="display:flex;align-items:center;gap:10px;">'
         +(b.type?'<div style="font-size:16px;font-weight:800;">'+xmlEsc(String(b.type).toUpperCase())+'</div>':'')
         +'<div style="width:76px;height:76px;flex:0 0 auto;">'+qrCodeSVG(b.tag,76)+'</div>'
@@ -5064,7 +5064,7 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
   var wh=gateWh(g);el.innerHTML='<div class="gate-hint"><span class="gh-chip">ประตู '+g+' → '+esc(whName(wh))+'</span></div>';}
 
 /* ---- fixed gate per terminal ---- */
-var FIXED_GATE_KEY='boxtrace_fixed_gate';
+var FIXED_GATE_KEY='smarttrace_fixed_gate';
 var fixedGates={out:'',in:''};
 (function(){try{var fg=JSON.parse(localStorage.getItem(FIXED_GATE_KEY));if(fg){fixedGates=fg;}}catch(e){}})();
 function saveFixedGates(){try{localStorage.setItem(FIXED_GATE_KEY,JSON.stringify(fixedGates));}catch(e){}}
@@ -7679,7 +7679,7 @@ function renderAll(){
 function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light';}
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
-  try{localStorage.setItem('boxtrace_theme',t);}catch(e){}
+  try{localStorage.setItem('smarttrace_theme',t);}catch(e){}
   var btn=$('#btnTheme');if(btn){btn.innerHTML=t==='dark'?IC('sun','tick'):IC('moon','tick');btn.title=t==='dark'?'สลับเป็นโหมดสว่าง':'สลับเป็นโหมดมืด';}
 }
 function toggleTheme(){applyTheme(currentTheme()==='dark'?'light':'dark');
@@ -7694,7 +7694,7 @@ $('#btnTheme').onclick=toggleTheme;
    shows cramped on a phone. In sidebar mode the fixed left rail's height (brand + wrapped
    control buttons) varies with content/language, so the vertical nav's top offset is measured
    from the chrome and pushed into --nav-top rather than hardcoded. */
-function layoutPref(){try{return localStorage.getItem('boxtrace_layout')||'top';}catch(e){return 'top';}}
+function layoutPref(){try{return localStorage.getItem('smarttrace_layout')||'top';}catch(e){return 'top';}}
 function effectiveLayout(pref){pref=pref||layoutPref();return (pref==='sidebar'&&window.innerWidth>=900)?'sidebar':'top';}
 function syncNavTop(){
   if(document.documentElement.getAttribute('data-layout')!=='sidebar')return;
@@ -7702,7 +7702,7 @@ function syncNavTop(){
 }
 window.syncNavTop=syncNavTop;
 function applyLayout(pref){
-  try{localStorage.setItem('boxtrace_layout',pref);}catch(e){}
+  try{localStorage.setItem('smarttrace_layout',pref);}catch(e){}
   var eff=effectiveLayout(pref);
   document.documentElement.setAttribute('data-layout',eff);
   var btn=$('#btnLayout');if(btn)btn.title=(pref==='sidebar')?'สลับเป็นเมนูด้านบน':'สลับเป็นเมนูด้านข้าง';
@@ -7718,9 +7718,9 @@ setTimeout(syncNavTop,120); /* re-measure once fonts/layout settle */
 /* ── sidebar collapse (icon-only rail) — independent of the top/sidebar layout choice above;
    only has visual effect while data-layout="sidebar", but the preference itself persists
    regardless, so it's already applied if the person switches back into sidebar mode later. */
-function sidebarCollapsedPref(){try{return localStorage.getItem('boxtrace_sidebar_collapsed')==='1';}catch(e){return false;}}
+function sidebarCollapsedPref(){try{return localStorage.getItem('smarttrace_sidebar_collapsed')==='1';}catch(e){return false;}}
 function applySidebarCollapsed(on){
-  try{localStorage.setItem('boxtrace_sidebar_collapsed',on?'1':'0');}catch(e){}
+  try{localStorage.setItem('smarttrace_sidebar_collapsed',on?'1':'0');}catch(e){}
   if(on)document.documentElement.setAttribute('data-sidebar-collapsed','1');
   else document.documentElement.removeAttribute('data-sidebar-collapsed');
   var b=$('#btnSidebarCollapse');if(b)b.title=on?'ขยายเมนูด้านข้าง':'ย่อเมนูด้านข้าง';
@@ -7730,7 +7730,7 @@ function toggleSidebarCollapse(){applySidebarCollapsed(!sidebarCollapsedPref());
 window.toggleSidebarCollapse=toggleSidebarCollapse;
 applySidebarCollapsed(sidebarCollapsedPref());
 function doBackup(){var blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='boxtrace-p1-'+dstr()+'.json';a.click();closeModal();toast('ดาวน์โหลดแล้ว');}
+  a.href=URL.createObjectURL(blob);a.download='smarttrace-p1-'+dstr()+'.json';a.click();closeModal();toast('ดาวน์โหลดแล้ว');}
 window.doBackup=doBackup;
 function resetAll(){confirmA('ล้างข้อมูลทั้งหมด?','ลบทุกอย่างถาวร','ล้าง',true).then(function(ok){if(!ok)return;
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
@@ -11014,7 +11014,7 @@ function openColumnMapModal(opts){
                   corrupts customer/warehouse/box data, which are never a bare UI phrase).
    - FRAG dict  : a curated set of fragments for JS-composed strings (counts, dates, names).
    - MutationObserver re-translates whatever the app re-renders (toasts, tables, modals).
-   Selected language is saved in localStorage ('boxtrace_lang').
+   Selected language is saved in localStorage ('smarttrace_lang').
    ============================================================================ */
 (function(){
   "use strict";
@@ -11254,7 +11254,7 @@ function openColumnMapModal(opts){
     "ผู้ดูแลระบบ (Admin)":"administrator rights",
     "โดยอัตโนมัติ และเป็นผู้เดียวที่เพิ่ม/แก้ไขพนักงานคนอื่นในภายหลังได้":"automatically, and will be the only one who can add or edit other employees afterwards",
     "ลงทะเบียนและเริ่มใช้งาน":"Register and start",
-    "BoxTrace — ประตูสแกน · Returnable Asset Tracking":"BoxTrace - Scan Gate - Returnable Asset Tracking",
+    "SmartTrace — ประตูสแกน · Returnable Asset Tracking":"SmartTrace - Scan Gate - Returnable Asset Tracking",
     "&#10005; ล้าง":"&#10005; Clear",
     "กด":"Press",
     "ต้อง":"must",
@@ -11801,7 +11801,7 @@ function openColumnMapModal(opts){
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
   var FRAG_KEYS  = Object.keys(FRAG).sort(function(a,b){return b.length-a.length;});
 
-  var LANG_KEY = "boxtrace_lang";
+  var LANG_KEY = "smarttrace_lang";
   var lang = "th";
   try { lang = localStorage.getItem(LANG_KEY) || "th"; } catch(e){}
 
@@ -11952,7 +11952,7 @@ const DAY=86400000;
    1 · DATA — ใช้ state S ของแอปเดิม (legacy-sync.js sync กับ PostgreSQL อยู่แล้ว)
        + poll GET /api/state เพื่อรับความเปลี่ยนแปลงจากเครื่องอื่น / PDA
    ══════════════════════════════════════════════════════════════ */
-const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
+const API='/api/state', POLL_MS=4000, SKEY='smarttrace_p1', TOKEN_KEY='smarttrace_jwt';
 let live=true;
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
 async function pullState(){
@@ -11971,7 +11971,7 @@ function adoptServerState(st){
   /* mirror it for the next reload, but mark it as already-synced so the
      persistence bridge does not PUT the server's own snapshot back at it */
   const snap=JSON.stringify(st);
-  if(typeof Wn.boxtraceAdoptServerJson==='function')Wn.boxtraceAdoptServerJson(snap);
+  if(typeof Wn.smarttraceAdoptServerJson==='function')Wn.smarttraceAdoptServerJson(snap);
   else try{localStorage.setItem(SKEY,snap);}catch(_){}
   try{
     /* read-only redraw: renderAll() would otherwise save() this snapshot
@@ -12603,7 +12603,7 @@ const YARD=[];                                    // ที่จอดรถบ
    skin = แผ่นโค้ง, gable = หน้าจั่วหัวท้าย (คนละวัสดุกันตอนเป็นหลังคาทึบ) */
 /* ค่าเริ่มต้นเป็น 'solid' (ไม่ใช่ 'glass') เพื่อให้เห็นหลังคาจริงตั้งแต่เปิดครั้งแรก
    และจำค่าที่ผู้ใช้เลือกไว้ข้าม reload ด้วย (แพทเทิร์นเดียวกับ theme/layout/lang) */
-const ROOF_MODE_KEY='boxtrace_roofmode';
+const ROOF_MODE_KEY='smarttrace_roofmode';
 function loadRoofMode(){try{var m=localStorage.getItem(ROOF_MODE_KEY);return(m==='glass'||m==='solid'||m==='off')?m:'solid';}catch(e){return'solid';}}
 function saveRoofMode(m){try{localStorage.setItem(ROOF_MODE_KEY,m);}catch(e){}}
 const ROOF={mode:loadRoofMode(),grp:null,skin:[],gable:[],solar:null};
@@ -14907,7 +14907,7 @@ document.addEventListener('visibilitychange',()=>{
 (function(){
 "use strict";
 const Wn=window;
-const API='/api/state', POLL_MS=4000, SKEY='boxtrace_p1', TOKEN_KEY='boxtrace_jwt';
+const API='/api/state', POLL_MS=4000, SKEY='smarttrace_p1', TOKEN_KEY='smarttrace_jwt';
 const St=()=>Wn.S||{};
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
 
@@ -14940,7 +14940,7 @@ function adoptServerState(st){
   /* mirror it for the next reload, but mark it as already-synced so the
      persistence bridge does not PUT the server's own snapshot back at it */
   const snap=JSON.stringify(st);
-  if(typeof Wn.boxtraceAdoptServerJson==='function')Wn.boxtraceAdoptServerJson(snap);
+  if(typeof Wn.smarttraceAdoptServerJson==='function')Wn.smarttraceAdoptServerJson(snap);
   else try{localStorage.setItem(SKEY,snap);}catch(_){}
   try{
     /* read-only redraw: renderAll() would otherwise save() this snapshot

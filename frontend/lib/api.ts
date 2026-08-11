@@ -1,5 +1,5 @@
-/** Tiny fetch wrapper for the BoxTrace API (same-origin via Next rewrites). */
-const TOKEN_KEY = 'boxtrace_jwt';
+/** Tiny fetch wrapper for the SmartTrace API (same-origin via Next rewrites). */
+const TOKEN_KEY = 'smarttrace_jwt';
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
