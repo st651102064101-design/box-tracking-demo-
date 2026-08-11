@@ -1792,7 +1792,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <button class="ivs-btn active" data-view="serial" title="แสดง 1 บาร์โค้ด ต่อ 1 แถว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/></svg></span> รายใบ</button>
       <button class="ivs-btn" data-view="summary" title="Group By ประเภท + พิกัด แสดงจำนวนรวม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> สรุปสต็อก</button>
     </div>
-    <button class="btn ghost sm" onclick="exportInvExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+    <button class="btn ghost sm" id="btnExportInv" onclick="exportInvExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
     <input type="file" id="invImportFile" accept=".csv,.xlsx,.xls" style="display:none;">
   </div>
 
@@ -2017,7 +2017,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
         <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
         <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-        <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+        <button class="btn ghost sm" id="btnExportBoxSetup" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th>บันทึกล่าสุด</th><th></th></tr></thead>
         <tbody id="boxBody"></tbody></table></div>
@@ -2060,7 +2060,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" id="btnExportBtype" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="btypeBody"></tbody></table></div>
@@ -2104,7 +2104,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelWh" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>คลังและประตู</h4><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>คลังและประตู</h4><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" id="btnExportWh" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="whBody"></tbody></table></div>
@@ -2207,7 +2207,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      <div class="tablehead"><h4>รายการลูกค้า</h4><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" id="btnExportCust" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div>
@@ -2275,7 +2275,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
     </div>
     <div class="tablecard">
-      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div>
+      <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" id="btnExportEmp" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -2397,7 +2397,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <button class="ivs-btn" data-lview="table"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span> ตาราง</button>
         </div>
         <button class="btn ghost sm" onclick="openImportModal('loc')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-        <button class="btn ghost sm" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+        <button class="btn ghost sm" id="btnExportLoc" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
         <button class="btn ghost sm" onclick="printFilteredLocLabels()" title="พิมพ์บาร์โค้ดป้ายเฉพาะที่กรองอยู่"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้าย (ที่กรอง)</button>
         <button class="btn ghost sm" id="btnClearOrphanLoc" style="display:none;color:var(--neg);" title="ลบตำแหน่งที่ไม่มีโซน (ข้อมูลตกค้างจากบั๊กเดิม)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ล้างตำแหน่งไม่มีโซน</button>
       </div>
@@ -2597,7 +2597,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <input id="schBox" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า">
             <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
             <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-            <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+            <button class="btn ghost sm" id="btnExportBoxInv" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> <span class="exp-label">Export Excel</span></button>
           </div>
           <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
             <tbody id="boxBody"></tbody></table></div>
@@ -8928,6 +8928,7 @@ function renderAll(){
   refreshGateDisplays();
   renderInventory();renderAuditLog();
   initSortToggles();
+  if(typeof refreshExportTemplateButtons==='function')refreshExportTemplateButtons();
   $('#whoTxt').textContent=USER+' · SaaS';save();
 }
 
@@ -11207,6 +11208,49 @@ function downloadXLSMulti(filename, sheets) {
 }
 window.downloadXLSMulti = downloadXLSMulti;
 
+/* A table with nothing in it still gets clicked "Export Excel" — the export
+   below turns into a one-example-row starting template instead of a
+   technically-valid but useless empty file, filename suffixed -template so
+   it's obvious at a glance which kind of file just downloaded. Re-import that
+   file (via the matching "นำเข้า Excel" button) and it round-trips: every
+   column already lines up. */
+function downloadXLSSmart(filename, headers, rows, exampleRow, opts) {
+  if (rows.length) return downloadXLS(filename, headers, rows, opts);
+  var tplName = /\.xls$/i.test(filename) ? filename.replace(/\.xls$/i, '-template.xls') : filename + '-template.xls';
+  downloadXLS(tplName, headers, exampleRow ? [exampleRow] : [], opts);
+  toast('ยังไม่มีข้อมูล', 'ดาวน์โหลดฟอร์แมตเปล่าให้กรอกแทน — เติมข้อมูลแล้วนำเข้ากลับได้เลย');
+}
+window.downloadXLSSmart = downloadXLSSmart;
+
+/* Flips each plain "Export Excel" button's own label to "Export Excel
+   Template" ahead of the click, whenever its table is empty — so the
+   button already says what it's about to do instead of surprising the
+   user with a template file after they asked to "export". Re-run from
+   renderAll() every time state changes, so importing data (or clearing it)
+   flips the label back immediately. Overview/Audit Log are left alone —
+   dashboards and history logs aren't master-data entry forms, so a
+   "template" for them doesn't mean anything. */
+var EXPORT_TEMPLATE_BUTTONS = [
+  { id: 'btnExportInv',      empty: function() { return !filteredInvBoxes().length; } },
+  { id: 'btnExportBoxSetup', empty: function() { return !Object.keys(S.boxes).length; } },
+  { id: 'btnExportBoxInv',   empty: function() { return !Object.keys(S.boxes).length; } },
+  { id: 'btnExportBtype',    empty: function() { return !Object.keys(S.boxtypes).length; } },
+  { id: 'btnExportWh',       empty: function() { return !Object.keys(S.warehouses).length; } },
+  { id: 'btnExportCust',     empty: function() { return !Object.keys(S.customers).length; } },
+  { id: 'btnExportEmp',      empty: function() { return !Object.keys(S.employees).length; } },
+  { id: 'btnExportLoc',      empty: function() { return !Object.keys(S.locations).length; } }
+];
+function refreshExportTemplateButtons() {
+  EXPORT_TEMPLATE_BUTTONS.forEach(function(e) {
+    var btn = document.getElementById(e.id); if (!btn) return;
+    var isEmpty = !!e.empty();
+    var label = btn.querySelector('.exp-label');
+    if (label) label.textContent = isEmpty ? 'Export Excel Template' : 'Export Excel';
+    btn.title = isEmpty ? 'ยังไม่มีข้อมูล — ดาวน์โหลดฟอร์แมตเปล่าให้กรอกแทน' : '';
+  });
+}
+window.refreshExportTemplateButtons = refreshExportTemplateButtons;
+
 function exportOverviewExcel() {
   applyAutoLost();
   var all = Object.values(S.boxes);
@@ -11266,7 +11310,8 @@ function exportInvExcel() {
       b.status === 'out' ? custName(b.customer) : '', b.status === 'out' ? (b.do || '') : '',
       invLastRecorder(b), b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
-  downloadXLS('inventory-stock-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
+  var example = [barcodeCell('BOX-001'), 'ลังพลาสติก', 'ในคลัง', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', '', 'admin', dstr() + ' ' + tstr()];
+  downloadXLSSmart('inventory-stock-' + dstr() + '.xls', headers, rows, example, { barcodeCols: [0] });
 }
 window.exportInvExcel = exportInvExcel;
 
@@ -11282,7 +11327,8 @@ function exportBoxExcel() {
       b.status === 'out' ? custName(b.customer) : '', b.do || '', b.po || '',
       b.cycles || 0, b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
-  downloadXLS('boxes-' + dstr() + '.xls', headers, rows, { barcodeCols: [0] });
+  var example = [barcodeCell('BOX-001'), 'ลังพลาสติก', 450, 'ในคลัง', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', '', '', 0, dstr() + ' ' + tstr()];
+  downloadXLSSmart('boxes-' + dstr() + '.xls', headers, rows, example, { barcodeCols: [0] });
 }
 window.exportBoxExcel = exportBoxExcel;
 
@@ -11295,7 +11341,8 @@ function exportEmpExcel() {
       EMP_SHIFT[e.shift] || '', e.phone || '',
       EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
-  downloadXLS('employees-' + dstr() + '.xls', headers, rows);
+  var example = ['EMP-01', 'สมศรี ใจดี', 'เจ้าหน้าที่คลัง', 'คลังสินค้า', 'คลังกลาง', 'เช้า', '081-234-5678', 'ผู้ปฏิบัติงาน', 'ปฏิบัติงาน'];
+  downloadXLSSmart('employees-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportEmpExcel = exportEmpExcel;
 
@@ -11307,7 +11354,8 @@ function exportLocExcel() {
     return [l.code, l.wh && S.warehouses[l.wh] ? S.warehouses[l.wh].name : '', l.zone || '', l.rack || '',
       l.shelf || '', l.slot || '', l.type || '', occMap[l.code] ? 'มีของ' : 'ว่าง'];
   });
-  downloadXLS('rack-locations-' + dstr() + '.xls', headers, rows);
+  var example = ['WH-01-โซนA-R01-1-01', 'คลังกลาง', 'โซน A', 'R-01', '1', '01', '', 'ว่าง'];
+  downloadXLSSmart('rack-locations-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportLocExcel = exportLocExcel;
 
@@ -11318,7 +11366,8 @@ function exportBtypeExcel() {
     var used = Object.values(S.boxes).filter(function(b) { return b.type === t.id; }).length;
     return [t.id, t.name, t.unit || '', t.value == null ? '' : t.value, t.dim || '', used];
   });
-  downloadXLS('box-types-' + dstr() + '.xls', headers, rows);
+  var example = ['BT-01', 'ลังพลาสติก', 'ใบ', 450, '600x400x320', 0];
+  downloadXLSSmart('box-types-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportBtypeExcel = exportBtypeExcel;
 
@@ -11330,7 +11379,8 @@ function exportWhExcel() {
     var stored = Object.values(S.boxes).filter(function(b) { return isRackedBox(b) && (b.location || {}).wh === w.id; }).length;
     return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
   });
-  downloadXLS('warehouses-' + dstr() + '.xls', headers, rows);
+  var example = ['WH-01', 'คลังกลาง', 1, 4, 4, 0];
+  downloadXLSSmart('warehouses-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportWhExcel = exportWhExcel;
 
@@ -11343,7 +11393,8 @@ function exportCustExcel() {
       c.returnDays || '', c.addr || '', c.phone || c.contact || '', c.email || '', c.taxId || '', c.contactPerson || '',
       c.creditLimit || 0, c.fineRate || 0, c.lostFine || 0, holding];
   });
-  downloadXLS('customers-' + dstr() + '.xls', headers, rows);
+  var example = ['CUST-01', 'บริษัท ตัวอย่าง จำกัด', 'ลูกค้า', 'ใช้งาน', 30, '123 ถ.ตัวอย่าง กรุงเทพฯ', '081-234-5678', 'example@mail.com', '0-0000-00000-00-0', 'สมชาย ใจดี', 0, 0, 0, 0];
+  downloadXLSSmart('customers-' + dstr() + '.xls', headers, rows, example);
 }
 window.exportCustExcel = exportCustExcel;
 
@@ -11596,6 +11647,20 @@ function openColumnMapModal(opts){
   };
   function enumOk(v,list){return !v||list.indexOf(v.toLowerCase())>=0;}
 
+  /* "สภาพ" cell → internal code — accepts either the Thai label already used
+     by Gate ขาออก (OUT_COND_LABEL, defined near scanOut()) or the raw code,
+     case-insensitively, so a file round-tripped from "Format Excel" and a
+     file someone typed by hand both work. Returns null (not '') for a
+     genuinely-invalid non-empty cell, so callers can tell "blank" from
+     "unrecognized" — see validateRow/buildRecord below. */
+  var COND_CODE={}; Object.keys(OUT_COND_LABEL).forEach(function(k){COND_CODE[OUT_COND_LABEL[k]]=k;});
+  function normCondition(v){
+    var s=String(v||'').trim(); if(!s)return '';
+    if(COND_CODE[s])return COND_CODE[s];
+    var lv=s.toLowerCase();
+    return ['good','minor','damaged'].indexOf(lv)>=0?lv:null;
+  }
+
   /* opts.fields entries follow openColumnMapModal's contract exactly
      ({key,label,required,aliases}) — cfg.fields is passed to it unmodified. */
   var IMPORT_CONFIGS={
@@ -11647,33 +11712,124 @@ function openColumnMapModal(opts){
       afterCommit:function(){rebuildGates();}
     },
 
+    /* "box" is the Inventory page's importer — the one entity here whose
+       columns don't map onto a single master table. A real box-stock file
+       (see the "all-boxes" export/backfill shape, and Gate ขาออก's own
+       OUT_FORMAT_HEADERS template — same columns, same idea) names a box
+       type, a customer, and a warehouse by NAME, not by our internal ids,
+       and expects all three to just exist afterward even if they never did
+       before. So unlike every other entry above (whose validateRow only
+       checks, and whose buildRecord only builds), this one's buildRecord
+       ALSO resolves-or-creates the box type / customer / warehouse rows it
+       needs, via the exact same match+auto-create rules Gate ขาออก's own
+       bulk importer uses (see window.find*Match / window.autoCreate*IfMissing,
+       exposed below in the OUTBOUND BULK IMPORT block) — one shared
+       definition of "what does 'ABSS' resolve to", not two that could
+       silently disagree. Side effects only happen in buildRecord (commit
+       time, per confirmed row), never in validateRow (preview time) — a
+       cancelled import must not have created anything. */
     box:{
-      key:'box', label:'ลงทะเบียนกล่อง', targetKey:'boxes', idField:'tag', idKind:'boxtag',
+      key:'box', label:'ลงทะเบียนกล่อง (ครบทุก Master)', targetKey:'boxes', idField:'tag', idKind:'boxtag',
       fields:[
-        {key:'tag',      label:'บาร์โค้ด (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['tag','barcode','บาร์โค้ด']},
-        {key:'typeId',   label:'รหัสประเภทกล่อง', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท']},
-        {key:'supplier', label:'รหัสซัพพลายเออร์', required:false, aliases:['supplier','ซัพพลายเออร์','รหัสซัพพลายเออร์']},
-        {key:'lot',      label:'Lot/Batch', required:false, aliases:['lot','batch']},
-        {key:'expiry',   label:'วันหมดอายุ (YYYY-MM-DD)', required:false, aliases:['expiry','วันหมดอายุ']}
+        {key:'tag',          label:'บาร์โค้ด/รหัสกล่อง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['tag','barcode','บาร์โค้ด','รหัสกล่อง']},
+        {key:'typeId',       label:'ประเภทกล่อง (ชื่อหรือรหัส — ไม่พบจะสร้างให้อัตโนมัติ)', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท','ประเภทกล่อง']},
+        {key:'unit',         label:'หน่วยนับ (กรณีต้องสร้างประเภทกล่องใหม่)', required:false, aliases:['unit','หน่วย','หน่วยนับ']},
+        {key:'condition',    label:'สภาพ (สมบูรณ์/มีตำหนิเล็กน้อย/ชำรุด)', required:false, aliases:['condition','สภาพ']},
+        {key:'customerName', label:'ลูกค้า/ปลายทาง (ชื่อหรือรหัส — เว้นว่าง = อยู่ในคลัง)', required:false, aliases:['customer','destination','ลูกค้า','ปลายทาง','ลูกค้า/ปลายทาง']},
+        {key:'addr',         label:'ที่อยู่/สาขา (กรณีต้องสร้างลูกค้าใหม่)', required:false, aliases:['address','addr','ที่อยู่','ที่อยู่/สาขา']},
+        {key:'phone',        label:'เบอร์โทร (กรณีต้องสร้างลูกค้าใหม่)', required:false, aliases:['phone','เบอร์โทร','เบอร์โทรศัพท์']},
+        {key:'email',        label:'อีเมล (กรณีต้องสร้างลูกค้าใหม่)', required:false, aliases:['email','อีเมล']},
+        {key:'returnDays',   label:'กำหนดคืนภายใน (วัน) (กรณีต้องสร้างลูกค้าใหม่)', required:false, aliases:['returndays','กำหนดคืน','กำหนดคืนภายใน','กำหนดคืนภายใน (วัน)']},
+        {key:'whName',       label:'คลัง (ชื่อหรือรหัส — ไม่พบจะสร้างให้อัตโนมัติ)', required:false, aliases:['warehouse','wh','คลัง']},
+        {key:'doNo',         label:'เลขที่ DO (กรณีส่งออกไปแล้ว)', required:false, aliases:['do','dono','เลขที่do','เลขที่ do']},
+        {key:'poNo',         label:'เลขที่ PO (กรณีส่งออกไปแล้ว)', required:false, aliases:['po','pono','เลขที่po','เลขที่ po']},
+        {key:'plate',        label:'ทะเบียนรถ (อ้างอิงเท่านั้น)', required:false, aliases:['plate','ทะเบียนรถ']},
+        {key:'driver',       label:'ชื่อคนขับ (อ้างอิงเท่านั้น)', required:false, aliases:['driver','ชื่อคนขับ','คนขับ']},
+        {key:'ts',           label:'วันที่/เวลา (ใช้เป็นวันที่ลงทะเบียนจริง ถ้าอ่านได้)', required:false, aliases:['timestamp','date','datetime','time','วันที่','เวลา','วันเวลา']},
+        {key:'who',          label:'ผู้บันทึก (อ้างอิงเท่านั้น)', required:false, aliases:['who','recorder','ผู้บันทึก']},
+        {key:'supplier',     label:'รหัสซัพพลายเออร์', required:false, aliases:['supplier','ซัพพลายเออร์','รหัสซัพพลายเออร์']},
+        {key:'lot',          label:'Lot/Batch', required:false, aliases:['lot','batch']},
+        {key:'expiry',       label:'วันหมดอายุ (YYYY-MM-DD)', required:false, aliases:['expiry','วันหมดอายุ']}
       ],
+      /* Read-only — never creates anything, so opening the preview (or
+         cancelling out of it) never mutates master data. Box-type creation
+         never actually fails (autoCreateBoxTypeIfMissing always has a
+         default unit to fall back on), so it's never flagged as an error
+         here — only "is this column present at all". */
       validateRow:function(m){
         var e=[];
-        if(!m.typeId)e.push('ไม่มีรหัสประเภทกล่อง');
-        else if(!S.boxtypes[m.typeId])e.push('ไม่พบประเภทกล่อง '+m.typeId+' ในระบบ');
+        if(!m.typeId)e.push('ไม่มีประเภทกล่อง (ชื่อหรือรหัส)');
         if(m.expiry&&isNaN(Date.parse(m.expiry)))e.push('รูปแบบวันหมดอายุไม่ถูกต้อง');
+        if(m.customerName&&!window.findCustomerMatch(m.customerName)){
+          if(!m.returnDays||isNaN(Number(m.returnDays))||Number(m.returnDays)<1)e.push('ลูกค้าใหม่ "'+m.customerName+'" ต้องระบุ "กำหนดคืนภายใน (วัน)"');
+          if(!m.addr)e.push('ลูกค้าใหม่ "'+m.customerName+'" ต้องระบุ "ที่อยู่/สาขา"');
+          if(!m.phone&&!m.email)e.push('ลูกค้าใหม่ "'+m.customerName+'" ต้องระบุเบอร์โทรหรืออีเมล');
+        }
+        if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรไม่ถูกต้อง');
+        if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
+        if(m.condition&&normCondition(m.condition)===null)e.push('สภาพต้องเป็น สมบูรณ์ / มีตำหนิเล็กน้อย / ชำรุด');
         return e;
       },
       buildRecord:function(m,tag){
-        var type=S.boxtypes[m.typeId];
+        var typeId=window.findBoxTypeMatch(m.typeId);
+        if(!typeId)typeId=window.autoCreateBoxTypeIfMissing(m.typeId,m.unit).id;
+        var type=S.boxtypes[typeId];
         var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
-        var regTsI=iso();
-        return {tag:tag,type:m.typeId,value:value,status:'pending',cycles:0,
+        var condCode=normCondition(m.condition)||'good';
+
+        var custId='';
+        if(m.customerName){
+          custId=window.findCustomerMatch(m.customerName);
+          if(!custId){
+            var custCreated=window.autoCreateCustomerIfMissing(m.customerName,[m.returnDays],[m.addr],[m.phone],[m.email]);
+            if(custCreated.ok)custId=custCreated.id;
+          }
+        }
+        var whId='';
+        if(m.whName){
+          whId=window.findWarehouseMatch(m.whName);
+          if(!whId){
+            // No ประตูเริ่ม/ประตูสิ้นสุด columns in this importer (it's a
+            // stock/backfill file, not a gate-mapping one) — a brand-new
+            // warehouse named here gets one starting gate, same as any
+            // other field editable afterward at ตั้งค่า → คลัง & ประตู.
+            var whCreated=window.autoCreateWarehouseIfMissing(m.whName,['1'],['1'],['both']);
+            if(whCreated.ok)whId=whCreated.id;
+          }
+        }
+
+        var parsedTs=m.ts?window.parseImportedTs(m.ts):null;
+        var regTsI=parsedTs?iso(parsedTs):iso();
+        var who=(m.who||'').trim()||USER;
+
+        var rec={tag:tag,type:typeId,value:value,status:'pending',cycles:0,
           customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
           lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
-          regAt:regTsI,regBy:USER,
+          condition:condCode,
+          regAt:regTsI,regBy:who,
           location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsI},
           lastSeenAt:regTsI,labeled:false,
-          history:[{dir:'reg',ts:regTsI,recorder:USER,note:'นำเข้าจากไฟล์ Excel/CSV'}]};
+          history:[{dir:'reg',ts:regTsI,recorder:who,note:'นำเข้าจากไฟล์ Excel/CSV (ครบทุก Master)',condition:condCode}]};
+
+        if(custId){
+          // Already shipped to a customer as of this file — mirror
+          // saveOutbound()'s own field set so it shows up in every screen
+          // that reads an 'out' box exactly like a live-scanned one does.
+          var c=S.customers[custId]||{};
+          var rd=Number(m.returnDays)||c.returnDays||S.cfg.agingDays;
+          var dueTs=new Date(new Date(regTsI).getTime()+rd*86400000).toISOString();
+          rec.status='out';rec.customer=custId;rec.do=m.doNo||'';rec.po=m.poNo||'';
+          rec.outWh=whId||'';rec.outAt=regTsI;rec.dueAt=dueTs;rec.returnDays=rd;rec.outCondition=condCode;
+          rec.history[0].dir='out';rec.history[0].customer=custId;rec.history[0].do=rec.do;rec.history[0].po=rec.po;
+          rec.history[0].wh=whId||'';rec.history[0].plate=m.plate||'';rec.history[0].driver=m.driver||'';rec.history[0].dueAt=dueTs;
+        }else if(whId){
+          var loc=window.pickLocationForWarehouse(whId);
+          rec.status=(condCode==='damaged')?'damage':'warehouse';
+          rec.location={wh:whId,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:null,ts:regTsI};
+        }else if(condCode==='damaged'){
+          rec.status='damage';
+        }
+        return rec;
       }
     },
 
@@ -11847,7 +12003,18 @@ function openColumnMapModal(opts){
         id=explicitId;
         if(claimed[key])dup=true;else claimed[key]=1;
       }else if(!errors.length){
-        if(cfg.key==='box')id=boxTagGen(mapped.typeId);
+        if(cfg.key==='box'){
+          // mapped.typeId may be a NAME (brand-new box type, not yet
+          // created — creation itself only happens later, at commit time
+          // in buildRecord, never here at preview time). A pure, read-only
+          // match is safe to try anyway: an EXISTING type still gets its
+          // real prefix in the previewed tag; a genuinely new one falls
+          // back to boxTagGen('') → a plain random tag, same clean
+          // fallback already used when a box has no type at all — better
+          // than mangling a Thai name into a garbage prefix.
+          var matchedType=window.findBoxTypeMatch?window.findBoxTypeMatch(mapped.typeId):null;
+          id=boxTagGen(matchedType||'');
+        }
         else if(cfg.key==='loc'){
           id=locBuildCode(mapped.zone,mapped.rack,mapped.shelf,mapped.slot);
           var lkey=id.toLowerCase();
@@ -12225,6 +12392,19 @@ function openColumnMapModal(opts){
     return {wh:whId,zone:'โซน A',rack:'R-01',shelf:'1',slot:'01'};
   }
 
+  /* Exposed for reuse by the Inventory-page "ลงทะเบียนกล่อง" importer (see
+     MASTER DATA BULK IMPORT above, box entry in IMPORT_CONFIGS) — same
+     match/auto-create rules for box types, customers and warehouses, so a
+     Gate ขาออก import and an Inventory import can never disagree about
+     what "ABSS" or "บจก. ส1" resolves to. */
+  window.findCustomerMatch=findCustomerMatch;
+  window.autoCreateCustomerIfMissing=autoCreateCustomerIfMissing;
+  window.findBoxTypeMatch=findBoxTypeMatch;
+  window.autoCreateBoxTypeIfMissing=autoCreateBoxTypeIfMissing;
+  window.findWarehouseMatch=findWarehouseMatch;
+  window.autoCreateWarehouseIfMissing=autoCreateWarehouseIfMissing;
+  window.pickLocationForWarehouse=pickLocationForWarehouse;
+
   /* A barcode this file names that classifyOutTag() couldn't find at all
      (never registered, as opposed to registered-but-not-shippable) gets
      registered here — using the shared createBoxes() primitive, the one
@@ -12412,6 +12592,7 @@ function openColumnMapModal(opts){
     var d4=new Date(s);
     return isNaN(d4)?null:d4;
   }
+  window.parseImportedTs=parseImportedTs;   /* reused by the Inventory-page box importer, see cfg above */
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
      on one value AND the field is currently empty. Never overwrites what the
