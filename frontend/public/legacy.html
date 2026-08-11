@@ -225,10 +225,8 @@ html[data-theme="dark"] nav .pill-bg{
   nav .pill-bg{transition:none;}}
 
 main{max-width:1180px;margin:0 auto;padding:0 22px 120px;}
-.tab{display:none;opacity:0;}
-.tab.active{display:block;}
-.tab.active.tab-visible{opacity:1;transition:opacity .12s ease-out;}
-@media (prefers-reduced-motion: reduce){.tab.active.tab-visible{transition:none;}}
+.tab{display:none;}
+.tab.active{display:block;opacity:1;}
 
 /* ============================================================ HERO / TYPE ============================================================ */
 .hero{padding:32px 0 24px;border-bottom:.5px solid var(--line);margin-bottom:36px;position:relative;}
@@ -2543,17 +2541,31 @@ function switchTab(name){
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
      down) page glide upward for a moment before the new tab even appears.
-     The tab swap itself gets a quick opacity fade instead (tab-visible,
-     added a frame later so the transition actually fires — display:none →
-     block can't transition, and toggling classes in the same frame as
-     adding them gets coalesced by the browser with no visible transition). */
+     The tab swap itself gets a quick opacity fade instead, applied here via
+     inline style rather than a CSS class keyed off "active" — the very
+     first tab shown on page load is marked active in the static HTML
+     before any JS runs (boot calls renderAll() directly, never
+     switchTab()), so a class-based "start at opacity:0, only switchTab()
+     ever adds the visible class" scheme left that first tab permanently
+     invisible (blank/black screen) since nothing had ever added the class.
+     display:none → block can't itself transition, hence the opacity:0 write
+     + forced reflow + rAF-deferred opacity:1 below. */
   window.scrollTo(0,0);
-  $all('.tab').forEach(function(t){t.classList.remove('active','tab-visible');});
-  var tab=$('#tab-'+name);if(tab)tab.classList.add('active');
+  $all('.tab').forEach(function(t){t.classList.remove('active');t.style.opacity='';t.style.transition='';});
+  var tab=$('#tab-'+name);
+  if(tab){
+    tab.classList.add('active');
+    var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(!reduceMotion){
+      tab.style.opacity='0';
+      void tab.offsetWidth;
+      tab.style.transition='opacity .12s ease-out';
+      requestAnimationFrame(function(){tab.style.opacity='1';});
+    }
+  }
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
-  if(tab)requestAnimationFrame(function(){tab.classList.add('tab-visible');});
   if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
