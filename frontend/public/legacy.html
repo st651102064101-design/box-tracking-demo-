@@ -8212,6 +8212,17 @@ function handleInvImportFile(e) {
   r.onload = function() {
     try {
       var wb = XLSX.read(new Uint8Array(r.result), { type: 'array' });
+      if (!wb.SheetNames.length) { toast('ไฟล์ว่างเปล่า', 'ไม่พบชีตข้อมูลในไฟล์', 'err'); return; }
+      /* A file with several sheets — e.g. one produced by "Export Excel
+         (ทุก Master)" — gets routed sheet-by-sheet into the matching master
+         table's own import pipeline (same column-map → preview → confirm
+         flow Setup's per-entity importers already use) instead of only
+         ever reading the first sheet as inventory items. A single-sheet
+         file keeps the original inventory-items behavior unchanged. */
+      if (wb.SheetNames.length > 1 && typeof handleMultiSheetMasterImport === 'function') {
+        var handled = handleMultiSheetMasterImport(wb, f.name);
+        if (handled) return;
+      }
       var ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) { toast('ไฟล์ว่างเปล่า', 'ไม่พบชีตข้อมูลในไฟล์', 'err'); return; }
       var rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: false });
@@ -8220,6 +8231,76 @@ function handleInvImportFile(e) {
     } catch (err) { toast('นำเข้าไม่สำเร็จ', 'ไฟล์ไม่ถูกต้อง หรือไม่ใช่ไฟล์ Excel/CSV', 'err'); }
   };
   r.readAsArrayBuffer(f);
+}
+/* ===== MULTI-SHEET MASTER IMPORT =====
+   Matches each sheet in a workbook against the known master tables
+   (ประเภทกล่อง/คลัง & ประตู/ลูกค้า คู่ค้า/พนักงาน/กล่อง) by sheet name first,
+   falling back to scoring the header row against each config's field
+   aliases when the sheet was renamed/doesn't match a known label exactly —
+   the same alias list openColumnMapModal itself already uses for
+   auto-mapping, so a sheet that "smells like" ลูกค้า data gets recognized
+   even if it isn't literally named "ลูกค้า คู่ค้า". Recognized sheets are
+   queued and imported ONE AT A TIME through the exact same column-mapping
+   → preview → confirm flow as Setup's individual importers — reusing that
+   proven pipeline (and its dup-detection/validation) instead of trying to
+   auto-commit 5 different entity shapes blind. Returns false (caller falls
+   back to the old single-sheet inventory-items import) if nothing in the
+   file matches any known master table. */
+var MULTI_SHEET_ENTITY_NAMES = {
+  btype: ['ประเภทกล่อง', 'box types', 'boxtypes', 'ประเภทกล่อง (box type)'],
+  wh: ['คลัง & ประตู', 'คลังและประตู', 'คลัง', 'warehouses'],
+  cust: ['ลูกค้า คู่ค้า', 'ลูกค้า/คู่ค้า', 'ลูกค้า', 'customers'],
+  emp: ['พนักงาน', 'employees'],
+  box: ['กล่อง (box)', 'กล่อง', 'boxes', 'ลงทะเบียนกล่อง']
+};
+function normSheetName(s) { return String(s || '').trim().toLowerCase().replace(/[()]/g, '').replace(/\s+/g, ' '); }
+function detectSheetEntityKey(sheetName, head) {
+  var norm = normSheetName(sheetName);
+  var byName = Object.keys(MULTI_SHEET_ENTITY_NAMES).find(function(key) {
+    return MULTI_SHEET_ENTITY_NAMES[key].some(function(n) { return normSheetName(n) === norm; });
+  });
+  if (byName) return byName;
+  // fall back to scoring the header row against each config's field aliases
+  if (!window.IMPORT_CONFIGS || !head || !head.length) return null;
+  var normHead = head.map(function(h) { return colMapNormHead(h); });
+  var bestKey = null, bestScore = 0;
+  Object.keys(window.IMPORT_CONFIGS).forEach(function(key) {
+    var cfg = window.IMPORT_CONFIGS[key];
+    var score = 0;
+    cfg.fields.forEach(function(f) {
+      if (f.aliases && f.aliases.some(function(a) { return normHead.indexOf(a) >= 0; })) score++;
+    });
+    if (score > bestScore) { bestScore = score; bestKey = key; }
+  });
+  return bestScore >= 2 ? bestKey : null;
+}
+function handleMultiSheetMasterImport(wb, fname) {
+  if (!window.IMPORT_CONFIGS) return false;
+  var queue = [];
+  wb.SheetNames.forEach(function(sheetName) {
+    var ws = wb.Sheets[sheetName];
+    if (!ws) return;
+    var rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: false });
+    var rows = (rawRows || []).filter(function(row) { return row && row.some(function(c) { return String(c == null ? '' : c).trim() !== ''; }); });
+    if (!rows.length) return;
+    var head = rows[0].map(function(h) { return String(h || '').trim(); });
+    var key = detectSheetEntityKey(sheetName, head);
+    var cfg = key && window.IMPORT_CONFIGS[key];
+    if (!cfg) return;
+    queue.push({ cfg: cfg, rows: rows, head: head, sheetName: sheetName });
+  });
+  if (!queue.length) return false;
+  toast('พบ ' + queue.length + ' sheet ที่นำเข้าได้', queue.map(function(q) { return q.cfg.label; }).join(', '), 'info');
+  (function next() {
+    if (!queue.length) return;
+    var item = queue.shift();
+    openColumnMapModal({
+      side: 'import-' + item.cfg.key, fname: fname + ' · ' + item.sheetName,
+      head: item.head, rows: item.rows, fields: item.cfg.fields,
+      onConfirm: function(colMap) { openImportPreviewModal(item.rows, colMap, item.cfg, fname, next); }
+    });
+  })();
+  return true;
 }
 function openInvImportMap(rows, fname) {
   if (!rows.length) return toast('ไฟล์ว่างเปล่า', null, 'err');
@@ -9061,6 +9142,10 @@ function openColumnMapModal(opts){
       }
     }
   };
+  /* Exposed so other importers (Inventory page's multi-sheet import — see
+     handleInvImportFile) can reuse the same per-entity config/validation/
+     commit pipeline instead of re-implementing it. */
+  window.IMPORT_CONFIGS=IMPORT_CONFIGS;
 
   /* ---- Step 1: pick a file → parse → open the column-mapping modal ----
      One shared <input type=file> (#importFileShared) for all six entities —
@@ -9150,7 +9235,7 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Step 3: preview table + confirm ---- */
-  window.openImportPreviewModal=function(rows,colMap,cfg,fname){
+  window.openImportPreviewModal=function(rows,colMap,cfg,fname,onDone){
     var results=importParseAndValidate(rows,colMap,cfg);
     var okRows=results.filter(function(x){return !x.errors.length&&!x.dup;});
     var dupRows=results.filter(function(x){return !x.errors.length&&x.dup;});
@@ -9206,7 +9291,7 @@ function openColumnMapModal(opts){
       var overwrite=!!(ovEl&&ovEl.checked);
       var toCommit=overwrite?okRows.concat(dupRows):okRows;
       closeModal();
-      commitImportRows(toCommit,cfg,fname,errRows.length+(overwrite?0:dupRows.length));
+      commitImportRows(toCommit,cfg,fname,errRows.length+(overwrite?0:dupRows.length),onDone);
     };
   };
 
@@ -9216,7 +9301,7 @@ function openColumnMapModal(opts){
      rows, neither of which helps anyone). Locations get an audit entry here
      even though the manual single-add path doesn't (see cfg research —
      that's an existing gap in btnAddLoc, not something worth repeating). ---- */
-  window.commitImportRows=function(rows,cfg,fname,skippedCount){
+  window.commitImportRows=function(rows,cfg,fname,skippedCount,onDone){
     var addedIds=[];
     rows.forEach(function(x){
       S[cfg.targetKey][x.id]=cfg.buildRecord(x.mapped,x.id);
@@ -9236,10 +9321,16 @@ function openColumnMapModal(opts){
       save();
     }
     renderAll();
-    openImportSummaryModal(fname,addedIds,skippedCount,cfg);
+    openImportSummaryModal(fname,addedIds,skippedCount,cfg,onDone);
   };
 
-  window.openImportSummaryModal=function(fname,addedIds,skippedCount,cfg){
+  /* onDone (used by the Inventory page's multi-sheet import queue — see
+     handleInvImportFile) fires once the operator dismisses THIS sheet's
+     result via "เข้าใจแล้ว", so the next queued sheet's column-mapping modal
+     doesn't appear until they've actually seen this one's outcome. Clicking
+     the ✕ instead (data-close, unchanged) just closes without continuing —
+     treated as "stop importing the rest of the file". */
+  window.openImportSummaryModal=function(fname,addedIds,skippedCount,cfg,onDone){
     function chips(list){return list.map(function(t){return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span></span></span>';}).join('');}
     var h='<div class="mhead"><h3>ผลการนำเข้า · '+esc(cfg.label)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>';
     h+='<div class="mbody" style="max-height:66vh;overflow:auto;">';
@@ -9253,8 +9344,10 @@ function openColumnMapModal(opts){
      +'<div class="small muted">ข้าม</div></div></div>';
     if(addedIds.length)h+='<div class="c2-label">นำเข้าสำเร็จ · '+addedIds.length+' รายการ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(addedIds)+'</div>';
     h+='</div>';
-    h+='<div class="mfoot"><button class="btn accent" data-close>เข้าใจแล้ว</button></div>';
+    h+='<div class="mfoot"><button class="btn accent" id="importSummaryOkBtn">เข้าใจแล้ว</button></div>';
     openModal(h);
+    var okBtn=document.getElementById('importSummaryOkBtn');
+    if(okBtn)okBtn.onclick=function(){closeModal();if(typeof onDone==='function')onDone();};
     toast(addedIds.length?'นำเข้าสำเร็จ':'ไม่มีรายการที่นำเข้าได้',
       addedIds.length?(addedIds.length+' รายการ · '+cfg.label):'ดูรายละเอียดในหน้าต่างสรุป',
       addedIds.length?'ok':'err');
