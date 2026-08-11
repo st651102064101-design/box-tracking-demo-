@@ -1211,7 +1211,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="field"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
-      <div class="field"><label>ประเภทรถ</label><input id="outVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
+      <div class="field"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
@@ -1281,13 +1281,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
-      <div class="field"><label>ประเภทรถ</label><input id="inVehicle" list="dl-vtype" placeholder="รถกระบะ / รถบรรทุก" autocomplete="off"></div>
+      <div class="field"><label>ประเภทรถ</label><div id="inVehicleField"></div></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div class="field" style="margin-top:14px;"><label>หมายเหตุ</label><input id="inNote" placeholder="บันทึกเพิ่มเติม (ถ้ามี)"></div>
     <div id="inVehicleQuick" style="margin-top:14px;"></div>
     <datalist id="dl-plate"></datalist>
-    <datalist id="dl-vtype"></datalist>
     <datalist id="dl-driver"></datalist>
     <datalist id="dl-tel"></datalist>
   </div>
@@ -2179,6 +2178,7 @@ function normalizeState(d){
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
   d.gatePrefs=d.gatePrefs||{};
   d.dfPrefs=d.dfPrefs||{};
+  d.vehicleTypes=d.vehicleTypes||[];
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
 }
@@ -4779,11 +4779,75 @@ function vehicleChipsHtml(dir){
 }
 function applyVehicle(dir,plate){
   var v=S.vehicles[plate];if(!v)return;
-  if(dir==='out'){setv('outPlate',v.plate);setv('outDriver',v.driver);setv('outVehicle',v.vehicle);setv('outDriverTel',v.tel);}
-  else{setv('inPlate',v.plate);setv('inDriver',v.driver);setv('inVehicle',v.vehicle);setv('inDriverTel',v.tel);}
+  if(dir==='out'){setv('outPlate',v.plate);setv('outDriver',v.driver);setv('outVehicle',v.vehicle);setv('outDriverTel',v.tel);renderVehicleTypeField('out');}
+  else{setv('inPlate',v.plate);setv('inDriver',v.driver);setv('inVehicle',v.vehicle);setv('inDriverTel',v.tel);renderVehicleTypeField('in');}
   toast('ดึงข้อมูลรถแล้ว',v.plate+(v.driver?' · '+v.driver:''),'info');
 }
 window.applyVehicle=applyVehicle;
+
+/* ===== ประเภทรถ dropdown (was a free-text input + datalist) =====
+   No dedicated "vehicle type master" table existed — types were just
+   whatever string had ever been typed into a plate's remembered record
+   (S.vehicles[plate].vehicle). S.vehicleTypes is a small standalone list so
+   "+ เพิ่มประเภทรถใหม่" can add a type before any vehicle ever uses it, and
+   both sources feed the same dropdown. outVehicle/inVehicle keep their
+   original element ids — val()/setv() (used all over Gate ขาเข้า/ขาออก)
+   read/write .value regardless of whether that id is an <input> or
+   <select>, so no other call site needed to change. */
+var VTYPE_NEW_SENTINEL='__new_vtype__';
+function vehicleTypeOptions(){
+  var set={};
+  (S.vehicleTypes||[]).forEach(function(t){if(t)set[t]=1;});
+  Object.values(S.vehicles||{}).forEach(function(v){if(v.vehicle)set[v.vehicle]=1;});
+  return Object.keys(set).sort(function(a,b){return a.localeCompare(b,'th');});
+}
+function renderVehicleTypeField(prefix){
+  var mount=$('#'+prefix+'VehicleField');if(!mount)return;
+  var fieldId=prefix+'Vehicle';
+  var existing=document.getElementById(fieldId);
+  var curVal=existing?existing.value:'';
+  var opts=vehicleTypeOptions();
+  if(!opts.length){
+    mount.innerHTML='<input type="hidden" id="'+fieldId+'" value="'+esc(curVal)+'">'
+      +'<button type="button" class="btn ghost sm" style="width:100%;justify-content:center;" onclick="promptNewVehicleType(\''+fieldId+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> สร้างประเภทรถ</button>';
+    return;
+  }
+  mount.innerHTML='<select id="'+fieldId+'" onchange="onVehicleTypeChange(\''+fieldId+'\')">'
+    +'<option value="">— เลือกประเภทรถ —</option>'
+    +opts.map(function(o){return '<option value="'+esc(o)+'"'+(o===curVal?' selected':'')+'>'+esc(o)+'</option>';}).join('')
+    +'<option value="'+VTYPE_NEW_SENTINEL+'">+ เพิ่มประเภทรถใหม่…</option>'
+    +'</select>';
+}
+window.renderVehicleTypeField=renderVehicleTypeField;
+function onVehicleTypeChange(fieldId){
+  var el=document.getElementById(fieldId);if(!el)return;
+  if(el.value===VTYPE_NEW_SENTINEL){el.value='';promptNewVehicleType(fieldId);}
+}
+window.onVehicleTypeChange=onVehicleTypeChange;
+function promptNewVehicleType(fieldId){
+  var h='<div class="mhead"><h3>เพิ่มประเภทรถใหม่</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody"><div class="field"><label>ชื่อประเภทรถ</label><input id="newVtypeInput" placeholder="เช่น รถกระบะ, รถบรรทุก 6 ล้อ" autocomplete="off"></div></div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" onclick="confirmNewVehicleType(\''+fieldId+'\')">เพิ่ม</button></div>';
+  openModal(h);
+  setTimeout(function(){
+    var i=$('#newVtypeInput');if(!i)return;i.focus();
+    i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();confirmNewVehicleType(fieldId);}});
+  },50);
+}
+window.promptNewVehicleType=promptNewVehicleType;
+function confirmNewVehicleType(fieldId){
+  var i=$('#newVtypeInput');if(!i)return;
+  var name=i.value.trim();
+  if(!name)return toast('กรอกชื่อประเภทรถ',null,'err');
+  if(!S.vehicleTypes)S.vehicleTypes=[];
+  var exists=S.vehicleTypes.some(function(t){return t.toLowerCase()===name.toLowerCase();});
+  if(!exists){S.vehicleTypes.push(name);save();}
+  closeModal();
+  renderVehicleTypeField('out');renderVehicleTypeField('in');
+  setv(fieldId,name);
+  toast('เพิ่มประเภทรถแล้ว',name);
+}
+window.confirmNewVehicleType=confirmNewVehicleType;
 function renderLocDatalist(){
   var zones={},racks={},shelves={},slots={};
   /* primary source: the Location Master itself — a zone/rack registered here must
@@ -4973,17 +5037,17 @@ window.bindLocPicker=bindLocPicker;
 function renderVehicleDatalist(){
   var vs=Object.values(S.vehicles).sort(function(a,b){return new Date(b.lastUsedAt)-new Date(a.lastUsedAt);});
   var plates=[...new Set(vs.map(function(v){return v.plate;}).filter(Boolean))];
-  var types=[...new Set(vs.map(function(v){return v.vehicle;}).filter(Boolean))];
   var drivers=[...new Set(vs.map(function(v){return v.driver;}).filter(Boolean))];
   var tels=[...new Set(vs.map(function(v){return v.tel;}).filter(Boolean))];
   function fill(id,arr){var el=document.getElementById(id);if(el)el.innerHTML=arr.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');}
-  fill('dl-plate',plates);fill('dl-vtype',types);fill('dl-driver',drivers);fill('dl-tel',tels);
+  fill('dl-plate',plates);fill('dl-driver',drivers);fill('dl-tel',tels);
   renderLocDatalist();
 }
 function renderVehicleQuick(){
   var o=$('#outVehicleQuick');if(o)o.innerHTML=vehicleChipsHtml('out');
   var i=$('#inVehicleQuick');if(i)i.innerHTML=vehicleChipsHtml('in');
   renderVehicleDatalist();
+  renderVehicleTypeField('out');renderVehicleTypeField('in');
 }
 function lookupDO(){
   var doNo=val('doNo');if(!doNo)return;
@@ -5201,12 +5265,30 @@ function autoFillVehicle(plateId,vTypeId,driverId,telId){
   var plate=(document.getElementById(plateId)||{}).value||'';
   var v=S.vehicles[plate];if(!v)return;
   var vt=document.getElementById(vTypeId),dr=document.getElementById(driverId),tl=document.getElementById(telId);
-  if(vt&&!vt.value)vt.value=v.vehicle||'';
+  if(vt&&!vt.value){vt.value=v.vehicle||'';renderVehicleTypeField(vTypeId==='outVehicle'?'out':'in');}
   if(dr&&!dr.value)dr.value=v.driver||'';
   if(tl&&!tl.value)tl.value=v.tel||'';
 }
 $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','inVehicle','inDriver','inDriverTel');});
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
+
+/* Auto-dash a Thai mobile number as it's typed — 095-000-0000 (3-3-4) —
+   instead of making the operator type the dashes themselves. Reformats on
+   every keystroke by stripping non-digits and re-inserting dashes; the
+   cursor lands at the end after each reformat (a simple `el.value=` write
+   during 'input' always does), which matches how a phone number is
+   normally typed anyway (left to right, into a growing field). */
+function formatThaiPhoneInput(el){
+  var digits=el.value.replace(/\D/g,'').slice(0,10);
+  var formatted=digits;
+  if(digits.length>6)formatted=digits.slice(0,3)+'-'+digits.slice(3,6)+'-'+digits.slice(6);
+  else if(digits.length>3)formatted=digits.slice(0,3)+'-'+digits.slice(3);
+  el.value=formatted;
+}
+['outDriverTel','inDriverTel'].forEach(function(id){
+  var el=document.getElementById(id);
+  if(el)el.addEventListener('input',function(){formatThaiPhoneInput(el);});
+});
 $('#btnCheckIn').onclick=function(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
@@ -9669,7 +9751,7 @@ function openColumnMapModal(opts){
 
     var vtArr=distinctVals(vtypeVals);
     meta.vtype.values=vtArr;
-    if(vtArr.length===1){ if(!val('inVehicle')){setv('inVehicle',vtArr[0]);meta.vtype.applied=true;} }
+    if(vtArr.length===1){ if(!val('inVehicle')){setv('inVehicle',vtArr[0]);meta.vtype.applied=true;renderVehicleTypeField('in');} }
 
     var telArr=distinctVals(telVals);
     meta.tel.values=telArr;
