@@ -975,14 +975,19 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-    <span>รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></span>
-    <span style="display:inline-flex;align-items:center;gap:8px;font-weight:400;flex-wrap:wrap;">
-      <label for="ovFlowFrom" class="muted small" style="font-weight:400;">จาก</label>
-      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="padding:6px 10px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-      <label for="ovFlowTo" class="muted small" style="font-weight:400;">ถึง</label>
-      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="padding:6px 10px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-      <button type="button" class="btn ghost sm" onclick="clearOvFlowRange()">ล้าง</button>
+  <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
+  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
+    <span class="inv-view-sw" style="flex-shrink:0;">
+      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
+      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
+      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
+      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
+      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
     </span>
   </div>
   <div class="tablecard reveal" id="ovTypeFlow"></div>
@@ -1402,6 +1407,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="eyebrow reveal">Master</div>
     <h1 class="h-title reveal d1">ตั้งค่า</h1>
     <p class="h-sub reveal d2">ลงทะเบียนกล่อง · ประเภทกล่อง · คลังและประตู · ลูกค้า · พารามิเตอร์ — ระบบเก็บประวัติเข้า·ออกเบื้องหลังให้อัตโนมัติ</p>
+  </div>
+
+  <div class="row no-print reveal" style="margin-bottom:18px;">
+    <button class="btn ghost sm" onclick="openSystemSettingsModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> ตั้งค่าระบบ</button>
+    <div class="spacer"></div>
   </div>
 
   <!-- Shared across all 6 Setup sub-tabs — which entity a click targets is
@@ -5743,8 +5753,13 @@ function renderReports(){
 }
 /* Date-range filter for "รายงานกล่องรายตัว — แยกตามประเภท" (#ovFlowFrom/#ovFlowTo)
    — renderReports() re-clamps min/max and re-reads the two inputs' values on
-   every call, so just re-rendering here is enough to apply the new range. */
-function onOvFlowRangeChange(){renderReports();}
+   every call, so just re-rendering here is enough to apply the new range.
+   Manually editing either date counts as "กำหนดเอง" — no preset button
+   should look active once the operator picked their own range by hand. */
+function onOvFlowRangeChange(){
+  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.remove('active');});
+  renderReports();
+}
 window.onOvFlowRangeChange=onOvFlowRangeChange;
 function clearOvFlowRange(){
   var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
@@ -5752,6 +5767,28 @@ function clearOvFlowRange(){
   renderReports();
 }
 window.clearOvFlowRange=clearOvFlowRange;
+
+/* Quick presets — the two raw date pickers alone were hard to use for a
+   simple "last week" look-back, so a one-click chip row sits in front of
+   them; picking a preset just fills the same #ovFlowFrom/#ovFlowTo inputs
+   renderReports() already reads, so no separate filter path to keep in sync. */
+function setOvFlowPreset(p){
+  $all('#ovFlowRangeBar .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.preset===p);});
+  var f=$('#ovFlowFrom'),t=$('#ovFlowTo');
+  if(!f||!t)return;
+  if(p==='all'){f.value='';t.value='';renderReports();return;}
+  var today=new Date();
+  var toStr=today.toISOString().slice(0,10);
+  var fromDate;
+  if(p==='7'){fromDate=new Date(today.getTime()-6*86400000);}
+  else if(p==='30'){fromDate=new Date(today.getTime()-29*86400000);}
+  else if(p==='month'){fromDate=new Date(today.getFullYear(),today.getMonth(),1);}
+  else{f.value='';t.value='';renderReports();return;}
+  f.value=fromDate.toISOString().slice(0,10);
+  t.value=toStr;
+  renderReports();
+}
+window.setOvFlowPreset=setOvFlowPreset;
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
@@ -6175,6 +6212,35 @@ function resetAll(){confirmA('ล้างข้อมูลทั้งหม�
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
   save();closeModal();toast('ล้างข้อมูลแล้ว');renderAll();});}
 window.resetAll=resetAll;
+
+/* ล้างข้อมูลทั้งหมด "ยกเว้นพนักงาน" — เหมือน resetAll() ทุกอย่าง แต่เก็บ
+   S.employees และตัวนับ seq.emp ไว้ (ทะเบียนพนักงานเป็นข้อมูลที่ตั้งไว้ล่วงหน้า
+   แยกจากข้อมูลธุรกรรม/สต็อกที่หมุนเวียนทุกวัน — ผู้ใช้ไม่ต้องมาลงทะเบียนพนักงาน
+   ใหม่ทุกครั้งที่ล้างข้อมูลทดสอบ) */
+function clearAllExceptEmployees(){
+  confirmA('ล้างข้อมูลทั้งหมด (ยกเว้นพนักงาน)?','ลบกล่อง/ลูกค้า/คลัง/ประวัติ/สต็อกถาวร — เก็บทะเบียนพนักงานไว้','ล้าง',true).then(function(ok){
+    if(!ok)return;
+    var keepEmployees=S.employees,keepEmpSeq=(S.seq||{}).emp||0;
+    S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},
+      seq:{do:0,emp:keepEmpSeq},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:keepEmployees,locations:{}};
+    save();closeModal();toast('ล้างข้อมูลแล้ว','เก็บข้อมูลพนักงานไว้');renderAll();
+  });
+}
+window.clearAllExceptEmployees=clearAllExceptEmployees;
+
+function openSystemSettingsModal(){
+  var h='<div class="mhead"><h3>ตั้งค่าระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+    +'<div class="c2-label">ข้อมูล</div>'
+    +'<button class="btn ghost" style="width:100%;justify-content:flex-start;margin-bottom:18px;" onclick="doBackup()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลดข้อมูล (JSON)</button>'
+    +'<div class="c2-label" style="color:var(--neg);">Danger Zone</div>'
+    +'<p class="muted small" style="margin:4px 0 12px;">ลบข้อมูลถาวร — ใช้เฉพาะตอนต้องการล้างข้อมูลทดสอบ/เริ่มใหม่เท่านั้น</p>'
+    +'<button class="btn red" style="width:100%;justify-content:flex-start;" onclick="clearAllExceptEmployees()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg></span> ล้างข้อมูลทั้งหมด (เก็บพนักงานไว้)</button>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
+  openModal(h);
+}
+window.openSystemSettingsModal=openSystemSettingsModal;
 /* the ⋯ menu button used to call seedDemo() directly with zero confirmation —
    one accidental click silently mixes 15 demo boxes/locations into whatever
    real data is already there. Route it through the same confirm pattern
