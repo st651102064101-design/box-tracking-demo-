@@ -3563,7 +3563,7 @@ window.printEmpBadgeWindow=printEmpBadgeWindow;
    คลิกพื้นหลัง/ปุ่มกากบาท ใช้บาร์โค้ด code128SVG ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์จริง
    ให้สแกนแล้วตรงกับสิ่งที่พิมพ์ออกมา ไม่ใช่ตัวหลอก */
 var empBadge={open:false,id:null,pts:[],theta:0,omega:0,cx:0,cy:0,s:1,seg:20,N:14,
-  anchor:{x:0,y:-26},anchorTargetY:0,drag:null,tilt:0,vx:0,t:0,raf:null,booted:false,mx:-9999,my:-9999};
+  anchor:{x:0,y:-26},anchorTargetY:0,anchorV:0,drag:null,tilt:0,vx:0,t:0,raf:null,booted:false,mx:-9999,my:-9999};
 function empBadgeSetFace(back){
   var flip=$('#empBadgeFlip');if(!flip)return;
   flip.style.transform='rotateY('+(back?180:0)+'deg)';
@@ -3603,7 +3603,7 @@ function openEmpBadge(id){
   var total=Math.max(150,vh*0.5-anchorY-half);
   empBadge.N=16;empBadge.seg=total/empBadge.N;
   empBadge.anchor.y=anchorY-(vh*0.55+CH*empBadge.s);
-  empBadge.anchorTargetY=anchorY;
+  empBadge.anchorTargetY=anchorY;empBadge.anchorV=0;
   empBadge.pts=[];
   for(var i=0;i<=empBadge.N;i++){var x=empBadge.anchor.x,y=empBadge.anchor.y+i*empBadge.seg;empBadge.pts.push({x:x,y:y,px:x,py:y});}
   empBadge.theta=0;empBadge.omega=0;empBadge.tilt=0;empBadge.drag=null;empBadge.t=0;
@@ -3671,9 +3671,24 @@ function empBadgeStep(){
   var eb=empBadge;
   if(!eb.open||!eb.pts.length)return;
   eb.t+=1;
-  if(Math.abs(eb.anchor.y-eb.anchorTargetY)>0.4)eb.anchor.y+=(eb.anchorTargetY-eb.anchor.y)*0.022;
+  /* Entrance: the clip ACCELERATES down to its resting height instead of easing
+     into it. An exponential ease (the *0.022 lerp this replaced) spends most of
+     its time crawling the last few pixels, which reads as a card drifting down
+     in slow motion; a constant downward acceleration is what a dropped badge
+     actually does, and it lands in roughly half a second. The rope is already
+     at full length, so the card is dragged down with it and keeps that
+     momentum when the clip stops — which is what produces the settle-swing. */
+  if(eb.anchor.y<eb.anchorTargetY){
+    eb.anchorV+=2.4;
+    eb.anchor.y=Math.min(eb.anchorTargetY,eb.anchor.y+eb.anchorV);
+    if(eb.anchor.y>=eb.anchorTargetY)eb.anchorV=0;
+  }
   var s=eb.s,CH=627,half=(CH*s)/2+44*s;
-  var g=0.34,air=0.985;
+  /* Weight: 0.34 px/frame² made the card feel like it was falling through
+     syrup. The card is ~4.7 px/mm here, so true 9.8 m/s² would be ~12.8
+     px/frame² — far too violent for a UI — but 0.95 is heavy enough to read as
+     a real laminated badge while staying watchable. */
+  var g=0.95,air=0.985;
   var breeze=Math.sin(eb.t*0.007)*0.008;
   var end=eb.pts[eb.N];
 
@@ -3722,8 +3737,8 @@ function empBadgeStep(){
     var prev=eb.pts[eb.N-1];
     var ropeA=Math.atan2(end.x-prev.x,end.y-prev.y);
     eb.omega+=(ropeA-eb.theta)*0.009;
-    eb.omega+=-Math.sin(eb.theta)*0.004;
-    eb.omega*=0.945;
+    eb.omega+=-Math.sin(eb.theta)*0.011;
+    eb.omega*=0.935;
     eb.theta=Math.max(-1.15,Math.min(1.15,eb.theta+eb.omega));
     var nx2=end.x-Math.sin(eb.theta)*half;
     eb.vx=nx2-eb.cx;eb.cx=nx2;
