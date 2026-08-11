@@ -975,7 +975,21 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออกวันนี้</div></div>
   </div>
 
-  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
+  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO — ตัวเลขสะสมนับตามช่วงวันที่ที่เลือก</span></div>
+  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
+    <span class="inv-view-sw" style="flex-shrink:0;">
+      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
+      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
+      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
+      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
+      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
+      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
+    </span>
+  </div>
   <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
 
   <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
@@ -1074,20 +1088,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="occ-grid reveal" id="ovOccupancy"></div>
 
   <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
-  <div class="row no-print reveal" id="ovFlowRangeBar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">
-    <span class="inv-view-sw" style="flex-shrink:0;">
-      <button type="button" class="ivs-btn active" data-preset="all" onclick="setOvFlowPreset('all')">ทั้งหมด</button>
-      <button type="button" class="ivs-btn" data-preset="7" onclick="setOvFlowPreset('7')">7 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="30" onclick="setOvFlowPreset('30')">30 วัน</button>
-      <button type="button" class="ivs-btn" data-preset="month" onclick="setOvFlowPreset('month')">เดือนนี้</button>
-    </span>
-    <span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">
-      <label for="ovFlowFrom" class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>
-      <input type="date" id="ovFlowFrom" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-      <label for="ovFlowTo" class="muted small" style="font-weight:400;white-space:nowrap;">ถึง</label>
-      <input type="date" id="ovFlowTo" onchange="onOvFlowRangeChange()" style="width:9.5em;flex:0 0 auto;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-    </span>
-  </div>
   <div class="tablecard reveal" id="ovTypeFlow"></div>
 
   <div class="sectlabel reveal">ประวัติการผ่าน Gate ล่าสุด (30 รายการ)</div>
@@ -5349,14 +5349,28 @@ var REPORT_DIRS=['missing','unreadable_tag'];
 function applyFloorReportHolds(){
   var changed=false;
   S.events.filter(function(e){return REPORT_DIRS.indexOf(e.dir)>=0&&e.tag;}).forEach(function(e){
-    var b=S.boxes[e.tag];if(!b||b.status!=='warehouse')return;
+    var b=S.boxes[e.tag];if(!b)return;
     var lastHist=(b.history||[]).length?b.history[b.history.length-1]:null;
     if(lastHist&&new Date(lastHist.ts)>=new Date(e.ts))return;
-    b.status='hold';b.lastSeenAt=e.ts;
-    if(!Array.isArray(b.history))b.history=[];
-    b.history.push({dir:'hold',ts:e.ts,reason:'พักอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+')',recorder:e.recorder||'PDA'});
-    auditEntry('HOLD',e.recorder||'PDA',e.tag,typeName(b.type),{status:'warehouse'},{status:'hold',reason:'แจ้งปัญหาจาก PDA'});
-    changed=true;
+    if(b.status==='warehouse'){
+      b.status='hold';b.lastSeenAt=e.ts;
+      if(!Array.isArray(b.history))b.history=[];
+      b.history.push({dir:'hold',ts:e.ts,reason:'พักอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+')',recorder:e.recorder||'PDA'});
+      auditEntry('HOLD',e.recorder||'PDA',e.tag,typeName(b.type),{status:'warehouse'},{status:'hold',reason:'แจ้งปัญหาจาก PDA'});
+      changed=true;
+    }else if(b.status==='out'){
+      /* กล่องที่ "ออกอยู่" ตอนถูกแจ้งปัญหาจาก PDA — พัก (hold) ไม่ได้เพราะอยู่กับ
+         ลูกค้าแล้ว ไม่ใช่ในคลัง เดิมรายงานประเภทนี้ค้างอยู่ในลิสต์ "แจ้งปัญหา
+         หน้างาน" ตลอดไปเพราะสถานะกล่องไม่เคยขยับ (renderFloorReports กรอง
+         เฉพาะกล่องที่กลับมา 'warehouse' ออกจากลิสต์) — ตีเป็นสูญหายอัตโนมัติแทน
+         เหมือน markLost() ที่พนักงานกดเอง เพื่อให้เรื่องถูกจัดการจริงและ
+         หลุดออกจากลิสต์ค้างในที่สุด */
+      b.status='lost';b.lostAt=e.ts;b.lostReason='pda-report';b.lastSeenAt=e.ts;
+      if(!Array.isArray(b.history))b.history=[];
+      b.history.push({dir:'lost',ts:e.ts,customer:b.customer,do:b.do,reason:'ตีสูญหายอัตโนมัติ — มีรายงานปัญหาจาก PDA ('+((EV_DIR[e.dir]||{}).t||e.dir)+') ขณะกล่องออกอยู่กับลูกค้า',recorder:e.recorder||'PDA'});
+      auditEntry('LOST',e.recorder||'PDA',e.tag,typeName(b.type),{status:'out'},{status:'lost',reason:'แจ้งปัญหาจาก PDA ขณะออกอยู่'});
+      changed=true;
+    }
   });
   if(changed)save();
 }
@@ -5522,36 +5536,10 @@ function renderReports(){
     typeBoxes[tk].push(b);
   });
 
-  /* Date-range filter for the flow report — the earliest date it makes sense
-     to pick is the earliest event actually on file; anything older can never
-     show data, so the "จาก" input's min= is clamped to that instead of
-     letting the operator pick a date that's guaranteed empty. */
-  var earliestEvMs=S.events.reduce(function(min,e){
-    var t=Date.parse(e.ts);return (!isNaN(t)&&(min==null||t<min))?t:min;
-  },null);
-  var fromEl=$('#ovFlowFrom'),toEl=$('#ovFlowTo');
-  if(earliestEvMs!=null){
-    var minDateStr=new Date(earliestEvMs).toISOString().slice(0,10);
-    if(fromEl){fromEl.min=minDateStr;if(fromEl.value&&fromEl.value<minDateStr)fromEl.value=minDateStr;}
-    if(toEl){toEl.min=minDateStr;if(toEl.value&&toEl.value<minDateStr)toEl.value=minDateStr;}
-  }
-  var todayStr=new Date().toISOString().slice(0,10);
-  if(fromEl){fromEl.max=todayStr;if(fromEl.value&&fromEl.value>todayStr)fromEl.value=todayStr;}
-  if(toEl){toEl.max=todayStr;if(toEl.value&&toEl.value>todayStr)toEl.value=todayStr;}
-  var rangeFromMs=fromEl&&fromEl.value?Date.parse(fromEl.value+'T00:00:00'):null;
-  var rangeToMs=toEl&&toEl.value?Date.parse(toEl.value+'T23:59:59'):null;
-  function inRange(ts){
-    var t=Date.parse(ts);
-    if(isNaN(t))return false;
-    if(rangeFromMs!=null&&t<rangeFromMs)return false;
-    if(rangeToMs!=null&&t>rangeToMs)return false;
-    return true;
-  }
-
-  // build events lookup per tag — restricted to the selected date range, if any
+  // build events lookup per tag (unfiltered — the date-range filter now lives
+  // on "สรุปตามลูกค้า" below, see rangeFromMs/rangeToMs/inRange there)
   var evByTag={};
   S.events.forEach(function(e){
-    if((rangeFromMs!=null||rangeToMs!=null)&&!inRange(e.ts))return;
     if(!evByTag[e.tag])evByTag[e.tag]={outs:[],ins:[]};
     if(e.dir==='out')evByTag[e.tag].outs.push(e);else if(e.dir==='in')evByTag[e.tag].ins.push(e);
   });
@@ -5709,7 +5697,40 @@ function renderReports(){
   all.forEach(function(b){if(!b.customer||!b.do)return;var k=b.customer+'|'+b.do;
     if(!custDo[k])custDo[k]={cust:b.customer,do:b.do,po:b.po||(S.doRecords[b.do]||{}).po||'',outAt:b.outAt,dueAt:b.dueAt,sent:0,ret:0};custDo[k].sent++;});
   all.forEach(function(b){(b.history||[]).forEach(function(h){if(h.dir==='in'&&h.do){var k=(h.customer||b.customer)+'|'+h.do;if(custDo[k])custDo[k].ret++;}});});
-  var ship={},ret={};S.events.forEach(function(e){if(!e.customer)return;if(e.dir==='out')ship[e.customer]=(ship[e.customer]||0)+1;else ret[e.customer]=(ret[e.customer]||0)+1;});
+
+  /* Date-range filter for "สรุปตามลูกค้า" — the earliest date it makes sense
+     to pick is the earliest event actually on file; anything older can never
+     show data, so the "จาก" input's min= is clamped to that instead of
+     letting the operator pick a date that's guaranteed empty. Only ส่งออกสะสม/
+     คืนสะสม (accumulated counts) respect the range — ค้างอยู่ is a live
+     snapshot of current status, not something a date range can filter. */
+  var earliestEvMs=S.events.reduce(function(min,e){
+    var t=Date.parse(e.ts);return (!isNaN(t)&&(min==null||t<min))?t:min;
+  },null);
+  var fromEl=$('#ovFlowFrom'),toEl=$('#ovFlowTo');
+  if(earliestEvMs!=null){
+    var minDateStr=new Date(earliestEvMs).toISOString().slice(0,10);
+    if(fromEl){fromEl.min=minDateStr;if(fromEl.value&&fromEl.value<minDateStr)fromEl.value=minDateStr;}
+    if(toEl){toEl.min=minDateStr;if(toEl.value&&toEl.value<minDateStr)toEl.value=minDateStr;}
+  }
+  var todayStr=new Date().toISOString().slice(0,10);
+  if(fromEl){fromEl.max=todayStr;if(fromEl.value&&fromEl.value>todayStr)fromEl.value=todayStr;}
+  if(toEl){toEl.max=todayStr;if(toEl.value&&toEl.value>todayStr)toEl.value=todayStr;}
+  var rangeFromMs=fromEl&&fromEl.value?Date.parse(fromEl.value+'T00:00:00'):null;
+  var rangeToMs=toEl&&toEl.value?Date.parse(toEl.value+'T23:59:59'):null;
+  function inRange(ts){
+    var t=Date.parse(ts);
+    if(isNaN(t))return false;
+    if(rangeFromMs!=null&&t<rangeFromMs)return false;
+    if(rangeToMs!=null&&t>rangeToMs)return false;
+    return true;
+  }
+
+  var ship={},ret={};S.events.forEach(function(e){
+    if(!e.customer)return;
+    if((rangeFromMs!=null||rangeToMs!=null)&&!inRange(e.ts))return;
+    if(e.dir==='out')ship[e.customer]=(ship[e.customer]||0)+1;else ret[e.customer]=(ret[e.customer]||0)+1;
+  });
   var grp={};all.forEach(function(b){if(b.customer&&b.status==='out'){grp[b.customer]=(grp[b.customer]||0)+1;}});
   var ck=Object.keys(S.customers);
   $('#ovByCust').innerHTML='<table><thead><tr><th></th><th>ลูกค้า</th><th class="r">ส่งออกสะสม</th><th class="r">คืนสะสม</th><th class="r">ค้างอยู่</th><th>สถานะ</th></tr></thead><tbody>'
