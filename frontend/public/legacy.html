@@ -5235,6 +5235,15 @@ function saveOutbound(){
      value — รอบคืน (return days) follows whichever customer the box actually
      ships to, not the form's customer if they differ. */
   var extraDoRecords={};
+  /* Representative due date for the printed DO label/toast — the label is
+     ONE physical piece of paper for the batch, so it can't show a different
+     due date per box the way b.dueDate (set per-box below) correctly does
+     when a multi-customer import gives boxes different return-day policies.
+     Uses the top-level form customer as "the" customer for that purpose,
+     same as it always did before per-box due dates existed. */
+  var batchC=S.customers[cust]||{};
+  var batchRd=formRd||batchC.returnDays||S.cfg.agingDays;
+  var batchDueDateStr=ddmmyyyy(new Date(new Date(outTs).getTime()+batchRd*86400000));
   pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
     var custForBox=pendingOutCustMap[t]||cust;
     var tsForBox=pendingOutTsMap[t]||outTs;
@@ -5268,7 +5277,7 @@ function saveOutbound(){
   /* Auto-print the Delivery Order label straight to the Zebra on the warehouse LAN.
      Fire-and-forget: the outbound is already saved, so a printer/LAN failure never
      blocks the workflow — it just warns. Works fully offline (no external internet). */
-  printDeliveryOrderLabel(doNo, custName(cust), dueDateStr, n);
+  printDeliveryOrderLabel(doNo, custName(cust), batchDueDateStr, n);
   toast('ส่งออกสำเร็จ',n+' ใบ → '+custName(cust)+' · '+doNo);renderAll();$('#scanOut').focus();
 }
 $('#btnShipOut').onclick=saveOutbound;
@@ -9464,15 +9473,29 @@ function openColumnMapModal(opts){
   /* Auto-create a Warehouse master record from the file's คลัง column when
      the name doesn't match anyone already on file — same reasoning as
      autoCreateCustomerIfNeeded below: every column the operator mapped ends
-     up stored in master data, not just referenced for a one-off import. No
-     gates are assigned yet (a file only gives a warehouse name, never gate
-     numbers) — the record shows up in Master ▸ คลัง & ประตู for the operator
-     to finish setting up gates on afterward. */
+     up stored in master data, not just referenced for a one-off import.
+
+     A file only ever gives a warehouse NAME, never gate numbers — but Gate
+     ขาออก can't auto-ship without a valid outGate to bind to (fixedGatesRef()
+     needs at least one gate to exist to auto-select). Leaving gates empty
+     meant the very first import into a fresh account (nothing set up in
+     Master ▸ คลัง & ประตู yet) could never actually ship — it silently
+     degraded to "queued, needs manual ยืนยันส่งออก" with no way to satisfy
+     the missing-gate validation short of leaving Gate ขาออก to go set one up
+     by hand first. One default gate (เข้า-ออกร่วมกัน, so it works for both
+     directions) is assigned automatically — numbered to continue the
+     system's existing gate sequence, or start at 1 if this is the very
+     first warehouse — so the operator can finish subdividing/renumbering it
+     properly later in Setup without the import itself ever being blocked. */
   function autoCreateWarehouseIfNeeded(name){
     var nm=String(name||'').trim();
     if(!nm)return null;
     var id=nextSeqId('WH-',Object.keys(S.warehouses));
-    S.warehouses[id]={id:id,name:nm,gates:[]};
+    var existingGates=Object.keys(S.gates||{}).map(Number).filter(function(n){return !isNaN(n);});
+    var defaultGate=(existingGates.length?Math.max.apply(null,existingGates):0)+1;
+    S.warehouses[id]={id:id,name:nm,gates:[defaultGate],gateType:'both',gateTypes:{}};
+    S.warehouses[id].gateTypes[defaultGate]='both';
+    rebuildGates();
     auditEntry('CREATE',USER,id,nm,null,S.warehouses[id]);
     save();
     return id;
@@ -9744,7 +9767,17 @@ function openColumnMapModal(opts){
        (gate is bound to the device, customer/DO/PO/etc. just got auto-filled
        above); if some required field is still missing, saveOutbound() shows
        its own toast explaining what and leaves the queue intact so the
-       operator can fill it in and confirm manually, same as before. */
+       operator can fill it in and confirm manually, same as before.
+
+       refreshGateDisplays() runs first because a completely fresh account
+       (nothing set up in Master ▸ คลัง & ประตู yet) may have JUST gotten its
+       first-ever gate from autoCreateWarehouseIfNeeded() above, mid-loop —
+       #outGate's hidden input only picks that up once this re-fires (it's
+       the same "only one valid gate for this direction — auto-select"
+       logic pickGate()'s UI already relies on), otherwise val('outGate')
+       would still read empty and block auto-ship on a gate that, by now,
+       actually exists. */
+    refreshGateDisplays();
     var autoShipped=false;
     if(added.length){
       var queuedBefore=pendingOut.length;
