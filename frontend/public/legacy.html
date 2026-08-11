@@ -1873,6 +1873,97 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
 
+<!-- ===== พนักงาน — บัตรพนักงานเสมือน (physics ID badge) =====
+     คลิกแถวพนักงานในหน้าตั้งค่า ▸ พนักงาน แล้วบัตรจะ "หล่น" ลงมาจากคลิปแขวนด้านบน
+     ลากเล่นได้ (จำลองแรงโน้มถ่วง/สายคล้อง), เอาเมาส์ชี้เพื่อพลิกดูด้านหลัง (เมนูจัดการ)
+     พิมพ์บาร์โค้ดจากรหัสบัตรพนักงานจริงด้วย Code128 (ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์) -->
+<div id="empBadgeOverlay" style="position:fixed;inset:0;z-index:400;display:none;">
+  <div id="empBadgeBackdrop" onclick="closeEmpBadge()" style="position:absolute;inset:0;background:rgba(20,20,22,.46);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);"></div>
+  <svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;">
+    <path id="empBadgeStrap" fill="none" stroke="var(--accent)" stroke-width="22" stroke-linejoin="round" stroke-linecap="butt"></path>
+    <path id="empBadgeStrapShade" fill="none" stroke="rgba(0,0,0,.14)" stroke-width="4" stroke-linejoin="round"></path>
+  </svg>
+  <div style="position:absolute;left:0;right:0;bottom:22px;text-align:center;color:rgba(255,255,255,.7);font-size:12px;pointer-events:none;">ลากบัตรเล่นได้ · เอาเมาส์ชี้เพื่อพลิกดูเมนูจัดการ · กด Esc หรือคลิกพื้นหลังเพื่อปิด</div>
+  <div id="empBadgeToast" style="position:absolute;left:50%;bottom:64px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;background:rgba(29,29,31,.92);color:#f5f5f7;font-size:13px;font-weight:500;opacity:0;transition:opacity .25s ease;pointer-events:none;white-space:nowrap;"></div>
+  <div id="empBadgeCard" style="position:absolute;left:0;top:0;width:280px;height:432px;cursor:grab;perspective:1400px;">
+    <div style="position:absolute;left:50%;top:0;transform:translate(-50%,-96%);width:34px;height:44px;display:flex;flex-direction:column;align-items:center;">
+      <div style="width:16px;height:16px;border:3px solid #b9b9c0;border-radius:50%;"></div>
+      <div style="width:17px;height:28px;margin-top:-3px;border-radius:6px;background:linear-gradient(100deg,#f2f2f5,#b9b9c0 55%,#e8e8ec);border:.5px solid #a9a9b2;box-shadow:0 2px 5px rgba(0,0,0,.25);"></div>
+    </div>
+    <div id="empBadgeFlip" style="position:absolute;inset:0;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.22,1,.36,1);">
+      <div style="position:absolute;inset:0;border-radius:22px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 28px 64px rgba(0,0,0,.32),0 2px 6px rgba(0,0,0,.16);">
+        <div style="height:46px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
+          <div style="width:60px;height:9px;border-radius:999px;background:var(--line2);"></div>
+          <button onclick="event.stopPropagation();closeEmpBadge()" title="ปิด" style="position:absolute;right:10px;top:9px;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div style="padding:18px 20px 0;display:flex;align-items:center;gap:13px;">
+          <div id="empBadgeAvatar" style="width:64px;height:64px;flex:0 0 auto;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:22px;font-weight:700;border:3px solid var(--surface);box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+          <div style="min-width:0;">
+            <div id="empBadgeName" style="font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+            <div id="empBadgeRole" style="font-size:13px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+          </div>
+        </div>
+        <div id="empBadgeStatus" style="margin:10px 20px 0;display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;"></div>
+        <div style="padding:14px 20px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;font-size:12.5px;">
+          <div><div style="color:var(--faint);font-weight:600;letter-spacing:.04em;font-size:10.5px;">แผนก</div><div id="empBadgeDept" style="margin-top:1px;font-weight:500;"></div></div>
+          <div><div style="color:var(--faint);font-weight:600;letter-spacing:.04em;font-size:10.5px;">คลัง</div><div id="empBadgeWh" style="margin-top:1px;font-weight:500;"></div></div>
+          <div><div style="color:var(--faint);font-weight:600;letter-spacing:.04em;font-size:10.5px;">กะ</div><div id="empBadgeShift" style="margin-top:1px;font-weight:500;"></div></div>
+          <div><div style="color:var(--faint);font-weight:600;letter-spacing:.04em;font-size:10.5px;">เบอร์โทร</div><div id="empBadgePhone" style="margin-top:1px;font-weight:500;font-family:var(--mono);"></div></div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 20px 14px;background:var(--surface2);border-top:.5px solid var(--line);">
+          <div id="empBadgeBarcode" style="height:38px;border-radius:4px;background-color:#fff;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+            <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink2);"></span>
+            <span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--faint);">CODE128</span>
+          </div>
+        </div>
+        <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.6);display:none;place-items:center;pointer-events:none;">
+          <div style="transform:rotate(-32deg);text-align:center;line-height:1;white-space:nowrap;">
+            <div style="font-size:40px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);">พ้นสภาพ</div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;inset:0;border-radius:22px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 28px 64px rgba(0,0,0,.32),0 2px 6px rgba(0,0,0,.16);display:flex;flex-direction:column;">
+        <div style="height:46px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
+          <div style="width:60px;height:9px;border-radius:999px;background:var(--line2);"></div>
+          <button onclick="event.stopPropagation();closeEmpBadge()" title="ปิด" style="position:absolute;left:10px;top:9px;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div style="padding:16px 18px 0;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--accentInk);">จัดการบัตรพนักงาน</div>
+          <div id="empBadgeNameBack" style="font-size:18px;font-weight:700;letter-spacing:-.02em;margin-top:3px;"></div>
+        </div>
+        <div style="padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;">
+          <button onclick="event.stopPropagation();empBadgeAction('edit')" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:13px;background:var(--surface2);border:.5px solid var(--line);font-size:14px;font-weight:500;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg>แก้ไขข้อมูลพนักงาน
+          </button>
+          <button id="empBadgeCredBtn" onclick="event.stopPropagation();empBadgeAction('cred')" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:13px;background:var(--surface2);border:.5px solid var(--line);font-size:14px;font-weight:500;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span id="empBadgeCredLabel">ตั้ง/เปลี่ยนรหัสผ่าน</span>
+          </button>
+          <button onclick="event.stopPropagation();empBadgeAction('print')" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:13px;background:var(--surface2);border:.5px solid var(--line);font-size:14px;font-weight:500;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="5"/><path d="M6 14H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2"/><rect x="6" y="13" width="12" height="8"/></svg>พิมพ์บัตรใหม่ (ZPL ^BC)
+          </button>
+          <button id="empBadgeDelBtn" onclick="event.stopPropagation();empBadgeAction('del')" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:13px;background:var(--negSoft);border:.5px solid rgba(215,0,21,.22);font-size:14px;font-weight:500;color:var(--neg);">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg>ลบพนักงานออกจากระบบ
+          </button>
+        </div>
+        <div style="margin-top:auto;padding:0 20px 16px;">
+          <div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--faint);">รหัสสแกน</div>
+          <div id="empBadgeScanCodeBack" style="font-family:var(--mono);font-size:13px;color:var(--ink2);margin-top:1px;"></div>
+        </div>
+        <div id="empBadgeInactiveBack" style="position:absolute;inset:0;background:rgba(12,12,14,.6);display:none;place-items:center;pointer-events:none;">
+          <div style="transform:rotate(-32deg);text-align:center;line-height:1;white-space:nowrap;">
+            <div style="font-size:40px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);">พ้นสภาพ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
      works 100% offline (no CDN). Added for the Gate-Out Excel import feature. -->
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -2368,6 +2459,7 @@ function formatPhoneOnInput(el){
   el.value=out;
 }
 function setv(id,v){var e=$('#'+id);if(e)e.value=(v==null?'':v);}
+function setText(id,v){var e=$('#'+id);if(e)e.textContent=(v==null?'':v);}
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function daysSince(s){if(!s)return 0;return Math.floor((now()-new Date(s))/86400000);}
@@ -3257,23 +3349,11 @@ $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textConten
 /* Row click → one modal with every per-employee action, instead of a button
    rail crammed into the row (unreadable once access/status pills are added). */
 function openEmpActions(id){
-  var e=S.employees[id];if(!e)return;
-  var empAdmin=isAdmin();
-  var canEdit=empAdmin||(currentEmp()&&currentEmp().id===id);
-  var isSelf=currentEmp()&&currentEmp().id===id;
-  var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-  openModal(
-    '<div class="mhead"><h3>'+esc(e.name||e.id)+'</h3><button class="x" data-close>'+IC('close')+'</button></div>'
-    +'<div class="mbody">'
-      +'<p class="desc" style="margin-top:0;">'+esc(e.id)+' · '+esc(e.role||'-')+(e.dept?' · '+esc(e.dept):'')+(whTxt!=='-'?' · '+whTxt:'')+'</p>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'
-        +'<button class="btn ghost" title="แสดงบาร์โค้ดสำหรับยิงเข้าระบบที่ PDA" onclick="closeModal();printEmpBadge(\''+esc(id)+'\')">บัตร</button>'
-        +(canEdit?'<button class="btn ghost" onclick="closeModal();editEmp(\''+esc(id)+'\')">แก้ไข</button>':'')
-        +(empAdmin?'<button class="btn ghost" title="ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้" onclick="closeModal();setEmpCredentials(\''+esc(id)+'\',\''+esc(e.name||id)+'\',\''+esc(e.loginUsername||'')+'\')">'+(e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน')+'</button>':'')
-        +(empAdmin&&!isSelf?'<button class="btn red" onclick="closeModal();delEmp(\''+esc(id)+'\')">ลบ</button>':'')
-      +'</div>'
-    +'</div>'
-  );
+  /* Row click now opens the animated ID-badge overlay (openEmpBadge, defined
+     further down alongside its physics engine) instead of a plain action
+     modal — the badge's back face carries the same actions this modal used
+     to (บัตร/แก้ไข/ตั้งรหัสผ่าน/ลบ), just reached by flipping the card. */
+  openEmpBadge(id);
 }
 window.openEmpActions=openEmpActions;
 function editEmp(id){
@@ -3434,6 +3514,191 @@ function printEmpBadgeWindow(id){
   w.focus();
 }
 window.printEmpBadgeWindow=printEmpBadgeWindow;
+
+/* ===== พนักงาน — บัตรพนักงานเสมือน (physics ID badge) =====
+   คลิกแถวพนักงาน → บัตรหล่นลงมาจากคลิปแขวนด้านบนภายใต้แรงโน้มถ่วงจำลอง (verlet
+   integration บนสายคล้อง N ท่อน), ลากเล่นได้, ปล่อยแล้วแกว่งแล้วนิ่ง; เอาเมาส์ชี้
+   เพื่อพลิกดูเมนูจัดการด้านหลัง — ปุ่มด้านหลังเรียกฟังก์ชันจริงเดิม (editEmp/
+   setEmpCredentials/printEmpBadge/delEmp) ผ่าน empBadgeAction() ปิดด้วย Esc/
+   คลิกพื้นหลัง/ปุ่มกากบาท ใช้บาร์โค้ด code128SVG ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์จริง
+   ให้สแกนแล้วตรงกับสิ่งที่พิมพ์ออกมา ไม่ใช่ตัวหลอก */
+var empBadge={open:false,id:null,pts:[],theta:0,omega:0,cx:0,cy:0,s:1,seg:20,N:14,
+  anchor:{x:0,y:-26},anchorTargetY:0,drag:null,tilt:0,vx:0,t:0,raf:null,booted:false,mx:-9999,my:-9999};
+function empBadgeSetFace(back){
+  var flip=$('#empBadgeFlip');if(!flip)return;
+  flip.style.transform='rotateY('+(back?180:0)+'deg)';
+}
+function empBadgeToast(msg){
+  var el=$('#empBadgeToast');if(!el)return;
+  el.textContent=msg;el.style.opacity='1';
+  clearTimeout(empBadge._toastT);
+  empBadge._toastT=setTimeout(function(){el.style.opacity='0';},2200);
+}
+function empBadgeBoot(){
+  if(empBadge.booted)return;empBadge.booted=true;
+  empBadge.raf=requestAnimationFrame(empBadgeTick);
+  window.addEventListener('keydown',empBadgeOnKey);
+  window.addEventListener('pointermove',empBadgeOnMove);
+  window.addEventListener('pointerup',empBadgeRelease);
+  window.addEventListener('pointercancel',empBadgeRelease);
+}
+function empBadgeOnKey(ev){if(ev.key==='Escape'&&empBadge.open)closeEmpBadge();}
+function empBadgeOnMove(ev){empBadge.mx=ev.clientX;empBadge.my=ev.clientY;if(empBadge.drag){empBadge.drag.x=ev.clientX;empBadge.drag.y=ev.clientY;}}
+function empBadgeGrab(ev){
+  if(!empBadge.open)return;ev.preventDefault();
+  var c=Math.cos(-empBadge.theta),s=Math.sin(-empBadge.theta);
+  var dx=ev.clientX-empBadge.cx,dy=ev.clientY-empBadge.cy;
+  empBadge.drag={lx:(dx*c-dy*s)/empBadge.s,ly:(dx*s+dy*c)/empBadge.s,x:ev.clientX,y:ev.clientY};
+  var card=$('#empBadgeCard');if(card)card.style.cursor='grabbing';
+}
+function empBadgeRelease(){empBadge.drag=null;var card=$('#empBadgeCard');if(card)card.style.cursor='grab';}
+function openEmpBadge(id){
+  var e=S.employees[id];if(!e)return;
+  var vw=window.innerWidth,vh=window.innerHeight;
+  var CW=280,CH=432;
+  empBadge.s=Math.max(.55,Math.min(1,(vh*0.8)/CH));
+  var half=(CH*empBadge.s)/2+40*empBadge.s;
+  var anchorY=-Math.max(60,vh*0.15);
+  empBadge.anchor={x:vw/2,y:anchorY};
+  var total=Math.max(130,vh*0.46-anchorY-half);
+  empBadge.N=14;empBadge.seg=total/empBadge.N;
+  empBadge.anchor.y=anchorY-(vh*0.5+CH*empBadge.s);
+  empBadge.anchorTargetY=anchorY;
+  empBadge.pts=[];
+  for(var i=0;i<=empBadge.N;i++){var x=empBadge.anchor.x,y=empBadge.anchor.y+i*empBadge.seg;empBadge.pts.push({x:x,y:y,px:x,py:y});}
+  empBadge.theta=0;empBadge.omega=0;empBadge.tilt=0;empBadge.drag=null;empBadge.t=0;
+  empBadge.cx=empBadge.anchor.x;empBadge.cy=empBadge.pts[empBadge.N].y+half;
+  empBadge.open=true;empBadge.id=id;
+  empBadgeSetFace(false);
+
+  var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+  var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
+  var stBgMap={ok:'var(--posSoft)',warn:'var(--warnSoft)',bad:'var(--negSoft)'};
+  var stFgMap={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'};
+  var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
+  var scanCode=(e.scanCode||e.id).toUpperCase();
+  setText('empBadgeAvatar',initials);
+  setText('empBadgeName',e.name||e.id);
+  setText('empBadgeRole',e.role||'-');
+  var stEl=$('#empBadgeStatus');if(stEl){stEl.textContent=st.t;stEl.style.background=stBgMap[st.c]||'var(--posSoft)';stEl.style.color=stFgMap[st.c]||'var(--pos)';}
+  setText('empBadgeDept',e.dept||'-');
+  setText('empBadgeWh',whTxt);
+  setText('empBadgeShift',EMP_SHIFT[e.shift]||'-');
+  setText('empBadgePhone',e.phone||'-');
+  setText('empBadgeScanCode',scanCode);
+  setText('empBadgeScanCodeBack',scanCode);
+  setText('empBadgeNameBack',e.name||e.id);
+  var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,38);
+  var inactive=e.status==='inactive';
+  var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
+  if(fi)fi.style.display=inactive?'grid':'none';
+  if(bi)bi.style.display=inactive?'grid':'none';
+
+  var empAdmin=isAdmin(),self=currentEmp()&&currentEmp().id===id;
+  var credLbl=$('#empBadgeCredLabel');if(credLbl)credLbl.textContent=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
+  var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'flex':'none';
+  var delBtn=$('#empBadgeDelBtn');if(delBtn)delBtn.style.display=(empAdmin&&!self)?'flex':'none';
+
+  var ov=$('#empBadgeOverlay');if(ov)ov.style.display='block';
+  empBadgeBoot();
+}
+window.openEmpBadge=openEmpBadge;
+function closeEmpBadge(){
+  empBadge.open=false;
+  var ov=$('#empBadgeOverlay');if(ov)ov.style.display='none';
+}
+window.closeEmpBadge=closeEmpBadge;
+function empBadgeAction(kind){
+  var id=empBadge.id;var e=S.employees[id];if(!e)return;
+  closeEmpBadge();
+  if(kind==='edit')editEmp(id);
+  else if(kind==='cred')setEmpCredentials(id,e.name||id,e.loginUsername||'');
+  else if(kind==='print')printEmpBadge(id);
+  else if(kind==='del')delEmp(id);
+}
+window.empBadgeAction=empBadgeAction;
+function empBadgeTick(){empBadge.raf=requestAnimationFrame(empBadgeTick);empBadgeStep();}
+function empBadgeStep(){
+  var eb=empBadge;
+  if(!eb.open||!eb.pts.length)return;
+  eb.t+=1;
+  if(Math.abs(eb.anchor.y-eb.anchorTargetY)>0.4)eb.anchor.y+=(eb.anchorTargetY-eb.anchor.y)*0.022;
+  var s=eb.s,CH=432,half=(CH*s)/2+40*s;
+  var g=0.34,air=0.985;
+  var breeze=Math.sin(eb.t*0.007)*0.008;
+  var end=eb.pts[eb.N];
+
+  if(eb.drag){
+    var lag=Math.max(-0.5,Math.min(0.5,-eb.vx*0.028));
+    eb.omega+=(lag-eb.theta)*0.055;eb.omega*=0.80;
+    eb.theta=Math.max(-0.9,Math.min(0.9,eb.theta+eb.omega));
+    var c=Math.cos(eb.theta),sn=Math.sin(eb.theta);
+    var tx=eb.drag.x-(eb.drag.lx*c-eb.drag.ly*sn)*s,ty=eb.drag.y-(eb.drag.lx*sn+eb.drag.ly*c)*s;
+    var nx=eb.cx+(tx-eb.cx)*0.36,ny=eb.cy+(ty-eb.cy)*0.36;
+    eb.vx=nx-eb.cx;eb.cx=nx;eb.cy=ny;
+    var clipX=eb.cx+Math.sin(eb.theta)*half,clipY=eb.cy-Math.cos(eb.theta)*half;
+    var dx=clipX-eb.anchor.x,dy=clipY-eb.anchor.y;
+    var d=Math.hypot(dx,dy)||0.001,max=eb.seg*eb.N;
+    if(d>max){
+      var allowed=max+(d-max)*0.18;
+      var kx=eb.anchor.x+(dx/d)*allowed-clipX,ky=eb.anchor.y+(dy/d)*allowed-clipY;
+      clipX+=kx;clipY+=ky;eb.cx+=kx;eb.cy+=ky;
+    }
+    end.px=end.x;end.py=end.y;end.x=clipX;end.y=clipY;
+  }
+
+  for(var i=1;i<=eb.N;i++){
+    if(eb.drag&&i===eb.N)continue;
+    var p=eb.pts[i];
+    var vx=(p.x-p.px)*air+breeze,vy=(p.y-p.py)*air;
+    p.px=p.x;p.py=p.y;p.x+=vx;p.y+=vy+g;
+  }
+  for(var k=0;k<10;k++){
+    eb.pts[0].x=eb.anchor.x;eb.pts[0].y=eb.anchor.y;
+    for(var j=0;j<eb.N;j++){
+      var a=eb.pts[j],b=eb.pts[j+1];
+      var ddx=b.x-a.x,ddy=b.y-a.y;
+      var dd=Math.hypot(ddx,ddy)||0.001;
+      var diff=(dd-eb.seg)/dd*0.5;
+      var ox=ddx*diff,oy=ddy*diff;
+      var aFixed=j===0,bFixed=(j+1===eb.N)&&!!eb.drag;
+      if(aFixed&&bFixed)continue;
+      if(aFixed){b.x-=ox*2;b.y-=oy*2;}
+      else if(bFixed){a.x+=ox*2;a.y+=oy*2;}
+      else{a.x+=ox;a.y+=oy;b.x-=ox;b.y-=oy;}
+    }
+  }
+
+  if(!eb.drag){
+    var prev=eb.pts[eb.N-1];
+    var ropeA=Math.atan2(end.x-prev.x,end.y-prev.y);
+    eb.omega+=(ropeA-eb.theta)*0.009;
+    eb.omega+=-Math.sin(eb.theta)*0.004;
+    eb.omega*=0.945;
+    eb.theta=Math.max(-1.15,Math.min(1.15,eb.theta+eb.omega));
+    var nx2=end.x-Math.sin(eb.theta)*half;
+    eb.vx=nx2-eb.cx;eb.cx=nx2;
+    eb.cy=end.y+Math.cos(eb.theta)*half;
+  }
+
+  eb.tilt+=(Math.max(-16,Math.min(16,eb.vx*1.6))-eb.tilt)*0.12;
+
+  var card=$('#empBadgeCard');
+  if(card)card.style.transform='translate('+(eb.cx-140)+'px,'+(eb.cy-216)+'px) rotate('+eb.theta+'rad) scale('+s+')';
+  var d2='M'+eb.pts[0].x.toFixed(1)+','+eb.pts[0].y.toFixed(1);
+  for(var m=1;m<=eb.N;m++)d2+=' L'+eb.pts[m].x.toFixed(1)+','+eb.pts[m].y.toFixed(1);
+  var sw=(22*s).toFixed(1);
+  var strap=$('#empBadgeStrap');if(strap){strap.setAttribute('d',d2);strap.setAttribute('stroke-width',sw);}
+  var shade=$('#empBadgeStrapShade');if(shade){shade.setAttribute('d',d2);shade.setAttribute('stroke-width',(4*s).toFixed(1));}
+}
+(function(){
+  var card=document.getElementById('empBadgeCard');
+  if(!card)return;
+  card.addEventListener('pointerdown',empBadgeGrab);
+  card.addEventListener('mouseenter',function(){empBadgeSetFace(true);});
+  card.addEventListener('mouseleave',function(){empBadgeSetFace(false);});
+})();
+
 /* Real sign-out: clears the JWT this tab holds and sends the whole browser
    tab (not just the /legacy.html iframe) to /login. Referenced from the
    "ออกจากระบบ" button (which already defensively checks for it) but never
