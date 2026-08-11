@@ -314,10 +314,9 @@ class ApiClient {
         as Map<String, dynamic>;
   }
 
-  /// POST /api/reports { kind, tag, note? } — the PDA's floor-exception
-  /// buttons ("ของหาย" / "อ่านแท็กไม่ติด / ป้ายหาย" / "กล่องชำรุด"). Each one
-  /// flips the box's status/flags, not just logs a note — see
-  /// ReportProblemScreen and the backend route's own doc comment.
+  /// POST /api/reports { kind, tag, note? } — flips a box's status/flags to
+  /// record a floor exception ("missing" / "unreadable_tag" / "damaged"),
+  /// not just logs a note — see the backend route's own doc comment.
   Future<Map<String, dynamic>> report({
     required String kind,
     required String tag,

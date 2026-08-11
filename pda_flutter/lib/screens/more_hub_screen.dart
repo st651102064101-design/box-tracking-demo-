@@ -8,10 +8,9 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 /// "เมนูอื่นๆ" — the second (and last) primary-menu slot, for floor actions
-/// besides Gate In/Out: looking a box up (Track), ตรวจนับ (Cycle Count),
+/// besides Gate In/Out: looking a box up (Track), ตรวจนับ (Cycle Count), and
 /// ค้นหา/เรดาร์ (RFID Locate — finds a box that already has a tag, doesn't
-/// bind one), and the "ของหาย" / "กล่องชำรุด" / "อ่านแท็กไม่ติด"
-/// floor-exception reports.
+/// bind one).
 ///
 /// Deliberately excluded: "ลงทะเบียนกล่องใหม่" (its create→label→**rfid**→
 /// **putaway** flow), "ย้ายตำแหน่ง" (a zone/rack/shelf/slot picker built on
@@ -29,7 +28,6 @@ class MoreHubScreen extends StatelessWidget {
     1: 'track',
     2: 'cycleCount',
     3: 'locate',
-    4: 'reportProblem',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -47,9 +45,6 @@ class MoreHubScreen extends StatelessWidget {
         break;
       case 'locate':
         c.goLocate();
-        break;
-      case 'reportProblem':
-        if (c.canScan) c.goReportProblem();
         break;
     }
     return KeyEventResult.handled;
@@ -131,24 +126,6 @@ class MoreHubScreen extends StatelessWidget {
                     sub: 'Search / Radar',
                     onTap: c.goLocate,
                   ),
-                  if (c.canScan) ...[
-                    const SizedBox(height: 10),
-                    // "พัก / แจ้งชำรุด" used to be its own tile here — it now
-                    // lives as a reason inside "แจ้งปัญหาหน้างาน" (its
-                    // "กล่องชำรุด" tile forwards straight into
-                    // HoldReleaseScreen), so an operator has one place to
-                    // start from for anything wrong with a box, not two
-                    // similarly-named tiles to choose between.
-                    _tile(
-                      number: 4,
-                      icon: Icons.report_gmailerrorred_outlined,
-                      color: C.red,
-                      bg: C.redBg,
-                      title: loc.t('แจ้งปัญหาหน้างาน'),
-                      sub: loc.t('ของหาย / กล่องชำรุด / อ่านแท็กไม่ติด'),
-                      onTap: c.goReportProblem,
-                    ),
-                  ],
                 ],
               ),
             ),

@@ -30,7 +30,6 @@ enum Screen {
   cycleCount,
   moreHub,
   holdRelease,
-  reportProblem,
   locationInquiry,
 }
 
@@ -1187,12 +1186,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
-  void goReportProblem() {
-    screen = Screen.reportProblem;
-    notifyListeners();
-  }
-
   /// "เช็คช่อง" — LocationInquiryScreen, the reverse of "หากล่อง": scan a
   /// shelf and see what the system believes is on it.
   void goLocationInquiry() {
@@ -1971,7 +1964,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         screen != Screen.transfer &&
         screen != Screen.cycleCount &&
         screen != Screen.holdRelease &&
-        screen != Screen.reportProblem &&
         screen != Screen.locationInquiry) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // Settings is included here — its RFID diagnostics panel has its own

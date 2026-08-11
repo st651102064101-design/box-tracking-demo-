@@ -24,8 +24,8 @@ class HomeScreen extends StatelessWidget {
   ///
   /// Home keeps the two things every operator needs on every single scan
   /// (Gate In/Out) plus one hub for everything else — ตรวจนับ / ค้นหา/เรดาร์ /
-  /// ติดตามกล่อง / แจ้งปัญหาหน้างาน live inside MoreHubScreen, which itself
-  /// excludes anything Putaway/rack/RFID-binding (see more_hub_screen.dart).
+  /// ติดตามกล่อง live inside MoreHubScreen, which itself excludes anything
+  /// Putaway/rack/RFID-binding (see more_hub_screen.dart).
   static const _keyActions = <int, String>{
     1: 'out',
     2: 'in',
@@ -333,7 +333,7 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     // same digit that jumps here from the keyboard. Colour groups follow
     // one convention throughout: green = inbound, blue = outbound/transfer,
     // red = everything-else. Home only keeps Gate In/Out plus one hub for
-    // the rest (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง / แจ้งปัญหาหน้างาน —
+    // the rest (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง —
     // MoreHubScreen leaves out anything Putaway/rack/RFID-binding).
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)

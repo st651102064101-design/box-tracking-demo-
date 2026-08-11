@@ -450,8 +450,6 @@ class LocaleController extends ChangeNotifier {
     'พัก / แจ้งชำรุด': 'Hold / flag damage',
     'กล่องที่อยู่ในคลังแล้ว — ชำรุดทีหลัง, พักรอ QC, หรือปลดพัก':
         'A box already in the warehouse — damaged later, held for QC, or released',
-    'แจ้งปัญหาหน้างาน': 'Report a floor problem',
-    'ของหาย / ช่องเก็บเต็ม': 'Missing box / bin full',
     'เช็คช่อง': 'Check a bin',
     'ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่':
         'Scan a shelf barcode to see what should be there',
