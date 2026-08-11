@@ -19,45 +19,45 @@ class Prefs {
       Prefs(await SharedPreferences.getInstance());
 
   // connection / device account
-  static const _kBaseUrl = 'boxtrace_base_url';
-  static const _kUsername = 'boxtrace_username';
-  static const _kPassword = 'boxtrace_password';
-  static const _kToken = 'boxtrace_token';
+  static const _kBaseUrl = 'smarttrace_base_url';
+  static const _kUsername = 'smarttrace_username';
+  static const _kPassword = 'smarttrace_password';
+  static const _kToken = 'smarttrace_token';
 
   // this device's fixed post (warehouse + gate) and behaviour
-  static const _kDeviceWh = 'boxtrace_device_wh';
-  static const _kDeviceGate = 'boxtrace_device_gate';
-  static const _kDeviceConfigured = 'boxtrace_device_configured';
-  static const _kDeviceModel = 'boxtrace_device_model';
+  static const _kDeviceWh = 'smarttrace_device_wh';
+  static const _kDeviceGate = 'smarttrace_device_gate';
+  static const _kDeviceConfigured = 'smarttrace_device_configured';
+  static const _kDeviceModel = 'smarttrace_device_model';
 
-  static const _kStateCache = 'boxtrace_state_cache';
-  static const _kOutbox = 'boxtrace_pda_outbox';
-  static const _kLang = 'boxtrace_lang';
-  static const _kDark = 'boxtrace_dark';
-  static const _kRfidMinRssi = 'boxtrace_rfid_min_rssi';
-  static const _kRfidPowerPercent = 'boxtrace_rfid_power_percent';
-  static const _kRfidSoundId = 'boxtrace_rfid_sound_id';
-  static const _kRfidSoundVolume = 'boxtrace_rfid_sound_volume';
-  static const _kRfidRegCount = 'boxtrace_rfid_reg_count';
-  static const _kRfidRegDate = 'boxtrace_rfid_reg_date';
-  static const _kHideMaxRangeAlert = 'boxtrace_hide_max_range_alert';
+  static const _kStateCache = 'smarttrace_state_cache';
+  static const _kOutbox = 'smarttrace_pda_outbox';
+  static const _kLang = 'smarttrace_lang';
+  static const _kDark = 'smarttrace_dark';
+  static const _kRfidMinRssi = 'smarttrace_rfid_min_rssi';
+  static const _kRfidPowerPercent = 'smarttrace_rfid_power_percent';
+  static const _kRfidSoundId = 'smarttrace_rfid_sound_id';
+  static const _kRfidSoundVolume = 'smarttrace_rfid_sound_volume';
+  static const _kRfidRegCount = 'smarttrace_rfid_reg_count';
+  static const _kRfidRegDate = 'smarttrace_rfid_reg_date';
+  static const _kHideMaxRangeAlert = 'smarttrace_hide_max_range_alert';
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
   // properties of the terminal itself. Persisted (not just in-memory) so the
   // "ล่าสุด" pick still remembers after the app restarts.
-  static const _kLastWh = 'boxtrace_last_wh';
-  static const _kLastGate = 'boxtrace_last_gate';
+  static const _kLastWh = 'smarttrace_last_wh';
+  static const _kLastGate = 'smarttrace_last_gate';
 
   // The employee who most recently started a shift on this terminal, so the
   // badge screen can float them to the top of "หรือแตะชื่อของคุณ" instead of
   // making the same person hunt for their own name in a long alphabetical
   // list every time. Per-device, same as the คลัง/ประตู shortcut above.
-  static const _kLastEmp = 'boxtrace_last_emp';
+  static const _kLastEmp = 'smarttrace_last_emp';
 
   // per-device memory of "asked this employee to set a PIN, they skipped" —
   // the PIN itself is server-side, see [pinSkipped]/[skipPin]/[clearPinSkip].
-  static const _kPinSkipped = 'boxtrace_pin_skipped';
+  static const _kPinSkipped = 'smarttrace_pin_skipped';
 
   String get lang => _p.getString(_kLang) ?? 'th';
   set lang(String v) => _p.setString(_kLang, v);
@@ -128,10 +128,10 @@ class Prefs {
 
   /// Baked in at build time so a device build ships pointing at the right host
   /// without an operator having to type a URL on a handheld keypad:
-  ///   flutter build apk --dart-define=BOXTRACE_API_BASE=http://192.168.3.128:4000
+  ///   flutter build apk --dart-define=SMARTTRACE_API_BASE=http://192.168.3.128:4000
   /// Empty (the default) falls through to the per-platform guesses below.
   static const _compiledBaseUrl =
-      String.fromEnvironment('BOXTRACE_API_BASE', defaultValue: '');
+      String.fromEnvironment('SMARTTRACE_API_BASE', defaultValue: '');
 
   String get baseUrl {
     final saved = _p.getString(_kBaseUrl);
@@ -280,7 +280,7 @@ class Prefs {
   // last confirmed for this person on this device", not enough to recover the
   // PIN from a lost or stolen terminal. Refreshed on every successful online
   // verify/set, so offline access is never more than one online sign-in stale.
-  static const _kPinHashPrefix = 'boxtrace_pin_hash_';
+  static const _kPinHashPrefix = 'smarttrace_pin_hash_';
 
   static String _pinHash(String employeeId, String pin) =>
       sha256.convert(utf8.encode('$employeeId:$pin')).toString();

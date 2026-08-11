@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:boxtrace_pda/models/state_snapshot.dart';
+import 'package:smarttrace_pda/models/state_snapshot.dart';
 
 /// Covers the pure logic behind the RFID-screen fixes in this change. The
 /// screens themselves need a live reader plus a mocked platform channel to

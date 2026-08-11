@@ -4,7 +4,7 @@ import '../theme.dart';
 import 'prefs.dart';
 
 /// Light/dark toggle for the PDA app, mirroring the moon/sun switch already
-/// used in the BoxTrace web reference — persists the choice like
+/// used in the SmartTrace web reference — persists the choice like
 /// [LocaleController] does for language, and re-applies [C]'s whole palette
 /// on toggle so every screen re-themes without per-widget plumbing.
 class ThemeController extends ChangeNotifier {

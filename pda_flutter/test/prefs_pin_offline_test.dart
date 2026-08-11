@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:boxtrace_pda/services/prefs.dart';
+import 'package:smarttrace_pda/services/prefs.dart';
 
 /// Covers the offline PIN fallback added for gate terminals that lose the
 /// backend mid-shift (see login_screen.dart's _verifyThenEnter): the server
@@ -51,7 +51,7 @@ void main() {
     final raw = await SharedPreferences.getInstance();
     final p = Prefs(raw);
     p.cachePinHash('emp-1', '4821');
-    final stored = raw.getString('boxtrace_pin_hash_emp-1');
+    final stored = raw.getString('smarttrace_pin_hash_emp-1');
     expect(stored, isNotNull);
     expect(stored, isNot(contains('4821')));
   });

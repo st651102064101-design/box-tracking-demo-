@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import 'package:boxtrace_pda/controllers/app_controller.dart';
-import 'package:boxtrace_pda/screens/hold_release_screen.dart';
-import 'package:boxtrace_pda/screens/report_problem_screen.dart';
-import 'package:boxtrace_pda/screens/location_inquiry_screen.dart';
-import 'package:boxtrace_pda/services/i18n.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/screens/hold_release_screen.dart';
+import 'package:smarttrace_pda/screens/report_problem_screen.dart';
+import 'package:smarttrace_pda/screens/location_inquiry_screen.dart';
+import 'package:smarttrace_pda/services/i18n.dart';
 
 import 'app_controller_test.dart'
     show FakeApi, makeController, fixtureEmployees, box;

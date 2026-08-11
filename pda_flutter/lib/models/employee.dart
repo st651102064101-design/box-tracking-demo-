@@ -1,6 +1,6 @@
 /// One row of the WMS employee master (`S.employees`), as the PDA sees it.
 ///
-/// This master — maintained in the BoxTrace web app's "พนักงาน" page — is the
+/// This master — maintained in the SmartTrace web app's "พนักงาน" page — is the
 /// *only* place people are managed. The PDA deliberately does not have its own
 /// accounts: an operator is a row here plus the badge they carry, so adding,
 /// suspending, or removing someone is one edit in one screen with no password

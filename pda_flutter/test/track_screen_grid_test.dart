@@ -3,11 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:boxtrace_pda/controllers/app_controller.dart';
-import 'package:boxtrace_pda/screens/track_screen.dart';
-import 'package:boxtrace_pda/services/i18n.dart';
-import 'package:boxtrace_pda/services/prefs.dart';
-import 'package:boxtrace_pda/services/rfid_service.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/screens/track_screen.dart';
+import 'package:smarttrace_pda/services/i18n.dart';
+import 'package:smarttrace_pda/services/prefs.dart';
+import 'package:smarttrace_pda/services/rfid_service.dart';
 
 import 'app_controller_test.dart' show FakeApi, box, fixtureEmployees;
 

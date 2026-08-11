@@ -30,7 +30,7 @@ class BrandMark extends StatelessWidget {
   }
 }
 
-/// "BoxTrace PDA" wordmark.
+/// "SmartTrace PDA" wordmark.
 class Wordmark extends StatelessWidget {
   final double size;
   const Wordmark({super.key, this.size = 19});
@@ -44,7 +44,7 @@ class Wordmark extends StatelessWidget {
             letterSpacing: -0.5,
             color: C.ink),
         children: [
-          TextSpan(text: 'BoxTrace '),
+          TextSpan(text: 'SmartTrace '),
           TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),
         ],
       ),

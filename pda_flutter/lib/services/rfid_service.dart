@@ -76,8 +76,8 @@ class RfidTagRead {
 /// gracefully to no-ops so the rest of the app — manual entry + the simulator —
 /// keeps working for development.
 class RfidService {
-  static const _method = MethodChannel('boxtrace/rfid');
-  static const _events = EventChannel('boxtrace/rfid/events');
+  static const _method = MethodChannel('smarttrace/rfid');
+  static const _events = EventChannel('smarttrace/rfid/events');
 
   final _tagCtrl = StreamController<String>.broadcast();
   final _rawTagCtrl = StreamController<RfidTagRead>.broadcast();

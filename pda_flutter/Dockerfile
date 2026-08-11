@@ -1,4 +1,4 @@
-# ── BoxTrace PDA (Flutter web) ──────────────────────────────────────────────
+# ── SmartTrace PDA (Flutter web) ──────────────────────────────────────────────
 # must stay >= 3.27 — the UI uses Color.withValues, which older SDKs reject.
 # Override with --build-arg FLUTTER_TAG=<x.y.z> to pin a reproducible build.
 ARG FLUTTER_TAG=stable

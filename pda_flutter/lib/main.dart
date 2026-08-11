@@ -24,15 +24,15 @@ Future<void> main() async {
   // fire-and-forget bootstrap (auth + state fetch), UI shows the boot splash
   controller.init();
 
-  runApp(BoxTraceApp(
+  runApp(SmartTraceApp(
       controller: controller, locale: locale, themeCtrl: themeCtrl));
 }
 
-class BoxTraceApp extends StatelessWidget {
+class SmartTraceApp extends StatelessWidget {
   final AppController controller;
   final LocaleController locale;
   final ThemeController themeCtrl;
-  const BoxTraceApp(
+  const SmartTraceApp(
       {super.key,
       required this.controller,
       required this.locale,
@@ -52,7 +52,7 @@ class BoxTraceApp extends StatelessWidget {
         builder: (context) {
           context.watch<ThemeController>();
           return MaterialApp(
-            title: 'BoxTrace PDA',
+            title: 'SmartTrace PDA',
             debugShowCheckedModeBanner: false,
             theme: buildTheme(),
             home: const RootScreen(),

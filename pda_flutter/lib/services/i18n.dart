@@ -4,7 +4,7 @@ import '../theme.dart';
 import 'prefs.dart';
 
 /// TH/EN toggle for the PDA app, mirroring the language switch already used
-/// in the BoxTrace web reference mockup (`btnLang` / `toggleLang()` there):
+/// in the SmartTrace web reference mockup (`btnLang` / `toggleLang()` there):
 /// Thai copy is the source of truth in the widget tree, this just swaps in an
 /// English string when one is known and persists the choice like the mockup
 /// does via localStorage.
@@ -36,8 +36,8 @@ class LocaleController extends ChangeNotifier {
     'ตั้งค่าการเชื่อมต่อ': 'Connection settings',
     'ยังไม่มีพนักงานในระบบ': 'No employees on file yet',
     'รอเชื่อมต่อกับระบบหลักก่อน': 'Waiting to connect to the main system',
-    'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
-        'No data from the BoxTrace main system yet — tap below to set up the connection',
+    'ยังไม่พบข้อมูลจากระบบหลัก SmartTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
+        'No data from the SmartTrace main system yet — tap below to set up the connection',
     'เชื่อมต่อไม่ได้': 'Could not connect',
     'ผู้ดูแลระบบ': 'Administrator',
     'ยืนยัน': 'Confirm',
@@ -199,7 +199,7 @@ class LocaleController extends ChangeNotifier {
 
     // settings screen
     'ตั้งค่า': 'Settings',
-    'เชื่อมต่อกับ BoxTrace แล้ว': 'Connected to BoxTrace',
+    'เชื่อมต่อกับ SmartTrace แล้ว': 'Connected to SmartTrace',
     'กล่องในฐานข้อมูล': 'boxes in the database',
     'แตะเพื่อเชื่อมต่อใหม่': 'Tap to reconnect',
     'รับค่า RFID': 'RFID readout',
@@ -213,7 +213,7 @@ class LocaleController extends ChangeNotifier {
     'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ':
         'Not set yet — tap to set one and keep others from tapping your name',
     'กลับไปหน้ายิงบัตร': 'Back to the badge screen',
-    'เชื่อมกับ BoxTrace backend': 'Connects to the BoxTrace backend',
+    'เชื่อมกับ SmartTrace backend': 'Connects to the SmartTrace backend',
     'ใส่รหัส PIN เดิมของ': 'Enter the current PIN for',
     'ยืนยันตัวตนก่อนตั้งรหัสใหม่':
         'Verify your identity before setting a new PIN',

@@ -92,7 +92,7 @@ class SettingsScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     c.connected
-                                        ? loc.t('เชื่อมต่อกับ BoxTrace แล้ว')
+                                        ? loc.t('เชื่อมต่อกับ SmartTrace แล้ว')
                                         : (c.connError ??
                                             loc.t('ยังไม่พบข้อมูล')),
                                     style: const TextStyle(
@@ -174,7 +174,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Center(
                   child: Text(
-                    'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ BoxTrace backend')}',
+                    'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),

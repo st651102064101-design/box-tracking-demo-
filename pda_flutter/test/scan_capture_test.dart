@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:boxtrace_pda/widgets/scan_capture.dart';
+import 'package:smarttrace_pda/widgets/scan_capture.dart';
 
 /// The imager delivers a decoded barcode over the text input connection in one
 /// go, which is what [WidgetTester.enterText] does too — so this is the real

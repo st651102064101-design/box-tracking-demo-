@@ -15,7 +15,7 @@ def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "
 def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
 android {
-    namespace = "com.abss.boxtrace_pda"
+    namespace = "com.abss.smarttrace_pda"
     compileSdk = 36
 
     compileOptions {

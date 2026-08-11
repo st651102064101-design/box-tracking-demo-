@@ -20,7 +20,7 @@ class SuggestLocationResult {
   SuggestLocationResult({required this.suggestion, this.reason});
 }
 
-/// Thin REST wrapper around the BoxTrace Express backend.
+/// Thin REST wrapper around the SmartTrace Express backend.
 ///
 /// All endpoints except `/auth` and `/health` require `Authorization: Bearer`.
 ///

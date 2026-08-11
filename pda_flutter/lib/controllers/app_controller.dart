@@ -100,7 +100,7 @@ class Toast {
 }
 
 /// The single orchestrator for the whole PDA app — a Dart port of the mockup's
-/// `Component`, backed by the real BoxTrace REST API and the Zebra reader.
+/// `Component`, backed by the real SmartTrace REST API and the Zebra reader.
 ///
 /// Identity is split in two on purpose:
 ///
@@ -1230,7 +1230,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
       lastResult = const ScanResult(
-          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
+          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล SmartTrace');
       notifyListeners();
       return;
     }

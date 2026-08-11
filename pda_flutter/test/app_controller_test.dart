@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:boxtrace_pda/controllers/app_controller.dart';
-import 'package:boxtrace_pda/models/employee.dart';
-import 'package:boxtrace_pda/services/api_client.dart';
-import 'package:boxtrace_pda/services/prefs.dart';
-import 'package:boxtrace_pda/services/rfid_service.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/models/employee.dart';
+import 'package:smarttrace_pda/services/api_client.dart';
+import 'package:smarttrace_pda/services/prefs.dart';
+import 'package:smarttrace_pda/services/rfid_service.dart';
 
 /// Records what the controller sends instead of hitting the network.
 class FakeApi extends ApiClient {

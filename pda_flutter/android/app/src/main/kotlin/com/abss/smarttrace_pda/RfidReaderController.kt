@@ -1,4 +1,4 @@
-package com.abss.boxtrace_pda
+package com.abss.smarttrace_pda
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -38,7 +38,7 @@ class RfidReaderController(private val context: Context) :
     Readers.RFIDReaderEventHandler {
 
     companion object {
-        private const val TAG = "BoxTraceRFID"
+        private const val TAG = "SmartTraceRFID"
     }
 
     private val main = Handler(Looper.getMainLooper())

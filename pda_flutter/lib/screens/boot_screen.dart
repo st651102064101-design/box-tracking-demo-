@@ -31,7 +31,7 @@ class BootScreen extends StatelessWidget {
                   letterSpacing: -0.6,
                   color: C.ink),
               children: [
-                TextSpan(text: 'BoxTrace '),
+                TextSpan(text: 'SmartTrace '),
                 TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),
               ],
             ),
