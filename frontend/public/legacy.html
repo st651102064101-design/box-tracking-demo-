@@ -2612,7 +2612,17 @@ function save(){
    silently wipes data that loadFromServer() would otherwise default in. */
 function normalizeState(d){
   d.boxes=d.boxes||{};d.customers=d.customers||{};d.boxtypes=d.boxtypes||{};d.warehouses=d.warehouses||{};
-  d.gates=d.gates||{};d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
+  /* d.gates ต้องเป็นค่าที่คำนวณสดใหม่ทุกครั้งที่โหลด ไม่ใช่เชื่อค่าที่เซิร์ฟเวอร์ส่งมาตรง ๆ —
+     มันเป็นแค่ index {เลขประตู: รหัสคลัง} ที่ rebuildGates() สร้างตอนบันทึกคลังเท่านั้น ถ้า
+     สถานะคลังถูกเปลี่ยนเป็น "ปิดใช้งาน" จากที่อื่น (เช่น session เก่าก่อนแก้บั๊กนี้ หรือ import
+     ข้อมูลตรง ๆ) แล้ว d.gates ที่ persist ไว้ยังอ้างถึงประตูของคลังนั้นอยู่ ประตูของคลังที่ปิดไป
+     แล้วก็จะยังเลือกได้ที่หน้า Gate เข้า/ออกอยู่ดีทุกครั้งที่โหลดหน้าใหม่ — คำนวณทับด้วยสถานะ
+     ปัจจุบันเสมอ กันไม่ให้ index เพี้ยนไปจากต้นทางจริง (d.warehouses) ได้อีก */
+  d.gates={};Object.values(d.warehouses).forEach(function(w){
+    if(w.status==='inactive')return;
+    (w.gates||[]).forEach(function(g){d.gates[g]=w.id;});
+  });
+  d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
   if(d.cfg.lostMode===undefined)d.cfg.lostMode='manual';d.seq=d.seq||{do:0};
   d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
