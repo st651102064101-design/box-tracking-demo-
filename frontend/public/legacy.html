@@ -1529,7 +1529,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row no-print reveal" style="margin-bottom:22px;">
     <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
-    <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
+    <button class="btn ghost sm stab" data-stab="pda"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3M20 14v3M14 20h6"/></svg></span> เชื่อมต่อ PDA</button>
+    <button class="btn ghost sm stab" data-stab="box"<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
@@ -1723,6 +1724,49 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <span class="bcnt" id="bulkWhCnt"></span>
         <button class="btn sm red" id="bulkWhDel">ลบที่เลือก</button>
         <button class="btn sm gray" id="bulkWhClear">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- เชื่อมต่อ PDA — ตั้งค่าที่อยู่เซิร์ฟเวอร์ของเครื่องพกพาด้วยการยิง QR แทนการพิมพ์ IP
+       บนแป้นเครื่อง PDA. เครื่องอ่านบาร์โค้ดในตัวเครื่องอ่าน QR บนจอคอมได้ทันที จึงไม่ต้อง
+       ใช้กล้อง/แอปเสริมใด ๆ — ฝั่งเครื่องอ่านที่หน้า "ตั้งค่าเครื่อง" (device_setup_screen.dart)
+       และตัวถอดรหัส payload อยู่ที่ pda_flutter/lib/services/connect_qr.dart -->
+  <div class="ssec" id="ssec-pda" style="display:none;">
+    <div class="card hover">
+      <h3>เชื่อมต่อเครื่อง PDA</h3>
+      <p class="desc">เครื่อง PDA ที่ยังจำ IP เดิมอยู่ ไม่ต้องเข้าไปพิมพ์ที่อยู่เซิร์ฟเวอร์ใหม่ทีละเครื่อง — เปิดหน้านี้ไว้บนจอคอม แล้วให้แต่ละเครื่องยิง QR ด้านล่าง ที่อยู่จะถูกตั้งให้เองทั้งหมด</p>
+
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+        <span class="tag">1 · ที่เครื่อง PDA เปิด ตั้งค่าเครื่อง</span>
+        <span class="tag">2 · แตะ "สแกน QR เพื่อเชื่อมต่อ"</span>
+        <span class="tag">3 · เล็งเครื่องมาที่ QR นี้ แล้วกดไกยิง</span>
+      </div>
+
+      <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;">
+        <div style="flex:1 1 320px;min-width:280px;">
+          <div class="field"><label>ที่อยู่เซิร์ฟเวอร์ (Backend URL) <span class="req">*</span></label>
+            <input id="pdaQrUrl" placeholder="http://192.168.1.10:4000" autocomplete="off" spellcheck="false">
+            <div class="tag" style="margin-top:5px;">ค่าเริ่มต้นคือที่อยู่ที่เปิดหน้านี้อยู่ — ถ้าเครื่อง PDA อยู่คนละวง ให้ใส่ IP ที่เครื่อง PDA มองเห็น</div>
+          </div>
+          <div class="field" style="margin-top:14px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="pdaQrIncPass" style="width:auto;margin:0;"> ใส่รหัสผ่านบัญชีเครื่องลงใน QR ด้วย
+            </label>
+            <input id="pdaQrPass" type="password" placeholder="รหัสผ่านบัญชีเครื่อง" autocomplete="new-password" style="display:none;margin-top:8px;">
+            <div class="tag" id="pdaQrPassWarn" style="margin-top:5px;display:none;color:var(--warn);">QR นี้จะมีรหัสผ่านอยู่ข้างใน — อย่าพิมพ์แปะผนัง ใช้แล้วปิดหน้าจอ</div>
+          </div>
+        </div>
+
+        <div style="flex:0 0 auto;text-align:center;">
+          <div id="pdaQrBox" style="background:#fff;padding:16px;border-radius:16px;border:1px solid var(--line);display:inline-block;min-width:292px;min-height:292px;"></div>
+          <div id="pdaQrErr" class="tag" style="display:none;margin-top:10px;color:var(--neg);"></div>
+          <div class="muted small" style="margin-top:10px;font-family:var(--mono);word-break:break-all;max-width:300px;" id="pdaQrText"></div>
+          <div class="row" style="justify-content:center;margin-top:12px;gap:8px;">
+            <button class="btn ghost sm" onclick="printPdaQr()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-6h16v6h-2M8 14h8v7H8z"/></svg></span> พิมพ์ QR</button>
+            <button class="btn ghost sm" onclick="downloadPdaQr()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลด PNG</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3268,7 +3312,88 @@ $all('.stab').forEach(function(b){b.addEventListener('click',function(){
   $all('.stab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});$('#ssec-'+b.dataset.stab).style.display='block';
   if(b.dataset.stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  if(b.dataset.stab==='pda'&&typeof initPdaQr==='function')initPdaQr();
 });});
+
+/* ===== SETUP → เชื่อมต่อ PDA: QR ตั้งค่าที่อยู่เซิร์ฟเวอร์ของเครื่องพกพา =====
+   ปัญหาเดิม: เครื่อง PDA ที่ยังจำ IP เก่าอยู่ ต้องให้คนเดินไปกดตั้งค่าแล้วพิมพ์
+   "http://192.168.1.10:4000" บนแป้นเครื่อง — พิมพ์ผิดหนึ่งตัวจะขึ้นอาการเหมือน
+   "เซิร์ฟเวอร์ล่ม" เป๊ะ ๆ จึงไล่หาสาเหตุไม่เจอ. หน้านี้พิมพ์ค่าเดียวกันออกมาเป็น QR
+   ให้เครื่องยิงเอาแทน — ค่าที่เข้าเครื่องจึงเป็นค่าที่ถูกต้องเสมอโดยไม่ต้องพิมพ์เลย.
+   รูปแบบ payload ต้องตรงกับ ConnectQr.parse() ฝั่งแอป (pda_flutter/lib/services/connect_qr.dart) */
+var PDA_QR_PREFIX='BTCFG1:';
+/* ความจุจริงของตัวเข้ารหัสในไฟล์นี้: QR version 5 ระดับ L = 108 codewords ลบส่วนหัว 2 = 106 ไบต์
+   เกินกว่านี้ qrModules() จะตัดข้อความทิ้งเงียบ ๆ แล้วได้ QR ที่สแกนแล้วได้ค่าผิด — ต้องกันไว้ก่อน */
+var PDA_QR_MAX_BYTES=106;
+function pdaQrPayload(){
+  var url=(($('#pdaQrUrl')||{}).value||'').trim().replace(/\/+$/,'');
+  var inc=$('#pdaQrIncPass')&&$('#pdaQrIncPass').checked;
+  var pass=inc?(($('#pdaQrPass')||{}).value||''):'';
+  if(!/^https?:\/\/[^\/\s]+/.test(url))return{err:'ที่อยู่ต้องขึ้นต้นด้วย http:// หรือ https:// และมีชื่อเครื่อง/IP'};
+  var o={url:url};
+  if(pass)o.pass=pass;
+  var text=PDA_QR_PREFIX+JSON.stringify(o);
+  if(qrBytesFor(text).length>PDA_QR_MAX_BYTES)return{err:'ข้อมูลยาวเกินไปสำหรับ QR หนึ่งใบ — ลดความยาวที่อยู่ลง'};
+  return{text:text,url:url};
+}
+function renderPdaQr(){
+  var box=$('#pdaQrBox');if(!box)return;
+  var err=$('#pdaQrErr'),txt=$('#pdaQrText');
+  var inc=$('#pdaQrIncPass')&&$('#pdaQrIncPass').checked;
+  var passIn=$('#pdaQrPass'),passWarn=$('#pdaQrPassWarn');
+  if(passIn)passIn.style.display=inc?'':'none';
+  if(passWarn)passWarn.style.display=inc?'':'none';
+  var p=pdaQrPayload();
+  if(p.err){
+    box.innerHTML='';txt.textContent='';
+    err.style.display='';err.textContent=p.err;
+    window.pdaQrCurrent=null;
+    return;
+  }
+  err.style.display='none';
+  box.innerHTML=qrCodeSVG(p.text,260);
+  /* แสดงเฉพาะที่อยู่ ไม่แสดง payload เต็ม — payload อาจมีรหัสผ่านอยู่ข้างใน */
+  txt.textContent=p.url;
+  window.pdaQrCurrent=p;
+}
+function printPdaQr(){
+  var p=window.pdaQrCurrent;if(!p){toast('ยังสร้าง QR ไม่ได้','ตรวจสอบที่อยู่เซิร์ฟเวอร์อีกครั้ง','err');return;}
+  var w=window.open('','_blank');if(!w)return;
+  /* หน้าต่างใหม่ไม่มีตัวแปร CSS ของแอป จึงใช้ inline style ล้วน เหมือนกับการพิมพ์ป้ายกล่อง */
+  w.document.write('<html><head><title>BoxTrace — QR เชื่อมต่อ PDA</title></head>'
+    +'<body style="font-family:-apple-system,Arial,sans-serif;text-align:center;padding:40px;">'
+    +'<div style="font-size:13px;font-weight:800;letter-spacing:.14em;color:#666;">BOXTRACE</div>'
+    +'<h2 style="margin:6px 0 4px;font-size:22px;">QR เชื่อมต่อเครื่อง PDA</h2>'
+    +'<div style="font-family:monospace;font-size:14px;color:#333;margin-bottom:18px;">'+esc(p.url)+'</div>'
+    +qrCodeSVG(p.text,300)
+    +'<div style="font-size:13px;color:#555;margin-top:18px;line-height:1.7;">'
+    +'ที่เครื่อง PDA: ตั้งค่าเครื่อง → แตะ "สแกน QR เพื่อเชื่อมต่อ" → เล็งมาที่ QR นี้แล้วกดไกยิง</div>'
+    +'</body></html>');
+  w.document.close();w.focus();setTimeout(function(){w.print();},250);
+}
+function downloadPdaQr(){
+  var p=window.pdaQrCurrent;if(!p){toast('ยังสร้าง QR ไม่ได้','ตรวจสอบที่อยู่เซิร์ฟเวอร์อีกครั้ง','err');return;}
+  var S=640,c=document.createElement('canvas');c.width=S;c.height=S;
+  drawQRToCanvas(c.getContext('2d'),p.text,0,0,S);
+  var a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='boxtrace-pda-connect.png';a.click();
+  toast('ดาวน์โหลดแล้ว',p.url,'ok');
+}
+/* ผูก event ครั้งเดียวตอนเปิดแท็บย่อยครั้งแรก — ฟอร์มนี้อยู่ในแท็บที่ซ่อนอยู่ตอนโหลดหน้า */
+var pdaQrWired=false;
+function initPdaQr(){
+  if(!pdaQrWired){
+    pdaQrWired=true;
+    ['pdaQrUrl','pdaQrPass'].forEach(function(id){
+      var el=$('#'+id);if(el)el.addEventListener('input',renderPdaQr);
+    });
+    var cb=$('#pdaQrIncPass');if(cb)cb.addEventListener('change',renderPdaQr);
+    /* ค่าเริ่มต้น = ที่อยู่ที่เปิดหน้านี้อยู่ ซึ่งก็คือ backend ตัวเดียวกับที่เว็บนี้เรียก /api
+       (เว็บกับ backend อยู่ origin เดียวกัน) — กรณีปกติจึงไม่ต้องพิมพ์อะไรเลย */
+    var u=$('#pdaQrUrl');if(u&&!u.value)u.value=window.location.origin;
+  }
+  renderPdaQr();
+}
+window.printPdaQr=printPdaQr;window.downloadPdaQr=downloadPdaQr;
 
 /* ===== SETUP: box register ===== */
 function nextSeqId(prefix,existingIds){
@@ -10955,13 +11080,12 @@ function exportInvExcel() {
   // Export the live WMS box-stock view (respects status filter + search)
   var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var boxes = filteredInvBoxes().sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
-  var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'อัปเดตล่าสุด'];
+  var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'ช่อง', 'ลูกค้า', 'DO', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
     return [barcodeCell(b.tag), typeName(b.type), statusLabel[b.status] || b.status,
       b.status === 'warehouse' && loc.wh ? whName(loc.wh) : '',
-      b.status === 'warehouse' ? (loc.zone || '') : '', b.status === 'warehouse' ? (loc.rack || '') : '',
-      b.status === 'warehouse' ? (loc.shelf || '') : '', b.status === 'warehouse' ? (loc.slot || '') : '',
+      b.status === 'warehouse' ? (loc.slot || '') : '',
       b.status === 'out' ? custName(b.customer) : '', b.status === 'out' ? (b.do || '') : '',
       b.lastSeenAt ? fmtTs(b.lastSeenAt) : ''];
   });
