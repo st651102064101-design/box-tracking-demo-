@@ -2781,6 +2781,35 @@ function normalizeState(d){
   d.uiPrefs=d.uiPrefs||{};
   d.vehicleTypes=d.vehicleTypes||[];
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
+  /* บาร์โค้ด/tag ของกล่องที่หลุดมาพร้อมเครื่องหมาย "*...*" แบบฟอนต์ Code 39 (ดู
+     barcodeCell()) — ก่อนแก้ import ("ลงทะเบียนกล่อง") ให้ลอกออกก่อนเก็บ ไฟล์ export
+     เดิมที่ import กลับเข้าไประหว่างนั้นจึงมี tag เป็น "*BOX-011*" ตรงๆ ค้างอยู่ในระบบ
+     ลอก * ออกทุกครั้งที่โหลด แล้ว rekey S.boxes/S.events/S.auditLog ให้ตรงกัน เหมือนที่
+     d.gates คำนวณทับสดใหม่ทุกครั้งด้านบน — ไม่เชื่อว่าข้อมูลเก่าที่ persist ไว้ "สะอาด" แล้ว */
+  var stripStars=function(s){return String(s==null?'':s).replace(/^\*+\s*|\s*\*+$/g,'').trim();};
+  var boxRenames={},boxDeletes=[];
+  Object.keys(d.boxes).forEach(function(oldTag){
+    var newTag=stripStars(oldTag);
+    if(!newTag||newTag===oldTag)return;
+    /* ถ้าเลขที่ลอกแล้วชนกับกล่องที่ "สะอาด" (ไม่มี *) อยู่แล้ว แสดงว่าตัวมี * เป็น
+       ระเบียนซ้ำที่หลุดมาจากบั๊ก import เดิม (ก่อนแก้) ไม่ใช่กล่องใบเดียวกัน — ลบตัวมี *
+       ทิ้ง ไม่เขียนทับของจริงเด็ดขาด เขียนทับแบบไม่ถามคือของหายแบบเงียบๆ ซึ่งเคยเกิดมา
+       แล้วในเซสชันนี้เอง */
+    if(d.boxes[newTag]){boxDeletes.push(oldTag);}
+    else boxRenames[oldTag]=newTag;
+  });
+  Object.keys(boxRenames).forEach(function(oldTag){
+    var newTag=boxRenames[oldTag];
+    var b=d.boxes[oldTag];
+    b.tag=newTag;
+    d.boxes[newTag]=b;
+    delete d.boxes[oldTag];
+  });
+  boxDeletes.forEach(function(oldTag){delete d.boxes[oldTag];});
+  if(Object.keys(boxRenames).length){
+    (d.events||[]).forEach(function(e){if(e.tag&&boxRenames[e.tag])e.tag=boxRenames[e.tag];});
+    (d.auditLog||[]).forEach(function(a){if(a.itemId&&boxRenames[a.itemId])a.itemId=boxRenames[a.itemId];});
+  }
   return d;
 }
 /** Loads S from the DB at boot. Returns a promise so init can await it. */
@@ -11289,7 +11318,14 @@ function openColumnMapModal(opts){
     cfg.fields.forEach(function(f){
       var idx=colMap[f.key];
       var v=(idx!=null&&idx>=0)?row[idx]:'';
-      m[f.key]=String(v==null?'':v).trim();
+      v=String(v==null?'':v).trim();
+      /* บาร์โค้ด (รหัสกล่อง/tag) ที่ export ออกไปห่อด้วย "*...*" แบบฟอนต์ Code 39
+         (ดู barcodeCell()) — พอเอาไฟล์เดิมกลับมา import ("ลงทะเบียนกล่อง") ต้องลอก
+         เครื่องหมาย * ที่ห่ออยู่ออกก่อนเก็บเสมอ ไม่งั้นได้รหัสเป็น *BOX-011* ตรงๆ
+         ใช้ resolveTag() ตัวเดียวกับที่ Gate เข้า/ออก ใช้อยู่แล้ว — กันไม่ให้แต่ละ
+         importer มีตรรกะลอก * ไม่เหมือนกัน */
+      if(f.key==='tag'&&v)v=resolveTag(v)||v;
+      m[f.key]=v;
     });
     return m;
   }
