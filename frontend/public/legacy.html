@@ -1300,6 +1300,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <button class="btn ghost" id="btnAllocateSuggest" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
     
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
+    <button class="btn ghost" onclick="exportGateOutExcel()" title="ส่งออกประวัติกล่องที่ผ่าน Gate ขาออกทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="outCount"></span>
   </div>
 </section>
@@ -1380,6 +1381,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row" style="margin-top:22px;margin-bottom:22px;">
     <button class="btn pos big" id="btnCheckIn">ยืนยันรับเข้าคลัง</button>
     <button class="btn ghost" onclick="clearGateIn()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
+    <button class="btn ghost" onclick="exportGateInExcel()" title="ส่งออกประวัติกล่องที่ผ่าน Gate ขาเข้าทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="inCount"></span>
   </div>
 </section>
@@ -9655,6 +9657,41 @@ function exportTruckManifestExcel(){
   downloadXLS('กล่องออกไปกับรถ-'+dstr()+'.xlsx', headers, rows, {barcodeCols:[3]});
 }
 window.exportTruckManifestExcel=exportTruckManifestExcel;
+
+/* Gate ขาออก/ขาเข้า Export Excel — ทั้งระบบ (ทุกครั้งที่เคยผ่าน Gate นั้นๆ ตลอด
+   ประวัติ S.events ไม่ใช่แค่คิวที่กำลังสแกนอยู่ตอนนี้) แยกไฟล์กันชัดเจน:
+   ปุ่มที่ Gate ขาออกมีแต่แถวกล่องที่ "ออก" เท่านั้น ปุ่มที่ Gate ขาเข้ามีแต่แถว
+   กล่องที่ "เข้า" (รวมกล่องใหม่ที่ลงทะเบียนตอนรับเข้า — dir 'in-new') เท่านั้น */
+function exportGateOutExcel(){
+  var rows=S.events.filter(function(e){return e.dir==='out';})
+    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
+    .map(function(e){
+      return [barcodeCell(e.tag), typeName(e.type), e.customerName||custName(e.customer)||'-',
+        e.do||'-', e.po||'-', e.gate!=null?e.gate:'-', e.wh?whName(e.wh):'-',
+        e.plate||'-', e.driver||'-', e.tel||'-', e.recorder||'-', fmtTs(e.ts)];
+    });
+  if(!rows.length)return toast('ยังไม่มีข้อมูล','ยังไม่เคยมีกล่องผ่าน Gate ขาออกเลย','err');
+  downloadXLS('gate-ขาออก-'+dstr()+'.xlsx',
+    ['บาร์โค้ด','ประเภทกล่อง','ลูกค้า/ปลายทาง','DO','PO','ประตู','คลัง','ทะเบียนรถ','คนขับ','เบอร์โทรคนขับ','ผู้บันทึก','เวลาที่ส่งออก'],
+    rows,{barcodeCols:[0]});
+}
+window.exportGateOutExcel=exportGateOutExcel;
+
+function exportGateInExcel(){
+  var rows=S.events.filter(function(e){return e.dir==='in'||e.dir==='in-new';})
+    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
+    .map(function(e){
+      return [barcodeCell(e.tag), typeName(e.type),
+        e.dir==='in-new'?'กล่องใหม่':(e.customerName||custName(e.customer)||'-'),
+        e.do||'-', e.gate!=null?e.gate:'-', e.wh?whName(e.wh):'-',
+        e.plate||'-', e.driver||'-', e.recorder||'-', fmtTs(e.ts)];
+    });
+  if(!rows.length)return toast('ยังไม่มีข้อมูล','ยังไม่เคยมีกล่องผ่าน Gate ขาเข้าเลย','err');
+  downloadXLS('gate-ขาเข้า-'+dstr()+'.xlsx',
+    ['บาร์โค้ด','ประเภทกล่อง','ลูกค้า/แหล่งที่มา','DO','ประตู','คลัง','ทะเบียนรถ','คนขับ','ผู้บันทึก','เวลาที่รับเข้า'],
+    rows,{barcodeCols:[0]});
+}
+window.exportGateInExcel=exportGateInExcel;
 
 function filterTruckManifest(q){
   q=(q||'').toLowerCase().trim();
