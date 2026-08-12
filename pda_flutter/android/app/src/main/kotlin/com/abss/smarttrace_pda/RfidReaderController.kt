@@ -672,6 +672,15 @@ class RfidReaderController(private val context: Context) :
             s.setSession(SESSION.SESSION_S0)
             s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_A)
             s.Action.setSLFlag(SL_FLAG.SL_ALL)
+            // Gen2's dynamic-Q collision-avoidance algorithm sizes its slot
+            // count from this estimate — left unset (0), the reader assumes
+            // a near-empty field and re-collides constantly once a real
+            // pallet's worth of tags (a few hundred) is actually in range,
+            // which throttles effective throughput far below what the
+            // hardware can do. 300 matches a dense pallet sweep on this
+            // hardware without over-sizing Q for the common case of far
+            // fewer tags (oversized Q wastes empty slots instead).
+            s.setTagPopulation(300)
             rd.Config.Antennas.setSingulationControl(1, s)
 
             rd.Actions.PreFilters.deleteAll()
