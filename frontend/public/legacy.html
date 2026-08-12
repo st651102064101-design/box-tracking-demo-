@@ -7426,8 +7426,8 @@ function saveOutbound(){
     var dueTs=custDueTs(custForBox,tsForBox);
     var dueDateStr=ddmmyyyy(new Date(dueTs));
     b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.lastSeenAt=tsForBox;b.outCondition=cond;
-    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr});
-    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox});
+    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,platform:'web'});
+    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,platform:'web'});
     if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel};});
   var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
@@ -7550,15 +7550,15 @@ $('#btnCheckIn').onclick=function(){
     if(!b.labeled){b.labeledAt=inTs;b.labeledBy=recorder;}
     b.labeled=true;
     if(isNewBox){
-      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จาก Supplier) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน'});
-      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
+      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จาก Supplier) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน',platform:'web'});
+      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,platform:'web'});
       b.status='warehouse';b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       newCount++;
     }else{
       // CASE B: box was previously dispatched → this is a genuine return from customer
-      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||'')});
-      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder});
+      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||''),platform:'web'});
+      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,platform:'web'});
       b.status='warehouse';b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       returnCount++;
