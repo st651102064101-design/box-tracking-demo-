@@ -1974,9 +1974,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
          ให้ตรงจังหวะ — ถ้าปล่อยให้ CSS transition หมุนเอง JS จะไม่รู้มุมระหว่างทางเลย -->
     <div id="empBadgeFlip" style="position:absolute;inset:0;transform-style:preserve-3d;">
 
-      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);">
+      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);isolation:isolate;">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
-          <div style="width:87px;height:13px;border-radius:999px;background:transparent;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
+          <div style="position:relative;width:87px;height:13px;">
+            <div style="position:absolute;inset:0;border-radius:999px;background:#000;mix-blend-mode:destination-out;"></div>
+            <div style="position:absolute;inset:0;border-radius:999px;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);pointer-events:none;"></div>
+          </div>
         </div>
 
         <div style="position:relative;padding:27px 30px 0;">
@@ -2031,9 +2034,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
       </div>
 
-      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);display:flex;flex-direction:column;">
+      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);display:flex;flex-direction:column;isolation:isolate;">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
-          <div style="width:87px;height:13px;border-radius:999px;background:transparent;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
+          <div style="position:relative;width:87px;height:13px;">
+            <div style="position:absolute;inset:0;border-radius:999px;background:#000;mix-blend-mode:destination-out;"></div>
+            <div style="position:absolute;inset:0;border-radius:999px;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);pointer-events:none;"></div>
+          </div>
         </div>
 
         <div style="padding:26px 30px 0;">
@@ -4943,7 +4949,7 @@ var CC_STATUS_DARK={
 
 var ccState={open:false,id:null,booted:false,raf:null,
   s:1,x:0,y:0,vx:0,vy:0,rx:0,ry:0,rz:0,wx:0,wy:0,wz:0,
-  bounce:0,rest:false,face:'front',t:0};
+  bounce:0,rest:false,face:'front',t:0,mx:null,my:null};
 
 /* ---- อ่านสถิติที่ผูกกับคู่ค้ารายนี้ครั้งเดียว แล้วให้ทั้งสองด้านของบัตรหยิบไปใช้ ---- */
 function custCardStats(c){
@@ -5127,6 +5133,10 @@ function ccBoot(){
     var vw=window.innerWidth,vh=window.innerHeight;
     ccState.s=Math.max(.5,Math.min(1,Math.min(vw*0.82/CC_CW,vh*0.6/CC_CH)));
   });
+  /* บัตรพักนิ่งแล้วหันหน้าตามเมาส์เบา ๆ (ดู ccStep) — เก็บพิกัดเมาส์ไว้เฉยๆ ตรงนี้
+     ไม่คำนวณมุมตรงนี้ เพราะ ccStep() ต้อง lerp เข้าเป้าหมายทีละเฟรมเหมือนทุกอย่างอื่น
+     ในฟิสิกส์การ์ดใบนี้ ไม่ใช่กระตุกตามเมาส์ทันที */
+  window.addEventListener('mousemove',function(ev){ccState.mx=ev.clientX;ccState.my=ev.clientY;});
   ccState.raf=requestAnimationFrame(ccTick);
 }
 function ccTick(){ccState.raf=requestAnimationFrame(ccTick);ccStep();}
@@ -5139,9 +5149,19 @@ function ccStep(){
        คือ "ยกขึ้นเบา ๆ" (target <= 0) เท่านั้น ไม่ให้แกว่งจมต่ำกว่าระดับพื้นแม้เสี้ยว
        พิกเซลเดียว ไม่งั้นการ์ดจะดูจมพื้นเป็นจังหวะ ๆ ตอนพัก */
     var t=s.t*0.01;
+    /* หันหน้าตามเมาส์เบา ๆ ตอนพักนิ่งแล้ว — มุมเอียงสูงสุดจำกัดไว้ต่ำ (CC_MOUSE_TILT_X/Y)
+       ไม่ให้ "หันมาก" ตามที่ขอ แค่พอรู้สึกว่าบัตรมองตามเมาส์ บวกเข้ากับการแกว่งหายใจเดิม
+       ไม่ได้แทนที่ (ไม่งั้นตอนเมาส์อยู่กลางจอพอดี บัตรจะนิ่งสนิทไม่แกว่งเลย) */
+    var mxN=0,myN=0;
+    if(s.mx!=null&&s.my!=null){
+      var cx=window.innerWidth/2+s.x,cy=window.innerHeight/2+s.y;
+      mxN=Math.max(-1,Math.min(1,(s.mx-cx)/(window.innerWidth/2)));
+      myN=Math.max(-1,Math.min(1,(s.my-cy)/(window.innerHeight/2)));
+    }
+    var CC_MOUSE_TILT_X=4,CC_MOUSE_TILT_Y=6;
     s.y+=(-Math.abs(Math.sin(t))*0.4-s.y)*0.04;
-    s.rx+=(Math.sin(t*0.7)*0.3-s.rx)*0.035;
-    s.ry+=(Math.sin(t*0.5)*0.5-s.ry)*0.035;
+    s.rx+=(Math.sin(t*0.7)*0.3-myN*CC_MOUSE_TILT_X-s.rx)*0.035;
+    s.ry+=(Math.sin(t*0.5)*0.5+mxN*CC_MOUSE_TILT_Y-s.ry)*0.035;
     s.rz+=(0-s.rz)*0.05;
   }else{
     /* แรงโน้มถ่วง .62 เดิมทำให้บัตรลอยอยู่กลางอากาศนานเกินไปก่อนถึงพื้น — เร่งขึ้นเป็น
