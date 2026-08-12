@@ -110,36 +110,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 .who:hover{background:color-mix(in srgb,var(--ink) 6%,transparent);}
 .who .who-ic{width:16px;height:16px;flex:0 0 auto;color:var(--pos);}
 .who .who-ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-/* เมนูผู้บันทึก — dropdown ห้อยจากชิปบัญชีแทน modal เต็มจอ: การเปลี่ยนคนบันทึก
-   เป็นงานเล็กที่ทำบ่อย การเปิดม่านดำทับทั้งหน้าจึงหนักเกินความจำเป็นและทำให้
-   หลุดบริบทของหน้าที่กำลังดูอยู่ */
 .who-wrap{position:relative;}
-/* --surface คือพื้นทึบของการ์ดทั้งระบบ (เดิมเขียน var(--panel) ซึ่งไม่มีตัวแปรนี้
-   อยู่จริง CSS จึงตกไปเป็นโปร่งใสและมองทะลุเห็นเนื้อหาข้างหลัง) */
-/* ตำแหน่งคำนวณจาก JS (pickUser()) แล้ว inline top/left มาเสมอ ไม่ได้พึ่ง CSS
-   anchor (top/right) แบบเดิม — เพราะ #whoMenu ถูกย้ายไปเป็นลูกของ <body> ตอน
-   เปิดเมนู (portal) เพื่อเลี่ยงบั๊ก: .chrome มี backdrop-filter ซึ่งสร้าง containing
-   block ใหม่ให้ position:fixed ของลูกหลาน ทำให้เมนูที่ตั้งใจให้ fixed กับ viewport
-   กลับไป fixed กับกล่อง .chrome แคบ ๆ (236px, สูงเท่าเนื้อหาบนสุด) แทน — เห็นผลเป็น
-   เมนูที่ถูกบีบเตี้ย ข้อความล้น/หาย และวางซ้อนผิดตำแหน่งอย่างในสกรีนช็อตที่รายงานมา.
-   z-index สูงกว่า .chrome/.navwrap (95/94) แต่ต่ำกว่า .modal (300) */
-.who-menu{position:fixed;z-index:250;width:max-content;min-width:300px;max-width:min(360px,calc(100vw - 24px));
-  background:var(--surface);border:.5px solid var(--line);border-radius:14px;padding:10px;
-  box-shadow:0 18px 44px rgba(0,0,0,.35);max-height:calc(100vh - 24px);overflow-y:auto;}
-.who-menu[hidden]{display:none;}
-.who-menu .wm-head{font-size:11px;color:var(--muted);padding:2px 4px 8px;line-height:1.45;}
-.who-menu .wm-sep{border-top:.5px solid var(--line);margin:8px 0;}
-/* แถวพนักงาน: ชื่อกับตำแหน่งวางซ้อนกันในคอลัมน์เดียว ไม่ใช่เรียงข้างกันแล้วแย่งที่
-   จนชื่อถูกบีบตัดเป็น "ผู้ / ดูแล / ระบบ" — ป้าย "ปัจจุบัน" กับปุ่มแก้ไขอยู่ขวาสุด
-   และห้ามหด (flex:0 0 auto) ให้ชื่อเป็นตัวที่ยืด-หดแทน */
-.who-menu .wm-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.who-menu .wm-pick{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
-  padding:8px 10px;border-radius:10px;border:.5px solid transparent;background:transparent;
-  color:var(--ink);cursor:pointer;text-align:left;font:inherit;}
-.who-menu .wm-pick:hover{background:var(--surface2);border-color:var(--line);}
-.who-menu .wm-nm{font-size:14px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.who-menu .wm-meta{font-size:11.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.who-menu .wm-row .pill,.who-menu .wm-row .btn{flex:0 0 auto;white-space:nowrap;}
 
 .iconbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
@@ -603,6 +574,21 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+/* Overview's date-range filters: once "ระบุวัน" (custom range) is picked, the
+   other four mode buttons (ทั้งหมด/N วัน/N เดือน/N ปี) are moot — collapsed away
+   so the bar doesn't sit there showing four buttons none of which reflect the
+   active filter. A small chevron hints they're still reachable; hovering the
+   whole bar smoothly reveals them again without changing the selected mode —
+   only clicking one actually switches it (dfSetMode). */
+.df-sw .df-collapsible{display:inline-flex;gap:2px;overflow:hidden;max-width:600px;opacity:1;
+  transition:max-width .32s cubic-bezier(.22,1,.36,1),opacity .2s ease,margin .32s cubic-bezier(.22,1,.36,1);}
+.df-sw .df-hidden-hint{display:none;align-items:center;color:var(--muted);width:0;overflow:hidden;
+  transition:width .32s cubic-bezier(.22,1,.36,1),opacity .2s ease;opacity:0;}
+.df-sw .df-hidden-hint svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+.df-sw[data-collapsed="1"] .df-collapsible{max-width:0;opacity:0;margin-left:-2px;}
+.df-sw[data-collapsed="1"] .df-hidden-hint{display:inline-flex;width:14px;opacity:.7;margin-right:2px;}
+.df-sw[data-collapsed="1"]:hover .df-collapsible{max-width:600px;opacity:1;margin-left:0;}
+.df-sw[data-collapsed="1"]:hover .df-hidden-hint{opacity:0;width:0;margin-right:0;}
 /* chip for a warehouse box that has no zone/rack on file yet — informational only */
 .loc-stg{display:inline-flex;align-items:center;gap:5px;background:var(--warnSoft);color:var(--warn);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;}
 .loc-stg .loc-stg-ic{font-size:13px;}
@@ -963,6 +949,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] .chrome{width:var(--side
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] .navwrap{width:var(--sidebar-w-collapsed);}
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] main{margin-left:var(--sidebar-w-collapsed);width:calc(100% - var(--sidebar-w-collapsed));}
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] .brand{justify-content:center;}
+/* .brand's 2nd child is a wrapper <div> around .nm/.sub, not those spans
+   directly — hiding just .nm/.sub left that wrapper an empty-but-present
+   flex sibling, so .brand's own 12px gap still reserved space for it. That
+   pushed the logo 6px off-center within .brand's box even though .brand
+   itself was correctly centered in the rail (measured: mark center 30px vs
+   rail center 36px). Hiding the wrapper itself removes the gap too. */
+html[data-layout="sidebar"][data-sidebar-collapsed="1"] .brand > div:not(.mark),
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] .brand .nm,
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] .brand .sub,
 html[data-layout="sidebar"][data-sidebar-collapsed="1"] .who span:not(.who-ic),
@@ -1041,8 +1034,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
   <div class="spacer"></div>
   <div class="who-wrap">
-    <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน"><span class="who-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.1-4.1 3.9-6.3 7-6.3s5.9 2.2 7 6.3"/></svg></span><span id="whoTxt">demo · SaaS</span></div>
-    <div class="who-menu" id="whoMenu" hidden></div>
+    <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน"><span class="who-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.1-4.1 3.9-6.3 7-6.3s5.9 2.2 7 6.3"/></svg></span><span id="whoTxt">demo · SaaS</span></div>
   </div>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
@@ -1984,7 +1976,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
       <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
-          <div style="width:87px;height:13px;border-radius:999px;background:var(--line2);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
+          <div style="width:87px;height:13px;border-radius:999px;background:transparent;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
         </div>
 
         <div style="position:relative;padding:27px 30px 0;">
@@ -2041,7 +2033,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
       <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);display:flex;flex-direction:column;">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
-          <div style="width:87px;height:13px;border-radius:999px;background:var(--line2);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
+          <div style="width:87px;height:13px;border-radius:999px;background:transparent;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
         </div>
 
         <div style="padding:26px 30px 0;">
@@ -2780,6 +2772,7 @@ function normalizeState(d){
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
   d.gatePrefs=d.gatePrefs||{};
   d.dfPrefs=d.dfPrefs||{};
+  d.uiPrefs=d.uiPrefs||{};
   d.vehicleTypes=d.vehicleTypes||[];
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   return d;
@@ -3401,7 +3394,7 @@ function setBoxRegMode(mode) {
 }
 
 $all('#boxModeSw .ivs-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() { setBoxRegMode(btn.dataset.mode); });
+  btn.addEventListener('click', function() { setBoxRegMode(btn.dataset.mode); uiPrefSet('boxRegMode', btn.dataset.mode); });
 });
 
 /* ═══════ EDIT (Master "ลงทะเบียนกล่อง" is CRUD-only — see editBox/delBox) ═══
@@ -5496,75 +5489,18 @@ function setCurrentUser(name){
   USER=name;try{localStorage.setItem('smarttrace_user',USER);}catch(e){}
   setv('outRecorder',USER);setv('inRecorder',USER);renderAll();}
 window.setCurrentUser=setCurrentUser;
-/* เมนูเลือกผู้บันทึก — dropdown ห้อยจากชิปบัญชี ไม่ใช่ modal เต็มจอ
-   เปลี่ยนคนบันทึกเป็นงานเล็กที่ทำบ่อยระหว่างวัน การเปิดม่านทับทั้งหน้าจึงหนัก
-   เกินเหตุและทำให้หลุดบริบทของหน้าที่กำลังดูอยู่ */
-function closeWhoMenu(){var m=document.getElementById('whoMenu');if(m)m.hidden=true;}
-window.closeWhoMenu=closeWhoMenu;
-/* จัดตำแหน่ง #whoMenu ให้ชิด "who" chip ที่กด — คำนวณจาก getBoundingClientRect()
-   สด ๆ ทุกครั้งที่เปิด (ไม่ใช่ CSS top/right แบบเดิม) เพราะเมนูถูกย้ายไปเป็นลูกของ
-   <body> แล้ว (ดูเหตุผลใน comment เหนือ .who-menu ใน <style>) จึงไม่มี positioned
-   ancestor ให้ผูกกับ chip โดยอัตโนมัติอีกต่อไป ต้องตั้ง top/left เองเสมอ */
-function positionWhoMenu(menu){
-  var chip=document.querySelector('.who-wrap .who')||document.querySelector('.who-wrap');
-  if(!chip)return;
-  var r=chip.getBoundingClientRect();
-  menu.style.left='-9999px';menu.style.top='-9999px';menu.hidden=false;
-  var mw=menu.offsetWidth,mh=menu.offsetHeight;
-  var pad=12;
-  var left=Math.min(Math.max(pad,r.right-mw),window.innerWidth-mw-pad);
-  var top=r.bottom+8;
-  if(top+mh>window.innerHeight-pad)top=Math.max(pad,r.top-mh-8); /* ไม่พอที่ด้านล่าง ก็โผล่ขึ้นด้านบนแทน */
-  menu.style.left=Math.round(left)+'px';
-  menu.style.top=Math.round(top)+'px';
-}
+/* บัญชีปัจจุบัน — คลิกชิป "who" แล้วเปิดบัตรพนักงานเหมือนหน้า Setup > พนักงาน
+   เลย (openEmpBadge) แทนเมนู dropdown เดิม ให้เห็นข้อมูลตัวเองแบบเดียวกับที่
+   ใช้ดูพนักงานคนอื่น ไม่ต้องมี UI สองแบบสำหรับ "ดูข้อมูลพนักงาน" */
 function pickUser(){
-  var menu=document.getElementById('whoMenu');
-  if(!menu)return;
-  if(document.body!==menu.parentNode)document.body.appendChild(menu);
-  if(!menu.hidden){closeWhoMenu();return;}          /* กดชิปซ้ำ = ปิด */
+  var emp=currentEmp();
+  if(emp){openEmpBadge(emp.id);return;}
   var emps=activeEmployees();
-  var h;
-  if(!emps.length){
-    h='<div class="wm-head">ยังไม่มีพนักงานในระบบ — เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้</div>'
-     +'<button class="btn accent sm" style="width:100%;justify-content:center;gap:8px;" onclick="closeWhoMenu();goSetup(\'emp\')">'+IC('plus')+' ไปเพิ่มพนักงาน</button>';
-  }else{
-    var opts=emps.map(function(e){
-      var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-      var canEdit=isAdmin()||(currentEmp()&&currentEmp().id===e.id);
-      return '<div class="wm-row">'
-      +'<button class="wm-pick" onclick="setCurrentUser(\''+esc(e.name).replace(/'/g,"\\'")+'\');closeWhoMenu();">'
-      +'<span class="wm-nm">'+esc(e.name)+'</span>'
-      +(meta?'<span class="wm-meta">'+esc(meta)+'</span>':'')+'</button>'
-      +(USER===e.name?'<span class="pill ok">'+IC('check','tick')+' ปัจจุบัน</span>':'')
-      +(canEdit?'<button class="btn ghost sm" title="แก้ไขข้อมูลพนักงาน" onclick="closeWhoMenu();pickUserEditEmp(\''+esc(e.id)+'\');">แก้ไข</button>':'')
-      +'</div>';}).join('');
-    h=opts
-     +'<div class="wm-sep"></div>'
-     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeWhoMenu();goSetup(\'emp\')">'+IC('plus')+' เพิ่มพนักงาน</button>'
-     +'<div class="wm-sep"></div>'
-     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--neg);" onclick="closeWhoMenu();if(typeof window.smarttraceLogout===\'function\')window.smarttraceLogout();">'+IC('close')+' ออกจากระบบ (เปลี่ยนบัญชี)</button>';
-  }
-  menu.innerHTML=h;
-  positionWhoMenu(menu);
+  if(!emps.length){toast('ยังไม่มีพนักงานในระบบ','เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้','err');goSetup('emp');return;}
+  /* USER ไม่ตรงกับพนักงานคนไหนเลย (เช่น ยังไม่เคยตั้งค่า) — เปิดบัตรของคนแรกให้เลือกจากตรงนั้นแทน */
+  openEmpBadge(emps[0].id);
 }
 window.pickUser=pickUser;
-
-/* ปิดเมื่อคลิกที่อื่นหรือกด Esc — dropdown ไม่มีม่านทึบให้กดปิดเหมือน modal
-   จึงต้องมีทางออกที่ผู้ใช้คาดหวังทั้งสองทาง */
-document.addEventListener('click',function(ev){
-  var m=document.getElementById('whoMenu');
-  if(m&&!m.hidden&&!ev.target.closest('.who-wrap')&&!ev.target.closest('#whoMenu'))closeWhoMenu();
-},true);
-document.addEventListener('keydown',function(ev){if(ev.key==='Escape'){closeWhoMenu();}});
-window.addEventListener('resize',closeWhoMenu);
-/* "แก้ไข" from the recorder picker: switch to Setup > พนักงาน first, then open the
-   edit form once that sub-tab is actually visible (goSetup's own tab-switch is async) */
-function pickUserEditEmp(id){
-  goSetup('emp');
-  setTimeout(function(){editEmp(id);},120);
-}
-window.pickUserEditEmp=pickUserEditEmp;
 
 /* ===== FIRST-RUN FORCED REGISTRATION =====
    When there are no employees yet (พนักงาน = null), pop a blocking modal on
@@ -7756,6 +7692,32 @@ window.toggleReportsPanel=toggleReportsPanel;
    another account's session on a shared terminal. dfGet() always re-resolves
    S.dfPrefs[USER][id] fresh (never a cached reference) since loadFromServer()
    reassigns S wholesale on reload/SSE sync. */
+/* ============================================================================
+   GENERIC UI-PREF STORE — same round-trip-through-/api/state reasoning as
+   S.dfPrefs above (see the comment on it), generalized to any single-value
+   toggle/segmented-filter the user clicks (view mode, registration mode,
+   gate mode, etc.) instead of just date-range filters. Deliberately only
+   covers self-contained "remember what I picked" preferences, NOT record
+   being-edited fields (whStatus/eStatus/cStatus toggles reflect the record
+   currently open, not a standing preference) and not navigation-driven
+   state (e.g. invStatusFilter set by clicking an Overview KPI card) — those
+   would make a stale filter silently reappear in a context that didn't ask
+   for it. Callers persist explicitly from their own click handler via
+   uiPrefSet(), not from passive re-render/resync passes, so a render that
+   merely repaints existing state never issues a redundant save(). */
+function uiPrefGet(key,dflt){
+  if(!S.uiPrefs)S.uiPrefs={};
+  if(!S.uiPrefs[USER])S.uiPrefs[USER]={};
+  if(S.uiPrefs[USER][key]===undefined)S.uiPrefs[USER][key]=dflt;
+  return S.uiPrefs[USER][key];
+}
+function uiPrefSet(key,val){
+  if(!S.uiPrefs)S.uiPrefs={};
+  if(!S.uiPrefs[USER])S.uiPrefs[USER]={};
+  S.uiPrefs[USER][key]=val;
+  save();
+}
+
 var DF_APPLY={};
 function dfGet(id){
   if(!S.dfPrefs)S.dfPrefs={};
@@ -7769,11 +7731,14 @@ function dfGet(id){
    the same filter) in one place instead of copy-pasted per report. */
 function dfBarHtml(id){
   return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
-    +'<span class="inv-view-sw" style="flex-shrink:0;">'
+    +'<span class="inv-view-sw df-sw" id="df-'+id+'-sw" style="flex-shrink:0;">'
+    +'<span class="df-hidden-hint" title="ยังมีตัวเลือกช่วงเวลาอื่นซ่อนอยู่ — เอาเมาส์ชี้เพื่อดู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span>'
+    +'<span class="df-collapsible">'
     +'<button type="button" class="ivs-btn active" data-mode="all" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
     +'<button type="button" class="ivs-btn" data-mode="day" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
     +'<button type="button" class="ivs-btn" data-mode="month" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
     +'<button type="button" class="ivs-btn" data-mode="year" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
+    +'</span>'
     +'<button type="button" class="ivs-btn" data-mode="custom" onclick="dfSetMode(\''+id+'\',\'custom\')">ระบุวัน</button>'
     +'</span>'
     +'<span id="df-'+id+'-custom" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">'
@@ -7857,6 +7822,8 @@ function dfDescribe(id){
 function dfSyncUI(id){
   var st=dfGet(id);
   $all('#df-'+id+' .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===st.mode);});
+  var sw=$('#df-'+id+'-sw');
+  if(sw){if(st.mode==='custom')sw.setAttribute('data-collapsed','1');else sw.removeAttribute('data-collapsed');}
   var customWrap=$('#df-'+id+'-custom');
   if(customWrap)customWrap.style.display=st.mode==='custom'?'inline-flex':'none';
   /* renderReports()/renderOverview() call this on every re-render (SSE pushes,
@@ -8253,10 +8220,11 @@ function refreshStabBadges(){
    รับกล่องใหม่จาก Supplier ไม่มีอะไรผูกไว้ล่วงหน้า จึงยังต้องเลือกอยู่
    (กรองให้เหลือเฉพาะซัพพลายเออร์ ไม่ปนลูกค้าเข้ามาให้เลือกผิด) */
 var inGateMode='return';
-function setInGateMode(mode){
+function setInGateMode(mode,persist){
   inGateMode=mode;
   $all('#inGateModeSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===mode);});
   renderInPartnerField();
+  if(persist!==false)uiPrefSet('inGateMode',mode);
 }
 window.setInGateMode=setInGateMode;
 function renderInPartnerField(){
@@ -8946,7 +8914,27 @@ window.seedDemo=seedDemo;
    the (empty) default S, or a render would flash empty before real data
    arrives. An empty account stays empty — seedDemo() is opt-in only, via
    "ใส่ข้อมูลตัวอย่าง" in the ⋯ menu, never automatic. */
+/* Re-apply whatever the account last picked for the standalone (non-df)
+   toggles, once per boot after S has actually loaded — the plain `var
+   invViewMode = 'serial'` etc. declarations above ran at parse time, before
+   loadFromServer() resolved, so they can only ever hold the hardcoded
+   fallback until this runs. persist:false on setBoxRegMode/setInGateMode
+   avoids writing the value straight back as if the user had just clicked it. */
+function restoreUiPrefs(){
+  invViewMode=uiPrefGet('invView','serial');
+  var invBtn=document.querySelector('#invViewSw .ivs-btn[data-view="'+invViewMode+'"]');
+  if(invBtn){
+    $all('#invViewSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b===invBtn);});
+    var serial=$('#invSerialWrap'),summary=$('#invSummaryWrap');
+    if(serial)serial.style.display=invViewMode==='serial'?'':'none';
+    if(summary)summary.style.display=invViewMode==='summary'?'':'none';
+  }
+  if(typeof setBoxRegMode==='function')setBoxRegMode(uiPrefGet('boxRegMode','single'));
+  if(typeof setInGateMode==='function')setInGateMode(uiPrefGet('inGateMode','return'),false);
+}
+
 loadFromServer().then(function(){
+  restoreUiPrefs();
   renderAll();
   hydrateIcons(document);
   /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
@@ -9616,6 +9604,7 @@ $all('#invViewSw .ivs-btn').forEach(function(btn) {
     $all('#invViewSw .ivs-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     invViewMode = btn.dataset.view;
+    uiPrefSet('invView', invViewMode);
     var serial = $('#invSerialWrap'), summary = $('#invSummaryWrap');
     if (serial) serial.style.display = invViewMode === 'serial' ? '' : 'none';
     if (summary) summary.style.display = invViewMode === 'summary' ? '' : 'none';
