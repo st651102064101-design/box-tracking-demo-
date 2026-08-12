@@ -14,6 +14,20 @@ import { resolveBoxesByCodes } from './rfid.js';
 
 const DAY = 86_400_000;
 const iso = () => new Date().toISOString();
+const pad = (n: number, w: number) => String(n).padStart(w, '0');
+/** Same shape as the legacy web UI's genDocNo('DO') (DO-YYYY-MM-DD-HHMMSS) —
+ *  this is the fallback used when a caller (PDA, an integration) ships a
+ *  batch without generating its own DO number. It used to be `DO-${Date.now()}`,
+ *  a raw epoch-ms stamp that looked nothing like the readable numbers the web
+ *  app generates for the exact same kind of record, confusing anyone
+ *  comparing a DO from the PDA against one from the web app. */
+function genDoNo(): string {
+  const d = new Date();
+  return (
+    `DO-${d.getFullYear()}-${pad(d.getMonth() + 1, 2)}-${pad(d.getDate(), 2)}-` +
+    `${pad(d.getHours(), 2)}${pad(d.getMinutes(), 2)}${pad(d.getSeconds(), 2)}`
+  );
+}
 
 async function warehouseOfGate(db: DB, gate: number): Promise<string> {
   const [row] = await db.select().from(gates).where(eq(gates.gateNo, gate));
@@ -96,6 +110,8 @@ export interface GateOutInput {
   vehicleType?: string;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
+  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
+  platform?: string;
 }
 
 export async function gateOut(db: DB, input: GateOutInput) {
@@ -103,7 +119,8 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const operator = await resolveOperator(db, input.employeeId, input.recorder);
   const { employeeId, recorder } = operator;
   const device = input.device ?? '';
-  const doNo = input.doNo ?? `DO-${Date.now()}`;
+  const platform = input.platform ?? '';
+  const doNo = input.doNo ?? genDoNo();
   const po = input.po ?? '';
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
@@ -195,6 +212,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
         recorder,
         employeeId,
         device,
+        platform,
         dueAt: dueTs,
         returnDays,
         plate,
@@ -222,6 +240,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
 
       await tx.insert(events).values({
         ts: new Date(outTs),
+        platform: platform || null,
         data: {
           ts: outTs,
           dir: 'out',
@@ -236,6 +255,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
           recorder,
           employeeId,
           device,
+          platform,
           plate,
           driver,
           vehicleType,
@@ -267,6 +287,8 @@ export interface GateInInput {
   conditions?: Record<string, 'hold' | 'damage'>;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
+  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
+  platform?: string;
   /** One shelf position for the whole batch — see gateInLocationSchema.
    *  Omitted means "leave wherever it already was" (pending-putaway). Never
    *  applied to a tag that landed on hold/damage instead of warehouse: a
@@ -280,6 +302,7 @@ export async function gateIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
   const { employeeId, recorder } = await resolveOperator(db, input.employeeId, input.recorder);
   const device = input.device ?? '';
+  const platform = input.platform ?? '';
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
   const vehicleType = input.vehicleType ?? '';
@@ -378,6 +401,7 @@ export async function gateIn(db: DB, input: GateInInput) {
         recorder,
         employeeId,
         device,
+        platform,
         plate,
         driver,
         vehicleType,
@@ -411,6 +435,7 @@ export async function gateIn(db: DB, input: GateInInput) {
 
       await tx.insert(events).values({
         ts: new Date(inTs),
+        platform: platform || null,
         data: {
           ts: inTs,
           dir: wasOut ? 'in' : 'in-new',
@@ -423,6 +448,7 @@ export async function gateIn(db: DB, input: GateInInput) {
           recorder,
           employeeId,
           device,
+          platform,
           plate,
           driver,
           vehicleType,

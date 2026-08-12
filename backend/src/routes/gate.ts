@@ -23,6 +23,11 @@ gateRouter.post(
   '/out',
   asyncHandler(async (req, res) => {
     const input = gateOutSchema.parse(req.body);
+    /* platform is client-declared (see gateOutSchema) — NOT defaulted here.
+       Only legacy.html and pda_flutter's own scan actually know which app
+       sent the request; guessing 'web' for anything that omits it would
+       mislabel an un-updated PDA build instead of leaving it honestly
+       unknown (null in the DB) until that client starts sending it. */
     const result = await gateOut(getDb(), { ...input, device: deviceOf(req) });
     /* A handheld scan has to reach the dashboards too, and it never goes
        through PUT /api/state — so the notification belongs here as well. */

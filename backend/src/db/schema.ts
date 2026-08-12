@@ -279,6 +279,12 @@ export const events = pgTable('events', {
   id: serial('id').primaryKey(),
   ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
   data: jsonb('data').notNull().default({}),
+  // Which client sent this gate movement — 'web' (legacy.html on a PC) or
+  // 'pda' (pda_flutter on a handheld, e.g. an MC3390R) — client-declared
+  // (not derived from the login account, which only says *who*, not
+  // *what app*) so gate-in/out activity can be filtered/reported by device
+  // without digging into the `data` JSONB.
+  platform: text('platform'),
 });
 
 export const auditLog = pgTable('audit_log', {

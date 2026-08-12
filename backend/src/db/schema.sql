@@ -215,10 +215,15 @@ CREATE TABLE IF NOT EXISTS cycle_counts (
 CREATE INDEX IF NOT EXISTS cycle_counts_open_idx ON cycle_counts (wh, zone, status);
 
 CREATE TABLE IF NOT EXISTS events (
-  id   SERIAL PRIMARY KEY,
-  ts   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  data JSONB NOT NULL DEFAULT '{}'::jsonb
+  id       SERIAL PRIMARY KEY,
+  ts       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  data     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  platform TEXT
 );
+
+-- Additive: databases created before gate movements tracked which client
+-- (web app on a PC vs. pda_flutter on a handheld) sent them.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS platform TEXT;
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id          SERIAL PRIMARY KEY,

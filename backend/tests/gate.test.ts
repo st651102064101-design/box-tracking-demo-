@@ -54,6 +54,21 @@ describe('gate operations', () => {
     expect(box.body.cycles).toBe(1);
   });
 
+  it('generates a readable DO number when the caller omits one (not a raw epoch stamp)', async () => {
+    await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag: 'BTX-NODONO', type: 'BT-001' });
+    await request(ctx.app).post('/api/boxes/BTX-NODONO/label').set(auth(ctx.token));
+    await request(ctx.app).post('/api/boxes/BTX-NODONO/putaway').set(auth(ctx.token)).send({ wh: 'WH-001' });
+    const res = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-NODONO'], customer: 'CUST-001', gate: 5, recorder: 'tester' });
+    expect(res.status).toBe(200);
+    // Same shape the legacy web UI's genDocNo('DO') produces: DO-YYYY-MM-DD-HHMMSS.
+    // Used to be `DO-${Date.now()}` (e.g. DO-1786556123050) — nothing like what
+    // the web app generates for the same kind of record.
+    expect(res.body.doNo).toMatch(/^DO-\d{4}-\d{2}-\d{2}-\d{6}$/);
+  });
+
   it('rejects shipping an unknown box', async () => {
     const res = await request(ctx.app)
       .post('/api/gate/out')
@@ -240,5 +255,45 @@ describe('gate/in per-tag conditions', () => {
     const box = await request(ctx.app).get('/api/boxes/BTX-COND-3').set(auth(ctx.token));
     expect(box.body.status).toBe('warehouse');
     expect(box.body.history.at(-1).condition).toBeUndefined();
+  });
+});
+
+describe('gate movements record which client sent them', () => {
+  it('stamps platform on the box history entry and the event when the caller declares it', async () => {
+    await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag: 'BTX-PLAT-1', type: 'BT-001' });
+    await request(ctx.app).post('/api/boxes/BTX-PLAT-1/label').set(auth(ctx.token));
+    await request(ctx.app).post('/api/boxes/BTX-PLAT-1/putaway').set(auth(ctx.token)).send({ wh: 'WH-001' });
+    await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-PLAT-1'], customer: 'CUST-001', gate: 5, platform: 'pda' });
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-PLAT-1').set(auth(ctx.token));
+    expect(box.body.history.at(-1).platform).toBe('pda');
+
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    const ev = state.body.events.find((e: any) => e.tag === 'BTX-PLAT-1' && e.dir === 'out');
+    expect(ev.platform).toBe('pda');
+  });
+
+  it('rejects a platform value other than web/pda', async () => {
+    const res = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-PLAT-1'], customer: 'CUST-001', gate: 5, platform: 'toaster' });
+    expect(res.status).toBe(400);
+  });
+
+  it('leaves platform unset (not defaulted to "web") when the caller omits it entirely', async () => {
+    await request(ctx.app).post('/api/boxes').set(auth(ctx.token)).send({ tag: 'BTX-PLAT-2', type: 'BT-001' });
+    await request(ctx.app).post('/api/boxes/BTX-PLAT-2/label').set(auth(ctx.token));
+    await request(ctx.app).post('/api/boxes/BTX-PLAT-2/putaway').set(auth(ctx.token)).send({ wh: 'WH-001' });
+    await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['BTX-PLAT-2'], customer: 'CUST-001', gate: 5 });
+
+    const box = await request(ctx.app).get('/api/boxes/BTX-PLAT-2').set(auth(ctx.token));
+    expect(box.body.history.at(-1).platform).toBe('');
   });
 });

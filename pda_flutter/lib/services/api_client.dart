@@ -170,6 +170,10 @@ class ApiClient {
           if (conditions != null && conditions.isNotEmpty)
             'conditions': conditions,
           if (location != null) 'location': location,
+          // Which client sent this — lets the server tell PDA (handheld,
+          // e.g. an MC3390R) gate movements apart from ones the web app
+          // made, without guessing off the login account.
+          'platform': 'pda',
         }))) as Map<String, dynamic>;
   }
 
@@ -220,6 +224,10 @@ class ApiClient {
           if (driver != null && driver.isNotEmpty) 'driver': driver,
           if (vehicleType != null && vehicleType.isNotEmpty)
             'vehicleType': vehicleType,
+          // Which client sent this — lets the server tell PDA (handheld,
+          // e.g. an MC3390R) gate movements apart from ones the web app
+          // made, without guessing off the login account.
+          'platform': 'pda',
         }))) as Map<String, dynamic>;
   }
 
