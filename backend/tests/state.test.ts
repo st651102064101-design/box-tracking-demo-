@@ -50,6 +50,9 @@ const sampleState = {
   inventory: {},
   cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
   seq: { do: 1, emp: 1 },
+  dfPrefs: { demo: { ovMove: { mode: 'day', day: 7, month: 1, year: 1, from: '', to: '' } } },
+  uiPrefs: { demo: { theme: 'dark', filtBoxStatus: 'warehouse' } },
+  gatePrefs: { demo: { lastGate: 2 } },
   auditLog: [
     { ts: '2026-07-20T03:00:00.000Z', action: 'CREATE', recorder: 'demo', itemId: 'CUST-001', itemName: 'ลูกค้า ก', before: '', after: '{}' },
   ],
@@ -82,6 +85,29 @@ describe('state bridge (S ↔ Postgres)', () => {
     // singletons
     expect(s.cfg).toEqual(sampleState.cfg);
     expect(s.seq).toEqual(sampleState.seq);
+
+    // per-account UI prefs (date filters, toggle/dropdown memory, gate display
+    // prefs) — these have no typed columns of their own, so it's easy for a
+    // schema change to silently start stripping them again (z.object() drops
+    // unknown keys by default); assert them explicitly rather than relying on
+    // one of the maps above to happen to catch it.
+    expect(s.dfPrefs).toEqual(sampleState.dfPrefs);
+    expect(s.uiPrefs).toEqual(sampleState.uiPrefs);
+    expect(s.gatePrefs).toEqual(sampleState.gatePrefs);
+  });
+
+  it('per-account UI prefs survive a reload independent of everything else changing', async () => {
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(sampleState);
+    // Simulate what save()/renderAll() does constantly: PUT the whole S again
+    // with unrelated fields touched but dfPrefs/uiPrefs/gatePrefs untouched.
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({ ...sampleState, boxes: {} });
+    const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(get.body.dfPrefs).toEqual(sampleState.dfPrefs);
+    expect(get.body.uiPrefs).toEqual(sampleState.uiPrefs);
+    expect(get.body.gatePrefs).toEqual(sampleState.gatePrefs);
   });
 
   it('replaces (not merges) on subsequent PUT', async () => {

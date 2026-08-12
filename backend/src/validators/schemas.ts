@@ -65,6 +65,13 @@ export const stateSchema = z.object({
   locations: record.optional().default({}),
   inventory: record.optional().default({}),
   auditLog: z.array(z.any()).optional().default([]),
+  // Per-account UI preferences (date-range filters, toggle/dropdown memory, gate
+  // display prefs) — previously silently stripped here since z.object() drops
+  // unknown keys by default, so the frontend's save()/loadFromServer() round
+  // trip looked correct but every one of these reset on the next real reload.
+  dfPrefs: record.optional().default({}),
+  uiPrefs: record.optional().default({}),
+  gatePrefs: record.optional().default({}),
 });
 export type StatePayload = z.infer<typeof stateSchema>;
 

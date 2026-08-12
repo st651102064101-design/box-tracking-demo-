@@ -90,6 +90,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
   const cfg = cfgRow
     ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode }
     : { agingDays: 15, boxValue: 450, lostMode: 'manual' };
+  const prefs = (cfgRow?.prefs as Record<string, unknown>) ?? {};
 
   return {
     boxes: mapBy(boxRows, (r) => r.tag),
@@ -124,6 +125,9 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     locations: mapBy(locRows, (r) => r.code),
     inventory: mapBy(invRows, (r) => r.id),
     auditLog: auditRows.map((r) => r.data),
+    dfPrefs: prefs.dfPrefs ?? {},
+    uiPrefs: prefs.uiPrefs ?? {},
+    gatePrefs: prefs.gatePrefs ?? {},
   };
 }
 
@@ -207,6 +211,15 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
 
     // 2) config singleton (upsert id=1)
     const cfg = s.cfg ?? {};
+    // dfPrefs/uiPrefs/gatePrefs have no typed columns of their own — they ride
+    // along in the same singleton row as one JSONB blob (see schema.ts's
+    // `config.prefs`), same reasoning as every other entity's verbatim `data`
+    // column: the frontend is the source of truth for their shape.
+    const prefs = {
+      dfPrefs: s.dfPrefs ?? {},
+      uiPrefs: s.uiPrefs ?? {},
+      gatePrefs: s.gatePrefs ?? {},
+    };
     await tx
       .insert(config)
       .values({
@@ -214,6 +227,7 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
         agingDays: toInt(cfg.agingDays) ?? 15,
         boxValue: toNumStr(cfg.boxValue) ?? '450',
         lostMode: (cfg.lostMode as string) ?? 'manual',
+        prefs,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -222,6 +236,7 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
           agingDays: toInt(cfg.agingDays) ?? 15,
           boxValue: toNumStr(cfg.boxValue) ?? '450',
           lostMode: (cfg.lostMode as string) ?? 'manual',
+          prefs,
           updatedAt: new Date(),
         },
       });

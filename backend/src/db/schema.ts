@@ -49,6 +49,14 @@ export const config = pgTable('config', {
   agingDays: integer('aging_days').notNull().default(15),
   boxValue: numeric('box_value').notNull().default('450'),
   lostMode: text('lost_mode').notNull().default('manual'),
+  // Per-account UI preferences the legacy frontend used to assume round-tripped
+  // through PUT/GET /api/state (S.dfPrefs/S.uiPrefs/S.gatePrefs) but which the
+  // typed columns above never actually persisted — they silently reset on every
+  // reload. One JSONB blob, keyed the same way the frontend already keys it
+  // (by USER, then by filter/toggle id), since there's no per-user table for
+  // this and the "verbatim data blob" bridge pattern is already how every
+  // other legacy-shaped field round-trips here.
+  prefs: jsonb('prefs').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

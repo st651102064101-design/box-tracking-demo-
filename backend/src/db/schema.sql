@@ -27,8 +27,13 @@ CREATE TABLE IF NOT EXISTS config (
   aging_days  INTEGER NOT NULL DEFAULT 15,
   box_value   NUMERIC NOT NULL DEFAULT 450,
   lost_mode   TEXT NOT NULL DEFAULT 'manual',
+  prefs       JSONB NOT NULL DEFAULT '{}',
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Additive: databases created before per-account UI prefs (S.dfPrefs/S.uiPrefs/
+-- S.gatePrefs) round-tripped through /api/state.
+ALTER TABLE config ADD COLUMN IF NOT EXISTS prefs JSONB NOT NULL DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS sequences (
   name  TEXT PRIMARY KEY,
