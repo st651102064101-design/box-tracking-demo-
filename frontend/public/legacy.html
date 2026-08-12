@@ -1130,11 +1130,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
 
   <div class="sectlabel reveal">รายงานรายการค้างคืนเกินกำหนด</div>
-  <div class="row no-print reveal" style="margin-bottom:10px;align-items:center;gap:8px;">
-    <label class="muted small" style="font-weight:400;white-space:nowrap;">แสดงเฉพาะที่เกินกำหนดคืนมาแล้วอย่างน้อย</label>
-    <input type="number" min="1" id="ovOverdueMinDays" value="1" onchange="pagerReset('ovOverdue');renderOverview();" style="width:5em;padding:6px 8px;border-radius:10px;border:.5px solid var(--line2);background:var(--surface);color:var(--ink);font-size:13px;">
-    <label class="muted small" style="font-weight:400;">วัน</label>
-  </div>
+  <div id="df-ovOverdue-mount"></div>
   <p class="muted small" id="ovOverdueDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th class="r">เกินมา</th></tr></thead><tbody id="ovOverdueBody"></tbody></table></div></div>
   <div class="pagerbar" id="pagerOvOverdue"></div>
@@ -8160,7 +8156,7 @@ window.dfOnCustomChange=dfOnCustomChange;
 /* Mount the four report-level date filters into their placeholder <div>s —
    one dfBarHtml() call per report id instead of copy-pasting the same
    markup per section in the HTML. */
-['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovStatusNow','ovRates','ovEvents'].forEach(function(id){
+['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovOverdue','ovStatusNow','ovRates','ovEvents'].forEach(function(id){
   var mount=$('#df-'+id+'-mount');
   if(mount)mount.innerHTML=dfBarHtml(id);
 });
@@ -8216,14 +8212,16 @@ function renderOverview(){
   }
   var ouPgEl=$('#pagerOvUnreturned');if(ouPgEl)ouPgEl.innerHTML=unreturnedAll.length?pagerBarHtml('ovUnreturned',ouPg):'';
 
-  // รายงานรายการค้างคืนเกินกำหนด — กรองด้วยจำนวนวันที่เกินกำหนดคืนจริง (ไม่ใช่ช่วงวันที่ส่งออก)
-  var minOverdueDays=Math.max(1,num('ovOverdueMinDays')||1);
-  var overdueAll=all.filter(function(b){
-    if(b.status!=='out'||!isOverdue(b))return false;
-    return Math.abs(boxDueDays(b)||0)>=minOverdueDays;
-  }).sort(function(a,b){return boxDueDays(a)-boxDueDays(b);});
+  // รายงานรายการค้างคืนเกินกำหนด — ใช้ตัวกรองช่วงวันที่แบบเดียวกับรายงานอื่น
+  // (ทั้งหมด/N วัน/เดือน/ปีล่าสุด/ระบุวัน) กรองที่ "วันครบกำหนดคืน" ของกล่อง —
+  // N วัน/เดือน/ปีล่าสุด = กล่องที่ครบกำหนดคืน (แล้วเกินมา) ภายใน N หน่วยที่ผ่านมา
+  var overdueBase=all.filter(function(b){return b.status==='out'&&isOverdue(b);});
+  dfSetVisible('ovOverdue',overdueBase.length>0);
+  dfSyncUI('ovOverdue');
+  var overdueAll=overdueBase.filter(function(b){return dfInRange('ovOverdue',b.dueAt);})
+    .sort(function(a,b){return boxDueDays(a)-boxDueDays(b);});
   var ovdDescEl=$('#ovOverdueDesc');
-  if(ovdDescEl)ovdDescEl.textContent='เกินกำหนดคืนมาแล้วอย่างน้อย '+nf(minOverdueDays)+' วัน — พบ '+nf(overdueAll.length)+' ใบ';
+  if(ovdDescEl)ovdDescEl.textContent='กรองตามวันครบกำหนดคืน — '+dfDescribe('ovOverdue')+' — พบ '+nf(overdueAll.length)+' ใบ';
   var oodPg=pagerSlice('ovOverdue',overdueAll),overdueRows=oodPg.rows;
   var oodBody=$('#ovOverdueBody');
   if(oodBody){
@@ -8237,7 +8235,7 @@ function renderOverview(){
         +'<td class="small">'+esc(b.dueDate||'-')+'</td>'
         +'<td class="r"><span class="days-badge over">'+d+' วัน</span></td>'
       +'</tr>';
-    }).join(''):emptyRow(6,'ไม่มีกล่องที่เกินกำหนดคืนมาแล้วอย่างน้อย '+nf(minOverdueDays)+' วัน');
+    }).join(''):emptyRow(6,'ไม่มีกล่องที่เกินกำหนดคืนในช่วงที่กรองไว้');
   }
   var oodPgEl=$('#pagerOvOverdue');if(oodPgEl)oodPgEl.innerHTML=overdueAll.length?pagerBarHtml('ovOverdue',oodPg):'';
 
@@ -8265,6 +8263,7 @@ DF_APPLY.ovMove=function(){renderOverview();};
 DF_APPLY.ovRecent=function(){pagerReset('ovRecent');renderOverview();};
 DF_APPLY.ovStatusNow=function(){renderOverview();};
 DF_APPLY.ovUnreturned=function(){pagerReset('ovUnreturned');renderOverview();};
+DF_APPLY.ovOverdue=function(){pagerReset('ovOverdue');renderOverview();};
 
 /* tab-reports — everything that used to live in the Overview tab besides the
    five status counts: money/rate KPIs, the process-board visualization, the
