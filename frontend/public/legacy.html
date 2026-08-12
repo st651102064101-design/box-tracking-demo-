@@ -152,7 +152,12 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
 nav::-webkit-scrollbar{display:none;}
 nav button{position:relative;color:var(--muted);font-weight:500;font-size:14px;letter-spacing:-.01em;
-  padding:9px 16px;border-radius:999px;white-space:nowrap;transition:color .3s var(--ease);z-index:1;}
+  padding:9px 16px;border-radius:999px;white-space:nowrap;transition:color .3s var(--ease);z-index:1;
+  /* buttons default to text-align:center in the UA stylesheet — without display:flex here,
+     sidebar mode's justify-content:flex-start (below) has no effect (it only applies to a
+     flex/grid container), so the centered icon+label lands at a different x per button
+     depending on that button's own content width, instead of a shared left edge. */
+  display:inline-flex;align-items:center;}
 nav button .ico{margin-right:6px;font-size:13px;opacity:.85;}
 nav button:hover{color:var(--ink2);}
 /* the pill is glass, not an ink fill — the active label reads *through* it, so it keeps
@@ -1642,7 +1647,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label><input id="btDim" placeholder="600x400x320" title="Format: กว้างxยาวxสูง เช่น 600x400x320"></div>
+        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input id="btDimW" type="number" min="0" placeholder="กว้าง" style="min-width:0;">
+            <span class="muted">×</span>
+            <input id="btDimL" type="number" min="0" placeholder="ยาว" style="min-width:0;">
+            <span class="muted">×</span>
+            <input id="btDimH" type="number" min="0" placeholder="สูง" style="min-width:0;">
+          </div>
+          <input id="btDim" type="hidden">
+        </div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
         <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -1666,9 +1680,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <h3>คลัง &amp; ประตู (Warehouse / Gate Map)</h3>
       <p class="desc">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="grid g4">
-        <div class="field"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
+        <div class="field" style="grid-column:span 2;"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
           <div class="auto-tag-row">
-            <input id="whId" readonly>
+            <input id="whId" readonly style="min-width:220px;">
             <button type="button" class="iconbtn" id="btnRegenWhId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
             <button type="button" class="iconbtn" id="btnCopyWhId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
             <button type="button" class="btn ghost sm" id="btnOverrideWhId">แก้เอง</button>
@@ -1690,7 +1704,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </div>
         <div class="field"><label>พื้นที่ / ที่ตั้ง</label><input id="whArea" placeholder="เช่น สมุทรปราการ"></div>
         <div class="field"><label>สถานะ</label>
-          <select id="whStatus"><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select>
+          <div class="inv-view-sw" data-target="whStatus">
+            <button type="button" class="ivs-btn active" data-val="active" onclick="setStatusToggle('whStatus','active')">ใช้งาน</button>
+            <button type="button" class="ivs-btn" data-val="inactive" onclick="setStatusToggle('whStatus','inactive')">ปิดใช้งาน</button>
+          </div>
+          <select id="whStatus" style="display:none;"><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select>
         </div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddWh">บันทึกคลัง</button>
@@ -1807,7 +1825,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </select>
         </div>
         <div class="field"><label>สถานะ</label>
-          <select id="eStatus">
+          <div class="inv-view-sw" data-target="eStatus">
+            <button type="button" class="ivs-btn active" data-val="active" onclick="setStatusToggle('eStatus','active')">ปฏิบัติงาน</button>
+            <button type="button" class="ivs-btn" data-val="inactive" onclick="setStatusToggle('eStatus','inactive')">พ้นสภาพ</button>
+          </div>
+          <select id="eStatus" style="display:none;">
             <option value="active">ปฏิบัติงาน</option>
             <option value="inactive">พ้นสภาพ</option>
           </select>
@@ -2327,7 +2349,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
 #whPanelOverlay .whp-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px 4px 4px;}
 #whPanelOverlay .whp-legend span{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;
-  color:rgba(245,245,247,.75);}
+  color:rgba(245,245,247,.75);cursor:pointer;padding:4px 8px 4px 4px;border-radius:999px;
+  transition:background .15s,color .15s;}
+#whPanelOverlay .whp-legend span:hover{background:rgba(255,255,255,.08);}
+#whPanelOverlay .whp-legend span.active{background:rgba(255,255,255,.16);color:#f5f5f7;}
 #whPanelOverlay .whp-legend i{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;
   flex:0 0 auto;}
 
@@ -2919,6 +2944,20 @@ function formatPhoneOnInput(el){
   el.value=out;
 }
 function setv(id,v){var e=$('#'+id);if(e)e.value=(v==null?'':v);}
+/* Active/inactive status fields (whStatus, eStatus) render as a 2-way
+   .ivs-btn toggle instead of a <select> — the <select> itself stays in the
+   DOM (display:none) as the actual value holder so every existing
+   val('whStatus')/setv('whStatus',...) call site keeps working unchanged.
+   setStatusToggle() is the click handler; syncStatusToggle() re-paints the
+   toggle's active state after any programmatic setv() (form reset, loading
+   a record to edit) since setv() itself doesn't touch the toggle buttons. */
+function setStatusToggle(id,v){setv(id,v);syncStatusToggle(id);}
+function syncStatusToggle(id){
+  var wrap=document.querySelector('.inv-view-sw[data-target="'+id+'"]');
+  if(!wrap)return;
+  var v=val(id)||'active';
+  $all('.ivs-btn',wrap).forEach(function(b){b.classList.toggle('active',b.dataset.val===v);});
+}
 function setText(id,v){var e=$('#'+id);if(e)e.textContent=(v==null?'':v);}
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -3499,32 +3538,28 @@ $('#btnAddBtype').onclick=function(){
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:dimClean};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();
+  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();
   toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
 function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
+  setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
   $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
+/* กว้าง/ยาว/สูง แยก 3 ช่อง — ประกอบกลับเป็น "WxLxH" ลง #btDim (hidden) ทุกครั้งที่
+   ช่องใดช่องหนึ่งเปลี่ยน เพื่อให้โค้ดบันทึก/แก้ไขที่อ่าน val('btDim') ทำงานเหมือนเดิม
+   โดยไม่ต้องแก้จุดอื่น ช่องที่เว้นว่างจะถูกข้ามไป (ไม่ใส่ "x" ค้างกลางสตริง) */
 (function(){
-  var el = document.getElementById('btDim');
-  if (el) {
-    el.addEventListener('input', function() {
-      var v = this.value;
-      v = v.replace(/\s+/g, '');
-      v = v.replace(/[X×]/g, 'x');
-      v = v.replace(/[^0-9x]/g, '');
-      v = v.replace(/^x+/, '');
-      v = v.replace(/x{2,}/g, 'x');
-      var parts = v.split('x');
-      if (parts.length > 3) {
-        v = parts.slice(0, 3).join('x');
-      }
-      this.value = v;
-    });
+  function syncBtDim(){
+    var parts=['btDimW','btDimL','btDimH'].map(function(id){return val(id);}).filter(function(v){return v!=='';});
+    setv('btDim',parts.join('x'));
   }
+  ['btDimW','btDimL','btDimH'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.addEventListener('input',syncBtDim);
+  });
 })();
 
 /* ===== SETUP: warehouse/gate CRUD ===== */
@@ -3612,14 +3647,14 @@ $('#btnAddWh').onclick=function(){
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');whIdAuto.reset();
+  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   renderWhGateTypeList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');whIdAuto.reset();renderWhGateTypeList();};
+  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();renderWhGateTypeList();};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
-  setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');setv('whStatus',w.status||'active');
+  setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
   $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delWh(id){
@@ -3813,12 +3848,12 @@ $('#btnAddEmp').onclick=function(){
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
@@ -3839,7 +3874,7 @@ function editEmp(id){
   editingEmp=id;
   eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
-  setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');
+  setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnCancelEmp').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});
   renderSetup();}
 function delEmp(id){
@@ -5233,16 +5268,19 @@ function whpActionsHtml(w){
 function whpRenderBody(w){
   var stats=whPanelStats(w);
   var ended=w.status==='inactive';
-  var gatesHtml=stats.gates.length
-    ?stats.gates.map(whpGateTile).join('')
-    :'<div style="padding:40px 20px;text-align:center;color:rgba(245,245,247,.6);font-size:13px;">คลังนี้ยังไม่ได้ตั้งค่าประตู</div>';
+  var gf=whp.gateFilter||'all';
+  var shownGates=gf==='all'?stats.gates:stats.gates.filter(function(g){return g.dir===gf;});
+  var gatesHtml=shownGates.length
+    ?shownGates.map(whpGateTile).join('')
+    :'<div style="padding:40px 20px;text-align:center;color:rgba(245,245,247,.6);font-size:13px;">'
+      +(stats.gates.length?'ไม่มีประตูที่ตรงกับตัวกรองที่เลือก':'คลังนี้ยังไม่ได้ตั้งค่าประตู')+'</div>';
   $('#whpBody').innerHTML=''
     +'<div class="whp-head">'
       +'<div><div class="name">'+esc(w.name)+'</div><div class="sub">'+esc(w.id)+(w.area?' · '+esc(w.area):'')+'</div></div>'
       +'<div class="whp-stats">'
         +'<div class="whp-stat"><div class="lbl">ประตูทั้งหมด</div><div class="val">'+nf(stats.gates.length)+'</div></div>'
         +'<div class="whp-stat"><div class="lbl">กล่องในคลัง</div><div class="val click" onclick="whpAction(\'inv\')" title="ดูกล่องในคลังนี้">'+nf(stats.held)+'</div></div>'
-        +'<div class="whp-stat"><div class="lbl">สถานะ</div><div class="val'+(ended?' bad':'')+'" style="font-size:15px;margin-top:5px;">'+(ended?'ปิดใช้งาน':'ใช้งาน')+'</div></div>'
+        +'<div class="whp-stat"><div class="lbl">สถานะ</div><div class="val click'+(ended?' bad':'')+'" style="font-size:15px;margin-top:5px;" onclick="whpToggleStatus()" title="คลิกเพื่อสลับสถานะ">'+(ended?'ปิดใช้งาน':'ใช้งาน')+'</div></div>'
       +'</div>'
     +'</div>'
     +'<div class="whp-building">'
@@ -5254,13 +5292,31 @@ function whpRenderBody(w){
       +(ended?whpDecoBanner():'')
     +'</div>'
     +'<div class="whp-legend">'
-      +'<span><i style="background:var(--accent2);color:var(--accentContrast);">'+CC_ICONS.out+'</i>ขาออก</span>'
-      +'<span><i style="background:#e9e9ee;color:#16330a;">'+CC_ICONS['in']+'</i>ขาเข้า</span>'
-      +'<span><i style="background:rgba(189,251,99,.28);color:#16330a;">'+CC_ICONS.both+'</i>สองทาง</span>'
+      +'<span class="'+(gf==='out'?'active':'')+'" onclick="whpSetGateFilter(\'out\')" title="กรองเฉพาะประตูขาออก"><i style="background:var(--accent2);color:var(--accentContrast);">'+CC_ICONS.out+'</i>ขาออก</span>'
+      +'<span class="'+(gf==='in'?'active':'')+'" onclick="whpSetGateFilter(\'in\')" title="กรองเฉพาะประตูขาเข้า"><i style="background:#e9e9ee;color:#16330a;">'+CC_ICONS['in']+'</i>ขาเข้า</span>'
+      +'<span class="'+(gf==='both'?'active':'')+'" onclick="whpSetGateFilter(\'both\')" title="กรองเฉพาะประตูสองทาง"><i style="background:rgba(189,251,99,.28);color:#16330a;">'+CC_ICONS.both+'</i>สองทาง</span>'
     +'</div>';
   $('#whpActions').innerHTML=whpActionsHtml(w);
   whpPlaceActions();
 }
+/* legend คลิกซ้ำที่ตัวกรองเดิม = ล้างตัวกรอง กลับไปแสดงทุกประตู */
+function whpSetGateFilter(mode){
+  whp.gateFilter=(whp.gateFilter===mode)?'all':mode;
+  var w=S.warehouses[whp.id];if(w)whpRenderBody(w);
+}
+window.whpSetGateFilter=whpSetGateFilter;
+function whpToggleStatus(){
+  var w=S.warehouses[whp.id];if(!w)return;
+  var before=Object.assign({},w);
+  w.status=(w.status==='inactive')?'active':'inactive';
+  rebuildGates(); /* soft-deactivated warehouses drop out of S.gates — same as the edit-form save path */
+  auditEntry('UPDATE',USER,w.id,w.name,before,w);
+  save();
+  whpRenderBody(w);
+  renderAll();
+  toast('อัปเดตสถานะคลังแล้ว',w.name+' · '+(w.status==='inactive'?'ปิดใช้งาน':'ใช้งาน'));
+}
+window.whpToggleStatus=whpToggleStatus;
 
 /* วางแถบปุ่มไว้ข้างขวาของแผง ห่าง 14px — ต้องวัด getBoundingClientRect เพราะความสูง/ความกว้าง
    จริงของแผงขึ้นกับเนื้อหา (จำนวนประตู) และ max-height:90vh หนีบไว้อีกชั้น
@@ -5279,9 +5335,14 @@ function openWhPanel(id){
   var w=S.warehouses[id];if(!w)return;
   /* ลบตัวเดิมทิ้งก่อนเสมอ เหมือนบัตรคู่ค้า/กล่อง 3D */
   closeWhPanel();
-  whp.id=id;whp.pinnedGate=null;whp.filter='all';
-  whpRenderBody(w);
+  whp.id=id;whp.pinnedGate=null;whp.filter='all';whp.gateFilter='all';
+  /* display:block MUST come before whpRenderBody() — it calls whpPlaceActions(),
+     which measures #whpStage via getBoundingClientRect() to park the action rail
+     beside it; measuring while the overlay is still display:none returns an
+     all-zero rect, so the rail lands at (OVERLAY_BTN_GAP, 8) near the viewport
+     corner instead of next to the stage. */
   $('#whPanelOverlay').style.display='block';
+  whpRenderBody(w);
   whpBoot();
 }
 window.openWhPanel=openWhPanel;
@@ -9096,6 +9157,16 @@ function showGateTodayList(dir){
   }else{
     h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?'ที่ออก':'ที่รับเข้า')+'ในช่วงที่กรองไว้</p>';
     h+='<input id="gateTodaySearch" placeholder="ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ" oninput="filterGateTodayList(this.value)" style="width:100%;padding:10px 12px;border:.5px solid var(--line);border-radius:10px;margin-bottom:12px;background:var(--surface);color:var(--ink);font:inherit;">';
+    /* หัวตาราง — เดิมไม่มีป้ายกำกับคอลัมน์เลย คอลัมน์ที่ 2 (ลูกค้า) เลยดูเหมือนไม่มีอยู่จริง
+       ทั้งที่ custTxt ถูกคำนวณและแสดงอยู่แล้ว โดยเฉพาะฝั่งขาเข้าที่คอลัมน์นี้คือ "บริษัท
+       ลูกค้าที่คืนกล่อง" — ต่างจากฝั่งขาออกที่หมายถึงลูกค้าปลายทางที่จะส่งไป */
+    h+='<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:10px;padding:0 4px 6px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.03em;">'
+      +'<div>บาร์โค้ด / ประเภท</div>'
+      +'<div>'+(isOut?'ลูกค้า/ปลายทาง':'บริษัทลูกค้าที่คืนกล่อง')+'</div>'
+      +'<div>'+(isOut?'DO':'DO / ทะเบียนรถ')+'</div>'
+      +'<div>ประตู / คลัง</div>'
+      +'<div style="text-align:right;">เวลา</div>'
+      +'</div>';
     /* เดิมทั้ง .mbody เลื่อนรวมกันหมด ช่องค้นหาเลยไหลหายไปพร้อมรายการตอนสกอร์ล — ให้เฉพาะ
        รายการกล่อง (#gateTodayRows) มีขอบเขตความสูงของตัวเองแล้วสกอร์ลแยก หัวเรื่อง/สรุปยอด/
        ช่องค้นหาด้านบนเลยลอยนิ่งอยู่ที่เดิมเสมอไม่ว่าจะเลื่อนดูรายการไปไกลแค่ไหน */
