@@ -1203,7 +1203,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div style="font-size:12px;font-weight:600;color:var(--accentInk);letter-spacing:.04em;">ประตูประจำเครื่องนี้</div>
         <div id="outGateDisplay" style="font-weight:700;font-size:16px;margin-top:1px;">— ยังไม่ได้ตั้งค่า —</div>
       </div>
-      <button class="btn ghost sm" onclick="pickGate('out')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
+      <button class="btn ghost sm" id="outGateChangeBtn" onclick="pickGate('out')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
     </div>
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
@@ -1286,7 +1286,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div style="font-size:12px;font-weight:600;color:var(--pos);letter-spacing:.04em;">ประตูประจำเครื่องนี้</div>
         <div id="inGateDisplay" style="font-weight:700;font-size:16px;margin-top:1px;">— ยังไม่ได้ตั้งค่า —</div>
       </div>
-      <button class="btn ghost sm" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
+      <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
     </div>
     <input type="hidden" id="inGate">
     <div id="inGateHint"></div>
@@ -6695,6 +6695,8 @@ function refreshGateDisplays(){
     var inp=$('#'+(dir==='out'?'outGate':'inGate'));
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
     var hint=$('#'+(dir==='out'?'outGateHint':'inGateHint'));
+    var changeBtn=$('#'+(dir==='out'?'outGateChangeBtn':'inGateChangeBtn'));
+    if(changeBtn)changeBtn.style.display=gs.length?'':'none'; /* no คลัง/ประตู at all — disp already shows its own "เพิ่มคลัง & ประตู" CTA */
     if(inp)inp.value=g||'';
     if(disp){
       if(g&&gateWh(g)){
@@ -9093,7 +9095,7 @@ function showGateTodayList(dir){
        ช่องค้นหาด้านบนเลยลอยนิ่งอยู่ที่เดิมเสมอไม่ว่าจะเลื่อนดูรายการไปไกลแค่ไหน */
     h+='<div id="gateTodayRows" style="max-height:min(48vh,420px);overflow-y:auto;">';
     evs.forEach(function(e){
-      var t=new Date(e.ts);var timeStr=pad(t.getHours(),2)+':'+pad(t.getMinutes(),2);
+      var timeStr=fmtTs(e.ts);
       var custTxt=e.customerName||(e.customer?custName(e.customer):(e.dir==='in-new'?'กล่องใหม่':'-'));
       var whTxt=e.wh?whName(e.wh):'-';
       var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
