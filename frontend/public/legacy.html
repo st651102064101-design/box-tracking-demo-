@@ -2008,6 +2008,123 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
 </div>
 
+<!-- ===== ประเภทกล่อง — กล่อง 3D หกด้าน (CSS 3D) =====
+     คลิกแถวในตาราง "ประเภทกล่อง" แล้วกล่องจะหล่นลงมาจากบนจอ กระแทกพื้น เด้ง แล้วนิ่ง
+     ลากหมุนดูได้รอบตัว ทั้ง 6 ด้านเป็น DOM จริง (ไม่ใช่ texture) จึงคลิก/สกอร์ล/ค้นหาได้
+     และแต่ละด้านคือหน้าข้อมูลคนละชุด ไม่ซ้ำกัน:
+       หน้า   = ภาพรวม + เมนูจัดการ (แก้ไข/ลบ/ลงทะเบียนกล่อง)
+       หลัง   = รายชื่อกล่องทุกใบที่ใช้ประเภทนี้ (BOX-001 …) ค้นหาได้
+       บน     = สถานะกล่อง (ในคลัง/ออกไปแล้ว/สูญหาย/Hold/ชำรุด/รอเข้าคลัง)
+       ล่าง   = การกระจายตามคลังและโซน
+       ขวา    = ลูกค้า/DO ที่ยังถือกล่องประเภทนี้อยู่ + เกินกำหนดคืน
+       ซ้าย   = รอบใช้งาน (cycles) + Lot / วันหมดอายุ
+     สัดส่วนกล่องอ่านจากฟิลด์ dim ("กว้างxยาวxสูง") และสี/ผิวอ่านจากคำในชื่อประเภท
+     แทนที่ modal แก้ไข-ลบ ของเดิม (openMasterRowActions) ตามแพตเทิร์นเดียวกับ
+     บัตรพนักงาน (openEmpBadge) ด้านบน -->
+<style>
+#btypeCubeOverlay{position:fixed;inset:0;z-index:400;display:none;}
+#btypeCubeOverlay .btc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
+
+/* เวทีใหญ่กว่าตัวกล่องพอสมควร เพื่อให้มี "ที่ว่างรอบกล่อง" ไว้ลากหมุนเสมอ
+   แม้ด้านที่หันเข้าหาเราจะกินพื้นที่คลิกไปทำงานของมันเอง */
+#btypeCubeOverlay .btc-stage{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);
+  perspective:2400px;perspective-origin:50% 42%;touch-action:none;cursor:grab;}
+#btypeCubeOverlay .btc-stage.grabbing{cursor:grabbing;}
+#btypeCubeOverlay .btc-drop{position:absolute;inset:0;transform-style:preserve-3d;will-change:transform;}
+#btypeCubeOverlay .btc-cube{position:absolute;left:50%;top:50%;width:0;height:0;
+  transform-style:preserve-3d;will-change:transform;}
+
+/* เงาบนพื้น — ยิ่งกล่องลอยสูงเงายิ่งเล็กและจาง */
+#btypeCubeOverlay .btc-shadow{position:absolute;left:50%;border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,.5),rgba(0,0,0,0) 70%);
+  transform:translateX(-50%);pointer-events:none;}
+
+#btypeCubeOverlay .btc-face{position:absolute;left:0;top:0;background:var(--surface);
+  border-radius:12px;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:inset 0 0 0 .5px var(--line);pointer-events:none;}
+/* เฉพาะด้านที่หันเข้าหาเราเท่านั้นที่กดได้ ด้านอื่นปล่อยคลิกทะลุไปให้เวทีใช้ลากหมุน */
+#btypeCubeOverlay .btc-face[data-active="1"]{pointer-events:auto;}
+
+/* ชั้นแสงเงาต่อด้าน ทำให้กล่องดูมีปริมาตรจริง — แต่ด้านที่กำลังอ่านอยู่ต้องสว่างเต็มที่
+   ไม่งั้นตัวหนังสือจะจมไปกับเงา */
+#btypeCubeOverlay .btc-shade{position:absolute;inset:0;pointer-events:none;
+  transition:opacity .34s cubic-bezier(.22,1,.36,1);}
+#btypeCubeOverlay .btc-face[data-active="1"] .btc-shade{opacity:0;}
+
+#btypeCubeOverlay .btc-fhead{flex:0 0 auto;padding:11px 14px;display:flex;align-items:center;
+  gap:9px;color:#fff;cursor:grab;}
+#btypeCubeOverlay .btc-fhead .t{font-size:14px;font-weight:700;letter-spacing:-.01em;}
+#btypeCubeOverlay .btc-fhead .n{margin-left:auto;font-family:var(--mono);font-size:13px;
+  font-weight:700;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;white-space:nowrap;}
+#btypeCubeOverlay .btc-scroll{flex:1 1 auto;overflow:auto;padding:12px 14px 14px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+
+#btypeCubeOverlay .btc-kv{display:flex;justify-content:space-between;gap:12px;
+  padding:6px 0;border-bottom:.5px solid var(--line);font-size:13px;}
+#btypeCubeOverlay .btc-kv:last-child{border-bottom:0;}
+#btypeCubeOverlay .btc-kv span{color:var(--muted);}
+#btypeCubeOverlay .btc-kv b{font-weight:600;text-align:right;}
+#btypeCubeOverlay .btc-big{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1;}
+#btypeCubeOverlay .btc-act{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  padding:10px 13px;border-radius:11px;background:var(--surface2);border:.5px solid var(--line);
+  font-size:13.5px;font-weight:500;color:var(--ink);margin-top:7px;}
+#btypeCubeOverlay .btc-act.danger{background:var(--negSoft);border-color:rgba(215,0,21,.22);color:var(--neg);}
+#btypeCubeOverlay .btc-act[disabled]{opacity:.42;cursor:not-allowed;}
+#btypeCubeOverlay .btc-search{width:100%;padding:7px 11px;border-radius:9px;border:.5px solid var(--line);
+  background:var(--surface2);color:var(--ink);font-size:13px;font-family:inherit;margin-bottom:9px;}
+#btypeCubeOverlay .btc-row{display:flex;align-items:center;gap:9px;padding:7px 0;
+  border-bottom:.5px solid var(--line);font-size:12.5px;}
+#btypeCubeOverlay .btc-row:last-child{border-bottom:0;}
+#btypeCubeOverlay .btc-row .tg{font-family:var(--mono);font-weight:700;flex:0 0 auto;}
+#btypeCubeOverlay .btc-row .rest{margin-left:auto;text-align:right;color:var(--muted);min-width:0;}
+#btypeCubeOverlay .btc-bar{height:9px;border-radius:999px;background:var(--line2);
+  overflow:hidden;display:flex;margin:2px 0 12px;}
+#btypeCubeOverlay .btc-bar i{display:block;height:100%;}
+#btypeCubeOverlay .btc-empty{color:var(--muted);font-size:13px;text-align:center;padding:26px 0;}
+
+/* แถบเลือกด้าน — ทำหน้าที่เป็นสารบัญของทั้ง 6 หน้าไปในตัว */
+#btypeCubeOverlay .btc-dock{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:min(92vw,760px);
+  padding:7px;border-radius:16px;background:rgba(29,29,31,.82);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+#btypeCubeOverlay .btc-dock button{display:flex;align-items:center;gap:7px;padding:7px 13px;
+  border-radius:11px;background:transparent;color:rgba(255,255,255,.72);
+  font-size:12.5px;font-weight:600;white-space:nowrap;}
+#btypeCubeOverlay .btc-dock button[data-on="1"]{background:rgba(255,255,255,.16);color:#fff;}
+#btypeCubeOverlay .btc-dock button .c{font-family:var(--mono);font-size:11px;opacity:.75;}
+#btypeCubeOverlay .btc-hint{position:absolute;left:0;right:0;bottom:26px;text-align:center;
+  color:rgba(255,255,255,.7);font-size:12.5px;pointer-events:none;}
+#btypeCubeOverlay .btc-close{position:absolute;right:22px;top:22px;width:42px;height:42px;
+  border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;
+  box-shadow:0 6px 16px rgba(0,0,0,.35);}
+@media(max-width:760px){
+  #btypeCubeOverlay .btc-dock{bottom:56px;}
+  #btypeCubeOverlay .btc-hint{display:none;}
+}
+</style>
+<div id="btypeCubeOverlay">
+  <div class="btc-backdrop" onclick="closeBtypeCube()"></div>
+  <div class="btc-shadow" id="btcShadow"></div>
+  <div class="btc-stage" id="btcStage">
+    <div class="btc-drop" id="btcDrop">
+      <div class="btc-cube" id="btcCube">
+        <div class="btc-face" id="btcFaceFront"  data-face="front"></div>
+        <div class="btc-face" id="btcFaceBack"   data-face="back"></div>
+        <div class="btc-face" id="btcFaceRight"  data-face="right"></div>
+        <div class="btc-face" id="btcFaceLeft"   data-face="left"></div>
+        <div class="btc-face" id="btcFaceTop"    data-face="top"></div>
+        <div class="btc-face" id="btcFaceBottom" data-face="bottom"></div>
+      </div>
+    </div>
+  </div>
+  <button class="btc-close" onclick="closeBtypeCube()" title="ปิด">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="btc-dock" id="btcDock"></div>
+  <div class="btc-hint">ลากพื้นที่รอบกล่อง (หรือแถบหัวข้อของด้าน) เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด</div>
+</div>
+
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
      works 100% offline (no CDN). Added for the Gate-Out Excel import feature. -->
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -3792,6 +3909,476 @@ function empBadgeStep(){
   card.addEventListener('mouseleave',function(){empBadgeSetFace(false);});
 })();
 
+/* ===== ประเภทกล่อง — กล่อง 3D หกด้าน (physics drop + CSS 3D) =====
+   คลิกแถวในตาราง "ประเภทกล่อง" → กล่องหล่นลงมาจากบนจอ กระแทกพื้น เด้ง แล้วนิ่ง
+   ลากหมุนดูได้รอบตัว ปล่อยแล้วมันจะหันด้านที่ใกล้ที่สุดเข้าหาเราเอง
+
+   ทำไมเป็น CSS 3D ไม่ใช่ WebGL: ทั้ง 6 ด้านต้องเป็น "หน้าใช้งานจริง" (กดปุ่ม
+   แก้ไข/ลบ, สกอร์ลรายการกล่อง, พิมพ์ค้นหา) ถ้าวาดเป็น texture บน canvas ตัวหนังสือ
+   จะเบลอตอนซูมและกดอะไรไม่ได้เลย อีกอย่าง legacy.html ทั้งไฟล์ไม่พึ่ง JS CDN
+   สักตัว (SheetJS ยัง inline) — จะได้ใช้งาน offline ได้เหมือนเดิม
+
+   แทนที่ modal แก้ไข/ลบ ของเดิมสำหรับ btype: openMasterRowActions ไม่รับ kind
+   'btype' แล้ว (ดูตรงนั้น) เหมือนที่พนักงานย้ายไป openEmpBadge ก่อนหน้านี้ */
+
+/* มุมกล้องที่ทำให้แต่ละด้านหันเข้าหาเรา + ทรานส์ฟอร์มของตัวด้านเอง
+   off/size อ่านจากขนาดจริงตอน layout (btcLayout) */
+var BTC_FACES=[
+  {k:'front', t:'ภาพรวม & จัดการ',       rx:  0, ry:   0, rot:'',                shade:'rgba(0,0,0,.04)'},
+  {k:'back',  t:'กล่องทั้งหมด',           rx:  0, ry: 180, rot:'rotateY(180deg)', shade:'rgba(0,0,0,.22)'},
+  {k:'top',   t:'สถานะกล่อง',             rx:-90, ry:   0, rot:'rotateX(90deg)',  shade:'rgba(255,255,255,.05)'},
+  {k:'bottom',t:'กระจายตามคลัง',          rx: 90, ry:   0, rot:'rotateX(-90deg)', shade:'rgba(0,0,0,.34)'},
+  {k:'right', t:'ลูกค้า & DO',            rx:  0, ry: -90, rot:'rotateY(90deg)',  shade:'rgba(0,0,0,.14)'},
+  {k:'left',  t:'รอบใช้งาน & Lot',        rx:  0, ry:  90, rot:'rotateY(-90deg)', shade:'rgba(0,0,0,.26)'}
+];
+var BTC_FACE_EL={front:'btcFaceFront',back:'btcFaceBack',top:'btcFaceTop',
+                 bottom:'btcFaceBottom',right:'btcFaceRight',left:'btcFaceLeft'};
+
+var btc={open:false,id:null,booted:false,raf:null,
+  w:0,d:0,h:0,                       /* ขนาดกล่องบนจอ (px) */
+  y:0,vy:0,g:2.35,bounce:0,rest:false,squash:0,
+  rx:0,ry:0,rxT:0,ryT:0,rxV:0,ryV:0,
+  drag:null,face:'front'};
+
+/* ---- อ่านขนาดจาก DB: "กว้างxยาวxสูง" (ซม.) ---- */
+function btcParseDim(dim){
+  var p=String(dim||'').replace(/[X×*]/g,'x').split('x').map(function(s){return parseFloat(s);});
+  if(p.length!==3||p.some(function(n){return !isFinite(n)||n<=0;}))return null;
+  return {w:p[0],l:p[1],h:p[2]};
+}
+
+/* ---- อ่านวัสดุจากคำในชื่อประเภท (รับทั้งไทย/อังกฤษ เผื่อข้อมูลใน DB ปนกัน) ---- */
+function btcMaterial(name){
+  var n=String(name||'').toLowerCase();
+  if(n.indexOf('กระดาษ')>=0||n.indexOf('ลูกฟูก')>=0||n.indexOf('carton')>=0||n.indexOf('paper')>=0||n.indexOf('cardboard')>=0)
+    return {key:'cardboard',label:'กระดาษ / ลูกฟูก',hdr:'linear-gradient(140deg,#c89b64,#a3703a)'};
+  if(n.indexOf('พลาสติก')>=0||n.indexOf('ลังหู')>=0||n.indexOf('plastic')>=0||n.indexOf('crate')>=0)
+    return {key:'plastic',label:'พลาสติก',hdr:'linear-gradient(140deg,#2f86e8,#1355a8)'};
+  if(n.indexOf('โฟม')>=0||n.indexOf('foam')>=0||n.indexOf('eps')>=0)
+    return {key:'foam',label:'โฟม',hdr:'linear-gradient(140deg,#aab4c2,#7d8794)'};
+  return {key:'generic',label:'ทั่วไป',hdr:'linear-gradient(140deg,#9aa2ad,#6f7783)'};
+}
+
+/* ---- รวบยอดทุกอย่างที่ผูกกับประเภทนี้ครั้งเดียว แล้วให้ทั้ง 6 ด้านหยิบไปใช้ ---- */
+function btypeStats(id){
+  var boxes=Object.values(S.boxes).filter(function(b){return b.type===id;});
+  var st={warehouse:0,pending:0,out:0,lost:0,hold:0,damage:0};
+  var wh={},cust={},lot={},value=0,cyc=0,cycMax=0,expSoon=0,expOver=0,overdue=0,noLot=0;
+  boxes.forEach(function(b){
+    if(st[b.status]==null)st[b.status]=0;
+    st[b.status]++;
+    value+=Number(b.value)||0;
+    cyc+=Number(b.cycles)||0;
+    if((Number(b.cycles)||0)>cycMax)cycMax=Number(b.cycles)||0;
+    if(b.status==='warehouse'||b.status==='hold'||b.status==='damage'){
+      var loc=b.location||{},wk=loc.wh||'';
+      var e=wh[wk]||(wh[wk]={n:0,zones:{}});
+      e.n++;
+      var z=[loc.zone,loc.rack].filter(Boolean).join('-');
+      if(z)e.zones[z]=(e.zones[z]||0)+1;
+    }
+    if(b.status==='out'){
+      var ck=b.customer||'';
+      var c=cust[ck]||(cust[ck]={n:0,dos:{},over:0});
+      c.n++;
+      if(b.do)c.dos[b.do]=1;
+      if(typeof isOverdue==='function'&&isOverdue(b)){c.over++;overdue++;}
+    }
+    if(b.lot)lot[b.lot]=(lot[b.lot]||0)+1;else noLot++;
+    var d=(typeof daysToExpiry==='function')?daysToExpiry(b):null;
+    if(d!=null){if(d<0)expOver++;else if(d<=30)expSoon++;}
+  });
+  return {boxes:boxes,st:st,wh:wh,cust:cust,lot:lot,noLot:noLot,value:value,
+    cyc:cyc,cycAvg:boxes.length?cyc/boxes.length:0,cycMax:cycMax,
+    expSoon:expSoon,expOver:expOver,overdue:overdue};
+}
+
+/* จำนวนที่โชว์บนแถบเลือกด้าน — ตัวเลขที่ "หน้านั้น" พูดถึงจริง ๆ ไม่ใช่ยอดรวมซ้ำกันหกที */
+function btcFaceCount(k,s){
+  if(k==='front')return s.boxes.length;
+  if(k==='back')return s.boxes.length;
+  if(k==='top')return Object.keys(s.st).filter(function(x){return s.st[x]>0;}).length;
+  if(k==='bottom')return Object.keys(s.wh).length;
+  if(k==='right')return Object.keys(s.cust).length;
+  return Object.keys(s.lot).length;
+}
+
+/* ===================== เนื้อหาแต่ละด้าน =====================
+   กติกา: หนึ่งด้าน = หนึ่งเรื่อง ห้ามเล่าเรื่องเดียวกันซ้ำสองด้าน */
+
+function btcFrontHtml(t,s,mat,dimCm){
+  var used=s.boxes.length;
+  var vol=dimCm?(dimCm.w*dimCm.l*dimCm.h/1000):null;   /* ซม.³ → ลิตร */
+  var admin=(typeof isAdmin==='function')?isAdmin():true;
+  return ''
+    +'<div class="btc-big">'+nf(used)+' <span style="font-size:15px;font-weight:600;color:var(--muted);">'+esc(t.unit||'ใบ')+'</span></div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 12px;">ใช้ประเภทนี้อยู่ในระบบ</div>'
+    +'<div class="btc-kv"><span>รหัส</span><b class="mono">'+esc(t.id)+'</b></div>'
+    +'<div class="btc-kv"><span>ชื่อประเภท</span><b>'+esc(t.name||'-')+'</b></div>'
+    +'<div class="btc-kv"><span>วัสดุที่ตรวจจากชื่อ</span><b>'+esc(mat.label)+'</b></div>'
+    +'<div class="btc-kv"><span>หน่วยนับ</span><b>'+esc(t.unit||'-')+'</b></div>'
+    +'<div class="btc-kv"><span>ขนาด (ก×ย×ส)</span><b class="mono">'+(dimCm?esc(dimCm.w+'×'+dimCm.l+'×'+dimCm.h+' ซม.'):'<span class="muted">ยังไม่ระบุ</span>')+'</b></div>'
+    +(vol?'<div class="btc-kv"><span>ปริมาตร</span><b class="mono">'+vol.toLocaleString('en-US',{maximumFractionDigits:1})+' ลิตร</b></div>':'')
+    +'<div class="btc-kv"><span>มูลค่าต่อใบ</span><b class="mono">'+(t.value==null?'-':money(t.value))+'</b></div>'
+    +'<div class="btc-kv"><span>มูลค่ารวมทั้งประเภท</span><b class="mono">'+money(s.value)+'</b></div>'
+    +'<div style="margin-top:12px;">'
+      +'<button class="btc-act" onclick="btcAction(\'edit\')">แก้ไขประเภทกล่อง</button>'
+      +'<button class="btc-act" onclick="btcAction(\'inv\')">ดูกล่องประเภทนี้ในหน้าคลัง</button>'
+      +(admin?('<button class="btc-act danger" onclick="btcAction(\'del\')"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ"':'')+'>ลบประเภทกล่อง</button>'):'')
+    +'</div>'
+    +(used?'<div style="font-size:11.5px;color:var(--muted);margin-top:8px;">ลบไม่ได้ขณะยังมีกล่อง '+nf(used)+' ใบใช้ประเภทนี้อยู่</div>':'')
+    +(btc.clamped?'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* กล่องทรงแบนมาก — สัดส่วนบนจอถูกถ่างให้อ่านข้อมูลได้ ไม่ตรงกับ '+esc(t.dim)+' เป๊ะ</div>':'');
+}
+
+function btcBackHtml(t,s){
+  if(!s.boxes.length)return '<div class="btc-empty">ยังไม่มีกล่องที่ใช้ประเภทนี้</div>';
+  var rows=s.boxes.slice().sort(function(a,b){return a.tag<b.tag?-1:1;}).map(function(b){
+    var where=b.status==='out'
+      ?esc(custName(b.customer))+(b.do?' · '+esc(b.do):'')
+      :(b.status==='pending'?'รอเข้าคลัง':((b.location||{}).wh?esc(whName(b.location.wh)):'ในคลัง'));
+    return '<div class="btc-row" data-tag="'+esc(b.tag)+'">'
+      +'<span class="tg">'+esc(b.tag)+'</span>'
+      +statusPill(b.status,b)
+      +'<span class="rest">'+where+'</span></div>';
+  }).join('');
+  return '<input class="btc-search" id="btcBoxSearch" placeholder="ค้นหาบาร์โค้ด / ลูกค้า / คลัง" '
+      +'oninput="btcFilterBoxes(this.value)">'
+    +'<div id="btcBoxRows">'+rows+'</div>';
+}
+
+function btcTopHtml(t,s){
+  if(!s.boxes.length)return '<div class="btc-empty">ยังไม่มีกล่องที่ใช้ประเภทนี้</div>';
+  var order=[['warehouse','ในคลัง','var(--accent)'],['pending','รอเข้าคลัง (Gate In)','var(--warn)'],
+    ['out','ออกไปแล้ว','#2aa'],['hold','พักใช้งาน (Hold)','#8a6bd8'],
+    ['damage','ชำรุด (Damage)','#d98324'],['lost','สูญหาย','var(--neg)']];
+  var tot=s.boxes.length;
+  var bar=order.map(function(o){
+    var n=s.st[o[0]]||0;
+    return n?'<i style="width:'+(n/tot*100).toFixed(2)+'%;background:'+o[2]+';" title="'+o[1]+' '+n+'"></i>':'';
+  }).join('');
+  var list=order.map(function(o){
+    var n=s.st[o[0]]||0;
+    return '<div class="btc-kv"><span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:'+o[2]+';margin-right:7px;"></span>'+o[1]+'</span>'
+      +'<b class="mono">'+nf(n)+' <span style="color:var(--muted);font-weight:500;">'+(tot?(n/tot*100).toFixed(0):0)+'%</span></b></div>';
+  }).join('');
+  return '<div class="btc-big">'+nf(tot)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 10px;">กล่องทั้งหมดของประเภทนี้</div>'
+    +'<div class="btc-bar">'+bar+'</div>'+list
+    +(s.overdue?'<div style="margin-top:11px;padding:9px 11px;border-radius:10px;background:var(--negSoft);color:var(--neg);font-size:12.5px;font-weight:600;">เกินกำหนดคืน '+nf(s.overdue)+' ใบ — ดูรายละเอียดที่ด้าน "ลูกค้า &amp; DO"</div>':'');
+}
+
+function btcBottomHtml(t,s){
+  var keys=Object.keys(s.wh);
+  if(!keys.length)return '<div class="btc-empty">ยังไม่มีกล่องประเภทนี้อยู่ในคลัง<div style="font-size:12px;margin-top:6px;">(นับเฉพาะสถานะ ในคลัง / Hold / ชำรุด)</div></div>';
+  var tot=keys.reduce(function(a,k){return a+s.wh[k].n;},0);
+  var html=keys.sort(function(a,b){return s.wh[b].n-s.wh[a].n;}).map(function(k){
+    var e=s.wh[k];
+    var zs=Object.keys(e.zones).sort(function(a,b){return e.zones[b]-e.zones[a];}).slice(0,6)
+      .map(function(z){return '<span class="tag" style="margin:2px 4px 0 0;display:inline-block;">'+esc(z)+' · '+e.zones[z]+'</span>';}).join('');
+    return '<div style="padding:9px 0;border-bottom:.5px solid var(--line);">'
+      +'<div style="display:flex;align-items:baseline;gap:9px;">'
+        +'<b style="font-size:13.5px;">'+esc(k?whName(k):'ยังไม่ระบุพิกัด')+'</b>'
+        +'<span class="mono" style="margin-left:auto;font-weight:700;">'+nf(e.n)+'</span>'
+        +'<span class="muted" style="font-size:11.5px;">'+(tot?(e.n/tot*100).toFixed(0):0)+'%</span>'
+      +'</div>'
+      +(zs?'<div style="margin-top:3px;">'+zs+'</div>':'<div class="muted" style="font-size:11.5px;margin-top:3px;">ยังไม่ได้บันทึกโซน/แร็ค</div>')
+    +'</div>';
+  }).join('');
+  return '<div class="btc-big">'+nf(tot)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 10px;">อยู่ในคลัง '+keys.length+' แห่ง</div>'+html;
+}
+
+function btcRightHtml(t,s){
+  var keys=Object.keys(s.cust);
+  if(!keys.length)return '<div class="btc-empty">ยังไม่มีลูกค้าถือกล่องประเภทนี้อยู่</div>';
+  var tot=keys.reduce(function(a,k){return a+s.cust[k].n;},0);
+  var html=keys.sort(function(a,b){return s.cust[b].n-s.cust[a].n;}).map(function(k){
+    var c=s.cust[k];
+    var dos=Object.keys(c.dos);
+    return '<div style="padding:9px 0;border-bottom:.5px solid var(--line);">'
+      +'<div style="display:flex;align-items:baseline;gap:9px;">'
+        +'<b style="font-size:13.5px;">'+esc(k?custName(k):'ไม่ระบุลูกค้า')+'</b>'
+        +'<span class="mono" style="margin-left:auto;font-weight:700;">'+nf(c.n)+'</span>'
+      +'</div>'
+      +'<div style="margin-top:3px;font-size:11.5px;color:var(--muted);">'
+        +(dos.length?('DO: '+esc(dos.slice(0,4).join(', '))+(dos.length>4?' +'+(dos.length-4):'')):'ยังไม่มีเลข DO')
+      +'</div>'
+      +(c.over?'<div class="days-badge over" style="margin-top:5px;">เกินกำหนดคืน '+nf(c.over)+' ใบ</div>':'')
+    +'</div>';
+  }).join('');
+  return '<div class="btc-big">'+nf(tot)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 10px;">ออกไปอยู่กับลูกค้า '+keys.length+' ราย</div>'+html;
+}
+
+function btcLeftHtml(t,s){
+  if(!s.boxes.length)return '<div class="btc-empty">ยังไม่มีกล่องที่ใช้ประเภทนี้</div>';
+  var lots=Object.keys(s.lot).sort(function(a,b){return s.lot[b]-s.lot[a];});
+  var lotHtml=lots.length
+    ?lots.slice(0,12).map(function(l){
+        return '<div class="btc-kv"><span class="mono">'+esc(l)+'</span><b class="mono">'+nf(s.lot[l])+'</b></div>';
+      }).join('')+(lots.length>12?'<div class="muted" style="font-size:11.5px;padding-top:6px;">และอีก '+(lots.length-12)+' Lot</div>':'')
+    :'<div class="muted" style="font-size:12.5px;padding:6px 0;">ยังไม่มีการบันทึก Lot</div>';
+  return '<div class="btc-big">'+s.cycAvg.toFixed(1)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 10px;">รอบใช้งานเฉลี่ยต่อใบ</div>'
+    +'<div class="btc-kv"><span>รอบใช้งานรวม</span><b class="mono">'+nf(s.cyc)+'</b></div>'
+    +'<div class="btc-kv"><span>ใบที่ใช้งานมากที่สุด</span><b class="mono">'+nf(s.cycMax)+' รอบ</b></div>'
+    +'<div style="font-size:12.5px;font-weight:700;margin:14px 0 4px;">Lot / วันหมดอายุ</div>'
+    +'<div class="btc-kv"><span>หมดอายุแล้ว</span><b class="mono" style="color:'+(s.expOver?'var(--neg)':'var(--muted)')+';">'+nf(s.expOver)+' ใบ</b></div>'
+    +'<div class="btc-kv"><span>หมดอายุใน 30 วัน</span><b class="mono" style="color:'+(s.expSoon?'var(--warn)':'var(--muted)')+';">'+nf(s.expSoon)+' ใบ</b></div>'
+    +'<div class="btc-kv"><span>ไม่ได้ระบุ Lot</span><b class="mono">'+nf(s.noLot)+' ใบ</b></div>'
+    +'<div style="font-size:12.5px;font-weight:700;margin:14px 0 4px;">แยกตาม Lot ('+lots.length+')</div>'
+    +lotHtml;
+}
+
+/* ค้นหาในด้าน "กล่องทั้งหมด" — กรองที่ DOM ตรง ๆ ไม่ต้อง re-render ทั้งด้าน
+   ระหว่างที่กล่องกำลังหมุน/เด้งอยู่ */
+function btcFilterBoxes(q){
+  q=String(q||'').toLowerCase().trim();
+  var wrap=$('#btcBoxRows');if(!wrap)return;
+  Array.prototype.forEach.call(wrap.children,function(r){
+    r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+  });
+}
+window.btcFilterBoxes=btcFilterBoxes;
+
+/* ===================== เปิด / ปิด / จัดวาง ===================== */
+
+function btcLayout(dimCm){
+  var vw=window.innerWidth,vh=window.innerHeight;
+  /* กล่องต้องใหญ่พอให้อ่านตัวหนังสือบนด้านได้ แต่ยังต้องเหลือที่ว่างรอบ ๆ ไว้ลากหมุน */
+  var span=Math.max(300,Math.min(vw*0.44,vh*0.56,540));
+  var MIN=Math.min(210,span*0.42);   /* ด้านที่สั้นที่สุดยังต้องกว้างพอให้อ่านออก */
+  var d=dimCm||{w:1,l:1,h:1};
+  var mx=Math.max(d.w,d.l,d.h);
+  /* คงสัดส่วนจริงจาก DB ไว้ แต่หนีบไม่ให้ด้านไหนแบนเกิน ~1:2.4 ของด้านที่ยาวสุด
+     ไม่งั้นกล่องทรงยาว ๆ (เช่น 120x20x15) จะได้หน้าที่บางจนใส่ข้อมูลไม่ลง
+     btc.clamped ไว้บอกผู้ใช้ตรง ๆ ว่าอันนี้ไม่ใช่สัดส่วนเป๊ะ */
+  function px(v){return Math.max(MIN,v/mx*span);}
+  btc.w=Math.round(px(d.w));btc.d=Math.round(px(d.l));btc.h=Math.round(px(d.h));
+  btc.clamped=!!dimCm&&[d.w,d.l,d.h].some(function(v){return v/mx*span<MIN-0.5;});
+
+  var stage=$('#btcStage');
+  var pad=110;                        /* ขอบว่างรอบกล่องไว้ให้ลากหมุน */
+  var sw=Math.max(btc.w,btc.d,btc.h)+pad*2;
+  stage.style.width=sw+'px';stage.style.height=sw+'px';
+  /* ยุบ-เด้งต้องหมุนรอบ "ก้นกล่อง" ไม่ใช่กลางกล่อง ไม่งั้นตอนกระแทกกล่องจะจมพื้น */
+  var drop=$('#btcDrop');
+  drop.style.transformOrigin='50% '+(sw/2+btc.h/2)+'px';
+
+  BTC_FACES.forEach(function(f){
+    var el=$('#'+BTC_FACE_EL[f.k]);if(!el)return;
+    var fw,fh,off;
+    if(f.k==='front'||f.k==='back'){fw=btc.w;fh=btc.h;off=btc.d/2;}
+    else if(f.k==='right'||f.k==='left'){fw=btc.d;fh=btc.h;off=btc.w/2;}
+    else{fw=btc.w;fh=btc.d;off=btc.h/2;}
+    el.style.width=fw+'px';el.style.height=fh+'px';
+    /* อ่านจากขวาไปซ้าย: จัดให้ด้านอยู่กึ่งกลางลูกบาศก์ → ดันออกไปตามแกนของตัวเอง → หมุนเข้าที่ */
+    el.style.transform=f.rot+' translateZ('+off+'px) translate('+(-fw/2)+'px,'+(-fh/2)+'px)';
+  });
+
+  var sh=$('#btcShadow');
+  sh.style.width=(btc.w*1.15)+'px';sh.style.height=(btc.d*0.42)+'px';
+  /* เวทีจัดกลางที่ top:47% (translateY(-50%)) ก้นกล่องจึงอยู่ที่ 47%+h/2
+     ไม่ใช่ 47%+sw/2 — เผลอใช้ขนาดเวทีแล้วเงาจะหล่นไปอยู่ใต้จอ */
+  sh.style.top=(vh*0.47+btc.h/2-8)+'px';
+}
+
+function btcRenderFaces(t,s,mat,dimCm){
+  var body={front:btcFrontHtml,back:btcBackHtml,top:btcTopHtml,
+            bottom:btcBottomHtml,right:btcRightHtml,left:btcLeftHtml};
+  BTC_FACES.forEach(function(f){
+    var el=$('#'+BTC_FACE_EL[f.k]);if(!el)return;
+    var n=btcFaceCount(f.k,s);
+    el.innerHTML=''
+      +'<div class="btc-fhead" style="background:'+mat.hdr+';">'
+        +'<span class="t">'+esc(f.t)+'</span><span class="n">'+nf(n)+'</span>'
+      +'</div>'
+      +'<div class="btc-scroll">'+body[f.k](t,s,mat,dimCm)+'</div>'
+      +'<div class="btc-shade" style="background:'+f.shade+';"></div>';
+  });
+  /* แถบเลือกด้าน = สารบัญของทั้งหกหน้า */
+  $('#btcDock').innerHTML=BTC_FACES.map(function(f){
+    return '<button onclick="btcSnapTo(\''+f.k+'\')" data-dock="'+f.k+'">'
+      +esc(f.t)+'<span class="c">'+nf(btcFaceCount(f.k,s))+'</span></button>';
+  }).join('');
+}
+
+function openBtypeCube(id){
+  var t=S.boxtypes[id];if(!t)return;
+  /* ลบตัวเดิมทิ้งก่อนเสมอ — เปิดซ้อนกันแล้ว rAF จะเดินสองตัวและกล่องเก่าค้างบนจอ */
+  closeBtypeCube();
+
+  var dimCm=btcParseDim(t.dim);
+  var mat=btcMaterial(t.name);
+  var s=btypeStats(id);
+
+  btc.id=id;btc.open=true;btc.face='front';
+  btcLayout(dimCm);
+  btcRenderFaces(t,s,mat,dimCm);
+
+  /* ตั้งท่าเริ่ม: ลอยอยู่เหนือจอ เอียงเฉียงนิดหน่อยให้เห็นสามด้านตอนร่วงลงมา
+     แล้วสปริงกลับมาหันด้าน "หน้า" ตรง ๆ พอดีจังหวะที่ตกถึงพื้น */
+  btc.y=-(window.innerHeight*0.5+btc.h+220);
+  btc.vy=0;btc.bounce=0;btc.rest=false;btc.squash=0;
+  btc.rxT=0;btc.ryT=0;btc.rx=24;btc.ry=-74;btc.rxV=0;btc.ryV=0;btc.drag=null;
+  btcSetActive('front');
+
+  $('#btypeCubeOverlay').style.display='block';
+  btcBoot();
+}
+window.openBtypeCube=openBtypeCube;
+
+function closeBtypeCube(){
+  btc.open=false;btc.drag=null;
+  if(btc.raf){cancelAnimationFrame(btc.raf);btc.raf=null;}
+  var ov=$('#btypeCubeOverlay');if(ov)ov.style.display='none';
+  var st=$('#btcStage');if(st)st.classList.remove('grabbing');
+}
+window.closeBtypeCube=closeBtypeCube;
+
+function btcAction(kind){
+  var id=btc.id,t=S.boxtypes[id];if(!t)return;
+  closeBtypeCube();
+  if(kind==='edit')editBtype(id);
+  else if(kind==='del')delBtype(id);
+  else if(kind==='inv'){
+    switchTab('inventory');
+    var q=$('#schInv');
+    if(q){q.value=t.name||id;q.dispatchEvent(new Event('input',{bubbles:true}));}
+  }
+}
+window.btcAction=btcAction;
+
+/* ===================== หมุน / สแนปเข้าด้าน ===================== */
+
+function btcNorm(a){a=(a+180)%360;if(a<0)a+=360;return a-180;}
+
+function btcSetActive(k){
+  btc.face=k;
+  BTC_FACES.forEach(function(f){
+    var el=$('#'+BTC_FACE_EL[f.k]);if(el)el.setAttribute('data-active',f.k===k?'1':'0');
+  });
+  var dock=$('#btcDock');
+  if(dock)Array.prototype.forEach.call(dock.children,function(b){
+    b.setAttribute('data-on',b.getAttribute('data-dock')===k?'1':'0');
+  });
+}
+
+/* หมุนไปหาด้านที่ระบุ โดยเดินทางสั้นที่สุด (ไม่คลายมุมกลับหลายรอบ) */
+function btcSnapTo(k){
+  var f=BTC_FACES.filter(function(x){return x.k===k;})[0];if(!f)return;
+  btc.rxT=btc.rx+btcNorm(f.rx-btc.rx);
+  btc.ryT=btc.ry+btcNorm(f.ry-btc.ry);
+  btcSetActive(k);
+}
+window.btcSnapTo=btcSnapTo;
+
+/* ด้านที่ใกล้มุมกล้องปัจจุบันที่สุด — ใช้ตอนปล่อยมือจากการลาก */
+function btcNearest(rx,ry){
+  var best=BTC_FACES[0],bd=1e9;
+  BTC_FACES.forEach(function(f){
+    var a=btcNorm(f.rx-rx),b=btcNorm(f.ry-ry);
+    var d=a*a+b*b;
+    if(d<bd){bd=d;best=f;}
+  });
+  return best;
+}
+
+function btcBoot(){
+  if(btc.booted){btc.raf=requestAnimationFrame(btcTick);return;}
+  btc.booted=true;
+  var stage=$('#btcStage');
+  stage.addEventListener('pointerdown',btcGrab);
+  window.addEventListener('pointermove',btcMove);
+  window.addEventListener('pointerup',btcRelease);
+  window.addEventListener('pointercancel',btcRelease);
+  window.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&btc.open)closeBtypeCube();});
+  window.addEventListener('resize',function(){
+    if(!btc.open)return;
+    var t=S.boxtypes[btc.id];if(!t)return;
+    btcLayout(btcParseDim(t.dim));
+  });
+  btc.raf=requestAnimationFrame(btcTick);
+}
+
+function btcGrab(ev){
+  if(!btc.open)return;
+  /* ปุ่ม/ช่องค้นหา/พื้นที่สกอร์ลของด้านที่เปิดอยู่ ต้องทำงานของมันได้ตามปกติ —
+     การลากหมุนเริ่มได้จากที่ว่างรอบกล่องและจากแถบหัวข้อของด้าน */
+  if(ev.target.closest('.btc-scroll,button,input,a,.btc-dock'))return;
+  ev.preventDefault();
+  btc.drag={x:ev.clientX,y:ev.clientY,rx:btc.rx,ry:btc.ry,vx:0,vy:0};
+  $('#btcStage').classList.add('grabbing');
+}
+
+function btcMove(ev){
+  var d=btc.drag;if(!d)return;
+  var nry=d.ry+(ev.clientX-d.x)*0.45;
+  var nrx=Math.max(-90,Math.min(90,d.rx-(ev.clientY-d.y)*0.45));
+  d.vx=nry-btc.ry;d.vy=nrx-btc.rx;
+  btc.ry=btc.ryT=nry;btc.rx=btc.rxT=nrx;
+}
+
+function btcRelease(){
+  var d=btc.drag;if(!d)return;
+  btc.drag=null;
+  $('#btcStage').classList.remove('grabbing');
+  /* เหวี่ยงต่ออีกนิดตามแรงที่สะบัด แล้วค่อยหันด้านที่ใกล้ที่สุดเข้าหาเรา
+     — รับประกันว่าจะมีด้านที่อ่านได้หันหน้าอยู่เสมอ ไม่ค้างเป็นมุมเฉียง */
+  var f=btcNearest(Math.max(-90,Math.min(90,btc.rx+d.vy*4)),btc.ry+d.vx*4);
+  btcSnapTo(f.k);
+}
+
+/* ===================== ลูปฟิสิกส์ ===================== */
+
+function btcTick(){btc.raf=requestAnimationFrame(btcTick);btcStep();}
+
+function btcStep(){
+  if(!btc.open)return;
+
+  /* ตก: เร่งลงคงที่จนกระแทกพื้น แล้วเด้งแบบสูญเสียพลังงาน (restitution .30)
+     เด้งได้ 3 ครั้งแล้วหยุด — กล่องกระดาษไม่ใช่ลูกบอล เด้งเยอะกว่านี้ดูเป็นการ์ตูน */
+  if(!btc.rest){
+    btc.vy+=btc.g;
+    btc.y+=btc.vy;
+    if(btc.y>=0){
+      btc.y=0;
+      var hit=Math.min(1,Math.abs(btc.vy)/38);
+      if(Math.abs(btc.vy)>1.6&&btc.bounce<3){
+        btc.vy=-Math.abs(btc.vy)*0.30;
+        btc.bounce++;
+        btc.squash=Math.max(btc.squash,hit);
+        btc.rxV+=hit*2.6;            /* สะบัดตอนกระแทก ไม่ใช่หยุดนิ่งสนิททันที */
+      }else{
+        btc.vy=0;btc.rest=true;
+        btc.squash=Math.max(btc.squash,hit*0.5);
+      }
+    }
+  }
+  btc.squash*=0.84;
+  if(btc.squash<0.002)btc.squash=0;
+
+  /* หมุน: สปริงเข้าหามุมเป้าหมาย มี overshoot นิด ๆ ให้ดูมีน้ำหนัก
+     ตอนลากอยู่ rx/ry ถูกเซ็ตตรง ๆ จาก pointer แล้ว จึงข้ามสปริงไป */
+  if(!btc.drag){
+    btc.rxV=(btc.rxV+(btc.rxT-btc.rx)*0.15)*0.76;btc.rx+=btc.rxV;
+    btc.ryV=(btc.ryV+(btc.ryT-btc.ry)*0.15)*0.76;btc.ry+=btc.ryV;
+  }
+
+  var drop=$('#btcDrop'),cube=$('#btcCube');
+  if(drop)drop.style.transform='translate3d(0,'+btc.y.toFixed(1)+'px,0) '
+    +'scale3d('+(1+btc.squash*0.10).toFixed(4)+','+(1-btc.squash*0.17).toFixed(4)+','+(1+btc.squash*0.10).toFixed(4)+')';
+  if(cube)cube.style.transform='rotateX('+btc.rx.toFixed(2)+'deg) rotateY('+btc.ry.toFixed(2)+'deg)';
+
+  /* เงาบนพื้น: ยิ่งลอยสูงยิ่งเล็กและจาง */
+  var sh=$('#btcShadow');
+  if(sh){
+    var k=Math.max(0,1-Math.abs(btc.y)/620);
+    sh.style.opacity=(0.40*k).toFixed(3);
+    sh.style.transform='translateX(-50%) scale('+(0.55+0.45*k).toFixed(3)+')';
+  }
+}
+
 /* Real sign-out: clears the JWT this tab holds and sends the whole browser
    tab (not just the /legacy.html iframe) to /login. Referenced from the
    "ออกจากระบบ" button (which already defensively checks for it) but never
@@ -4160,8 +4747,11 @@ window.saveContact=saveContact;
 
 /* ===== shared row action modal for master tables (box type / warehouse / customer) ===== */
 function openMasterRowActions(kind,id,title,canDelete){
-  var editFn={btype:'editBtype',wh:'editWh',cust:'editCust',emp:'editEmp'}[kind];
-  var delFn={btype:'delBtype',wh:'delWh',cust:'delCust',emp:'delEmp'}[kind];
+  /* 'btype' ไม่ผ่านทางนี้แล้ว — คลิกแถวประเภทกล่องเปิดกล่อง 3D หกด้าน
+     (openBtypeCube) แทน และปุ่มแก้ไข/ลบย้ายไปอยู่บนด้าน "ภาพรวม & จัดการ"
+     ของกล่องนั้น เหมือนที่พนักงานย้ายไป openEmpBadge ก่อนหน้านี้ */
+  var editFn={wh:'editWh',cust:'editCust',emp:'editEmp'}[kind];
+  var delFn={wh:'delWh',cust:'delCust',emp:'delEmp'}[kind];
   var empLocked=kind==='emp'&&!isAdmin();
   var actions=[];
   if(empLocked){
@@ -6692,7 +7282,7 @@ function renderSetup(){
   }):bts;
   var btsSorted=sortTable(btsFiltered,uiSort.btype,'name');
   $('#btypeBody').innerHTML=btsSorted.length?btsSorted.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
-    return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openMasterRowActions(\'btype\',\''+esc(t.id)+'\',\''+esc(t.name+' ('+t.id+')')+'\','+(used?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
+    return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openBtypeCube(\''+esc(t.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
       +'<td class="r mono">'+used+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(8,'ยังไม่มีประเภทกล่อง');
   $('#cntBtype').textContent=bts.length+' ประเภท';
