@@ -1739,21 +1739,21 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
         </div>
         <div class="field"><label>ชื่อลูกค้า / บริษัท <span class="req">*</span></label><input id="cName" placeholder="บจก. ปลายทาง"></div>
-        <div class="field"><label>ประเภทคู่ค้า <span class="req">*</span></label><select id="cKind">
+        <div class="field"><label>ประเภทคู่ค้า</label><select id="cKind">
           <option value="customer">ลูกค้า (รับกล่องออกไป)</option>
           <option value="supplier">ซัพพลายเออร์ (ส่งกล่องเข้ามา)</option>
           <option value="both">ทั้งลูกค้าและซัพพลายเออร์</option>
         </select></div>
-        <div class="field"><label>ยืมได้กี่วัน <span class="req">*</span></label>
+        <div class="field"><label>ยืมได้กี่วัน</label>
           <div style="display:flex;align-items:center;gap:8px;">
             <input id="cReturnDays" type="number" min="0" placeholder="15" title="จำนวนวันที่ลูกค้ารายนี้ยืมกล่องได้ นับจากวันที่บันทึก — ใช้กับกล่องทุกใบที่ส่งให้ลูกค้ารายนี้" style="max-width:110px;">
             <span class="muted small">วัน (นับจากวันที่บันทึก)</span>
           </div>
           <input id="cReturnDate" type="hidden">
         </div>
-        <div class="field"><label>เบอร์โทรศัพท์ <span class="req">*</span></label><input id="cPhone" type="tel" inputmode="tel" placeholder="02-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
+        <div class="field"><label>เบอร์โทรศัพท์</label><input id="cPhone" type="tel" inputmode="tel" placeholder="02-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
         <div class="field"><label>อีเมล</label><input id="cEmail" type="email" inputmode="email" placeholder="contact@company.com" maxlength="254" autocomplete="email"></div>
-        <div class="field"><label>ที่อยู่/สาขา <span class="req">*</span></label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
+        <div class="field"><label>ที่อยู่/สาขา</label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
         <div class="field"><label>เลขประจำตัวผู้เสียภาษี</label><input id="cTaxId" placeholder="0-0000-00000-00-0"></div>
         <div class="field"><label>ผู้ติดต่อหลัก</label><input id="cContactPerson" placeholder="ชื่อผู้ประสานงาน"></div>
         <div class="field"><label>สถานะการใช้งาน</label>
@@ -3679,15 +3679,20 @@ window.editWh=editWh;window.delWh=delWh;
 var editingCust=null;
 var CUST_FIELDS=['cName','cPhone','cEmail','cAddr','cTaxId','cContactPerson','cCreditLimit','cFineRate','cLostFine','cReturnDays'];
 $('#btnAddCust').onclick=function(){
-  var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ',null,'err');
+  var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกชื่อลูกค้า / บริษัท',null,'err');
+  /* มีแค่ชื่อลูกค้า/บริษัทเท่านั้นที่บังคับกรอก — ทุกช่องอื่น (ยืมได้กี่วัน/เบอร์โทร/
+     อีเมล/ที่อยู่/ประเภทคู่ค้า/สถานะ) เป็นข้อมูลเสริม เว้นว่างแล้วบันทึกผ่านได้เลย
+     (เหมือนที่ผ่อนให้ import Excel ผ่านได้แม้ข้อมูลไม่ครบ — ฟอร์มกรอกมือก็ต้องผ่อนตาม
+     ไม่งั้นจะเข้มกว่า import ทั้งที่เป็นข้อมูลชุดเดียวกัน) ยังตรวจรูปแบบเบอร์/อีเมล
+     อยู่ถ้ามีการกรอกมาเท่านั้น ไม่ใช่บังคับให้ต้องกรอก */
   var returnDaysRaw=val('cReturnDays');
-  if(returnDaysRaw===''||isNaN(Number(returnDaysRaw))||Number(returnDaysRaw)<0)return toast('ระบุจำนวนวันที่ยืมได้ (ตัวเลข 0 ขึ้นไป)',null,'err');
-  var returnDate=ddmmyyyy(new Date(Date.now()+Number(returnDaysRaw)*86400000));
-  var phone=val('cPhone'),email=val('cEmail');if(!phone&&!email)return toast('กรอกเบอร์โทรศัพท์หรืออีเมลอย่างน้อยหนึ่งช่อง',null,'err');
+  var returnDays=(returnDaysRaw===''||isNaN(Number(returnDaysRaw))||Number(returnDaysRaw)<0)?0:Number(returnDaysRaw);
+  var returnDate=ddmmyyyy(new Date(Date.now()+returnDays*86400000));
+  var phone=val('cPhone'),email=val('cEmail');
   if(phone&&!isValidThaiPhone(phone))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 02-123-4567','err');
   phone=normPhoneDigits(phone);
   if(email&&!isValidEmail(email))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
-  var addr=val('cAddr');if(!addr)return toast('กรอกที่อยู่/สาขา',null,'err');
+  var addr=val('cAddr');
   if(!editingCust&&S.customers[id])return toast('มีรหัสลูกค้านี้แล้ว',id,'err');
   if(editingCust&&editingCust!==id&&S.customers[id])return toast('รหัสซ้ำ',id,'err');
   /* #cId is readonly today so this can't fire via the UI yet — same defense-in-depth
@@ -11390,10 +11395,10 @@ function openColumnMapModal(opts){
         {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
         {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท']},
         {key:'kind',          label:'ประเภทคู่ค้า (customer/supplier/both)', required:false, aliases:['kind','ประเภท','ประเภทคู่ค้า']},
-        {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่)', required:true, aliases:['returndate','returndays','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)','กำหนดคืนภายใน (วัน)']},
+        {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่)', required:false, aliases:['returndate','returndays','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)','กำหนดคืนภายใน (วัน)']},
         {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์']},
         {key:'email',         label:'อีเมล', required:false, aliases:['email','อีเมล']},
-        {key:'addr',          label:'ที่อยู่/สาขา', required:true, aliases:['address','addr','ที่อยู่']},
+        {key:'addr',          label:'ที่อยู่/สาขา', required:false, aliases:['address','addr','ที่อยู่']},
         {key:'taxId',         label:'เลขประจำตัวผู้เสียภาษี', required:false, aliases:['taxid','เลขภาษี']},
         {key:'contactPerson', label:'ผู้ติดต่อหลัก', required:false, aliases:['contact','ผู้ติดต่อ']},
         {key:'status',        label:'สถานะ (active/inactive/blocked)', required:false, aliases:['status','สถานะ']},
@@ -11403,28 +11408,31 @@ function openColumnMapModal(opts){
       ],
       validateRow:function(m){
         var e=[];
+        /* มีแค่ชื่อลูกค้า/บริษัทเท่านั้นที่บังคับ — ทุกช่องอื่นเป็นข้อมูลเสริม เว้นว่างได้
+           แล้ว import ผ่านเลย (เหมือนฟอร์มกรอกมือ) ยังตรวจ "รูปแบบ" ถ้ามีการกรอกมาเท่านั้น
+           (เบอร์/อีเมล/วันที่) ไม่ใช่บังคับให้ต้องมี และไม่บังคับค่า enum ของ
+           ประเภทคู่ค้า/สถานะอีกต่อไป — buildRecord() ใส่ default ให้เองถ้าเว้นว่างหรือ
+           พิมพ์มาไม่ตรง enum ที่รู้จัก */
         if(!m.name)e.push('ไม่มีชื่อลูกค้า');
         /* File may hand us DD/MM/YYYY, YYYY-MM-DD, or an Excel date serial —
            normalize in place so buildRecord and the preview table both see
            the same DD/MM/YYYY text the rest of the app stores/displays. */
-        var normDate=parseFlexDateToDmy(m.returnDate);
-        if(!normDate)e.push('กำหนดคืน (วันที่) ไม่ถูกต้อง — ใส่วันที่ เช่น 31/12/2026');
-        else m.returnDate=normDate;
-        if(!m.phone&&!m.email)e.push('ต้องมีเบอร์โทรหรืออีเมลอย่างน้อยหนึ่งอย่าง');
+        if(m.returnDate){
+          var normDate=parseFlexDateToDmy(m.returnDate);
+          if(!normDate)e.push('กำหนดคืน (วันที่) ไม่ถูกต้อง — ใส่วันที่ เช่น 31/12/2026');
+          else m.returnDate=normDate;
+        }
         if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
         if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
-        if(!m.addr)e.push('ไม่มีที่อยู่/สาขา');
-        if(!enumOk(m.kind,['customer','supplier','both']))e.push(ENUM_ERR.kind);
-        if(!enumOk(m.status,['active','inactive','blocked']))e.push(ENUM_ERR.custStatus);
         return e;
       },
       buildRecord:function(m,id){
-        return {id:id,name:m.name,kind:(m.kind||'customer').toLowerCase(),addr:m.addr,
+        return {id:id,name:m.name,kind:(m.kind||'customer').toLowerCase(),addr:m.addr||'',
           phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
           taxId:m.taxId||'',contactPerson:m.contactPerson||'',
           status:(m.status||'active').toLowerCase(),
           creditLimit:Number(m.creditLimit)||0,fineRate:Number(m.fineRate)||0,
-          lostFine:Number(m.lostFine)||0,returnDate:m.returnDate};
+          lostFine:Number(m.lostFine)||0,returnDate:m.returnDate||ddmmyyyy(new Date())};
       }
     },
 
