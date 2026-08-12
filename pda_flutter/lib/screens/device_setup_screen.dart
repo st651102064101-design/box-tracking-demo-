@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/i18n.dart';
+import '../services/scan_speed_detector.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -26,6 +27,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   late final TextEditingController _url;
   late final TextEditingController _account;
   late final TextEditingController _password;
+  final FocusNode _urlFocus = FocusNode();
+  late final ScanSpeedAutoSubmit _scanDetector;
   bool _showAccount = false;
 
   /// The one profile this screen actually shows/picks — resolved from what
@@ -40,7 +43,18 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url = TextEditingController(text: c.prefs.baseUrl);
     _account = TextEditingController(text: c.prefs.username);
     _password = TextEditingController();
+    _scanDetector = ScanSpeedAutoSubmit(onAutoSubmit: _handleScan);
     _detectDevice(c);
+  }
+
+  /// Fires once the barcode gun's keyboard-wedge burst settles — see
+  /// [ScanSpeedAutoSubmit]. The scanned text is the server URL itself, so it
+  /// just replaces whatever manual typing would have gone in [_url].
+  void _handleScan() {
+    final value = _url.text.trim();
+    if (value.isEmpty) return;
+    _scanDetector.reset();
+    setState(() {});
   }
 
   /// Used to auto-pick the Zebra profile for every device this build ran
@@ -95,6 +109,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _url.dispose();
     _account.dispose();
     _password.dispose();
+    _urlFocus.dispose();
+    _scanDetector.dispose();
     super.dispose();
   }
 
@@ -172,11 +188,57 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                         const SizedBox(height: 14),
                       ],
                       FieldLabel(loc.t('ที่อยู่เซิร์ฟเวอร์')),
-                      TextField(
-                        controller: _url,
-                        keyboardType: TextInputType.url,
-                        autocorrect: false,
-                        decoration: pdaInput('http://192.168.1.10:4000'),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 22, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: C.neutralBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: C.border2),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.qr_code_scanner,
+                                size: 30, color: C.muted),
+                            const SizedBox(height: 10),
+                            Text(
+                              loc.t('ยิงบาร์โค้ดเพื่อทำการเชื่อมต่อ'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w700),
+                            ),
+                            if (_url.text.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                _url.text,
+                                textAlign: TextAlign.center,
+                                style:
+                                    TextStyle(fontSize: 12, color: C.muted),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // Off-screen but focused so the scanner's keyboard-wedge
+                      // input lands here — the panel above only ever shows the
+                      // resulting message/URL, never a field to type into.
+                      SizedBox(
+                        height: 0,
+                        width: 0,
+                        child: TextField(
+                          controller: _url,
+                          focusNode: _urlFocus,
+                          autofocus: true,
+                          showCursor: false,
+                          decoration: const InputDecoration.collapsed(
+                              hintText: ''),
+                          onChanged: (v) {
+                            _scanDetector.onChanged(v);
+                            setState(() {});
+                          },
+                          onSubmitted: (_) => _handleScan(),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       // Collapsed by default: on a device that already works,
