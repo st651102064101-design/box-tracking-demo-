@@ -1668,6 +1668,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field" style="grid-column:1/-1;"><label>ทิศทางรายประตู — แยกตั้งได้ทุกประตู</label>
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
+        <div class="field"><label>พื้นที่ / ที่ตั้ง</label><input id="whArea" placeholder="เช่น สมุทรปราการ"></div>
+        <div class="field"><label>สถานะ</label>
+          <select id="whStatus"><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select>
+        </div>
       </div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddWh">บันทึกคลัง</button>
         <button class="btn gray" id="btnCancelWh" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -1675,7 +1679,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="tablecard">
       <div class="tablehead"><h4>คลังและประตู</h4><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th class="c">จัดการ</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th class="r">จำนวนประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th>พื้นที่</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="whBody"></tbody></table></div>
       <div class="bulkbar" id="bulkWh" style="display:none;">
         <span class="bcnt" id="bulkWhCnt"></span>
@@ -3183,18 +3187,19 @@ $('#btnAddWh').onclick=function(){
   var gates=[];for(var k=from;k<=to;k++)gates.push(k);
   var gtMap={};$all('#whGateTypeList .wh-gt-sel').forEach(function(s){gtMap[s.dataset.gate]=s.value;});
   gates.forEach(function(k2){if(!gtMap[k2])gtMap[k2]=gt;});
-  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap};rebuildGates();
+  var area=val('whArea'),status=val('whStatus')||'active';
+  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,area:area,status:status};rebuildGates();
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');whIdAuto.reset();
+  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');whIdAuto.reset();
   renderWhGateTypeList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo'].forEach(function(i){setv(i,'');});setv('whGateType','both');whIdAuto.reset();renderWhGateTypeList();};
+  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');whIdAuto.reset();renderWhGateTypeList();};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
-  setv('whGateType',w.gateType||'both');
+  setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');setv('whStatus',w.status||'active');
   renderWhGateTypeList(w.gateTypes||{});
   $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delWh(id){
@@ -3253,6 +3258,17 @@ window.CUST_KIND_LABEL=CUST_KIND_LABEL;
 var CUST_STATUS={active:{t:'ใช้งาน',c:'ok'},inactive:{t:'ปิดใช้งานชั่วคราว',c:'gray'},blocked:{t:'ระงับการใช้งาน',c:'bad'}};
 function CUST_STATUS_LABEL(s){var m=CUST_STATUS[s]||CUST_STATUS.active;
   return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
+/* คลังที่ "ปิดใช้งาน" คือ soft delete — ยังอยู่ในทะเบียนเพื่อดูประวัติ/กล่องเก่าที่ยังผูกอยู่
+   แต่ต้องไม่โผล่เป็นตัวเลือกในหน้าอื่น (ฟอร์มย้ายกล่อง, ตัวกรองคลัง, ภาพรวม ฯลฯ) — ใช้ activeWarehouses() ที่นั่น */
+var WH_STATUS={active:{t:'ใช้งาน',c:'ok'},inactive:{t:'ปิดใช้งาน',c:'bad'}};
+function WH_STATUS_LABEL(s){var m=WH_STATUS[s]||WH_STATUS.active;
+  return '<span class="pill '+m.c+'" style="font-size:11px;">'+m.t+'</span>';}
+function activeWarehouses(){return Object.values(S.warehouses).filter(function(w){return w.status!=='inactive';});}
+window.activeWarehouses=activeWarehouses;
+/* พนักงานที่ "พ้นสภาพ" คือ soft delete เช่นกัน — ยังอยู่ในทะเบียนเพื่อดูประวัติ
+   แต่ต้องไม่โผล่เป็นตัวเลือกในหน้าอื่น (เลือกผู้บันทึก ฯลฯ) — ใช้ activeEmployees() ที่นั่น */
+function activeEmployees(){return Object.values(S.employees).filter(function(e){return e.status!=='inactive';});}
+window.activeEmployees=activeEmployees;
 window.CUST_STATUS_LABEL=CUST_STATUS_LABEL;
 /* กล่องค้างคืนของลูกค้ารายนี้ — คำนวณสดจากกล่องจริงเสมอ (status='out' ผูกกับ
    c.id) ไม่เก็บเป็นตัวเลขแยกต่างหาก กันข้อมูลสองชุดไม่ตรงกัน */
@@ -3816,7 +3832,7 @@ function pickUser(){
   if(!menu)return;
   if(document.body!==menu.parentNode)document.body.appendChild(menu);
   if(!menu.hidden){closeWhoMenu();return;}          /* กดชิปซ้ำ = ปิด */
-  var emps=Object.values(S.employees);
+  var emps=activeEmployees();
   var h;
   if(!emps.length){
     h='<div class="wm-head">ยังไม่มีพนักงานในระบบ — เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้</div>'
@@ -4525,7 +4541,7 @@ function resolveLocBarcode(raw){
   });
   if(!zone&&!rack&&!shelf&&!slot)return null;
   /* find best matching warehouse by elimination */
-  var wh='';var whs=Object.values(S.warehouses);
+  var wh='';var whs=activeWarehouses();
   if(whs.length===1)wh=whs[0].id;
   return {wh:wh,zone:zone,rack:rack,shelf:shelf,slot:slot,_auto:true};
 }
@@ -6467,7 +6483,7 @@ function renderReports(){
   $('#ovLost').innerHTML=lostHtml;
 
   // occupancy by warehouse
-  var whs=Object.values(S.warehouses);
+  var whs=activeWarehouses();
   $('#ovOccupancy').innerHTML=whs.length?whs.map(function(w){
     var inWh=all.filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
     var pct=wh?Math.round(inWh/wh*100):0;
@@ -6694,10 +6710,13 @@ function renderSetup(){
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
     var gtHtml=[gtT.both?'<span>⇄ '+gtT.both+'</span>':'',gtT['in']?'<span style="color:var(--accentInk);">↓ เข้า '+gtT['in']+'</span>':'',gtT.out?'<span style="color:var(--neg);">↑ ออก '+gtT.out+'</span>':''].filter(Boolean).join(' · ');
     return '<tr data-tag="'+esc(w.id)+'" class="row-click" onclick="openMasterRowActions(\'wh\',\''+esc(w.id)+'\',\''+esc(w.name+' ('+w.id+')')+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb wh-cb" data-tag="'+esc(w.id)+'"></td><td class="mono"><b>'+esc(w.id)+'</b></td><td>'+esc(w.name)+'</td><td>ประตู '+gr+'</td>'
+      +'<td class="r mono">'+nf((w.gates||[]).length)+'</td>'
       +'<td><span style="font-size:12px;font-weight:700;">'+gtHtml+'</span></td>'
       +'<td class="r mono">'+nf(held)+'</td>'
+      +'<td>'+esc(w.area||'-')+'</td>'
+      +'<td>'+WH_STATUS_LABEL(w.status)+'</td>'
       +'<td class="c muted">›</td></tr>';
-  }).join(''):emptyRow(7,'ยังไม่มีคลัง');
+  }).join(''):emptyRow(9,'ยังไม่มีคลัง');
   $('#cntWh').textContent=whs.length+' คลัง · '+allGateNums().length+' ประตู';
   setupBulkTable('whBody','wh-cb','cbAllWh','bulkWh','bulkWhCnt');
 
@@ -7633,7 +7652,7 @@ function filteredInvBoxes() {
    เดียวกับแถวแยกตามลูกค้าด้านล่าง เพื่อดูสต็อกทีละคลังหรือทั้งหมดพร้อมกันได้ */
 function buildInvWhPills() {
   var whRow = $('#invWhRow'), pillsEl = $('#invWhPills'); if (!whRow || !pillsEl) return;
-  var whs = Object.values(S.warehouses);
+  var whs = activeWarehouses();
   if (whs.length <= 1) {
     whRow.classList.remove('show');
     invWhFilter = whs.length === 1 ? whs[0].id : '';
@@ -8315,7 +8334,10 @@ function invDistinctValues(field) {
   return Array.from(new Set(Object.values(S.inventory).map(function(it) { return it[field]; }).filter(Boolean))).sort();
 }
 function invWhOptions(sel) {
-  var whs = Object.values(S.warehouses);
+  var whs = activeWarehouses();
+  /* คลังปิดใช้งานไม่ให้เลือกใหม่ — แต่ถ้าค่าปัจจุบัน (sel) ผูกอยู่กับคลังที่ปิดไปแล้ว
+     ยังต้องโชว์ตัวเลือกนั้นไว้ ไม่งั้นฟอร์มจะเงียบๆ เปลี่ยนคลังของระเบียนเดิมโดยไม่ตั้งใจ */
+  if (sel && S.warehouses[sel] && S.warehouses[sel].status === 'inactive' && whs.indexOf(S.warehouses[sel]) < 0) whs = whs.concat([S.warehouses[sel]]);
   if (!whs.length) return '<option value="">(ยังไม่มีคลัง)</option>';
   if (whs.length === 1 && !sel) sel = whs[0].id;
   return whs.map(function(w) {
@@ -8323,7 +8345,7 @@ function invWhOptions(sel) {
   }).join('');
 }
 function warehouseFieldHtml(selectId, sel) {
-  var whs = Object.values(S.warehouses);
+  var whs = activeWarehouses();
   if (!whs.length) return '<button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง</button>';
   if (whs.length === 1) {
     var w = whs[0];
@@ -9037,11 +9059,11 @@ window.exportBtypeExcel = exportBtypeExcel;
 
 function exportWhExcel() {
   var whs = Object.values(S.warehouses).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
+  var headers = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่', 'พื้นที่', 'สถานะ'];
   var rows = whs.map(function(w) {
     var gs = (w.gates || []).slice().sort(function(a, b) { return a - b; });
     var stored = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location || {}).wh === w.id; }).length;
-    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
+    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored, w.area || '', (WH_STATUS[w.status] || WH_STATUS.active).t];
   });
   downloadXLS('warehouses-' + dstr() + '.xlsx', headers, rows);
 }
@@ -9101,11 +9123,11 @@ function exportAllMastersExcel() {
   });
 
   var whs = Object.values(S.warehouses).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var whHeaders = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่'];
+  var whHeaders = ['รหัสคลัง', 'ชื่อคลัง', 'ประตูเริ่ม', 'ประตูสิ้นสุด', 'จำนวนประตู', 'กล่องที่เก็บอยู่', 'พื้นที่', 'สถานะ'];
   var whRows = whs.map(function(w) {
     var gs = (w.gates || []).slice().sort(function(a, b) { return a - b; });
     var stored = boxes.filter(function(b) { return b.status === 'warehouse' && (b.location || {}).wh === w.id; }).length;
-    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored];
+    return [w.id, w.name, gs[0] || '', gs[gs.length - 1] || '', gs.length, stored, w.area || '', (WH_STATUS[w.status] || WH_STATUS.active).t];
   });
 
   var custs = Object.values(S.customers).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
