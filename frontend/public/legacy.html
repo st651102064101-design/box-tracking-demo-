@@ -2071,11 +2071,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #btypeCubeOverlay .btc-kv span{color:var(--muted);}
 #btypeCubeOverlay .btc-kv b{font-weight:600;text-align:right;}
 #btypeCubeOverlay .btc-big{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1;}
-#btypeCubeOverlay .btc-act{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
-  padding:10px 13px;border-radius:11px;background:var(--surface2);border:.5px solid var(--line);
-  font-size:13.5px;font-weight:500;color:var(--ink);margin-top:7px;}
-#btypeCubeOverlay .btc-act.danger{background:var(--negSoft);border-color:rgba(215,0,21,.22);color:var(--neg);}
-#btypeCubeOverlay .btc-act[disabled]{opacity:.42;cursor:not-allowed;}
 #btypeCubeOverlay .btc-search{width:100%;padding:7px 11px;border-radius:9px;border:.5px solid var(--line);
   background:var(--surface2);color:var(--ink);font-size:13px;font-family:inherit;margin-bottom:9px;}
 #btypeCubeOverlay .btc-row{display:flex;align-items:center;gap:9px;padding:7px 0;
@@ -2100,9 +2095,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #btypeCubeOverlay .btc-dock button .c{font-family:var(--mono);font-size:11px;opacity:.75;}
 #btypeCubeOverlay .btc-hint{position:absolute;left:0;right:0;bottom:26px;text-align:center;
   color:rgba(255,255,255,.7);font-size:12.5px;pointer-events:none;}
-#btypeCubeOverlay .btc-close{position:absolute;right:22px;top:22px;width:42px;height:42px;
-  border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;
+/* ปุ่มจัดการทั้งชุด (ปิด/แก้ไข/ดูในหน้าคลัง/ลบ) อยู่รวมกันเป็นแถวแนวตั้งมุมขวาบน
+   เหมือนแผงคลังกับบัตรคู่ค้า — ปิดต้องอยู่ติดปุ่มจัดการเสมอ ไม่ใช่แยกลอยอยู่คนละที่ */
+#btypeCubeOverlay .btc-actions{position:absolute;top:22px;right:22px;z-index:6;
+  display:flex;flex-direction:column;gap:10px;}
+#btypeCubeOverlay .btc-abtn{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
   box-shadow:0 6px 16px rgba(0,0,0,.35);}
+#btypeCubeOverlay .btc-abtn.dark{background:var(--ink);color:var(--surface);}
+#btypeCubeOverlay .btc-abtn.light{background:var(--surface);color:var(--ink);}
+#btypeCubeOverlay .btc-abtn.red{background:var(--neg);color:#fff;}
+#btypeCubeOverlay .btc-abtn[disabled]{opacity:.42;pointer-events:none;}
 @media(max-width:760px){
   #btypeCubeOverlay .btc-dock{bottom:56px;}
   #btypeCubeOverlay .btc-hint{display:none;}
@@ -2123,9 +2125,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
     </div>
   </div>
-  <button class="btc-close" onclick="closeBtypeCube()" title="ปิด">
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-  </button>
+  <div class="btc-actions" id="btcActions"></div>
   <div class="btc-dock" id="btcDock"></div>
   <div class="btc-hint">ลากพื้นที่รอบกล่อง (หรือแถบหัวข้อของด้าน) เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด</div>
 </div>
@@ -4168,10 +4168,10 @@ function btcFaceCount(k,s){
 function btcFrontHtml(t,s,mat,dimCm){
   var used=s.boxes.length;
   var vol=dimCm?(dimCm.w*dimCm.l*dimCm.h/1000):null;   /* ซม.³ → ลิตร */
-  var admin=(typeof isAdmin==='function')?isAdmin():true;
   return ''
     +'<div class="btc-big">'+nf(used)+' <span style="font-size:15px;font-weight:600;color:var(--muted);">'+esc(t.unit||'ใบ')+'</span></div>'
-    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 12px;">ใช้ประเภทนี้อยู่ในระบบ</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin:2px 0 12px;">ใช้ประเภทนี้อยู่ในระบบ'
+      +(used?' · ลบประเภทนี้ไม่ได้จนกว่าจะไม่มีกล่องเหลือ':'')+'</div>'
     +'<div class="btc-kv"><span>รหัส</span><b class="mono">'+esc(t.id)+'</b></div>'
     +'<div class="btc-kv"><span>ชื่อประเภท</span><b>'+esc(t.name||'-')+'</b></div>'
     +'<div class="btc-kv"><span>วัสดุที่ตรวจจากชื่อ</span><b>'+esc(mat.label)+'</b></div>'
@@ -4180,16 +4180,22 @@ function btcFrontHtml(t,s,mat,dimCm){
     +(vol?'<div class="btc-kv"><span>ปริมาตร</span><b class="mono">'+vol.toLocaleString('en-US',{maximumFractionDigits:1})+' ลิตร</b></div>':'')
     +'<div class="btc-kv"><span>มูลค่าต่อใบ</span><b class="mono">'+(t.value==null?'-':money(t.value))+'</b></div>'
     +'<div class="btc-kv"><span>มูลค่ารวมทั้งประเภท</span><b class="mono">'+money(s.value)+'</b></div>'
-    +'<div style="margin-top:12px;">'
-      +'<button class="btc-act" onclick="btcAction(\'edit\')">แก้ไขประเภทกล่อง</button>'
-      +'<button class="btc-act" onclick="btcAction(\'inv\')">ดูกล่องประเภทนี้ในหน้าคลัง</button>'
-      +(admin?('<button class="btc-act danger" onclick="btcAction(\'del\')"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ"':'')+'>ลบประเภทกล่อง</button>'):'')
-    +'</div>'
-    +(used?'<div style="font-size:11.5px;color:var(--muted);margin-top:8px;">ลบไม่ได้ขณะยังมีกล่อง '+nf(used)+' ใบใช้ประเภทนี้อยู่</div>':'')
-    +(btc.clamped?'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* กล่องทรงแบนมาก — สัดส่วนบนจอถูกถ่างให้อ่านข้อมูลได้ ไม่ตรงกับ '+esc(t.dim)+' เป๊ะ</div>':'')
+    +(btc.clamped?'<div style="font-size:11.5px;color:var(--warn);margin-top:12px;">* กล่องทรงแบนมาก — สัดส่วนบนจอถูกถ่างให้อ่านข้อมูลได้ ไม่ตรงกับ '+esc(t.dim)+' เป๊ะ</div>':'')
     /* ไม่มี dim ใน DB → วาดเป็นลูกบาศก์ 1:1:1 ไปก่อน บอกไว้ตรง ๆ ว่านั่นไม่ใช่ทรงจริง
        ของกล่องใบนี้ ไม่งั้นจะเข้าใจผิดว่าระบบอ่านขนาดมาแล้ว */
-    +(dimCm?'':'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* ยังไม่ได้กรอกขนาดในประเภทนี้ กล่องจึงแสดงเป็นทรงลูกบาศก์ไปก่อน — กรอกขนาดที่ "แก้ไขประเภทกล่อง" แล้วทรงจะตรงกับของจริง</div>');
+    +(dimCm?'':'<div style="font-size:11.5px;color:var(--warn);margin-top:12px;">* ยังไม่ได้กรอกขนาดในประเภทนี้ กล่องจึงแสดงเป็นทรงลูกบาศก์ไปก่อน — กรอกขนาดที่ปุ่มแก้ไข (มุมขวาบน) แล้วทรงจะตรงกับของจริง</div>');
+}
+
+/* ปุ่มจัดการทั้งชุด: ปิด/แก้ไข/ดูในหน้าคลัง/ลบ ต่อกันเป็นแถวเดียวมุมขวาบน — ลบถูก disable
+   ล่วงหน้าพร้อม title บอกเหตุผล แทนที่จะเปิดให้กดแล้วโดน toast ปัดกลับ เหมือนแผงคลัง/บัตรคู่ค้า */
+function btcActionsHtml(t,s){
+  var used=s.boxes.length;
+  var admin=(typeof isAdmin==='function')?isAdmin():true;
+  return ''
+    +'<button class="btc-abtn dark" onclick="closeBtypeCube()" title="ปิด"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
+    +'<button class="btc-abtn light" onclick="btcAction(\'edit\')" title="แก้ไขประเภทกล่อง"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></button>'
+    +'<button class="btc-abtn light" onclick="btcAction(\'inv\')" title="ดูกล่องประเภทนี้ในหน้าคลัง"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></button>'
+    +(admin?('<button class="btc-abtn red" onclick="btcAction(\'del\')" title="'+(used?esc('มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ'):'ลบประเภทกล่อง')+'"'+(used?' disabled':'')+'><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></button>'):'');
 }
 
 function btcBackHtml(t,s){
@@ -4377,6 +4383,7 @@ function openBtypeCube(id){
   btc.id=id;btc.open=true;btc.face='front';
   btcLayout(dimCm);
   btcRenderFaces(t,s,mat,dimCm);
+  $('#btcActions').innerHTML=btcActionsHtml(t,s);
 
   /* ตั้งท่าเริ่ม: ลอยอยู่เหนือจอ เอียงเฉียงนิดหน่อยให้เห็นสามด้านตอนร่วงลงมา
      แล้วสปริงกลับมาหันด้าน "หน้า" ตรง ๆ พอดีจังหวะที่ตกถึงพื้น */
