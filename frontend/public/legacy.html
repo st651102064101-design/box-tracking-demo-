@@ -4659,7 +4659,9 @@ function openCustCard(id){
   ccState.y=-(vh/2+CC_CH*ccState.s+140);
   ccState.vx=(Math.random()-0.5)*1.1;ccState.vy=0;
   ccState.rx=-56-Math.random()*14;ccState.ry=24+Math.random()*10;ccState.rz=-12-Math.random()*8;
-  ccState.wx=0.72;ccState.wy=-0.4;ccState.wz=0.18;
+  /* ตกไวขึ้นแล้วมีเวลาตีลังกาน้อยลง (เฟรมน้อยลง) — เร่งอัตราหมุนตามไปด้วย ไม่งั้นบัตร
+     จะดูแทบไม่พลิกเลยก่อนถึงพื้น */
+  ccState.wx=1.15;ccState.wy=-0.62;ccState.wz=0.3;
   ccState.bounce=0;ccState.rest=false;ccState.t=0;
 
   ccSetFace(false);
@@ -4760,7 +4762,10 @@ function ccStep(){
     s.ry+=(Math.sin(t*0.5)*0.5-s.ry)*0.035;
     s.rz+=(0-s.rz)*0.05;
   }else{
-    s.vy=s.vy*0.994+0.62;
+    /* แรงโน้มถ่วง .62 เดิมทำให้บัตรลอยอยู่กลางอากาศนานเกินไปก่อนถึงพื้น — เร่งขึ้นเป็น
+       ~3 เท่า ลดเวลากระแทกครั้งแรกจากราว .95 วิ เหลือราว .5 วิ (นิ่งสนิทจาก 1.43 วิ
+       เหลือราว .88 วิ) ยังพอเห็นเป็นการ "ตก" อยู่ ไม่ใช่การเทเลพอร์ตวาบเดียวถึงพื้น */
+    s.vy=s.vy*0.994+1.9;
     s.y+=s.vy;
     s.x+=s.vx;s.vx*=0.992;
     s.rx+=s.wx;s.ry+=s.wy;s.rz+=s.wz;
