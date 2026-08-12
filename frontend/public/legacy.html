@@ -1264,7 +1264,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <button class="btn ghost" id="btnAllocateSuggest" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
     
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
-    <button class="btn ghost" onclick="exportAllMastersExcel()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+    <button class="btn ghost" onclick="pickAllMastersExportMode()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="outCount"></span>
   </div>
 </section>
@@ -1345,7 +1345,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="row" style="margin-top:22px;margin-bottom:22px;">
     <button class="btn pos big" id="btnCheckIn">ยืนยันรับเข้าคลัง</button>
     <button class="btn ghost" onclick="clearGateIn()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
-    <button class="btn ghost" onclick="exportAllMastersExcel()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+    <button class="btn ghost" onclick="pickAllMastersExportMode()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="inCount"></span>
   </div>
 </section>
@@ -1398,7 +1398,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <button class="ivs-btn" data-view="summary" title="Group By ประเภท + พิกัด แสดงจำนวนรวม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> สรุปสต็อก</button>
     </div>
     <button class="btn accent sm" onclick="document.getElementById('invImportFile').click()" title="เลือกไฟล์ Excel/CSV เพื่อนำเข้ารายการสต็อก — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ชื่อหัวคอลัมน์ตายตัว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> Import Excel</button>
-    <button class="btn ghost sm" onclick="exportAllMastersExcel()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+    <button class="btn ghost sm" onclick="pickAllMastersExportMode()" title="Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) เป็นไฟล์เดียว แยก sheet ต่อ master"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <input type="file" id="invImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
   </div>
 
@@ -10592,6 +10592,39 @@ function downloadXLSMulti(filename, sheets) {
   toast('Export แล้ว', finalName);
 }
 window.downloadXLSMulti = downloadXLSMulti;
+/* Single-sheet variant of downloadXLSMulti — same section shape (name/headers/
+   rows/opts), but stacked into one sheet as title-row + header-row + data
+   blocks separated by a blank row, instead of one tab per section. Lets
+   "รวมเป็น sheet เดียว" reuse the exact same section data exportAllMastersExcel()
+   already builds for the per-sheet version. */
+function downloadXLSSingle(filename, sections) {
+  if (typeof XLSX === 'undefined') { toast('ไลบรารี Excel ยังไม่พร้อม','โหลดหน้าใหม่แล้วลองอีกครั้ง','err'); return; }
+  var aoa = [];
+  var barcodeCells = [];
+  sections.forEach(function(sec, si){
+    if (si > 0) aoa.push([]);
+    aoa.push([sec.name]);
+    aoa.push(sec.headers);
+    (sec.rows || []).forEach(function(row){
+      var rIndex = aoa.length;
+      aoa.push(row.map(function(v){ return v == null ? '' : v; }));
+      var barcodeCols = (sec.opts || {}).barcodeCols || [];
+      barcodeCols.forEach(function(c){ barcodeCells.push({ r: rIndex, c: c }); });
+    });
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  barcodeCells.forEach(function(bc){
+    var addr = XLSX.utils.encode_cell({ r: bc.r, c: bc.c });
+    var cell = ws[addr];
+    if (cell) { cell.t = 's'; cell.v = String(cell.v); }
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'All Masters');
+  var finalName = ensureXlsxName(filename);
+  XLSX.writeFile(wb, finalName);
+  toast('Export แล้ว', finalName);
+}
+window.downloadXLSSingle = downloadXLSSingle;
 
 function exportOverviewExcel() {
   applyAutoLost();
@@ -10740,7 +10773,18 @@ window.exportAuditExcel = exportAuditExcel;
    Setup tabs and export each one individually. Mirrors the exact
    headers/rows each single-entity exportXxxExcel() above already produces
    — this doesn't invent a new shape, just bundles them into one file. */
-function exportAllMastersExcel() {
+function pickAllMastersExportMode() {
+  var h = '<div class="mhead"><h3>Export ทุก Master</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    + '<div class="mbody" style="padding-top:4px;">'
+    + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:8px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'multi\');">'
+    + '<div><b>แยกเป็นแต่ละ Sheet</b><div class="muted small" style="font-weight:400;">1 ไฟล์ · 1 sheet ต่อ 1 master (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน)</div></div></button>'
+    + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'single\');">'
+    + '<div><b>รวมเป็น Sheet เดียว</b><div class="muted small" style="font-weight:400;">1 ไฟล์ · 1 sheet เดียว เรียงทุก master ต่อกัน คั่นด้วยหัวข้อ</div></div></button>'
+    + '</div>';
+  openModal(h);
+}
+window.pickAllMastersExportMode = pickAllMastersExportMode;
+function exportAllMastersExcel(mode) {
   var boxStatusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var boxHeaders = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง', 'ลูกค้า', 'DO', 'PO', 'Lot/Batch', 'วันหมดอายุ', 'ซัพพลายเออร์', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
@@ -10787,13 +10831,18 @@ function exportAllMastersExcel() {
       EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
 
-  downloadXLSMulti('all-masters-' + dstr() + '.xlsx', [
+  var sections = [
     { name: 'กล่อง (Box)', headers: boxHeaders, rows: boxRows, opts: { barcodeCols: [0] } },
     { name: 'ประเภทกล่อง', headers: btypeHeaders, rows: btypeRows },
     { name: 'คลัง & ประตู', headers: whHeaders, rows: whRows },
     { name: 'ลูกค้า คู่ค้า', headers: custHeaders, rows: custRows },
     { name: 'พนักงาน', headers: empHeaders, rows: empRows },
-  ]);
+  ];
+  if (mode === 'single') {
+    downloadXLSSingle('all-masters-' + dstr() + '.xlsx', sections);
+  } else {
+    downloadXLSMulti('all-masters-' + dstr() + '.xlsx', sections);
+  }
 }
 window.exportAllMastersExcel = exportAllMastersExcel;
 
