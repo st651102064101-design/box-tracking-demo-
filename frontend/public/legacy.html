@@ -10372,10 +10372,15 @@ function parseCSV(text) {
    Import ทั้งหมด (ดู OUT_MAP_FIELDS/IMPORT_CONFIGS): ให้ผู้ใช้จับคู่คอลัมน์เอง
    เสมอ แทนการเช็คชื่อหัวคอลัมน์ตรงเป๊ะแล้วปฏิเสธทั้งไฟล์ถ้าไม่ตรง — ไฟล์จริงตั้ง
    ชื่อหัวคอลัมน์กันคนละแบบ บังคับให้ตรงเป๊ะคือจุดที่ทำให้ import พังบ่อยที่สุด */
+/* 'category' used to be its own mapped column, but in this app a box's
+   "ประเภท" (box type) IS its "ชื่อสินค้า" (item name) — there's no such thing
+   as one item name covering several box types here, so offering both let an
+   operator map the same source column to two different targets and wonder
+   why nothing changed. importInvFromRows() now matches the box type off the
+   `name` column directly instead of a separate one. */
 var INV_MAP_FIELDS = [
   { key: 'code', label: 'รหัสสินค้า', required: true, aliases: ['รหัสสินค้า', 'code', 'sku'] },
-  { key: 'name', label: 'ชื่อสินค้า', required: true, aliases: ['ชื่อสินค้า', 'name'] },
-  { key: 'category', label: 'ประเภท', required: false, aliases: ['ประเภท', 'category'] },
+  { key: 'name', label: 'ชื่อสินค้า', required: true, aliases: ['ชื่อสินค้า', 'ประเภท', 'name', 'category'] },
   { key: 'qty', label: 'จำนวน', required: false, aliases: ['จำนวน', 'qty'] },
   { key: 'unit', label: 'หน่วย', required: false, aliases: ['หน่วย', 'unit'] },
   { key: 'value', label: 'มูลค่าต่อหน่วย (บาท)', required: false, aliases: ['มูลค่าต่อหน่วย (บาท)', 'มูลค่าต่อหน่วย', 'มูลค่า', 'ราคา', 'value', 'price'] },
@@ -10537,13 +10542,12 @@ function importInvFromRows(rows, colMap) {
     var whRaw = ci.wh >= 0 ? String(r[ci.wh] || '').trim() : '';
     var wh = S.warehouses[whRaw] ? whRaw : (whByName[whRaw] || '');
     var before = existed ? Object.assign({}, S.inventory[code]) : null;
-    var catRaw = ci.category >= 0 ? String(r[ci.category] || '').trim() : '';
-    var bt = S.boxtypes[code] || S.boxtypes[catRaw] || null;
-    if (!bt) { var byName = Object.values(S.boxtypes).find(function(t) { return t.name === catRaw; }); if (byName) bt = byName; }
+    var bt = S.boxtypes[code] || S.boxtypes[nm] || null;
+    if (!bt) { var byName = Object.values(S.boxtypes).find(function(t) { return t.name === nm; }); if (byName) bt = byName; }
     var valueRaw = ci.value >= 0 ? String(r[ci.value] || '').trim() : '';
     var item = {
       code: code, name: nm,
-      category: bt ? bt.name : catRaw, boxTypeId: bt ? bt.id : '',
+      category: bt ? bt.name : nm, boxTypeId: bt ? bt.id : '',
       qty: bt ? boxTypeWarehouseQty(bt.id) : (ci.qty >= 0 ? (parseFloat(r[ci.qty]) || 0) : 0),
       unit: bt ? (bt.unit || '') : (ci.unit >= 0 ? String(r[ci.unit] || '').trim() : ''),
       value: bt ? (bt.value || null) : (valueRaw !== '' && !isNaN(Number(valueRaw)) ? Number(valueRaw) : null),
