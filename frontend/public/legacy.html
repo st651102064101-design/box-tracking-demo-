@@ -2129,7 +2129,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   color:rgba(255,255,255,.7);font-size:12.5px;pointer-events:none;}
 /* ปุ่มจัดการทั้งชุด (ปิด/แก้ไข/ดูในหน้าคลัง/ลบ) อยู่รวมกันเป็นแถวแนวตั้งมุมขวาบน
    เหมือนแผงคลังกับบัตรคู่ค้า — ปิดต้องอยู่ติดปุ่มจัดการเสมอ ไม่ใช่แยกลอยอยู่คนละที่ */
-#btypeCubeOverlay .btc-actions{position:absolute;top:22px;right:22px;z-index:6;
+#btypeCubeOverlay .btc-actions{position:absolute;left:0;top:0;z-index:6;
   display:flex;flex-direction:column;gap:10px;}
 #btypeCubeOverlay .btc-abtn{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
   box-shadow:0 6px 16px rgba(0,0,0,.35);}
@@ -2208,7 +2208,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #custCardOverlay .cc-back{transform:rotateY(180deg);}
 #custCardOverlay .cc-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;
   font-size:13px;font-weight:600;position:relative;}
-#custCardOverlay .cc-close{position:fixed;right:22px;top:22px;width:44px;height:44px;border-radius:50%;
+/* ปุ่มปิดเกาะข้างมุมขวาบนของบัตร — ccStep() ย้ายตำแหน่งให้ทุกเฟรม (ดูท้าย ccStep)
+   เป็น element พี่น้องกับบัตร ไม่ได้อยู่ในบัตร จึงไม่ถูกหมุน/ย่อ/พลิกตาม ตั้งตรงเสมอ */
+#custCardOverlay .cc-close{position:absolute;left:0;top:0;width:44px;height:44px;border-radius:50%;
   background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.4);z-index:5;}
 #custCardOverlay .cc-act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 14px;
   border-radius:13px;background:var(--panelChipBg);border:1px solid var(--panelChipBorder);
@@ -2227,7 +2229,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="cc-face cc-back" id="ccBack"></div>
     </div>
   </div>
-  <button class="cc-close" onclick="closeCustCard()" title="ปิด">
+  <button class="cc-close" id="ccClose" onclick="closeCustCard()" title="ปิด">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
   </button>
 </div>
@@ -2246,7 +2248,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
    ตัวหนังสือหัวเรื่องจึงต้องมี text-shadow กันจมไปกับพื้นหลังที่ยังพอเห็นลาง ๆ */
 #whPanelOverlay .whp-stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(1040px,92vw);max-height:90vh;overflow:auto;padding:8px 26px 26px;}
-#whPanelOverlay .whp-actions{position:fixed;top:24px;right:26px;z-index:6;display:flex;flex-direction:column;gap:10px;}
+/* ปุ่มจัดการเกาะข้างขวาของแผง — whpPlaceActions() วัดขนาดแผงจริงแล้วจัดตำแหน่งให้
+   (ความสูงแผงขึ้นกับจำนวนประตู คำนวณจาก CSS ล้วน ๆ ไม่ได้ ต้องวัดเอา) */
+#whPanelOverlay .whp-actions{position:fixed;left:0;top:0;z-index:6;display:flex;flex-direction:column;gap:10px;}
 #whPanelOverlay .whp-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
   box-shadow:0 6px 16px rgba(0,0,0,.4);}
 #whPanelOverlay .whp-btn.dark{background:#1d1d1f;color:#fff;}
@@ -2328,7 +2332,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <div id="whPanelOverlay">
   <div class="whp-backdrop" onclick="closeWhPanel()"></div>
   <div class="whp-actions" id="whpActions"></div>
-  <div class="whp-stage">
+  <div class="whp-stage" id="whpStage">
     <div id="whpBody"></div>
   </div>
   <div id="whpPinned"></div>
@@ -4571,6 +4575,17 @@ function btcLayout(dimCm){
   /* เวทีจัดกลางที่ top:47% (translateY(-50%)) ก้นกล่องจึงอยู่ที่ 47%+h/2
      ไม่ใช่ 47%+sw/2 — เผลอใช้ขนาดเวทีแล้วเงาจะหล่นไปอยู่ใต้จอ */
   sh.style.top=(vh*0.47+btc.h/2-8)+'px';
+
+  /* แถบปุ่มเกาะข้างขวาของกล่อง ห่าง 20px — ใช้ max(w,d) เป็นครึ่งความกว้าง เพราะกล่องหมุน
+     รอบแกน Y ได้ ความกว้างที่เห็นจึงสลับระหว่างด้านกว้างกับด้านลึก ใช้ค่ามากสุดกันปุ่มถูกกล่องทับ
+     ตอนหมุน ถ้ากล่องใหญ่จนปุ่มตกขอบจอ ให้ถอยมาชิดขอบขวาจอแทน */
+  var rail=$('#btcActions');
+  if(rail){
+    var halfW=Math.max(btc.w,btc.d)/2;
+    var rx=vw/2+halfW+20;
+    if(rx+48>vw-8)rx=vw-56;
+    rail.style.transform='translate('+Math.round(rx)+'px,'+Math.round(Math.max(8,vh*0.47-btc.h/2))+'px)';
+  }
 }
 
 function btcRenderFaces(t,s,mat,dimCm){
@@ -5081,6 +5096,17 @@ function ccStep(){
     sh.style.transform='translateY('+(CC_CH*s.s*0.42).toFixed(1)+'px) scale('+(0.55+k*0.45).toFixed(3)+')';
     sh.style.opacity=(0.06+k*0.30).toFixed(3);
   }
+  /* ปุ่มปิดเกาะข้างมุมขวาบนของบัตร ห่างออกไป 30px — หมุนจุดมุมขวาบนตาม rz (มุมหมุนในระนาบ
+     จอ) เหมือนที่บัตรหมุน ส่วน rx/ry เป็นการพลิกออกนอกระนาบซึ่งตอนบัตรนิ่งจะเข้าใกล้ 0 อยู่แล้ว
+     ตัวปุ่มแค่เลื่อน ไม่หมุนตาม จึงตั้งตรงเสมอ */
+  var ccBtn=$('#ccClose');
+  if(ccBtn){
+    var rz=s.rz*Math.PI/180,cz=Math.cos(rz),sz=Math.sin(rz);
+    var lx=CC_CW/2*s.s+30,ly=-CC_CH/2*s.s+22;
+    var bx=window.innerWidth/2+s.x+(lx*cz-ly*sz);
+    var by=window.innerHeight/2+s.y+(lx*sz+ly*cz);
+    ccBtn.style.transform='translate('+(bx-22).toFixed(1)+'px,'+(by-22).toFixed(1)+'px)';
+  }
 }
 
 /* ===== คลัง — แผงประตูคลัง (gate visualization) =====
@@ -5210,6 +5236,20 @@ function whpRenderBody(w){
       +'<span><i style="background:rgba(189,251,99,.28);color:#16330a;">'+CC_ICONS.both+'</i>สองทาง</span>'
     +'</div>';
   $('#whpActions').innerHTML=whpActionsHtml(w);
+  whpPlaceActions();
+}
+
+/* วางแถบปุ่มไว้ข้างขวาของแผง ห่าง 14px — ต้องวัด getBoundingClientRect เพราะความสูง/ความกว้าง
+   จริงของแผงขึ้นกับเนื้อหา (จำนวนประตู) และ max-height:90vh หนีบไว้อีกชั้น
+   ถ้าจอแคบจนวางข้างนอกแล้วปุ่มตกขอบจอ ให้ถอยมาซ้อนมุมขวาบนของแผงแทน ดีกว่าโผล่ไม่พ้นจอ */
+function whpPlaceActions(){
+  var rail=$('#whpActions'),stage=$('#whpStage');
+  if(!rail||!stage)return;
+  var r=stage.getBoundingClientRect();
+  var W=48;
+  var x=r.right+14;
+  if(x+W>window.innerWidth-8)x=Math.max(8,r.right-W-6);
+  rail.style.transform='translate('+Math.round(x)+'px,'+Math.round(Math.max(8,r.top))+'px)';
 }
 
 function openWhPanel(id){
@@ -5323,6 +5363,10 @@ function whpBoot(){
     if(ev.key!=='Escape')return;
     var ov=$('#whPanelOverlay');if(!ov||ov.style.display!=='block')return;
     if(whp.pinnedGate!=null)whpUnpin();else closeWhPanel();
+  });
+  /* ย่อ/ขยายจอแล้วแผงเปลี่ยนขนาด ปุ่มต้องขยับตามด้วย ไม่งั้นจะค้างอยู่ตำแหน่งเดิมที่ไม่ตรงแผงแล้ว */
+  window.addEventListener('resize',function(){
+    var ov=$('#whPanelOverlay');if(ov&&ov.style.display==='block')whpPlaceActions();
   });
 }
 
