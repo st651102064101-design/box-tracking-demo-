@@ -591,6 +591,10 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
    flex items default to align-items:stretch on the cross axis, so without this
    the toggle stretched to the field's full width instead of hugging its text. */
 .inv-view-sw[data-target]{align-self:flex-start;}
+/* status toggles only need to fit their (short, fixed) label — the default
+   .ivs-btn padding (7px 16px, tuned for longer view-switcher labels like
+   "สรุปสต็อก") left visible dead space around "ปฏิบัติงาน"/"พ้นสภาพ" etc. */
+.inv-view-sw[data-target] .ivs-btn{padding:6px 10px;}
 .ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;}
 .ivs-btn:hover{color:var(--ink);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
@@ -5434,6 +5438,10 @@ function whpRenderPin(){
     +'</div>';
   }).join(''):'<div style="opacity:.6;font-size:13px;text-align:center;padding:20px 0;">ไม่มีข้อมูลในช่วงนี้</div>';
   p.innerHTML=''
+    /* click-outside-to-close: a full-viewport catcher sitting between the panel's own
+       backdrop and .whp-pin (z-index 250) — .whp-backdrop alone would call
+       closeWhPanel() and exit the whole warehouse panel, not just this pinned gate card. */
+    +'<div onclick="whpUnpin()" style="position:fixed;inset:0;z-index:240;"></div>'
     +'<div class="whp-pin" id="whpPinCard">'
       +'<div style="padding:22px 24px 14px;flex:0 0 auto;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
