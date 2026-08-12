@@ -1447,7 +1447,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <table>
         <thead><tr>
           <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllInv" title="เลือกทั้งหมด"></th>
-          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th>
+          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th><th>วันที่ต้องคืน</th>
           <th></th>
         </tr></thead>
         <tbody id="invBody"></tbody>
@@ -9403,6 +9403,15 @@ function invShipRecvText(b) {
   }
   return '<span class="muted small">—</span>';
 }
+/* วันที่ต้องคืน — มีความหมายก็ต่อเมื่อกล่องยังออกอยู่ (status='out') เท่านั้น
+   ใช้ b.dueDate ที่ตั้งไว้ตอนยิงออกจริง (ดู custDueTs) ไม่คำนวณซ้ำที่นี่ —
+   ไฮไลต์แดงถ้าเกินกำหนดแล้ว (isOverdue) ให้เห็นตรงตารางเลยไม่ต้องเปิดโมดัล */
+function invDueDateText(b) {
+  if (b.status !== 'out' || !b.dueDate) return '<span class="muted small">—</span>';
+  return isOverdue(b)
+    ? '<span class="pill bad">' + esc(b.dueDate) + '</span>'
+    : esc(b.dueDate);
+}
 function canRelocateBox(b) {
   return !!b && b.status === 'warehouse';
 }
@@ -9928,9 +9937,10 @@ function renderInventory() {
       + '<td>' + invLocText(b) + '</td>'
       + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
       + '<td class="small">' + invShipRecvText(b) + '</td>'
+      + '<td class="small">' + invDueDateText(b) + '</td>'
       + '<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
     + '</tr>';
-  }).join('') : emptyRow(7, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
+  }).join('') : emptyRow(8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
   if ($('#pagerInv')) $('#pagerInv').innerHTML = pagerBarHtml('inv', pg);
 }
