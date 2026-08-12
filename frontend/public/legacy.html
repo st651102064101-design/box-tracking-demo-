@@ -11361,16 +11361,20 @@ function openColumnMapModal(opts){
       ],
       validateRow:function(m){
         var e=[];
+        /* ไม่เช็คว่าประเภทกล่องมีอยู่จริงในระบบหรือยัง — ถ้ายังไม่มี buildRecord()
+           จะสร้างให้อัตโนมัติตอนยืนยันนำเข้า (ไม่ใช่ตอน validate/preview ซึ่งยังไม่
+           ควรมี side effect เพราะผู้ใช้อาจกดยกเลิก) ต้องมีแค่ค่าที่จะใช้เป็นชื่อ/รหัส
+           ประเภทเท่านั้น ค่าว่างคือสิ่งเดียวที่สร้างอะไรไม่ได้จริง ๆ */
         if(!m.typeId)e.push('ไม่มีรหัสประเภทกล่อง');
-        else if(!S.boxtypes[m.typeId])e.push('ไม่พบประเภทกล่อง '+m.typeId+' ในระบบ');
         if(m.expiry&&isNaN(Date.parse(m.expiry)))e.push('รูปแบบวันหมดอายุไม่ถูกต้อง');
         return e;
       },
       buildRecord:function(m,tag){
-        var type=S.boxtypes[m.typeId];
+        var typeId=window.findBoxTypeMatch(m.typeId)||window.autoCreateBoxTypeIfNeeded(m.typeId)||'';
+        var type=S.boxtypes[typeId];
         var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
         var regTsI=iso();
-        return {tag:tag,type:m.typeId,value:value,status:'pending',cycles:0,
+        return {tag:tag,type:typeId,value:value,status:'pending',cycles:0,
           customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
           lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
           regAt:regTsI,regBy:USER,
@@ -11445,14 +11449,16 @@ function openColumnMapModal(opts){
         if(!m.name)e.push('ไม่มีชื่อพนักงาน');
         if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
         if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
-        if(m.wh&&!S.warehouses[m.wh])e.push('ไม่พบรหัสคลัง '+m.wh);
+        /* ไม่เช็คว่าคลังมีอยู่จริงแล้วหรือยัง — ถ้ายังไม่มี buildRecord() จะสร้างให้
+           อัตโนมัติตอนยืนยันนำเข้า (เหมือนประเภทกล่องของ "ลงทะเบียนกล่อง" ด้านบน) */
         if(!enumOk(m.shift,['morning','afternoon','night','general']))e.push(ENUM_ERR.shift);
         if(!enumOk(m.access,['operator','supervisor','admin','viewer']))e.push(ENUM_ERR.access);
         if(!enumOk(m.status,['active','inactive']))e.push(ENUM_ERR.empStatus);
         return e;
       },
       buildRecord:function(m,id){
-        return {id:id,name:m.name,role:m.role||'',dept:m.dept||'',wh:m.wh||'',
+        var wh=m.wh?(window.findWarehouseMatch(m.wh)||window.autoCreateWarehouseIfNeeded(m.wh)||''):'';
+        return {id:id,name:m.name,role:m.role||'',dept:m.dept||'',wh:wh,
           shift:m.shift||'',phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
           startDate:m.startDate||'',scanCode:(m.scanCode||'').trim()||id,
           access:(m.access||'operator').toLowerCase(),status:(m.status||'active').toLowerCase()};
@@ -11536,7 +11542,10 @@ function openColumnMapModal(opts){
         id=explicitId;
         if(claimed[key])dup=true;else claimed[key]=1;
       }else if(!errors.length){
-        if(cfg.key==='box')id=boxTagGen(mapped.typeId);
+        /* ตอน preview นี้ยังไม่สร้างประเภทกล่องใหม่ (side effect เก็บไว้ที่ buildRecord
+           ตอนกดยืนยันเท่านั้น) — แต่ถ้าประเภทที่พิมพ์มาตรงกับที่มีอยู่แล้ว (ไม่ว่าจะใส่
+           มาเป็นรหัสหรือชื่อ) ใช้รหัสจริงทำ prefix ให้บาร์โค้ดเลย ไม่ต้องรอถึงตอน commit */
+        if(cfg.key==='box')id=boxTagGen((window.findBoxTypeMatch&&window.findBoxTypeMatch(mapped.typeId))||mapped.typeId);
         else id=seqGen();
       }
 
@@ -11784,6 +11793,13 @@ function openColumnMapModal(opts){
     save();
     return id;
   }
+  /* Exposed so IMPORT_CONFIGS.box/emp (a separate closure — see the "ลงทะเบียนกล่อง"/
+     "พนักงาน" importer above) can auto-create a missing box type/warehouse from the
+     file instead of rejecting the row — per explicit request: no matter which import
+     screen, an "ไม่พบ...ในระบบ" error should create the missing master record from
+     what's in the file rather than block the whole row. */
+  window.findBoxTypeMatch=findBoxTypeMatch;
+  window.autoCreateBoxTypeIfNeeded=autoCreateBoxTypeIfNeeded;
 
   /* find an existing warehouse master record by id or by name (case-insensitive) */
   function findWarehouseMatch(text){
@@ -11826,6 +11842,8 @@ function openColumnMapModal(opts){
     save();
     return id;
   }
+  window.findWarehouseMatch=findWarehouseMatch;
+  window.autoCreateWarehouseIfNeeded=autoCreateWarehouseIfNeeded;
 
   var COND_TEXT_TO_CODE={
     'สมบูรณ์':'good','ดี':'good','good':'good',
