@@ -10593,26 +10593,50 @@ function downloadXLSMulti(filename, sheets) {
 }
 window.downloadXLSMulti = downloadXLSMulti;
 /* Single-sheet variant of downloadXLSMulti — same section shape (name/headers/
-   rows/opts), but stacked into one sheet as title-row + header-row + data
-   blocks separated by a blank row, instead of one tab per section. Lets
-   "รวมเป็น sheet เดียว" reuse the exact same section data exportAllMastersExcel()
-   already builds for the per-sheet version. */
+   rows/opts), but laid out SIDE BY SIDE (each master gets its own column
+   range, one empty gap column between blocks) so every section's header row
+   sits on the same row instead of one section's headers appearing dozens of
+   rows below the previous section's data. Row 1 = section title spanning its
+   columns, row 2 = that section's headers, row 3+ = data — one row per index
+   across every section at once, blank where a section has fewer rows than
+   the tallest one. Lets "รวมเป็น sheet เดียว" reuse the exact same section
+   data exportAllMastersExcel() already builds for the per-sheet version. */
 function downloadXLSSingle(filename, sections) {
   if (typeof XLSX === 'undefined') { toast('ไลบรารี Excel ยังไม่พร้อม','โหลดหน้าใหม่แล้วลองอีกครั้ง','err'); return; }
-  var aoa = [];
-  var barcodeCells = [];
-  sections.forEach(function(sec, si){
-    if (si > 0) aoa.push([]);
-    aoa.push([sec.name]);
-    aoa.push(sec.headers);
-    (sec.rows || []).forEach(function(row){
-      var rIndex = aoa.length;
-      aoa.push(row.map(function(v){ return v == null ? '' : v; }));
-      var barcodeCols = (sec.opts || {}).barcodeCols || [];
-      barcodeCols.forEach(function(c){ barcodeCells.push({ r: rIndex, c: c }); });
-    });
+  var colOffsets = [];
+  var offset = 0;
+  sections.forEach(function(sec){
+    colOffsets.push(offset);
+    offset += sec.headers.length + 1; /* +1 gap column between sections */
   });
+  var maxRows = sections.reduce(function(m, sec){ return Math.max(m, (sec.rows || []).length); }, 0);
+
+  var titleRow = [], headerRow = [];
+  sections.forEach(function(sec, si){
+    var off = colOffsets[si];
+    titleRow[off] = sec.name;
+    sec.headers.forEach(function(h, ci){ headerRow[off + ci] = h; });
+  });
+  var aoa = [titleRow, headerRow];
+  var barcodeCells = [];
+  for (var r = 0; r < maxRows; r++) {
+    var row = [];
+    sections.forEach(function(sec, si){
+      var off = colOffsets[si];
+      var dataRow = (sec.rows || [])[r];
+      if (!dataRow) return;
+      dataRow.forEach(function(v, ci){ row[off + ci] = v == null ? '' : v; });
+      var barcodeCols = (sec.opts || {}).barcodeCols || [];
+      barcodeCols.forEach(function(c){ barcodeCells.push({ r: aoa.length, c: off + c }); });
+    });
+    aoa.push(row);
+  }
+
   var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = sections.map(function(sec, si){
+    var off = colOffsets[si];
+    return { s: { r: 0, c: off }, e: { r: 0, c: off + sec.headers.length - 1 } };
+  });
   barcodeCells.forEach(function(bc){
     var addr = XLSX.utils.encode_cell({ r: bc.r, c: bc.c });
     var cell = ws[addr];
