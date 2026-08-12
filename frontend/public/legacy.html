@@ -6520,7 +6520,7 @@ function printDeliveryOrderLabel(doNo, customerName, dueDate, totalBoxes){
   var zpl=generateZPL(doNo, customerName, dueDate, totalBoxes);
   return printZPLToPrinter(zpl).then(function(ok){
     if(ok) toast('ส่งพิมพ์ป้าย DO แล้ว', doNo+' → '+zebraPrinterUrl());
-    else   toast('พิมพ์ป้าย DO ไม่สำเร็จ','บันทึกขาออกเรียบร้อยแล้ว — ตรวจสอบเครื่องพิมพ์/สาย LAN แล้วพิมพ์ซ้ำได้','warn');
+    else   console.warn('[Smart Tracking] DO label print failed — printer/LAN unreachable, gate-out already saved.');
     return ok;
   });
 }
@@ -12219,6 +12219,22 @@ function openColumnMapModal(opts){
     return b;
   }
 
+  /* A tag from a Gate ขาออก import file is treated as authoritative for that
+     box: if it already exists in the system (any status — warehouse/out/
+     lost/pending/hold/damage), the import wipes it completely — the box
+     record AND every gate-movement event (S.events) tied to that tag — then
+     re-registers it fresh from the file, same as a box the system has never
+     seen before. Requested explicitly: a re-imported file must start that
+     tag's history from zero, not merge into or get blocked by whatever was
+     there previously. */
+  function wipeBoxForReimport(tag){
+    var before=S.boxes[tag];
+    if(!before)return;
+    S.events=(S.events||[]).filter(function(e){return e.tag!==tag;});
+    delete S.boxes[tag];
+    auditEntry('DELETE',USER,tag,'ล้างข้อมูลเดิมก่อนเขียนทับจากไฟล์นำเข้า Gate ขาออก: '+(typeName(before.type)||tag),before,null);
+  }
+
   function classifyOutTag(rawTag,typeHint,whHint,invHint){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
@@ -12232,15 +12248,10 @@ function openColumnMapModal(opts){
     if(whHint)findWarehouseMatch(whHint)||autoCreateWarehouseIfNeeded(whHint);
     if(typeHint){var ih=invHint||{};findBoxTypeMatch(typeHint)||autoCreateBoxTypeIfNeeded(typeHint,ih.unit,ih.value);}
     var tag=resolveTag(raw);
-    var b=S.boxes[tag];
-    var isNewlyRegistered=false;
-    if(!b){ b=autoRegisterOutBox(tag,typeHint,whHint,invHint); isNewlyRegistered=true; }
-    if(b.status==='out')return {ok:false,code:'out',tag:tag,reason:'ออกไปแล้ว (ยังไม่คืน)'};
-    if(b.status==='lost')return {ok:false,code:'lost',tag:tag,reason:'ตีเป็นสูญหาย'};
-    if(b.status==='pending')return {ok:false,code:'pending',tag:tag,reason:'ยังไม่เคยผ่าน Gate เข้าคลัง'};
-    if(b.status==='hold')return {ok:false,code:'hold',tag:tag,reason:'ถูกพักการใช้งาน (Hold)'};
-    if(b.status==='damage')return {ok:false,code:'damage',tag:tag,reason:'สถานะชำรุด (Damage)'};
-    return {ok:true,tag:tag,type:typeName(b.type),isNew:isNewlyRegistered};
+    var overwritten=!!S.boxes[tag];
+    if(overwritten)wipeBoxForReimport(tag);
+    var b=autoRegisterOutBox(tag,typeHint,whHint,invHint);
+    return {ok:true,tag:tag,type:typeName(b.type),isNew:!overwritten,isOverwrite:overwritten};
   }
 
   /* find an existing customer master record by id or by name (case-insensitive) */
@@ -12353,7 +12364,7 @@ function openColumnMapModal(opts){
         tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder,
         valc=colMap.value, lotc=colMap.lot, expc=colMap.expiry, supc=colMap.supplier;
 
-    var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[];
+    var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[], overwritten=[];
     var destVals=[], plateVals=[], driverVals=[], tsVals=[];
     var custAddrVals=[], custPhoneVals=[], custEmailVals=[];
     /* Resolve/create the destination customer ONCE per distinct name (not
@@ -12396,6 +12407,7 @@ function openColumnMapModal(opts){
       if(pendingOut.indexOf(v.tag)>=0){alreadyQueued.push(v.tag);continue;}
       pendingOut.push(v.tag);added.push(v.tag);
       if(v.isNew)autoRegistered.push(v.tag);
+      if(v.isOverwrite)overwritten.push(v.tag);
       // only pull shipment-detail values from rows that actually made it into the queue
       if(dc>=0){
         destVals.push(rows[i][dc]);
@@ -12466,7 +12478,7 @@ function openColumnMapModal(opts){
       saveOutbound();
       autoShipped=queuedBefore>0&&pendingOut.length===0;
     }
-    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped);
+    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped,overwritten);
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
@@ -12514,7 +12526,7 @@ function openColumnMapModal(opts){
   }
 
   /* ---- Result summary modal (same look as the app's other modals) ---- */
-  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped){
+  function showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped,overwritten){
     var okN=added.length;
     var skipN=dupInFile.length+alreadyQueued.length+failed.length;
     var byReason={};failed.forEach(function(x){(byReason[x.reason]=byReason[x.reason]||[]).push(x.tag);});
@@ -12580,6 +12592,12 @@ function openColumnMapModal(opts){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
         +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
+    }
+
+    if(overwritten&&overwritten.length){
+      h+='<div class="c2-label"><span class="pill bad" style="margin-right:6px;">เขียนทับข้อมูลเดิม</span>พบรหัสนี้ในระบบอยู่แล้ว · '+overwritten.length+' ใบ</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ล้างข้อมูลกล่องเดิมทั้งหมดแล้ว — รวมประวัติ Gate เข้า/ออกคลัง — แล้วลงทะเบียนใหม่ทั้งหมดจากไฟล์นี้ (เริ่มประวัติจาก 0)</div>'
+        +'<div class="chiplist" style="margin-bottom:14px;">'+chips(overwritten)+'</div>';
     }
 
     if(Object.keys(byReason).length){
