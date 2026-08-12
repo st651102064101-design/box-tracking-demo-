@@ -1131,6 +1131,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div id="df-ovRecent-mount"></div>
   <p class="muted small" id="ovRecentDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal" id="ovRecentReturns"></div>
+  <div class="pagerbar" id="pagerOvRecent"></div>
 
   <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
        เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
@@ -2597,7 +2598,8 @@ var PAGER_RENDER={
   btype:function(){renderSetup();},
   wh:function(){renderSetup();},
   cust:function(){renderSetup();},
-  emp:function(){renderSetup();}
+  emp:function(){renderSetup();},
+  ovRecent:function(){renderOverview();}
 };
 function pagerGo(key,newPage){
   pagerState[key]=Math.max(0,newPage);
@@ -3811,7 +3813,12 @@ function openDeleteBoxModal(tag){
   function check(){
     var raw=input.value.trim();if(!raw)return;
     var scanned=resolveTag(raw)||raw;
-    if(scanned===tag){msg.innerHTML='<span style="color:var(--pos);">'+IC('check','tick')+' ตรงกับกล่องนี้ — พร้อมลบ</span>';btn.disabled=false;}
+    /* เทียบกับ tag ที่ resolveTag() แล้วด้วย ไม่ใช่ tag ดิบ — กล่องบางใบอาจยังมี "*"
+       ห่ออยู่ในระบบ (เช่นจากไฟล์เก่าก่อนแก้ import) ในขณะที่บาร์โค้ดจริงที่สแกน/พิมพ์เข้ามา
+       ไม่มี * ติดมาด้วยแล้ว (resolveTag() ลอกออกให้) เทียบตรง ๆ กับ tag ดิบเลยไม่มีวันตรงกัน
+       เลยลบกล่องพวกนี้ไม่ได้เลยสักที ต้อง normalize ทั้งสองฝั่งก่อนเทียบเสมอ */
+    var target=resolveTag(tag)||tag;
+    if(scanned===target){msg.innerHTML='<span style="color:var(--pos);">'+IC('check','tick')+' ตรงกับกล่องนี้ — พร้อมลบ</span>';btn.disabled=false;}
     else{msg.innerHTML='<span style="color:var(--neg);">รหัสที่สแกน ('+esc(scanned)+') ไม่ตรงกับ '+esc(tag)+' — สแกนกล่องที่ต้องการลบ</span>';btn.disabled=true;}
   }
   input.addEventListener('input',check);
@@ -7970,13 +7977,14 @@ function renderOverview(){
     }).join(''):emptyRow(6,'ไม่มีของที่ยังไม่ได้คืนในช่วงที่กรองไว้');
   }
 
-  // ส่งคืนล่าสุด — ในช่วงที่กรองไว้ (dfInRange('ovRecent',...)) สูงสุด 8 รายการล่าสุด
+  // ส่งคืนล่าสุด — ในช่วงที่กรองไว้ (dfInRange('ovRecent',...)) แบ่งหน้าแทนตัดที่ 8 รายการ
   var hasRecentEvents=S.events.some(function(e){return e.dir==='in'||e.dir==='in-new';});
   dfSetVisible('ovRecent',hasRecentEvents);
   dfSyncUI('ovRecent');
   var rrDescEl=$('#ovRecentDesc');if(rrDescEl)rrDescEl.textContent='กรองตามวันที่รับคืน — '+dfDescribe('ovRecent');
-  var recent=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dfInRange('ovRecent',e.ts);})
-    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).slice(0,8);
+  var recentAll=S.events.filter(function(e){return (e.dir==='in'||e.dir==='in-new')&&dfInRange('ovRecent',e.ts);})
+    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
+  var rrPg=pagerSlice('ovRecent',recentAll),recent=rrPg.rows;
   var rrHtml='<table><thead><tr><th>กล่อง</th><th>ประเภท</th><th>คลัง</th><th>เวลา</th></tr></thead><tbody>'
     +(recent.length?recent.map(function(e){
       var evLoc=e.location||{};
@@ -7987,9 +7995,10 @@ function renderOverview(){
         +'<td class="small">'+fmtTs(e.ts)+'</td></tr>';
     }).join(''):emptyRow(4,'ยังไม่มีการส่งคืน'))+'</tbody></table>';
   var rrEl=$('#ovRecentReturns');if(rrEl)rrEl.innerHTML=rrHtml;
+  var rrPgEl=$('#pagerOvRecent');if(rrPgEl)rrPgEl.innerHTML=recentAll.length?pagerBarHtml('ovRecent',rrPg):'';
 }
 DF_APPLY.ovMove=function(){renderOverview();};
-DF_APPLY.ovRecent=function(){renderOverview();};
+DF_APPLY.ovRecent=function(){pagerReset('ovRecent');renderOverview();};
 
 /* tab-reports — everything that used to live in the Overview tab besides the
    five status counts: money/rate KPIs, the process-board visualization, the
@@ -8638,9 +8647,15 @@ function openBulkDeleteBoxModal(tags){
   function check(){
     var raw=input.value.trim();if(!raw)return;
     var scanned=resolveTag(raw)||raw;
-    if(bulkDelQueue.indexOf(scanned)<0){msg.innerHTML='<span style="color:var(--neg);">'+esc(scanned)+' ไม่อยู่ในรายการที่เลือกลบ</span>';}
-    else if(bulkDelDone[scanned]){msg.innerHTML='<span style="color:var(--muted);">'+esc(scanned)+' ยืนยันแล้ว</span>';}
-    else{bulkDelDone[scanned]=true;msg.innerHTML='<span style="color:var(--pos);">'+IC('check','tick')+' ยืนยัน '+esc(scanned)+' แล้ว</span>';renderList();}
+    /* เทียบกับ tag ในคิวหลัง resolveTag() แล้วทั้งคู่ — กันกรณีกล่องบางใบยังมี "*"
+       ห่ออยู่ใน bulkDelQueue (เช่นจากไฟล์เก่าก่อนแก้ import) แต่บาร์โค้ดจริงที่สแกน/พิมพ์
+       ไม่มี * แล้ว เทียบตรง ๆ (indexOf) จะไม่มีวันเจอ ต้องหาโดย normalize ทั้งสองฝั่ง แล้ว
+       ใช้ tag ดิบจากคิวเป็น key ของ bulkDelDone ต่อ (ตัวเดียวกับที่ renderList()/btn.onclick
+       ใช้อ้างอิง S.boxes อยู่แล้ว) ไม่ใช่ค่าที่สแกน */
+    var match=bulkDelQueue.find(function(t){return (resolveTag(t)||t)===scanned;});
+    if(!match){msg.innerHTML='<span style="color:var(--neg);">'+esc(scanned)+' ไม่อยู่ในรายการที่เลือกลบ</span>';}
+    else if(bulkDelDone[match]){msg.innerHTML='<span style="color:var(--muted);">'+esc(scanned)+' ยืนยันแล้ว</span>';}
+    else{bulkDelDone[match]=true;msg.innerHTML='<span style="color:var(--pos);">'+IC('check','tick')+' ยืนยัน '+esc(scanned)+' แล้ว</span>';renderList();}
     input.value='';
   }
   input.addEventListener('keydown',function(e){if(e.key==='Enter')check();});
