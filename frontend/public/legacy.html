@@ -3991,6 +3991,10 @@ window.printEmpBadgeWindow=printEmpBadgeWindow;
    setEmpCredentials/printEmpBadge/delEmp) ผ่าน empBadgeAction() ปิดด้วย Esc/
    คลิกพื้นหลัง/ปุ่มกากบาท ใช้บาร์โค้ด code128SVG ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์จริง
    ให้สแกนแล้วตรงกับสิ่งที่พิมพ์ออกมา ไม่ใช่ตัวหลอก */
+/* ระยะห่างจากขอบการ์ด/แผง/กล่อง ถึงแถบปุ่มจัดการ — ใช้ร่วมกันทั้งสี่ overlay (บัตรพนักงาน,
+   บัตรคู่ค้า, แผงคลัง, กล่อง 3D) ให้ระยะเท่ากันหมด และปรับที่เดียวจบ ไม่ต้องไล่แก้สี่จุด */
+var OVERLAY_BTN_GAP=52;
+
 var empBadge={open:false,id:null,pts:[],theta:0,omega:0,cx:0,cy:0,s:1,seg:20,N:14,
   anchor:{x:0,y:-26},anchorTargetY:0,anchorV:0,drag:null,tilt:0,vx:0,t:0,raf:null,booted:false,mx:-9999,my:-9999,
   flipCur:0,flipTarget:0};
@@ -4231,7 +4235,7 @@ function empBadgeStep(){
   var closeBtn=$('#empBadgeClose');
   if(closeBtn){
     var cth=Math.cos(eb.theta),sth=Math.sin(eb.theta);
-    var lx=204*s+30,ly=-313.5*s+21;
+    var lx=204*s+OVERLAY_BTN_GAP,ly=-313.5*s+21;
     var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
     closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
   }
@@ -4852,7 +4856,7 @@ function btcStep(){
     var sqY=1-btc.squash*0.17;
     var boxBottom=vhN*0.47+btc.y+btc.h/2;
     var boxCenterY=boxBottom-(btc.h/2)*sqY;
-    var railX=vwN/2+halfW+20;
+    var railX=vwN/2+halfW+OVERLAY_BTN_GAP;
     if(railX+48>vwN-8)railX=vwN-56;
     var railY=Math.max(8,boxCenterY-halfH*sqY);
     rail.style.transform='translate('+Math.round(railX)+'px,'+Math.round(railY)+'px)';
@@ -5114,7 +5118,7 @@ function ccStep(){
   var ccBtn=$('#ccClose');
   if(ccBtn){
     var rz=s.rz*Math.PI/180,cz=Math.cos(rz),sz=Math.sin(rz);
-    var lx=CC_CW/2*s.s+30,ly=-CC_CH/2*s.s+22;
+    var lx=CC_CW/2*s.s+OVERLAY_BTN_GAP,ly=-CC_CH/2*s.s+22;
     var bx=window.innerWidth/2+s.x+(lx*cz-ly*sz);
     var by=window.innerHeight/2+s.y+(lx*sz+ly*cz);
     ccBtn.style.transform='translate('+(bx-22).toFixed(1)+'px,'+(by-22).toFixed(1)+'px)';
@@ -5259,7 +5263,7 @@ function whpPlaceActions(){
   if(!rail||!stage)return;
   var r=stage.getBoundingClientRect();
   var W=48;
-  var x=r.right+14;
+  var x=r.right+OVERLAY_BTN_GAP;
   if(x+W>window.innerWidth-8)x=Math.max(8,r.right-W-6);
   rail.style.transform='translate('+Math.round(x)+'px,'+Math.round(Math.max(8,r.top))+'px)';
 }
