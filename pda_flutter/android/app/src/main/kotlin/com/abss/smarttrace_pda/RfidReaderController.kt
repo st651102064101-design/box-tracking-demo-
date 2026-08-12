@@ -1,6 +1,7 @@
 package com.abss.smarttrace_pda
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -339,6 +340,10 @@ class RfidReaderController(private val context: Context) :
             "playSound" -> { playSoundId(call.argument<String>("soundId") ?: "none"); result.success(true) }
             "setSoundVolume" -> { setSoundVolume(call.argument<Double>("volume") ?: 1.0); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
+            "setBarcodeScannerEnabled" -> {
+                setBarcodeScannerEnabled(call.argument<Boolean>("enabled") ?: true)
+                result.success(true)
+            }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             "deviceInfo" -> result.success(deviceInfo())
@@ -347,6 +352,30 @@ class RfidReaderController(private val context: Context) :
     }
 
     private fun isConnected(): Boolean = reader?.isConnected == true
+
+    /**
+     * Arms/disarms the handheld's *barcode* imager (laser/LED/beep) via
+     * DataWedge's public intent API — separate from the RFID antenna, which
+     * is entirely on the RFIDAPI3 side above. Without this, DataWedge owns
+     * the same physical trigger the RFID SDK listens to, so picking "RFID"
+     * in the app's scan-mode toggle silenced the antenna on our side but
+     * left DataWedge free to also decode a barcode (light/beep and all) on
+     * the same trigger pull, and vice versa in barcode mode.
+     *
+     * No EMDK license needed — DataWedge ships pre-installed on Zebra
+     * devices and listens for this broadcast system-wide, keyed by intent
+     * action + extra name (com.symbol.datawedge.api.ACTION /
+     * SCANNERINPUTPLUGIN), regardless of which DataWedge profile is active.
+     */
+    private fun setBarcodeScannerEnabled(enabled: Boolean) {
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra(
+            "com.symbol.datawedge.api.SCANNERINPUTPLUGIN",
+            if (enabled) "ENABLE_PLUGIN" else "DISABLE_PLUGIN"
+        )
+        context.sendBroadcast(intent)
+    }
 
     /**
      * What the OS itself says this handheld actually is — independent of

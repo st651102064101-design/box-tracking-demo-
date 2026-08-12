@@ -1405,6 +1405,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // an inventory is running from before the switch) must not leave the
     // reader sweeping in the background on a mode that just said "don't".
     if (m == ScanInputMode.barcode) rfid.stopInventory();
+    // DataWedge owns the same physical trigger as the RFID SDK, so the
+    // mode picked here must also arm/disarm the barcode imager itself
+    // (laser/LED/beep) — otherwise RFID mode silences our antenna but
+    // DataWedge still decodes (and beeps for) a barcode on the same pull,
+    // and barcode mode leaves the imager off from the last RFID session.
+    rfid.setBarcodeScannerEnabled(m == ScanInputMode.barcode);
     notifyListeners();
   }
 
@@ -1854,6 +1860,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;
     rfid.connect();
+    // Match the imager to whatever scan mode is already selected — a fresh
+    // connect shouldn't leave DataWedge on its own default if the operator
+    // starts (or comes back) in RFID mode.
+    rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
   }
 
   /// Pushes the reader's transmit power to its own maximum — for any screen

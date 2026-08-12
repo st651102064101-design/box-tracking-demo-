@@ -284,6 +284,19 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Arms/disarms the handheld's physical barcode imager (laser/LED/beep) via
+  /// DataWedge, independent of the RFID antenna — see
+  /// RfidReaderController.setBarcodeScannerEnabled on the native side for
+  /// why this exists: without it, DataWedge and the RFID SDK both own the
+  /// same trigger button, so RFID mode alone never stopped a barcode decode
+  /// from also firing on the same pull.
+  Future<void> setBarcodeScannerEnabled(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setBarcodeScannerEnabled', {'enabled': enabled});
+    } catch (_) {}
+  }
+
   /// Set the antenna transmit power as a percentage (0–100) of the reader max.
   /// Used only to restore the saved setting on connect — a percent can only
   /// ever land on ~101 of the reader's real power steps, so live dragging
