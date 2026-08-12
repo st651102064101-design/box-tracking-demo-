@@ -1046,7 +1046,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
   <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
-  <button data-tab="inventory" title="คลังสินค้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังสินค้า</span></button>
+  <button data-tab="inventory" title="คลังกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังกล่อง</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
   <button data-tab="setup" title="ตั้งค่า (Master)"><span class="ico"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></span><span class="navlbl">ตั้งค่า (Master)</span></button>
   <button class="no-print" id="btnSidebarCollapse" onclick="toggleSidebarCollapse()" title="ย่อ/ขยายเมนูด้านข้าง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></span></span><span class="navlbl">ย่อเมนู</span></button>
@@ -1807,7 +1807,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field"><label>ตำแหน่ง</label><input id="eRole" placeholder="เช่น พนักงานคลัง"></div>
       </div>
       <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังสินค้า, จัดส่ง"></div>
+        <div class="field"><label>แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>
         <div class="field"><label>คลังที่สังกัด</label><select id="eWh"></select></div>
         <div class="field"><label>กะการทำงาน</label>
           <select id="eShift">
@@ -1877,7 +1877,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <label style="font-size:12px;">หมวดหมู่</label>
           <select id="filtAuditModule">
             <option value="">ทั้งหมด</option>
-            <option value="box">กล่อง / คลังสินค้า</option>
+            <option value="box">กล่อง / คลังกล่อง</option>
             <option value="btype">ประเภทกล่อง</option>
             <option value="wh">คลัง & ประตู</option>
             <option value="cust">ลูกค้า</option>
@@ -3630,7 +3630,7 @@ function isStagingLoc(loc){ return false; } /* SOW: no Putaway/staging */
 /* Human label for a staging location — shows the actual configured zone/rack, not a hardcoded value */
 function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
   var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
-  return 'พื้นที่พักสินค้า'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
+  return 'พื้นที่พักกล่อง'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
 
 $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
@@ -5576,7 +5576,7 @@ function openFirstRegisterModal(){
       +'<div class="mbody">'
       +'<p class="muted small" style="margin:0 0 16px;">ไม่บังคับกรอก — เพิ่มทีหลังได้ที่หน้า "พนักงาน" เช่นกัน</p>'
       +'<div class="grid g3">'
-      +'<div class="field"><label>แผนก / หน่วยงาน</label><input id="frDept" placeholder="เช่น คลังสินค้า, จัดส่ง"></div>'
+      +'<div class="field"><label>แผนก / หน่วยงาน</label><input id="frDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>'
       +'<div class="field"><label>กะการทำงาน</label>'
         +'<select id="frShift">'
           +'<option value="">— ไม่ระบุ —</option>'
@@ -8919,7 +8919,7 @@ function seedDemo(){
 
   S.events.sort(function(a,b){return new Date(a.ts)-new Date(b.ts);});
   save();
-  toast('ใส่ข้อมูลตัวอย่างแล้ว','15 กล่อง (3 ประเภท × 5) · 6 ในคลัง · 6 ออก · 3 สูญหาย · 8 สินค้าใน Inventory · 19 Audit Logs');
+  toast('ใส่ข้อมูลตัวอย่างแล้ว','15 กล่อง (3 ประเภท × 5) · 6 ในคลัง · 6 ออก · 3 สูญหาย · 8 กล่องใน Inventory · 19 Audit Logs');
   renderAll();
 }
 window.seedDemo=seedDemo;
@@ -10171,7 +10171,7 @@ function invNameListOptions() {
 function genInvCode() { return nextSeqId('SKU-', Object.keys(S.inventory)); }
 function openInvModal(code) {
   var it = code ? S.inventory[code] : null;
-  var title = it ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่';
+  var title = it ? 'แก้ไขกล่อง' : 'เพิ่มกล่องใหม่';
   var dp = it ? { wh: it.wh, loc: it.loc } : defaultRecvLoc();
   var initCat = it ? (it.boxTypeId || it.category || '') : '';
   openModal(
@@ -10179,17 +10179,17 @@ function openInvModal(code) {
     + '<div class="mbody">'
       + '<input type="hidden" id="invEditId" value="' + (it ? esc(it.code) : '') + '">'
       + (!it ? '<div class="field" style="margin-bottom:14px;"><button type="button" class="btn ghost sm" onclick="document.getElementById(\'invImportFile\').click()" style="width:auto;"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5M4 20h16"/></svg></span> นำเข้าหลายรายการจาก Excel / CSV (Mass Import)</button></div>' : '')
-      + '<div class="field" style="margin-bottom:14px;"><label>ประเภท <span class="req">*</span></label><input id="invCategory" list="invCategoryList" placeholder="เลือกประเภทกล่อง หรือพิมพ์ประเภทสินค้าทั่วไป" value="' + esc(initCat) + '" autocomplete="off"><datalist id="invCategoryList">' + invCategoryListOptions() + '</datalist>'
-        + (!Object.keys(S.boxtypes).length ? '<button class="btn accent" onclick="closeModal();goSetup(\'btype\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button>' : '<span class="muted small" id="invCategoryHint">เลือกประเภทกล่องจากรายการเพื่อดึงรหัส ชื่อ หน่วย และจำนวนจากข้อมูลหลักอัตโนมัติ — หรือพิมพ์ประเภทอื่นสำหรับสินค้าทั่วไป</span>')
+      + '<div class="field" style="margin-bottom:14px;"><label>ประเภท <span class="req">*</span></label><input id="invCategory" list="invCategoryList" placeholder="เลือกประเภทกล่อง หรือพิมพ์ประเภทกล่องทั่วไป" value="' + esc(initCat) + '" autocomplete="off"><datalist id="invCategoryList">' + invCategoryListOptions() + '</datalist>'
+        + (!Object.keys(S.boxtypes).length ? '<button class="btn accent" onclick="closeModal();goSetup(\'btype\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button>' : '<span class="muted small" id="invCategoryHint">เลือกประเภทกล่องจากรายการเพื่อดึงรหัส ชื่อ หน่วย และจำนวนจากข้อมูลหลักอัตโนมัติ — หรือพิมพ์ประเภทอื่นสำหรับกล่องทั่วไป</span>')
       + '</div>'
       + '<div class="grid g3 inv-code-grid" style="margin-bottom:14px;">'
-        + '<div class="field"><label>รหัสสินค้า / บาร์โค้ด (สร้างอัตโนมัติ) <span class="req">*</span></label>'
+        + '<div class="field"><label>รหัสกล่อง / บาร์โค้ด (สร้างอัตโนมัติ) <span class="req">*</span></label>'
           + '<div class="auto-tag-row"><input id="invCode" value="' + (it ? esc(it.code) : '') + '" readonly placeholder="เลือกประเภทก่อน">'
             + '<button type="button" class="iconbtn" id="btnRegenInvCode" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>'
             + '<button type="button" class="iconbtn" id="btnCopyInvCode" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>'
             + '<button type="button" class="btn ghost sm" id="btnOverrideInvCode">แก้เอง</button></div>'
           + '<div class="tag" style="margin-top:5px;" id="invCodeHint">เลือกประเภทเพื่อรับรหัสอัตโนมัติ · กด "แก้เอง" หากต้องการระบุ/สแกนรหัสเอง</div></div>'
-        + '<div class="field"><label>ชื่อสินค้า <span class="req">*</span></label><input id="invName" list="invNameList" placeholder="เลือกจากรายการ หรือพิมพ์ชื่อใหม่" value="' + (it ? esc(it.name) : '') + '"><datalist id="invNameList">' + invNameListOptions() + '</datalist></div>'
+        + '<div class="field"><label>ชื่อกล่อง <span class="req">*</span></label><input id="invName" list="invNameList" placeholder="เลือกจากรายการ หรือพิมพ์ชื่อใหม่" value="' + (it ? esc(it.name) : '') + '"><datalist id="invNameList">' + invNameListOptions() + '</datalist></div>'
         + '<div class="field"><label>จำนวน <span class="req">*</span></label><input id="invQty" type="number" min="0" placeholder="0" value="' + (it ? esc(it.qty || 0) : '') + '">'
           + '<span class="muted small" id="invQtyHint" style="display:none;">ดึงจากจำนวนกล่องที่ลงทะเบียนและอยู่ในคลังจริง — ไปแก้ไขจำนวนได้ที่แท็บ "ลงทะเบียนกล่อง"</span></div>'
       + '</div>'
@@ -10211,7 +10211,7 @@ function openInvModal(code) {
       + '</div>'
     + '</div>'
     + '<div class="mfoot">'
-      + (it ? '<button class="btn red" style="margin-right:auto;" onclick="deleteInvFromModal(\'' + esc(code) + '\')">ลบสินค้า</button>' : '')
+      + (it ? '<button class="btn red" style="margin-right:auto;" onclick="deleteInvFromModal(\'' + esc(code) + '\')">ลบกล่อง</button>' : '')
       + '<button class="btn gray" data-close>ยกเลิก</button>'
       + '<button class="btn accent" onclick="saveInvForm()">บันทึก</button>'
     + '</div>'
@@ -10224,7 +10224,7 @@ function openInvModal(code) {
 }
 window.openInvModal = openInvModal;
 
-/* สลับโหมดฟอร์มตามประเภทที่พิมพ์/เลือก: ตรงกับ Box Type Master = ดึงข้อมูลล็อกทั้งหมด · ไม่ตรง = สินค้าทั่วไปกรอกเองได้ */
+/* สลับโหมดฟอร์มตามประเภทที่พิมพ์/เลือก: ตรงกับ Box Type Master = ดึงข้อมูลล็อกทั้งหมด · ไม่ตรง = กล่องทั่วไปกรอกเองได้ */
 function applyInvCategoryMode(catVal, it) {
   var codeEl = $('#invCode'), nameEl = $('#invName'), qtyEl = $('#invQty'), unitEl = $('#invUnit'), hint = $('#invQtyHint'), codeHint = $('#invCodeHint');
   var bt = catVal ? S.boxtypes[catVal] : null;
@@ -10302,13 +10302,13 @@ function saveInvForm() {
   var editId = val('invEditId');
   var catVal = val('invCategory'); if (!catVal) return toast('เลือกหรือพิมพ์ประเภท', null, 'err');
   var bt = S.boxtypes[catVal] || null;
-  var code = val('invCode'); if (!code) return toast('กรอกรหัสสินค้า', null, 'err');
-  var name = val('invName'); if (!name) return toast('กรอกชื่อสินค้า', null, 'err');
+  var code = val('invCode'); if (!code) return toast('กรอกรหัสกล่อง', null, 'err');
+  var name = val('invName'); if (!name) return toast('กรอกชื่อกล่อง', null, 'err');
   var qty = bt ? boxTypeWarehouseQty(bt.id) : parseFloat(val('invQty'));
   if (isNaN(qty) || qty < 0) return toast('กรอกจำนวน', null, 'err');
   var recorder = USER;
-  if (!editId && S.inventory[code]) return toast('รหัสสินค้านี้มีอยู่แล้ว', code, 'err');
-  if (editId && editId !== code && S.inventory[code]) return toast('รหัสสินค้าซ้ำ', code, 'err');
+  if (!editId && S.inventory[code]) return toast('รหัสกล่องนี้มีอยู่แล้ว', code, 'err');
+  if (editId && editId !== code && S.inventory[code]) return toast('รหัสกล่องซ้ำ', code, 'err');
   var before = editId ? Object.assign({}, S.inventory[editId]) : null;
   if (editId && editId !== code) { delete S.inventory[editId]; }
   var wh = val('invWh');
@@ -10328,13 +10328,13 @@ function saveInvForm() {
   saveLastInvLoc(wh, loc);
   save();
   closeModal();
-  toast(editId ? 'อัปเดตสินค้าแล้ว' : 'เพิ่มสินค้าแล้ว', code + ' · ' + name);
+  toast(editId ? 'อัปเดตกล่องแล้ว' : 'เพิ่มกล่องแล้ว', code + ' · ' + name);
   renderInventory(); renderAuditLog();
 }
 window.saveInvForm = saveInvForm;
 
 function deleteInvFromModal(code) {
-  confirmA('ลบสินค้า ' + code + '?', 'ลบถาวร — ไม่สามารถกู้คืนได้', 'ลบ', true).then(function(ok) {
+  confirmA('ลบกล่อง ' + code + '?', 'ลบถาวร — ไม่สามารถกู้คืนได้', 'ลบ', true).then(function(ok) {
     if (!ok) return;
     var before = Object.assign({}, S.inventory[code]);
     var recorder = USER;
@@ -10373,14 +10373,14 @@ function parseCSV(text) {
    เสมอ แทนการเช็คชื่อหัวคอลัมน์ตรงเป๊ะแล้วปฏิเสธทั้งไฟล์ถ้าไม่ตรง — ไฟล์จริงตั้ง
    ชื่อหัวคอลัมน์กันคนละแบบ บังคับให้ตรงเป๊ะคือจุดที่ทำให้ import พังบ่อยที่สุด */
 /* 'category' used to be its own mapped column, but in this app a box's
-   "ประเภท" (box type) IS its "ชื่อสินค้า" (item name) — there's no such thing
-   as one item name covering several box types here, so offering both let an
+   "ประเภท" (box type) IS its "ชื่อกล่อง" (box name) — there's no such thing
+   as one box name covering several box types here, so offering both let an
    operator map the same source column to two different targets and wonder
    why nothing changed. importInvFromRows() now matches the box type off the
    `name` column directly instead of a separate one. */
 var INV_MAP_FIELDS = [
-  { key: 'code', label: 'รหัสสินค้า', required: true, aliases: ['รหัสสินค้า', 'code', 'sku'] },
-  { key: 'name', label: 'ชื่อสินค้า', required: true, aliases: ['ชื่อสินค้า', 'ประเภท', 'name', 'category'] },
+  { key: 'code', label: 'รหัสกล่อง', required: true, aliases: ['รหัสกล่อง', 'รหัสสินค้า', 'code', 'sku'] },
+  { key: 'name', label: 'ชื่อกล่อง', required: true, aliases: ['ชื่อกล่อง', 'ชื่อสินค้า', 'ประเภท', 'name', 'category'] },
   { key: 'qty', label: 'จำนวน', required: false, aliases: ['จำนวน', 'qty'] },
   { key: 'unit', label: 'หน่วย', required: false, aliases: ['หน่วย', 'unit'] },
   { key: 'value', label: 'มูลค่าต่อหน่วย (บาท)', required: false, aliases: ['มูลค่าต่อหน่วย (บาท)', 'มูลค่าต่อหน่วย', 'มูลค่า', 'ราคา', 'value', 'price'] },
@@ -12225,7 +12225,7 @@ function openColumnMapModal(opts){
 
     if(autoRegistered&&autoRegistered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
-        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังสินค้า</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
     }
 
@@ -12484,7 +12484,7 @@ function openColumnMapModal(opts){
 
     if(autoRegistered&&autoRegistered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
-        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวรับเข้าคลังทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังสินค้า</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวรับเข้าคลังทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
     }
 
@@ -12739,10 +12739,10 @@ function openColumnMapModal(opts){
     "ยืนยันลบ (ถอด Tag แล้ว)":"Confirm delete (tag removed)",
     "ของกล่องแต่ละใบให้ครบก่อนลบ — ป้องกันลบข้อมูลออกจากระบบทั้งที่ยังไม่ได้ถอด Tag ออกจากกล่องจริง":"of every box before deleting - this stops records being removed while tags are still on the physical boxes",
     "ยืนยันลบทั้งหมด":"Confirm delete all",
-    "รหัสสินค้า / บาร์โค้ด (สร้างอัตโนมัติ)":"Item code / barcode (auto-generated)",
+    "รหัสกล่อง / บาร์โค้ด (สร้างอัตโนมัติ)":"Box code / barcode (auto-generated)",
     "เลือกประเภทเพื่อรับรหัสอัตโนมัติ · กด \"แก้เอง\" หากต้องการระบุ/สแกนรหัสเอง":"Pick a type to get a code automatically - press \"Manual\" to enter or scan one yourself",
-    "ชื่อสินค้า":"Item name",
-    "ลบสินค้า":"Delete item",
+    "ชื่อกล่อง":"Box name",
+    "ลบกล่อง":"Delete box",
     "บันทึก":"Save",
     "ยังไม่มี Audit Log":"No audit log yet",
     "คอลัมน์นี้ไม่มีข้อมูล":"This column has no data",
@@ -12829,7 +12829,7 @@ function openColumnMapModal(opts){
     "ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่":"Search / scan barcode - code - name - address",
     "เช่น สมศรี ใจดี":"e.g. Somsri Jaidee",
     "เช่น พนักงานคลัง":"e.g. Warehouse staff",
-    "เช่น คลังสินค้า, จัดส่ง":"e.g. Warehouse, Dispatch",
+    "เช่น คลังกล่อง, จัดส่ง":"e.g. Warehouse, Dispatch",
     "ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์":"Search / scan badge - code - name - department - phone",
     "ระบุโซนใหม่ เช่น A":"New zone, e.g. A",
     "ระบุประเภทแร็ค":"Rack type",
@@ -12846,7 +12846,7 @@ function openColumnMapModal(opts){
     "ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ":"Search box code / customer / DO / plate",
     "ยิงบาร์โค้ด / บาร์โค้ดกล่องที่คืน":"Scan the barcode of the returned box",
     "ปล่อยว่าง = สร้างอัตโนมัติ":"Leave blank = auto-generate",
-    "เลือกประเภทกล่อง หรือพิมพ์ประเภทสินค้าทั่วไป":"Pick a box type, or type a general item type",
+    "เลือกประเภทกล่อง หรือพิมพ์ประเภทกล่องทั่วไป":"Pick a box type, or type a general box type",
     "เลือกประเภทก่อน":"Pick a type first",
     "เลือกจากรายการ หรือพิมพ์ชื่อใหม่":"Pick from the list, or type a new name",
     "เลือกจากรายการ หรือพิมพ์ตำแหน่งใหม่":"Pick from the list, or type a new location",
@@ -12949,7 +12949,7 @@ function openColumnMapModal(opts){
     "ไม่มีตำแหน่งว่างให้ลบในขอบเขตนี้ — ทุกช่องยังมีกล่องอยู่":"No empty locations to delete in this scope - every slot still holds a box",
     "ยังไม่มีรายการ — เพิ่มอย่างน้อย 1 ประเภทก่อนสร้าง Pick List":"Nothing here yet - add at least one type before generating a pick list",
     "ดึงจากจำนวนกล่องที่ลงทะเบียนและอยู่ในคลังจริง — ไปแก้ไขจำนวนได้ที่แท็บ \"ลงทะเบียนกล่อง\"":"Taken from the boxes actually registered and in the warehouse - change the count on the \"Register box\" tab",
-    "เลือกประเภทกล่องจากรายการเพื่อดึงรหัส ชื่อ หน่วย และจำนวนจากข้อมูลหลักอัตโนมัติ — หรือพิมพ์ประเภทอื่นสำหรับสินค้าทั่วไป":"Pick a box type from the list to pull its code, name, unit and count from the master data automatically - or type another type for general goods",
+    "เลือกประเภทกล่องจากรายการเพื่อดึงรหัส ชื่อ หน่วย และจำนวนจากข้อมูลหลักอัตโนมัติ — หรือพิมพ์ประเภทอื่นสำหรับกล่องทั่วไป":"Pick a box type from the list to pull its code, name, unit and count from the master data automatically - or type another type for general boxes",
     "เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่อยู่ในคลังเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ":"Add a type and the quantity to pick; the system chooses boxes by FEFO/FIFO automatically (only ones in the warehouse), groups them by shelf location and orders the walk Zone -> Rack -> Shelf (S-shape) so it is all picked in one trip",
     /* ---- ที่เพิ่มรอบนี้: คำที่ยังโผล่เป็นไทยตอนสลับ EN ---- */
     /* ปุ่ม/ฟิลด์ที่เพิ่มเข้ามาทีหลังแล้วลืมลงพจนานุกรม */
@@ -13099,7 +13099,7 @@ function openColumnMapModal(opts){
     "ยังไม่กลับเข้าคลัง":"Not yet returned","ตัวเลขสำคัญ":"Key figures","กล่องทั้งหมดในระบบ":"Total boxes in system",
     "ออกไปแล้ว (ยังไม่คืน)":"Out (not returned)","รับคืนสะสม (ครั้ง)":"Returns (times)","เกินกำหนดคืน":"Overdue",
     "รอบหมุนเวียนรวม":"Total cycles","มูลค่าสูญหาย (บาท)":"Loss value (THB)","พิมพ์ภาพรวม":"Print overview",
-    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังสินค้า":"Inventory",
+    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังกล่อง":"Inventory",
     "ติดตามกล่อง":"Track Box","ตั้งค่า (Master)":"Setup (Master)",
     "สลับโหมดสว่าง/มืด":"Toggle light/dark","ใส่ข้อมูลตัวอย่าง":"Load sample data","เมนู":"Menu",
     /* ---- Location Master (rack map / hierarchical table) — added while building the multi-warehouse rack map ---- */
@@ -13155,8 +13155,8 @@ function openColumnMapModal(opts){
     "ส่งได้เฉพาะกล่องในคลัง":"Only in-warehouse boxes can be shipped","เลือกลูกค้า":"Select customer",
     "กล่องที่เลือกถูกแจ้งกล่องหายแล้ว หรือยังไม่ติด Tag (ยังไม่ผ่าน Gate เข้าคลัง)":"Selected boxes are already marked lost, or haven't been tagged yet (haven't passed the inbound gate)",
     "แจ้งกล่องหายแล้ว":"Reported as lost","พบรายการเดิม":"Existing record found","เลือกหรือพิมพ์ประเภท":"Select or type a category",
-    "กรอกรหัสสินค้า":"Enter item code","กรอกชื่อสินค้า":"Enter item name","กรอกจำนวน":"Enter quantity",
-    "รหัสสินค้านี้มีอยู่แล้ว":"This item code already exists","รหัสสินค้าซ้ำ":"Duplicate item code",
+    "กรอกรหัสกล่อง":"Enter box code","กรอกชื่อกล่อง":"Enter box name","กรอกจำนวน":"Enter quantity",
+    "รหัสกล่องนี้มีอยู่แล้ว":"This box code already exists","รหัสกล่องซ้ำ":"Duplicate box code",
     "รองรับเฉพาะไฟล์ .csv":"Only .csv files are supported","นำเข้าไม่สำเร็จ":"Import failed","ไฟล์ว่างเปล่า":"File is empty",
     "นำเข้าสำเร็จ":"Imported successfully","Export แล้ว":"Exported",
     /* ---- confirmA() dialog bodies (static sentences) and titles that don't embed a variable ---- */
@@ -13239,7 +13239,7 @@ function openColumnMapModal(opts){
     "รายการที่เลือก":"selected"," รายการ":" records","เกินกำหนดคืน":"Overdue","เกินกำหนด":"overdue",
     "เกิน ":"Overdue ","เหลือ ":"In "," วัน":" days",
     "ลบประเภท ":"Delete type ","ลบคลัง ":"Delete warehouse ","ลบลูกค้า ":"Delete customer ","ลบพนักงาน ":"Delete employee ",
-    "ลบตำแหน่ง ":"Delete location ","ลบสินค้า ":"Delete item ","ลบ ":"Delete ","ตีกล่อง ":"Mark box "," เป็นสูญหาย?":" as lost?",
+    "ลบตำแหน่ง ":"Delete location ","ลบกล่อง ":"Delete box ","ลบ ":"Delete ","ตีกล่อง ":"Mark box "," เป็นสูญหาย?":" as lost?",
     "ยกเลิกสูญหาย ":"Cancel lost status for ","พักการใช้งาน ":"Put on hold ","ตีชำรุด ":"Mark damaged ",
     "ซ่อมเสร็จ ":"Repair complete for ","แจ้งกล่องหาย ":"Report lost: "," กล่อง?":" boxes?"," ตำแหน่งที่เลือก?":" selected locations?",
     "รอบที่ ":"Cycle ","ขั้นตอนที่ ":"Step ","(ขั้นตอนปัจจุบัน)":"(current step)","(เสร็จแล้ว)":"(done)","(ยังไม่ถึง)":"(not yet)",
