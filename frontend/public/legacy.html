@@ -7412,6 +7412,13 @@ var pendingOutRecorderMap={};
    this over the single top-level doCustomer field per box, same pattern as
    pendingOutDoMap/PoMap/RecorderMap. */
 var pendingOutCustMap={};
+/* Per-box "ยืมได้กี่วัน" override — a Gate ขาออก import file that supplies its
+   own จำนวนวันที่ยืมได้ per row computes THAT box's due date from its actual
+   ship date + N days, instead of falling back to the customer's fixed
+   returnDate policy (custDueTs) that every other shipment to that customer
+   shares. Lets one file mix "customer's usual policy" rows (column left
+   blank) with "this batch is special, N days only" rows. */
+var pendingOutReturnDaysMap={};
 function outConditionSelectHtml(t){
   var cur=outConditionMap[t]||'good';
   return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
@@ -7430,7 +7437,7 @@ function renderOutResult(){
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];renderOutResult();}
+function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];renderOutResult();}
 window.unqueueOut=unqueueOut;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
@@ -7504,13 +7511,16 @@ function saveOutbound(){
     var doForBox=pendingOutDoMap[t]||doNo;
     var poForBox=pendingOutPoMap[t]||po;
     var recorderForBox=pendingOutRecorderMap[t]||recorder;
-    var dueTs=custDueTs(custForBox,tsForBox);
+    var returnDaysForBox=pendingOutReturnDaysMap[t];
+    var dueTs=(returnDaysForBox!=null)
+      ?new Date(new Date(tsForBox).getTime()+returnDaysForBox*86400000).toISOString()
+      :custDueTs(custForBox,tsForBox);
     var dueDateStr=ddmmyyyy(new Date(dueTs));
     b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.lastSeenAt=tsForBox;b.outCondition=cond;
     b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,platform:'web'});
     S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,platform:'web'});
     if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel};});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};
+  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};pendingOutReturnDaysMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
   if(cust){S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel};}
   Object.keys(extraDoRecords).forEach(function(k){S.doRecords[k]=extraDoRecords[k];});
@@ -12145,6 +12155,7 @@ function openColumnMapModal(opts){
   var LOT_ALIASES = ['lot','batch','lot/batch'];
   var EXPIRY_ALIASES = ['expiry','expiry date','วันหมดอายุ (yyyy-mm-dd)','วันหมดอายุ'];
   var SUPPLIER_ALIASES = ['supplier','รหัสซัพพลายเออร์','ซัพพลายเออร์'];
+  var RETURNDAYS_ALIASES = ['returndays','ยืมได้กี่วัน','ยืมได้กี่วัน (นับจากที่ยืมไป)','จำนวนวันที่ยืมได้','กำหนดคืนภายใน (วัน)'];
 
   /* Every column the operator's export can contain gets a slot here — none
      silently dropped. Only tag is required; everything else is best-effort:
@@ -12171,6 +12182,7 @@ function openColumnMapModal(opts){
     {key:'tsTime',   label:'เวลา (ส่งออกจริง)',                     required:false, aliases:TSTIME_ALIASES},
     {key:'ts',       label:'Timestamp รวมวันที่+เวลา (ถ้ามีคอลัมน์เดียว)', required:false, aliases:TS_ALIASES},
     {key:'recorder', label:'ผู้บันทึก',                             required:false, aliases:RECORDER_ALIASES},
+    {key:'returnDays',label:'ยืมได้กี่วัน (นับจากที่ยืมไป)',        required:false, aliases:RETURNDAYS_ALIASES},
     {key:'value',    label:'มูลค่าต่อหน่วย (บาท)',                  required:false, aliases:VALUE_ALIASES},
     {key:'lot',      label:'Lot/Batch',                             required:false, aliases:LOT_ALIASES},
     {key:'expiry',   label:'วันหมดอายุ (YYYY-MM-DD)',               required:false, aliases:EXPIRY_ALIASES},
@@ -12444,7 +12456,8 @@ function openColumnMapModal(opts){
         doc=colMap.doNo, poc=colMap.poNo,
         pc=colMap.plate, vc=colMap.driver,
         tdc=colMap.tsDate, ttc=colMap.tsTime, tsc=colMap.ts, rec=colMap.recorder,
-        valc=colMap.value, lotc=colMap.lot, expc=colMap.expiry, supc=colMap.supplier;
+        valc=colMap.value, lotc=colMap.lot, expc=colMap.expiry, supc=colMap.supplier,
+        rdc=colMap.returnDays;
 
     var added=[], dupInFile=[], alreadyQueued=[], failed=[], seen={}, autoRegistered=[], overwritten=[];
     var destVals=[], plateVals=[], driverVals=[], tsVals=[];
@@ -12516,6 +12529,10 @@ function openColumnMapModal(opts){
       if(rec>=0){
         var recRaw=String(rows[i][rec]==null?'':rows[i][rec]).trim();
         if(recRaw)pendingOutRecorderMap[v.tag]=recRaw;
+      }
+      if(rdc>=0){
+        var rdRaw=String(rows[i][rdc]==null?'':rows[i][rdc]).trim();
+        if(rdRaw!==''&&!isNaN(Number(rdRaw))&&Number(rdRaw)>=0)pendingOutReturnDaysMap[v.tag]=Number(rdRaw);
       }
       // date+time as two columns takes priority over a single combined Timestamp column
       var parsedTs=null;
