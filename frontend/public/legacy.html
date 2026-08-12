@@ -1018,6 +1018,8 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 }
 </style>
 <script src="/legacy-sync.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 <script>
@@ -1711,7 +1713,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div class="field" style="grid-column:1/-1;"><label>ทิศทางรายประตู — แยกตั้งได้ทุกประตู</label>
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
-        <div class="field"><label>พื้นที่ / ที่ตั้ง</label><input id="whArea" placeholder="เช่น สมุทรปราการ"></div>
+        <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง</label>
+          <div class="auto-tag-row">
+            <input id="whArea" placeholder="เช่น สมุทรปราการ — หรือคลิกเลือกบนแผนที่">
+            <button type="button" class="btn ghost sm" id="btnPickWhMap">📍 เลือกบนแผนที่</button>
+          </div>
+          <input type="hidden" id="whLat"><input type="hidden" id="whLng">
+          <div id="whMapWrap" style="display:none;margin-top:8px;">
+            <div id="whMap" style="height:260px;border-radius:10px;overflow:hidden;"></div>
+            <div class="tag" style="margin-top:5px;">คลิกบนแผนที่เพื่อปักหมุด — ระบบจะกรอกที่ตั้งให้อัตโนมัติ</div>
+          </div>
+        </div>
         <div class="field"><label>สถานะ</label>
           <div class="inv-view-sw" data-target="whStatus">
             <button type="button" class="ivs-btn active" data-val="active" onclick="setStatusToggle('whStatus','active')">ใช้งาน</button>
@@ -3787,6 +3799,30 @@ function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
   var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
   return 'พื้นที่พักกล่อง'+(zone?' · '+esc(zone):'')+(rack?' · '+esc(rack):'');}
 
+/* ===== warehouse location: pin-drop map (Leaflet + OSM) instead of typing lat/lng ===== */
+var whMapInst=null,whMapMarker=null;
+function whMapSetPin(lat,lng){
+  if(!whMapInst)return;
+  if(whMapMarker)whMapMarker.setLatLng([lat,lng]);else whMapMarker=L.marker([lat,lng]).addTo(whMapInst);
+  setv('whLat',lat.toFixed(6));setv('whLng',lng.toFixed(6));
+  fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng+'&zoom=16&accept-language=th')
+    .then(function(r){return r.json();})
+    .then(function(d){setv('whArea',(d&&d.display_name)||(lat.toFixed(5)+', '+lng.toFixed(5)));})
+    .catch(function(){setv('whArea',lat.toFixed(5)+', '+lng.toFixed(5));});
+}
+function whMapEnsure(){
+  if(whMapInst)return;
+  whMapInst=L.map('whMap').setView([13.7563,100.5018],11); /* default: Bangkok */
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(whMapInst);
+  var lat0=parseFloat(val('whLat')),lng0=parseFloat(val('whLng'));
+  if(!isNaN(lat0)&&!isNaN(lng0)){whMapInst.setView([lat0,lng0],15);whMapMarker=L.marker([lat0,lng0]).addTo(whMapInst);}
+  whMapInst.on('click',function(e){whMapSetPin(e.latlng.lat,e.latlng.lng);});
+}
+$('#btnPickWhMap').onclick=function(){
+  var wrap=$('#whMapWrap');var show=wrap.style.display==='none';
+  wrap.style.display=show?'':'none';
+  if(show){whMapEnsure();setTimeout(function(){whMapInst.invalidateSize();},50);}
+};
 $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
   var gt=val('whGateType')||'both';
@@ -3808,18 +3844,25 @@ $('#btnAddWh').onclick=function(){
   var gtMap={};$all('#whGateTypeList .wh-gt-sel').forEach(function(s){gtMap[s.dataset.gate]=s.value;});
   gates.forEach(function(k2){if(!gtMap[k2])gtMap[k2]=gt;});
   var area=val('whArea'),status=val('whStatus')||'active';
-  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,area:area,status:status};rebuildGates();
+  var lat=parseFloat(val('whLat')),lng=parseFloat(val('whLng'));
+  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,area:area,lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,status:status};rebuildGates();
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
+  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
+  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
   renderWhGateTypeList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();renderWhGateTypeList();};
+  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
+  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
+  renderWhGateTypeList();};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
-  setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
+  setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');
+  setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');
+  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
+  setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
   $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
 function delWh(id){
