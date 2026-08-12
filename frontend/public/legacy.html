@@ -97,7 +97,12 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 /* ============================================================ NAV ============================================================ */
 .chrome{position:sticky;top:0;z-index:90;background:color-mix(in srgb,var(--bg) 72%,transparent);
   backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:.5px solid var(--line);
-  padding:env(safe-area-inset-top) 0 0;}
+  padding:env(safe-area-inset-top) 0 0;transition:transform .38s cubic-bezier(.22,1,.36,1);}
+/* scroll down = hide the top bar, scroll up = bring it back — Apple-style auto-hiding
+   chrome. Only in "top" layout: in "sidebar" layout .chrome/.navwrap are pinned to the
+   left edge instead of the page top, so hiding them on vertical scroll makes no sense. */
+html[data-layout="top"].topbar-hidden .chrome{transform:translateY(-100%);}
+html[data-layout="top"].topbar-hidden .navwrap{transform:translateY(calc(-100% - var(--chrome-h,58px)));}
 .chrome-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:13px 22px;}
 .brand{display:flex;align-items:center;gap:12px;cursor:pointer;}
 .brand .mark{width:30px;height:30px;border-radius:8px;background:var(--ink);color:var(--bg);
@@ -119,7 +124,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.03em;}
 
 .navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
-  border-bottom:.5px solid var(--line);}
+  border-bottom:.5px solid var(--line);transition:transform .38s cubic-bezier(.22,1,.36,1);}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
 nav::-webkit-scrollbar{display:none;}
 nav button{position:relative;color:var(--muted);font-weight:500;font-size:14px;letter-spacing:-.01em;
@@ -13945,6 +13950,31 @@ document.addEventListener('visibilitychange',()=>{
     });
     rows.forEach(function(r){tbody.appendChild(r);});
   });
+})();
+
+/* auto-hide the top bar (header + nav) on scroll down, bring it back on scroll up —
+   only meaningful in "top" layout since "sidebar" layout pins them to the left edge */
+(function(){
+  var lastY=window.scrollY,hidden=false,ticking=false;
+  function chromeH(){var c=$('.chrome');return c?c.getBoundingClientRect().height:58;}
+  function setVar(){document.documentElement.style.setProperty('--chrome-h',chromeH()+'px');}
+  function tick(){
+    ticking=false;
+    var y=Math.max(0,window.scrollY);
+    if(document.documentElement.getAttribute('data-layout')!=='top'){
+      if(hidden){hidden=false;document.documentElement.classList.remove('topbar-hidden');}
+      lastY=y;return;
+    }
+    var dy=y-lastY;
+    if(y<=40){ if(hidden){hidden=false;document.documentElement.classList.remove('topbar-hidden');} }
+    else if(dy>6&&!hidden){hidden=true;document.documentElement.classList.add('topbar-hidden');}
+    else if(dy<-6&&hidden){hidden=false;document.documentElement.classList.remove('topbar-hidden');}
+    lastY=y;
+  }
+  window.addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(tick);}},{passive:true});
+  window.addEventListener('resize',setVar);
+  window.addEventListener('load',setVar);
+  setVar();
 })();
 </script>
 </body>
