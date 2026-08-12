@@ -1910,10 +1910,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div style="position:absolute;left:0;right:0;bottom:26px;text-align:center;color:rgba(255,255,255,.72);font-size:12.5px;pointer-events:none;">ลากบัตรเล่นได้ · เอาเมาส์ชี้เพื่อพลิกดูเมนูจัดการ · กด Esc หรือคลิกพื้นหลังเพื่อปิด</div>
   <div id="empBadgeToast" style="position:absolute;left:50%;bottom:74px;transform:translateX(-50%);padding:11px 20px;border-radius:999px;background:rgba(29,29,31,.92);color:#f5f5f7;font-size:14px;font-weight:500;opacity:0;transition:opacity .25s ease;pointer-events:none;white-space:nowrap;"></div>
 
-  <!-- ปุ่มปิดยึดมุมขวาบนของจอเสมอ ไม่ผูกกับตัวการ์ด — เดิมปุ่มปิดของด้านหลังอยู่ในการ์ด
-       ที่แกว่งไปมาตามฟิสิกส์สายคล้อง ปุ่มเลยลอยตามการ์ดไปทั่วจอ กดยากเวลาการ์ดแกว่งอยู่
-       ย้ายออกมาเป็น element แยกลอยนิ่งมุมจอ ตรงกับแพตเทิร์นเดียวกับกล่อง 3D/แผงคลัง/บัตรคู่ค้า -->
-  <button onclick="closeEmpBadge()" title="ปิดบัตร" style="position:absolute;right:22px;top:22px;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+  <!-- ปุ่มปิดลอยเกาะข้างมุมขวาบนของการ์ด ห่างออกไปนิดเดียว — เป็น element พี่น้องกับการ์ด
+       (ไม่ได้อยู่ในการ์ด) จึงไม่ถูกหมุน/ย่อขยาย/พลิกตามการ์ด ตัวปุ่มตั้งตรงและขนาดคงที่เสมอ
+       แต่ empBadgeStep() ย้ายตำแหน่งให้ตามการ์ดทุกเฟรม เลยดูเหมือนติดอยู่กับการ์ดจริง ๆ
+       (ตำแหน่งคำนวณจากมุมขวาบนของการ์ดที่หมุนแล้ว ดูท้าย empBadgeStep) -->
+  <button id="empBadgeClose" onclick="closeEmpBadge()" title="ปิดบัตร" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
   </button>
 
@@ -4220,6 +4221,16 @@ function empBadgeStep(){
   var flipRad=eb.flipCur*Math.PI/180;
   var strap=$('#empBadgeStrap');if(strap)strap.setAttribute('d',empBadgeStrapPolygon(eb.pts,eb.N,flipRad,13*s,2*s));
   var shade=$('#empBadgeStrapShade');if(shade)shade.setAttribute('d',empBadgeStrapPolygon(eb.pts,eb.N,flipRad,3.5*s,0.5*s));
+  /* ปุ่มปิดเกาะข้างมุมขวาบนของการ์ด — หาพิกัดมุมนั้นในพิกัดจอ โดยหมุนจุดในระบบพิกัดของการ์ด
+     (204,-313.5 = มุมขวาบน ก่อนสเกล) ตามมุมแกว่ง theta เดียวกับที่การ์ดใช้ แล้วเลื่อนออกนอกขอบ
+     อีก 30px กันปุ่มทับตัวบัตร — ตัวปุ่มเองแค่เลื่อน (translate) ไม่หมุนตาม จึงตั้งตรงเสมอ */
+  var closeBtn=$('#empBadgeClose');
+  if(closeBtn){
+    var cth=Math.cos(eb.theta),sth=Math.sin(eb.theta);
+    var lx=204*s+30,ly=-313.5*s+21;
+    var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
+    closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
+  }
 }
 (function(){
   var card=document.getElementById('empBadgeCard');
