@@ -7048,6 +7048,25 @@ function boxDueDays(b){if(b.status!=='out')return null;
   if(d)return Math.ceil((d-now())/86400000);
   return (S.cfg.agingDays||15)-daysSince(b.outAt);}
 function isOverdue(b){var d=boxDueDays(b);return d!=null&&d<0;}
+/* YouTube-style relative overdue text — "เลยมา 1 ปี 2 เดือน", "เลยมา 3 วัน 4 ชม."
+   — top 2 non-zero units of the actual elapsed time since dueAt, not a single
+   coarse "N วัน" figure, so a box overdue by over a year reads as a year, not
+   as an unreadable four-digit day count. Returns null when not overdue. */
+function relOverdueText(dueAt){
+  var dueMs=Date.parse(dueAt);
+  if(isNaN(dueMs))return null;
+  var diffMs=now().getTime()-dueMs;
+  if(diffMs<=0)return null;
+  var s=Math.floor(diffMs/1000);
+  var units=[['ปี',31536000],['เดือน',2592000],['วัน',86400],['ชม.',3600],['นาที',60],['วิ',1]];
+  var parts=[];
+  for(var i=0;i<units.length&&parts.length<2;i++){
+    var v=Math.floor(s/units[i][1]);
+    if(v>0){parts.push(v+' '+units[i][0]);s-=v*units[i][1];}
+  }
+  if(!parts.length)return 'เลยกำหนดเมื่อสักครู่';
+  return 'เลยมา '+parts.join(' ');
+}
 function applyAutoLost(){if(S.cfg.lostMode!=='auto')return;
   Object.values(S.boxes).forEach(function(b){if(b.status==='out'&&isOverdue(b)){
     b.status='lost';b.lostAt=iso();b.lostReason='auto-overdue';b.lastSeenAt=iso();
@@ -8313,14 +8332,13 @@ function renderOverview(){
   var oodBody=$('#ovOverdueBody');
   if(oodBody){
     oodBody.innerHTML=overdueRows.length?overdueRows.map(function(b){
-      var d=Math.abs(boxDueDays(b)||0);
       return '<tr class="row-click" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
         +'<td class="mono"><b>'+esc(b.tag)+'</b></td>'
         +'<td>'+esc(typeName(b.type))+'</td>'
         +'<td>'+esc(custName(b.customer))+'</td>'
         +'<td class="small">'+(b.outAt?fmtTs(b.outAt):'-')+'</td>'
         +'<td class="small">'+esc(b.dueDate||'-')+'</td>'
-        +'<td class="r"><span class="days-badge over">'+d+' วัน</span></td>'
+        +'<td class="r"><span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'-')+'</span></td>'
       +'</tr>';
     }).join(''):emptyRow(6,'ไม่มีกล่องที่เกินกำหนดคืนในช่วงที่กรองไว้');
   }
@@ -8461,7 +8479,7 @@ function renderReports(){
         var overdue=isOverdue(b);
         var dueBadge='';
         if(b.status==='out'){
-          if(overdue)dueBadge='<span class="days-badge over">เกิน '+Math.abs(dueDays)+' วัน</span>';
+          if(overdue)dueBadge='<span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'เกินกำหนด')+'</span>';
           else if(dueDays!=null&&dueDays<=3)dueBadge='<span class="days-badge warn">เหลือ '+dueDays+' วัน</span>';
           else if(dueDays!=null)dueBadge='<span class="days-badge ok">เหลือ '+dueDays+' วัน</span>';
           else dueBadge='<span class="muted small">—</span>';
@@ -8504,7 +8522,6 @@ function renderReports(){
       +'<th>Box ID</th><th>ประเภท</th><th>ลูกค้า</th><th>DO</th><th class="r">วันที่ออก</th><th class="r">กำหนดคืน</th><th class="r">เกินมา</th><th>ติดต่อล่าสุด</th><th class="r">มูลค่า (฿)</th><th class="c">จัดการ</th>'
       +'</tr></thead><tbody>';
     overdueBoxes.sort(function(a,b){return boxDueDays(a)-boxDueDays(b);}).forEach(function(b){
-      var d=Math.abs(boxDueDays(b)||0);
       lostHtml+='<tr style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
         +'<td class="mono"><b>'+esc(b.tag)+'</b></td>'
         +'<td>'+esc(typeName(b.type))+'</td>'
@@ -8512,7 +8529,7 @@ function renderReports(){
         +'<td class="mono">'+esc(b.do||'-')+'</td>'
         +'<td class="r mono">'+(b.outAt?dstr(new Date(b.outAt)):'-')+'</td>'
         +'<td class="r mono">'+(b.dueAt?dstr(new Date(b.dueAt)):'-')+'</td>'
-        +'<td class="r"><span class="days-badge over">'+d+' วัน</span></td>'
+        +'<td class="r"><span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'-')+'</span></td>'
         +'<td onclick="event.stopPropagation();openContactModal(&quot;'+esc(b.tag)+'&quot;)" style="cursor:pointer;" title="บันทึก / ดูประวัติการติดต่อลูกค้า">'+lastContactCell(b)+'</td>'
         +'<td class="r mono">'+money(b.value)+'</td>'
         +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
@@ -9490,12 +9507,13 @@ function invShipRecvText(b) {
 }
 /* วันที่ต้องคืน — มีความหมายก็ต่อเมื่อกล่องยังออกอยู่ (status='out') เท่านั้น
    ใช้ b.dueDate ที่ตั้งไว้ตอนยิงออกจริง (ดู custDueTs) ไม่คำนวณซ้ำที่นี่ —
-   ไฮไลต์แดงถ้าเกินกำหนดแล้ว (isOverdue) ให้เห็นตรงตารางเลยไม่ต้องเปิดโมดัล */
+   เกินกำหนดแล้ว (isOverdue) โชว์เป็นข้อความสัมพัทธ์แบบ YouTube "เลยมา X Y" แทน
+   วันที่ดิบ (relOverdueText) เพราะวันที่ล้วนๆ อ่านไม่ออกทันทีว่าเลยมานานแค่ไหน —
+   title ยังมีวันที่จริงไว้เผื่ออยากรู้ */
 function invDueDateText(b) {
   if (b.status !== 'out' || !b.dueDate) return '<span class="muted small">—</span>';
-  return isOverdue(b)
-    ? '<span class="pill bad">' + esc(b.dueDate) + '</span>'
-    : esc(b.dueDate);
+  if (!isOverdue(b)) return esc(b.dueDate);
+  return '<span class="pill bad" title="ครบกำหนด ' + esc(b.dueDate) + '">' + esc(relOverdueText(b.dueAt) || b.dueDate) + '</span>';
 }
 function canRelocateBox(b) {
   return !!b && b.status === 'warehouse';
