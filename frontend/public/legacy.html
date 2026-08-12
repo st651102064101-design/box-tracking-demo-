@@ -2554,8 +2554,12 @@ function pagerPageNums(pageIndex,totalPages){
   }
   return nums;
 }
+/* โชว์แถบแบ่งหน้าเสมอ แม้แถวจะพอดีหน้าเดียว (ปุ่มเลื่อนหน้าแค่ถูก disable ไปเอง) — เดิมซ่อน
+   ทั้งแถบไปเลยตอนแถว ≤ PAGE_SIZE ซึ่งด้วยข้อมูลเดโมจริง (คลัง/ลูกค้าอย่างละ 1 แถว ประเภทกล่อง
+   1 แถว) ไม่มีตารางไหนเคยแตะ 20 แถวเลยสักตาราง แถบแบ่งหน้าเลยไม่โผล่มาให้เห็นเลยสักที
+   ทั้งที่ระบบทำงานถูกต้องอยู่แล้ว — คงไว้แบบ "แสดง X–Y จาก Z รายการ" ตลอดจึงพิสูจน์ได้ว่ามี
+   pagination ต่อกันทุกตารางจริง ไม่ต้องรอให้ข้อมูลเยอะพอก่อนถึงจะเห็น */
 function pagerBarHtml(key,info){
-  if(info.total<=PAGE_SIZE)return '';   /* แถวพอดีหน้าเดียวอยู่แล้ว ไม่ต้องโชว์แถบแบ่งหน้า */
   var from=info.total?info.start+1:0,to=Math.min(info.start+PAGE_SIZE,info.total);
   var navBtns=pagerPageNums(info.pageIndex,info.totalPages).map(function(n){
     if(n===null)return '<span class="pg-dots">…</span>';
