@@ -2603,15 +2603,16 @@ var pagerState={};
 /* เรียกจาก listener ของช่องค้นหา/ตัวกรองแต่ละตัว ก่อนเรียก render ซ้ำ — ค้นหาคำใหม่ต้องกลับไป
    หน้า 1 เสมอ ไม่งั้นอาจค้างอยู่หน้า 5 ทั้งที่ผลค้นหาใหม่มีแค่ 2 หน้า (ดูว่างเปล่า) */
 function pagerReset(key){pagerState[key]=0;}
-function pagerSlice(key,list){
+function pagerSlice(key,list,size){
+  size=size||PAGE_SIZE;
   var total=list.length;
-  var totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  var totalPages=Math.max(1,Math.ceil(total/size));
   var p=pagerState[key]||0;
   if(p>totalPages-1)p=totalPages-1;
   if(p<0)p=0;
   pagerState[key]=p;
-  var start=p*PAGE_SIZE;
-  return {rows:list.slice(start,start+PAGE_SIZE),pageIndex:p,totalPages:totalPages,total:total,start:start};
+  var start=p*size;
+  return {rows:list.slice(start,start+size),pageIndex:p,totalPages:totalPages,total:total,start:start,size:size};
 }
 /* ทะเบียนฟังก์ชัน render ของแต่ละตาราง ให้ปุ่มเปลี่ยนหน้าเรียกซ้ำได้ตรงตาราง — btype/wh/cust/emp
    ทั้งสี่อยู่ในฟังก์ชัน renderSetup() เดียวกัน (เรนเดอร์รวมทุกตาราง Master ในทีเดียว) */
@@ -2650,7 +2651,7 @@ function pagerPageNums(pageIndex,totalPages){
    ทั้งที่ระบบทำงานถูกต้องอยู่แล้ว — คงไว้แบบ "แสดง X–Y จาก Z รายการ" ตลอดจึงพิสูจน์ได้ว่ามี
    pagination ต่อกันทุกตารางจริง ไม่ต้องรอให้ข้อมูลเยอะพอก่อนถึงจะเห็น */
 function pagerBarHtml(key,info){
-  var from=info.total?info.start+1:0,to=Math.min(info.start+PAGE_SIZE,info.total);
+  var from=info.total?info.start+1:0,to=Math.min(info.start+(info.size||PAGE_SIZE),info.total);
   var navBtns=pagerPageNums(info.pageIndex,info.totalPages).map(function(n){
     if(n===null)return '<span class="pg-dots">…</span>';
     return '<button class="'+(n===info.pageIndex?'on':'')+'" onclick="pagerGo(\''+key+'\','+n+')">'+(n+1)+'</button>';
@@ -9561,7 +9562,7 @@ function renderGateTodayRows(){
     var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
     return {e:e,custTxt:custTxt,whTxt:whTxt,hay:hay};
   }).filter(function(r){return !q||r.hay.indexOf(q)>=0;});
-  var gtPg=pagerSlice('gateToday',rowsWithHay),rows=gtPg.rows;
+  var gtPg=pagerSlice('gateToday',rowsWithHay,10),rows=gtPg.rows;
   var rowsHtml=rows.map(function(r){
     var e=r.e,timeStr=fmtTs(e.ts);
     return '<div class="truck-box" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:10px 4px;border-top:.5px solid var(--line);font-size:13px;">'
