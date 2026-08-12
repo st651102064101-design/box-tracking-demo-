@@ -1129,12 +1129,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออก</div></div>
   </div>
 
-  <div class="sectlabel reveal">รายการของที่ยังไม่ได้คืน</div>
-  <div id="df-ovUnreturned-mount"></div>
-  <p class="muted small" id="ovUnreturnedDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th>สถานะ</th></tr></thead><tbody id="ovUnreturnedBody"></tbody></table></div></div>
-  <div class="pagerbar" id="pagerOvUnreturned"></div>
-
   <div class="sectlabel reveal">รายงานรายการค้างคืนเกินกำหนด</div>
   <div class="row no-print reveal" style="margin-bottom:10px;align-items:center;gap:8px;">
     <label class="muted small" style="font-weight:400;white-space:nowrap;">แสดงเฉพาะที่เกินกำหนดคืนมาแล้วอย่างน้อย</label>
@@ -1149,12 +1143,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div id="df-ovByCust-mount"></div>
   <p class="muted small" id="ovByCustDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
-
-  <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
-  <div id="df-ovRecent-mount"></div>
-  <p class="muted small" id="ovRecentDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal" id="ovRecentReturns"></div>
-  <div class="pagerbar" id="pagerOvRecent"></div>
 
   <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
        เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
@@ -1173,6 +1161,18 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <h1 class="h-title reveal d1">รายละเอียดเพิ่มเติม</h1>
     <p class="h-sub reveal d2">ทุกอย่างที่ไม่ใช่ตัวเลขสถานะกล่องโดยตรง — มูลค่า อัตราการคืน รายงานหน้างานจาก PDA ผังคลัง และประวัติล่าสุด</p>
   </div>
+
+  <div class="sectlabel reveal">รายการของที่ยังไม่ได้คืน</div>
+  <div id="df-ovUnreturned-mount"></div>
+  <p class="muted small" id="ovUnreturnedDesc" style="margin:0 0 10px;"></p>
+  <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th>สถานะ</th></tr></thead><tbody id="ovUnreturnedBody"></tbody></table></div></div>
+  <div class="pagerbar" id="pagerOvUnreturned"></div>
+
+  <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
+  <div id="df-ovRecent-mount"></div>
+  <p class="muted small" id="ovRecentDesc" style="margin:0 0 10px;"></p>
+  <div class="tablecard reveal" id="ovRecentReturns"></div>
+  <div class="pagerbar" id="pagerOvRecent"></div>
 
   <style>
   /* SOW: no Putaway/staging — chip style kept unused, no caller left */
