@@ -8467,7 +8467,7 @@ function renderSetupResetWh(){pagerReset('wh');renderSetup();}
 function renderSetupResetCust(){pagerReset('cust');renderSetup();}
 function renderSetupResetEmp(){pagerReset('emp');renderSetup();}
 $('#schBox').addEventListener('input',renderSetupResetBox);
-$('#filtBoxStatus').addEventListener('change',renderSetupResetBox);
+$('#filtBoxStatus').addEventListener('change',function(){uiPrefSet('filtBoxStatus',this.value);renderSetupResetBox();});
 /* box-type search â works by typing OR by scanning a barcode of the type code.
    autoScanBind runs the scanner-Thai auto-fix (autoFixScannerThai) before filtering,
    so a scanner firing while the OS keyboard is in Thai mode still finds the right row. */
@@ -8645,6 +8645,7 @@ function applyTheme(t){
   var btn=$('#btnTheme');if(btn){btn.innerHTML=t==='dark'?IC('sun','tick'):IC('moon','tick');btn.title=t==='dark'?'สลับเป็นโหมดสว่าง':'สลับเป็นโหมดมืด';}
 }
 function toggleTheme(){applyTheme(currentTheme()==='dark'?'light':'dark');
+  if(typeof uiPrefSet==='function')uiPrefSet('theme',currentTheme());
   toast('เปลี่ยนธีมแล้ว',currentTheme()==='dark'?'โหมดมืด':'โหมดสว่าง','info');}
 window.toggleTheme=toggleTheme;
 applyTheme(currentTheme()); /* sync the icon with whatever the early inline script set */
@@ -8672,6 +8673,7 @@ function applyLayout(pref){
   var a=$('#nav button.active');if(a&&eff==='top')movePill(a);
 }
 function toggleLayout(){var p=layoutPref()==='sidebar'?'top':'sidebar';applyLayout(p);
+  if(typeof uiPrefSet==='function')uiPrefSet('layout',p);
   toast('เปลี่ยนรูปแบบเมนูแล้ว',p==='sidebar'?'เมนูด้านข้าง (Sidebar)':'เมนูด้านบน (Top bar)','info');}
 window.toggleLayout=toggleLayout;
 applyLayout(layoutPref()); /* sync button title + --nav-top with whatever the early inline script set */
@@ -8688,7 +8690,8 @@ function applySidebarCollapsed(on){
   var b=$('#btnSidebarCollapse');if(b)b.title=on?'ขยายเมนูด้านข้าง':'ย่อเมนูด้านข้าง';
   syncNavTop();
 }
-function toggleSidebarCollapse(){applySidebarCollapsed(!sidebarCollapsedPref());}
+function toggleSidebarCollapse(){var on=!sidebarCollapsedPref();applySidebarCollapsed(on);
+  if(typeof uiPrefSet==='function')uiPrefSet('sidebarCollapsed',on?'1':'0');}
 window.toggleSidebarCollapse=toggleSidebarCollapse;
 applySidebarCollapsed(sidebarCollapsedPref());
 /* ดาวน์โหลดข้อมูลสำรอง — เดิมเป็นปุ่มแยกให้กดเอง แต่ตอนนี้ไม่มีปุ่มนั้นแล้ว
@@ -8951,6 +8954,25 @@ function restoreUiPrefs(){
   }
   if(typeof setBoxRegMode==='function')setBoxRegMode(uiPrefGet('boxRegMode','single'));
   if(typeof setInGateMode==='function')setInGateMode(uiPrefGet('inGateMode','return'),false);
+
+  var fbs=$('#filtBoxStatus');if(fbs)fbs.value=uiPrefGet('filtBoxStatus','');
+  var fam=$('#filtAuditModule');if(fam)fam.value=uiPrefGet('filtAuditModule','');
+  var faa=$('#filtAuditAction');if(faa)faa.value=uiPrefGet('filtAuditAction','');
+
+  /* ธีม/ภาษา/รูปแบบเมนู/ย่อ sidebar เดิมจำแบบ localStorage (จำเฉพาะเครื่อง) — ตอนบูตตัว
+     IIFE ต้นไฟล์อ่าน localStorage ก่อน S จะโหลดเสร็จเสมอ (กัน flash ผิดธีมตอนเพจยังไม่มี S
+     ให้อ่าน) ตรงนี้จึงเป็นรอบ "sync ข้ามเครื่อง" ที่มาทีหลัง — ถ้าค่าที่จำใน DB (ตามบัญชี)
+     ต่างจากที่ localStorage เครื่องนี้มีอยู่ ให้ค่าใน DB ชนะ แล้วเขียนทับ localStorage
+     เครื่องนี้ไปด้วย ครั้งต่อไปเปิดเครื่องนี้จะไม่มี flash แล้วเพราะ localStorage ตรงกันแล้ว */
+  var dbTheme=uiPrefGet('theme',null);
+  if(dbTheme&&dbTheme!==currentTheme())applyTheme(dbTheme);
+  var dbLayout=uiPrefGet('layout',null);
+  if(dbLayout&&dbLayout!==layoutPref())applyLayout(dbLayout);
+  var dbCollapsed=uiPrefGet('sidebarCollapsed',null);
+  if(dbCollapsed!=null&&(dbCollapsed==='1')!==sidebarCollapsedPref())applySidebarCollapsed(dbCollapsed==='1');
+  var dbLang=uiPrefGet('lang',null);
+  var curLang=(function(){try{return localStorage.getItem('smarttrace_lang')||'th';}catch(e){return 'th';}})();
+  if(dbLang&&dbLang!==curLang&&typeof window.changeLanguage==='function')window.changeLanguage(dbLang);
 }
 
 loadFromServer().then(function(){
@@ -10663,8 +10685,8 @@ function renderAuditLog() {
   document.getElementById('pagerAudit').innerHTML = pagerBarHtml('audit', pg);
 }
 document.getElementById('schAudit').addEventListener('input', function(){pagerReset('audit');renderAuditLog();});
-document.getElementById('filtAuditModule').addEventListener('change', function(){pagerReset('audit');renderAuditLog();});
-document.getElementById('filtAuditAction').addEventListener('change', function(){pagerReset('audit');renderAuditLog();});
+document.getElementById('filtAuditModule').addEventListener('change', function(){uiPrefSet('filtAuditModule',this.value);pagerReset('audit');renderAuditLog();});
+document.getElementById('filtAuditAction').addEventListener('change', function(){uiPrefSet('filtAuditAction',this.value);pagerReset('audit');renderAuditLog();});
 document.getElementById('filtAuditUser').addEventListener('input', function(){pagerReset('audit');renderAuditLog();});
 
 /* ===== EXCEL EXPORT HELPERS ===== */
@@ -13393,7 +13415,8 @@ function openColumnMapModal(opts){
   };
 
   window.changeLanguage = applyLang;                       /* per spec: changeLanguage(lang) */
-  window.toggleLang = function(){ applyLang(lang === "en" ? "th" : "en"); };
+  window.toggleLang = function(){ var next = lang === "en" ? "th" : "en"; applyLang(next);
+    if(typeof window.uiPrefSet==='function')window.uiPrefSet('lang', next); };
 
   /* ---- init ---- */
   document.documentElement.setAttribute("data-lang", lang);
