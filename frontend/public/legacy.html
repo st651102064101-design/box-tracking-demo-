@@ -10274,13 +10274,29 @@ function handleInvImportFile(e) {
     try {
       var wb = XLSX.read(new Uint8Array(r.result), { type: 'array' });
       if (!wb.SheetNames.length) { toast('ไฟล์ว่างเปล่า', 'ไม่พบชีตข้อมูลในไฟล์', 'err'); return; }
-      /* A file with several sheets — e.g. one produced by "Export Excel
-         (ทุก Master)" — gets routed sheet-by-sheet into the matching master
-         table's own import pipeline (same column-map → preview → confirm
-         flow Setup's per-entity importers already use) instead of only
-         ever reading the first sheet as inventory items. A single-sheet
-         file keeps the original inventory-items behavior unchanged. */
-      if (wb.SheetNames.length > 1 && typeof handleMultiSheetMasterImport === 'function') {
+      /* A file with several sheets — e.g. one produced by "แยกเป็นแต่ละ Sheet" —
+         gets routed sheet-by-sheet into the matching master table's own
+         import pipeline (same column-map → preview → confirm flow Setup's
+         per-entity importers already use) instead of only ever reading the
+         first sheet as inventory items.
+         A single-sheet file ALSO goes through that same routing, but only
+         when it's recognizably the "รวมเป็น Sheet เดียว" export — its header
+         row carries "สถานะกล่อง", a column that export alone writes (not the
+         legacy inventory-items template's columns). Gating on that exact
+         marker — rather than reusing detectSheetEntityKey's generic ≥2-alias
+         score on an arbitrary single sheet — avoids misrouting an ordinary
+         inventory-items file that happens to have e.g. both "ประเภท" and
+         "ซัพพลายเออร์" columns (each individually an alias the box importer
+         also recognizes) into the box importer by accident. Any other
+         single-sheet file keeps the original inventory-items behavior
+         unchanged. */
+      var isRelationalSingleSheet = false;
+      if (wb.SheetNames.length === 1) {
+        var wsFirst = wb.Sheets[wb.SheetNames[0]];
+        var headFirst = wsFirst ? (XLSX.utils.sheet_to_json(wsFirst, { header: 1 })[0] || []) : [];
+        isRelationalSingleSheet = headFirst.some(function(h) { return String(h || '').trim() === 'สถานะกล่อง'; });
+      }
+      if ((wb.SheetNames.length > 1 || isRelationalSingleSheet) && typeof handleMultiSheetMasterImport === 'function') {
         var handled = handleMultiSheetMasterImport(wb, f.name);
         if (handled) return;
       }
@@ -10598,63 +10614,81 @@ function downloadXLSMulti(filename, sheets) {
   toast('Export แล้ว', finalName);
 }
 window.downloadXLSMulti = downloadXLSMulti;
-/* Single-sheet variant of downloadXLSMulti — same section shape (name/headers/
-   rows/opts), but laid out SIDE BY SIDE (each master gets its own column
-   range, one empty gap column between blocks) so every section's header row
-   sits on the same row instead of one section's headers appearing dozens of
-   rows below the previous section's data. Row 1 = section title spanning its
-   columns, row 2 = that section's headers, row 3+ = data — one row per index
-   across every section at once, blank where a section has fewer rows than
-   the tallest one. Lets "รวมเป็น sheet เดียว" reuse the exact same section
-   data exportAllMastersExcel() already builds for the per-sheet version. */
-function downloadXLSSingle(filename, sections) {
-  if (typeof XLSX === 'undefined') { toast('ไลบรารี Excel ยังไม่พร้อม','โหลดหน้าใหม่แล้วลองอีกครั้ง','err'); return; }
-  var colOffsets = [];
-  var offset = 0;
-  sections.forEach(function(sec){
-    colOffsets.push(offset);
-    offset += sec.headers.length + 1; /* +1 gap column between sections */
-  });
-  var maxRows = sections.reduce(function(m, sec){ return Math.max(m, (sec.rows || []).length); }, 0);
+/* Single-sheet "รวมเป็น sheet เดียว" export — ONE flat, properly-related table
+   instead of 5 unrelated master lists stitched together by row position (that
+   older layout put e.g. box row #3 next to customer row #3 with no actual
+   connection between them — not 1NF, just visual alignment). Every row here
+   is a real record joined through its actual foreign keys:
+     - one row per box, with its type/warehouse/customer pulled in via
+       b.type / location.wh / b.customer — the exact FKs the app itself uses
+     - + one row per master record that has ZERO boxes pointing at it (an
+       unused box type, an empty warehouse, a customer holding nothing, a
+       employee whose warehouse), so every master still appears somewhere,
+       it's just that an orphan's row only has its own columns filled in
+       (no box to hang the other columns off of — filling them with
+       unrelated data would recreate the same problem this replaces).
+   Column 0 ("บาร์โค้ด") + column 1 ("รหัสประเภท") double as the header labels
+   IMPORT_CONFIGS.box already recognizes, so this file — like the per-sheet
+   export — routes straight back into the box importer (see
+   handleMultiSheetMasterImport, which runs on single-sheet files too). */
+function buildRelationalInventoryRows() {
+  var boxStatusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var headers = [
+    'บาร์โค้ด', 'รหัสประเภท', 'ชื่อประเภทกล่อง', 'หน่วยนับกล่อง', 'สถานะกล่อง',
+    'รหัสคลัง', 'ชื่อคลัง', 'โซน', 'แร็ค', 'ชั้น', 'ช่อง',
+    'รหัสลูกค้า', 'ชื่อลูกค้า', 'DO',
+    'พนักงานประจำคลัง',
+    /* "มูลค่ากล่อง"/"หน่วยนับกล่อง" (not the bare "มูลค่า"/"หน่วยนับ" ประเภทกล่อง
+       uses) — those exact strings are also aliases in IMPORT_CONFIGS.btype,
+       and detectSheetEntityKey picks the config with the HIGHEST alias score;
+       colliding on them tied btype's score with box's and btype won the tie
+       (object insertion order), routing this file to the wrong importer. */
+    'มูลค่ากล่อง', 'รอบหมุนเวียน', 'อัปเดตล่าสุด',
+    'รหัสพนักงาน (ไม่สังกัดคลัง)', 'ชื่อพนักงาน (ไม่สังกัดคลัง)',
+  ];
+  function blankRow() { return new Array(headers.length).fill(''); }
 
-  var titleRow = [], headerRow = [];
-  sections.forEach(function(sec, si){
-    var off = colOffsets[si];
-    titleRow[off] = sec.name;
-    sec.headers.forEach(function(h, ci){ headerRow[off + ci] = h; });
-  });
-  var aoa = [titleRow, headerRow];
-  var barcodeCells = [];
-  for (var r = 0; r < maxRows; r++) {
-    var row = [];
-    sections.forEach(function(sec, si){
-      var off = colOffsets[si];
-      var dataRow = (sec.rows || [])[r];
-      if (!dataRow) return;
-      dataRow.forEach(function(v, ci){ row[off + ci] = v == null ? '' : v; });
-      var barcodeCols = (sec.opts || {}).barcodeCols || [];
-      barcodeCols.forEach(function(c){ barcodeCells.push({ r: aoa.length, c: off + c }); });
-    });
-    aoa.push(row);
-  }
+  var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
+  var empNamesByWh = {};
+  Object.values(S.employees).forEach(function(e) { if (e.wh) (empNamesByWh[e.wh] = empNamesByWh[e.wh] || []).push(e.name || e.id); });
 
-  var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!merges'] = sections.map(function(sec, si){
-    var off = colOffsets[si];
-    return { s: { r: 0, c: off }, e: { r: 0, c: off + sec.headers.length - 1 } };
+  var seenType = {}, seenWh = {}, seenCust = {};
+  var rows = boxes.map(function(b) {
+    var type = S.boxtypes[b.type]; if (type) seenType[type.id] = true;
+    var loc = b.location || {};
+    var wh = loc.wh ? S.warehouses[loc.wh] : null; if (wh) seenWh[wh.id] = true;
+    var cust = (b.status === 'out' && b.customer) ? S.customers[b.customer] : null; if (cust) seenCust[cust.id] = true;
+    var r = blankRow();
+    r[0] = barcodeCell(b.tag); r[1] = b.type || ''; r[2] = type ? type.name : ''; r[3] = type ? (type.unit || '') : '';
+    r[4] = boxStatusLabel[b.status] || b.status;
+    r[5] = wh ? wh.id : ''; r[6] = wh ? wh.name : '';
+    r[7] = b.status === 'warehouse' ? (loc.zone || '') : ''; r[8] = b.status === 'warehouse' ? (loc.rack || '') : '';
+    r[9] = b.status === 'warehouse' ? (loc.shelf || '') : ''; r[10] = b.status === 'warehouse' ? (loc.slot || '') : '';
+    r[11] = cust ? cust.id : ''; r[12] = cust ? cust.name : ''; r[13] = b.do || '';
+    r[14] = wh ? (empNamesByWh[wh.id] || []).join(', ') : '';
+    r[15] = b.value || 0; r[16] = b.cycles || 0; r[17] = b.lastSeenAt ? fmtTs(b.lastSeenAt) : '';
+    return r;
   });
-  barcodeCells.forEach(function(bc){
-    var addr = XLSX.utils.encode_cell({ r: bc.r, c: bc.c });
-    var cell = ws[addr];
-    if (cell) { cell.t = 's'; cell.v = String(cell.v); }
+
+  Object.values(S.boxtypes).forEach(function(t) {
+    if (seenType[t.id]) return;
+    var r = blankRow(); r[1] = t.id; r[2] = t.name; r[3] = t.unit || ''; rows.push(r);
   });
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'All Masters');
-  var finalName = ensureXlsxName(filename);
-  XLSX.writeFile(wb, finalName);
-  toast('Export แล้ว', finalName);
+  Object.values(S.warehouses).forEach(function(w) {
+    if (seenWh[w.id]) return;
+    var r = blankRow(); r[5] = w.id; r[6] = w.name; r[14] = (empNamesByWh[w.id] || []).join(', '); rows.push(r);
+  });
+  Object.values(S.customers).forEach(function(c) {
+    if (seenCust[c.id]) return;
+    var r = blankRow(); r[11] = c.id; r[12] = c.name; rows.push(r);
+  });
+  Object.values(S.employees).forEach(function(e) {
+    if (e.wh && S.warehouses[e.wh]) return; /* already represented via that warehouse's empNamesByWh above */
+    var r = blankRow(); r[18] = e.id; r[19] = e.name || ''; rows.push(r);
+  });
+
+  return { headers: headers, rows: rows };
 }
-window.downloadXLSSingle = downloadXLSSingle;
 
 function exportOverviewExcel() {
   applyAutoLost();
@@ -10809,7 +10843,7 @@ function pickAllMastersExportMode() {
     + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:8px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'multi\');">'
     + '<div><b>แยกเป็นแต่ละ Sheet</b><div class="muted small" style="font-weight:400;">1 ไฟล์ · 1 sheet ต่อ 1 master (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน)</div></div></button>'
     + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'single\');">'
-    + '<div><b>รวมเป็น Sheet เดียว</b><div class="muted small" style="font-weight:400;">1 ไฟล์ · 1 sheet เดียว เรียงทุก master ต่อกัน คั่นด้วยหัวข้อ</div></div></button>'
+    + '<div><b>รวมเป็น Sheet เดียว</b><div class="muted small" style="font-weight:400;">1 ไฟล์ · 1 sheet · 1 แถว = 1 กล่อง พร้อมประเภท/คลัง/ลูกค้า/พนักงานที่เกี่ยวข้องจริง (เชื่อมด้วยรหัสอ้างอิง ไม่ใช่เรียงตามลำดับแถว)</div></div></button>'
     + '</div>';
   openModal(h);
 }
@@ -10869,7 +10903,8 @@ function exportAllMastersExcel(mode) {
     { name: 'พนักงาน', headers: empHeaders, rows: empRows },
   ];
   if (mode === 'single') {
-    downloadXLSSingle('all-masters-' + dstr() + '.xlsx', sections);
+    var rel = buildRelationalInventoryRows();
+    downloadXLS('all-masters-' + dstr() + '.xlsx', rel.headers, rel.rows, { barcodeCols: [0] });
   } else {
     downloadXLSMulti('all-masters-' + dstr() + '.xlsx', sections);
   }
