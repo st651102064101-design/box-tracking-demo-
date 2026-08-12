@@ -3742,7 +3742,7 @@ $('#btnAddCust').onclick=function(){
   S.customers[id]={id:id,name:nm,kind:val('cKind')||'customer',addr:addr,phone:phone,email:email,
     taxId:val('cTaxId'),contactPerson:val('cContactPerson'),status:val('cStatus')||'active',
     creditLimit:num('cCreditLimit')||0,fineRate:num('cFineRate')||0,lostFine:num('cLostFine')||0,
-    returnDate:returnDate};
+    returnDate:returnDate,returnDays:returnDays};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
@@ -3777,13 +3777,33 @@ window.CUST_STATUS_LABEL=CUST_STATUS_LABEL;
    c.id) ไม่เก็บเป็นตัวเลขแยกต่างหาก กันข้อมูลสองชุดไม่ตรงกัน */
 function custHeldCount(id){return Object.values(S.boxes).filter(function(b){return b.customer===id&&b.status==='out';}).length;}
 window.custHeldCount=custHeldCount;
+/* วันที่ต้องคืนจริง มีความหมายก็ต่อเมื่อลูกค้ารายนี้กำลังยืมกล่องอยู่จริง (status='out')
+   — ใช้ b.dueAt ของกล่องแต่ละใบที่ตั้งไว้ตอนยิงออกจริง (Gate ขาออก) ไม่ใช่ c.returnDate
+   ซึ่งเป็นแค่ policy ที่คำนวณครั้งเดียวตอนบันทึกลูกค้า แล้วเพี้ยนจากความจริงไปเรื่อยๆ
+   ตามเวลาที่ผ่านไป เอาวันที่ครบกำหนดเร็วที่สุดในบรรดากล่องที่ยืมอยู่ตอนนี้ */
+function custEarliestDueDate(id){
+  var earliest=null;
+  Object.values(S.boxes).forEach(function(b){
+    if(b.customer!==id||b.status!=='out'||!b.dueAt)return;
+    var t=new Date(b.dueAt).getTime();
+    if(isNaN(t))return;
+    if(earliest==null||t<earliest)earliest=t;
+  });
+  return earliest==null?null:ddmmyyyy(new Date(earliest));
+}
+window.custEarliestDueDate=custEarliestDueDate;
 function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');
-  /* returnDate is stored as a fixed calendar date, but the form now asks for
-     "ยืมกี่วัน" — show it as days-remaining-from-today so the field still
-     reflects the record's current due date; resaving unchanged recomputes a
-     date that lands within a day of the original (negligible drift). */
-  var dueD=parseDMY(c.returnDate);
-  var daysLeft=dueD?Math.round((dueD.getTime()-Date.now())/86400000):(S.cfg.agingDays||15);
+  /* ระเบียนที่มี c.returnDays อยู่แล้ว (บันทึก/import ตั้งแต่มีฟิลด์นี้) ใช้ค่านั้นตรงๆ
+     ไม่เพี้ยน — ระเบียนเก่าก่อนมีฟิลด์นี้ค่อย fallback ไปคำนวณย้อนจาก returnDate
+     (วันที่คงที่ที่เคยบันทึกไว้) เป็นจำนวนวันคงเหลือนับจากวันนี้แทน ซึ่งจะคลาดเคลื่อนไป
+     เรื่อยๆ ตามเวลาที่ผ่านไปนับจากวันที่บันทึกครั้งล่าสุด (ยอมรับได้สำหรับข้อมูลเก่า) */
+  var daysLeft;
+  if(c.returnDays!=null&&c.returnDays!==''&&!isNaN(Number(c.returnDays))){
+    daysLeft=Number(c.returnDays);
+  }else{
+    var dueD=parseDMY(c.returnDate);
+    daysLeft=dueD?Math.round((dueD.getTime()-Date.now())/86400000):(S.cfg.agingDays||15);
+  }
   setv('cReturnDays',Math.max(0,daysLeft));
   setv('cPhone',c.phone||c.contact||'');setv('cEmail',c.email||'');setv('cAddr',c.addr||'');
   setv('cTaxId',c.taxId||'');setv('cContactPerson',c.contactPerson||'');setv('cStatus',c.status||'active');syncStatusToggle('cStatus');
@@ -8444,7 +8464,18 @@ function renderSetup(){
   var pgCust=pagerSlice('cust',cs);
   $('#custBody').innerHTML=pgCust.rows.length?pgCust.rows.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
-    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openCustCard(\''+esc(c.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+esc(c.returnDate||'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
+    /* วันที่คืนจริงมีความหมายก็ต่อเมื่อกำลังยืมอยู่ (held>0) — ยังไม่ยืมเลยไม่มีวันที่
+       จริงให้แสดง (เดิมโชว์ c.returnDate ซึ่งเป็นแค่วันที่คำนวณไว้ตอนบันทึก ไม่เกี่ยวกับ
+       การยืมจริง ดูเหมือนวันครบกำหนดทั้งที่ยังไม่มีอะไรค้างอยู่เลย) แสดงเป็นเงื่อนไข
+       การให้ยืมแทน (formal) ให้รู้ policy โดยไม่ชวนเข้าใจผิดว่ามีของค้างคืน */
+    var returnCell;
+    if(held>0){
+      returnCell=esc(custEarliestDueDate(c.id)||c.returnDate||'-');
+    }else{
+      var rd=(c.returnDays!=null&&c.returnDays!=='')?Number(c.returnDays):null;
+      returnCell=(rd!=null&&!isNaN(rd))?('ยืมได้ '+rd+' วัน'):'-';
+    }
+    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openCustCard(\''+esc(c.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+returnCell+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
@@ -11446,7 +11477,12 @@ function openColumnMapModal(opts){
         {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
         {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท']},
         {key:'kind',          label:'ประเภทคู่ค้า (customer/supplier/both)', required:false, aliases:['kind','ประเภท','ประเภทคู่ค้า']},
-        {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่)', required:false, aliases:['returndate','returndays','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)','กำหนดคืนภายใน (วัน)']},
+        /* แยกเป็นสองคอลัมน์ (จำนวนวัน vs วันที่จริง) — เดิมรวมกันเป็นคอลัมน์เดียวโดย
+           alias 'returndays'/'กำหนดคืนภายใน (วัน)' ทับอยู่กับ 'returndate' ตัวเดียวกัน
+           ไฟล์ที่คอลัมน์เป็น "จำนวนวัน" ล้วน (เช่น 15) จึงถูกส่งเข้า parseFlexDateToDmy()
+           ที่ตีความเป็น Excel date serial แทน กลายเป็นวันที่ 15/01/1900 ที่ผิดสิ้นเชิง */
+        {key:'returnDays',    label:'ยืมได้กี่วัน', required:false, aliases:['returndays','จำนวนวัน','ยืมได้กี่วัน','กำหนดคืนภายใน (วัน)']},
+        {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่ — ถ้าไม่กรอกจำนวนวันด้านบน)', required:false, aliases:['returndate','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)']},
         {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์']},
         {key:'email',         label:'อีเมล', required:false, aliases:['email','อีเมล']},
         {key:'addr',          label:'ที่อยู่/สาขา', required:false, aliases:['address','addr','ที่อยู่']},
@@ -11465,10 +11501,13 @@ function openColumnMapModal(opts){
            ประเภทคู่ค้า/สถานะอีกต่อไป — buildRecord() ใส่ default ให้เองถ้าเว้นว่างหรือ
            พิมพ์มาไม่ตรง enum ที่รู้จัก */
         if(!m.name)e.push('ไม่มีชื่อลูกค้า');
+        if(m.returnDays&&(isNaN(Number(m.returnDays))||Number(m.returnDays)<0))e.push('ยืมได้กี่วัน ต้องเป็นตัวเลข 0 ขึ้นไป');
         /* File may hand us DD/MM/YYYY, YYYY-MM-DD, or an Excel date serial —
            normalize in place so buildRecord and the preview table both see
-           the same DD/MM/YYYY text the rest of the app stores/displays. */
-        if(m.returnDate){
+           the same DD/MM/YYYY text the rest of the app stores/displays. Only
+           parsed when there's no returnDays column — ถ้ามีจำนวนวันมาแล้วไม่ต้อง
+           สนใจคอลัมน์วันที่เลย กัน parse ผิดจากคอลัมน์ที่ไม่ได้ตั้งใจใช้ */
+        if(!m.returnDays&&m.returnDate){
           var normDate=parseFlexDateToDmy(m.returnDate);
           if(!normDate)e.push('กำหนดคืน (วันที่) ไม่ถูกต้อง — ใส่วันที่ เช่น 31/12/2026');
           else m.returnDate=normDate;
@@ -11478,12 +11517,14 @@ function openColumnMapModal(opts){
         return e;
       },
       buildRecord:function(m,id){
+        var returnDays=(m.returnDays!==''&&!isNaN(Number(m.returnDays)))?Number(m.returnDays):null;
+        var returnDate=returnDays!=null?ddmmyyyy(new Date(Date.now()+returnDays*86400000)):(m.returnDate||ddmmyyyy(new Date()));
         return {id:id,name:m.name,kind:(m.kind||'customer').toLowerCase(),addr:m.addr||'',
           phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
           taxId:m.taxId||'',contactPerson:m.contactPerson||'',
           status:(m.status||'active').toLowerCase(),
           creditLimit:Number(m.creditLimit)||0,fineRate:Number(m.fineRate)||0,
-          lostFine:Number(m.lostFine)||0,returnDate:m.returnDate||ddmmyyyy(new Date())};
+          lostFine:Number(m.lostFine)||0,returnDate:returnDate,returnDays:returnDays};
       }
     },
 
@@ -11990,10 +12031,11 @@ function openColumnMapModal(opts){
     if(!nm)return null;
     var id=nextSeqId('CUST-',Object.keys(S.customers));
     var regTs=iso();
+    var autoReturnDays=S.cfg.agingDays||15;
     S.customers[id]={id:id,name:nm,kind:'customer',addr:String(addr||'').trim(),
       phone:normPhoneDigits(String(phone||'').trim()),email:String(email||'').trim(),
       taxId:'',contactPerson:'',status:'active',creditLimit:0,fineRate:0,lostFine:0,
-      returnDate:ddmmyyyy(new Date(Date.now()+(S.cfg.agingDays||15)*86400000))};
+      returnDate:ddmmyyyy(new Date(Date.now()+autoReturnDays*86400000)),returnDays:autoReturnDays};
     auditEntry('CREATE',USER,id,nm,null,S.customers[id]);
     save();
     return id;
