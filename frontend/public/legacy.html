@@ -2064,7 +2064,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #btypeCubeOverlay .btc-fhead .n{margin-left:auto;font-family:var(--mono);font-size:13px;
   font-weight:700;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;white-space:nowrap;}
 #btypeCubeOverlay .btc-scroll{flex:1 1 auto;overflow:auto;padding:12px 14px 14px;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;cursor:grab;}
+#btypeCubeOverlay .btc-stage.grabbing .btc-scroll,
+#btypeCubeOverlay .btc-stage.grabbing .btc-fhead{cursor:grabbing;}
 
 #btypeCubeOverlay .btc-kv{display:flex;justify-content:space-between;gap:12px;
   padding:6px 0;border-bottom:.5px solid var(--line);font-size:13px;}
@@ -2146,7 +2148,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
   <div class="btc-actions" id="btcActions"></div>
   <div class="btc-dock" id="btcDock"></div>
-  <div class="btc-hint" id="btcHint">ลากพื้นที่รอบกล่อง (หรือแถบหัวข้อของด้าน) เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด</div>
+  <div class="btc-hint" id="btcHint">ลากที่กล่องจุดไหนก็ได้เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด</div>
 </div>
 
 <!-- ===== ลูกค้า / ซัพพลายเออร์ — บัตรคู่ค้าเสมือน (physics drop + flip) =====
@@ -4106,7 +4108,7 @@ function empBadgeStep(){
 /* มุมกล้องที่ทำให้แต่ละด้านหันเข้าหาเรา + ทรานส์ฟอร์มของตัวด้านเอง
    off/size อ่านจากขนาดจริงตอน layout (btcLayout) */
 var BTC_FACES=[
-  {k:'front', t:'ภาพรวม & จัดการ',       rx:  0, ry:   0, rot:'',                shade:'rgba(0,0,0,.04)'},
+  {k:'front', t:'ภาพรวม',                rx:  0, ry:   0, rot:'',                shade:'rgba(0,0,0,.04)'},
   {k:'back',  t:'กล่องทั้งหมด',           rx:  0, ry: 180, rot:'rotateY(180deg)', shade:'rgba(0,0,0,.22)'},
   {k:'top',   t:'สถานะกล่อง',             rx:-90, ry:   0, rot:'rotateX(90deg)',  shade:'rgba(255,255,255,.05)'},
   {k:'bottom',t:'กระจายตามคลัง',          rx: 90, ry:   0, rot:'rotateX(-90deg)', shade:'rgba(0,0,0,.34)'},
@@ -4471,7 +4473,7 @@ function btcClearActive(){
   BTC_FACES.forEach(function(f){var el=$('#'+BTC_FACE_EL[f.k]);if(el)el.setAttribute('data-active','0');});
 }
 
-var BTC_HINT_DATA='ลากพื้นที่รอบกล่อง (หรือแถบหัวข้อของด้าน) เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด';
+var BTC_HINT_DATA='ลากที่กล่องจุดไหนก็ได้เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด';
 var BTC_HINT_REAL='ลากกล่องหมุนดูได้รอบตัวอย่างอิสระ ไม่ล็อกด้าน · กดไอคอนรูปภาพมุมขวาบนอีกครั้งเพื่อกลับไปดูข้อมูล · Esc เพื่อปิด';
 function btcSetHint(mode){var h=$('#btcHint');if(h)h.textContent=mode==='real'?BTC_HINT_REAL:BTC_HINT_DATA;}
 
@@ -4597,9 +4599,9 @@ function btcBoot(){
 
 function btcGrab(ev){
   if(!btc.open)return;
-  /* ปุ่ม/ช่องค้นหา/พื้นที่สกอร์ลของด้านที่เปิดอยู่ ต้องทำงานของมันได้ตามปกติ —
-     การลากหมุนเริ่มได้จากที่ว่างรอบกล่องและจากแถบหัวข้อของด้าน */
-  if(ev.target.closest('.btc-scroll,button,input,a,.btc-dock'))return;
+  /* ลากได้จากทุกจุดบนกล่อง รวมเนื้อหาด้านที่เปิดอยู่ด้วย — เว้นแค่ตัวควบคุมจริง ๆ
+     (ปุ่ม/ช่องพิมพ์/ลิงก์/แถบเลือกหน้า) ที่ต้องกดใช้งานได้ตามปกติ ไม่ใช่ถูกกลืนไปเป็นการลากหมุน */
+  if(ev.target.closest('button,input,a,.btc-dock'))return;
   ev.preventDefault();
   btc.drag={x:ev.clientX,y:ev.clientY,rx:btc.rx,ry:btc.ry,vx:0,vy:0};
   $('#btcStage').classList.add('grabbing');
