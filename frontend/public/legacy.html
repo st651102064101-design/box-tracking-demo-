@@ -2192,34 +2192,86 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #whPanelOverlay{position:fixed;inset:0;z-index:410;display:none;}
 #whPanelOverlay .whp-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+/* เวทีลอยตรง ๆ บนพื้นหลังเบลอ ไม่มีการ์ดทึบรองรับ — เหมือนยืนมองเข้าไปในโรงเก็บของจริง
+   ตัวหนังสือหัวเรื่องจึงต้องมี text-shadow กันจมไปกับพื้นหลังที่ยังพอเห็นลาง ๆ */
 #whPanelOverlay .whp-stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(980px,92vw);max-height:88vh;overflow:auto;border-radius:26px;
-  background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);
-  color:var(--panelInk);box-shadow:0 40px 90px rgba(0,0,0,.45);border:.5px solid var(--panelBorder);}
+  width:min(1040px,92vw);max-height:90vh;overflow:auto;padding:8px 26px 26px;}
 #whPanelOverlay .whp-actions{position:fixed;top:24px;right:26px;z-index:6;display:flex;flex-direction:column;gap:10px;}
 #whPanelOverlay .whp-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
-  box-shadow:0 6px 16px rgba(0,0,0,.35);}
-#whPanelOverlay .whp-btn.dark{background:var(--ink);color:var(--surface);}
-#whPanelOverlay .whp-btn.light{background:var(--surface);color:var(--ink);}
-#whPanelOverlay .whp-btn.red{background:var(--neg);color:#fff;}
+  box-shadow:0 6px 16px rgba(0,0,0,.4);}
+#whPanelOverlay .whp-btn.dark{background:#1d1d1f;color:#fff;}
+#whPanelOverlay .whp-btn.light{background:#fff;color:#1d1d1f;}
+#whPanelOverlay .whp-btn.red{background:#d70015;color:#fff;}
 #whPanelOverlay .whp-btn[disabled]{opacity:.4;pointer-events:none;}
-#whPanelOverlay .whp-gaterow{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;}
-#whPanelOverlay .whp-gate{position:relative;flex:0 0 auto;width:132px;border-radius:14px;cursor:pointer;
-  background:rgba(255,255,255,.06);border:1px solid var(--panelBorder);padding:12px 10px;text-align:center;
-  transition:background .2s;}
-#whPanelOverlay .whp-gate:hover{background:rgba(255,255,255,.11);}
-#whPanelOverlay .whp-gate .door{width:100%;height:64px;border-radius:9px;display:grid;place-items:center;margin-bottom:8px;
-  transition:transform .25s cubic-bezier(.4,0,.2,1);}
-#whPanelOverlay .whp-gate:hover .door{transform:translateY(-6%) scale(1.04);}
-#whPanelOverlay .whp-log{position:absolute;left:50%;bottom:100%;transform:translateX(-50%) translateY(6px);
-  margin-bottom:9px;width:230px;background:var(--ink);color:var(--bg);border-radius:13px;padding:12px 14px;
-  box-shadow:0 16px 34px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
-  z-index:8;text-align:left;}
+
+#whPanelOverlay .whp-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+  padding:0 90px 18px 4px;flex-wrap:wrap;}
+#whPanelOverlay .whp-head .name{font-size:26px;font-weight:700;letter-spacing:-.02em;color:#f5f5f7;
+  text-shadow:0 2px 10px rgba(0,0,0,.5);}
+#whPanelOverlay .whp-head .sub{font-family:var(--mono);font-size:14px;color:rgba(245,245,247,.6);
+  margin-top:2px;text-shadow:0 1px 6px rgba(0,0,0,.5);}
+#whPanelOverlay .whp-stats{display:flex;gap:20px;}
+#whPanelOverlay .whp-stat .lbl{font-size:11px;font-weight:600;letter-spacing:.08em;color:rgba(245,245,247,.5);
+  text-align:right;}
+#whPanelOverlay .whp-stat .val{font-size:22px;font-weight:700;color:#f5f5f7;margin-top:1px;text-align:right;}
+#whPanelOverlay .whp-stat .val.click{cursor:pointer;text-decoration:underline;
+  text-decoration-color:rgba(245,245,247,.35);text-underline-offset:3px;}
+#whPanelOverlay .whp-stat .val.bad{color:#ff6b6b;}
+
+/* อาคารคลัง: ซุ้มโค้งบนสุด (เหมือนทางเข้าโรงเก็บของ) + พื้นลายทาง + ประตูม้วนทีละบาน —
+   ทึบและคงสีเดิมทุกธีม เพราะเป็นภาพประกอบวัตถุจริง ไม่ใช่ chrome ของแอปที่ต้องปรับตามธีม */
+#whPanelOverlay .whp-building{position:relative;margin:0 auto;max-width:900px;}
+#whPanelOverlay .whp-arch{height:56px;background:linear-gradient(180deg,#34343a,#232327);
+  border-radius:900px 900px 0 0;display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.25);}
+#whPanelOverlay .whp-arch .b{display:flex;align-items:center;gap:10px;margin-top:14px;}
+#whPanelOverlay .whp-arch .logo{width:22px;height:22px;border-radius:6px;background:var(--accent2);
+  color:var(--accentContrast);display:grid;place-items:center;font-size:13px;font-weight:700;}
+#whPanelOverlay .whp-arch .lbl{font-size:17px;font-weight:600;letter-spacing:.02em;color:#f5f5f7;}
+#whPanelOverlay .whp-floor{background:repeating-linear-gradient(90deg,#f7f7f9 0 14px,#eeeef1 14px 15px);
+  border-left:1px solid #d8d8de;border-right:1px solid #d8d8de;padding:26px 22px 0;}
+#whPanelOverlay .whp-gaterow{display:flex;gap:14px;flex-wrap:nowrap;width:max-content;max-width:100%;
+  margin:0 auto;overflow-x:auto;padding-bottom:6px;}
+#whPanelOverlay .whp-gate{position:relative;width:132px;flex:0 0 auto;border-radius:9px;overflow:visible;
+  background:transparent;cursor:pointer;}
+#whPanelOverlay .whp-frame{width:100%;height:150px;border:2px solid #c9c9d0;border-bottom:none;border-radius:9px 9px 0 0;
+  background:#141416;position:relative;overflow:hidden;box-shadow:inset 0 8px 14px rgba(0,0,0,.35);}
+#whPanelOverlay .whp-door{position:absolute;left:6px;right:6px;top:8px;bottom:0;
+  background:#e9e9ee;background-image:repeating-linear-gradient(180deg,rgba(0,0,0,.09) 0 2px,transparent 2px 12px);
+  transform-origin:top center;transition:transform .32s cubic-bezier(.4,0,.2,1);box-shadow:0 6px 10px rgba(0,0,0,.25);}
+#whPanelOverlay .whp-gate:hover .whp-door{transform:translateY(-72%);}
+#whPanelOverlay .whp-door-cap{position:absolute;left:0;right:0;top:0;height:16px;background:#c9c9d0;}
+#whPanelOverlay .whp-badge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:52px;height:52px;border-radius:50%;display:grid;place-items:center;box-shadow:0 4px 12px rgba(0,0,0,.18);}
+#whPanelOverlay .whp-door-shade{position:absolute;left:0;right:0;bottom:0;height:9px;background:rgba(0,0,0,.16);}
+#whPanelOverlay .whp-gate-label{text-align:center;padding:7px 6px 9px;width:100%;background:#1d1d1f;
+  border-radius:0 0 9px 9px;}
+#whPanelOverlay .whp-gate-label .n{font-size:14px;font-weight:700;letter-spacing:-.01em;color:#fff;}
+#whPanelOverlay .whp-gate-label .dir{font-size:12px;color:rgba(255,255,255,.7);margin-top:2px;}
+#whPanelOverlay .whp-foot1{height:16px;background:#3a3a3c;border-radius:0 0 6px 6px;}
+#whPanelOverlay .whp-foot2{height:26px;background:repeating-linear-gradient(90deg,#d7d9dc 0 34px,#cfd1d5 34px 70px);
+  border-radius:0 0 4px 4px;}
+#whPanelOverlay .whp-footshadow{height:22px;margin:0 -20px;
+  background:radial-gradient(closest-side,rgba(0,0,0,.5),rgba(0,0,0,0));filter:blur(6px);}
+#whPanelOverlay .whp-deco{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;}
+
+/* ป็อปอัปประวัติล่าสุดตอนชี้เมาส์ที่ประตู */
+#whPanelOverlay .whp-log{position:absolute;left:50%;bottom:100%;transform:translateX(-50%) translateY(10px);
+  margin-bottom:10px;width:250px;background:#1d1d1f;color:#f5f5f7;border-radius:14px;padding:14px 16px;
+  box-shadow:0 16px 34px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+  z-index:20;text-align:left;}
 #whPanelOverlay .whp-gate:hover .whp-log{opacity:1;transform:translateX(-50%) translateY(0);}
 #whPanelOverlay .whp-log:after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
-  width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid var(--ink);}
+  width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid #1d1d1f;}
+
+#whPanelOverlay .whp-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px 4px 4px;}
+#whPanelOverlay .whp-legend span{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;
+  color:rgba(245,245,247,.75);}
+#whPanelOverlay .whp-legend i{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;
+  flex:0 0 auto;}
+
 #whPanelOverlay .whp-pin{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:420px;max-width:92vw;
-  max-height:70vh;background:var(--ink);color:var(--bg);border-radius:20px;box-shadow:0 30px 70px rgba(0,0,0,.55);
+  max-height:70vh;background:#1d1d1f;color:#f5f5f7;border-radius:20px;box-shadow:0 30px 70px rgba(0,0,0,.55);
   z-index:250;display:flex;flex-direction:column;overflow:hidden;}
 #whPanelOverlay .whp-chip{padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;}
 </style>
@@ -4787,25 +4839,41 @@ function whDeleteBlockReason(w){
 }
 
 function whpDecoBanner(){
-  return '<div style="position:absolute;inset:0;background:rgba(8,8,10,.55);display:grid;place-items:center;pointer-events:none;border-radius:26px;">'
+  return '<div class="whp-deco">'
     +'<div style="transform:rotate(-18deg);text-align:center;line-height:1;white-space:nowrap;">'
-    +'<div style="font-size:46px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">ปิดใช้งาน</div>'
-    +'<div style="font-size:20px;font-weight:700;letter-spacing:.18em;color:rgba(255,138,131,.9);margin-top:6px;">DEACTIVATED</div>'
+    +'<div style="font-size:44px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">ปิดใช้งาน</div>'
+    +'<div style="font-size:19px;font-weight:700;letter-spacing:.18em;color:rgba(255,138,131,.9);margin-top:6px;">DEACTIVATED</div>'
     +'</div></div>';
 }
 
+/* ป้ายเลขประตูบนซุ้มทางเข้า — เอา "ประตู" นำหน้าเลขต่ำสุด–สูงสุดของคลังนี้
+   (ตัวเดียวกับที่ตารางคลังใช้แสดงคอลัมน์ "ประตู X–Y" อยู่แล้ว) */
+function whpGateRangeText(w){
+  var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});
+  if(!gs.length)return 'ยังไม่มีประตู';
+  return 'ประตู '+(gs.length>1?(gs[0]+'–'+gs[gs.length-1]):gs[0]);
+}
+
+/* ประตูม้วนทีละบาน: กรอบเข้ม + บานเลื่อนลายทางแนวนอน + ตรากลมบอกทิศทางตรงกลาง
+   บานเลื่อนขึ้น (CSS :hover) ตอนชี้เมาส์ ให้ความรู้สึกเหมือนเปิดประตูดูข้างในจริง ๆ */
 function whpGateTile(g){
-  var m=WH_DIR_META[g.dir]||WH_DIR_META.both;
+  var dirTxt=(WH_DIR_META[g.dir]||WH_DIR_META.both).t;
+  var badgeBg=g.dir==='out'?'var(--accent2)':(g.dir==='in'?'#ffffff':'rgba(189,251,99,.28)');
   var icon=g.dir==='out'?CC_ICONS.out:(g.dir==='in'?CC_ICONS['in']:CC_ICONS.both);
-  var logHtml=g.log.length
-    ?g.log.map(function(l){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:11.5px;border-top:.5px solid rgba(255,255,255,.12);"><span style="opacity:.6;font-family:var(--mono);flex:0 0 auto;">'+l.time+'</span><span style="text-align:right;">'+l.text+'</span></div>';}).join('')
-    :'<div style="font-size:11.5px;opacity:.6;padding:4px 0;">ยังไม่มีการเคลื่อนไหว</div>';
+  var logBody=g.log.length
+    ?g.log.map(function(l){return '<div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-top:.5px solid rgba(255,255,255,.1);"><span style="font-family:var(--mono);font-size:11px;color:rgba(245,245,247,.5);flex:0 0 auto;">'+l.time+'</span><span style="font-size:12.5px;color:#f5f5f7;line-height:1.35;">'+l.text+'</span></div>';}).join('')
+      +'<div style="font-size:11px;color:rgba(245,245,247,.4);margin-top:8px;">คลิกที่ประตูเพื่อดูรายละเอียดทั้งหมด</div>'
+    :'<div style="font-size:12.5px;color:rgba(245,245,247,.5);">ยังไม่มีการเคลื่อนไหว</div>';
   return '<div class="whp-gate" onclick="whpPin('+g.n+')">'
-    +'<div class="whp-log"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">ประตู '+g.n+' · '+m.t+'</div>'+logHtml+'</div>'
-    +'<div class="door" style="background:'+m.bg+';color:'+m.fg+';">'+icon+'</div>'
-    +'<div style="font-size:14px;font-weight:700;">ประตู '+g.n+'</div>'
-    +'<div style="font-size:11px;color:var(--panelInkSoft);margin-top:2px;">'+m.t+'</div>'
-    +'<div style="font-size:11px;margin-top:4px;">'+(g.today?('<b>'+g.today+'</b> ครั้งวันนี้'):'<span style="opacity:.55;">ไม่มีวันนี้</span>')+'</div>'
+    +'<div class="whp-frame">'
+      +'<div class="whp-door">'
+        +'<div class="whp-door-cap"></div>'
+        +'<div class="whp-badge" style="background:'+badgeBg+';color:#16330a;">'+icon+'</div>'
+        +'<div class="whp-door-shade"></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="whp-gate-label"><div class="n">ประตู '+g.n+'</div><div class="dir">'+dirTxt+'</div></div>'
+    +'<div class="whp-log"><div style="font-size:13px;font-weight:700;color:#f5f5f7;margin-bottom:8px;">ประตู '+g.n+' · '+dirTxt+'</div>'+logBody+'</div>'
   +'</div>';
 }
 
@@ -4814,38 +4882,37 @@ function whpActionsHtml(w){
   return ''
     +'<button class="whp-btn dark" onclick="closeWhPanel()" title="ปิด"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
     +'<button class="whp-btn light" onclick="whpAction(\'edit\')" title="แก้ไขคลัง"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></button>'
-    +'<button class="whp-btn light" onclick="whpAction(\'inv\')" title="ดูกล่องในคลังนี้"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></button>'
     +'<button class="whp-btn red" onclick="whpAction(\'del\')" title="'+(reason?esc(reason):'ลบคลัง')+'"'+(reason?' disabled':'')+'><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></button>';
 }
 
 function whpRenderBody(w){
   var stats=whPanelStats(w);
   var ended=w.status==='inactive';
-  var stMeta=ended
-    ?{t:'ปิดใช้งาน',bg:'color-mix(in srgb,var(--neg) 24%,transparent)',fg:'#ff8a83'}
-    :{t:'ใช้งาน',bg:'rgba(255,255,255,.14)',fg:'var(--panelInk)'};
   var gatesHtml=stats.gates.length
     ?stats.gates.map(whpGateTile).join('')
-    :'<div style="padding:20px 4px;color:var(--panelInkSoft);font-size:13px;">คลังนี้ยังไม่ได้ตั้งค่าประตู</div>';
+    :'<div style="padding:40px 20px;text-align:center;color:rgba(245,245,247,.6);font-size:13px;">คลังนี้ยังไม่ได้ตั้งค่าประตู</div>';
   $('#whpBody').innerHTML=''
-    +'<div style="position:relative;padding:30px 32px 26px;">'
-      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">'
-        +'<div><div style="font-size:26px;font-weight:700;letter-spacing:-.02em;">'+esc(w.name)+'</div>'
-          +'<div style="font-family:var(--mono);font-size:14px;color:var(--panelInkSoft);margin-top:2px;">'+esc(w.id)+(w.area?' · '+esc(w.area):'')+'</div></div>'
-        +'<div style="display:flex;gap:22px;">'
-          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">ประตูทั้งหมด</div><div style="font-size:20px;font-weight:700;margin-top:2px;">'+nf(stats.gates.length)+'</div></div>'
-          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">กล่องในคลัง</div><div style="font-size:20px;font-weight:700;margin-top:2px;">'+nf(stats.held)+'</div></div>'
-          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">สถานะ</div><div style="display:inline-flex;margin-top:4px;padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:600;background:'+stMeta.bg+';color:'+stMeta.fg+';">'+stMeta.t+'</div></div>'
-        +'</div>'
-      +'</div>'
-      +'<div class="whp-gaterow" style="margin-top:22px;">'+gatesHtml+'</div>'
-      +'<div style="display:flex;gap:14px;flex-wrap:wrap;padding:16px 0 0;font-size:12.5px;color:var(--panelInkSoft);">'
-        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--accent2);margin-right:6px;"></span>ขาเข้า</span>'
-        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--neg);margin-right:6px;"></span>ขาออก</span>'
-        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--panelInk);margin-right:6px;"></span>เข้า-ออกได้ทั้งสองทาง</span>'
+    +'<div class="whp-head">'
+      +'<div><div class="name">'+esc(w.name)+'</div><div class="sub">'+esc(w.id)+(w.area?' · '+esc(w.area):'')+'</div></div>'
+      +'<div class="whp-stats">'
+        +'<div class="whp-stat"><div class="lbl">ประตูทั้งหมด</div><div class="val">'+nf(stats.gates.length)+'</div></div>'
+        +'<div class="whp-stat"><div class="lbl">กล่องในคลัง</div><div class="val click" onclick="whpAction(\'inv\')" title="ดูกล่องในคลังนี้">'+nf(stats.held)+'</div></div>'
+        +'<div class="whp-stat"><div class="lbl">สถานะ</div><div class="val'+(ended?' bad':'')+'" style="font-size:15px;margin-top:5px;">'+(ended?'ปิดใช้งาน':'ใช้งาน')+'</div></div>'
       +'</div>'
     +'</div>'
-    +(ended?whpDecoBanner():'');
+    +'<div class="whp-building">'
+      +'<div class="whp-arch"><div class="b"><div class="logo">B</div><div class="lbl">'+esc(whpGateRangeText(w))+'</div></div></div>'
+      +'<div class="whp-floor"><div class="whp-gaterow">'+gatesHtml+'</div></div>'
+      +'<div class="whp-foot1"></div>'
+      +'<div class="whp-foot2"></div>'
+      +'<div class="whp-footshadow"></div>'
+      +(ended?whpDecoBanner():'')
+    +'</div>'
+    +'<div class="whp-legend">'
+      +'<span><i style="background:var(--accent2);color:var(--accentContrast);">'+CC_ICONS.out+'</i>ขาออก</span>'
+      +'<span><i style="background:#e9e9ee;color:#16330a;">'+CC_ICONS['in']+'</i>ขาเข้า</span>'
+      +'<span><i style="background:rgba(189,251,99,.28);color:#16330a;">'+CC_ICONS.both+'</i>สองทาง</span>'
+    +'</div>';
   $('#whpActions').innerHTML=whpActionsHtml(w);
 }
 
