@@ -122,7 +122,7 @@ html[data-layout="top"].topbar-hidden .navwrap{transform:translateY(calc(-100% -
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
 .iconbtn:active{transform:scale(.9);}
 
-.navwrap{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:80;
+.navwrap{position:sticky;top:var(--chrome-h,58px);z-index:80;
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border-bottom:.5px solid var(--line);transition:transform .38s cubic-bezier(.22,1,.36,1);}
 nav{max-width:1180px;margin:0 auto;display:flex;gap:3px;padding:9px 16px;overflow-x:auto;scrollbar-width:none;position:relative;}
