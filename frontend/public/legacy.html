@@ -8868,7 +8868,10 @@ function showGateTodayList(dir){
   }else{
     h+='<p class="muted small" style="margin:0 0 14px;">รวม <b>'+nf(evs.length)+'</b> กล่อง'+(isOut?'ที่ออก':'ที่รับเข้า')+'ในช่วงที่กรองไว้</p>';
     h+='<input id="gateTodaySearch" placeholder="ค้นหา รหัสกล่อง / ลูกค้า / DO / ทะเบียนรถ" oninput="filterGateTodayList(this.value)" style="width:100%;padding:10px 12px;border:.5px solid var(--line);border-radius:10px;margin-bottom:12px;background:var(--surface);color:var(--ink);font:inherit;">';
-    h+='<div id="gateTodayRows">';
+    /* เดิมทั้ง .mbody เลื่อนรวมกันหมด ช่องค้นหาเลยไหลหายไปพร้อมรายการตอนสกอร์ล — ให้เฉพาะ
+       รายการกล่อง (#gateTodayRows) มีขอบเขตความสูงของตัวเองแล้วสกอร์ลแยก หัวเรื่อง/สรุปยอด/
+       ช่องค้นหาด้านบนเลยลอยนิ่งอยู่ที่เดิมเสมอไม่ว่าจะเลื่อนดูรายการไปไกลแค่ไหน */
+    h+='<div id="gateTodayRows" style="max-height:min(48vh,420px);overflow-y:auto;">';
     evs.forEach(function(e){
       var t=new Date(e.ts);var timeStr=pad(t.getHours(),2)+':'+pad(t.getMinutes(),2);
       var custTxt=e.customerName||(e.customer?custName(e.customer):(e.dir==='in-new'?'กล่องใหม่':'-'));
