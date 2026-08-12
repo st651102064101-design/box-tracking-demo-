@@ -1128,6 +1128,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div id="df-ovUnreturned-mount"></div>
   <p class="muted small" id="ovUnreturnedDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th>สถานะ</th></tr></thead><tbody id="ovUnreturnedBody"></tbody></table></div></div>
+  <div class="pagerbar" id="pagerOvUnreturned"></div>
 
   <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
   <div id="df-ovByCust-mount"></div>
@@ -2623,6 +2624,7 @@ var PAGER_RENDER={
   cust:function(){renderSetup();},
   emp:function(){renderSetup();},
   ovRecent:function(){renderOverview();},
+  ovUnreturned:function(){renderOverview();},
   ovEvents:function(){renderReports();}
 };
 function pagerGo(key,newPage){
@@ -8178,8 +8180,9 @@ function renderOverview(){
   dfSyncUI('ovUnreturned');
   var unreturnedDescEl=$('#ovUnreturnedDesc');
   if(unreturnedDescEl)unreturnedDescEl.textContent='กรองตามวันที่ส่งออกจริง — '+dfDescribe('ovUnreturned');
-  var unreturned=all.filter(function(b){return b.status==='out'&&dfInRange('ovUnreturned',b.outAt);})
+  var unreturnedAll=all.filter(function(b){return b.status==='out'&&dfInRange('ovUnreturned',b.outAt);})
     .sort(function(a,b){return new Date(a.outAt||0)-new Date(b.outAt||0);});
+  var ouPg=pagerSlice('ovUnreturned',unreturnedAll),unreturned=ouPg.rows;
   var ovuBody=$('#ovUnreturnedBody');
   if(ovuBody){
     ovuBody.innerHTML=unreturned.length?unreturned.map(function(b){
@@ -8194,6 +8197,7 @@ function renderOverview(){
       +'</tr>';
     }).join(''):emptyRow(6,'ไม่มีของที่ยังไม่ได้คืนในช่วงที่กรองไว้');
   }
+  var ouPgEl=$('#pagerOvUnreturned');if(ouPgEl)ouPgEl.innerHTML=unreturnedAll.length?pagerBarHtml('ovUnreturned',ouPg):'';
 
   // ส่งคืนล่าสุด — ในช่วงที่กรองไว้ (dfInRange('ovRecent',...)) แบ่งหน้าแทนตัดที่ 8 รายการ
   var hasRecentEvents=S.events.some(function(e){return e.dir==='in'||e.dir==='in-new';});
@@ -8218,7 +8222,7 @@ function renderOverview(){
 DF_APPLY.ovMove=function(){renderOverview();};
 DF_APPLY.ovRecent=function(){pagerReset('ovRecent');renderOverview();};
 DF_APPLY.ovStatusNow=function(){renderOverview();};
-DF_APPLY.ovUnreturned=function(){renderOverview();};
+DF_APPLY.ovUnreturned=function(){pagerReset('ovUnreturned');renderOverview();};
 
 /* tab-reports — everything that used to live in the Overview tab besides the
    five status counts: money/rate KPIs, the process-board visualization, the
@@ -9499,8 +9503,10 @@ window.showTruckManifest=showTruckManifest;
 
 /* ===== "which boxes went through the gate today" — opened from the cycle-ring's
    Gate ขาออก/ขาเข้า nodes, since a bare count there didn't say what actually moved ===== */
+var gateTodayIsOut=false,gateTodayQuery='';
 function showGateTodayList(dir){
   var isOut=dir==='out';
+  gateTodayIsOut=isOut;gateTodayQuery='';pagerReset('gateToday');
   var filterDesc=dfDescribe('ovMove');
   var evs=S.events.filter(function(e){
     return dfInRange('ovMove',e.ts) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
@@ -9530,39 +9536,51 @@ function showGateTodayList(dir){
     /* เดิมทั้ง .mbody เลื่อนรวมกันหมด ช่องค้นหาเลยไหลหายไปพร้อมรายการตอนสกอร์ล — ให้เฉพาะ
        รายการกล่อง (#gateTodayRows) มีขอบเขตความสูงของตัวเองแล้วสกอร์ลแยก หัวเรื่อง/สรุปยอด/
        ช่องค้นหาด้านบนเลยลอยนิ่งอยู่ที่เดิมเสมอไม่ว่าจะเลื่อนดูรายการไปไกลแค่ไหน */
-    h+='<div id="gateTodayRows" style="max-height:min(48vh,420px);overflow-y:auto;">';
-    evs.forEach(function(e){
-      var timeStr=fmtTs(e.ts);
-      var custTxt=e.customerName||(e.customer?custName(e.customer):(e.dir==='in-new'?'กล่องใหม่':'-'));
-      var whTxt=e.wh?whName(e.wh):'-';
-      var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
-      h+='<div class="truck-box" data-hay="'+esc(hay)+'" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:10px 4px;border-top:.5px solid var(--line);font-size:13px;">'
-        +'<div><span class="mono" style="font-weight:600;">'+esc(e.tag)+'</span><div class="muted" style="font-size:11px;">'+esc(typeName(e.type))+'</div></div>'
-        +'<div>'+esc(custTxt)+'</div>'
-        +'<div class="mono muted">'+esc(e.do||e.plate||'-')+'</div>'
-        +'<div class="muted" style="white-space:nowrap;">Gate '+(e.gate!=null?e.gate:'-')+'<div style="font-size:11px;">'+esc(whTxt)+'</div></div>'
-        +'<div class="mono" style="text-align:right;white-space:nowrap;">'+timeStr+'</div>'
-        +'</div>';
-    });
-    h+='</div>';
+    h+='<div id="gateTodayRows" style="max-height:min(48vh,420px);overflow-y:auto;"></div>';
+    h+='<div class="pagerbar" id="pagerGateToday"></div>';
     h+='<p class="muted small" id="gateTodayNoRes" style="display:none;text-align:center;padding:20px 0;">ไม่พบผลลัพธ์ที่ตรงกับคำค้นหา</p>';
   }
   h+='</div>';
   h+='<div class="mfoot"><button class="btn ghost" onclick="closeModal()">ปิด</button>'
     +'<button class="btn accent" onclick="closeModal();switchTab(\''+(isOut?'gateout':'gatein')+'\');">ไปที่ Gate '+(isOut?'ขาออก':'ขาเข้า')+'</button></div>';
   openModal(h);
+  if(evs.length)renderGateTodayRows();
 }
 window.showGateTodayList=showGateTodayList;
+/* rebuilds #gateTodayRows from S.events each call so paging (pagerGo) and search
+   (filterGateTodayList) share one code path instead of paging slicing a stale list
+   while search does DOM show/hide on top of it — the two would otherwise fight */
+function renderGateTodayRows(){
+  var isOut=gateTodayIsOut,q=gateTodayQuery;
+  var evs=S.events.filter(function(e){
+    return dfInRange('ovMove',e.ts) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
+  }).sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
+  var rowsWithHay=evs.map(function(e){
+    var custTxt=e.customerName||(e.customer?custName(e.customer):(e.dir==='in-new'?'กล่องใหม่':'-'));
+    var whTxt=e.wh?whName(e.wh):'-';
+    var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
+    return {e:e,custTxt:custTxt,whTxt:whTxt,hay:hay};
+  }).filter(function(r){return !q||r.hay.indexOf(q)>=0;});
+  var gtPg=pagerSlice('gateToday',rowsWithHay),rows=gtPg.rows;
+  var rowsHtml=rows.map(function(r){
+    var e=r.e,timeStr=fmtTs(e.ts);
+    return '<div class="truck-box" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:10px 4px;border-top:.5px solid var(--line);font-size:13px;">'
+      +'<div><span class="mono" style="font-weight:600;">'+esc(e.tag)+'</span><div class="muted" style="font-size:11px;">'+esc(typeName(e.type))+'</div></div>'
+      +'<div>'+esc(r.custTxt)+'</div>'
+      +'<div class="mono muted">'+esc(e.do||e.plate||'-')+'</div>'
+      +'<div class="muted" style="white-space:nowrap;">Gate '+(e.gate!=null?e.gate:'-')+'<div style="font-size:11px;">'+esc(r.whTxt)+'</div></div>'
+      +'<div class="mono" style="text-align:right;white-space:nowrap;">'+timeStr+'</div>'
+      +'</div>';
+  }).join('');
+  var rowsEl=$('#gateTodayRows');if(rowsEl)rowsEl.innerHTML=rowsHtml;
+  var pgEl=$('#pagerGateToday');if(pgEl)pgEl.innerHTML=rowsWithHay.length?pagerBarHtml('gateToday',gtPg):'';
+  var noRes=$('#gateTodayNoRes');if(noRes)noRes.style.display=(q&&!rowsWithHay.length)?'':'none';
+}
+PAGER_RENDER.gateToday=function(){renderGateTodayRows();};
 function filterGateTodayList(q){
-  q=(q||'').toLowerCase().trim();
-  var any=false;
-  $all('#gateTodayRows .truck-box').forEach(function(r){
-    var show=!q||(r.dataset.hay||'').indexOf(q)>=0;
-    r.style.display=show?'':'none';
-    if(show)any=true;
-  });
-  var noRes=$('#gateTodayNoRes');
-  if(noRes)noRes.style.display=(q&&!any)?'':'none';
+  gateTodayQuery=(q||'').toLowerCase().trim();
+  pagerReset('gateToday');
+  renderGateTodayRows();
 }
 window.filterGateTodayList=filterGateTodayList;
 
