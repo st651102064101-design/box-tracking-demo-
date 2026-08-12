@@ -2040,7 +2040,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   background:radial-gradient(ellipse at center,rgba(0,0,0,.5),rgba(0,0,0,0) 70%);
   transform:translateX(-50%);pointer-events:none;}
 
-#btypeCubeOverlay .btc-face{position:absolute;left:0;top:0;background:var(--surface);
+/* transform-origin ต้องเป็น 0 0 = มุมซ้ายบนของด้าน ซึ่งวางทับจุดกึ่งกลางลูกบาศก์พอดี
+   (.btc-cube ขนาด 0x0) ถ้าปล่อยเป็นค่าปริยาย 50% 50% ทุกด้านจะหมุนรอบจุดกึ่งกลาง
+   ของตัวเอง ซึ่งเยื้องจากแกนกล่องอยู่ (กว้าง/2, สูง/2) แล้วกล่องจะกางแบะออกเป็นแผ่น ๆ
+   แทนที่จะประกบกันเป็นทรงสี่เหลี่ยม */
+#btypeCubeOverlay .btc-face{position:absolute;left:0;top:0;transform-origin:0 0;
+  background:var(--surface);
   border-radius:12px;overflow:hidden;display:flex;flex-direction:column;
   box-shadow:inset 0 0 0 .5px var(--line);pointer-events:none;}
 /* เฉพาะด้านที่หันเข้าหาเราเท่านั้นที่กดได้ ด้านอื่นปล่อยคลิกทะลุไปให้เวทีใช้ลากหมุน */
@@ -4027,7 +4032,10 @@ function btcFrontHtml(t,s,mat,dimCm){
       +(admin?('<button class="btc-act danger" onclick="btcAction(\'del\')"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ"':'')+'>ลบประเภทกล่อง</button>'):'')
     +'</div>'
     +(used?'<div style="font-size:11.5px;color:var(--muted);margin-top:8px;">ลบไม่ได้ขณะยังมีกล่อง '+nf(used)+' ใบใช้ประเภทนี้อยู่</div>':'')
-    +(btc.clamped?'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* กล่องทรงแบนมาก — สัดส่วนบนจอถูกถ่างให้อ่านข้อมูลได้ ไม่ตรงกับ '+esc(t.dim)+' เป๊ะ</div>':'');
+    +(btc.clamped?'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* กล่องทรงแบนมาก — สัดส่วนบนจอถูกถ่างให้อ่านข้อมูลได้ ไม่ตรงกับ '+esc(t.dim)+' เป๊ะ</div>':'')
+    /* ไม่มี dim ใน DB → วาดเป็นลูกบาศก์ 1:1:1 ไปก่อน บอกไว้ตรง ๆ ว่านั่นไม่ใช่ทรงจริง
+       ของกล่องใบนี้ ไม่งั้นจะเข้าใจผิดว่าระบบอ่านขนาดมาแล้ว */
+    +(dimCm?'':'<div style="font-size:11.5px;color:var(--warn);margin-top:8px;">* ยังไม่ได้กรอกขนาดในประเภทนี้ กล่องจึงแสดงเป็นทรงลูกบาศก์ไปก่อน — กรอกขนาดที่ "แก้ไขประเภทกล่อง" แล้วทรงจะตรงกับของจริง</div>');
 }
 
 function btcBackHtml(t,s){
