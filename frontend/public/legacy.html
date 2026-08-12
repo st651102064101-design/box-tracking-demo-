@@ -10388,7 +10388,6 @@ var INV_MAP_FIELDS = [
   { key: 'lot', label: 'Lot/Batch', required: false, aliases: ['lot', 'batch', 'lot/batch'] },
   { key: 'expiry', label: 'วันหมดอายุ (YYYY-MM-DD)', required: false, aliases: ['วันหมดอายุ (yyyy-mm-dd)', 'วันหมดอายุ', 'expiry', 'expiry date'] },
   { key: 'wh', label: 'คลัง', required: false, aliases: ['คลัง', 'warehouse'] },
-  { key: 'loc', label: 'โซน/แร็ค', required: false, aliases: ['โซน/แร็ค', 'โซน / แร็ค', 'location', 'loc'] },
   { key: 'note', label: 'หมายเหตุ', required: false, aliases: ['หมายเหตุ', 'note'] }
 ];
 function handleInvImportFile(e) {
@@ -10554,7 +10553,7 @@ function importInvFromRows(rows, colMap) {
       supplier: ci.supplier >= 0 ? String(r[ci.supplier] || '').trim() : '',
       lot: ci.lot >= 0 ? String(r[ci.lot] || '').trim() : '',
       expiry: ci.expiry >= 0 ? String(r[ci.expiry] || '').trim() : '',
-      wh: wh, loc: ci.loc >= 0 ? String(r[ci.loc] || '').trim() : '',
+      wh: wh, loc: '',
       note: ci.note >= 0 ? String(r[ci.note] || '').trim() : '',
       updatedAt: iso(), updatedBy: USER
     };
