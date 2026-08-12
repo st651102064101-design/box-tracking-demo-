@@ -2130,6 +2130,108 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div class="btc-hint">ลากพื้นที่รอบกล่อง (หรือแถบหัวข้อของด้าน) เพื่อหมุน · ปล่อยแล้วกล่องจะหันด้านที่ใกล้ที่สุดเข้าหาคุณ · กดปุ่มด้านล่างเพื่อสลับหน้า · Esc เพื่อปิด</div>
 </div>
 
+<!-- ===== ลูกค้า / ซัพพลายเออร์ — บัตรคู่ค้าเสมือน (physics drop + flip) =====
+     คลิกแถวในตาราง "ลูกค้า" แล้วบัตรจะร่วงหล่นลงมาจากบนจอ ตีลังกากลางอากาศ กระแทกพื้น
+     เด้งแล้วนิ่งคว่ำหน้าขึ้น — ชี้เมาส์เพื่อพลิกดูด้านหลัง (บาร์โค้ด + เมนูจัดการ)
+     แทนที่ modal แก้ไข/ลบ ของเดิมสำหรับ 'cust' เหมือนที่พนักงานย้ายไป openEmpBadge
+     และประเภทกล่องย้ายไป openBtypeCube ก่อนหน้านี้ -->
+<style>
+#custCardOverlay{position:fixed;inset:0;z-index:410;display:none;perspective:1800px;}
+#custCardOverlay .cc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.45);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
+#custCardOverlay .cc-shadow{position:absolute;left:50%;top:50%;width:480px;height:64px;
+  margin-left:-240px;margin-top:-32px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.5),rgba(0,0,0,0) 72%);
+  pointer-events:none;will-change:transform,opacity;}
+#custCardOverlay .cc-hint{position:absolute;left:0;right:0;bottom:26px;text-align:center;
+  color:rgba(255,255,255,.72);font-size:12.5px;pointer-events:none;}
+#custCardOverlay .cc-card{position:absolute;left:50%;top:50%;width:560px;height:353px;
+  margin-left:-280px;margin-top:-176.5px;transform-style:preserve-3d;will-change:transform;}
+#custCardOverlay .cc-flip{position:absolute;inset:0;transform-style:preserve-3d;
+  transition:transform .5s cubic-bezier(.22,1,.36,1);}
+#custCardOverlay .cc-face{position:absolute;inset:0;border-radius:24px;overflow:hidden;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;color:var(--panelInk);
+  background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);
+  box-shadow:0 34px 70px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08),0 0 0 .5px var(--panelBorder);}
+#custCardOverlay .cc-face::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(60% 90% at 15% 115%,color-mix(in srgb,var(--accent) 26%,transparent),transparent 60%);opacity:.55;}
+#custCardOverlay .cc-back{transform:rotateY(180deg);}
+#custCardOverlay .cc-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;
+  font-size:13px;font-weight:600;position:relative;}
+#custCardOverlay .cc-close{position:fixed;right:22px;top:22px;width:44px;height:44px;border-radius:50%;
+  background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.4);z-index:5;}
+#custCardOverlay .cc-act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 14px;
+  border-radius:13px;background:var(--panelChipBg);border:1px solid var(--panelChipBorder);
+  font-size:14.5px;font-weight:500;color:var(--panelInk);}
+#custCardOverlay .cc-act.danger{background:color-mix(in srgb,var(--neg) 20%,transparent);
+  border-color:color-mix(in srgb,var(--neg) 40%,transparent);color:#ff8a83;}
+#custCardOverlay .cc-act[disabled]{opacity:.4;cursor:not-allowed;}
+</style>
+<div id="custCardOverlay">
+  <div class="cc-backdrop" onclick="closeCustCard()"></div>
+  <div class="cc-shadow" id="ccShadow"></div>
+  <div class="cc-hint">ชี้เมาส์ที่การ์ดเพื่อพลิกดูบาร์โค้ดและเมนูจัดการ · กด Esc หรือคลิกพื้นหลังเพื่อปิด</div>
+  <div class="cc-card" id="ccCard" onmouseenter="ccToBack()" onmouseleave="ccToFront()">
+    <div class="cc-flip" id="ccFlip">
+      <div class="cc-face cc-front" id="ccFront"></div>
+      <div class="cc-face cc-back" id="ccBack"></div>
+    </div>
+  </div>
+  <button class="cc-close" onclick="closeCustCard()" title="ปิด">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+</div>
+
+<!-- ===== คลัง — แผงประตูคลัง (gate visualization) =====
+     คลิกแถวในตาราง "คลัง & ประตู" แล้วเปิดเป็นแผงขนาดใหญ่แสดงประตูทุกบานของคลังนั้น
+     เป็นแถว ชี้เมาส์ที่ประตูไหนประตูนั้นสว่างขึ้นพร้อมโชว์ 3 รายการล่าสุดจริงจาก
+     S.events คลิกที่ประตูเพื่อ "ปักหมุด" แผงประวัติแยก กรองตามช่วงเวลาได้
+     แทนที่ modal แก้ไข/ลบ ของเดิมสำหรับ 'wh' — ไม่มีฟิสิกส์ตกเหมือนบัตร/กล่อง เพราะ
+     เป็นแผงข้อมูลขนาดใหญ่ที่ต้องอ่านทันที ไม่ใช่วัตถุที่ถือขึ้นมาดู -->
+<style>
+#whPanelOverlay{position:fixed;inset:0;z-index:410;display:none;}
+#whPanelOverlay .whp-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+#whPanelOverlay .whp-stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(980px,92vw);max-height:88vh;overflow:auto;border-radius:26px;
+  background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);
+  color:var(--panelInk);box-shadow:0 40px 90px rgba(0,0,0,.45);border:.5px solid var(--panelBorder);}
+#whPanelOverlay .whp-actions{position:fixed;top:24px;right:26px;z-index:6;display:flex;flex-direction:column;gap:10px;}
+#whPanelOverlay .whp-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  box-shadow:0 6px 16px rgba(0,0,0,.35);}
+#whPanelOverlay .whp-btn.dark{background:var(--ink);color:var(--surface);}
+#whPanelOverlay .whp-btn.light{background:var(--surface);color:var(--ink);}
+#whPanelOverlay .whp-btn.red{background:var(--neg);color:#fff;}
+#whPanelOverlay .whp-btn[disabled]{opacity:.4;pointer-events:none;}
+#whPanelOverlay .whp-gaterow{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;}
+#whPanelOverlay .whp-gate{position:relative;flex:0 0 auto;width:132px;border-radius:14px;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--panelBorder);padding:12px 10px;text-align:center;
+  transition:background .2s;}
+#whPanelOverlay .whp-gate:hover{background:rgba(255,255,255,.11);}
+#whPanelOverlay .whp-gate .door{width:100%;height:64px;border-radius:9px;display:grid;place-items:center;margin-bottom:8px;
+  transition:transform .25s cubic-bezier(.4,0,.2,1);}
+#whPanelOverlay .whp-gate:hover .door{transform:translateY(-6%) scale(1.04);}
+#whPanelOverlay .whp-log{position:absolute;left:50%;bottom:100%;transform:translateX(-50%) translateY(6px);
+  margin-bottom:9px;width:230px;background:var(--ink);color:var(--bg);border-radius:13px;padding:12px 14px;
+  box-shadow:0 16px 34px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+  z-index:8;text-align:left;}
+#whPanelOverlay .whp-gate:hover .whp-log{opacity:1;transform:translateX(-50%) translateY(0);}
+#whPanelOverlay .whp-log:after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+  width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid var(--ink);}
+#whPanelOverlay .whp-pin{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:420px;max-width:92vw;
+  max-height:70vh;background:var(--ink);color:var(--bg);border-radius:20px;box-shadow:0 30px 70px rgba(0,0,0,.55);
+  z-index:250;display:flex;flex-direction:column;overflow:hidden;}
+#whPanelOverlay .whp-chip{padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;}
+</style>
+<div id="whPanelOverlay">
+  <div class="whp-backdrop" onclick="closeWhPanel()"></div>
+  <div class="whp-actions" id="whpActions"></div>
+  <div class="whp-stage">
+    <div id="whpBody"></div>
+  </div>
+  <div id="whpPinned"></div>
+</div>
+
 <!-- SheetJS (xlsx) mini build v0.18.5 — bundled INLINE so .xlsx import/export
      works 100% offline (no CDN). Added for the Gate-Out Excel import feature. -->
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -4387,6 +4489,452 @@ function btcStep(){
   }
 }
 
+/* ===== ลูกค้า / ซัพพลายเออร์ — บัตรคู่ค้าเสมือน (physics drop + flip) =====
+   คลิกแถวในตาราง "ลูกค้า" → บัตรร่วงหล่นลงมาจากบนจอ ตีลังกากลางอากาศ กระแทกพื้น
+   เด้งเสียพลังงาน (restitution .30) แล้วนิ่งคว่ำหน้าขึ้นเสมอ (มุมหน่วงเข้าหา 0 ทุกแกน
+   ทั้งตอนเด้งและตอนพัก) ชี้เมาส์เพื่อพลิกดูด้านหลัง เหมือนบัตรพนักงาน แต่ใช้ทรงตีลังกา
+   อิสระ 3 แกนแทนสายคล้องคอ — คู่ค้าไม่มีคลิปแขวน ตกอิสระเหมือนโยนนามบัตรลงโต๊ะ */
+
+var CC_CW=560, CC_CH=353;
+var CC_ICONS={
+  out:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h13M13 7l5 5-5 5"/></svg>',
+  in:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H6M11 7l-5 5 5 5"/></svg>',
+  both:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-4-4M20 15H4l4 4"/></svg>'
+};
+var CC_STATUS_DARK={
+  active:{t:'ใช้งาน',bg:'rgba(255,255,255,.14)',fg:'var(--panelInk)'},
+  inactive:{t:'ปิดใช้งานชั่วคราว',bg:'rgba(255,255,255,.10)',fg:'var(--panelInkSoft)'},
+  blocked:{t:'ระงับการใช้งาน',bg:'color-mix(in srgb,var(--neg) 30%,transparent)',fg:'#ff8a83'}
+};
+
+var ccState={open:false,id:null,booted:false,raf:null,
+  s:1,x:0,y:0,vx:0,vy:0,rx:0,ry:0,rz:0,wx:0,wy:0,wz:0,
+  bounce:0,rest:false,face:'front',t:0};
+
+/* ---- อ่านสถิติที่ผูกกับคู่ค้ารายนี้ครั้งเดียว แล้วให้ทั้งสองด้านของบัตรหยิบไปใช้ ---- */
+function custCardStats(c){
+  var isCustK=isCustomerKind(c),isSupK=isSupplierKind(c);
+  var held=custHeldCount(c.id);
+  var overdue=isCustK?Object.values(S.boxes).filter(function(b){return b.customer===c.id&&b.status==='out'&&isOverdue(b);}).length:0;
+  var supplied=isSupK?Object.values(S.boxes).filter(function(b){return b.supplier===c.id;}).length:0;
+  return {isCustK:isCustK,isSupK:isSupK,held:held,overdue:overdue,supplied:supplied};
+}
+function ccKindMeta(c){
+  var isCustK=isCustomerKind(c),isSupK=isSupplierKind(c);
+  if(isCustK&&isSupK)return {text:'ลูกค้า + ซัพพลายเออร์',icon:'both'};
+  if(isSupK)return {text:'ซัพพลายเออร์',icon:'in'};
+  return {text:'ลูกค้า',icon:'out'};
+}
+
+function ccBlockedBanner(){
+  return '<div style="position:absolute;inset:0;background:rgba(8,8,10,.6);display:grid;place-items:center;pointer-events:none;">'
+    +'<div style="transform:rotate(-22deg);text-align:center;line-height:1;white-space:nowrap;">'
+    +'<div style="font-size:52px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">ระงับการใช้งาน</div>'
+    +'<div style="font-size:23px;font-weight:700;letter-spacing:.18em;color:rgba(255,138,131,.9);margin-top:8px;">BLOCKED</div>'
+    +'</div></div>';
+}
+
+function ccFrontHtml(c,stats,kindMeta){
+  var st=CC_STATUS_DARK[c.status]||CC_STATUS_DARK.active;
+  var rightBlock;
+  if(stats.isCustK){
+    rightBlock=''
+      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">กำหนดคืน</div>'
+      +'<div style="font-family:var(--mono);font-size:17px;margin-top:3px;">'+esc(c.returnDate||'—')+'</div>'
+      +'<div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:600;'
+        +(stats.overdue?'background:color-mix(in srgb,var(--neg) 26%,transparent);color:#ff8a83;':'background:var(--accent2);color:var(--accentContrast);')+'">'
+        +'ยืมอยู่ '+nf(stats.held)+' ใบ'+(stats.overdue?' · เกินกำหนด '+nf(stats.overdue):'')+'</div>';
+  }else{
+    rightBlock=''
+      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">รับเข้าแล้ว (สะสม)</div>'
+      +'<div style="font-family:var(--mono);font-size:22px;margin-top:3px;">'+nf(stats.supplied)+' ใบ</div>';
+  }
+  return ''
+    +'<div style="position:relative;padding:26px 30px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">'
+      +'<div>'
+        +'<div style="display:flex;align-items:center;gap:9px;">'
+          +'<div style="width:24px;height:24px;border-radius:7px;background:var(--accent2);color:var(--accentContrast);display:grid;place-items:center;font-size:14px;font-weight:700;">B</div>'
+          +'<div style="font-size:17px;font-weight:600;letter-spacing:-.02em;">BoxTrace</div>'
+        +'</div>'
+        +'<div class="cc-tag" style="margin-top:12px;background:rgba(255,255,255,.12);">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</div>'
+      +'</div>'
+      +'<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;background:'+st.bg+';color:'+st.fg+';white-space:nowrap;">'+esc(st.t)+'</div>'
+    +'</div>'
+    +'<div style="position:relative;padding:18px 30px 0;font-family:var(--mono);font-size:25px;font-weight:500;letter-spacing:.04em;">'+esc(c.id)+'</div>'
+    +'<div style="position:absolute;left:30px;right:30px;bottom:24px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">'
+      +'<div style="min-width:0;">'
+        +'<div style="font-size:20px;font-weight:600;letter-spacing:-.02em;">'+esc(c.name)+'</div>'
+        +'<div style="font-size:13px;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.contactPerson||'—')+(c.addr?' · '+esc(c.addr):'')+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
+    +'</div>'
+    +(c.status==='blocked'?ccBlockedBanner():'');
+}
+
+function ccBackHtml(c,stats){
+  var meta=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
+  var code=String(c.id).toUpperCase();
+  return ''
+    +'<div style="padding:24px 30px 0;">'
+      +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
+      +'<div style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:5px;">'+esc(c.name)+'</div>'
+      +'<div style="font-family:var(--mono);font-size:13px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+' · '+esc(meta)+'</div>'
+    +'</div>'
+    +'<div style="padding:16px 30px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
+      +'<div>'
+        +'<div style="height:44px;border-radius:6px;background:#fff;padding:2px;">'+code128SVG(code,40)+'</div>'
+        +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--panelInkSoft);margin-top:6px;">'+esc(code)+' · CODE 128</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:7px;">'
+        +'<button class="cc-act" onclick="ccAction(\'edit\')">แก้ไขข้อมูล</button>'
+        +(stats.isCustK?'<button class="cc-act" onclick="ccAction(\'boxes\')">ดูกล่องที่ยืมอยู่</button>':'')
+        +'<button class="cc-act" onclick="ccAction(\'print\')">พิมพ์บัตร</button>'
+        +'<button class="cc-act danger" onclick="ccAction(\'del\')"'+(stats.held?' disabled title="มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้"':'')+'>ลบออกจากระบบ</button>'
+      +'</div>'
+    +'</div>';
+}
+
+function openCustCard(id){
+  var c=S.customers[id];if(!c)return;
+  /* ลบตัวเดิมทิ้งก่อนเสมอ — เปิดซ้อนกันแล้ว rAF จะเดินสองตัวและบัตรเก่าค้างบนจอ */
+  closeCustCard();
+  var stats=custCardStats(c),kindMeta=ccKindMeta(c);
+
+  ccState.id=id;ccState.open=true;ccState.face='front';
+  var vw=window.innerWidth,vh=window.innerHeight;
+  ccState.s=Math.max(.5,Math.min(1,Math.min(vw*0.82/CC_CW,vh*0.6/CC_CH)));
+  ccState.x=(Math.random()-0.5)*40;
+  ccState.y=-(vh/2+CC_CH*ccState.s+140);
+  ccState.vx=(Math.random()-0.5)*1.1;ccState.vy=0;
+  ccState.rx=-56-Math.random()*14;ccState.ry=24+Math.random()*10;ccState.rz=-12-Math.random()*8;
+  ccState.wx=0.72;ccState.wy=-0.4;ccState.wz=0.18;
+  ccState.bounce=0;ccState.rest=false;ccState.t=0;
+
+  ccSetFace(false);
+  $('#ccFront').innerHTML=ccFrontHtml(c,stats,kindMeta);
+  $('#ccBack').innerHTML=ccBackHtml(c,stats);
+  var card=$('#ccCard');if(card)card.style.pointerEvents='none';   /* ตกอยู่ ยังจับพลิกไม่ได้ */
+
+  $('#custCardOverlay').style.display='block';
+  ccBoot();
+}
+window.openCustCard=openCustCard;
+
+function closeCustCard(){
+  ccState.open=false;
+  if(ccState.raf){cancelAnimationFrame(ccState.raf);ccState.raf=null;}
+  var ov=$('#custCardOverlay');if(ov)ov.style.display='none';
+}
+window.closeCustCard=closeCustCard;
+
+function ccSetFace(back){
+  ccState.face=back?'back':'front';
+  var flip=$('#ccFlip');if(flip)flip.style.transform='rotateY('+(back?180:0)+'deg)';
+}
+function ccToBack(){if(ccState.rest)ccSetFace(true);}
+function ccToFront(){ccSetFace(false);}
+window.ccToBack=ccToBack;window.ccToFront=ccToFront;
+
+function ccAction(kind){
+  var id=ccState.id,c=S.customers[id];if(!c)return;
+  if(kind==='edit'){closeCustCard();editCust(id);}
+  else if(kind==='boxes'){closeCustCard();goInventory({cust:id,status:'out',label:'กล่องของ '+(c.name||id)+' (ยืมอยู่)'});}
+  else if(kind==='print'){printCustCardWindow(id);}
+  else if(kind==='del'){closeCustCard();delCust(id);}
+}
+window.ccAction=ccAction;
+
+/* บัตรพิมพ์จริง ขนาด CR80 (86×54มม.) เหมือนบัตรพนักงาน — ไม่ใช่แค่ของประดับ */
+function printCustCardWindow(id){
+  var c=S.customers[id];if(!c)return;
+  var code=String(c.id).toUpperCase();
+  var meta=[c.phone||c.contact,c.email].filter(Boolean).join(' · ');
+  var kindTxt=ccKindMeta(c).text;
+  var w=window.open('','_blank','width=560,height=460');
+  if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
+  w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
+    +'<title>บัตรคู่ค้า '+esc(c.id)+'</title><style>'
+    +'@page{size:86mm 54mm;margin:0;}'
+    +'*{box-sizing:border-box;}'
+    +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
+    +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
+    +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
+    +'justify-content:space-between;}'
+    +'.top{display:flex;align-items:baseline;justify-content:space-between;gap:4mm;}'
+    +'.nm{font-size:13pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;}'
+    +'.mt{font-size:8pt;color:#666;margin-top:.6mm;}'
+    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;}'
+    +'.bc{text-align:center;}'
+    +'.bc svg{display:block;margin:0 auto;}'
+    +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
+    +'margin-top:1mm;text-align:center;}'
+    +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
+    +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
+    +'</style></head><body><div class="card">'
+    +'<div class="top"><div><div class="nm">'+esc(c.name||c.id)+'</div>'
+    +'<div class="mt">'+esc(kindTxt)+(meta?' · '+esc(meta):'')+'</div>'
+    +'</div><div class="brand">◈ Smart Tracking</div></div>'
+    +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
+    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</body></html>');
+  w.document.close();
+  w.focus();
+}
+window.printCustCardWindow=printCustCardWindow;
+
+function ccBoot(){
+  if(ccState.booted){ccState.raf=requestAnimationFrame(ccTick);return;}
+  ccState.booted=true;
+  window.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&ccState.open)closeCustCard();});
+  window.addEventListener('resize',function(){
+    if(!ccState.open)return;
+    var vw=window.innerWidth,vh=window.innerHeight;
+    ccState.s=Math.max(.5,Math.min(1,Math.min(vw*0.82/CC_CW,vh*0.6/CC_CH)));
+  });
+  ccState.raf=requestAnimationFrame(ccTick);
+}
+function ccTick(){ccState.raf=requestAnimationFrame(ccTick);ccStep();}
+function ccStep(){
+  var s=ccState;
+  if(!s.open)return;
+  s.t++;
+  if(s.rest){
+    /* พักแล้วยังลอยตัวเบา ๆ ตามลมหายใจ ไม่นิ่งสนิทจนดูเป็นภาพนิ่ง — ทิศทางเดียว
+       คือ "ยกขึ้นเบา ๆ" (target <= 0) เท่านั้น ไม่ให้แกว่งจมต่ำกว่าระดับพื้นแม้เสี้ยว
+       พิกเซลเดียว ไม่งั้นการ์ดจะดูจมพื้นเป็นจังหวะ ๆ ตอนพัก */
+    var t=s.t*0.01;
+    s.y+=(-Math.abs(Math.sin(t))*0.4-s.y)*0.04;
+    s.rx+=(Math.sin(t*0.7)*0.3-s.rx)*0.035;
+    s.ry+=(Math.sin(t*0.5)*0.5-s.ry)*0.035;
+    s.rz+=(0-s.rz)*0.05;
+  }else{
+    s.vy=s.vy*0.994+0.62;
+    s.y+=s.vy;
+    s.x+=s.vx;s.vx*=0.992;
+    s.rx+=s.wx;s.ry+=s.wy;s.rz+=s.wz;
+    s.wx*=0.993;s.wy*=0.993;s.wz*=0.993;
+    if(s.y>=0){
+      s.y=0;s.bounce++;
+      s.vy=-Math.abs(s.vy)*0.3;s.vx*=0.45;
+      s.wx*=0.22;s.wy*=0.22;s.wz*=0.3;
+      s.rx*=0.26;s.ry*=0.3;s.rz*=0.4;
+      if(Math.abs(s.vy)<3||s.bounce>=3){
+        s.rest=true;s.t=0;
+        var card=$('#ccCard');if(card)card.style.pointerEvents='auto';   /* นิ่งแล้ว จับพลิกได้ */
+      }
+    }
+  }
+  var card=$('#ccCard');
+  if(card)card.style.transform='translate('+s.x.toFixed(1)+'px,'+s.y.toFixed(1)+'px) scale('+s.s.toFixed(3)
+    +') rotateX('+s.rx.toFixed(2)+'deg) rotateY('+s.ry.toFixed(2)+'deg) rotateZ('+s.rz.toFixed(2)+'deg)';
+  var sh=$('#ccShadow');
+  if(sh){
+    var h=Math.max(0,-s.y),k=Math.max(0,1-h/620);
+    sh.style.transform='translateY('+(CC_CH*s.s*0.42).toFixed(1)+'px) scale('+(0.55+k*0.45).toFixed(3)+')';
+    sh.style.opacity=(0.06+k*0.30).toFixed(3);
+  }
+}
+
+/* ===== คลัง — แผงประตูคลัง (gate visualization) =====
+   คลิกแถวในตาราง "คลัง & ประตู" → เปิดแผงใหญ่แสดงประตูทุกบานของคลังนั้นเป็นแถว
+   ทิศทาง/สีของแต่ละประตูอ่านจาก gateTypeOfWh() ตัวเดียวกับที่ตารางใช้อยู่แล้ว
+   ชี้เมาส์ที่ประตูโชว์ 3 เหตุการณ์ล่าสุดจริงจาก S.events (ไม่ใช่ข้อมูลตัวอย่าง)
+   คลิกประตูเพื่อ "ปักหมุด" แผงประวัติแยก กรองช่วงเวลาได้ (วันนี้/7วัน/เดือน/ปี) */
+
+var WH_FILTER_DAYS={all:Infinity,day:1,week:7,month:30,year:365};
+var WH_DIR_META={
+  both:{bg:'var(--panelChipBg)',fg:'var(--panelInk)',t:'⇄ เข้า-ออก'},
+  'in':{bg:'var(--accent2)',fg:'var(--accentContrast)',t:'↓ ขาเข้า'},
+  out:{bg:'var(--neg)',fg:'#fff',t:'↑ ขาออก'}
+};
+
+var whp={id:null,pinnedGate:null,filter:'all',booted:false};
+
+/* ---- เหตุการณ์จริงของประตูนี้ ใหม่สุดก่อน ---- */
+function whGateEvents(whId,gate){
+  return S.events.filter(function(e){return e.wh===whId&&e.gate===gate;})
+    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
+}
+function whEventTimeStr(ts){var d=new Date(ts);return ddmmyyyy(d)+' '+pad(d.getHours(),2)+':'+pad(d.getMinutes(),2);}
+function whEventLabel(e){
+  if(e.dir==='out')return {t:'ส่งออก',who:e.customerName||custName(e.customer)||'-'};
+  if(e.dir==='in')return {t:'รับคืน',who:e.customerName||custName(e.customer)||'-'};
+  return {t:'รับเข้าใหม่',who:e.partner||'ผู้จัดหา'};
+}
+function whGateStats(w){
+  var gates=(w.gates||[]).slice().sort(function(a,b){return a-b;});
+  var todayStr=dstr(now());
+  return gates.map(function(g){
+    var dir=gateTypeOfWh(w,g);
+    var ev=whGateEvents(w.id,g);
+    var today=ev.filter(function(e){return (e.ts||'').slice(0,10)===todayStr;}).length;
+    return {n:g,dir:dir,total:ev.length,today:today,
+      log:ev.slice(0,3).map(function(e){var lb=whEventLabel(e);
+        return {time:whEventTimeStr(e.ts),text:esc(lb.t)+' · '+esc(e.tag)+' · '+esc(lb.who)};})};
+  });
+}
+function whPanelStats(w){
+  var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+  return {held:held,gates:whGateStats(w)};
+}
+/* เหตุผลที่ลบไม่ได้ (ถ้ามี) — คำนวณล่วงหน้าเพื่อ disable ปุ่มก่อนกดจริง แทนที่จะเปิดแล้วโดน toast ปัดกลับ */
+function whDeleteBlockReason(w){
+  var boxCount=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===w.id)||b.outWh===w.id;}).length;
+  if(boxCount)return 'มีกล่องผูกกับคลังนี้ '+boxCount+' ใบ';
+  var empCount=Object.values(S.employees||{}).filter(function(e){return e.wh===w.id;}).length;
+  if(empCount)return 'มีพนักงานสังกัดคลังนี้อยู่ '+empCount+' คน';
+  return '';
+}
+
+function whpDecoBanner(){
+  return '<div style="position:absolute;inset:0;background:rgba(8,8,10,.55);display:grid;place-items:center;pointer-events:none;border-radius:26px;">'
+    +'<div style="transform:rotate(-18deg);text-align:center;line-height:1;white-space:nowrap;">'
+    +'<div style="font-size:46px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">ปิดใช้งาน</div>'
+    +'<div style="font-size:20px;font-weight:700;letter-spacing:.18em;color:rgba(255,138,131,.9);margin-top:6px;">DEACTIVATED</div>'
+    +'</div></div>';
+}
+
+function whpGateTile(g){
+  var m=WH_DIR_META[g.dir]||WH_DIR_META.both;
+  var icon=g.dir==='out'?CC_ICONS.out:(g.dir==='in'?CC_ICONS['in']:CC_ICONS.both);
+  var logHtml=g.log.length
+    ?g.log.map(function(l){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:11.5px;border-top:.5px solid rgba(255,255,255,.12);"><span style="opacity:.6;font-family:var(--mono);flex:0 0 auto;">'+l.time+'</span><span style="text-align:right;">'+l.text+'</span></div>';}).join('')
+    :'<div style="font-size:11.5px;opacity:.6;padding:4px 0;">ยังไม่มีการเคลื่อนไหว</div>';
+  return '<div class="whp-gate" onclick="whpPin('+g.n+')">'
+    +'<div class="whp-log"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">ประตู '+g.n+' · '+m.t+'</div>'+logHtml+'</div>'
+    +'<div class="door" style="background:'+m.bg+';color:'+m.fg+';">'+icon+'</div>'
+    +'<div style="font-size:14px;font-weight:700;">ประตู '+g.n+'</div>'
+    +'<div style="font-size:11px;color:var(--panelInkSoft);margin-top:2px;">'+m.t+'</div>'
+    +'<div style="font-size:11px;margin-top:4px;">'+(g.today?('<b>'+g.today+'</b> ครั้งวันนี้'):'<span style="opacity:.55;">ไม่มีวันนี้</span>')+'</div>'
+  +'</div>';
+}
+
+function whpActionsHtml(w){
+  var reason=whDeleteBlockReason(w);
+  return ''
+    +'<button class="whp-btn dark" onclick="closeWhPanel()" title="ปิด"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
+    +'<button class="whp-btn light" onclick="whpAction(\'edit\')" title="แก้ไขคลัง"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></button>'
+    +'<button class="whp-btn light" onclick="whpAction(\'inv\')" title="ดูกล่องในคลังนี้"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></button>'
+    +'<button class="whp-btn red" onclick="whpAction(\'del\')" title="'+(reason?esc(reason):'ลบคลัง')+'"'+(reason?' disabled':'')+'><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></button>';
+}
+
+function whpRenderBody(w){
+  var stats=whPanelStats(w);
+  var ended=w.status==='inactive';
+  var stMeta=ended
+    ?{t:'ปิดใช้งาน',bg:'color-mix(in srgb,var(--neg) 24%,transparent)',fg:'#ff8a83'}
+    :{t:'ใช้งาน',bg:'rgba(255,255,255,.14)',fg:'var(--panelInk)'};
+  var gatesHtml=stats.gates.length
+    ?stats.gates.map(whpGateTile).join('')
+    :'<div style="padding:20px 4px;color:var(--panelInkSoft);font-size:13px;">คลังนี้ยังไม่ได้ตั้งค่าประตู</div>';
+  $('#whpBody').innerHTML=''
+    +'<div style="position:relative;padding:30px 32px 26px;">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">'
+        +'<div><div style="font-size:26px;font-weight:700;letter-spacing:-.02em;">'+esc(w.name)+'</div>'
+          +'<div style="font-family:var(--mono);font-size:14px;color:var(--panelInkSoft);margin-top:2px;">'+esc(w.id)+(w.area?' · '+esc(w.area):'')+'</div></div>'
+        +'<div style="display:flex;gap:22px;">'
+          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">ประตูทั้งหมด</div><div style="font-size:20px;font-weight:700;margin-top:2px;">'+nf(stats.gates.length)+'</div></div>'
+          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">กล่องในคลัง</div><div style="font-size:20px;font-weight:700;margin-top:2px;">'+nf(stats.held)+'</div></div>'
+          +'<div style="text-align:right;"><div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--panelInkSoft);">สถานะ</div><div style="display:inline-flex;margin-top:4px;padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:600;background:'+stMeta.bg+';color:'+stMeta.fg+';">'+stMeta.t+'</div></div>'
+        +'</div>'
+      +'</div>'
+      +'<div class="whp-gaterow" style="margin-top:22px;">'+gatesHtml+'</div>'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap;padding:16px 0 0;font-size:12.5px;color:var(--panelInkSoft);">'
+        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--accent2);margin-right:6px;"></span>ขาเข้า</span>'
+        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--neg);margin-right:6px;"></span>ขาออก</span>'
+        +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--panelInk);margin-right:6px;"></span>เข้า-ออกได้ทั้งสองทาง</span>'
+      +'</div>'
+    +'</div>'
+    +(ended?whpDecoBanner():'');
+  $('#whpActions').innerHTML=whpActionsHtml(w);
+}
+
+function openWhPanel(id){
+  var w=S.warehouses[id];if(!w)return;
+  /* ลบตัวเดิมทิ้งก่อนเสมอ เหมือนบัตรคู่ค้า/กล่อง 3D */
+  closeWhPanel();
+  whp.id=id;whp.pinnedGate=null;whp.filter='all';
+  whpRenderBody(w);
+  $('#whPanelOverlay').style.display='block';
+  whpBoot();
+}
+window.openWhPanel=openWhPanel;
+
+function closeWhPanel(){
+  var ov=$('#whPanelOverlay');if(ov)ov.style.display='none';
+  whp.id=null;whp.pinnedGate=null;
+  var p=$('#whpPinned');if(p)p.innerHTML='';
+}
+window.closeWhPanel=closeWhPanel;
+
+function whpPin(gateNum){
+  whp.pinnedGate=gateNum;whp.filter='all';
+  whpRenderPin();
+}
+window.whpPin=whpPin;
+function whpUnpin(){whp.pinnedGate=null;var p=$('#whpPinned');if(p)p.innerHTML='';}
+window.whpUnpin=whpUnpin;
+function whpSetFilter(mode){whp.filter=mode;whpRenderPin();}
+window.whpSetFilter=whpSetFilter;
+
+function whpRenderPin(){
+  var w=S.warehouses[whp.id];
+  var p=$('#whpPinned');if(!p)return;
+  if(!w||whp.pinnedGate==null){p.innerHTML='';return;}
+  var ev=whGateEvents(w.id,whp.pinnedGate);
+  var maxDays=WH_FILTER_DAYS[whp.filter];
+  if(maxDays==null)maxDays=Infinity;
+  var nowTs=now();
+  var rows=ev.filter(function(e){var days=(nowTs-new Date(e.ts))/86400000;return days<=maxDays;});
+  var inSum=0,outSum=0;
+  rows.forEach(function(e){if(e.dir==='out')outSum++;else inSum++;});
+  var dir=gateTypeOfWh(w,whp.pinnedGate);
+  var m=WH_DIR_META[dir]||WH_DIR_META.both;
+  var filters=[['all','ทั้งหมด'],['day','1 วัน'],['week','7 วัน'],['month','1 เดือน'],['year','1 ปี']];
+  var chipsHtml=filters.map(function(f){
+    var on=whp.filter===f[0];
+    return '<button class="whp-chip" style="background:'+(on?'var(--accent2)':'rgba(255,255,255,.1)')+';color:'+(on?'var(--accentContrast)':'inherit')+';" onclick="whpSetFilter(\''+f[0]+'\')">'+f[1]+'</button>';
+  }).join('');
+  var rowsHtml=rows.length?rows.map(function(e){
+    var lb=whEventLabel(e);
+    return '<div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px;flex:0 0 auto;">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;"><b style="font-size:13px;">'+esc(lb.who)+'</b><span style="font-family:var(--mono);font-size:11.5px;opacity:.6;white-space:nowrap;">'+whEventTimeStr(e.ts)+'</span></div>'
+      +'<div style="font-size:12px;opacity:.75;margin-top:3px;">'+esc(lb.t)+' · '+esc(e.tag)+'</div>'
+    +'</div>';
+  }).join(''):'<div style="opacity:.6;font-size:13px;text-align:center;padding:20px 0;">ไม่มีข้อมูลในช่วงนี้</div>';
+  p.innerHTML=''
+    +'<div class="whp-pin">'
+      +'<div style="padding:22px 24px 14px;flex:0 0 auto;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
+          +'<div><div style="font-size:11px;font-weight:600;letter-spacing:.1em;opacity:.6;">'+esc(w.name)+'</div>'
+            +'<div style="font-size:20px;font-weight:700;margin-top:4px;">ประตู '+whp.pinnedGate+' · '+m.t+'</div></div>'
+          +'<button onclick="whpUnpin()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;flex:0 0 auto;">'
+            +'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'
+        +'</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;">'+chipsHtml+'</div>'
+        +'<div style="font-size:12px;opacity:.65;margin-top:10px;">'+nf(rows.length)+' รายการ · เข้า '+nf(inSum)+' · ออก '+nf(outSum)+'</div>'
+      +'</div>'
+      +'<div style="flex:1 1 auto;overflow:auto;padding:2px 24px 20px;display:flex;flex-direction:column;gap:8px;">'+rowsHtml+'</div>'
+    +'</div>';
+}
+
+function whpAction(kind){
+  var id=whp.id,w=S.warehouses[id];if(!w)return;
+  if(kind==='edit'){closeWhPanel();editWh(id);}
+  else if(kind==='del'){closeWhPanel();delWh(id);}
+  else if(kind==='inv'){closeWhPanel();goInventory({wh:id,status:'warehouse',label:'กล่องในคลัง '+(w.name||id)});}
+}
+window.whpAction=whpAction;
+
+function whpBoot(){
+  if(whp.booted)return;whp.booted=true;
+  window.addEventListener('keydown',function(ev){
+    if(ev.key!=='Escape')return;
+    var ov=$('#whPanelOverlay');if(!ov||ov.style.display!=='block')return;
+    if(whp.pinnedGate!=null)whpUnpin();else closeWhPanel();
+  });
+}
+
 /* Real sign-out: clears the JWT this tab holds and sends the whole browser
    tab (not just the /legacy.html iframe) to /login. Referenced from the
    "ออกจากระบบ" button (which already defensively checks for it) but never
@@ -4753,32 +5301,10 @@ function saveContact(tag){
 window.saveContact=saveContact;
 
 
-/* ===== shared row action modal for master tables (box type / warehouse / customer) ===== */
-function openMasterRowActions(kind,id,title,canDelete){
-  /* 'btype' ไม่ผ่านทางนี้แล้ว — คลิกแถวประเภทกล่องเปิดกล่อง 3D หกด้าน
-     (openBtypeCube) แทน และปุ่มแก้ไข/ลบย้ายไปอยู่บนด้าน "ภาพรวม & จัดการ"
-     ของกล่องนั้น เหมือนที่พนักงานย้ายไป openEmpBadge ก่อนหน้านี้ */
-  var editFn={wh:'editWh',cust:'editCust',emp:'editEmp'}[kind];
-  var delFn={wh:'delWh',cust:'delCust',emp:'delEmp'}[kind];
-  var empLocked=kind==='emp'&&!isAdmin();
-  var actions=[];
-  if(empLocked){
-    openModal('<div class="mhead"><h3 class="mono">'+esc(title||id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-      +'<div class="mbody"><p class="muted small" style="margin:0;">ต้องมีสิทธิ์ผู้ดูแลระบบ (Admin) เท่านั้นจึงจะแก้ไข/ลบพนักงานได้</p></div>'
-      +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>');
-    return;
-  }
-  if(editFn)actions.push({label:'แก้ไข',cls:'btn ghost',fn:'closeModal();'+editFn+'(\''+esc(id)+'\')'});
-  if(delFn&&canDelete!==false)actions.push({label:'ลบ',cls:'btn red',fn:'closeModal();'+delFn+'(\''+esc(id)+'\')'});
-  openModal(
-    '<div class="mhead"><h3 class="mono">'+esc(title||id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody"><div style="display:flex;flex-direction:column;gap:8px;">'
-      +actions.map(function(a){return '<button class="'+a.cls+'" style="width:100%;justify-content:flex-start;" onclick="'+a.fn+'">'+a.label+'</button>';}).join('')
-    +'</div></div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
-  );
-}
-window.openMasterRowActions=openMasterRowActions;
+/* ป้ายอ้างอิงเก่า: "shared row action modal for master tables" ถูกถอดออกหมดแล้ว —
+   btype → openBtypeCube (กล่อง 3D หกด้าน), emp → openEmpBadge (บัตรพนักงานฟิสิกส์),
+   wh → openWhPanel (แผงประตูคลัง), cust → openCustCard (บัตรคู่ค้าฟิสิกส์) ทุกแถวใน
+   ตาราง Master เรียกฟังก์ชันเฉพาะของตัวเองตรง ๆ แล้ว จึงไม่มีฟังก์ชันกลางเหลืออยู่ */
 
 function markLost(tag){
   var b=S.boxes[tag];if(!b||b.status==='pending')return;
@@ -7307,7 +7833,7 @@ function renderSetup(){
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
     var gtHtml=[gtT.both?'<span>⇄ '+gtT.both+'</span>':'',gtT['in']?'<span style="color:var(--accentInk);">↓ เข้า '+gtT['in']+'</span>':'',gtT.out?'<span style="color:var(--neg);">↑ ออก '+gtT.out+'</span>':''].filter(Boolean).join(' · ');
-    return '<tr data-tag="'+esc(w.id)+'" class="row-click" onclick="openMasterRowActions(\'wh\',\''+esc(w.id)+'\',\''+esc(w.name+' ('+w.id+')')+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb wh-cb" data-tag="'+esc(w.id)+'"></td><td class="mono"><b>'+esc(w.id)+'</b></td><td>'+esc(w.name)+'</td><td>ประตู '+gr+'</td>'
+    return '<tr data-tag="'+esc(w.id)+'" class="row-click" onclick="openWhPanel(\''+esc(w.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb wh-cb" data-tag="'+esc(w.id)+'"></td><td class="mono"><b>'+esc(w.id)+'</b></td><td>'+esc(w.name)+'</td><td>ประตู '+gr+'</td>'
       +'<td class="r mono">'+nf((w.gates||[]).length)+'</td>'
       +'<td><span style="font-size:12px;font-weight:700;">'+gtHtml+'</span></td>'
       +'<td class="r mono">'+nf(held)+'</td>'
@@ -7326,7 +7852,7 @@ function renderSetup(){
   var cs=sortTable(csAll,uiSort.cust,'name');
   $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
-    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openMasterRowActions(\'cust\',\''+esc(c.id)+'\',\''+esc(c.name+' ('+c.id+')')+'\','+(held?'false':'true')+')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+esc(c.returnDate||'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
+    return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openCustCard(\''+esc(c.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+esc(c.returnDate||'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
