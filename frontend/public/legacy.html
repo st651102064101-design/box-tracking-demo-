@@ -2300,6 +2300,28 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #custCardOverlay .cc-act.danger{background:color-mix(in srgb,var(--neg) 20%,transparent);
   border-color:color-mix(in srgb,var(--neg) 40%,transparent);color:#ff8a83;}
 #custCardOverlay .cc-act[disabled]{opacity:.4;cursor:not-allowed;}
+/* ปุ่มจัดการฝั่งหลังบัตร — ย้ายมาไว้มุมขวาบน (ใต้ปุ่มปิด X ที่ลอยอยู่นอกบัตร) แทนคอลัมน์
+   ข้างบาร์โค้ดเดิม จึงย่อขนาดลงเป็น icon-only ทรงกลม ไม่ใช้ปุ่มยาวเต็มความกว้างแบบเดิม
+   (คลาส .cc-act ด้านบนยังใช้อยู่ที่อื่นไม่ได้ — ปุ่มชุดนี้ใช้คลาสใหม่ .cc-act-sm) */
+#custCardOverlay .cc-act-sm{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:var(--panelChipBg);border:1px solid var(--panelChipBorder);color:var(--panelInk);flex:0 0 auto;}
+#custCardOverlay .cc-act-sm.danger{background:color-mix(in srgb,var(--neg) 20%,transparent);
+  border-color:color-mix(in srgb,var(--neg) 40%,transparent);color:#ff8a83;}
+#custCardOverlay .cc-act-sm[disabled]{opacity:.35;cursor:not-allowed;}
+/* บาร์โค้ดท้ายบัตร — เต็มความกว้างบัตรจริง (ไม่มี padding ซ้าย/ขวา) ชิดขอบล่างสุด —
+   hover แล้วบาร์โค้ด fade ลง พร้อมโผล่ปุ่มพิมพ์ตรงกลางให้กดพิมพ์ได้ทันที */
+#custCardOverlay .cc-bc-wrap{position:relative;background:#fff;}
+#custCardOverlay .cc-bc-wrap .cc-bc-content{transition:opacity .2s;padding:10px 0 8px;}
+#custCardOverlay .cc-bc-wrap:hover .cc-bc-content{opacity:.12;}
+#custCardOverlay .cc-bc-print{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .2s;pointer-events:none;}
+#custCardOverlay .cc-bc-wrap:hover .cc-bc-print{opacity:1;pointer-events:auto;}
+#custCardOverlay .cc-bc-print button{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
+  border-radius:999px;background:var(--ink);color:var(--surface);font-size:13px;font-weight:700;
+  box-shadow:0 8px 22px rgba(0,0,0,.35);}
+/* แถบข้อความทะแยงตอนสถานะปิดใช้งานชั่วคราว/ระงับการใช้งาน — ใช้ร่วมทั้งด้านหน้า/หลังบัตร */
+#custCardOverlay .cc-status-banner{position:absolute;inset:0;background:rgba(8,8,10,.6);
+  display:grid;place-items:center;pointer-events:none;z-index:4;}
 </style>
 <div id="custCardOverlay">
   <div class="cc-backdrop" onclick="closeCustCard()"></div>
@@ -5223,11 +5245,19 @@ function ccKindMeta(c){
   return {text:'ลูกค้า',icon:'out'};
 }
 
-function ccBlockedBanner(){
-  return '<div style="position:absolute;inset:0;background:rgba(8,8,10,.6);display:grid;place-items:center;pointer-events:none;">'
+/* ป้ายทะแยงเต็มบัตร — โชว์ทั้งด้านหน้า/หลังบัตรเมื่อสถานะไม่ใช่ 'active' ปกติ กัน
+   ผู้ใช้เผลอนึกว่าคู่ค้ารายนี้ยังใช้งานได้อยู่จากการเห็นแค่ด้านเดียวของบัตร */
+var CC_STATUS_BANNER={
+  inactive:{th:'ปิดใช้งานชั่วคราว',en:'INACTIVE',enColor:'rgba(255,255,255,.85)'},
+  blocked: {th:'ระงับการใช้งาน', en:'BLOCKED', enColor:'rgba(255,138,131,.9)'}
+};
+function ccStatusBanner(c){
+  var b=CC_STATUS_BANNER[c.status];
+  if(!b)return '';
+  return '<div class="cc-status-banner">'
     +'<div style="transform:rotate(-22deg);text-align:center;line-height:1;white-space:nowrap;">'
-    +'<div style="font-size:52px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">ระงับการใช้งาน</div>'
-    +'<div style="font-size:23px;font-weight:700;letter-spacing:.18em;color:rgba(255,138,131,.9);margin-top:8px;">BLOCKED</div>'
+    +'<div style="font-size:44px;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);text-shadow:0 6px 20px rgba(0,0,0,.6);">'+esc(b.th)+'</div>'
+    +'<div style="font-size:20px;font-weight:700;letter-spacing:.18em;color:'+b.enColor+';margin-top:8px;">'+b.en+'</div>'
     +'</div></div>';
 }
 
@@ -5266,39 +5296,84 @@ function ccFrontHtml(c,stats,kindMeta){
       +'</div>'
       +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
     +'</div>'
-    +(c.status==='blocked'?ccBlockedBanner():'');
+    +ccStatusBanner(c);
 }
 
+/* ไอคอนล้วน ไม่มีข้อความ — วางเป็นแถวใต้ปุ่มปิด X (ลอยนอกบัตรมุมขวาบน) แทนคอลัมน์ยาว
+   ข้างบาร์โค้ดแบบเดิม ใช้ title สำหรับคำอธิบายตอน hover แทนป้ายข้อความ */
+function ccActSm(kind,icon,title,extra){
+  return '<button class="cc-act-sm'+(kind==='del'?' danger':'')+'" onclick="ccAction(\''+kind+'\')" title="'+esc(title)+'"'+(extra||'')+'>'+icon+'</button>';
+}
+var CC_ACT_ICONS={
+  edit:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  boxes:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
+  print:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="5"/><path d="M6 14H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2"/><rect x="6" y="13" width="12" height="8"/></svg>',
+  del:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
+};
+/* รายละเอียดคู่ค้าแบบเต็ม — เดิมหลังบัตรมีแค่ชื่อ/รหัส/เบอร์-อีเมลรวมบรรทัดเดียว ไม่พอ
+   ให้เห็นข้อมูลทั้งหมดโดยไม่ต้องกด "แก้ไขข้อมูล" ออกไปดู เพิ่มเป็นตารางฟิลด์ละบรรทัด
+   ข้ามฟิลด์ที่ไม่มีค่าไปเลย ไม่โชว์ "—" ให้รกบัตร */
+function ccDetailRows(c){
+  var items=[
+    ['ที่อยู่/สาขา',c.addr],
+    ['เบอร์โทร',c.phone||c.contact],
+    ['อีเมล',c.email],
+    ['เลขผู้เสียภาษี',c.taxId],
+    ['ผู้ติดต่อ',c.contactPerson],
+    ['วงเงินเครดิต',c.creditLimit?money(Number(c.creditLimit))+' ฿':''],
+    ['อัตราค่าปรับเกินกำหนด',c.fineRate?money(Number(c.fineRate))+' ฿/วัน':''],
+    ['ค่าปรับกล่องหาย',c.lostFine?money(Number(c.lostFine))+' ฿/ใบ':''],
+    ['ยืมได้กี่วัน',(c.returnDays!=null&&c.returnDays!=='')?nf(c.returnDays)+' วัน':'']
+  ].filter(function(r){return r[1];});
+  if(!items.length)return '<div style="font-size:12.5px;color:var(--panelInkSoft);">ยังไม่มีข้อมูลเพิ่มเติม — กด "แก้ไขข้อมูล" เพื่อกรอก</div>';
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">'
+    +items.map(function(r){
+      return '<div><div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--panelInkSoft);text-transform:uppercase;">'+esc(r[0])+'</div>'
+        +'<div style="font-size:13px;color:var(--panelInk);margin-top:2px;word-break:break-word;">'+esc(r[1])+'</div></div>';
+    }).join('')
+    +'</div>';
+}
 function ccBackHtml(c,stats){
-  var meta=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
   var code=String(c.id).toUpperCase();
   var fineBits=[];
   if(stats.overdue)fineBits.push('เกินกำหนด '+nf(stats.overdue)+' ใบ × '+money(Number(c.fineRate)||0)+' ฿/วัน = ~'+money(stats.overdueFine)+' ฿');
   if(stats.lostCount)fineBits.push('สูญหาย '+nf(stats.lostCount)+' ใบ × '+money(Number(c.lostFine)||0)+' ฿ = '+money(stats.lostFineTotal)+' ฿');
   var fineHtml=fineBits.length
-    ?'<div style="padding:12px 30px 0;"><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--panelInkSoft);text-transform:uppercase;">ค่าปรับปัจจุบัน (ประมาณ)</div>'
+    ?'<div style="margin-top:12px;"><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--panelInkSoft);text-transform:uppercase;">ค่าปรับปัจจุบัน (ประมาณ)</div>'
       +fineBits.map(function(t){return '<div style="font-size:12.5px;color:var(--panelInk);margin-top:3px;">'+esc(t)+'</div>';}).join('')
       +'<div style="font-size:14px;font-weight:700;margin-top:4px;color:#ff8a83;">รวม '+money(stats.overdueFine+stats.lostFineTotal)+' ฿</div></div>'
     :'';
   return ''
-    +'<div style="padding:24px 30px 0;">'
-      +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
-      +'<div style="font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:5px;">'+esc(c.name)+'</div>'
-      +'<div style="font-family:var(--mono);font-size:13px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+' · '+esc(meta)+'</div>'
+    +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
+      +'<div style="flex:0 0 auto;padding:20px 30px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">'
+        +'<div style="min-width:0;">'
+          +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
+          +'<div style="font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:4px;">'+esc(c.name)+'</div>'
+          +'<div style="font-family:var(--mono);font-size:12.5px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+'</div>'
+        +'</div>'
+        /* วางไว้ใต้ปุ่มปิด X (ลอยนอกบัตรมุมขวาบนเสมอ ดู ccStep) — แถวไอคอนนี้จึงอยู่ใต้มันพอดี */
+        +'<div style="display:flex;gap:8px;flex:0 0 auto;margin-top:2px;">'
+          +ccActSm('edit',CC_ACT_ICONS.edit,'แก้ไขข้อมูล')
+          +(stats.isCustK?ccActSm('boxes',CC_ACT_ICONS.boxes,'ดูกล่องที่ยืมอยู่'):'')
+          +ccActSm('print',CC_ACT_ICONS.print,'พิมพ์บัตร')
+          +ccActSm('del',CC_ACT_ICONS.del,stats.held?'มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้':'ลบออกจากระบบ',stats.held?' disabled':'')
+        +'</div>'
+      +'</div>'
+      +'<div style="flex:1;min-height:0;overflow-y:auto;padding:14px 30px 6px;">'
+        +ccDetailRows(c)
+        +fineHtml
+      +'</div>'
+      /* บาร์โค้ดชิดขอบล่างสุด กว้างเท่าตัวบัตรจริง (ไม่มี padding ซ้าย/ขวา) —
+         hover แล้ว fade บาร์โค้ดลง โผล่ปุ่มพิมพ์ตรงกลางแทน กดพิมพ์ได้ทันที */
+      +'<div class="cc-bc-wrap" style="flex:0 0 auto;" onclick="ccAction(\'print\')">'
+        +'<div class="cc-bc-content" style="text-align:center;">'
+          +code128SVG(code,42)
+          +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#666;margin-top:4px;">'+esc(code)+' · CODE 128</div>'
+        +'</div>'
+        +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บาร์โค้ด</button></div>'
+      +'</div>'
     +'</div>'
-    +fineHtml
-    +'<div style="padding:16px 30px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
-      +'<div>'
-        +'<div style="height:44px;border-radius:6px;background:#fff;padding:2px;">'+code128SVG(code,40)+'</div>'
-        +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--panelInkSoft);margin-top:6px;">'+esc(code)+' · CODE 128</div>'
-      +'</div>'
-      +'<div style="display:flex;flex-direction:column;gap:7px;">'
-        +'<button class="cc-act" onclick="ccAction(\'edit\')">แก้ไขข้อมูล</button>'
-        +(stats.isCustK?'<button class="cc-act" onclick="ccAction(\'boxes\')">ดูกล่องที่ยืมอยู่</button>':'')
-        +'<button class="cc-act" onclick="ccAction(\'print\')">พิมพ์บัตร</button>'
-        +'<button class="cc-act danger" onclick="ccAction(\'del\')"'+(stats.held?' disabled title="มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้"':'')+'>ลบออกจากระบบ</button>'
-      +'</div>'
-    +'</div>';
+    +ccStatusBanner(c);
 }
 
 function openCustCard(id){
