@@ -1891,7 +1891,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div id="empBadgeToast" style="position:absolute;left:50%;bottom:74px;transform:translateX(-50%);padding:11px 20px;border-radius:999px;background:rgba(29,29,31,.92);color:#f5f5f7;font-size:14px;font-weight:500;opacity:0;transition:opacity .25s ease;pointer-events:none;white-space:nowrap;"></div>
 
   <div id="empBadgeCard" style="position:absolute;left:0;top:0;width:408px;height:627px;transform-origin:50% 50%;will-change:transform;perspective:1600px;cursor:grab;">
-    <div style="position:absolute;left:50%;top:0;transform:translate(-50%,-96%);width:42px;height:56px;display:flex;flex-direction:column;align-items:center;">
+    <!-- คลิปเดิมลอยสูงเกินไป ห่างจากช่องบากบนบัตร (บรรทัดถัดไปในการ์ด) เห็นเป็นช่องว่างโหว่ ๆ
+         ก่อนถึงตัวบัตร — ขยับลงมาให้ปลายคลิปพอดีซ้อนกับช่องบากนั้นแทน เหมือนคลิปเสียบเข้าช่อง
+         จริง ๆ (ต้องปรับค่าคงที่ 44 ในฟิสิกส์ empBadgeStep/openEmpBadge ให้เท่ากับ 12 ตามไปด้วย
+         ไม่งั้นสายคล้องจะยังคำนวณจุดเกี่ยวไว้ที่ตำแหน่งเดิม แล้วภาพจะดูหลุดจากคลิปอีก) -->
+    <div style="position:absolute;left:50%;top:0;transform:translate(-50%,-22px);width:42px;height:56px;display:flex;flex-direction:column;align-items:center;">
       <div style="width:21px;height:21px;border:4px solid #b9b9c0;border-radius:50%;background:transparent;"></div>
       <div style="width:23px;height:37px;margin-top:-4px;border-radius:7px;background:linear-gradient(100deg,#f2f2f5,#b9b9c0 55%,#e8e8ec);border:.5px solid #a9a9b2;box-shadow:0 3px 7px rgba(0,0,0,.25);"></div>
     </div>
@@ -3924,7 +3928,7 @@ function openEmpBadge(id){
   var vw=window.innerWidth,vh=window.innerHeight;
   var CW=408,CH=627;
   empBadge.s=Math.max(.5,Math.min(1,(vh*0.78)/CH));
-  var half=(CH*empBadge.s)/2+44*empBadge.s;
+  var half=(CH*empBadge.s)/2+12*empBadge.s;   /* 12 = ระยะจากขอบบนบัตรถึงกึ่งกลางห่วงคลิปในซีเอสเอส (top:-22px ลบครึ่งความสูงห่วง 21px) */
   var anchorY=-Math.max(70,vh*0.16);
   empBadge.anchor={x:vw/2,y:anchorY};
   var total=Math.max(150,vh*0.5-anchorY-half);
@@ -4017,7 +4021,7 @@ function empBadgeStep(){
     eb.anchor.y=Math.min(eb.anchorTargetY,eb.anchor.y+eb.anchorV);
     if(eb.anchor.y>=eb.anchorTargetY)eb.anchorV=0;
   }
-  var s=eb.s,CH=627,half=(CH*s)/2+44*s;
+  var s=eb.s,CH=627,half=(CH*s)/2+12*s;   /* ต้องตรงกับค่าเดียวกันใน openEmpBadge() */
   /* Weight: 0.34 px/frame² made the card feel like it was falling through
      syrup. The card is ~4.7 px/mm here, so true 9.8 m/s² would be ~12.8
      px/frame² — far too violent for a UI — but 0.95 is heavy enough to read as
