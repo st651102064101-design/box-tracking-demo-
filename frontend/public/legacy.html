@@ -4576,16 +4576,6 @@ function btcLayout(dimCm){
      ไม่ใช่ 47%+sw/2 — เผลอใช้ขนาดเวทีแล้วเงาจะหล่นไปอยู่ใต้จอ */
   sh.style.top=(vh*0.47+btc.h/2-8)+'px';
 
-  /* แถบปุ่มเกาะข้างขวาของกล่อง ห่าง 20px — ใช้ max(w,d) เป็นครึ่งความกว้าง เพราะกล่องหมุน
-     รอบแกน Y ได้ ความกว้างที่เห็นจึงสลับระหว่างด้านกว้างกับด้านลึก ใช้ค่ามากสุดกันปุ่มถูกกล่องทับ
-     ตอนหมุน ถ้ากล่องใหญ่จนปุ่มตกขอบจอ ให้ถอยมาชิดขอบขวาจอแทน */
-  var rail=$('#btcActions');
-  if(rail){
-    var halfW=Math.max(btc.w,btc.d)/2;
-    var rx=vw/2+halfW+20;
-    if(rx+48>vw-8)rx=vw-56;
-    rail.style.transform='translate('+Math.round(rx)+'px,'+Math.round(Math.max(8,vh*0.47-btc.h/2))+'px)';
-  }
 }
 
 function btcRenderFaces(t,s,mat,dimCm){
@@ -4844,6 +4834,28 @@ function btcStep(){
     var k=Math.max(0,1-Math.abs(btc.y)/620);
     sh.style.opacity=(0.40*k).toFixed(3);
     sh.style.transform='translateX(-50%) scale('+(0.55+0.45*k).toFixed(3)+')';
+  }
+
+  /* แถบปุ่มขยับตามกล่องทุกเฟรม — ทั้งตอนร่วงลงมา ตอนเด้ง/ยุบ และตอนหมุน
+     กว้างที่ "เห็น" บนจอตอนหมุนรอบแกน Y = w*|cos ry| + d*|sin ry| (ค่าจริงตามมุมปัจจุบัน
+     ไม่ใช่ max(w,d) แบบเหมารวม ปุ่มจะได้ขยับเข้า-ออกตามกล่องจริง) — rotateX ไม่มีผลกับความ
+     กว้างบนจอ มีผลแค่ความสูง จึงคิดแยกกัน โดยความลึกหลังหมุนรอบ Y คือ w*|sin ry| + d*|cos ry|
+     ส่วนการยุบตอนกระแทกหมุนรอบก้นกล่อง ตำแหน่งกึ่งกลางจึงเลื่อนตามไปด้วย */
+  var rail=$('#btcActions');
+  if(rail){
+    var vwN=window.innerWidth,vhN=window.innerHeight;
+    var rxR=btc.rx*Math.PI/180,ryR=btc.ry*Math.PI/180;
+    var cRy=Math.abs(Math.cos(ryR)),sRy=Math.abs(Math.sin(ryR));
+    var halfW=(btc.w*cRy+btc.d*sRy)/2;
+    var depth=btc.w*sRy+btc.d*cRy;
+    var halfH=(btc.h*Math.abs(Math.cos(rxR))+depth*Math.abs(Math.sin(rxR)))/2;
+    var sqY=1-btc.squash*0.17;
+    var boxBottom=vhN*0.47+btc.y+btc.h/2;
+    var boxCenterY=boxBottom-(btc.h/2)*sqY;
+    var railX=vwN/2+halfW+20;
+    if(railX+48>vwN-8)railX=vwN-56;
+    var railY=Math.max(8,boxCenterY-halfH*sqY);
+    rail.style.transform='translate('+Math.round(railX)+'px,'+Math.round(railY)+'px)';
   }
 }
 
