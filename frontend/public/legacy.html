@@ -497,6 +497,16 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .tablehead h4{font-size:16px;font-weight:600;letter-spacing:-.02em;} .tablehead .spacer{flex:1;}
 .tablehead input,.tablehead select{width:auto;padding:9px 14px;font-size:14px;}
 .twrap{overflow:auto;max-height:64vh;}
+/* แถบแบ่งหน้าใต้ตาราง — ว่างเปล่า/ไม่มี border เมื่อแถวพอดีหน้าเดียว (ดู pagerBarHtml) */
+.pagerbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:.5px solid var(--line);}
+.pagerbar:empty{display:none;}
+.pagerbar .pg-info{font-size:12.5px;color:var(--muted);padding:12px 22px 12px 22px;}
+.pagerbar .pg-nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:10px 22px 12px;}
+.pagerbar .pg-nav button{min-width:32px;height:32px;padding:0 9px;border-radius:9px;
+  border:.5px solid var(--line2);background:var(--surface2);color:var(--ink);font-size:12.5px;font-weight:600;}
+.pagerbar .pg-nav button[disabled]{opacity:.38;cursor:not-allowed;}
+.pagerbar .pg-nav button.on{background:var(--ink);color:var(--surface);border-color:var(--ink);}
+.pagerbar .pg-nav span.pg-dots{color:var(--muted);font-size:12.5px;padding:0 2px;}
 table{border-collapse:collapse;width:100%;font-size:14px;}
 th,td{padding:13px 18px;text-align:left;border-bottom:.5px solid var(--line);white-space:nowrap;letter-spacing:-.01em;}
 th{position:sticky;top:0;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);
@@ -1406,6 +1416,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <tbody id="invBody"></tbody>
       </table>
     </div>
+    <div class="pagerbar" id="pagerInv"></div>
     <div class="bulkbar" id="bulkInv" style="display:none;">
       <span class="bcnt" id="bulkInvCnt"></span>
       <button class="btn sm accent" id="bulkInvRelocate"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> ย้ายพิกัดจัดเก็บ</button>
@@ -1598,6 +1609,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
         <tbody id="boxBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerBox"></div>
       <div class="bulkbar" id="bulkBox" style="display:none;">
         <span class="bcnt" id="bulkBoxCnt"></span>
         <button class="btn sm ghost" id="bulkBoxLabel">พิมพ์ฉลาก</button>
@@ -1633,6 +1645,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="btypeBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerBtype"></div>
       <div class="bulkbar" id="bulkBtype" style="display:none;">
         <span class="bcnt" id="bulkBtypeCnt"></span>
         <button class="btn sm red" id="bulkBtypeDel">ลบที่เลือก</button>
@@ -1681,6 +1694,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th class="r">จำนวนประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th>พื้นที่</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="whBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerWh"></div>
       <div class="bulkbar" id="bulkWh" style="display:none;">
         <span class="bcnt" id="bulkWhCnt"></span>
         <button class="btn sm red" id="bulkWhDel">ลบที่เลือก</button>
@@ -1733,6 +1747,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerCust"></div>
       <div class="bulkbar" id="bulkCust" style="display:none;">
         <span class="bcnt" id="bulkCustCnt"></span>
         <button class="btn sm red" id="bulkCustDel">ลบที่เลือก</button>
@@ -1804,6 +1819,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div>
       <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerEmp"></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
         <span class="bcnt" id="bulkEmpCnt"></span>
         <button class="btn sm red" id="bulkEmpDel">ลบที่เลือก</button>
@@ -1867,6 +1883,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <tbody id="auditBody"></tbody>
         </table>
       </div>
+      <div class="pagerbar" id="pagerAudit"></div>
     </div>
   </div>
 </section>
@@ -1905,9 +1922,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
           <div style="width:87px;height:13px;border-radius:999px;background:var(--line2);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
-          <button onclick="event.stopPropagation();closeEmpBadge()" title="ปิดบัตร" style="position:absolute;right:14px;top:14px;width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:5;">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
         </div>
 
         <div style="position:relative;padding:27px 30px 0;">
@@ -1979,9 +1993,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <div style="padding:22px 24px 0;display:flex;flex-direction:column;gap:10px;">
           <button id="empBadgeEditBtn" onclick="event.stopPropagation();empBadgeAction('edit')" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:15px 18px;border-radius:16px;background:var(--surface2);border:.5px solid var(--line);font-size:18px;font-weight:500;color:var(--ink);">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg>แก้ไขข้อมูลพนักงาน
-          </button>
-          <button id="empBadgeRecorderBtn" onclick="event.stopPropagation();empBadgeAction('recorder')" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:15px 18px;border-radius:16px;background:var(--surface2);border:.5px solid var(--line);font-size:18px;font-weight:500;color:var(--ink);">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>ตั้งให้เป็นผู้บันทึกคนปัจจุบัน
           </button>
           <button id="empBadgeCredBtn" onclick="event.stopPropagation();empBadgeAction('cred')" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:15px 18px;border-radius:16px;background:var(--surface2);border:.5px solid var(--line);font-size:18px;font-weight:500;color:var(--ink);">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span id="empBadgeCredLabel">ตั้งรหัสผ่าน</span>
@@ -2490,6 +2501,71 @@ function initSortToggles(){
   injectSortToggle('cntInv','inv');
   injectSortToggle('cntAudit','audit');
   Object.keys(uiSort).forEach(refreshSortToggleUI);
+}
+
+/* ===== แบ่งหน้าตาราง — ใช้ร่วมกันทุกตาราง (Audit Log, Inventory, Master ทั้ง 4) =====
+   เก็บ "หน้าปัจจุบัน" แยกตามตาราง (tableKey) ไม่ให้เปลี่ยนหน้าตารางหนึ่งไปกระทบอีกตาราง
+   pagerSlice() ต้องเรียกหลัง filter+sort เสร็จแล้วเสมอ ก่อน map เป็นแถว HTML — สไลซ์ทับ
+   array ที่กรอง/เรียงแล้ว ไม่ใช่ array ดิบ ไม่งั้นเลขหน้าจะไม่ตรงกับที่ผู้ใช้เห็นจริง
+   (ยิ่งสำคัญกับ Audit Log ที่กรองก่อนแล้วค่อยแบ่งหน้า ไม่งั้นหน้า 2 อาจโผล่แถวที่ถูกกรองทิ้งไปแล้ว) */
+var PAGE_SIZE=20;
+var pagerState={};
+/* เรียกจาก listener ของช่องค้นหา/ตัวกรองแต่ละตัว ก่อนเรียก render ซ้ำ — ค้นหาคำใหม่ต้องกลับไป
+   หน้า 1 เสมอ ไม่งั้นอาจค้างอยู่หน้า 5 ทั้งที่ผลค้นหาใหม่มีแค่ 2 หน้า (ดูว่างเปล่า) */
+function pagerReset(key){pagerState[key]=0;}
+function pagerSlice(key,list){
+  var total=list.length;
+  var totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  var p=pagerState[key]||0;
+  if(p>totalPages-1)p=totalPages-1;
+  if(p<0)p=0;
+  pagerState[key]=p;
+  var start=p*PAGE_SIZE;
+  return {rows:list.slice(start,start+PAGE_SIZE),pageIndex:p,totalPages:totalPages,total:total,start:start};
+}
+/* ทะเบียนฟังก์ชัน render ของแต่ละตาราง ให้ปุ่มเปลี่ยนหน้าเรียกซ้ำได้ตรงตาราง — btype/wh/cust/emp
+   ทั้งสี่อยู่ในฟังก์ชัน renderSetup() เดียวกัน (เรนเดอร์รวมทุกตาราง Master ในทีเดียว) */
+var PAGER_RENDER={
+  audit:function(){renderAuditLog();},
+  inv:function(){renderInventory();},
+  box:function(){renderSetup();},
+  btype:function(){renderSetup();},
+  wh:function(){renderSetup();},
+  cust:function(){renderSetup();},
+  emp:function(){renderSetup();}
+};
+function pagerGo(key,newPage){
+  pagerState[key]=Math.max(0,newPage);
+  var fn=PAGER_RENDER[key];if(fn)fn();
+}
+window.pagerGo=pagerGo;
+/* เลขหน้าที่จะโชว์เป็นปุ่ม: หน้าแรก, หน้าสุดท้าย, กับหน้าใกล้ ๆ ปัจจุบัน (±2) เสมอ — ใส่ null
+   แทนช่อง "…" ตรงที่ข้ามไป กัน Audit Log ที่มีเป็นร้อยหน้าไม่ให้ปุ่มพรืดยาวทั้งแถว */
+function pagerPageNums(pageIndex,totalPages){
+  var nums=[],last=-1;
+  for(var i=0;i<totalPages;i++){
+    if(i===0||i===totalPages-1||Math.abs(i-pageIndex)<=2){
+      if(last>=0&&i-last>1)nums.push(null);
+      nums.push(i);last=i;
+    }
+  }
+  return nums;
+}
+function pagerBarHtml(key,info){
+  if(info.total<=PAGE_SIZE)return '';   /* แถวพอดีหน้าเดียวอยู่แล้ว ไม่ต้องโชว์แถบแบ่งหน้า */
+  var from=info.total?info.start+1:0,to=Math.min(info.start+PAGE_SIZE,info.total);
+  var navBtns=pagerPageNums(info.pageIndex,info.totalPages).map(function(n){
+    if(n===null)return '<span class="pg-dots">…</span>';
+    return '<button class="'+(n===info.pageIndex?'on':'')+'" onclick="pagerGo(\''+key+'\','+n+')">'+(n+1)+'</button>';
+  }).join('');
+  return '<div class="pg-info">แสดง '+nf(from)+'–'+nf(to)+' จาก '+nf(info.total)+' รายการ · หน้า '+(info.pageIndex+1)+'/'+info.totalPages+'</div>'
+    +'<div class="pg-nav">'
+      +'<button '+(info.pageIndex<=0?'disabled':'')+' onclick="pagerGo(\''+key+'\',0)" title="หน้าแรก">«</button>'
+      +'<button '+(info.pageIndex<=0?'disabled':'')+' onclick="pagerGo(\''+key+'\','+(info.pageIndex-1)+')" title="ก่อนหน้า">‹</button>'
+      +navBtns
+      +'<button '+(info.pageIndex>=info.totalPages-1?'disabled':'')+' onclick="pagerGo(\''+key+'\','+(info.pageIndex+1)+')" title="ถัดไป">›</button>'
+      +'<button '+(info.pageIndex>=info.totalPages-1?'disabled':'')+' onclick="pagerGo(\''+key+'\','+(info.totalPages-1)+')" title="หน้าสุดท้าย">»</button>'
+    +'</div>';
 }
 /* generic comparator: dir 'desc' = latest/highest first, 'asc' = oldest/lowest first */
 function sortByDir(list,dir,getVal){
@@ -3972,7 +4048,6 @@ function openEmpBadge(id){
   var empAdmin=isAdmin(),self=currentEmp()&&currentEmp().id===id;
   var credLbl=$('#empBadgeCredLabel');if(credLbl)credLbl.textContent=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
   var editBtn=$('#empBadgeEditBtn');if(editBtn)editBtn.style.display=(empAdmin||self)?'flex':'none';
-  var recBtn=$('#empBadgeRecorderBtn');if(recBtn)recBtn.style.display=self?'none':'flex';
   var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'flex':'none';
   var delBtn=$('#empBadgeDelBtn');if(delBtn)delBtn.style.display=(empAdmin&&!self)?'flex':'none';
 
@@ -3989,9 +4064,6 @@ function empBadgeAction(kind){
   var id=empBadge.id;var e=S.employees[id];if(!e)return;
   closeEmpBadge();
   if(kind==='edit')editEmp(id);
-  /* same call the ผู้บันทึก dropdown makes — setCurrentUser takes the display
-     name, not the employee id, and handles the save()/re-render itself */
-  else if(kind==='recorder')setCurrentUser(e.name||id);
   else if(kind==='cred')setEmpCredentials(id,e.name||id,e.loginUsername||'');
   else if(kind==='print')printEmpBadge(id);
   else if(kind==='del')delEmp(id);
@@ -8046,7 +8118,8 @@ function renderSetup(){
     if(uiSort.box==='az'||uiSort.box==='za'){var m=uiSort.box==='za'?-1:1;return m*String(a.tag||'').localeCompare(String(b.tag||''),undefined,{numeric:true,sensitivity:'base'});}
     var dir=uiSort.box==='asc'?1:-1;var ta=new Date(a.regAt||a.lastSeenAt||0).getTime();var tb=new Date(b.regAt||b.lastSeenAt||0).getTime();if(ta!==tb)return dir*(ta-tb);return dir*(a.tag<b.tag?-1:1);
   });
-  $('#boxBody').innerHTML=bx.length?bx.map(function(b){
+  var pgBox=pagerSlice('box',bx);
+  $('#boxBody').innerHTML=pgBox.rows.length?pgBox.rows.map(function(b){
     var locOrCust=b.status==='out'?(esc(custName(b.customer))+'<div class="tag">'+esc(b.do||'')+'</div>'):b.status==='pending'?'<span class="muted">รอเข้าคลัง (Gate In)</span>':locShort(b.location);
     var lotExpCell=(b.lot||b.expiry)
       ?(b.lot?('<span class="mono">'+esc(b.lot)+'</span>'):'')+(b.expiry?((b.lot?'<div class="tag" style="margin-top:2px;">':'')+esc(b.expiry)+' '+expiryPill(b)+(b.lot?'</div>':'')):'')
@@ -8066,6 +8139,7 @@ function renderSetup(){
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอเข้าคลัง (Gate In) '+totalPending+'</span>':'');
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
+  $('#pagerBox').innerHTML=pagerBarHtml('box',pgBox);
 
   // box type table
   var sbt=val('schBtype').toLowerCase();
@@ -8073,12 +8147,16 @@ function renderSetup(){
     return (t.id+' '+(t.name||'')+' '+(t.unit||'')+' '+(t.dim||'')).toLowerCase().indexOf(sbt)>=0;
   }):bts;
   var btsSorted=sortTable(btsFiltered,uiSort.btype,'name');
-  $('#btypeBody').innerHTML=btsSorted.length?btsSorted.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
+  var pgBtype=pagerSlice('btype',btsSorted);
+  $('#btypeBody').innerHTML=pgBtype.rows.length?pgBtype.rows.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
     return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openBtypeCube(\''+esc(t.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
       +'<td class="r mono">'+used+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(8,'ยังไม่มีประเภทกล่อง');
-  $('#cntBtype').textContent=bts.length+' ประเภท';
+  /* นับจากรายการที่กรองแล้ว (btsFiltered) ไม่ใช่ bts ดิบทั้งหมด — เดิมนับ bts.length
+     ตัวเลขบนหัวตารางเลยไม่ตรงกับ "แสดง X–Y จาก Z" ที่แถบแบ่งหน้าด้านล่างบอกตอนพิมพ์ค้นหา */
+  $('#cntBtype').textContent=btsFiltered.length+' ประเภท';
   setupBulkTable('btypeBody','btype-cb','cbAllBtype','bulkBtype','bulkBtypeCnt');
+  $('#pagerBtype').innerHTML=pagerBarHtml('btype',pgBtype);
 
   // warehouse table
   var sbw=val('schWh').toLowerCase();
@@ -8087,7 +8165,8 @@ function renderSetup(){
   }):Object.values(S.warehouses);
   var whs=sortTable(whsAll,uiSort.wh,'name');
   var gtColors={'both':'var(--ink)','in':'var(--pos)','out':'var(--neg)'};
-  $('#whBody').innerHTML=whs.length?whs.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
+  var pgWh=pagerSlice('wh',whs);
+  $('#whBody').innerHTML=pgWh.rows.length?pgWh.rows.map(function(w){var held=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&(b.location||{}).wh===w.id;}).length;
     var gr=w.gates&&w.gates.length?(w.gates[0]+'–'+w.gates[w.gates.length-1]):'-';
     var gtT={both:0,'in':0,out:0};(w.gates||[]).forEach(function(g){gtT[gateTypeOfWh(w,g)]++;});
     var gtHtml=[gtT.both?'<span>⇄ '+gtT.both+'</span>':'',gtT['in']?'<span style="color:var(--accentInk);">↓ เข้า '+gtT['in']+'</span>':'',gtT.out?'<span style="color:var(--neg);">↑ ออก '+gtT.out+'</span>':''].filter(Boolean).join(' · ');
@@ -8101,6 +8180,7 @@ function renderSetup(){
   }).join(''):emptyRow(9,'ยังไม่มีคลัง');
   $('#cntWh').textContent=whs.length+' คลัง · '+allGateNums().length+' ประตู';
   setupBulkTable('whBody','wh-cb','cbAllWh','bulkWh','bulkWhCnt');
+  $('#pagerWh').innerHTML=pagerBarHtml('wh',pgWh);
 
   // customer table
   var sbc=val('schCust').toLowerCase();
@@ -8108,13 +8188,15 @@ function renderSetup(){
     return (c.id+' '+(c.name||'')+' '+(c.addr||'')+' '+(c.phone||c.contact||'')+' '+(c.email||'')+' '+(c.contactPerson||'')).toLowerCase().indexOf(sbc)>=0;
   }):Object.values(S.customers);
   var cs=sortTable(csAll,uiSort.cust,'name');
-  $('#custBody').innerHTML=cs.length?cs.map(function(c){var held=custHeldCount(c.id);
+  var pgCust=pagerSlice('cust',cs);
+  $('#custBody').innerHTML=pgCust.rows.length?pgCust.rows.map(function(c){var held=custHeldCount(c.id);
     var ctcTxt=[c.phone||c.contact,c.email].filter(Boolean).join(' · ')||'-';
     return '<tr data-tag="'+esc(c.id)+'" class="row-click" onclick="openCustCard(\''+esc(c.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb cust-cb" data-tag="'+esc(c.id)+'"></td><td class="mono"><b>'+esc(c.id)+'</b></td><td>'+esc(c.name)+'</td><td>'+CUST_KIND_LABEL(c.kind)+'</td><td>'+CUST_STATUS_LABEL(c.status)+'</td><td class="r mono">'+esc(c.returnDate||'-')+'</td><td>'+esc(c.addr||'-')+'</td><td>'+esc(ctcTxt)+'</td>'
       +'<td class="r mono">'+held+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(10,'ยังไม่มีลูกค้า');
   $('#cntCust').textContent=cs.length+' ราย';
   setupBulkTable('custBody','cust-cb','cbAllCust','bulkCust','bulkCustCnt');
+  $('#pagerCust').innerHTML=pagerBarHtml('cust',pgCust);
 
   // employee add-form: employees have no right to add/edit OTHER employees, so the whole
   // form is hidden unless you're admin — or you're a non-admin who tapped "แก้ไข" on your
@@ -8150,7 +8232,8 @@ function renderSetup(){
   }):Object.values(S.employees);
   var eps=sortTable(epsAll,uiSort.emp,'name');
   var meId=currentEmp()&&currentEmp().id;
-  $('#empBody').innerHTML=eps.length?eps.map(function(e){
+  var pgEmp=pagerSlice('emp',eps);
+  $('#empBody').innerHTML=pgEmp.rows.length?pgEmp.rows.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var isMe=meId&&e.id===meId;
@@ -8162,25 +8245,35 @@ function renderSetup(){
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
   if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
+  $('#pagerEmp').innerHTML=pagerBarHtml('emp',pgEmp);
 }
-$('#schBox').addEventListener('input',renderSetup);
-$('#filtBoxStatus').addEventListener('change',renderSetup);
+/* แต่ละช่องค้นหาในตาราง Master รีเซ็ตกลับหน้า 1 เฉพาะตารางของตัวเองเท่านั้น — renderSetup()
+   เรนเดอร์รวมกล่อง/ประเภทกล่อง/คลัง/ลูกค้า/พนักงานทั้งห้าตารางในทีเดียว ถ้ารีเซ็ตทุกตัวพร้อม
+   กันตอนพิมพ์ค้นหาช่องใดช่องหนึ่ง ตารางอื่นที่ผู้ใช้ตั้งใจเลื่อนดูหน้า 3 ค้างไว้จะกระเด้งกลับ
+   หน้า 1 ไปด้วยทั้งที่ไม่เกี่ยวกัน */
+function renderSetupResetBox(){pagerReset('box');renderSetup();}
+function renderSetupResetBtype(){pagerReset('btype');renderSetup();}
+function renderSetupResetWh(){pagerReset('wh');renderSetup();}
+function renderSetupResetCust(){pagerReset('cust');renderSetup();}
+function renderSetupResetEmp(){pagerReset('emp');renderSetup();}
+$('#schBox').addEventListener('input',renderSetupResetBox);
+$('#filtBoxStatus').addEventListener('change',renderSetupResetBox);
 /* box-type search â works by typing OR by scanning a barcode of the type code.
    autoScanBind runs the scanner-Thai auto-fix (autoFixScannerThai) before filtering,
    so a scanner firing while the OS keyboard is in Thai mode still finds the right row. */
-(function(){var e=$('#schBtype');if(e){e.addEventListener('input',renderSetup);autoScanBind(e,renderSetup);}})();
+(function(){var e=$('#schBtype');if(e){e.addEventListener('input',renderSetupResetBtype);autoScanBind(e,renderSetupResetBtype);}})();
 /* Apply the same "type or scan a barcode" search to EVERY master table.
    - Warehouse / Customer / Employee had no search box before â add a live 'input' filter.
    - All boxes (new + existing: Box list, Location, Audit, Inventory) also get the
      scanner-Thai auto-fix via autoScanBind, so a scanner firing while the OS keyboard
      is in Thai mode still finds the right row on any page. */
 (function(){
-  [['schWh',renderSetup],['schCust',renderSetup],['schEmp',renderSetup]].forEach(function(p){
+  [['schWh',renderSetupResetWh],['schCust',renderSetupResetCust],['schEmp',renderSetupResetEmp]].forEach(function(p){
     var el=$('#'+p[0]);if(el)el.addEventListener('input',p[1]);
   });
-  [['schWh',renderSetup],['schCust',renderSetup],['schEmp',renderSetup],
-   ['schBox',renderSetup],['schAudit',renderAuditLog],
-   ['schInv',renderInventory]].forEach(function(p){
+  [['schWh',renderSetupResetWh],['schCust',renderSetupResetCust],['schEmp',renderSetupResetEmp],
+   ['schBox',renderSetupResetBox],['schAudit',function(){pagerReset('audit');renderAuditLog();}],
+   ['schInv',function(){pagerReset('inv');renderInventory();}]].forEach(function(p){
     var el=$('#'+p[0]);if(el)autoScanBind(el,p[1]);
   });
 })();
@@ -8760,6 +8853,7 @@ function goInventory(opts) {
   invCustFilter   = opts.cust   || '';
   invWhFilter     = opts.wh     || '';
   invDoFilter     = opts.doNo   || '';
+  pagerReset('inv');
   /* sync status seg UI */
   $all('#invStatusSeg .sf-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.st === invStatusFilter);
@@ -9082,6 +9176,7 @@ function buildInvWhPills() {
 }
 function setInvWh(id) {
   invWhFilter = id;
+  pagerReset('inv');
   buildInvWhPills();
   renderInventory();
 }
@@ -9106,6 +9201,7 @@ function buildInvCustPills() {
 }
 function setInvCust(id) {
   invCustFilter = id;
+  pagerReset('inv');
   buildInvCustPills();
   renderInventory();
 }
@@ -9166,7 +9262,8 @@ function renderInventory() {
     return dir * (a.tag < b.tag ? -1 : 1);
   });
   if ($('#cntInv')) $('#cntInv').textContent = boxes.length + ' รายการ';
-  body.innerHTML = boxes.length ? boxes.map(function(b) {
+  var pg = pagerSlice('inv', boxes);
+  body.innerHTML = pg.rows.length ? pg.rows.map(function(b) {
     return '<tr data-tag="' + esc(b.tag) + '" style="cursor:pointer;" onclick="if(event.target.type!==\'checkbox\')openBoxActionModal(\'' + esc(b.tag) + '\')">'
       + '<td class="cb-td"><input type="checkbox" class="row-cb inv-cb" data-tag="' + esc(b.tag) + '"></td>'
       + '<td class="mono"><b>' + esc(b.tag) + '</b></td>'
@@ -9178,6 +9275,7 @@ function renderInventory() {
     + '</tr>';
   }).join('') : emptyRow(7, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
+  if ($('#pagerInv')) $('#pagerInv').innerHTML = pagerBarHtml('inv', pg);
 }
 
 /* ---- Summary (Group-by) view ---- */
@@ -9275,6 +9373,7 @@ window.toggleInvSumGroup = toggleInvSumGroup;
 
 document.getElementById('schInv').addEventListener('input', function(){
   invWhFilter = ''; invDoFilter = '';
+  pagerReset('inv');
   var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
   renderInventory();
 });
@@ -9299,6 +9398,7 @@ $all('#invStatusSeg .sf-btn').forEach(function(btn) {
     btn.classList.add('active');
     invStatusFilter = btn.dataset.st;
     invCustFilter = ''; invWhFilter = ''; invDoFilter = '';
+    pagerReset('inv');
     var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
     buildInvCustPills();
     renderInventory();
@@ -10270,6 +10370,7 @@ function renderAuditLog() {
     return dir * (ta - tb);
   });
   document.getElementById('cntAudit').textContent = logs.length + ' รายการ';
+  var pg = pagerSlice('audit', logs);
   var actionLabel = { CREATE: '<span class="pill ok">เพิ่ม</span>', UPDATE: '<span class="pill info">แก้ไข</span>',
     DELETE: '<span class="pill bad">ลบ</span>', GATE_OUT: '<span class="pill teal">Gate ออก</span>',
     GATE_IN: '<span class="pill ok">Gate เข้า</span>', RELOCATE: '<span class="pill teal">ย้ายตำแหน่ง</span>',
@@ -10278,7 +10379,7 @@ function renderAuditLog() {
     rfid_associate: '<span class="pill ok">ผูกแท็ก RFID</span>', rfid_replace: '<span class="pill info">เปลี่ยนแท็ก RFID</span>',
     rfid_detach: '<span class="pill teal">ถอดแท็ก RFID</span>', pin_set: '<span class="pill info">ตั้ง PIN</span>',
     pin_reset: '<span class="pill warn">รีเซ็ต PIN (OTP)</span>', credentials_set: '<span class="pill info">ตั้งบัญชีเว็บ</span>' };
-  document.getElementById('auditBody').innerHTML = logs.length ? logs.map(function(e) {
+  document.getElementById('auditBody').innerHTML = pg.rows.length ? pg.rows.map(function(e) {
     var before = auditObjText(e.before);
     var after = auditObjText(e.after);
     return '<tr>'
@@ -10302,11 +10403,12 @@ function renderAuditLog() {
         + esc(after.substring(0, 160)) + '</div></td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="7"><div class="empty"><div class="e-ic">∅</div>ยังไม่มี Audit Log</div></td></tr>';
+  document.getElementById('pagerAudit').innerHTML = pagerBarHtml('audit', pg);
 }
-document.getElementById('schAudit').addEventListener('input', renderAuditLog);
-document.getElementById('filtAuditModule').addEventListener('change', renderAuditLog);
-document.getElementById('filtAuditAction').addEventListener('change', renderAuditLog);
-document.getElementById('filtAuditUser').addEventListener('input', renderAuditLog);
+document.getElementById('schAudit').addEventListener('input', function(){pagerReset('audit');renderAuditLog();});
+document.getElementById('filtAuditModule').addEventListener('change', function(){pagerReset('audit');renderAuditLog();});
+document.getElementById('filtAuditAction').addEventListener('change', function(){pagerReset('audit');renderAuditLog();});
+document.getElementById('filtAuditUser').addEventListener('input', function(){pagerReset('audit');renderAuditLog();});
 
 /* ===== EXCEL EXPORT HELPERS ===== */
 /* wraps a tag as *TAG* -- Code 39 barcode-font delimiters */
