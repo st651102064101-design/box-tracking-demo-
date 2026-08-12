@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.ToneGenerator
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -353,6 +354,51 @@ class RfidReaderController(private val context: Context) :
 
     private fun isConnected(): Boolean = reader?.isConnected == true
 
+    /** DataWedge profile this app owns — see [ensureDataWedgeProfile]. */
+    private val dataWedgeProfileName = "SmartTracePDA"
+    private var dataWedgeProfileEnsured = false
+
+    /**
+     * Creates (idempotent) and associates a DataWedge profile with this
+     * app's package before the first [setBarcodeScannerEnabled] call.
+     *
+     * Without an app-owned profile, this app runs under DataWedge's
+     * "Profile0" — the catch-all default for unassociated apps — where
+     * runtime plugin toggles observably don't stick (confirmed on-device:
+     * DISABLE_PLUGIN broadcasts are received and processed by DataWedge's
+     * ScanningService, yet the physical imager keeps arming/illuminating
+     * on trigger pull). Giving the app its own profile is what every
+     * DataWedge integration guide assumes as the starting point; Profile0
+     * is meant to be left alone.
+     *
+     * The KEYSTROKE plugin is left enabled here so barcode mode's existing
+     * scan-into-focused-textfield capture (ScanCapture/scan_speed_detector)
+     * keeps working exactly as it did under Profile0 — only the BARCODE
+     * (decoder/imager) plugin's enabled state is what the mode toggle now
+     * actually controls per scan.
+     */
+    private fun ensureDataWedgeProfile() {
+        if (dataWedgeProfileEnsured) return
+        dataWedgeProfileEnsured = true
+
+        sendDataWedge("com.symbol.datawedge.api.CREATE_PROFILE", dataWedgeProfileName)
+
+        val appConfig = Bundle()
+        appConfig.putString("PACKAGE_NAME", context.packageName)
+        appConfig.putStringArray("ACTIVITY_LIST", arrayOf("*"))
+
+        val profileConfig = Bundle()
+        profileConfig.putString("PROFILE_NAME", dataWedgeProfileName)
+        profileConfig.putString("PROFILE_ENABLED", "true")
+        profileConfig.putString("CONFIG_MODE", "UPDATE")
+        profileConfig.putParcelableArray("APP_LIST", arrayOf(appConfig))
+        sendDataWedgeConfig(profileConfig)
+
+        val keystrokeParams = Bundle()
+        keystrokeParams.putString("keystroke_output_enabled", "true")
+        sendDataWedgePluginConfig("KEYSTROKE", keystrokeParams)
+    }
+
     /**
      * Arms/disarms the handheld's *barcode* imager (laser/LED/beep) via
      * DataWedge's public intent API — separate from the RFID antenna, which
@@ -362,12 +408,22 @@ class RfidReaderController(private val context: Context) :
      * left DataWedge free to also decode a barcode (light/beep and all) on
      * the same trigger pull, and vice versa in barcode mode.
      *
+     * Targets this app's own profile (see [ensureDataWedgeProfile]) via
+     * SET_CONFIG rather than only the quick SCANNERINPUTPLUGIN command —
+     * the latter alone was observed not to stick while running under
+     * Profile0. Both are sent; SCANNERINPUTPLUGIN is a harmless no-op once
+     * the profile-scoped config is what's actually taking effect.
+     *
      * No EMDK license needed — DataWedge ships pre-installed on Zebra
-     * devices and listens for this broadcast system-wide, keyed by intent
-     * action + extra name (com.symbol.datawedge.api.ACTION /
-     * SCANNERINPUTPLUGIN), regardless of which DataWedge profile is active.
+     * devices and listens for these broadcasts system-wide.
      */
     private fun setBarcodeScannerEnabled(enabled: Boolean) {
+        ensureDataWedgeProfile()
+
+        val barcodeParams = Bundle()
+        barcodeParams.putString("scanner_input_enabled", if (enabled) "true" else "false")
+        sendDataWedgePluginConfig("BARCODE", barcodeParams)
+
         val intent = Intent()
         intent.action = "com.symbol.datawedge.api.ACTION"
         intent.putExtra(
@@ -375,6 +431,34 @@ class RfidReaderController(private val context: Context) :
             if (enabled) "ENABLE_PLUGIN" else "DISABLE_PLUGIN"
         )
         context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedge(extraName: String, extraValue: String) {
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra(extraName, extraValue)
+        context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedgeConfig(profileConfig: Bundle) {
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra("com.symbol.datawedge.api.SET_CONFIG", profileConfig)
+        context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedgePluginConfig(pluginName: String, params: Bundle) {
+        val pluginConfig = Bundle()
+        pluginConfig.putString("PLUGIN_NAME", pluginName)
+        pluginConfig.putString("RESET_CONFIG", "true")
+        pluginConfig.putBundle("PARAM_LIST", params)
+
+        val profileConfig = Bundle()
+        profileConfig.putString("PROFILE_NAME", dataWedgeProfileName)
+        profileConfig.putString("PROFILE_ENABLED", "true")
+        profileConfig.putString("CONFIG_MODE", "UPDATE")
+        profileConfig.putParcelable("PLUGIN_CONFIG", pluginConfig)
+        sendDataWedgeConfig(profileConfig)
     }
 
     /**

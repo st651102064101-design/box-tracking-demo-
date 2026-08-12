@@ -146,6 +146,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         rfid.stopInventory();
         break;
       case AppLifecycleState.resumed:
+        // DataWedge re-asserts its own default (enabled) scanner state on
+        // some devices whenever the foreground app regains focus, silently
+        // undoing setScanInputMode's earlier disable — reapply it every
+        // time this app comes back, not just when the toggle itself moves.
+        rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+        break;
       case AppLifecycleState.detached:
         break;
     }
