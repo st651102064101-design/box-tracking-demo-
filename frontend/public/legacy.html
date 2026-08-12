@@ -7006,25 +7006,51 @@ function applySidebarCollapsed(on){
 function toggleSidebarCollapse(){applySidebarCollapsed(!sidebarCollapsedPref());}
 window.toggleSidebarCollapse=toggleSidebarCollapse;
 applySidebarCollapsed(sidebarCollapsedPref());
+/* ดาวน์โหลดข้อมูลสำรอง — เดิมเป็นปุ่มแยกให้กดเอง แต่ตอนนี้ไม่มีปุ่มนั้นแล้ว
+   (ผู้ใช้ขอให้บังคับสำรองข้อมูลอัตโนมัติทุกครั้งก่อนลบแทน) ฟังก์ชันนี้จึงเหลือ
+   ไว้เป็น step ภายในของ resetAll()/clearAllExceptEmployees() เท่านั้น —
+   ไม่มี toast/closeModal ของตัวเอง เพราะ flow ที่เรียกมันจะจัดการต่อเอง */
 function doBackup(){var blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='smarttrace-p1-'+dstr()+'.json';a.click();closeModal();toast('ดาวน์โหลดแล้ว');}
+  a.href=URL.createObjectURL(blob);a.download='smarttrace-p1-'+dstr()+'.json';a.click();}
 window.doBackup=doBackup;
-function resetAll(){confirmA('ล้างข้อมูลทั้งหมด?','ลบทุกอย่างถาวร','ล้าง',true).then(function(ok){if(!ok)return;
+/* นำเข้าข้อมูลจากไฟล์สำรอง (JSON) — แทนที่ข้อมูลทั้งระบบด้วยไฟล์ที่เลือก
+   เติม key ที่ขาดด้วยโครงว่างเริ่มต้น กันไฟล์สำรองรุ่นเก่าที่ไม่มี key ใหม่ๆ ทำให้พัง */
+function doImportJSON(file){
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(){
+    var data;
+    try{data=JSON.parse(reader.result);}catch(e){return toast('นำเข้าไม่สำเร็จ','ไฟล์ไม่ใช่ JSON ที่ถูกต้อง','err');}
+    if(!data||typeof data!=='object'||Array.isArray(data))return toast('นำเข้าไม่สำเร็จ','รูปแบบข้อมูลในไฟล์ไม่ตรงกับข้อมูลระบบ','err');
+    confirmA('นำเข้าข้อมูลจากไฟล์นี้?','ข้อมูลปัจจุบันทั้งหมดในระบบจะถูกแทนที่ด้วยข้อมูลในไฟล์นี้ทันที','นำเข้า',true).then(function(ok){
+      if(!ok)return;
+      var blank={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
+      S=Object.assign(blank,data);
+      save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();
+    });
+  };
+  reader.readAsText(file);
+}
+window.doImportJSON=doImportJSON;
+function resetAll(){confirmA('ล้างข้อมูลทั้งหมด?','ลบทุกอย่างถาวร — ระบบจะดาวน์โหลดไฟล์สำรองให้อัตโนมัติก่อนลบ','ล้าง',true).then(function(ok){if(!ok)return;
+  doBackup();
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
-  save();closeModal();toast('ล้างข้อมูลแล้ว');renderAll();});}
+  save();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว');renderAll();});}
 window.resetAll=resetAll;
 
 /* ล้างข้อมูลทั้งหมด "ยกเว้นพนักงาน" — เหมือน resetAll() ทุกอย่าง แต่เก็บ
    S.employees และตัวนับ seq.emp ไว้ (ทะเบียนพนักงานเป็นข้อมูลที่ตั้งไว้ล่วงหน้า
    แยกจากข้อมูลธุรกรรม/สต็อกที่หมุนเวียนทุกวัน — ผู้ใช้ไม่ต้องมาลงทะเบียนพนักงาน
-   ใหม่ทุกครั้งที่ล้างข้อมูลทดสอบ) */
+   ใหม่ทุกครั้งที่ล้างข้อมูลทดสอบ)
+   บังคับดาวน์โหลดข้อมูลสำรอง (JSON) ก่อนลบทุกครั้ง — กันพลาดกดลบแล้วกู้คืนไม่ได้ */
 function clearAllExceptEmployees(){
-  confirmA('ล้างข้อมูลทั้งหมด (ยกเว้นพนักงาน)?','ลบกล่อง/ลูกค้า/คลัง/ประวัติ/สต็อกถาวร — เก็บทะเบียนพนักงานไว้','ล้าง',true).then(function(ok){
+  confirmA('ล้างข้อมูลทั้งหมด (ยกเว้นพนักงาน)?','ลบกล่อง/ลูกค้า/คลัง/ประวัติ/สต็อกถาวร — เก็บทะเบียนพนักงานไว้ — ระบบจะดาวน์โหลดไฟล์สำรองให้อัตโนมัติก่อนลบ','ล้าง',true).then(function(ok){
     if(!ok)return;
+    doBackup();
     var keepEmployees=S.employees,keepEmpSeq=(S.seq||{}).emp||0;
     S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},
       seq:{do:0,emp:keepEmpSeq},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:keepEmployees,locations:{}};
-    save();closeModal();toast('ล้างข้อมูลแล้ว','เก็บข้อมูลพนักงานไว้');renderAll();
+    save();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว · เก็บข้อมูลพนักงานไว้');renderAll();
   });
 }
 window.clearAllExceptEmployees=clearAllExceptEmployees;
@@ -7033,7 +7059,9 @@ function openSystemSettingsModal(){
   var h='<div class="mhead"><h3>ตั้งค่าระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
     +'<div class="c2-label">ข้อมูล</div>'
-    +'<button class="btn ghost" style="width:100%;justify-content:flex-start;margin-bottom:18px;" onclick="doBackup()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลดข้อมูล (JSON)</button>'
+    +'<input type="file" id="importJsonFile" accept="application/json,.json" style="display:none;" onchange="doImportJSON(this.files[0]);this.value=\'\';">'
+    +'<button class="btn ghost" style="width:100%;justify-content:flex-start;margin-bottom:18px;" onclick="document.getElementById(\'importJsonFile\').click()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9M7.5 13.5 12 9l4.5 4.5M4 4h16"/></svg></span> นำเข้าข้อมูล (JSON)</button>'
+    +'<p class="muted small" style="margin:-12px 0 18px;">ไม่มีปุ่มดาวน์โหลดสำรองแยกแล้ว — ระบบจะดาวน์โหลดไฟล์สำรองให้อัตโนมัติทุกครั้งก่อนล้างข้อมูลด้านล่าง</p>'
     +'<div class="c2-label" style="color:var(--neg);">Danger Zone</div>'
     +'<p class="muted small" style="margin:4px 0 12px;">ลบข้อมูลถาวร — ใช้เฉพาะตอนต้องการล้างข้อมูลทดสอบ/เริ่มใหม่เท่านั้น</p>'
     +'<button class="btn red" style="width:100%;justify-content:flex-start;" onclick="clearAllExceptEmployees()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg></span> ล้างข้อมูลทั้งหมด (เก็บพนักงานไว้)</button>'
