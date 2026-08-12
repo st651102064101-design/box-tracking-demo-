@@ -1907,6 +1907,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div style="position:absolute;left:0;right:0;bottom:26px;text-align:center;color:rgba(255,255,255,.72);font-size:12.5px;pointer-events:none;">ลากบัตรเล่นได้ · เอาเมาส์ชี้เพื่อพลิกดูเมนูจัดการ · กด Esc หรือคลิกพื้นหลังเพื่อปิด</div>
   <div id="empBadgeToast" style="position:absolute;left:50%;bottom:74px;transform:translateX(-50%);padding:11px 20px;border-radius:999px;background:rgba(29,29,31,.92);color:#f5f5f7;font-size:14px;font-weight:500;opacity:0;transition:opacity .25s ease;pointer-events:none;white-space:nowrap;"></div>
 
+  <!-- ปุ่มปิดยึดมุมขวาบนของจอเสมอ ไม่ผูกกับตัวการ์ด — เดิมปุ่มปิดของด้านหลังอยู่ในการ์ด
+       ที่แกว่งไปมาตามฟิสิกส์สายคล้อง ปุ่มเลยลอยตามการ์ดไปทั่วจอ กดยากเวลาการ์ดแกว่งอยู่
+       ย้ายออกมาเป็น element แยกลอยนิ่งมุมจอ ตรงกับแพตเทิร์นเดียวกับกล่อง 3D/แผงคลัง/บัตรคู่ค้า -->
+  <button onclick="closeEmpBadge()" title="ปิดบัตร" style="position:absolute;right:22px;top:22px;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+
   <div id="empBadgeCard" style="position:absolute;left:0;top:0;width:408px;height:627px;transform-origin:50% 50%;will-change:transform;perspective:1600px;cursor:grab;">
     <!-- คลิปเดิมลอยสูงเกินไป ห่างจากช่องบากบนบัตร (บรรทัดถัดไปในการ์ด) เห็นเป็นช่องว่างโหว่ ๆ
          ก่อนถึงตัวบัตร — ขยับลงมาให้ปลายคลิปพอดีซ้อนกับช่องบากนั้นแทน เหมือนคลิปเสียบเข้าช่อง
@@ -1982,9 +1989,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);display:flex;flex-direction:column;">
         <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
           <div style="width:87px;height:13px;border-radius:999px;background:var(--line2);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);"></div>
-          <button onclick="event.stopPropagation();closeEmpBadge()" title="ปิดบัตร" style="position:absolute;left:14px;top:14px;width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:5;">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
         </div>
 
         <div style="padding:26px 30px 0;">
