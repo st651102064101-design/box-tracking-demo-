@@ -65,11 +65,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _scanDetector.reset();
     if (raw.trim().isEmpty) return;
     final parsed = ConnectQr.parse(raw);
+    if (parsed == null) {
+      setState(() =>
+          _scanError = 'บาร์โค้ดนี้ไม่ใช่บาร์โค้ดเชื่อมต่อระบบ ลองสแกนใหม่อีกครั้ง');
+      return;
+    }
     setState(() {
-      if (parsed == null) {
-        _scanError = 'บาร์โค้ดนี้ไม่ใช่บาร์โค้ดเชื่อมต่อระบบ ลองสแกนใหม่อีกครั้ง';
-        return;
-      }
       _scanError = null;
       _url.text = parsed.url;
       if (parsed.pass != null) {
@@ -77,6 +78,19 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
         _showAccount = true;
       }
     });
+    // A successful scan supplies everything "ถัดไป" needs — no reason to
+    // make the operator tap it separately.
+    _connectNow();
+  }
+
+  void _connectNow() {
+    final c = context.read<AppController>();
+    if (c.prefs.deviceModel.isEmpty || c.busy) return;
+    c.completeDeviceSetup(
+      baseUrl: _url.text,
+      username: _account.text,
+      password: _password.text,
+    );
   }
 
   /// Used to auto-pick the Zebra profile for every device this build ran
@@ -144,6 +158,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final themeCtrl = context.watch<ThemeController>();
     final bottom = MediaQuery.of(context).padding.bottom;
     final canSave = c.prefs.deviceModel.isNotEmpty;
+    // Nothing scanned yet this session — "ถัดไป" falls back to offline use
+    // instead of trying (and failing) to save an empty server URL.
+    final hasScannedUrl = _url.text.trim().isNotEmpty;
     // A device being provisioned for the first time has nowhere to go back to.
     final canLeave = c.deviceConfigured;
 
@@ -256,9 +273,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                       // Off-screen but focused so the scanner's keyboard-wedge
                       // input lands here — the panel above only ever shows the
                       // resulting message/URL, never a field to type into.
-                      SizedBox(
-                        height: 0,
-                        width: 0,
+                      // Offstage (not a 0x0 SizedBox) so the TextField still
+                      // gets normal layout constraints — a zero-size text
+                      // field crashes when this Column's width is recomputed
+                      // mid-scroll (e.g. AutoHideHeader collapsing).
+                      Offstage(
+                        offstage: true,
                         child: TextField(
                           controller: _scanBuffer,
                           focusNode: _urlFocus,
@@ -337,15 +357,19 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             child: PrimaryButton(
               label: c.busy
                   ? loc.t('กำลังเชื่อมต่อ…')
-                  : loc.t('บันทึกและเริ่มใช้งาน'),
+                  : hasScannedUrl
+                      ? loc.t('บันทึกและเริ่มใช้งาน')
+                      : loc.t('ใช้งานแบบ offline'),
               trailing: Icon(Icons.arrow_forward,
                   size: 19, color: canSave ? C.limeDeep : C.faint),
               onTap: (canSave && !c.busy)
-                  ? () => c.completeDeviceSetup(
-                        baseUrl: _url.text,
-                        username: _account.text,
-                        password: _password.text,
-                      )
+                  ? () => hasScannedUrl
+                      ? c.completeDeviceSetup(
+                          baseUrl: _url.text,
+                          username: _account.text,
+                          password: _password.text,
+                        )
+                      : c.useOffline()
                   : null,
             ),
           ),

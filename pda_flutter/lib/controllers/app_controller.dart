@@ -1001,6 +1001,16 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _connectReader();
   }
 
+  /// device_setup_screen.dart's bottom button falls back to this when the
+  /// operator hasn't scanned a connect barcode — skips the network call
+  /// [completeDeviceSetup] would attempt against an empty base URL, and
+  /// finishes setup straight away. The runtime already tolerates a
+  /// terminal with no working connection (offline PIN login, outbox queue),
+  /// so there's nothing else this needs to set up.
+  void useOffline() {
+    finishDeviceSetup();
+  }
+
   void setDeviceModel(String id) {
     prefs.deviceModel = id;
     notifyListeners();
