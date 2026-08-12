@@ -81,8 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
       validate: (entered) async =>
           entered == firstPin ? null : 'รหัสไม่ตรงกัน ลองใหม่',
     );
-    if (confirm == null || confirm.pin == null)
+    if (confirm == null || confirm.pin == null) {
       return; // cancelled — nothing saved
+    }
     if (!mounted) return;
     try {
       await c.api.setEmployeePin(e.id, firstPin);

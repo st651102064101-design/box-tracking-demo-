@@ -574,7 +574,7 @@ class _ScanScreenState extends State<ScanScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 2),
                         decoration: BoxDecoration(
-                            color: C.limeDeep.withOpacity(0.16),
+                            color: C.limeDeep.withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(999)),
                         child: Text('${c.queue.length}',
                             style: TextStyle(

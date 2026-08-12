@@ -83,8 +83,9 @@ class ApiClient {
   /// the retry picks up the *new* token instead of replaying the stale one.
   Future<dynamic> _send(Future<http.Response> Function() send) async {
     final r = await send().timeout(_timeout);
-    if (r.statusCode != 401 || _refreshing || reauthenticate == null)
+    if (r.statusCode != 401 || _refreshing || reauthenticate == null) {
       return _decode(r);
+    }
 
     _refreshing = true;
     bool refreshed;

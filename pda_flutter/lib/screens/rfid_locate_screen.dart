@@ -193,8 +193,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // this screen is gone must not invoke a closure that calls setState on
     // an unmounted State.
     final c = context.read<AppController>();
-    if (identical(c.systemBackOverride, _handleBack))
+    if (identical(c.systemBackOverride, _handleBack)) {
       c.systemBackOverride = null;
+    }
     c.rfidLocateSweepStep = false;
     _tagSub?.cancel();
     _statusSub?.cancel();
@@ -879,8 +880,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       locParts.add(loc.t('แจ้งสูญหาย'));
     } else {
       locParts.add(S.whName(l['wh']?.toString()));
-      if ((l['zone'] ?? '').toString().isNotEmpty)
+      if ((l['zone'] ?? '').toString().isNotEmpty) {
         locParts.add('${loc.t('โซน')} ${l['zone']}');
+      }
       if ((l['rack'] ?? '').toString().isNotEmpty) locParts.add('${l['rack']}');
     }
 

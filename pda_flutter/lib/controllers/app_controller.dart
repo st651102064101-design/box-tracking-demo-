@@ -604,8 +604,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         s.contains('Failed host lookup')) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่าเครื่องนี้อยู่ในเครือข่าย/Wi-Fi เดียวกับเซิร์ฟเวอร์ และ Base URL ในหน้าตั้งค่าถูกต้อง';
     }
-    if (e is TimeoutException)
+    if (e is TimeoutException) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
+    }
     final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
     return m == null ? s : s.substring(m.end);
   }
@@ -798,7 +799,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (screen == Screen.deviceSetup && !deviceConfigured) return;
     if (screen == Screen.home ||
         screen == Screen.login ||
-        screen == Screen.boot) return;
+        screen == Screen.boot) {
+      return;
+    }
     backToHome();
   }
 
@@ -854,8 +857,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
-    if (!e.active)
+    if (!e.active) {
       return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
+    }
     emp = e;
     prefs.lastEmpId = e.id;
     _resetPost();
@@ -883,8 +887,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Badge read from the UI or the reader: identifies, or explains why not.
   void badgeScanned(String code) {
     final err = identifyByScanCode(code);
-    if (err != null)
+    if (err != null) {
       toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
+    }
   }
 
   /// Ends the current operator's session and returns to the badge screen. The
@@ -1822,8 +1827,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     String? password,
   }) async {
     prefs.baseUrl = baseUrl.trim();
-    if (username != null && username.trim().isNotEmpty)
+    if (username != null && username.trim().isNotEmpty) {
       prefs.username = username.trim();
+    }
     if (password != null && password.isNotEmpty) prefs.password = password;
     prefs.token = null;
     api

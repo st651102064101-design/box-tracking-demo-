@@ -111,7 +111,7 @@ class PrimaryButton extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                          color: C.lime.withOpacity(0.4),
+                          color: C.lime.withValues(alpha: 0.4),
                           blurRadius: 22,
                           offset: const Offset(0, 8))
                     ],
@@ -641,6 +641,12 @@ class ScanModeToggle extends StatelessWidget {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
 
+    void switchTo(ScanInputMode m) {
+      if (c.scanInputMode == m) return;
+      c.setScanInputMode(m);
+      onChanged?.call(m);
+    }
+
     Widget seg(ScanInputMode m, String label, IconData icon) {
       final selected = c.scanInputMode == m;
       return Expanded(
@@ -648,11 +654,7 @@ class ScanModeToggle extends StatelessWidget {
           // Opaque so a tap anywhere on the segment counts, not just on the
           // glyphs — this is worn with gloves on.
           behavior: HitTestBehavior.opaque,
-          onTap: () {
-            if (c.scanInputMode == m) return;
-            c.setScanInputMode(m);
-            onChanged?.call(m);
-          },
+          onTap: () => switchTo(m),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
@@ -680,19 +682,41 @@ class ScanModeToggle extends StatelessWidget {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
-          seg(
-              ScanInputMode.rfid,
-              rfidNote == null ? 'RFID' : 'RFID (${loc.t(rfidNote!)})',
-              Icons.wifi_tethering),
-        ],
-      ),
+    // Sliding a thumb (or gloved finger) across the whole control switches
+    // it too, not just a precise tap on one half — the same drag gesture a
+    // native iOS/Android segmented switch responds to. Coexists fine with
+    // each segment's own onTap above: tap and horizontal-drag are different
+    // recognizers in the gesture arena, so a plain tap still resolves
+    // immediately with no drag involved.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        void handleDragPosition(double localX) {
+          final isRfid = localX > constraints.maxWidth / 2;
+          switchTo(isRfid ? ScanInputMode.rfid : ScanInputMode.barcode);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (d) => handleDragPosition(d.localPosition.dx),
+          onHorizontalDragUpdate: (d) =>
+              handleDragPosition(d.localPosition.dx),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+                color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              children: [
+                seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'),
+                    Icons.qr_code_scanner),
+                seg(
+                    ScanInputMode.rfid,
+                    rfidNote == null ? 'RFID' : 'RFID (${loc.t(rfidNote!)})',
+                    Icons.wifi_tethering),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

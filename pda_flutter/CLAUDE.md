@@ -58,7 +58,15 @@ Do not consider a pda_flutter change complete until both pass.
 
 After finishing any edit, re-review the change just made and report findings as a numbered list — call out exactly what's wrong or risky, point by point. If nothing is wrong, state that explicitly rather than skipping the recheck.
 
-## 5. Always Consult This File
+## 5. DataWedge Profile ("SmartTracePDA")
+
+แอปนี้จะสร้างและผูก DataWedge Profile ชื่อ `SmartTracePDA` กับตัวเองอัตโนมัติบนเครื่อง Zebra ทุกเครื่องที่ติดตั้ง — ไม่ต้องตั้งค่ามือใดๆ บนตัวเครื่อง (ดู `RfidReaderController.ensureDataWedgeProfile()` ใน `android/app/src/main/kotlin/com/abss/smarttrace_pda/RfidReaderController.kt`)
+
+เหตุผลที่ต้องมี profile นี้: ถ้าแอปไม่เคยผูกกับ DataWedge Profile ของตัวเอง จะตกไปอยู่ "Profile0" (ค่าเริ่มต้นของ DataWedge) ซึ่งคำสั่งเปิด/ปิดเครื่องยิงบาร์โค้ดจาก runtime ไม่ยึดติดจริง — ทำให้สลับโหมด RFID/บาร์โค้ดในแอปแล้วเครื่องยิงบาร์โค้ดยังทำงานอยู่ (ไฟ/เสียงติ๊ด) แม้จะเลือกโหมด RFID ไว้
+
+ถ้าต้อง reset เครื่องหรือ debug ปัญหาเครื่องยิงบาร์โค้ด/RFID ชนกัน ให้เช็ค Profile นี้ในแอป DataWedge บนตัวเครื่องก่อน (ควรมี Profile "SmartTracePDA" ผูกกับ `com.abss.boxtrace_pda` อยู่)
+
+## 6. Always Consult This File
 ทุกครั้งที่มีการทำงานเกี่ยวกับ pda_flutter (ไม่ว่าจะแก้โค้ด, build, deploy) ต้องอ่านไฟล์นี้ก่อนทุกครั้ง
 
 Every time work touches pda_flutter (editing code, building, or deploying), read this file first before proceeding.

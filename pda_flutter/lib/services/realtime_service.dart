@@ -78,8 +78,9 @@ class RealtimeService {
           .transform(const LineSplitter())
           .listen(
         (line) {
-          if (line.isEmpty || line.startsWith(':'))
+          if (line.isEmpty || line.startsWith(':')) {
             return; // frame end / heartbeat comment
+          }
           if (line.startsWith('event:')) {
             currentEvent = line.substring(6).trim();
             return;

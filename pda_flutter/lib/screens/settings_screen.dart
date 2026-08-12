@@ -323,8 +323,9 @@ class SettingsScreen extends StatelessWidget {
       validate: (entered) async =>
           entered == first.pin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
     );
-    if (confirm == null || confirm.pin == null)
+    if (confirm == null || confirm.pin == null) {
       return; // cancelled — nothing saved
+    }
     if (!context.mounted) return;
     try {
       await c.api.setEmployeePin(e.id, first.pin!);
@@ -579,8 +580,9 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 
   String _label(AppController c, LocaleController loc) {
-    if (!c.rfid.supported)
+    if (!c.rfid.supported) {
       return loc.t('ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra');
+    }
     switch (c.rfidStatus.state) {
       case RfidState.connected:
         return loc.t('เชื่อมต่อเครื่องอ่านแล้ว');
@@ -998,7 +1000,7 @@ class _RssiPicker extends StatelessWidget {
             activeTrackColor: C.ink,
             inactiveTrackColor: C.neutralBg2,
             thumbColor: C.ink,
-            overlayColor: C.ink.withOpacity(0.12),
+            overlayColor: C.ink.withValues(alpha: 0.12),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
           child: Slider(
@@ -1066,7 +1068,7 @@ class _RangePicker extends StatelessWidget {
             activeTrackColor: C.ink,
             inactiveTrackColor: C.neutralBg2,
             thumbColor: C.ink,
-            overlayColor: C.ink.withOpacity(0.12),
+            overlayColor: C.ink.withValues(alpha: 0.12),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
           child: Slider(
