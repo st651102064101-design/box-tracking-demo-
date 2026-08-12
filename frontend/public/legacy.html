@@ -2598,7 +2598,7 @@ function initSortToggles(){
    pagerSlice() ต้องเรียกหลัง filter+sort เสร็จแล้วเสมอ ก่อน map เป็นแถว HTML — สไลซ์ทับ
    array ที่กรอง/เรียงแล้ว ไม่ใช่ array ดิบ ไม่งั้นเลขหน้าจะไม่ตรงกับที่ผู้ใช้เห็นจริง
    (ยิ่งสำคัญกับ Audit Log ที่กรองก่อนแล้วค่อยแบ่งหน้า ไม่งั้นหน้า 2 อาจโผล่แถวที่ถูกกรองทิ้งไปแล้ว) */
-var PAGE_SIZE=20;
+var PAGE_SIZE=10;
 var pagerState={};
 /* เรียกจาก listener ของช่องค้นหา/ตัวกรองแต่ละตัว ก่อนเรียก render ซ้ำ — ค้นหาคำใหม่ต้องกลับไป
    หน้า 1 เสมอ ไม่งั้นอาจค้างอยู่หน้า 5 ทั้งที่ผลค้นหาใหม่มีแค่ 2 หน้า (ดูว่างเปล่า) */
@@ -9562,7 +9562,7 @@ function renderGateTodayRows(){
     var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
     return {e:e,custTxt:custTxt,whTxt:whTxt,hay:hay};
   }).filter(function(r){return !q||r.hay.indexOf(q)>=0;});
-  var gtPg=pagerSlice('gateToday',rowsWithHay,10),rows=gtPg.rows;
+  var gtPg=pagerSlice('gateToday',rowsWithHay),rows=gtPg.rows;
   var rowsHtml=rows.map(function(r){
     var e=r.e,timeStr=fmtTs(e.ts);
     return '<div class="truck-box" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;gap:10px;align-items:center;padding:10px 4px;border-top:.5px solid var(--line);font-size:13px;">'
