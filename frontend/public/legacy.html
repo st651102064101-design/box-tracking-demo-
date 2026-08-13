@@ -2878,6 +2878,17 @@ function normalizeState(d){
   d.uiPrefs=d.uiPrefs||{};
   d.vehicleTypes=d.vehicleTypes||[];
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
+  /* status:'pending' ("รอเข้าคลัง (Gate In)") ถูกตัดออกทั้งหมดตามที่ผู้ใช้ขอ — ทุกจุดที่
+     เคยสร้างกล่องด้วยสถานะนี้ (ลงทะเบียนเดี่ยว/เป็นชุด/นำเข้า Excel ทั้งฝั่ง Master และ
+     Gate ขาเข้า) ตั้ง status:'warehouse' ทันทีแล้ว แต่กล่องเก่าที่ค้างอยู่ในฐานข้อมูลจาก
+     ก่อนแก้ยังเป็น 'pending' อยู่ — ยกระดับให้เป็น 'warehouse' ทุกครั้งที่โหลด เหมือนที่
+     stripStars ทำกับ tag เก่าด้านบน คือไม่เชื่อว่าข้อมูลเก่าที่ persist ไว้ "สะอาด" แล้ว
+     ที่มาของบั๊ก "สถานะขึ้นรอเข้าคลัง แต่ตำแหน่งบอกว่าอยู่ในคลังแล้ว" ที่ผู้ใช้เจอ — กล่องพวกนี้
+     labeled ไปแล้วจริง (เคยผ่าน Gate เข้ามาก่อนบั๊กจะถูกแก้) จึงตั้ง labeled:true ด้วย ไม่งั้น
+     statusPill ในหน้าอื่นจะยังโชว์ข้อความเดิมทับสถานะในคลังอยู่ (ดูคอมเมนต์ที่บรรทัด 3697) */
+  Object.values(d.boxes).forEach(function(b){
+    if(b.status==='pending'){b.status='warehouse';b.labeled=true;}
+  });
   /* บาร์โค้ด/tag ของกล่องที่หลุดมาพร้อมเครื่องหมาย "*...*" แบบฟอนต์ Code 39 (ดู
      barcodeCell()) — ก่อนแก้ import ("ลงทะเบียนกล่อง") ให้ลอกออกก่อนเก็บ ไฟล์ export
      เดิมที่ import กลับเข้าไประหว่างนั้นจึงมี tag เป็น "*BOX-011*" ตรงๆ ค้างอยู่ในระบบ
@@ -10112,16 +10123,19 @@ function applyInvStatusBadges(counts) {
   });
 }
 function refreshInvStatusBadges() {
-  var local = localStatusCounts();
-  applyInvStatusBadges(local);
-  fetch('/api/boxes/status-summary', { headers: authHeaders() })
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if (!data || !data.byStatus) return;
-      var total = Object.keys(data.byStatus).reduce(function(a, k) { return a + data.byStatus[k]; }, 0);
-      applyInvStatusBadges(Object.assign({}, local, data.byStatus, { '': total }));
-    })
-    .catch(function() {});
+  /* Used to also fetch /api/boxes/status-summary and overwrite these counts
+     (including the "ทั้งหมด" total) with the server's numbers — but the
+     table below (filteredInvBoxes) only ever reads from S.boxes, the same
+     client-side state this function's "local" counts come from. The
+     summary endpoint counts a different, separately-maintained boxes table
+     server-side, so whenever the two drifted apart (e.g. a fresh demo
+     session, or state not yet migrated) the tab badge showed one number
+     (from the DB) while the table showed a contradicting one (from
+     S.boxes) — exactly the "badge says 10, table says 0" bug reported.
+     Always deriving the badge from the same source as the table means they
+     can never visually disagree again, even though it means the badge no
+     longer reflects a separate server-side total. */
+  applyInvStatusBadges(localStatusCounts());
 }
 
 function renderInventory() {
@@ -11994,12 +12008,15 @@ function openColumnMapModal(opts){
         var type=S.boxtypes[typeId];
         var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
         var regTsI=iso();
-        return {tag:tag,type:typeId,value:value,status:'pending',cycles:0,
+        /* status:'warehouse' ทันที — เดียวกับที่ "ลงทะเบียนกล่อง" เดี่ยว/เป็นชุดแก้ไปแล้ว
+           (ดูคอมเมนต์ที่บรรทัด 3697) นำเข้าจาก Excel ก็คือการลงทะเบียนแบบหนึ่ง ไม่ควรต้อง
+           ผ่าน Gate ขาเข้าซ้ำอีกขั้นก่อนใช้งานได้เหมือนกัน */
+        return {tag:tag,type:typeId,value:value,status:'warehouse',cycles:0,
           customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
           lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
           regAt:regTsI,regBy:USER,
           location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsI},
-          lastSeenAt:regTsI,labeled:false,
+          lastSeenAt:regTsI,labeled:true,
           history:[{dir:'reg',ts:regTsI,recorder:USER,note:'นำเข้าจากไฟล์ Excel/CSV'}]};
       }
     },
@@ -12973,31 +12990,35 @@ function openColumnMapModal(opts){
   /* A tag that shows up in a Gate ขาเข้า import file but was never entered
      into the system (no master record) — the physical box is right there
      being received, it's just missing from S.boxes, so we register it the
-     same way "ลงทะเบียนกล่อง" would: status 'pending', unlabeled. The
-     #btnCheckIn confirm handler already treats any box with no prior 'out'
-     history as a first-time inbound regardless of starting status, so this
-     new record flows through the normal queue/confirm path unchanged —
-     no special-casing needed downstream. Mirrors autoRegisterOutBox() for
-     the outbound importer. */
+     same way "ลงทะเบียนกล่อง" would: status 'warehouse' right away, same as
+     every other registration path now (see comment at line 3697 — 'pending'
+     as a separate "awaiting Gate เข้า confirm" limbo was removed entirely
+     per request; it was producing boxes whose status pill said "รอเข้าคลัง
+     (Gate In)" while their location already read "ในคลัง"). It still goes
+     into pendingIn/#btnCheckIn below so the operator's scan-and-confirm
+     batch UX (assign gate/vehicle/driver) is unchanged — classifyInTag()
+     just no longer rejects it as "already in warehouse" for being fresh.
+     Mirrors autoRegisterOutBox() for the outbound importer. */
   function autoRegisterInBox(tag){
     var typeKey=Object.keys(S.boxtypes||{})[0]||'';
     var bt=S.boxtypes[typeKey]||{};
     var value=bt.value||S.cfg.boxValue;
     var regTs=iso();
-    var b={tag:tag,type:typeKey,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',
+    var b={tag:tag,type:typeKey,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',
       outGate:null,outWh:'',outAt:null,dueAt:null,lot:'',expiry:'',supplier:'',
       regAt:regTs,regBy:USER,location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},
-      lastSeenAt:regTs,labeled:false,
+      lastSeenAt:regTs,labeled:true,
       history:[{dir:'reg',ts:regTs,recorder:USER,note:'สร้างอัตโนมัติจากไฟล์นำเข้า Gate ขาเข้า (ไม่พบในระบบมาก่อน)'}]};
     S.boxes[tag]=b;
-    auditEntry('CREATE',USER,tag,typeName(typeKey),null,{type:typeKey,value:value,status:'pending',note:'auto-created via Gate ขาเข้า import'});
+    auditEntry('CREATE',USER,tag,typeName(typeKey),null,{type:typeKey,value:value,status:'warehouse',note:'auto-created via Gate ขาเข้า import'});
     return b;
   }
 
-  /* Mirrors the status gate inside scanIn(): reject only already-in-warehouse
-     now — an unknown tag gets auto-registered instead of rejected (see
-     autoRegisterInBox above). ⚠ Keep in sync with scanIn() if the rule
-     changes. */
+  /* Mirrors the status gate inside scanIn(): reject an already-in-warehouse
+     box UNLESS it's the one just auto-registered a moment ago by this same
+     call (autoRegisterInBox now sets status:'warehouse' immediately, so
+     without this exception a freshly-created box would reject itself out of
+     its own import queue). ⚠ Keep in sync with scanIn() if the rule changes. */
   function classifyInTag(rawTag){
     var raw=String(rawTag==null?'':rawTag).trim();
     if(!raw)return {ok:false,code:'empty',reason:'ช่องว่าง'};
@@ -13005,7 +13026,7 @@ function openColumnMapModal(opts){
     var b=S.boxes[tag];
     var isNewlyRegistered=false;
     if(!b){ b=autoRegisterInBox(tag); isNewlyRegistered=true; }
-    if(b.status==='warehouse')return {ok:false,code:'inwh',tag:tag,reason:'อยู่ในคลังอยู่แล้ว'};
+    if(!isNewlyRegistered&&b.status==='warehouse')return {ok:false,code:'inwh',tag:tag,reason:'อยู่ในคลังอยู่แล้ว'};
     return {ok:true,tag:tag,type:typeName(b.type),isNew:isNewlyRegistered};
   }
 
