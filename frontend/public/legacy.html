@@ -2317,8 +2317,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 /* สแต็กใต้ปุ่มปิด X — element พี่น้องกับบัตรเหมือนปุ่ม X เอง ดูคอมเมนต์ที่ตัว element
    ในเนื้อ HTML ด้านล่าง กับ ccStep()/ccSetFace() สำหรับตำแหน่ง/การซ่อนโชว์ */
 #custCardOverlay .cc-act-row{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:8px;
-  z-index:5;opacity:0;pointer-events:none;transition:opacity .15s;}
-#custCardOverlay .cc-act-row.show{opacity:1;pointer-events:auto;}
+  z-index:5;}
 #custCardOverlay .cc-act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 14px;
   border-radius:13px;background:var(--panelChipBg);border:1px solid var(--panelChipBorder);
   font-size:14.5px;font-weight:500;color:var(--panelInk);}
@@ -2328,10 +2327,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 /* ปุ่มจัดการฝั่งหลังบัตร — ย้ายมาไว้มุมขวาบน (ใต้ปุ่มปิด X ที่ลอยอยู่นอกบัตร) แทนคอลัมน์
    ข้างบาร์โค้ดเดิม จึงย่อขนาดลงเป็น icon-only ทรงกลม ไม่ใช้ปุ่มยาวเต็มความกว้างแบบเดิม
    (คลาส .cc-act ด้านบนยังใช้อยู่ที่อื่นไม่ได้ — ปุ่มชุดนี้ใช้คลาสใหม่ .cc-act-sm) */
+/* var(--panelChipBg) เป็นสีโปร่งแสงสำหรับวางทับพื้นหลังเข้มของบัตร (ตอนปุ่มพวกนี้ยัง
+   อยู่ในตัวบัตร) — ย้ายออกมาลอยอยู่นอกบัตรบนพื้นหลังเบลอเข้มแล้วสีเลยจางจนแทบมองไม่เห็น
+   เปลี่ยนเป็นพื้นทึบเข้มคู่สีเดียวกับปุ่มปิด X (.cc-close ด้านบน) ที่อยู่ติดกันแทน ให้
+   เห็นชัดเจนสม่ำเสมอกันไม่ว่าธีมเว็บจะเป็นสว่างหรือมืด */
 #custCardOverlay .cc-act-sm{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-  background:var(--panelChipBg);border:1px solid var(--panelChipBorder);color:var(--panelInk);flex:0 0 auto;}
-#custCardOverlay .cc-act-sm.danger{background:color-mix(in srgb,var(--neg) 20%,transparent);
-  border-color:color-mix(in srgb,var(--neg) 40%,transparent);color:#ff8a83;}
+  background:var(--ink);border:none;color:var(--surface);flex:0 0 auto;
+  box-shadow:0 6px 16px rgba(0,0,0,.35);}
+#custCardOverlay .cc-act-sm.danger{background:#ff453a;color:#fff;}
 #custCardOverlay .cc-act-sm[disabled]{opacity:.35;cursor:not-allowed;}
 /* บาร์โค้ดท้ายบัตร — เต็มความกว้างบัตรจริง (ไม่มี padding ซ้าย/ขวา) ชิดขอบล่างสุด —
    hover แล้วบาร์โค้ด fade ลง พร้อมโผล่ปุ่มพิมพ์ตรงกลางให้กดพิมพ์ได้ทันที */
@@ -2371,8 +2374,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
        เหมือนกัน (เดิมอยู่ในการ์ดเอง ซึ่งพลิก/หมุน/ย่อขยายตามบัตรไปด้วย ทำให้ตำแหน่งเทียบกับ
        ปุ่ม X ที่ลอยอยู่นอกบัตรคลาดเคลื่อนได้เวลาบัตรเอียง) ccStep() ย้ายตำแหน่งให้ชิดใต้ปุ่ม X
        ทุกเฟรมเหมือนกัน จึงตั้งตรงเสมอและเกาะกับปุ่ม X แน่นอนไม่ว่าบัตรจะเอียงแค่ไหน —
-       เนื้อหาใส่โดย openCustCard()/ccSetFace() เห็นเฉพาะตอนพลิกไปหน้าหลัง (ปุ่มพวกนี้ใช้
-       จัดการข้อมูล ไม่เกี่ยวกับหน้าแรก) -->
+       เนื้อหาใส่โดย openCustCard() เห็นตลอดตั้งแต่เปิดบัตร ไม่ต้องรอพลิกไปหน้าหลังก่อน -->
   <div class="cc-act-row" id="ccActRow"></div>
 </div>
 
@@ -5680,13 +5682,10 @@ function ccStep(){
     ccBtn.style.transform='translate('+(bx-22).toFixed(1)+'px,'+(by-22).toFixed(1)+'px)';
     /* สแต็กปุ่มจัดการ ชิดใต้ปุ่ม X ตัวเดียวกันนี้เป๊ะ — จุดยึด bx/by เดียวกัน แต่ X มีรัศมี
        ครึ่งหนึ่ง 22px (ขอบล่างจึงอยู่ที่ by+22) บวกช่องไฟ 8px = by+30 ส่วนแนวนอนจัดกึ่งกลาง
-       ให้ตรงกับ X (ปุ่มแถวนี้กว้าง 34px จึงเลื่อนซ้าย 17px จาก bx) เห็นเฉพาะหน้าหลัง
-       (ปุ่มจัดการใช้ไม่ได้ตอนดูหน้าแรก) */
+       ให้ตรงกับ X (ปุ่มแถวนี้กว้าง 34px จึงเลื่อนซ้าย 17px จาก bx) — เห็นตลอดตั้งแต่เปิดบัตร
+       ไม่ต้องรอพลิกไปหน้าหลังก่อน (เดิมซ่อนไว้จนกว่า face==='back' ตามที่ผู้ใช้ขอให้เอาออก) */
     var actRow=s.el.actRow;
-    if(actRow){
-      actRow.classList.toggle('show',s.face==='back');
-      actRow.style.transform='translate('+(bx-17).toFixed(1)+'px,'+(by+30).toFixed(1)+'px)';
-    }
+    if(actRow)actRow.style.transform='translate('+(bx-17).toFixed(1)+'px,'+(by+30).toFixed(1)+'px)';
   }
 }
 
