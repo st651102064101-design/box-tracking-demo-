@@ -2366,11 +2366,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <style>
 #whPanelOverlay{position:fixed;inset:0;z-index:410;display:none;}
 #whPanelOverlay .whp-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  animation:whpFadeIn .45s cubic-bezier(.22,1,.36,1) both;}
 /* เวทีลอยตรง ๆ บนพื้นหลังเบลอ ไม่มีการ์ดทึบรองรับ — เหมือนยืนมองเข้าไปในโรงเก็บของจริง
-   ตัวหนังสือหัวเรื่องจึงต้องมี text-shadow กันจมไปกับพื้นหลังที่ยังพอเห็นลาง ๆ */
-#whPanelOverlay .whp-stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(1040px,92vw);max-height:90vh;overflow:auto;padding:8px 26px 26px;}
+   ตัวหนังสือหัวเรื่องจึงต้องมี text-shadow กันจมไปกับพื้นหลังที่ยังพอเห็นลาง ๆ
+   ซูมเข้ามาจากไกล ๆ ตอนเปิด (เดิมโผล่มาตรง ๆ ทันทีไม่มีทรานซิชันเลย) — display:none→block
+   รีสตาร์ท CSS animation ให้อัตโนมัติทุกครั้งที่เปิดแผง ไม่ต้องสลับคลาสด้วย JS */
+#whPanelOverlay .whp-stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);
+  width:min(1040px,92vw);max-height:90vh;overflow:auto;padding:8px 26px 26px;
+  animation:whpZoomIn .45s cubic-bezier(.22,1,.36,1) both;transform-origin:center center;}
+@keyframes whpFadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes whpZoomIn{from{transform:translate(-50%,-50%) scale(.08);opacity:0;}to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
 /* ปุ่มจัดการเกาะข้างขวาของแผง — whpPlaceActions() วัดขนาดแผงจริงแล้วจัดตำแหน่งให้
    (ความสูงแผงขึ้นกับจำนวนประตู คำนวณจาก CSS ล้วน ๆ ไม่ได้ ต้องวัดเอา) */
 #whPanelOverlay .whp-actions{position:fixed;left:0;top:0;z-index:6;display:flex;flex-direction:column;gap:10px;}
