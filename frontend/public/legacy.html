@@ -1155,12 +1155,20 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
   <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
        เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
-       ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านล่างเพื่อกาง/ซ่อน ====== -->
+       ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านล่างเพื่อกาง/ซ่อน — เดิม
+       เป็นปุ่ม ghost เล็กๆ ไม่บอกด้วยว่าข้างในมีอะไร ทำให้คนไม่รู้ว่าคุ้มจะกดไหม
+       ตอนนี้เต็มความกว้าง เห็นชัด พร้อมบรรทัดสรุปหัวข้อข้างในไว้ตัดสินใจก่อนกด
+       และจำสถานะกาง/ซ่อนไว้ข้ามการโหลดหน้าถัดไป (ดู REPORTS_OPEN_KEY) ====== -->
   <div class="row no-print reveal" style="margin-top:22px;">
-    <button class="btn ghost" id="btnToggleReports" onclick="toggleReportsPanel()">
-      <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span>
-      <span id="btnToggleReportsLbl">รายงานเพิ่มเติม</span>
-      <span class="svgi" id="btnToggleReportsChevron" style="transition:transform .2s var(--ease);"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+    <button class="btn ghost" id="btnToggleReports" onclick="toggleReportsPanel()" style="width:100%;justify-content:space-between;padding:14px 16px;">
+      <span style="display:flex;align-items:center;gap:10px;text-align:left;">
+        <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span>
+        <span>
+          <span id="btnToggleReportsLbl" style="display:block;font-weight:700;">รายงานเพิ่มเติม</span>
+          <span class="muted small" style="font-weight:400;">ค้างคืน · ส่งคืนล่าสุด · อัตราคืน/สูญหาย · ตำแหน่งจัดเก็บ · แยกตามประเภท · ประวัติ Gate</span>
+        </span>
+      </span>
+      <span class="svgi" id="btnToggleReportsChevron" style="transition:transform .2s var(--ease);flex:0 0 auto;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
     </button>
   </div>
 
@@ -1460,7 +1468,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <table>
         <thead><tr>
           <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllInv" title="เลือกทั้งหมด"></th>
-          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th><th>วันที่ต้องคืน</th>
+          <th>รหัสบาร์โค้ด</th><th>ประเภทกล่อง</th><th>ตำแหน่ง / ลูกค้า</th><th>สถานะ</th><th>วันที่ ส่ง/รับ</th><th id="invDueDateTh">วันที่ต้องคืน</th>
           <th></th>
         </tr></thead>
         <tbody id="invBody"></tbody>
@@ -1473,7 +1481,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <button class="btn sm ghost" id="bulkInvTag" title="พิมพ์ป้ายบาร์โค้ด/QR ของกล่องที่เลือก แล้วบันทึกว่าติดป้ายแล้ว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายบาร์โค้ด</button>
       <button class="btn sm ghost" id="bulkInvShip"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งให้ลูกค้า</button>
       <button class="btn sm ghost" id="bulkInvHold" title="กันไม่ให้จ่ายออกจนกว่าจะปลดล็อก — ใช้ได้เฉพาะกล่องในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักการใช้งาน (Hold)</button>
+      <button class="btn sm ghost" id="bulkInvReleaseHold" title="ปลดล็อกกลับสู่สถานะพร้อมส่งออก — ใช้ได้เฉพาะกล่องที่ Hold อยู่"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg></span> ปลด Hold</button>
       <button class="btn sm ghost" id="bulkInvDamage" title="ยังอยู่ในคลังแต่กันออกจากการใช้งาน — ใช้ได้กับกล่องในคลังหรือที่ Hold อยู่"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ตีชำรุด (Damage)</button>
+      <button class="btn sm ghost" id="bulkInvRepair" title="ซ่อมเสร็จแล้ว กลับสู่สถานะพร้อมส่งออก — ใช้ได้เฉพาะกล่องที่ชำรุดอยู่"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-9 9H5v-6z"/></svg></span> ซ่อมเสร็จ</button>
       <button class="btn sm red" id="bulkInvWriteoff">⊘ แจ้งกล่องหาย</button>
       <button class="btn sm gray" id="bulkInvClear">ยกเลิก</button>
     </div>
@@ -1705,11 +1715,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
       </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th><th></th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th></tr></thead>
         <tbody id="boxBody"></tbody></table></div>
       <div class="pagerbar" id="pagerBox"></div>
       <div class="bulkbar" id="bulkBox" style="display:none;">
         <span class="bcnt" id="bulkBoxCnt"></span>
+        <button class="btn sm accent" id="bulkBoxEdit">แก้ไขที่เลือก</button>
         <button class="btn sm ghost" id="bulkBoxLabel">พิมพ์ฉลาก</button>
         <button class="btn sm red" id="bulkBoxDel">ลบที่เลือก</button>
         <button class="btn sm gray" id="bulkBoxClear">ยกเลิก</button>
@@ -2020,6 +2031,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
        (ตำแหน่งคำนวณจากมุมขวาบนของการ์ดที่หมุนแล้ว ดูท้าย empBadgeStep) -->
   <button id="empBadgeClose" onclick="closeEmpBadge()" title="ปิดบัตร" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <!-- ล็อกเอาท์ — เกาะข้าง #empBadgeClose ทั้งตำแหน่งและฟิสิกส์ (ดู empBadgeStep()),
+       แค่เลื่อนออกไปอีกขั้นให้ไม่ทับปุ่มปิด ไม่ผูกกับ isSelf เพราะเป็นทางลัดออกจาก
+       แอปทั้งระบบ ไม่ใช่ action ที่ผูกกับบัตรใบไหนใบหนึ่งโดยเฉพาะ -->
+  <button id="empBadgeLogout" onclick="smarttraceLogout()" title="ล็อกเอาท์" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
   </button>
 
   <div id="empBadgeCard" style="position:absolute;left:0;top:0;width:408px;height:627px;transform-origin:50% 50%;will-change:transform;perspective:1600px;cursor:grab;">
@@ -3393,6 +3410,7 @@ function switchTab(name){
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
+  if(name==='overview'){restoreReportsPanelState();}
 }
 window.switchTab=switchTab;
 function goSetup(stab){
@@ -4506,7 +4524,7 @@ function empBadgeBoot(){
   empBadge.el={
     card:$('#empBadgeCard'),flip:$('#empBadgeFlip'),clip:$('#empBadgeClip'),
     strap:$('#empBadgeStrap'),shade:$('#empBadgeStrapShade'),close:$('#empBadgeClose'),
-    backdrop:$('#empBadgeBackdrop')
+    logout:$('#empBadgeLogout'),backdrop:$('#empBadgeBackdrop')
   };
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
@@ -4534,7 +4552,7 @@ function empBadgeRelease(){
   if(el.card)el.card.style.cursor='grab';
   if(el.backdrop)el.backdrop.classList.remove('no-blur');
 }
-function openEmpBadge(id){
+function openEmpBadge(id,isSelf){
   var e=S.employees[id];if(!e)return;
   var vw=window.innerWidth,vh=window.innerHeight;
   var CW=408,CH=627;
@@ -4580,8 +4598,11 @@ function openEmpBadge(id){
   if(bi)bi.style.display=inactive?'grid':'none';
 
   /* Same permission rules the old action modal enforced: edit is admin-or-self,
-     credentials/delete are admin-only, and no one may delete their own account. */
-  var empAdmin=isAdmin(),self=currentEmp()&&currentEmp().id===id;
+     credentials/delete are admin-only, and no one may delete their own account.
+     isSelf (passed by pickUser() for the who-chip's own-badge view) is honored
+     as-is on top of the name-match check — see pickUser()'s comment for why
+     the match alone isn't reliable enough on its own for that call path. */
+  var empAdmin=isAdmin(),self=isSelf===true||(currentEmp()&&currentEmp().id===id);
   var credLbl=$('#empBadgeCredLabel');if(credLbl)credLbl.textContent=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
   var editBtn=$('#empBadgeEditBtn');if(editBtn)editBtn.style.display=(empAdmin||self)?'flex':'none';
   var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'flex':'none';
@@ -4771,11 +4792,20 @@ function empBadgeStep(){
      (204,-313.5 = มุมขวาบน ก่อนสเกล) ตามมุมแกว่ง theta เดียวกับที่การ์ดใช้ แล้วเลื่อนออกนอกขอบ
      อีก 30px กันปุ่มทับตัวบัตร — ตัวปุ่มเองแค่เลื่อน (translate) ไม่หมุนตาม จึงตั้งตรงเสมอ */
   var closeBtn=eb.el.close;
+  var cth=Math.cos(eb.theta),sth=Math.sin(eb.theta);
   if(closeBtn){
-    var cth=Math.cos(eb.theta),sth=Math.sin(eb.theta);
     var lx=204*s+OVERLAY_BTN_GAP,ly=-313.5*s+21;
     var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
     closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
+  }
+  var logoutBtn=eb.el.logout;
+  if(logoutBtn){
+    // Same corner as closeBtn, pushed 54px further down that corner's local
+    // y-axis (42px button + 12px gap) — stacks below the X instead of
+    // overlapping it, still tracking the card's swing/tilt the same way.
+    var llx=204*s+OVERLAY_BTN_GAP,lly=-313.5*s+21+54;
+    var lbx=eb.cx+(llx*cth-lly*sth),lby=eb.cy+(llx*sth+lly*cth);
+    logoutBtn.style.transform='translate('+(lbx-21).toFixed(1)+'px,'+(lby-21).toFixed(1)+'px)';
   }
 }
 (function(){
@@ -6095,11 +6125,18 @@ window.setCurrentUser=setCurrentUser;
    ใช้ดูพนักงานคนอื่น ไม่ต้องมี UI สองแบบสำหรับ "ดูข้อมูลพนักงาน" */
 function pickUser(){
   var emp=currentEmp();
-  if(emp){openEmpBadge(emp.id);return;}
+  // isSelf=true unconditionally here — this is always "my own badge" from
+  // the operator's point of view (they clicked the who-chip in the header),
+  // even in the no-match fallback branch below where currentEmp() can't
+  // actually resolve a matching employee record. Without the explicit flag,
+  // openEmpBadge's own self-check (name===USER) fails in that fallback case
+  // and the delete-employee button on the flip side showed up over what the
+  // operator sees as *their own* account — see openEmpBadge's isSelf param.
+  if(emp){openEmpBadge(emp.id,true);return;}
   var emps=activeEmployees();
   if(!emps.length){toast('ยังไม่มีพนักงานในระบบ','เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้','err');goSetup('emp');return;}
   /* USER ไม่ตรงกับพนักงานคนไหนเลย (เช่น ยังไม่เคยตั้งค่า) — เปิดบัตรของคนแรกให้เลือกจากตรงนั้นแทน */
-  openEmpBadge(emps[0].id);
+  openEmpBadge(emps[0].id,true);
 }
 window.pickUser=pickUser;
 
@@ -7343,6 +7380,26 @@ function relOverdueText(dueAt){
   if(!parts.length)return 'เลยกำหนดเมื่อสักครู่';
   return 'เลยมา '+parts.join(' ');
 }
+/* Same YouTube-style top-2-units breakdown as relOverdueText, mirrored for
+   time still remaining until dueAt instead of time elapsed past it — "เหลืออีก
+   1 เดือน 2 วัน" instead of a raw date, for the same reason: a raw DD/MM/YYYY
+   doesn't say at a glance whether that's tomorrow or six months out. Returns
+   null once dueAt has already passed (relOverdueText takes over from there). */
+function relRemainingText(dueAt){
+  var dueMs=Date.parse(dueAt);
+  if(isNaN(dueMs))return null;
+  var diffMs=dueMs-now().getTime();
+  if(diffMs<=0)return null;
+  var s=Math.floor(diffMs/1000);
+  var units=[['ปี',31536000],['เดือน',2592000],['วัน',86400],['ชม.',3600],['นาที',60],['วิ',1]];
+  var parts=[];
+  for(var i=0;i<units.length&&parts.length<2;i++){
+    var v=Math.floor(s/units[i][1]);
+    if(v>0){parts.push(v+' '+units[i][0]);s-=v*units[i][1];}
+  }
+  if(!parts.length)return 'อีกไม่กี่วินาที';
+  return 'เหลืออีก '+parts.join(' ');
+}
 function applyAutoLost(){if(S.cfg.lostMode!=='auto')return;
   Object.values(S.boxes).forEach(function(b){if(b.status==='out'&&isOverdue(b)){
     b.status='lost';b.lostAt=iso();b.lostReason='auto-overdue';b.lastSeenAt=iso();
@@ -8320,19 +8377,39 @@ var REPORT_DIRS=['missing'];
    สลับกันไปมาได้ตามต้องการ — renderReports() เรียกทุกครั้งที่กางออก เผื่อข้อมูล
    เปลี่ยนไปหลังจากซ่อนไว้นาน (renderAll() ก็ยังเรียกมันตลอดอยู่แล้วเช่นกัน ไม่ได้
    render ซ้ำซ้อนเพิ่มต้นทุนอะไร แค่กัน UI ค้างข้อมูลเก่าไว้ตอนกางออกครั้งแรก) */
+var REPORTS_OPEN_KEY='smarttrace_reports_open';
 function toggleReportsPanel(){
   var el=$('#tab-reports');if(!el)return;
   var opening=el.style.display==='none';
-  el.style.display=opening?'':'none';
-  var lbl=$('#btnToggleReportsLbl');if(lbl)lbl.textContent=opening?'ซ่อนรายงานเพิ่มเติม':'รายงานเพิ่มเติม';
-  var chev=$('#btnToggleReportsChevron');if(chev)chev.style.transform=opening?'rotate(180deg)':'';
-  if(opening){
-    renderReports();
-    $all('.reveal',el).forEach(function(x){x.classList.add('in');});
-    el.scrollIntoView({behavior:'smooth',block:'start'});
-  }
+  _setReportsPanelOpen(opening,true);
 }
 window.toggleReportsPanel=toggleReportsPanel;
+/* Shared by the button click (toggleReportsPanel) and by the saved-state
+   restore on tab entry (restoreReportsPanelState) — [scroll] is only true
+   for an explicit click, never on restore, so returning to a tab that was
+   already left open doesn't yank the page down to the reports section
+   before the operator has even seen the top of it. */
+function _setReportsPanelOpen(open,scroll){
+  var el=$('#tab-reports');if(!el)return;
+  el.style.display=open?'':'none';
+  var lbl=$('#btnToggleReportsLbl');if(lbl)lbl.textContent=open?'ซ่อนรายงานเพิ่มเติม':'รายงานเพิ่มเติม';
+  var chev=$('#btnToggleReportsChevron');if(chev)chev.style.transform=open?'rotate(180deg)':'';
+  try{localStorage.setItem(REPORTS_OPEN_KEY,open?'1':'0');}catch(e){}
+  if(open){
+    renderReports();
+    $all('.reveal',el).forEach(function(x){x.classList.add('in');});
+    if(scroll)el.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+/* Reopens the panel automatically on returning to ภาพรวม if the operator
+   left it open last time — previously it collapsed on every single tab
+   switch, so anyone who actually uses these reports regularly had to
+   re-click "รายงานเพิ่มเติม" every single time they came back to this page. */
+function restoreReportsPanelState(){
+  var wasOpen=false;try{wasOpen=localStorage.getItem(REPORTS_OPEN_KEY)==='1';}catch(e){}
+  if(wasOpen)_setReportsPanelOpen(true,false);
+}
+window.restoreReportsPanelState=restoreReportsPanelState;
 
 /* Overview tab — สถานะกล่อง ณ ตอนนี้ (ในคลัง/ออกอยู่/สูญหาย/พัก/ชำรุด) บวกยอด
    Gate In/Out ของวันนี้, รายงานกล่องรายตัวแยกตามประเภท, และตารางส่งคืนล่าสุด
@@ -8639,6 +8716,13 @@ function renderOverview(){
     }).join(''):emptyRow(4,'ยังไม่มีการส่งคืน'))+'</tbody></table>';
   var rrEl=$('#ovRecentReturns');if(rrEl)rrEl.innerHTML=rrHtml;
   var rrPgEl=$('#pagerOvRecent');if(rrPgEl)rrPgEl.innerHTML=recentAll.length?pagerBarHtml('ovRecent',rrPg):'';
+  // Once only, not on every renderOverview() call (renderAll() re-runs this
+  // on essentially every state change app-wide) — otherwise a manual close
+  // mid-session would keep springing back open the next time anything saved.
+  // switchTab('overview') covers every later visit to this tab; this covers
+  // the very first paint, since boot calls renderAll() directly and never
+  // switchTab() for the tab that's already marked active in static HTML.
+  if(!renderOverview._restoredReportsPanel){renderOverview._restoredReportsPanel=true;restoreReportsPanelState();}
 }
 DF_APPLY.ovMove=function(){renderOverview();};
 DF_APPLY.ovRecent=function(){pagerReset('ovRecent');renderOverview();};
@@ -9035,15 +9119,15 @@ function renderSetup(){
       :'<span class="muted small">-</span>';
     /* CRUD only here (แก้ไข/ลบ) — ทุกอย่างที่เป็น lifecycle จริงของกล่อง
        (ติดตาม/พิมพ์ป้าย/ย้ายพิกัด/Hold/ชำรุด/กล่องหาย) อยู่ที่หน้า Inventory
-       เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน */
-    return '<tr data-tag="'+esc(b.tag)+'"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
+       เท่านั้น ไม่ซ้ำเมนูกันสองที่ — ดู editBox/delBox ด้านบน
+       ไม่มีปุ่ม แก้ไข/ลบ ต่อแถวอีกต่อไป — คลิกที่แถว (ยกเว้นช่องติ๊ก) เข้า editBox()
+       ตรงๆ แทน เหมือนพฤติกรรมแถวของตาราง Inventory, ส่วนลบใช้บาร์เลือกหลายรายการ
+       ด้านล่าง (bulkBoxDel) ซึ่งมีอยู่แล้วและรองรับลบทีละหลายใบได้ดีกว่าปุ่มเดี่ยว */
+    return '<tr data-tag="'+esc(b.tag)+'" style="cursor:pointer;" onclick="if(event.target.type!==\'checkbox\')editBox(\''+esc(b.tag)+'\')"><td class="cb-td"><input type="checkbox" class="row-cb box-cb" data-tag="'+esc(b.tag)+'"></td>'
       +'<td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td class="r mono">'+money(b.value)+'</td>'
       +'<td>'+statusPill(b.status,b)+rfidBadge(b)+'</td><td>'+locOrCust+'</td><td>'+lotExpCell+'</td><td class="r mono">'+nf(b.cycles)+'</td>'
-      +'<td class="c"><div class="row-actions">'
-      +'<button class="btn sm ghost" onclick="editBox(\''+esc(b.tag)+'\')">แก้ไข</button>'
-      +'<button class="btn sm red" onclick="delBox(\''+esc(b.tag)+'\')">ลบ</button>'
-      +'</div></td></tr>';
-  }).join(''):emptyRow(9,'ยังไม่มีกล่อง');
+    + '</tr>';
+  }).join(''):emptyRow(8,'ยังไม่มีกล่อง');
   var totalWh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse';}).length;
   var totalPending=Object.values(S.boxes).filter(function(b){return b.status==='pending';}).length;
   $('#cntBox').innerHTML=Object.keys(S.boxes).length+' ใบ · <span style="color:var(--ink)">ในคลัง '+totalWh+'</span>'+(totalPending?' · <span style="color:var(--warn)">รอเข้าคลัง (Gate In) '+totalPending+'</span>':'');
@@ -9341,6 +9425,49 @@ $('#bulkBoxDel').addEventListener('click',function(){var tags=getChecked('box-cb
   var inUse=tags.filter(function(t){return S.boxes[t]&&S.boxes[t].status==='out';});
   if(inUse.length)return toast('ลบไม่ได้','มี '+inUse.length+' ใบที่ออกไปแล้ว','err');
   openBulkDeleteBoxModal(tags);});
+
+/* แก้ไขทะเบียนหลายใบพร้อมกัน — แทนที่ปุ่ม แก้ไข/ลบ ต่อแถวที่เอาออกแล้ว (ดูคอมเมนต์
+   ตรง #boxBody ด้านบน) เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนค่านั้น เพราะรายการที่เลือกมัก
+   มีค่าตั้งต้นต่างกันอยู่แล้ว (ประเภท/ซัพพลายเออร์/Lot/วันหมดอายุคนละอันกัน) การ
+   บังคับให้ทุกช่องมีค่าจะเท่ากับบังคับให้ทุกใบกลายเป็นค่าเดียวกันหมดโดยไม่ตั้งใจ */
+function openBulkEditBoxModal(tags){
+  if(!tags.length)return;
+  var typeOpts='<option value="">— ไม่เปลี่ยน —</option>'+Object.values(S.boxtypes).map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
+  openModal(
+    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> แก้ไข ' + tags.length + ' ใบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    + '<div class="mbody">'
+      + '<p class="muted small" style="margin:0 0 16px;">เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนค่านั้น — อัปเดตเฉพาะช่องที่กรอกให้ทั้ง ' + tags.length + ' ใบพร้อมกัน</p>'
+      + '<div class="grid g2">'
+        + '<div class="field"><label>ประเภทกล่อง</label><select id="bezType">' + typeOpts + '</select></div>'
+        + '<div class="field"><label>ซัพพลายเออร์</label><select id="bezSupplier">' + supplierOptions('') + '</select></div>'
+        + '<div class="field"><label>Lot</label><input id="bezLot" placeholder="ปล่อยว่าง = ไม่เปลี่ยน"></div>'
+        + '<div class="field"><label>วันหมดอายุ</label><input id="bezExpiry" placeholder="ปล่อยว่าง = ไม่เปลี่ยน"></div>'
+      + '</div>'
+    + '</div>'
+    + '<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button>'
+      + '<button class="btn accent" onclick="commitBulkEditBox(' + JSON.stringify(tags).replace(/"/g, '&quot;') + ')">บันทึกทั้งหมด</button></div>'
+  );
+}
+window.openBulkEditBoxModal=openBulkEditBoxModal;
+function commitBulkEditBox(tags){
+  var type=val('bezType'),supplier=val('bezSupplier'),lot=val('bezLot'),expiry=val('bezExpiry');
+  if(!type&&!supplier&&!lot&&!expiry)return toast('ไม่มีอะไรเปลี่ยน','กรอกอย่างน้อย 1 ช่องก่อนบันทึก','warn');
+  var n=0;
+  tags.forEach(function(t){
+    var b=S.boxes[t];if(!b)return;
+    var before=Object.assign({},b);
+    if(type)b.type=type;
+    if(supplier)b.supplier=supplier;
+    if(lot)b.lot=lot;
+    if(expiry)b.expiry=expiry;
+    auditEntry('UPDATE',USER,t,typeName(b.type),before,Object.assign({},b));
+    n++;
+  });
+  save();closeModal();clearBulk('box-cb','bulkBox','cbAllBox');
+  toast('แก้ไขแล้ว',n+' ใบ');renderAll();
+}
+window.commitBulkEditBox=commitBulkEditBox;
+$('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-cb');if(!tags.length)return;openBulkEditBoxModal(tags);});
 
 /* ===== RENDER ALL ===== */
 function renderAll(){
@@ -9776,14 +9903,18 @@ function invShipRecvText(b) {
   return '<span class="muted small">—</span>';
 }
 /* วันที่ต้องคืน — มีความหมายก็ต่อเมื่อกล่องยังออกอยู่ (status='out') เท่านั้น
-   ใช้ b.dueDate ที่ตั้งไว้ตอนยิงออกจริง (ดู custDueTs) ไม่คำนวณซ้ำที่นี่ —
-   เกินกำหนดแล้ว (isOverdue) โชว์เป็นข้อความสัมพัทธ์แบบ YouTube "เลยมา X Y" แทน
-   วันที่ดิบ (relOverdueText) เพราะวันที่ล้วนๆ อ่านไม่ออกทันทีว่าเลยมานานแค่ไหน —
-   title ยังมีวันที่จริงไว้เผื่ออยากรู้ */
+   ใช้ b.dueDate ที่ตั้งไว้ตอนยิงออกจริง (ดู custDueTs) ไม่คำนวณซ้ำที่นี่ — ทั้ง
+   เกินกำหนด (relOverdueText, "เลยมา X Y") และยังไม่ถึงกำหนด (relRemainingText,
+   "เหลืออีก X Y") โชว์เป็นข้อความสัมพัทธ์แทนวันที่ดิบ เพราะวันที่ล้วนๆ อ่านไม่ออก
+   ทันทีว่าใกล้/ไกลแค่ไหน — คลิกได้เพื่อดูวันที่จริงเป็น toast (title เฉยๆ ใช้ไม่ได้
+   บนจอสัมผัส ไม่มี hover) */
 function invDueDateText(b) {
   if (b.status !== 'out' || !b.dueDate) return '<span class="muted small">—</span>';
-  if (!isOverdue(b)) return esc(b.dueDate);
-  return '<span class="pill bad" title="ครบกำหนด ' + esc(b.dueDate) + '">' + esc(relOverdueText(b.dueAt) || b.dueDate) + '</span>';
+  var onclick = 'event.stopPropagation();toast(\'วันที่ต้องคืน\',\'' + b.dueDate + '\',\'info\')';
+  if (isOverdue(b)) {
+    return '<span class="pill bad" style="cursor:pointer;" onclick="' + onclick + '">' + esc(relOverdueText(b.dueAt) || b.dueDate) + '</span>';
+  }
+  return '<span class="small" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;" onclick="' + onclick + '">' + esc(relRemainingText(b.dueAt) || b.dueDate) + '</span>';
 }
 function canRelocateBox(b) {
   return !!b && b.status === 'warehouse';
@@ -10321,6 +10452,12 @@ function renderInventory() {
   });
   if ($('#cntInv')) $('#cntInv').textContent = boxes.length + ' รายการ';
   var pg = pagerSlice('inv', boxes);
+  // "วันที่ต้องคืน" only ever has anything to show once a box has actually
+  // shipped — every row under the "จัดเก็บในคลังแล้ว" filter would just be a
+  // column of "—", so the whole column (header included) hides for that
+  // filter instead of leaving it visually there for no reason.
+  var hideDue = invStatusFilter === 'warehouse';
+  var dueTh = $('#invDueDateTh'); if (dueTh) dueTh.style.display = hideDue ? 'none' : '';
   body.innerHTML = pg.rows.length ? pg.rows.map(function(b) {
     return '<tr data-tag="' + esc(b.tag) + '" style="cursor:pointer;" onclick="if(event.target.type!==\'checkbox\')openBoxActionModal(\'' + esc(b.tag) + '\')">'
       + '<td class="cb-td"><input type="checkbox" class="row-cb inv-cb" data-tag="' + esc(b.tag) + '"></td>'
@@ -10329,10 +10466,10 @@ function renderInventory() {
       + '<td>' + invLocText(b) + '</td>'
       + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
       + '<td class="small">' + invShipRecvText(b) + '</td>'
-      + '<td class="small">' + invDueDateText(b) + '</td>'
+      + (hideDue ? '' : '<td class="small">' + invDueDateText(b) + '</td>')
       + '<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
     + '</tr>';
-  }).join('') : emptyRow(8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
+  }).join('') : emptyRow(hideDue ? 7 : 8, 'ยังไม่มีกล่องในเงื่อนไขนี้ — สแกนรับเข้าคลังเพื่อเริ่มต้น');
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
   if ($('#pagerInv')) $('#pagerInv').innerHTML = pagerBarHtml('inv', pg);
 }
@@ -10737,7 +10874,9 @@ function updateInvBulkButtons() {
   setBtnEnabled('bulkInvTag', tags.length > 0);
   setBtnEnabled('bulkInvShip', invBulkTargets(tags, function(b) { return b && b.status === 'warehouse'; }).length > 0);
   setBtnEnabled('bulkInvHold', invBulkTargets(tags, function(b) { return b && b.status === 'warehouse'; }).length > 0);
+  setBtnEnabled('bulkInvReleaseHold', invBulkTargets(tags, function(b) { return b && b.status === 'hold'; }).length > 0);
   setBtnEnabled('bulkInvDamage', invBulkTargets(tags, function(b) { return b && (b.status === 'warehouse' || b.status === 'hold'); }).length > 0);
+  setBtnEnabled('bulkInvRepair', invBulkTargets(tags, function(b) { return b && b.status === 'damage'; }).length > 0);
   setBtnEnabled('bulkInvWriteoff', invBulkTargets(tags, function(b) { return b && b.status !== 'lost' && b.status !== 'pending'; }).length > 0);
 }
 window.updateInvBulkButtons = updateInvBulkButtons;
@@ -10881,6 +11020,23 @@ $('#bulkInvHold').addEventListener('click', function() {
     });
 });
 
+$('#bulkInvReleaseHold').addEventListener('click', function() {
+  var tags = getChecked('inv-cb'); if (!tags.length) return;
+  var live = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status === 'hold'; });
+  if (!live.length) return toast('ปลด Hold ได้เฉพาะกล่องที่ Hold อยู่', 'กล่องที่เลือกไม่มีใบที่ Hold อยู่', 'warn');
+  var ts = iso();
+  live.forEach(function(t) {
+    var b = S.boxes[t];
+    var before = { status: b.status };
+    b.status = 'warehouse'; b.holdAt = null; b.lastSeenAt = ts;
+    b.history.push({ dir: 'reg', ts: ts, reason: 'ปลด Hold — กลับมาพร้อมใช้งาน (Bulk)' });
+    auditEntry('RELEASE_HOLD', USER, t, typeName(b.type), before, { status: 'warehouse' });
+  });
+  save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
+  toast('ปลด Hold แล้ว', live.length + ' ใบ · พร้อมใช้งาน', 'ok');
+  renderAll();
+});
+
 $('#bulkInvDamage').addEventListener('click', function() {
   var tags = getChecked('inv-cb'); if (!tags.length) return;
   var live = tags.filter(function(t) { var b = S.boxes[t]; return b && (b.status === 'warehouse' || b.status === 'hold'); });
@@ -10900,6 +11056,23 @@ $('#bulkInvDamage').addEventListener('click', function() {
       toast('ตีชำรุดแล้ว', live.length + ' ใบ · Damage', 'warn');
       renderAll();
     });
+});
+
+$('#bulkInvRepair').addEventListener('click', function() {
+  var tags = getChecked('inv-cb'); if (!tags.length) return;
+  var live = tags.filter(function(t) { return S.boxes[t] && S.boxes[t].status === 'damage'; });
+  if (!live.length) return toast('ปิดงานซ่อมได้เฉพาะกล่องที่ชำรุดอยู่', 'กล่องที่เลือกไม่มีใบที่ชำรุดอยู่', 'warn');
+  var ts = iso();
+  live.forEach(function(t) {
+    var b = S.boxes[t];
+    var before = { status: b.status };
+    b.status = 'warehouse'; b.damageAt = null; b.lastSeenAt = ts;
+    b.history.push({ dir: 'reg', ts: ts, reason: 'ซ่อมเสร็จ — กลับเข้าคลัง (Bulk)' });
+    auditEntry('REPAIR', USER, t, typeName(b.type), before, { status: 'warehouse' });
+  });
+  save(); clearBulk('inv-cb', 'bulkInv', 'cbAllInv');
+  toast('ซ่อมเสร็จแล้ว', live.length + ' ใบ · พร้อมใช้งาน', 'ok');
+  renderAll();
 });
 
 var INV_COMMON_UNITS = ['ชิ้น', 'กล่อง', 'ใบ', 'แผ่น', 'ม้วน', 'แพ็ค', 'ลัง', 'กิโลกรัม', 'เมตร', 'ลิตร'];
@@ -13848,6 +14021,7 @@ function openColumnMapModal(opts){
     "เพิ่มพนักงาน":"Add employee",
     "ไปเพิ่มพนักงาน":"Go add an employee",
     "ออกจากระบบ (เปลี่ยนบัญชี)":"Sign out (switch account)",
+    "ล็อกเอาท์":"Log out","ปิดบัตร":"Close card",
     "แก้ไขข้อมูลพนักงาน":"Edit employee details",
     "ยังไม่มีพนักงานในระบบ — เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้":
       "No employees on file yet - add one before you can pick a recorder",
@@ -13930,6 +14104,8 @@ function openColumnMapModal(opts){
     "คัดลอก":"Copy","เริ่มเลขที่":"Start number","จำนวน":"Quantity","บันทึกรับเข้า":"Save inbound",
     "กล่องที่ลงทะเบียน":"Registered boxes","พิมพ์ฉลากทั้งหมด":"Print all labels","ประเภท":"Type","มูลค่า":"Value","มูลค่า (บาท)":"Value (THB)",
     "ตำแหน่ง / ลูกค้า":"Location / Customer","รอบ":"Cycles","พิมพ์ฉลาก":"Print label","ลบที่เลือก":"Delete selected","ยกเลิกแก้ไข":"Cancel edit",
+    "แก้ไขที่เลือก":"Edit selected","ไม่มีอะไรเปลี่ยน":"Nothing changed","กรอกอย่างน้อย 1 ช่องก่อนบันทึก":"Fill in at least 1 field before saving",
+    "วันหมดอายุ":"Expiry date","แก้ไขแล้ว":"Updated",
     "ลูกค้า / DO":"Customer / DO","ผู้บันทึกล่าสุด":"Last recorder","ย้ายพิกัดจัดเก็บ":"Relocate","ส่งให้ลูกค้า":"Ship to customer",
     "ยกเลิก":"Cancel","พิกัดจัดเก็บ":"Storage location","จำนวน (Qty)":"Qty","มูลค่ารวม (฿)":"Total value (THB)",
     "คลัง & ประตู":"Warehouse & Gate","ลงทะเบียนกล่อง":"Register box","ลูกค้า":"Customer","พนักงาน":"Employees",
@@ -14001,6 +14177,13 @@ function openColumnMapModal(opts){
     "ลงทะเบียนสำเร็จ":"Registered successfully","ย้ายตำแหน่งแล้ว":"Relocated","ตีกล่องหายแล้ว":"Marked as lost",
     "ยกเลิกสูญหายแล้ว":"Lost status cancelled","พักการใช้งานแล้ว":"Put on hold","ปลด Hold แล้ว":"Hold released",
     "ตีชำรุดแล้ว":"Marked as damaged","ซ่อมเสร็จแล้ว":"Repair complete","ไปหยิบตามพิกัด":"Go pick by location",
+    "ปลด Hold":"Release hold","ซ่อมเสร็จ":"Repair complete",
+    "ปลดล็อกกลับสู่สถานะพร้อมส่งออก — ใช้ได้เฉพาะกล่องที่ Hold อยู่":"Unlocks back to ready-to-ship — only for boxes on hold",
+    "ซ่อมเสร็จแล้ว กลับสู่สถานะพร้อมส่งออก — ใช้ได้เฉพาะกล่องที่ชำรุดอยู่":"Repair finished, back to ready-to-ship — only for damaged boxes",
+    "ปลด Hold ได้เฉพาะกล่องที่ Hold อยู่":"Can only release hold on boxes that are on hold",
+    "กล่องที่เลือกไม่มีใบที่ Hold อยู่":"None of the selected boxes are on hold",
+    "ปิดงานซ่อมได้เฉพาะกล่องที่ชำรุดอยู่":"Can only close out repair on damaged boxes",
+    "กล่องที่เลือกไม่มีใบที่ชำรุดอยู่":"None of the selected boxes are damaged",
     "เพิ่มเข้าคิวขาออกแล้ว":"Added to ship-out queue","กรอกจำนวนให้ถูกต้อง":"Enter a valid quantity","เกินจำนวนที่มีในสต็อก":"Exceeds available stock",
     "เพิ่มรายการก่อนอย่างน้อย 1 ประเภท":"Add at least 1 line item first","กล่องนี้ไม่อยู่ในรายการหยิบตำแหน่งนี้":"This box isn't in this pick location's list",
     "บางใบถูกใช้ไปก่อนแล้ว":"Some boxes were already claimed","ไม่มีตำแหน่งให้พิมพ์":"No location to print","ไม่มีฟังก์ชันพิมพ์":"Print function unavailable",
@@ -14109,6 +14292,8 @@ function openColumnMapModal(opts){
     "ลบประเภท ":"Delete type ","ลบคลัง ":"Delete warehouse ","ลบลูกค้า ":"Delete customer ","ลบพนักงาน ":"Delete employee ",
     "ลบตำแหน่ง ":"Delete location ","ลบกล่อง ":"Delete box ","ลบ ":"Delete ","ตีกล่อง ":"Mark box "," เป็นสูญหาย?":" as lost?",
     "ยกเลิกสูญหาย ":"Cancel lost status for ","พักการใช้งาน ":"Put on hold ","ตีชำรุด ":"Mark damaged ",
+    "แก้ไข ":"Edit ",
+    "เว้นว่างช่องไหนไว้ = ไม่เปลี่ยนค่านั้น — อัปเดตเฉพาะช่องที่กรอกให้ทั้ง ":"Leave a field blank to keep it unchanged — only filled-in fields are updated, for all ",
     "ซ่อมเสร็จ ":"Repair complete for ","แจ้งกล่องหาย ":"Report lost: "," กล่อง?":" boxes?"," ตำแหน่งที่เลือก?":" selected locations?",
     "รอบที่ ":"Cycle ","ขั้นตอนที่ ":"Step ","(ขั้นตอนปัจจุบัน)":"(current step)","(เสร็จแล้ว)":"(done)","(ยังไม่ถึง)":"(not yet)",
     "สถานะปัจจุบันแทรกอยู่กลางขั้นตอน: ":"Current status sits outside the linear flow: ",
