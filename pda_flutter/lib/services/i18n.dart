@@ -312,6 +312,9 @@ class LocaleController extends ChangeNotifier {
     'กำลังเริ่ม…': 'Starting…',
     'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้':
         'The count is recorded on the server — if someone already has a count open for this zone, you\'ll continue theirs',
+    'ตรวจนับครบถ้วน': 'Count complete',
+    'ขอแสดงความยินดี ท่านได้ดำเนินการตรวจนับครบถ้วนทุกรายการที่คาดไว้เรียบร้อยแล้ว':
+        'Congratulations — every expected item has been counted',
     'ปิดรอบและบันทึกผล': 'Close and save result',
     'ปิดรอบตรวจนับ': 'Close this count?',
     'ปิดรอบแล้วจะบันทึกผลลงระบบ และเพิ่มสแกนอีกไม่ได้':

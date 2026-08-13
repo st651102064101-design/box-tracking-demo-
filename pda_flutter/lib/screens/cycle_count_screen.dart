@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -53,6 +54,12 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   /// without it, every rebuild while _start() is still in flight would kick
   /// off another openCycleCount call.
   bool _autoStartTried = false;
+
+  /// Missing-count seen on the previous build, so the completion celebration
+  /// fires only on the transition into "nothing missing" — not on every
+  /// rebuild of an already-complete session, and not the instant a session
+  /// is resumed already complete from a previous shift.
+  int? _lastMissing;
 
   AppController get _c => context.read<AppController>();
 
@@ -187,6 +194,40 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
   }
 
+  /// Plays a one-shot confetti burst over the whole screen and shows a
+  /// formal congratulatory alert — fired from build() exactly once, on the
+  /// transition into "nothing missing" (see _lastMissing).
+  void _celebrateComplete(LocaleController loc) {
+    if (!mounted) return;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _ConfettiBurst(onDone: () => entry.remove()),
+    );
+    overlay.insert(entry);
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        icon: Icon(Icons.emoji_events, color: C.lime, size: 40),
+        title: Text(loc.t('ตรวจนับครบถ้วน')),
+        content: Text(
+          loc.t(
+              'ขอแสดงความยินดี ท่านได้ดำเนินการตรวจนับครบถ้วนทุกรายการที่คาดไว้เรียบร้อยแล้ว'),
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          Center(
+            child: FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              style: FilledButton.styleFrom(backgroundColor: C.ink),
+              child: Text(loc.t('รับทราบ')),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Feeds any AppController.cycleCountRfidHits entries this screen hasn't
   /// posted yet through the same _submitScan a barcode read uses — called
   /// post-frame (build() must stay side-effect-free) whenever build() sees
@@ -229,6 +270,22 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     if (session == null && !_busy && !_autoStartTried && zones.isEmpty) {
       _autoStartTried = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    }
+
+    if (session != null) {
+      final expectedCount = _summary('expected');
+      final missingCount = _summary('missing');
+      // Fires only on the transition into zero-missing — a session resumed
+      // already complete from a previous shift, or a rebuild that just
+      // redraws an already-celebrated session, must not replay the alert.
+      if (_lastMissing != null &&
+          _lastMissing! > 0 &&
+          missingCount == 0 &&
+          expectedCount > 0) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _celebrateComplete(loc));
+      }
+      _lastMissing = missingCount;
     }
 
     return ScanCapture(
@@ -557,3 +614,114 @@ class _CountStat extends StatelessWidget {
     );
   }
 }
+
+/// One-shot confetti rain over the whole screen, inserted as a root overlay
+/// entry from _celebrateComplete so it draws above the AlertDialog's own
+/// barrier — a full-screen burst reads as "the whole app is celebrating",
+/// not just the dialog card. Self-removes via [onDone] once the fall
+/// animation finishes; not gated on C.lowGraphics like every other
+/// animation in this app, since this plays once as a reward rather than on
+/// every frame of routine chrome.
+class _ConfettiBurst extends StatefulWidget {
+  final VoidCallback onDone;
+  const _ConfettiBurst({required this.onDone});
+  @override
+  State<_ConfettiBurst> createState() => _ConfettiBurstState();
+}
+
+class _ConfettiBurstState extends State<_ConfettiBurst>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final List<_ConfettiParticle> _particles;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2200))
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) widget.onDone();
+      })
+      ..forward();
+    final rnd = Random();
+    _particles = List.generate(70, (_) => _ConfettiParticle(rnd));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, __) => CustomPaint(
+          size: MediaQuery.of(context).size,
+          painter: _ConfettiPainter(_particles, _ctrl.value),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfettiParticle {
+  final double x0; // 0..1 horizontal start
+  final double delay; // 0..0.35 stagger, so the burst doesn't fall as one flat sheet
+  final double speed; // fall-speed multiplier
+  final double drift; // horizontal sway amplitude in px
+  final double size;
+  final double rotSpeed;
+  final Color color;
+
+  _ConfettiParticle(Random rnd)
+      : x0 = rnd.nextDouble(),
+        delay = rnd.nextDouble() * 0.35,
+        speed = 0.7 + rnd.nextDouble() * 0.6,
+        drift = (rnd.nextDouble() - 0.5) * 40,
+        size = 5 + rnd.nextDouble() * 5,
+        rotSpeed = (rnd.nextDouble() - 0.5) * 8,
+        color = _confettiColors[rnd.nextInt(_confettiColors.length)];
+}
+
+/// Pulled from C's own accent tokens rather than hardcoded — this way the
+/// burst's palette shifts with the current theme (light/dark) the same as
+/// everything else on screen, instead of clashing against a dark background.
+List<Color> get _confettiColors =>
+    [C.lime, C.orange, C.menuBlue, C.menuGreen, C.red];
+
+class _ConfettiPainter extends CustomPainter {
+  final List<_ConfettiParticle> particles;
+  final double t; // overall animation progress, 0..1
+  _ConfettiPainter(this.particles, this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    for (final p in particles) {
+      final local = ((t - p.delay) / (1 - p.delay)).clamp(0.0, 1.0);
+      if (local <= 0) continue;
+      final fallY = local * p.speed * size.height * 1.15;
+      final dx = p.x0 * size.width + sin(local * pi * 2) * p.drift;
+      final dy = -20 + fallY;
+      if (dy > size.height + 20) continue;
+      final fadeOut = local > 0.85 ? (1 - local) / 0.15 : 1.0;
+      paint.color = p.color.withValues(alpha: fadeOut.clamp(0.0, 1.0));
+      canvas.save();
+      canvas.translate(dx, dy);
+      canvas.rotate(local * p.rotSpeed);
+      canvas.drawRect(
+        Rect.fromCenter(
+            center: Offset.zero, width: p.size, height: p.size * 0.6),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => true;
+}
+
