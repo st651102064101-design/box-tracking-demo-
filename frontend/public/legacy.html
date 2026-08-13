@@ -1127,7 +1127,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <div id="df-ovStatusNow-mount"></div>
   <p class="muted small" id="ovStatusNowDesc" style="margin:0 0 10px;"></p>
   <div class="kpis reveal" style="margin-top:8px;">
-    <div class="kpi green clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'ในคลัง'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></div><div class="n mono" id="kInNow">0</div><div class="l">ในคลัง</div></div>
+    <div class="kpi green clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'พร้อมส่งออก'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></div><div class="n mono" id="kInNow">0</div><div class="l">พร้อมส่งออก</div></div>
     <div class="kpi teal clickable" title="ดูกล่องที่ออกอยู่" onclick="goInventory({status:'out',label:'ออกอยู่'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kOutNow">0</div><div class="l">ออกอยู่</div></div>
     <div class="kpi red clickable" title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'สูญหาย'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M8 9l3 4 3-3 4 5"/><path d="M18 15h2v-2"/></svg></span></div><div class="n mono" id="kLostNow">0</div><div class="l">สูญหาย</div></div>
     <div class="kpi orange clickable" title="ดูกล่องที่พักใช้งาน" onclick="goInventory({status:'hold',label:'พักใช้งาน (Hold)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></div><div class="n mono" id="kHoldNow">0</div><div class="l">พักใช้งาน (Hold)</div></div>
@@ -1621,7 +1621,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <!-- ลงทะเบียนกล่อง — ย้ายมารวมกับประเภทกล่องในหน้าเดียวกัน (เดิมแยกแท็บ) -->
     <div class="card hover">
       <h3>ลงทะเบียนกล่อง (Barcode)</h3>
-      <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "ในคลัง" พร้อมใช้งาน</p>
+      <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "พร้อมส่งออก" พร้อมใช้งาน</p>
 
       <!-- Mode Selector -->
       <div class="inv-view-sw" id="boxModeSw" style="margin-bottom:20px;">
@@ -1689,7 +1689,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         <select id="filtBoxStatus" style="width:auto;">
           <option value="">ทุกสถานะ</option>
           <option value="pending">รอเข้าคลัง (Gate In)</option>
-          <option value="warehouse">ในคลัง</option>
+          <option value="warehouse">พร้อมส่งออก</option>
           <option value="hold">พักใช้งาน (Hold)</option>
           <option value="damage">ชำรุด (Damage)</option>
           <option value="out">ออกไปแล้ว</option>
@@ -3185,7 +3185,7 @@ function gateWh(g){return S.gates[g]||'';}
 function allGateNums(){return Object.keys(S.gates).map(Number).sort(function(a,b){return a-b;});}
 function gateOptions(sel){var gs=allGateNums();if(!gs.length)return '<option value="">(ยังไม่มีประตู — เพิ่มที่ตั้งค่า)</option>';
   return '<option value="">— เลือกประตู —</option>'+gs.map(function(g){return '<option value="'+g+'"'+(String(sel)===String(g)?' selected':'')+'>ประตู '+g+' · '+esc(whName(gateWh(g)))+'</option>';}).join('');}
-function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">ในคลัง</span>';
+function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">พร้อมส่งออก</span>';
   var tail=[loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
   return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
 
@@ -4882,7 +4882,7 @@ function btcBackHtml(t,s){
   var rows=s.boxes.slice().sort(function(a,b){return a.tag<b.tag?-1:1;}).map(function(b){
     var where=b.status==='out'
       ?esc(custName(b.customer))+(b.do?' · '+esc(b.do):'')
-      :(b.status==='pending'?'รอเข้าคลัง':((b.location||{}).wh?esc(whName(b.location.wh)):'ในคลัง'));
+      :(b.status==='pending'?'รอเข้าคลัง':((b.location||{}).wh?esc(whName(b.location.wh)):'พร้อมส่งออก'));
     return '<div class="btc-row" data-tag="'+esc(b.tag)+'">'
       +'<span class="tg">'+esc(b.tag)+'</span>'
       +statusPill(b.status,b)
@@ -4895,7 +4895,7 @@ function btcBackHtml(t,s){
 
 function btcTopHtml(t,s){
   if(!s.boxes.length)return '<div class="btc-empty">ยังไม่มีกล่องที่ใช้ประเภทนี้</div>';
-  var order=[['warehouse','ในคลัง','var(--accent)'],['pending','รอเข้าคลัง (Gate In)','var(--warn)'],
+  var order=[['warehouse','พร้อมส่งออก','var(--accent)'],['pending','รอเข้าคลัง (Gate In)','var(--warn)'],
     ['out','ออกไปแล้ว','#2aa'],['hold','พักใช้งาน (Hold)','#8a6bd8'],
     ['damage','ชำรุด (Damage)','#d98324'],['lost','สูญหาย','var(--neg)']];
   var tot=s.boxes.length;
@@ -5847,11 +5847,21 @@ window.whpToggleStatus=whpToggleStatus;
 function whpPlaceActions(){
   var rail=$('#whpActions'),stage=$('#whpStage');
   if(!rail||!stage)return;
-  var r=stage.getBoundingClientRect();
+  /* offsetWidth/offsetHeight (ไม่ผ่าน transform) แทน getBoundingClientRect() — หลังพัง
+     ตอนเรียกกลางอนิเมชันซูมเข้า (.whp-stage มี transform:scale() วิ่งอยู่ .45s ตอนเปิดแผง)
+     เพราะมันวัดกล่องตามที่ "เห็นจริง ณ ขณะนั้น" ซึ่งกลางอนิเมชันยังเล็กจิ๋วกลางจอ (คีย์เฟรม
+     from{scale(.08)}) ไม่ใช่ขนาดเต็มตอนอนิเมชันจบ — ปุ่มเลยไปเกาะกลางจอทับการ์ดประตูแทนที่
+     จะอยู่ข้างแผงเต็มขนาด offsetWidth/Height ไม่นับ transform เลย ได้ขนาดจริงเสมอไม่ว่า
+     อนิเมชันจะวิ่งถึงไหน ส่วนตำแหน่งคำนวณเองแทนวัด เพราะ .whp-stage centered กลาง
+     #whPanelOverlay (position:fixed;inset:0 เต็มจอ) ด้วย left:50%;top:50%;translate(-50%,-50%)
+     ตลอดทั้งอนิเมชัน (มีแค่ scale ที่เปลี่ยน จุดกึ่งกลางไม่ขยับ) จึงรู้ตำแหน่งสุดท้ายได้แน่นอน
+     ทันที ไม่ต้องรอ animationend */
+  var cx=window.innerWidth/2,cy=window.innerHeight/2;
+  var right=cx+stage.offsetWidth/2,top=cy-stage.offsetHeight/2;
   var W=48;
-  var x=r.right+OVERLAY_BTN_GAP;
-  if(x+W>window.innerWidth-8)x=Math.max(8,r.right-W-6);
-  rail.style.transform='translate('+Math.round(x)+'px,'+Math.round(Math.max(8,r.top))+'px)';
+  var x=right+OVERLAY_BTN_GAP;
+  if(x+W>window.innerWidth-8)x=Math.max(8,right-W-6);
+  rail.style.transform='translate('+Math.round(x)+'px,'+Math.round(Math.max(8,top))+'px)';
 }
 
 function openWhPanel(id){
@@ -6315,7 +6325,7 @@ function markLost(tag){
 }
 function recoverLost(tag){
   var b=S.boxes[tag];if(!b||b.status!=='lost')return;
-  confirmA('ยกเลิกสูญหาย '+tag+'?','กล่องจะกลับสู่สถานะ "ในคลัง" — ควรบันทึกการรับเข้าจริงที่แท็บ Gate ขาเข้าด้วย','ยืนยัน พบกล่องแล้ว',false)
+  confirmA('ยกเลิกสูญหาย '+tag+'?','กล่องจะกลับสู่สถานะ "พร้อมส่งออก" — ควรบันทึกการรับเข้าจริงที่แท็บ Gate ขาเข้าด้วย','ยืนยัน พบกล่องแล้ว',false)
     .then(function(ok){if(!ok)return;
       b.status='warehouse';b.lostAt=null;b.lostReason=null;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.history.push({dir:'reg',ts:iso(),reason:'ยกเลิกสูญหาย — พบกล่องแล้ว'});
@@ -6356,7 +6366,7 @@ function markDamage(tag){
 }
 function repairDamage(tag){
   var b=S.boxes[tag];if(!b||b.status!=='damage')return;
-  confirmA('ซ่อมเสร็จ '+tag+'?','กล่องจะกลับสู่สถานะ "ในคลัง" พร้อมใช้งานอีกครั้ง','ยืนยันซ่อมเสร็จ',false).then(function(ok){if(!ok)return;
+  confirmA('ซ่อมเสร็จ '+tag+'?','กล่องจะกลับสู่สถานะ "พร้อมส่งออก" พร้อมใช้งานอีกครั้ง','ยืนยันซ่อมเสร็จ',false).then(function(ok){if(!ok)return;
     var before={status:b.status};b.status='warehouse';b.damageAt=null;b.lastSeenAt=iso();
     b.history.push({dir:'reg',ts:iso(),reason:'ซ่อมเสร็จ — กลับเข้าคลัง'});
     auditEntry('REPAIR',USER,tag,typeName(b.type),before,{status:'warehouse'});
@@ -6447,7 +6457,7 @@ function openAllocateModal(){
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบกล่อง (FIFO / FEFO)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
-      +'<p class="muted small" style="margin:0 0 14px;">เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน — <b>FEFO</b> ใช้วันหมดอายุ, <b>FIFO</b> ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ "ในคลัง")</p>'
+      +'<p class="muted small" style="margin:0 0 14px;">เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน — <b>FEFO</b> ใช้วันหมดอายุ, <b>FIFO</b> ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ "พร้อมส่งออก")</p>'
       +'<div class="grid g3" style="margin-bottom:14px;">'
         +'<div class="field"><label>ประเภทกล่อง</label><select id="alType">'+typeOpts+'</select></div>'
         +'<div class="field"><label>จำนวนที่ต้องจ่าย</label><input id="alQty" type="number" min="1" value="5"></div>'
@@ -6466,7 +6476,7 @@ function openAllocateModal(){
       ?'<div class="twrap" style="max-height:46vh;"><table><thead><tr><th>#</th><th>บาร์โค้ด</th><th>ประเภท</th><th>Lot</th><th>หมดอายุ</th><th>เข้าคลังเมื่อ</th><th>ตำแหน่ง</th></tr></thead><tbody>'
         +list.map(function(b,i){return '<tr><td class="mono">'+(i+1)+'</td><td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td>'+esc(b.lot||'-')+'</td><td>'+(b.expiry?esc(b.expiry)+' '+expiryPill(b):'<span class="muted">-</span>')+'</td><td class="small">'+fmtTs(boxReceiveTs(b))+'</td><td class="small">'+locShort(b.location)+'</td></tr>';}).join('')
         +'</tbody></table></div>'
-      :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้</div>';
+      :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "พร้อมส่งออก" ตามเงื่อนไขนี้</div>';
   }
   ['alType','alQty','alMode'].forEach(function(id){var e=$('#'+id);if(e){e.addEventListener('input',refresh);e.addEventListener('change',refresh);}});
   /* "ไปหยิบตามพิกัด" used to push the suggested tags straight into the
@@ -6481,7 +6491,7 @@ function openAllocateModal(){
     var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
     if(!type)return toast('เลือกประเภทกล่อง',null,'err');
     if(!qty||qty<1)return toast('กรอกจำนวนให้ถูกต้อง',null,'err');
-    if(!availableQtyForType(type))return toast('ไม่มีกล่องสถานะ "ในคลัง" ตามเงื่อนไขนี้',null,'err');
+    if(!availableQtyForType(type))return toast('ไม่มีกล่องสถานะ "พร้อมส่งออก" ตามเงื่อนไขนี้',null,'err');
     closeModal();
     openPickListModal([{type:type,qty:qty,mode:mode}]);
   };
@@ -6592,7 +6602,7 @@ function pickRowDone(row){return row.forced||row.tags.every(function(t){return r
 function renderPickTable(){
   var box=$('#plResult');if(!box)return;
   var shortfallHtml=(pickShortfalls&&pickShortfalls.length)?('<div class="banner warn" style="margin-bottom:10px;">สต็อกเปลี่ยนระหว่างทาง — บางรายการได้ไม่ครบ:<br>'+pickShortfalls.map(esc).join('<br>')+'</div>'):'';
-  if(!pickRows||!pickRows.length){box.innerHTML=shortfallHtml+'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "ในคลัง" ตรงเงื่อนไขนี้</div>';$('#plQueueBtn').disabled=true;return;}
+  if(!pickRows||!pickRows.length){box.innerHTML=shortfallHtml+'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "พร้อมส่งออก" ตรงเงื่อนไขนี้</div>';$('#plQueueBtn').disabled=true;return;}
   box.innerHTML=shortfallHtml+'<div class="twrap" style="max-height:48vh;"><table><thead><tr><th>🟩 พิกัดชั้นวาง</th><th>📦 ชนิดกล่อง</th><th>🔢 จำนวน</th><th>🎯 ผลการหยิบ</th></tr></thead><tbody>'
     +pickRows.map(function(row,ri){
       var done=pickRowDone(row);var doneCnt=row.tags.filter(function(t){return row.confirmed[t];}).length;
@@ -7105,14 +7115,14 @@ window.printAllLabels=printAllLabels;
 /* Status pill. Pass the box (or box-like group with .location) as the 2nd
    arg when available — used only for the pending/not-yet-labeled case below.
    SOW: no Putaway/staging — a box without a zone/rack on file is still
-   plain "ในคลัง" (ready to ship), not a distinct warning state. */
+   plain "พร้อมส่งออก" (ready to ship), not a distinct warning state. */
 function statusPill(s,ctx){
   if(s==='warehouse'&&ctx&&ctx.labeled===false){
     return '<span class="pill warn">รอเข้าคลัง (Gate In)</span>';
   }
-  /* SOW: no Putaway/staging — a box lands in "ในคลัง" the moment Gate In
+  /* SOW: no Putaway/staging — a box lands in "พร้อมส่งออก" the moment Gate In
      receives it, whether or not it has a zone/rack recorded */
-  var m={warehouse:['info','ในคลัง'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอเข้าคลัง (Gate In)'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
+  var m={warehouse:['info','พร้อมส่งออก'],out:['teal','ออกไปแล้ว'],lost:['bad','สูญหาย'],pending:['warn','รอเข้าคลัง (Gate In)'],hold:['hold','พักใช้งาน (Hold)'],damage:['dmg','ชำรุด (Damage)']};var x=m[s]||['gray',s];return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
 /* small badge shown next to the status pill: only speaks up once a box
    actually HAS an RFID tag associated (from the PDA — see
    pda_flutter/lib/screens/rfid_register_screen.dart). SOW: a box no longer
@@ -8632,7 +8642,7 @@ function renderReports(){
         +'<span id="'+chevId+'" style="font-size:11px;color:var(--muted);transition:transform .3s;display:inline-block;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span></span>'
         +'<div class="rth-name">'+esc(typeName(tk))+'<div class="tag" style="margin-top:3px;">มูลค่ารวม '+money(totVal)+' ฿</div></div>'
         +'<div style="text-align:right;padding:0 8px;"><div class="rth-n">'+nf(boxes.length)+'</div><div class="rth-label">ทั้งหมด</div></div>'
-        +'<div style="text-align:right;padding:0 8px;"><div class="rth-n">'+nf(totWh)+'</div><div class="rth-label">ในคลัง</div></div>'
+        +'<div style="text-align:right;padding:0 8px;"><div class="rth-n">'+nf(totWh)+'</div><div class="rth-label">พร้อมส่งออก</div></div>'
         +'<div style="text-align:right;padding:0 8px;"><div class="rth-n '+(totOut?'diff-neg':'')+'">'+nf(totOut)+'</div><div class="rth-label">ออกอยู่</div></div>'
         +'<div style="text-align:right;padding:0 8px;"><div class="rth-n '+(totLost?'diff-neg':'')+'">'+nf(totLost)+'</div><div class="rth-label">สูญหาย</div></div>'
         +'<div style="text-align:right;padding:0 8px;"><div class="rth-n">'+nf(totOutEv)+'</div><div class="rth-label">ออกสะสม</div></div>'
@@ -9650,12 +9660,12 @@ function invLocText(b) {
   if (b.status === 'lost') return '<span class="muted">— แจ้งกล่องหาย —</span>' + (b.customer ? '<div class="tag">' + esc(custName(b.customer)) + '</div>' : '');
   /* SOW: no Putaway/staging — a box not yet through Gate In just reads
      "รอเข้าคลัง (Gate In)", labeled or not, and one that IS in the
-     warehouse but has no zone/rack on file reads as plain "ในคลัง" — neither
+     warehouse but has no zone/rack on file reads as plain "พร้อมส่งออก" — neither
      is an error state needing a warning pill, since there's no rack
      placement step left to nag about. */
   if (b.status === 'pending') return '<span class="muted">รอเข้าคลัง (Gate In)</span>';
   var loc = b.location || {};
-  if (!loc.wh) return '<span class="muted">ในคลัง</span>';
+  if (!loc.wh) return '<span class="muted">พร้อมส่งออก</span>';
   return locShort(b.location);
 }
 /* วันที่ ส่ง/รับ ล่าสุด — อ่านจาก history ตัวจริงของกล่อง (ล่าสุดที่เป็น
@@ -10046,7 +10056,23 @@ function filteredInvBoxes() {
        that warehouse — the status TAB is what should decide status-based
        hiding, not the warehouse pill. */
     if (invWhFilter) {
-      if ((b.location || {}).wh !== invWhFilter) return false;
+      var boxWh = (b.location || {}).wh;
+      /* A box with no location.wh yet (registered but never actually put
+         away/scanned into a specific warehouse — e.g. straight from
+         "ลงทะเบียนกล่อง") isn't really "not in invWhFilter's warehouse", it
+         just doesn't have one on file. With more than one warehouse there's
+         no way to guess which, so it's correctly excluded — but with only
+         one warehouse in the whole system, buildInvWhPills() auto-selects
+         it as invWhFilter, and every such box then failed this exact !==
+         check and vanished from the table entirely (while the status-tab
+         badges, which don't apply invWhFilter, kept showing the real
+         count) — this is what "badge says 11, table shows 0" was. */
+      if (!boxWh) {
+        var whs = activeWarehouses();
+        if (whs.length !== 1 || whs[0].id !== invWhFilter) return false;
+      } else if (boxWh !== invWhFilter) {
+        return false;
+      }
     }
     /* ── standard status filter ── */
     /* SOW: no Putaway/staging/RFID-pending workflow — 'unlocated',
@@ -10271,7 +10297,7 @@ function renderInvSummary() {
 
   if (!rows.length) { body.innerHTML = '<tr><td colspan="6">' + emptyRow(6, 'ยังไม่มีกล่องในเงื่อนไขนี้').replace(/<tr>|<\/tr>/g,'') + '</td></tr>'; return; }
 
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'แจ้งกล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var statusLabel = { warehouse: 'พร้อมส่งออก', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'แจ้งกล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
   body.innerHTML = rows.map(function(g, gi) {
     var isStg = g.status === 'warehouse' && g.locKey.indexOf('STG') === 0;
     var isOut = g.status === 'out';
@@ -10360,7 +10386,7 @@ autoScanBind($('#invScan'), invQuickSearch);
 
 /* ====== CREATE: สแกนรับเข้าคลัง (auto-fill type/unit + default location) ====== */
 var invReceiveQueue = [];
-/* SOW: no Putaway/staging — a box lands in "ในคลัง" the moment it's received here.
+/* SOW: no Putaway/staging — a box lands in "พร้อมส่งออก" the moment it's received here.
    The rack fields below are an optional convenience so the operator can note
    where it physically sits; they are never required for the receive to succeed. */
 function openInvReceiveModal(prefilledTag) {
@@ -11445,7 +11471,7 @@ window.downloadXLSMulti = downloadXLSMulti;
    export — routes straight back into the box importer (see
    handleMultiSheetMasterImport, which runs on single-sheet files too). */
 function buildRelationalInventoryRows() {
-  var boxStatusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var boxStatusLabel = { warehouse: 'พร้อมส่งออก', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var headers = [
     'บาร์โค้ด', 'รหัสประเภท', 'ชื่อประเภทกล่อง', 'หน่วยนับกล่อง', 'สถานะกล่อง',
     'รหัสคลัง', 'ชื่อคลัง',
@@ -11548,7 +11574,7 @@ window.exportOverviewExcel = exportOverviewExcel;
 
 function exportInvExcel() {
   // Export the live WMS box-stock view (respects status filter + search)
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var statusLabel = { warehouse: 'พร้อมส่งออก', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ส่งลูกค้า', lost: 'กล่องหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var boxes = filteredInvBoxes().sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var headers = ['รหัสบาร์โค้ด', 'ประเภทกล่อง', 'สถานะ', 'คลัง', 'ลูกค้า', 'DO', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
@@ -11563,7 +11589,7 @@ window.exportInvExcel = exportInvExcel;
 
 function exportBoxExcel() {
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
-  var statusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var statusLabel = { warehouse: 'พร้อมส่งออก', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var headers = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'ลูกค้า', 'DO', 'PO', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
   var rows = boxes.map(function(b) {
     var loc = b.location || {};
@@ -11656,7 +11682,7 @@ function pickAllMastersExportMode() {
 }
 window.pickAllMastersExportMode = pickAllMastersExportMode;
 function exportAllMastersExcel(mode) {
-  var boxStatusLabel = { warehouse: 'ในคลัง', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
+  var boxStatusLabel = { warehouse: 'พร้อมส่งออก', hold: 'พักใช้งาน (Hold)', damage: 'ชำรุด (Damage)', out: 'ออกไปแล้ว', lost: 'สูญหาย', pending: 'รอเข้าคลัง (Gate In)' };
   var boxes = Object.values(S.boxes).sort(function(a, b) { return a.tag < b.tag ? -1 : 1; });
   var boxHeaders = ['บาร์โค้ด', 'ประเภท', 'มูลค่า', 'สถานะ', 'คลัง/ตำแหน่ง', 'ลูกค้า', 'DO', 'PO', 'Lot/Batch', 'วันหมดอายุ', 'ซัพพลายเออร์', 'รอบหมุนเวียน', 'อัปเดตล่าสุด'];
   var boxRows = boxes.map(function(b) {
@@ -13036,7 +13062,7 @@ function openColumnMapModal(opts){
      every other registration path now (see comment at line 3697 — 'pending'
      as a separate "awaiting Gate เข้า confirm" limbo was removed entirely
      per request; it was producing boxes whose status pill said "รอเข้าคลัง
-     (Gate In)" while their location already read "ในคลัง"). It still goes
+     (Gate In)" while their location already read "พร้อมส่งออก"). It still goes
      into pendingIn/#btnCheckIn below so the operator's scan-and-confirm
      batch UX (assign gate/vehicle/driver) is unchanged — classifyInTag()
      just no longer rejects it as "already in warehouse" for being fresh.
@@ -13453,10 +13479,10 @@ function openColumnMapModal(opts){
     "ถึง":"to",
     "เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน —":"Pick a type and a quantity and the system orders which boxes to take first -",
     "ใช้วันหมดอายุ,":"by expiry date,",
-    "ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ \"ในคลัง\")":"by order of arrival (boxes with status \"in warehouse\" only)",
+    "ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ \"พร้อมส่งออก\")":"by order of arrival (boxes with status \"in warehouse\" only)",
     "หมดอายุ":"Expiry",
     "เข้าคลังเมื่อ":"Received",
-    "ไม่มีกล่องสถานะ \"ในคลัง\" ตามเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
+    "ไม่มีกล่องสถานะ \"พร้อมส่งออก\" ตามเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
     "สต็อกเปลี่ยนระหว่างทาง — บางรายการได้ไม่ครบ:":"Stock changed in the meantime - some lines are short:",
     "🟩 พิกัดชั้นวาง":"🟩 Shelf location",
     "📦 ชนิดกล่อง":"📦 Box type",
@@ -13535,7 +13561,7 @@ function openColumnMapModal(opts){
     "WMS · เฟส 1 · Returnable Asset Tracking":"WMS - Phase 1 - Returnable Asset Tracking",
     "ผังกระบวนการ — สลับเป็น 3D เพื่อเข้าคลังเสมือนที่เชื่อมข้อมูลจริง":"Process map - switch to 3D for the virtual warehouse on live data",
     "Lot / หมดอายุ":"Lot / expiry",
-    "ไม่มีกล่องสถานะ \"ในคลัง\" ตรงเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
+    "ไม่มีกล่องสถานะ \"พร้อมส่งออก\" ตรงเงื่อนไขนี้":"No boxes with status \"in warehouse\" match this",
     "ไทม์ไลน์ทั้งหมด (ใหม่ → เก่า)":"Full timeline (newest -> oldest)",
     "กล่องที่ถูกตีเป็นสูญหายแล้ว (Manual หรือ Auto-overdue)":"Boxes marked lost (manually or auto-overdue)",
     "เข้าวันนี้ · Gate In":"In today - Gate In",
@@ -13663,7 +13689,7 @@ function openColumnMapModal(opts){
     "ผลการนำเข้าไฟล์ (รับคืน)":"Import results (returns)",
     "ยังไม่ระบุ":"Not set",
     "ยิงบาร์โค้ด / บาร์โค้ด หรือพิมพ์เลขกล่อง, PO, DO, ทะเบียนรถ แล้วกด Enter — ระบบดึงทุกกล่องในชุดนั้นพร้อมประวัติและตำแหน่งล่าสุดขึ้นมาให้":"Scan a barcode, or type a box number, PO, DO or plate and press Enter - the system pulls every box in that batch with its history and latest location",
-    "ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ \"ในคลัง\" พร้อมใช้งาน":"Codes are generated automatically so they can never collide - once registered, a box is \"in warehouse\" and ready to use",
+    "ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ \"พร้อมส่งออก\" พร้อมใช้งาน":"Codes are generated automatically so they can never collide - once registered, a box is \"in warehouse\" and ready to use",
     "สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป":"Create or edit box types - they appear as choices when registering a box. Detailed size/weight comes in a later phase",
     "กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน":"Define each warehouse and the range of gate numbers tied to it - whichever gate is scanned, the system knows at once which warehouse the box entered or left",
     "รายชื่อผู้ปฏิบัติงานที่เลือกเป็น \"ผู้บันทึก\" ได้จากปุ่มมุมขวาบน — ไม่กระทบประวัติเดิมเมื่อแก้ไข/ลบ":"Staff who can be picked as the \"recorder\" from the button in the top right - editing or deleting one leaves past history untouched",
@@ -13807,7 +13833,7 @@ function openColumnMapModal(opts){
     "ประวัติการใช้งาน":"Audit Log","เปลี่ยนรหัสผ่าน":"Change password","ตั้งรหัสผ่าน":"Set password",
     "ตั้ง/เปลี่ยนบัญชีเข้าสู่ระบบเว็บของพนักงานคนนี้":"Set/change this employee's web login account",
     "ทุกสถานะ":"All statuses","พักใช้งาน (Hold)":"On hold (Hold)","ชำรุด (Damage)":"Damaged (Damage)","สูญหาย":"Lost",
-    "ทั้งหมด":"All","รอเข้าคลัง (Gate In)":"Awaiting Gate In","ในคลัง":"In warehouse",
+    "ทั้งหมด":"All","รอเข้าคลัง (Gate In)":"Awaiting Gate In","พร้อมส่งออก":"Ready to ship",
     "จัดเก็บในคลังแล้ว":"Stored in warehouse",
     "ชำรุด":"Damaged","ยังไม่ระบุตำแหน่ง":"No location","ส่งลูกค้า":"At customer","แจ้งกล่องหาย":"Report lost",
     "รายใบ":"By unit","สรุปสต็อก":"Stock summary","บาร์โค้ดตำแหน่ง":"Location barcode","เลือกทั้งหมด":"Select all",
@@ -13902,10 +13928,10 @@ function openColumnMapModal(opts){
     "ประวัติ Gate เข้า/ออกเดิมที่เคยผูกกับลูกค้านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย":"Existing gate in/out history tied to this customer stays intact — it won't be deleted with them",
     "ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย":"Existing gate in/out history recorded by this employee stays intact — it won't be deleted with them",
     "การยืนยันนี้จะเปลี่ยนสถานะเป็น \"สูญหาย\" — สามารถยกเลิกได้ภายหลังหากพบกล่อง":"Confirming changes the status to \"Lost\" — this can be undone later if the box is found",
-    "กล่องจะกลับสู่สถานะ \"ในคลัง\" — ควรบันทึกการรับเข้าจริงที่แท็บ Gate ขาเข้าด้วย":"The box returns to \"In warehouse\" status — you should also record the actual receipt on the Gate In tab",
+    "กล่องจะกลับสู่สถานะ \"พร้อมส่งออก\" — ควรบันทึกการรับเข้าจริงที่แท็บ Gate ขาเข้าด้วย":"The box returns to \"In warehouse\" status — you should also record the actual receipt on the Gate In tab",
     "กล่องจะยังอยู่ในตำแหน่งเดิม แต่ถูกกันไม่ให้จ่ายออกจนกว่าจะปลดล็อก":"The box stays in its current location but is blocked from shipping until released",
     "กล่องยังอยู่ในคลังแต่จะถูกกันออกจากการใช้งาน — ต่างจาก \"สูญหาย\" ที่หายไปจริง":"The box stays in the warehouse but is excluded from use — different from \"Lost\", which means it's actually missing",
-    "กล่องจะกลับสู่สถานะ \"ในคลัง\" พร้อมใช้งานอีกครั้ง":"The box returns to \"In warehouse\" status, ready for use again",
+    "กล่องจะกลับสู่สถานะ \"พร้อมส่งออก\" พร้อมใช้งานอีกครั้ง":"The box returns to \"In warehouse\" status, ready for use again",
     "กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้":"Boxes previously recorded at this location keep their existing data",
     "ลบทุกอย่างถาวร":"Permanently deletes everything",
     "เปลี่ยนสถานะเป็น \"แจ้งกล่องหาย\" — ไม่ลบออกจากฐานข้อมูล สามารถคืนสภาพภายหลังได้":"Changes status to \"Reported lost\" — not deleted from the database, can be restored later",
