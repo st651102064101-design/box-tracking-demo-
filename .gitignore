@@ -1,6 +1,8 @@
 node_modules/
 frontend/node_modules/
 .DS_Store
+.next/
+frontend/.next/
 
 # local dev config + on-disk PGlite database — contains JWT_SECRET, never commit
 .env
