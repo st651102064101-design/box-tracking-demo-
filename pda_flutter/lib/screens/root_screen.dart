@@ -127,10 +127,12 @@ class _OfflineAlertListener extends StatefulWidget {
 
 class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
   int? _lastSeen;
+  bool _dialogOpen = false;
 
   @override
   Widget build(BuildContext context) {
     final id = context.select<AppController, int>((c) => c.offlineEventId);
+    final connected = context.select<AppController, bool>((c) => c.connected);
     if (_lastSeen == null) {
       // First build: this is the app's starting state, not a drop that just
       // happened — nothing to alert about yet.
@@ -140,6 +142,7 @@ class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
       final c = context.read<AppController>();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        _dialogOpen = true;
         showDialog<void>(
           context: context,
           builder: (dialogCtx) => AlertDialog(
@@ -161,7 +164,19 @@ class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
               ),
             ],
           ),
-        );
+        ).then((_) => _dialogOpen = false);
+      });
+    }
+    // The dialog has no auto-close timer of its own — it stays up until the
+    // operator taps a button. Reconnecting in the background (the SSE retry
+    // succeeding, or a manual "ตั้งค่าระบบ" fix landing) must still clear it
+    // immediately rather than leaving a stale "ขาดการเชื่อมต่อ" dialog on
+    // screen once the app is actually back online.
+    if (connected && _dialogOpen) {
+      _dialogOpen = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context, rootNavigator: true).maybePop();
       });
     }
     // Must be Positioned, not a bare SizedBox: a Stack sizes itself to its
