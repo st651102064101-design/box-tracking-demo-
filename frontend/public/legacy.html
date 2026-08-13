@@ -1357,6 +1357,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <datalist id="dl-tel"></datalist>
   </div>
 
+  <!-- thai_submit build: boxes arrive at this gate via a fixed Zebra FX9600
+       reader's IoT Connector HTTP-POST profile, not manual scanning or
+       Excel import — this just surfaces the webhook URL that profile needs
+       to be pointed at (see backend/src/routes/rfid.ts's fx9600Webhook),
+       so setting up the physical reader doesn't require reading source. -->
+  <div class="card hover reveal d1" id="fx9600InfoCard" style="border-style:dashed;">
+    <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>รับกล่องอัตโนมัติผ่านเครื่องอ่าน RFID (Zebra FX9600)</h3>
+    <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ พร้อมแนบ header <code>X-Webhook-Secret</code> ตามที่ผู้ดูแลระบบตั้งไว้ — ระบบจะรับกล่องเข้าคลังที่ประตูนี้ให้อัตโนมัติทันทีที่อ่านแท็กเจอ</p>
+    <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
+  </div>
 
   <div class="gatebox in reveal d1" id="gateInBox">
     <div class="scanline"></div>
@@ -7426,6 +7436,13 @@ function refreshGateDisplays(){
       else{disp.innerHTML='<span style="color:var(--muted);">ยังไม่มีประตูในระบบ</span> <button class="btn sm accent" onclick="goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>';}
     }
     if(hint&&g)updateGateHint(dir==='out'?'outGate':'inGate',dir==='out'?'outGateHint':'inGateHint');
+    // FX9600 webhook URL is gate-specific (see routes/rfid.ts) — recomputed
+    // alongside inGateDisplay so it always names whichever gate is actually
+    // selected right now, not whatever gate happened to be picked earlier.
+    if(dir==='in'){
+      var fxEl=$('#fx9600WebhookUrl');
+      if(fxEl)fxEl.textContent=g?apiUrl('/api/rfid/fx9600/'+g+'/webhook'):'เลือกประตูขาเข้าก่อน จึงจะเห็น URL';
+    }
   });
 }
 function pickGate(dir){
