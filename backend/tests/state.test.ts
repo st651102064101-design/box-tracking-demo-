@@ -90,4 +90,59 @@ describe('state bridge (S ↔ Postgres)', () => {
     expect(Object.keys(get.body.boxes)).toHaveLength(0);
     expect(Object.keys(get.body.customers)).toHaveLength(0);
   });
+
+  describe('first-employee self-registration bootstrap', () => {
+    it("links the sole employee on an empty table to the caller's own account", async () => {
+      const fresh = await bootstrap();
+      const put = await request(fresh.app)
+        .put('/api/state')
+        .set(auth(fresh.token))
+        .send({ employees: { 'EMP-001': { id: 'EMP-001', name: 'เกรียงไกร คงเมือง', role: 'ผู้ดูแลระบบ' } } });
+      expect(put.status).toBe(200);
+
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      // fresh bootstrap() always seeds users.id 1 as the admin the test logs in as
+      expect(get.body.employees['EMP-001'].userId).toBe(1);
+    });
+
+    it('does NOT link when the table already had an employee (not a fresh bootstrap)', async () => {
+      const fresh = await bootstrap();
+      await request(fresh.app)
+        .put('/api/state')
+        .set(auth(fresh.token))
+        .send({ employees: { 'EMP-001': { id: 'EMP-001', name: 'first', role: 'admin' } } });
+
+      const put2 = await request(fresh.app)
+        .put('/api/state')
+        .set(auth(fresh.token))
+        .send({
+          employees: {
+            'EMP-001': { id: 'EMP-001', name: 'first', role: 'admin' },
+            'EMP-002': { id: 'EMP-002', name: 'second', role: 'staff' },
+          },
+        });
+      expect(put2.status).toBe(200);
+
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(get.body.employees['EMP-002'].userId).toBeNull();
+    });
+
+    it('does NOT link a batch of employees arriving together on an empty table', async () => {
+      const fresh = await bootstrap();
+      const put = await request(fresh.app)
+        .put('/api/state')
+        .set(auth(fresh.token))
+        .send({
+          employees: {
+            'EMP-001': { id: 'EMP-001', name: 'a', role: 'staff' },
+            'EMP-002': { id: 'EMP-002', name: 'b', role: 'staff' },
+          },
+        });
+      expect(put.status).toBe(200);
+
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(get.body.employees['EMP-001'].userId).toBeNull();
+      expect(get.body.employees['EMP-002'].userId).toBeNull();
+    });
+  });
 });

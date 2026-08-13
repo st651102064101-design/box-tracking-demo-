@@ -30,6 +30,7 @@ import {
   sequences,
 } from '../db/schema.js';
 import type { StatePayload } from '../validators/schemas.js';
+import type { JwtPayload } from '../lib/jwt.js';
 
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v: unknown): Date | null => {
@@ -128,7 +129,11 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 }
 
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
-export async function replaceState(db: DB, s: StatePayload): Promise<void> {
+export async function replaceState(
+  db: DB,
+  s: StatePayload,
+  actor?: JwtPayload,
+): Promise<void> {
   await db.transaction(async (tx) => {
     // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
     // own web-app login (username/passwordHash) never round-trip through the
@@ -301,6 +306,35 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
       }),
     );
 
+    /* Bootstrap self-registration: the legacy UI's "ลงทะเบียนผู้ใช้งานคนแรก"
+       modal (opened client-side whenever S.employees comes back empty) tells
+       the operator they'll "automatically get Admin access" — but the modal
+       never collects a password, and this endpoint had no notion of linking
+       the employee row it creates to any `users` account at all. The result
+       was a real employee record with name/phone/email saved correctly, but
+       userId/username/passwordHash all left null, so that person could never
+       actually log in as themselves — only the request's own already-
+       authenticated account (bootstrapped from the seed admin) could reach
+       this endpoint at all (requireRole('admin','staff') above), and that's
+       exactly the account this bootstrap employee is standing in for. Link
+       them to it: only when the employees table was genuinely empty before
+       this write (pinById, captured pre-wipe above, is the "before" state),
+       the caller authenticated via a `users` row (not an employee login —
+       employeeId is only set on the latter, see JwtPayload), and the
+       incoming row doesn't already carry an explicit userId of its own.
+       Also requires exactly one incoming employee — an empty table plus a
+       multi-row batch import (Master ▸ Excel) landing in the same instant
+       is a real possibility and must NOT link every imported employee to
+       whichever admin happened to run the import. */
+    const incomingEmployeeCount = Object.keys(s.employees ?? {}).length;
+    const bootstrapUserId =
+      pinById.size === 0 &&
+      incomingEmployeeCount === 1 &&
+      actor &&
+      actor.employeeId === undefined
+        ? toInt(actor.sub)
+        : null;
+
     await chunkInsert(
       tx,
       employees,
@@ -317,7 +351,7 @@ export async function replaceState(db: DB, s: StatePayload): Promise<void> {
              silently dropped on the very next unrelated state save. Same
              reasoning for the PIN/login columns, captured into pinById above
              since they never round-trip through `data` at all (see composeState). */
-          userId: toInt(e.userId),
+          userId: toInt(e.userId) ?? bootstrapUserId,
           data: e,
           pinHash: pin?.pinHash ?? null,
           pinResetOtpHash: pin?.pinResetOtpHash ?? null,

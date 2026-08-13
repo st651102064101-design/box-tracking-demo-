@@ -58,7 +58,7 @@ stateRouter.put(
       throw httpError(403, 'ไม่สามารถลบบัญชีของตัวเองได้', 'forbidden');
     }
 
-    await replaceState(db, payload);
+    await replaceState(db, payload, req.user);
     /* Tell every open stream. The writer's own id rides along so its browser
        can skip re-fetching the snapshot it just uploaded. */
     const version = bump(req.get('X-Client-Id'));
