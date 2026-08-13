@@ -2332,9 +2332,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 #custCardOverlay .cc-bc-print button{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
   border-radius:999px;background:var(--ink);color:var(--surface);font-size:13px;font-weight:700;
   box-shadow:0 8px 22px rgba(0,0,0,.35);}
-/* แถบข้อความทะแยงตอนสถานะปิดใช้งานชั่วคราว/ระงับการใช้งาน — ใช้ร่วมทั้งด้านหน้า/หลังบัตร */
+/* แถบข้อความทะแยงตอนสถานะปิดใช้งานชั่วคราว/ระงับการใช้งาน — เดิม render ซ้ำในทั้ง
+   ccFrontHtml/ccBackHtml (คนละ element ในสองหน้าของ #ccFlip ที่หมุน rotateY สลับกัน)
+   ทำให้ตอนหมุนเปลี่ยนหน้า backface-visibility ไม่ตัดภาพสะอาดในบางเบราว์เซอร์ ข้อความ
+   ทั้งสองชุดเลยไปโผล่ทับกันแบบเห็นทั้งตัวปกติและตัวกลับด้าน (mirror) พร้อมกัน — ย้ายมา
+   เป็น element เดียว นอก #ccFlip (ไม่ถูกหมุนพลิกตามไปด้วย) วางทับบนสุดเสมอ ไม่ว่าจะ
+   หันหน้าไหนของบัตรอยู่ก็ยังอ่านออกปกติชุดเดียว ไม่ซ้อน/ไม่กลับด้าน */
 #custCardOverlay .cc-status-banner{position:absolute;inset:0;background:rgba(8,8,10,.6);
-  display:grid;place-items:center;pointer-events:none;z-index:4;}
+  display:grid;place-items:center;pointer-events:none;z-index:4;border-radius:24px;overflow:hidden;}
 </style>
 <div id="custCardOverlay">
   <div class="cc-backdrop" onclick="closeCustCard()"></div>
@@ -2345,6 +2350,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div class="cc-face cc-front" id="ccFront"></div>
       <div class="cc-face cc-back" id="ccBack"></div>
     </div>
+    <div id="ccStatusBannerHolder"></div>
   </div>
   <button class="cc-close" id="ccClose" onclick="closeCustCard()" title="ปิด">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -5308,8 +5314,7 @@ function ccFrontHtml(c,stats,kindMeta){
         +'<div style="font-size:13px;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.contactPerson||'—')+(c.addr?' · '+esc(c.addr):'')+'</div>'
       +'</div>'
       +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
-    +'</div>'
-    +ccStatusBanner(c);
+    +'</div>';
 }
 
 /* ไอคอนล้วน ไม่มีข้อความ — วางเป็นแถวใต้ปุ่มปิด X (ลอยนอกบัตรมุมขวาบน) แทนคอลัมน์ยาว
@@ -5385,8 +5390,7 @@ function ccBackHtml(c,stats){
         +'</div>'
         +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บาร์โค้ด</button></div>'
       +'</div>'
-    +'</div>'
-    +ccStatusBanner(c);
+    +'</div>';
 }
 
 function openCustCard(id){
@@ -5410,6 +5414,9 @@ function openCustCard(id){
   ccSetFace(false);
   $('#ccFront').innerHTML=ccFrontHtml(c,stats,kindMeta);
   $('#ccBack').innerHTML=ccBackHtml(c,stats);
+  /* แถบสถานะทะแยง — element เดียวนอก #ccFlip (ดูคอมเมนต์ที่ .cc-status-banner) ไม่ต้อง
+     render ซ้ำต่อหน้า จึงไม่มีทางไปทับ/กลับด้านกับตัวมันเองตอนพลิกบัตร */
+  var bannerHolder=$('#ccStatusBannerHolder');if(bannerHolder)bannerHolder.innerHTML=ccStatusBanner(c);
   var card=$('#ccCard');if(card)card.style.pointerEvents='none';   /* ตกอยู่ ยังจับพลิกไม่ได้ */
 
   $('#custCardOverlay').style.display='block';
