@@ -719,6 +719,11 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
             child: SizedBox(
               height: 35,
               child: Stack(
+                // Stack defaults to top-left for non-positioned children —
+                // without this the label Row (icon+text, shorter than the
+                // 35px track) pins to the top instead of centering in it,
+                // which is exactly the "not centered on the y axis" bug.
+                alignment: Alignment.center,
                 children: [
                   // No-animation while dragging (thumb == finger, 1:1, every
                   // frame) — only the release-to-rest snap gets a tween, via
