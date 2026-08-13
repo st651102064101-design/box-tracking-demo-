@@ -1,7 +1,7 @@
 name: smarttrace_pda
 description: SmartTrace PDA — Zebra MC3390R handheld terminal for the SmartTrace RFID gate backend.
 publish_to: "none"
-version: 1.0.0+48
+version: 1.0.0+49
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
