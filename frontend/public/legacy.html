@@ -1566,16 +1566,59 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <input type="file" id="importFileShared" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
 
   <div class="row no-print reveal" style="margin-bottom:22px;">
-    <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
+    <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภท &amp; ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
-    <button class="btn ghost sm stab" data-stab="box"<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
   </div>
 
-  <div class="ssec" id="ssec-box" style="display:none;">
+
+  <div class="ssec" id="ssec-btype">
+    <div class="card hover">
+      <h3>ประเภทกล่อง (Box Type Master)</h3>
+      <p class="desc">สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป</p>
+      <div class="grid g4">
+        <div class="field"><label>รหัสประเภท (สร้างอัตโนมัติ)</label>
+          <div class="auto-tag-row">
+            <input id="btId" readonly>
+            <button type="button" class="iconbtn" id="btnRegenBtId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+            <button type="button" class="iconbtn" id="btnCopyBtId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+            <button type="button" class="btn ghost sm" id="btnOverrideBtId">แก้เอง</button>
+          </div>
+        </div>
+        <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
+        <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
+        <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
+        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input id="btDimW" type="number" min="0" placeholder="กว้าง" style="min-width:0;">
+            <span class="muted">×</span>
+            <input id="btDimL" type="number" min="0" placeholder="ยาว" style="min-width:0;">
+            <span class="muted">×</span>
+            <input id="btDimH" type="number" min="0" placeholder="สูง" style="min-width:0;">
+          </div>
+          <input id="btDim" type="hidden">
+        </div>
+      </div>
+      <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
+        <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
+    </div>
+    <div class="tablecard">
+      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      </div>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
+        <tbody id="btypeBody"></tbody></table></div>
+      <div class="pagerbar" id="pagerBtype"></div>
+      <div class="bulkbar" id="bulkBtype" style="display:none;">
+        <span class="bcnt" id="bulkBtypeCnt"></span>
+        <button class="btn sm red" id="bulkBtypeDel">ลบที่เลือก</button>
+        <button class="btn sm gray" id="bulkBtypeClear">ยกเลิก</button>
+      </div>
+    </div>
+
+    <!-- ลงทะเบียนกล่อง — ย้ายมารวมกับประเภทกล่องในหน้าเดียวกัน (เดิมแยกแท็บ) -->
     <div class="card hover">
       <h3>ลงทะเบียนกล่อง (Barcode)</h3>
       <p class="desc">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "ในคลัง" พร้อมใช้งาน</p>
@@ -1668,51 +1711,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
     </div>
   </div>
-
-  <div class="ssec" id="ssec-btype">
-    <div class="card hover">
-      <h3>ประเภทกล่อง (Box Type Master)</h3>
-      <p class="desc">สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป</p>
-      <div class="grid g4">
-        <div class="field"><label>รหัสประเภท (สร้างอัตโนมัติ)</label>
-          <div class="auto-tag-row">
-            <input id="btId" readonly>
-            <button type="button" class="iconbtn" id="btnRegenBtId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
-            <button type="button" class="iconbtn" id="btnCopyBtId" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
-            <button type="button" class="btn ghost sm" id="btnOverrideBtId">แก้เอง</button>
-          </div>
-        </div>
-        <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
-        <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
-        <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <input id="btDimW" type="number" min="0" placeholder="กว้าง" style="min-width:0;">
-            <span class="muted">×</span>
-            <input id="btDimL" type="number" min="0" placeholder="ยาว" style="min-width:0;">
-            <span class="muted">×</span>
-            <input id="btDimH" type="number" min="0" placeholder="สูง" style="min-width:0;">
-          </div>
-          <input id="btDim" type="hidden">
-        </div>
-      </div>
-      <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
-        <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
-    </div>
-    <div class="tablecard">
-      <div class="tablehead"><h4>รายการประเภทกล่อง</h4><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
-        <tbody id="btypeBody"></tbody></table></div>
-      <div class="pagerbar" id="pagerBtype"></div>
-      <div class="bulkbar" id="bulkBtype" style="display:none;">
-        <span class="bcnt" id="bulkBtypeCnt"></span>
-        <button class="btn sm red" id="bulkBtypeDel">ลบที่เลือก</button>
-        <button class="btn sm gray" id="bulkBtypeClear">ยกเลิก</button>
-      </div>
-    </div>
-  </div>
-
   <div class="ssec" id="ssec-wh" style="display:none;">
     <div class="card hover">
       <h3>คลัง &amp; ประตู (Warehouse / Gate Map)</h3>
@@ -3355,7 +3353,7 @@ window.addEventListener('resize',function(){
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
   $all('.stab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});$('#ssec-'+b.dataset.stab).style.display='block';
-  if(b.dataset.stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  if(b.dataset.stab==='btype'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
 });});
 
 /* ===== ตั้งค่าระบบ → เชื่อมต่อ PDA: QR ตั้งค่าที่อยู่เซิร์ฟเวอร์ของเครื่องพกพา =====
@@ -3642,11 +3640,12 @@ $all('#boxModeSw .ivs-btn').forEach(function(btn) {
 var editingBox=null;
 function editBox(tag){
   var b=S.boxes[tag];if(!b)return;
-  // goSetup('box') switches sub-tabs on its own setTimeout(60) — its click
+  // goSetup('btype') switches sub-tabs on its own setTimeout(60) — its click
   // handler calls setBoxRegMode(), which resets #btnAddBox's label back to
   // "บันทึกรับเข้า". Filling the form has to happen *after* that settles,
   // not before, or the edit-mode label/fields get immediately clobbered.
-  goSetup('box');
+  // (ลงทะเบียนกล่องย้ายมารวมอยู่ในแท็บ "btype" แล้ว ไม่มีแท็บ "box" แยกอีกต่อไป)
+  goSetup('btype');
   setTimeout(function(){
     editingBox=tag;
     setBoxRegMode('single');
