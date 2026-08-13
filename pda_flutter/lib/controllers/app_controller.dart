@@ -400,6 +400,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription? _tagSub, _trigSub, _statusSub;
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
+  Timer? _offlineDialogDebounce;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -565,6 +566,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final wasConnected = _liveConnected;
     _liveConnected = up;
     if (up) {
+      // A blip that recovers inside the debounce window below must not
+      // still pop the dialog a moment later — the connection is back
+      // before the operator would even see it.
+      _offlineDialogDebounce?.cancel();
       connError = null;
       // Walked back into signal after queuing scans in a dead zone: sync
       // straight to the server in the background, no operator action
@@ -577,7 +582,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // dialog and the reconnect sheet both have their own wording for
       // "just offline", and echoing a generic string here only made the
       // alert repeat its own title back as the body.
-      if (wasConnected) offlineEventId++;
+      //
+      // The SSE stream's own retry loop (RealtimeService's exponential
+      // backoff, starting at 2s) can reconnect well inside a few seconds
+      // of a routine blip — an idle-timeout proxy killing the long-lived
+      // connection, a brief Wi-Fi drop — so firing the modal the instant
+      // `up` goes false meant it was still on screen (it doesn't
+      // auto-dismiss) well after the chip already read "online" again.
+      // Only count it as a real outage, worth interrupting the operator
+      // for, if it's still down after this debounce window.
+      if (wasConnected) {
+        _offlineDialogDebounce?.cancel();
+        _offlineDialogDebounce = Timer(const Duration(seconds: 4), () {
+          if (!_liveConnected) {
+            offlineEventId++;
+            notifyListeners();
+          }
+        });
+      }
     }
     notifyListeners();
   }
@@ -625,6 +647,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _trigSub?.cancel();
     _statusSub?.cancel();
     _realtimeDebounce?.cancel();
+    _offlineDialogDebounce?.cancel();
     _realtime.dispose();
     super.dispose();
   }
