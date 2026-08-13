@@ -1744,13 +1744,25 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
         <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง</label>
-          <div class="auto-tag-row">
-            <input id="whArea" placeholder="เช่น สมุทรปราการ — หรือคลิกเลือกบนแผนที่">
-            <button type="button" class="btn ghost sm" id="btnPickWhMap">📍 เลือกบนแผนที่</button>
+          <!-- โหมด "พิมพ์เอง" กับ "เลือกบนแผนที่" แยกกันชัดเจน — เดิม #whArea พิมพ์ได้อิสระ
+               อยู่ตลอดเวลาแม้ตอนแผนที่เปิดอยู่ (ปุ่ม "เลือกบนแผนที่" แค่โชว์/ซ่อนแผนที่ ไม่ได้
+               สลับโหมดจริง) พิมพ์ทับที่แผนที่เพิ่งกรอกให้ได้โดยไม่ตั้งใจ แยกเป็นสอง state:
+               text = พิมพ์ #whArea ได้ตามปกติ, map = #whArea เป็น readonly (ให้แผนที่เป็นคน
+               กรอกอย่างเดียว) พร้อมช่องค้นหา + ปุ่มตำแหน่งของฉัน */
+          <div class="inv-view-sw" id="whAreaModeSw" style="margin-bottom:8px;">
+            <button type="button" class="ivs-btn active" data-mode="text" id="whAreaMode_text">พิมพ์เอง</button>
+            <button type="button" class="ivs-btn" data-mode="map" id="whAreaMode_map">📍 เลือกบนแผนที่</button>
           </div>
+          <input id="whArea" placeholder="เช่น สมุทรปราการ">
           <input type="hidden" id="whLat"><input type="hidden" id="whLng">
           <div id="whMapWrap" style="display:none;margin-top:8px;">
-            <div id="whMap" style="height:260px;border-radius:10px;overflow:hidden;"></div>
+            <div class="auto-tag-row">
+              <input id="whMapSearch" placeholder="ค้นหาสถานที่บนแผนที่ เช่น ตลาดไท, อำเภอเมือง...">
+              <button type="button" class="btn ghost sm" id="btnWhMapSearch">ค้นหา</button>
+              <button type="button" class="btn ghost sm" id="btnWhMyLoc">📍 ตำแหน่งของฉัน</button>
+            </div>
+            <div id="whMapSearchResults" style="display:none;margin-top:6px;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto;"></div>
+            <div id="whMap" style="height:260px;border-radius:10px;overflow:hidden;margin-top:8px;"></div>
             <div class="tag" style="margin-top:5px;">คลิกบนแผนที่เพื่อปักหมุด — ระบบจะกรอกที่ตั้งให้อัตโนมัติ</div>
           </div>
         </div>
@@ -3939,11 +3951,63 @@ function whMapEnsure(){
   if(!isNaN(lat0)&&!isNaN(lng0)){whMapInst.setView([lat0,lng0],15);whMapMarker=L.marker([lat0,lng0]).addTo(whMapInst);}
   whMapInst.on('click',function(e){whMapSetPin(e.latlng.lat,e.latlng.lng);});
 }
-$('#btnPickWhMap').onclick=function(){
-  var wrap=$('#whMapWrap');var show=wrap.style.display==='none';
-  wrap.style.display=show?'':'none';
-  if(show){whMapEnsure();setTimeout(function(){whMapInst.invalidateSize();},50);}
+/* โหมด "พิมพ์เอง" / "เลือกบนแผนที่" — ดูคอมเมนต์ที่ #whAreaModeSw ในเนื้อ HTML ว่าทำไม
+   ต้องแยกเป็นสอง state แทนที่จะโชว์/ซ่อนแผนที่เฉย ๆ แบบเดิม (ปุ่ม #btnPickWhMap เดี่ยว ๆ) */
+function whAreaSetMode(mode){
+  $all('#whAreaModeSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===mode);});
+  var wrap=$('#whMapWrap'),areaInput=$('#whArea');
+  var isMap=mode==='map';
+  wrap.style.display=isMap?'':'none';
+  if(areaInput){areaInput.readOnly=isMap;areaInput.placeholder=isMap?'คลิกบนแผนที่หรือค้นหาด้านล่าง':'เช่น สมุทรปราการ';}
+  if(isMap){whMapEnsure();setTimeout(function(){whMapInst.invalidateSize();},50);}
+  else{var res=$('#whMapSearchResults');if(res){res.style.display='none';res.innerHTML='';}}
+}
+window.whAreaSetMode=whAreaSetMode;
+$all('#whAreaModeSw .ivs-btn').forEach(function(b){b.onclick=function(){whAreaSetMode(b.dataset.mode);};});
+/* ตำแหน่งของฉัน — ยังไม่เคยมี navigator.geolocation ใช้ที่ไหนในไฟล์นี้มาก่อน เขียนใหม่
+   ตามแพทเทิร์นเดียวกับ whMapSetPin (ปักหมุด + reverse-geocode กรอก #whArea ให้) */
+$('#btnWhMyLoc').onclick=function(){
+  if(!navigator.geolocation)return toast('เบราว์เซอร์นี้ไม่รองรับ','การหาตำแหน่งปัจจุบัน','err');
+  var btn=$('#btnWhMyLoc');btn.disabled=true;var origText=btn.textContent;btn.textContent='กำลังหาตำแหน่ง…';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    btn.disabled=false;btn.textContent=origText;
+    whMapEnsure();
+    whMapInst.setView([pos.coords.latitude,pos.coords.longitude],15);
+    whMapSetPin(pos.coords.latitude,pos.coords.longitude);
+  },function(err){
+    btn.disabled=false;btn.textContent=origText;
+    toast('หาตำแหน่งไม่สำเร็จ',err&&err.message?err.message:'กรุณาอนุญาตการเข้าถึงตำแหน่งของเบราว์เซอร์','err');
+  },{enableHighAccuracy:true,timeout:10000});
 };
+/* ค้นหาสถานที่บนแผนที่ (forward geocoding) — ไม่เคยมีมาก่อน มีแต่ reverse (คลิกแผนที่
+   → ที่อยู่) ใน whMapSetPin ด้านบน ใช้ endpoint /search ตัวเดียวกับ Nominatim ที่ /reverse
+   ใช้อยู่แล้ว ไม่ต้องเพิ่ม dependency ใหม่ */
+function whMapSearchRun(){
+  var q=val('whMapSearch').trim();var resEl=$('#whMapSearchResults');
+  if(!q){resEl.style.display='none';resEl.innerHTML='';return;}
+  resEl.style.display='block';resEl.innerHTML='<div style="padding:9px 12px;color:var(--muted);font-size:13px;">กำลังค้นหา…</div>';
+  fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(q)+'&limit=6&accept-language=th&countrycodes=th')
+    .then(function(r){return r.json();})
+    .then(function(list){
+      if(!list||!list.length){resEl.innerHTML='<div style="padding:9px 12px;color:var(--muted);font-size:13px;">ไม่พบผลลัพธ์</div>';return;}
+      resEl.innerHTML=list.map(function(item,i){
+        return '<div class="wh-map-result" data-i="'+i+'" style="padding:9px 12px;font-size:13px;cursor:pointer;border-top:'+(i?'1px solid var(--line)':'none')+';">'+esc(item.display_name)+'</div>';
+      }).join('');
+      $all('#whMapSearchResults .wh-map-result').forEach(function(el){
+        el.onmouseenter=function(){el.style.background='var(--surface2)';};
+        el.onmouseleave=function(){el.style.background='';};
+        el.onclick=function(){
+          var item=list[Number(el.dataset.i)];if(!item)return;
+          var lat=parseFloat(item.lat),lng=parseFloat(item.lon);
+          whMapEnsure();whMapInst.setView([lat,lng],16);whMapSetPin(lat,lng);
+          resEl.style.display='none';resEl.innerHTML='';setv('whMapSearch','');
+        };
+      });
+    })
+    .catch(function(){resEl.innerHTML='<div style="padding:9px 12px;color:var(--muted);font-size:13px;">ค้นหาไม่สำเร็จ ลองใหม่อีกครั้ง</div>';});
+}
+$('#btnWhMapSearch').onclick=whMapSearchRun;
+$('#whMapSearch').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();whMapSearchRun();}});
 $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
   var gt=val('whGateType')||'both';
@@ -3970,19 +4034,22 @@ $('#btnAddWh').onclick=function(){
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
-  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
+  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
+  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
   renderWhGateTypeList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
-  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
-  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
+  ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
+  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
   renderWhGateTypeList();};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
   setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');
-  setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');
-  whMapMarker=null;whMapInst=null;$('#whMapWrap').style.display='none';$('#whMap').innerHTML='';
+  setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');setv('whMapSearch','');
+  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';
+  /* มีพิกัดอยู่แล้ว (เคยปักหมุดไว้ตอนบันทึกครั้งก่อน) → เปิดโหมดแผนที่ให้เห็นหมุดเดิมเลย
+     ไม่มี → เริ่มที่โหมดพิมพ์เอง (ค่าเริ่มต้น) */
+  whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
   setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
   $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
