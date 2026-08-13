@@ -2314,6 +2314,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
    เป็น element พี่น้องกับบัตร ไม่ได้อยู่ในบัตร จึงไม่ถูกหมุน/ย่อ/พลิกตาม ตั้งตรงเสมอ */
 #custCardOverlay .cc-close{position:absolute;left:0;top:0;width:44px;height:44px;border-radius:50%;
   background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.4);z-index:5;}
+/* สแต็กใต้ปุ่มปิด X — element พี่น้องกับบัตรเหมือนปุ่ม X เอง ดูคอมเมนต์ที่ตัว element
+   ในเนื้อ HTML ด้านล่าง กับ ccStep()/ccSetFace() สำหรับตำแหน่ง/การซ่อนโชว์ */
+#custCardOverlay .cc-act-row{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:8px;
+  z-index:5;opacity:0;pointer-events:none;transition:opacity .15s;}
+#custCardOverlay .cc-act-row.show{opacity:1;pointer-events:auto;}
 #custCardOverlay .cc-act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 14px;
   border-radius:13px;background:var(--panelChipBg);border:1px solid var(--panelChipBorder);
   font-size:14.5px;font-weight:500;color:var(--panelInk);}
@@ -2362,6 +2367,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button class="cc-close" id="ccClose" onclick="closeCustCard()" title="ปิด">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
   </button>
+  <!-- ปุ่มจัดการ (แก้ไข/ดูกล่อง/พิมพ์/ลบ) — element พี่น้องกับปุ่มปิด X ไม่ได้อยู่ในตัวบัตร
+       เหมือนกัน (เดิมอยู่ในการ์ดเอง ซึ่งพลิก/หมุน/ย่อขยายตามบัตรไปด้วย ทำให้ตำแหน่งเทียบกับ
+       ปุ่ม X ที่ลอยอยู่นอกบัตรคลาดเคลื่อนได้เวลาบัตรเอียง) ccStep() ย้ายตำแหน่งให้ชิดใต้ปุ่ม X
+       ทุกเฟรมเหมือนกัน จึงตั้งตรงเสมอและเกาะกับปุ่ม X แน่นอนไม่ว่าบัตรจะเอียงแค่ไหน —
+       เนื้อหาใส่โดย openCustCard()/ccSetFace() เห็นเฉพาะตอนพลิกไปหน้าหลัง (ปุ่มพวกนี้ใช้
+       จัดการข้อมูล ไม่เกี่ยวกับหน้าแรก) -->
+  <div class="cc-act-row" id="ccActRow"></div>
 </div>
 
 <!-- ===== คลัง — แผงประตูคลัง (gate visualization) =====
@@ -5418,6 +5430,14 @@ var CC_ACT_ICONS={
   print:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="5"/><path d="M6 14H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2"/><rect x="6" y="13" width="12" height="8"/></svg>',
   del:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
 };
+/* เนื้อหาของ #ccActRow (สแต็กปุ่มจัดการที่ลอยใต้ปุ่มปิด X นอกบัตร — ดูคอมเมนต์ที่ตัว
+   element ใน HTML) แยกออกมาจาก ccBackHtml() เพื่อ inject เข้า element คนละตัวกัน */
+function ccActRowHtml(stats){
+  return ccActSm('edit',CC_ACT_ICONS.edit,'แก้ไขข้อมูล')
+    +(stats.isCustK?ccActSm('boxes',CC_ACT_ICONS.boxes,'ดูกล่องที่ยืมอยู่'):'')
+    +ccActSm('print',CC_ACT_ICONS.print,'พิมพ์บัตร')
+    +ccActSm('del',CC_ACT_ICONS.del,stats.held?'มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้':'ลบออกจากระบบ',stats.held?' disabled':'');
+}
 /* รายละเอียดคู่ค้าแบบเต็ม — เดิมหลังบัตรมีแค่ชื่อ/รหัส/เบอร์-อีเมลรวมบรรทัดเดียว ไม่พอ
    ให้เห็นข้อมูลทั้งหมดโดยไม่ต้องกด "แก้ไขข้อมูล" ออกไปดู เพิ่มเป็นตารางฟิลด์ละบรรทัด
    ข้ามฟิลด์ที่ไม่มีค่าไปเลย ไม่โชว์ "—" ให้รกบัตร */
@@ -5453,18 +5473,11 @@ function ccBackHtml(c,stats){
     :'';
   return ''
     +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
-      +'<div style="flex:0 0 auto;padding:20px 30px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">'
+      +'<div style="flex:0 0 auto;padding:20px 30px 0;">'
         +'<div style="min-width:0;">'
           +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
           +'<div style="font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:4px;">'+esc(c.name)+'</div>'
           +'<div style="font-family:var(--mono);font-size:12.5px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+'</div>'
-        +'</div>'
-        /* วางไว้ใต้ปุ่มปิด X (ลอยนอกบัตรมุมขวาบนเสมอ ดู ccStep) — แถวไอคอนนี้จึงอยู่ใต้มันพอดี */
-        +'<div style="display:flex;gap:8px;flex:0 0 auto;margin-top:2px;">'
-          +ccActSm('edit',CC_ACT_ICONS.edit,'แก้ไขข้อมูล')
-          +(stats.isCustK?ccActSm('boxes',CC_ACT_ICONS.boxes,'ดูกล่องที่ยืมอยู่'):'')
-          +ccActSm('print',CC_ACT_ICONS.print,'พิมพ์บัตร')
-          +ccActSm('del',CC_ACT_ICONS.del,stats.held?'มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้':'ลบออกจากระบบ',stats.held?' disabled':'')
         +'</div>'
       +'</div>'
       +'<div style="flex:1;min-height:0;overflow-y:auto;padding:14px 30px 6px;">'
@@ -5504,6 +5517,7 @@ function openCustCard(id){
   ccSetFace(false);
   $('#ccFront').innerHTML=ccFrontHtml(c,stats,kindMeta);
   $('#ccBack').innerHTML=ccBackHtml(c,stats);
+  var actRow=$('#ccActRow');if(actRow)actRow.innerHTML=ccActRowHtml(stats);
   /* แถบสถานะทะแยง — element เดียวนอก #ccFlip (ดูคอมเมนต์ที่ .cc-status-banner) ไม่ต้อง
      render ซ้ำต่อหน้า จึงไม่มีทางไปทับ/กลับด้านกับตัวมันเองตอนพลิกบัตร */
   var bannerHolder=$('#ccStatusBannerHolder');if(bannerHolder)bannerHolder.innerHTML=ccStatusBanner(c);
@@ -5583,7 +5597,7 @@ function ccBoot(){
   ccState.booted=true;
   /* Looked up once and reused every frame instead of three document.querySelector
      calls inside ccStep() — same reasoning as empBadge.el (see empBadgeBoot). */
-  ccState.el={card:$('#ccCard'),shadow:$('#ccShadow'),close:$('#ccClose'),backdrop:$('#custCardOverlay .cc-backdrop')};
+  ccState.el={card:$('#ccCard'),shadow:$('#ccShadow'),close:$('#ccClose'),backdrop:$('#custCardOverlay .cc-backdrop'),actRow:$('#ccActRow')};
   window.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&ccState.open)closeCustCard();});
   window.addEventListener('resize',function(){
     if(!ccState.open)return;
@@ -5664,6 +5678,15 @@ function ccStep(){
     var bx=window.innerWidth/2+s.x+(lx*cz-ly*sz);
     var by=window.innerHeight/2+s.y+(lx*sz+ly*cz);
     ccBtn.style.transform='translate('+(bx-22).toFixed(1)+'px,'+(by-22).toFixed(1)+'px)';
+    /* สแต็กปุ่มจัดการ ชิดใต้ปุ่ม X ตัวเดียวกันนี้เป๊ะ — จุดยึด bx/by เดียวกัน แต่ X มีรัศมี
+       ครึ่งหนึ่ง 22px (ขอบล่างจึงอยู่ที่ by+22) บวกช่องไฟ 8px = by+30 ส่วนแนวนอนจัดกึ่งกลาง
+       ให้ตรงกับ X (ปุ่มแถวนี้กว้าง 34px จึงเลื่อนซ้าย 17px จาก bx) เห็นเฉพาะหน้าหลัง
+       (ปุ่มจัดการใช้ไม่ได้ตอนดูหน้าแรก) */
+    var actRow=s.el.actRow;
+    if(actRow){
+      actRow.classList.toggle('show',s.face==='back');
+      actRow.style.transform='translate('+(bx-17).toFixed(1)+'px,'+(by+30).toFixed(1)+'px)';
+    }
   }
 }
 
