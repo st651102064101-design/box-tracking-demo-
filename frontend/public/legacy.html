@@ -1922,7 +1922,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     </div>
     <div class="tablecard">
       <div class="tablehead"><h4>รายชื่อพนักงาน</h4><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div>
-      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div>
       <div class="pagerbar" id="pagerEmp"></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -3156,8 +3156,17 @@ function setText(id,v){var e=$('#'+id);if(e)e.textContent=(v==null?'':v);}
    "who" chip so both stay in sync without duplicating this logic. */
 function renderAvatar(id,name,photo){
   var e=$('#'+id);if(!e)return;
-  if(photo){e.innerHTML='<img src="'+esc(photo)+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';}
-  else{var initials=(name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');e.textContent=initials;}
+  e.innerHTML=avatarHTML(name,photo);
+}
+/* Same photo-or-initials avatar as renderAvatar(), but returns a markup string
+   instead of writing into one fixed element — for spots (e.g. a table row
+   rendered from an array) where there's one avatar per row, not a single id. */
+function avatarHTML(name,photo,size){
+  size=size||32;
+  var base='width:'+size+'px;height:'+size+'px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);font-size:'+Math.round(size*0.36)+'px;font-weight:700;';
+  if(photo)return '<div style="'+base+'"><img src="'+esc(photo)+'" alt="" style="width:100%;height:100%;object-fit:cover;"></div>';
+  var initials=(name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+  return '<div style="'+base+'">'+esc(initials)+'</div>';
 }
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -9285,11 +9294,11 @@ function renderSetup(){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var isMe=meId&&e.id===meId;
-    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
+    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
-  }).join(''):emptyRow(11,'ยังไม่มีพนักงาน');
+  }).join(''):emptyRow(12,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
   if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
