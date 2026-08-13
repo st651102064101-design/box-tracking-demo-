@@ -108,7 +108,7 @@ class LocaleController extends ChangeNotifier {
     'ลงทะเบียนกล่อง': 'Register box',
     'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway':
         'Receive boxes from a supplier — create, label, tag, then put away',
-    'รับเข้า / รับคืน': 'Gate In / Return',
+    'รับคืน': 'Return',
     'Gate In — ยิงกล่องกลับเข้าคลัง':
         'Gate In — scan boxes back into the warehouse',
     'ส่งออก': 'Gate Out',
@@ -347,7 +347,7 @@ class LocaleController extends ChangeNotifier {
     'แก้ไขข้อมูลลูกค้า/รถ': 'Edit customer/vehicle info',
     'ถัดไป': 'Next',
     'ยืนยันส่งออก': 'Confirm Gate Out',
-    'ยืนยันรับเข้าคลัง': 'Confirm Gate In',
+    'ยืนยันรับคืน': 'Confirm Return',
     'ลูกค้าปลายทาง *': 'Destination customer *',
     '— เลือกลูกค้า —': '— Choose customer —',
     'ทะเบียนรถ *': 'License plate *',

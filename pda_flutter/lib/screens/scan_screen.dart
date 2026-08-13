@@ -126,7 +126,7 @@ class _ScanScreenState extends State<ScanScreen>
 
   /// First tap (label "ถัดไป", only enabled once the form itself is valid)
   /// moves from the customer/vehicle step to the scanner/queue step; the
-  /// second tap (label "ยืนยันรับเข้าคลัง"/"ยืนยันส่งออก") actually commits. A
+  /// second tap (label "ยืนยันรับคืน"/"ยืนยันส่งออก") actually commits. A
   /// failed commit leaves the queue non-empty, which is the signal to stay
   /// on the scan step for a retry rather than snapping back to an empty
   /// form.
@@ -499,11 +499,11 @@ class _ScanScreenState extends State<ScanScreen>
         onBack: c.backToHome,
         title: Row(
           children: [
-            Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
+            Pill(loc.t(isOut ? 'ออก' : 'คืน'),
                 color: isOut ? C.orange : C.limeText,
                 bg: isOut ? C.orangeBg : C.limeBg),
             const SizedBox(width: 7),
-            Text(loc.t(isOut ? 'ส่งออก' : 'รับเข้า / รับคืน')),
+            Text(loc.t(isOut ? 'ส่งออก' : 'รับคืน')),
           ],
         ),
         subtitle: Text('${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'),
@@ -568,7 +568,7 @@ class _ScanScreenState extends State<ScanScreen>
               child: PrimaryButton(
                 label: loc.t(!_onScanStep
                     ? 'ถัดไป'
-                    : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับเข้าคลัง')),
+                    : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับคืน')),
                 trailing: _onScanStep
                     ? Container(
                         padding: const EdgeInsets.symmetric(
