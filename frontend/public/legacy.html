@@ -8915,13 +8915,17 @@ function renderSetup(){
   if(bTypeEmpty){bTypeEmpty.style.display=bts.length?'none':'block';bTypeEmpty.innerHTML=bts.length?'':'<button class="btn accent" onclick="goSetup(\'btype\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button>';}
   if(noTypeHint)noTypeHint.style.display='none';
   /* คลังสำหรับลงทะเบียนกล่อง — ใช้ invWhOptions() ตัวเดียวกับ #eWh ด้านล่าง ซึ่งเลือก
-     คลังเดียวที่มีให้อัตโนมัติอยู่แล้วถ้าทั้งระบบมีคลังเดียว (ดู invWhOptions ข้างล่าง) */
-  var bWhSel=$('#bWh');if(bWhSel){var curBWh=bWhSel.value;bWhSel.innerHTML=invWhOptions(curBWh);bWhSel.value=curBWh;}
-  var bWhBatchSel=$('#bWhBatch');if(bWhBatchSel){var curBWhB=bWhBatchSel.value;bWhBatchSel.innerHTML=invWhOptions(curBWhB);bWhBatchSel.value=curBWhB;}
+     คลังเดียวที่มีให้อัตโนมัติอยู่แล้วถ้าทั้งระบบมีคลังเดียว (ดู invWhOptions ข้างล่าง)
+     แต่การ "sel.value=curWh" ต่อท้ายทันที เขียนทับ auto-select นั้นทิ้งเสมอเวลา curWh
+     ยังว่างอยู่ (ค่าเดิมก่อน re-render) — <option selected> ที่ invWhOptions ใส่มาให้ก็
+     ไม่มีผลอะไรเพราะโดนสั่ง value='' ทับซ้ำ ผู้ใช้เลยเห็น dropdown มีตัวเลือกเดียวแต่ต้อง
+     กดเลือกเองอยู่ดี — restore ค่าดิม value จริง ๆ ก็ต่อเมื่อเคยมีค่าอยู่ก่อนแล้วเท่านั้น */
+  var bWhSel=$('#bWh');if(bWhSel){var curBWh=bWhSel.value;bWhSel.innerHTML=invWhOptions(curBWh);if(curBWh)bWhSel.value=curBWh;}
+  var bWhBatchSel=$('#bWhBatch');if(bWhBatchSel){var curBWhB=bWhBatchSel.value;bWhBatchSel.innerHTML=invWhOptions(curBWhB);if(curBWhB)bWhBatchSel.value=curBWhB;}
 
   // auto-generated ids
   btIdAuto.refresh(); whIdAuto.refresh(); cIdAuto.refresh(); eIdAuto.refresh();
-  var eWhSel=$('#eWh');if(eWhSel){var curWh=eWhSel.value;eWhSel.innerHTML=invWhOptions(curWh);eWhSel.value=curWh;}
+  var eWhSel=$('#eWh');if(eWhSel){var curWh=eWhSel.value;eWhSel.innerHTML=invWhOptions(curWh);if(curWh)eWhSel.value=curWh;}
 
   // gate dropdowns
   refreshGateDisplays();
