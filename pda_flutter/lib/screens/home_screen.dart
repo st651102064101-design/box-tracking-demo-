@@ -563,7 +563,7 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
               title: (e['tag'] ?? '').toString(),
               subtitle: [time, if (who.isNotEmpty) who].join(' · '),
               trailing: Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
-                  color: isOut ? C.orange : C.limeDeep,
+                  color: isOut ? C.orange : (C.isDark ? Colors.white : C.limeDeep),
                   bg: isOut ? C.orangeBg : C.limeBg),
             );
           }).toList(),
