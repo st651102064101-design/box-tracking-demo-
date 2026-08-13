@@ -1964,8 +1964,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // deliberately left untouched: it's the barcode field's own state,
         // and populating it from an RFID read is what used to leak the last
         // tag number into the barcode box after switching modes.
+        // Only a tag that actually resolves to a box on file counts as a
+        // "find" — a sweep picking up a stray/foreign tag with no matching
+        // record must not surface it at all, same reasoning as the
+        // Screen.transfer case just below.
         final tag = resolveTag(epc);
-        if (!trackRfidHits.contains(tag)) {
+        if (S?.box(tag) != null && !trackRfidHits.contains(tag)) {
           trackRfidHits.add(tag);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
@@ -1991,15 +1995,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         }
         break;
       case Screen.cycleCount:
-        // Raw EPC, not resolveTag(epc) — CycleCountScreen posts whatever it's
-        // given straight to the server's /scan endpoint, which resolves
-        // barcode/EPC/TID itself (same reasoning as its own _submitScan
-        // comment). Deduping here only stops the same tag re-queuing dozens
-        // of times a second while the trigger's held; the screen dedupes
-        // against the session's own 'counted' list separately, since a tag
-        // legitimately re-appears across multiple trigger pulls in one
-        // count.
-        if (!cycleCountRfidHits.contains(epc)) {
+        // Raw EPC, not resolveTag(epc), is still what's queued —
+        // CycleCountScreen posts whatever it's given straight to the
+        // server's /scan endpoint, which resolves barcode/EPC/TID itself
+        // (same reasoning as its own _submitScan comment). But resolveTag is
+        // used here first to check the tag actually maps to a box on file —
+        // a stray/foreign tag with no matching record must never queue at
+        // all, same reasoning as Screen.track/Screen.transfer above.
+        // Deduping only stops the same tag re-queuing dozens of times a
+        // second while the trigger's held; the screen dedupes against the
+        // session's own 'counted' list separately, since a tag legitimately
+        // re-appears across multiple trigger pulls in one count.
+        if (S?.box(resolveTag(epc)) != null &&
+            !cycleCountRfidHits.contains(epc)) {
           cycleCountRfidHits.add(epc);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
