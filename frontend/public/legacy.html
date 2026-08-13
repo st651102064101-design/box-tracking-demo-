@@ -3686,15 +3686,19 @@ $('#btnAddBox').onclick = function() {
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
     var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
     var regTs=iso();
-    S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+    /* ลงทะเบียนเสร็จ = เข้าคลังทันที — เดิม status:'pending' ต้องผ่าน Gate ขาเข้าซ้ำอีก
+       ขั้นก่อนจะใช้งานได้จริง ตามที่ผู้ใช้ขอให้ตัดขั้นตอนนี้ออก ตั้ง status:'warehouse'
+       ตรงนี้เลย และ labeled:true (statusPill โชว์ "รอเข้าคลัง (Gate In)" ทับสถานะ
+       ในคลังอยู่ถ้า labeled=false — ต้องปิดด้วยไม่งั้น pill ยังขึ้นข้อความเดิม) */
+    S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
       lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:false,
+      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:true,
       /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
          stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
       history:[{dir:'reg',ts:regTs,recorder:USER}]};
-    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'pending',lot:lot,expiry:expiry,supplier:sup});
+    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'warehouse',lot:lot,expiry:expiry,supplier:sup});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
-    toast('ลงทะเบียนกล่องแล้ว', tag + ' · รอเข้าคลัง (Gate In)'); renderAll();
+    toast('ลงทะเบียนกล่องแล้ว', tag + ' · เข้าคลังแล้ว'); renderAll();
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
     var pre = val('bPrefix') || 'BOX-', start = num('bStart') || 1, qty = num('bQty') || 0;
@@ -3703,12 +3707,12 @@ $('#btnAddBox').onclick = function() {
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue; var added = 0; var addedTags = [];
     var blot = val('bLot'); var bexp = val('bExpiry'); var bsup = val('bSupplier');
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
-      if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'pending',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
+      if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
         lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:false,
+        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:true,
         history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
-    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · รอเข้าคลัง (Gate In)'); renderPrefixDatalist(); renderAll();
+    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · เข้าคลังแล้ว'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
   }
