@@ -49,6 +49,11 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   /// zone doesn't silently drop reads.
   final List<String> _pending = [];
 
+  /// Guards the no-zones auto-start (see build()) so it fires exactly once —
+  /// without it, every rebuild while _start() is still in flight would kick
+  /// off another openCycleCount call.
+  bool _autoStartTried = false;
+
   AppController get _c => context.read<AppController>();
 
   List<String> _zonesInWh(AppController c) {
@@ -216,6 +221,16 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
           .addPostFrameCallback((_) => _drainRfidHits(c));
     }
 
+    // No button to tap any more (see the zone chips below for the
+    // has-zones case) — a warehouse with no zones on file has nothing left
+    // for the operator to pick, so open the whole-warehouse session the
+    // instant this screen is reached instead of making them tap a "start"
+    // button for a choice that was never actually theirs to make.
+    if (session == null && !_busy && !_autoStartTried && zones.isEmpty) {
+      _autoStartTried = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    }
+
     return ScanCapture(
       // Live only once a session is open — the setup step above has zone
       // chips and a start button, and nothing to scan into yet.
@@ -252,6 +267,11 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                   ],
                   if (session == null) ...[
                     if (zones.isNotEmpty) ...[
+                      // No separate "เริ่มตรวจนับ" button any more — picking
+                      // a zone chip *is* the start action, straight through
+                      // to _start(). A zone with nothing left to decide
+                      // (the no-zones branch below) skips even this tap via
+                      // the auto-start in build() above.
                       Text(loc.t('เลือกโซนที่จะตรวจนับ'),
                           style: TextStyle(
                               fontSize: 12.5,
@@ -262,30 +282,45 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _zoneChip(loc.t('ทั้งคลัง'), _zone == null,
-                              () => setState(() => _zone = null)),
+                          _zoneChip(
+                              loc.t('ทั้งคลัง'),
+                              _zone == null,
+                              _busy
+                                  ? null
+                                  : () {
+                                      setState(() => _zone = null);
+                                      _start();
+                                    }),
                           ...zones.map((z) => _zoneChip(
-                              z, _zone == z, () => setState(() => _zone = z))),
+                              z,
+                              _zone == z,
+                              _busy
+                                  ? null
+                                  : () {
+                                      setState(() => _zone = z);
+                                      _start();
+                                    })),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                     ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _busy ? null : _start,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: C.ink,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text(_busy
-                            ? loc.t('กำลังเริ่ม…')
-                            : loc.t('เริ่มตรวจนับ')),
+                    if (_busy) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: C.muted),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(loc.t('กำลังเริ่ม…'),
+                              style: TextStyle(fontSize: 12.5, color: C.muted)),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 10),
+                    ],
                     Text(
                         loc.t(
                             'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
@@ -440,7 +475,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     return b == null ? '' : (c.S?.typeName(b.type) ?? '');
   }
 
-  Widget _zoneChip(String label, bool selected, VoidCallback onTap) {
+  Widget _zoneChip(String label, bool selected, VoidCallback? onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
