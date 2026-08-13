@@ -1,10 +1,13 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
-import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, type EpcBits } from '../lib/rfid.js';
+import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, decodeEpcHexToBarcode, type EpcBits } from '../lib/rfid.js';
+import { env } from '../env.js';
+import { getDb } from '../db/client.js';
+import { gateIn } from '../services/gate.js';
+import { bump } from '../lib/bus.js';
 
 export const rfidRouter = Router();
-rfidRouter.use(requireAuth);
 
 /**
  * Preview-only: computes the hex a PDA should Write to a blank tag's EPC
@@ -14,6 +17,7 @@ rfidRouter.use(requireAuth);
  */
 rfidRouter.get(
   '/encode/:tag',
+  requireAuth,
   asyncHandler(async (req, res) => {
     const bits = req.query.bits === '128' ? EPC_BITS.EPC_128 : (EPC_BITS.EPC_96 as EpcBits);
     try {
@@ -23,6 +27,110 @@ rfidRouter.get(
       if (e instanceof EpcEncodeError) throw httpError(400, e.message, 'epc_encode_error');
       throw e;
     }
+  }),
+);
+
+/**
+ * Tag-read webhook for a fixed Zebra FX9600 reader running the IoT
+ * Connector app in "HTTP POST" mode, one destination profile per gate
+ * (the gate number lives in the URL, configured once when the profile is
+ * set up — a fixed reader never moves, so there's nothing to pick per
+ * request the way a handheld's own login does that job instead).
+ *
+ * No JWT here — the reader has no operator signed into it to hold one.
+ * requireFx9600Secret is the entire auth story: a shared secret configured
+ * both here (FX9600_WEBHOOK_SECRET) and in the IoT Connector profile's
+ * custom HTTP header.
+ *
+ * IoT Connector's HTTP POST payload shape is configurable per profile
+ * (the "REST" template), so this accepts the field names Zebra's stock
+ * templates commonly use, in a few common shapes:
+ *   - a single object                      { idHex: "..." }
+ *   - an object wrapping the read           { data: { idHex: "..." } }
+ *   - an array of either of the above       [{ idHex: "..." }, ...]
+ * If your reader's profile emits something else, adjust EPC_FIELD_CANDIDATES
+ * below to match — the rest of the pipeline (decode -> gateIn) doesn't care.
+ */
+const EPC_FIELD_CANDIDATES = ['idHex', 'epc', 'EPC', 'tagId', 'id'] as const;
+
+function extractEpc(read: unknown): string | null {
+  if (!read || typeof read !== 'object') return null;
+  const obj = read as Record<string, unknown>;
+  for (const field of EPC_FIELD_CANDIDATES) {
+    const v = obj[field];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function extractReads(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === 'object') {
+    const obj = body as Record<string, unknown>;
+    if (obj.data && typeof obj.data === 'object') return [obj.data];
+    if (Array.isArray(obj.tagReports)) return obj.tagReports;
+    return [obj];
+  }
+  return [];
+}
+
+function requireFx9600Secret(req: Request, res: Response, next: NextFunction) {
+  const got = req.get('X-Webhook-Secret') ?? '';
+  if (got !== env.fx9600WebhookSecret) {
+    res.status(401).json({ error: 'unauthorized', message: 'invalid webhook secret' });
+    return;
+  }
+  next();
+}
+
+rfidRouter.post(
+  '/fx9600/:gate/webhook',
+  requireFx9600Secret,
+  asyncHandler(async (req, res) => {
+    const gate = Number(req.params.gate);
+    if (!Number.isInteger(gate) || gate <= 0) {
+      throw httpError(400, 'gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_gate');
+    }
+
+    const reads = extractReads(req.body);
+    const epcs = reads.map(extractEpc).filter((e): e is string => e !== null);
+    if (!epcs.length) {
+      // Not an error — IoT Connector can POST a heartbeat/status payload with
+      // no tag data in it. Nothing to receive, nothing to fail on.
+      // Same shape as gateIn()'s own response (received: string[]), not a
+      // bare count — a caller checking .received.length or .includes(tag)
+      // shouldn't need a special case for "nothing to receive".
+      res.json({ ok: true, received: [], unknown: [], count: 0 });
+      return;
+    }
+
+    // Every tag this system writes carries the box's own barcode as ASCII in
+    // the EPC bank (see lib/rfid.ts's encodeBarcodeToEpcHex) — decode first
+    // so resolveBoxesByCodes matches on box.tag even for a tag that was
+    // physically written but never explicitly bound via POST
+    // /api/boxes/:tag/rfid. A tag that doesn't decode to anything (foreign/
+    // blank/binary) falls back to the raw EPC hex, which still matches a box
+    // explicitly bound by rfid_epc.
+    const tags = epcs.map((epcHex) => {
+      try {
+        const decoded = decodeEpcHexToBarcode(epcHex);
+        return decoded || epcHex;
+      } catch {
+        return epcHex;
+      }
+    });
+
+    const result = await gateIn(getDb(), {
+      tags,
+      gate,
+      recorder: `FX9600 · Gate ${gate}`,
+      device: 'fx9600-webhook',
+    });
+    // Same reason the handheld routes call this — a reader-driven receive
+    // never goes through PUT /api/state, so the dashboards would otherwise
+    // sit stale until someone happens to refresh.
+    bump();
+    res.json(result);
   }),
 );
 
