@@ -1789,12 +1789,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
         </div>
         <div class="field"><label>ชื่อลูกค้า / บริษัท <span class="req">*</span></label><input id="cName" placeholder="บจก. ปลายทาง"></div>
-        <div class="field"><label>ประเภทคู่ค้า</label><select id="cKind">
+        <div class="field"><label>ประเภทคู่ค้า</label><select id="cKind" onchange="custSyncKindFields()">
           <option value="customer">ลูกค้า (รับกล่องออกไป)</option>
           <option value="supplier">ซัพพลายเออร์ (ส่งกล่องเข้ามา)</option>
           <option value="both">ทั้งลูกค้าและซัพพลายเออร์</option>
         </select></div>
-        <div class="field"><label>ยืมได้กี่วัน</label>
+        <div class="field" id="custFieldReturnDays"><label>ยืมได้กี่วัน</label>
           <div style="display:flex;align-items:center;gap:8px;">
             <input id="cReturnDays" type="number" min="0" placeholder="15" title="จำนวนวันที่ลูกค้ารายนี้ยืมกล่องได้ นับจากวันที่บันทึก — ใช้กับกล่องทุกใบที่ส่งให้ลูกค้ารายนี้" style="max-width:110px;">
             <span class="muted small">วัน (นับจากวันที่บันทึก)</span>
@@ -1819,10 +1819,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </select>
         </div>
         <div class="field"><label>วงเงินมัดจำ/เครดิต (บาท)</label><input id="cCreditLimit" type="number" min="0" placeholder="0"></div>
-        <div class="field"><label>อัตราค่าปรับ/วัน (บาท)</label><input id="cFineRate" type="number" min="0" placeholder="0" title="คูณด้วยจำนวนวันที่เกินกำหนดคืนของแต่ละกล่อง แล้วรวมทุกใบที่เกินกำหนดอยู่ตอนนี้ — ดูยอดรวมได้ที่บัตรลูกค้า (แตะแถวลูกค้า)"></div>
-        <div class="field"><label>ค่าปรับกล่องหาย (บาท)</label><input id="cLostFine" type="number" min="0" placeholder="0" title="คิดครั้งเดียวต่อกล่อง 1 ใบที่มีสถานะ &quot;สูญหาย&quot; (ไม่ผูกกับจำนวนวัน) — รวมกับค่าปรับเกินกำหนดคืนแยกกันคนละก้อน"></div>
+        <div class="field" id="custFieldFineRate"><label>อัตราค่าปรับ/วัน (บาท)</label><input id="cFineRate" type="number" min="0" placeholder="0" title="คูณด้วยจำนวนวันที่เกินกำหนดคืนของแต่ละกล่อง แล้วรวมทุกใบที่เกินกำหนดอยู่ตอนนี้ — ดูยอดรวมได้ที่บัตรลูกค้า (แตะแถวลูกค้า)"></div>
+        <div class="field" id="custFieldLostFine"><label>ค่าปรับกล่องหาย (บาท)</label><input id="cLostFine" type="number" min="0" placeholder="0" title="คิดครั้งเดียวต่อกล่อง 1 ใบที่มีสถานะ &quot;สูญหาย&quot; (ไม่ผูกกับจำนวนวัน) — รวมกับค่าปรับเกินกำหนดคืนแยกกันคนละก้อน"></div>
       </div>
-      <div class="tag" style="margin-top:2px;max-width:640px;">วิธีคิดค่าปรับ: <b>ค่าปรับเกินกำหนดคืน</b> = อัตรา/วัน × จำนวนวันที่เกินกำหนดคืน × จำนวนกล่องที่เกินกำหนดอยู่ตอนนี้ (คำนวณสดทุกครั้ง ไม่ได้บันทึกเป็นยอดค้างชำระ) · <b>ค่าปรับกล่องหาย</b> = อัตรานี้ × จำนวนกล่องที่สถานะเป็น "สูญหาย" ของลูกค้ารายนี้ — ดูยอดรวมปัจจุบันได้ที่บัตรลูกค้า (แตะแถวลูกค้าในตารางด้านล่าง)</div>
+      <div class="tag" id="custFineNote" style="margin-top:2px;max-width:640px;">วิธีคิดค่าปรับ: <b>ค่าปรับเกินกำหนดคืน</b> = อัตรา/วัน × จำนวนวันที่เกินกำหนดคืน × จำนวนกล่องที่เกินกำหนดอยู่ตอนนี้ (คำนวณสดทุกครั้ง ไม่ได้บันทึกเป็นยอดค้างชำระ) · <b>ค่าปรับกล่องหาย</b> = อัตรานี้ × จำนวนกล่องที่สถานะเป็น "สูญหาย" ของลูกค้ารายนี้ — ดูยอดรวมปัจจุบันได้ที่บัตรลูกค้า (แตะแถวลูกค้าในตารางด้านล่าง)</div>
       <div class="hint" id="custHeldHint" style="display:none;margin-top:10px;"></div>
       <div class="row" style="margin-top:20px;"><button class="btn accent" id="btnAddCust">บันทึกลูกค้า</button>
         <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
@@ -3940,6 +3940,18 @@ window.editWh=editWh;window.delWh=delWh;
 /* ===== SETUP: customers CRUD ===== */
 var editingCust=null;
 var CUST_FIELDS=['cName','cPhone','cEmail','cAddr','cTaxId','cContactPerson','cCreditLimit','cFineRate','cLostFine','cReturnDays'];
+/* ฟิลด์ยืม/คืน+ค่าปรับ มีความหมายเฉพาะฝั่ง "ลูกค้า" (รับกล่องออกไปแล้วต้องคืน) —
+   ซัพพลายเออร์ล้วน (ส่งกล่องเข้ามาอย่างเดียว ไม่เคยยืม) ไม่มีวันครบกำหนดคืน ไม่มีค่าปรับ
+   เกินกำหนด/กล่องหายให้คิด จึงซ่อนช่องเหล่านี้ไปเมื่อเลือกประเภทคู่ค้าเป็น "ซัพพลายเออร์"
+   ล้วน — เลือก "ทั้งลูกค้าและซัพพลายเออร์" ยังโชว์ไว้เหมือนเดิมเพราะยังมีด้านลูกค้าอยู่ */
+function custSyncKindFields(){
+  var k=val('cKind')||'customer';
+  var showBorrow=(k!=='supplier');
+  ['custFieldReturnDays','custFieldFineRate','custFieldLostFine','custFineNote'].forEach(function(id){
+    var el=$('#'+id);if(el)el.style.display=showBorrow?'':'none';
+  });
+}
+window.custSyncKindFields=custSyncKindFields;
 $('#btnAddCust').onclick=function(){
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกชื่อลูกค้า / บริษัท',null,'err');
   /* มีแค่ชื่อลูกค้า/บริษัทเท่านั้นที่บังคับกรอก — ทุกช่องอื่น (ยืมได้กี่วัน/เบอร์โทร/
@@ -3977,11 +3989,11 @@ $('#btnAddCust').onclick=function(){
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();
+  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';
   toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
-  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();
+  CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
@@ -4023,7 +4035,7 @@ function custEarliestDueDate(id){
   return earliest==null?null:ddmmyyyy(new Date(earliest));
 }
 window.custEarliestDueDate=custEarliestDueDate;
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');custSyncKindFields();
   /* ระเบียนที่มี c.returnDays อยู่แล้ว (บันทึก/import ตั้งแต่มีฟิลด์นี้) ใช้ค่านั้นตรงๆ
      ไม่เพี้ยน — ระเบียนเก่าก่อนมีฟิลด์นี้ค่อย fallback ไปคำนวณย้อนจาก returnDate
      (วันที่คงที่ที่เคยบันทึกไว้) เป็นจำนวนวันคงเหลือนับจากวันนี้แทน ซึ่งจะคลาดเคลื่อนไป
