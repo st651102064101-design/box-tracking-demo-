@@ -1566,7 +1566,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <input type="file" id="importFileShared" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
 
   <div class="row no-print reveal" style="margin-bottom:22px;">
-    <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภท &amp; ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
+    <button class="btn ghost sm stab active" data-stab="btype" title="ประเภทกล่อง / กล่องที่ลงทะเบียน"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภท &amp; ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="btype" title="ประเภทกล่อง"></span><span class="sf-badge" data-stab-badge="box" title="กล่องที่ลงทะเบียน"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
@@ -4451,6 +4451,7 @@ function openEmpBadge(id){
   empBadge.cx=empBadge.anchor.x;empBadge.cy=empBadge.pts[empBadge.N].y+half;
   empBadge.open=true;empBadge.id=id;
   empBadge.flipCur=0;empBadge.flipTarget=0;   /* เปิดใหม่ทุกครั้งเริ่มที่หน้าตรง ๆ ทันที ไม่ไล่มุมพลิกจากใบเดิม */
+  empBadge._noBlur=false;   /* ให้ตรงกับ DOM จริงเสมอ — closeEmpBadge() ลบคลาส no-blur ทิ้งไปแล้วตอนปิดใบก่อน */
 
   var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
   var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
@@ -4563,7 +4564,8 @@ function empBadgeStep(){
      actually does, and it lands in roughly half a second. The rope is already
      at full length, so the card is dragged down with it and keeps that
      momentum when the clip stops — which is what produces the settle-swing. */
-  if(eb.anchor.y<eb.anchorTargetY){
+  var entering=eb.anchor.y<eb.anchorTargetY;
+  if(entering){
     /* Motion profile, not a constant fall: accelerate hard, but never exceed the
        speed from which we can still brake to a near-stop over the distance that
        remains (v = sqrt(2*a*d)). Slamming the clip to a dead stop at full speed
@@ -4574,6 +4576,16 @@ function empBadgeStep(){
     eb.anchorV=Math.min(eb.anchorV+14,Math.sqrt(2*5.2*remain)+3.5);
     eb.anchor.y=Math.min(eb.anchorTargetY,eb.anchor.y+eb.anchorV);
     if(eb.anchor.y>=eb.anchorTargetY)eb.anchorV=0;
+  }
+  /* Entrance (still falling in from the clip) is the other continuous-motion
+     span besides an active drag — same no-blur treatment, same reasoning as
+     empBadgeGrab/Release (see .perf-backdrop.no-blur's comment). Only
+     touches the class when the wanted state actually changes, since this
+     runs every frame. */
+  var wantNoBlur=eb.drag||entering;
+  if(wantNoBlur!==eb._noBlur&&eb.el.backdrop){
+    eb.el.backdrop.classList.toggle('no-blur',wantNoBlur);
+    eb._noBlur=wantNoBlur;
   }
   var s=eb.s,CH=627,half=(CH*s)/2+12*s;   /* ต้องตรงกับค่าเดียวกันใน openEmpBadge() */
   /* Weight: 0.34 px/frame² made the card feel like it was falling through
@@ -8775,15 +8787,22 @@ function tglRpt(rowId,chevId){var row=$('#'+rowId),ch=$('#'+chevId);if(!row)retu
 window.tglRpt=tglRpt;
 
 /* ===== SETUP render tables ===== */
-/* จำนวนรายการต่อแท็บย่อยของหน้า Master — ให้เห็นภาพรวมโดยไม่ต้องคลิกเข้าไปดูก่อน */
+/* จำนวนรายการต่อแท็บย่อยของหน้า Master — ให้เห็นภาพรวมโดยไม่ต้องคลิกเข้าไปดูก่อน
+   แท็บ "ประเภท & ลงทะเบียนกล่อง" รวมสองเรื่องไว้ในแท็บเดียว — เดิมมี badge slot เดียว
+   (data-stab-badge="btype") ที่โชว์แค่จำนวนประเภทกล่อง จำนวนกล่องจริงที่ลงทะเบียนแล้ว
+   (นับแยกอยู่แล้วใน counts.box) ไม่เคยถูกแสดงที่ไหนเลย ผู้ใช้เห็นเลขเดียว ("3") แล้ว
+   เข้าใจผิดว่านับรวมทั้งสองอย่าง — เพิ่ม badge slot ที่สอง (data-stab-badge="box")
+   ใน HTML ของปุ่มนี้ แล้วต่อ suffix หน่วยให้สองอันนี้โดยเฉพาะ ("3 ประเภท" / "11 กล่อง")
+   กันสับสนว่าเลขไหนคือเลขไหนโดยไม่ต้อง hover ดู title */
 function refreshStabBadges(){
   var counts={btype:Object.keys(S.boxtypes||{}).length,wh:Object.keys(S.warehouses||{}).length,
     box:Object.keys(S.boxes||{}).length,cust:Object.keys(S.customers||{}).length,
     emp:Object.keys(S.employees||{}).length,
     audit:(S.auditLog||[]).length};
+  var suffix={btype:' ประเภท',box:' กล่อง'};
   Object.keys(counts).forEach(function(k){
     var el=document.querySelector('[data-stab-badge="'+k+'"]');
-    if(el)el.textContent=counts[k]?nf(counts[k]):'';
+    if(el)el.textContent=counts[k]?(nf(counts[k])+(suffix[k]||'')):'';
   });
 }
 /* Gate ขาเข้า: คืนกล่อง (ลูกค้า) vs รับกล่อง Supplier — เดิม "รถของคู่ค้า"
