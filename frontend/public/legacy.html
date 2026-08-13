@@ -1643,6 +1643,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <div class="tag" style="margin-top:5px;">กด <span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span> เพื่อสร้างใหม่ · กด "แก้เอง" ถ้าต้องการระบุรหัสเอง</div>
           </div>
           <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bType"></select><div id="bTypeEmpty" style="display:none;margin-top:6px;"></div></div>
+          <!-- ไม่ตั้งเอง (location.wh ว่าง) กล่องนี้จะไม่มีทางรู้ว่าอยู่คลังไหนเลยจนกว่าจะ
+               ผ่าน Gate เข้า/ย้ายพิกัดจริง — คอลัมน์ "ตำแหน่ง" ในตาราง Inventory จะซ้ำคำ
+               กับคอลัมน์ "สถานะ" เปล่าประโยชน์ (locShort() เดายังไม่ได้ถ้ามีหลายคลัง) -->
+          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bWh"></select></div>
         </div>
       </div>
 
@@ -1650,6 +1654,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       <div id="boxBatchWrap" style="display:none;">
         <div class="grid g3" style="margin-bottom:0;">
           <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bTypeBatch"></select></div>
+          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bWhBatch"></select></div>
           <div class="field"><label>สร้างเป็นชุด — Prefix <span class="req">*</span></label>
             <input id="bPrefix" list="dl-prefix" placeholder="CRT-" autocomplete="off">
             <datalist id="dl-prefix"></datalist>
@@ -3187,9 +3192,19 @@ function gateWh(g){return S.gates[g]||'';}
 function allGateNums(){return Object.keys(S.gates).map(Number).sort(function(a,b){return a-b;});}
 function gateOptions(sel){var gs=allGateNums();if(!gs.length)return '<option value="">(ยังไม่มีประตู — เพิ่มที่ตั้งค่า)</option>';
   return '<option value="">— เลือกประตู —</option>'+gs.map(function(g){return '<option value="'+g+'"'+(String(sel)===String(g)?' selected':'')+'>ประตู '+g+' · '+esc(whName(gateWh(g)))+'</option>';}).join('');}
-function locShort(loc){if(!loc||!loc.wh)return '<span class="muted">พร้อมส่งออก</span>';
-  var tail=[loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
-  return esc(whName(loc.wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
+function locShort(loc){
+  var wh=loc&&loc.wh;
+  if(!wh){
+    /* กล่องที่ยังไม่เคยถูกระบุคลัง (ลงทะเบียนตรง ๆ ไม่ผ่านการจัดวางจริง) — ถ้าทั้งระบบ
+       มีคลังเดียว ก็รู้แน่นอนอยู่แล้วว่าเป็นคลังไหน ไม่ต้องขึ้นข้อความซ้ำสถานะแบบเดิม
+       (ที่ผู้ใช้เจอคือคอลัมน์ "ตำแหน่ง" ซ้ำคำเดียวกับคอลัมน์ "สถานะ" เปล่าประโยชน์)
+       หลายคลังถึงจะไม่รู้จริง ๆ ว่าอยู่ไหน ต้องขึ้น fallback แบบเดิม */
+    var whs=activeWarehouses();
+    if(whs.length===1)wh=whs[0].id;
+    else return '<span class="muted">พร้อมส่งออก</span>';
+  }
+  var tail=[loc&&loc.zone&&('โซน '+loc.zone),loc&&loc.rack&&('แร็ค '+loc.rack),loc&&loc.shelf&&('ชั้น '+loc.shelf),loc&&loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
+  return esc(whName(wh))+(tail?'<div class="tag">'+esc(tail)+'</div>':'');}
 
 /* ===== toast / confirm / modal ===== */
 /* Short synthesized notification chime, one per toast() call — generated
@@ -3715,6 +3730,7 @@ $('#btnAddBox').onclick = function() {
   if (boxRegMode === 'single') {
     var tag = val('bTag'); if (!tag) return toast('กรอก บาร์โค้ด', null, 'err');
     var type = val('bType'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน', 'err');
+    var wh = val('bWh'); if (!wh) return toast('เลือกคลัง', 'เพิ่มคลังที่แท็บ "คลัง & ประตู" ก่อน', 'err');
     if (S.boxes[tag]) return toast('มี Tag นี้แล้ว', tag, 'err');
     var bt = S.boxtypes[type] || {}; var value = bt.value || S.cfg.boxValue;
     var lot = val('bLot'); var expiry = val('bExpiry'); var sup = val('bSupplier');
@@ -3722,18 +3738,22 @@ $('#btnAddBox').onclick = function() {
     /* ลงทะเบียนเสร็จ = เข้าคลังทันที — เดิม status:'pending' ต้องผ่าน Gate ขาเข้าซ้ำอีก
        ขั้นก่อนจะใช้งานได้จริง ตามที่ผู้ใช้ขอให้ตัดขั้นตอนนี้ออก ตั้ง status:'warehouse'
        ตรงนี้เลย และ labeled:true (statusPill โชว์ "รอเข้าคลัง (Gate In)" ทับสถานะ
-       ในคลังอยู่ถ้า labeled=false — ต้องปิดด้วยไม่งั้น pill ยังขึ้นข้อความเดิม) */
+       ในคลังอยู่ถ้า labeled=false — ต้องปิดด้วยไม่งั้น pill ยังขึ้นข้อความเดิม)
+       location.wh มาจาก #bWh ที่เลือกไว้ — เดิมปล่อยว่างเสมอ ทำให้คอลัมน์ "ตำแหน่ง"
+       ในตาราง Inventory ไม่มีทางบอกได้ว่ากล่องอยู่คลังไหนจนกว่าจะผ่าน Gate เข้า/ย้าย
+       พิกัดจริง (ดู locShort()) — เก็บจากผู้ใช้ตรงนี้แทนตั้งแต่ลงทะเบียน */
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
       lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:true,
+      location:{wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:true,
       /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
          stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
       history:[{dir:'reg',ts:regTs,recorder:USER}]};
-    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'warehouse',lot:lot,expiry:expiry,supplier:sup});
+    auditEntry('CREATE', USER, tag, typeName(type), null, {type:type,value:value,status:'warehouse',wh:wh,lot:lot,expiry:expiry,supplier:sup});
     save(); var t = $('#bTag'); if (t && !t._override) { t.value = nextTagForType(type); } else { setv('bTag',''); }
-    toast('ลงทะเบียนกล่องแล้ว', tag + ' · เข้าคลังแล้ว'); renderAll();
+    toast('ลงทะเบียนกล่องแล้ว', tag + ' · เข้าคลัง ' + whName(wh) + ' แล้ว'); renderAll();
   } else {
     var type = val('bTypeBatch'); if (!type) return toast('เลือกประเภทกล่อง', 'เพิ่มประเภทก่อน', 'err');
+    var whB = val('bWhBatch'); if (!whB) return toast('เลือกคลัง', 'เพิ่มคลังที่แท็บ "คลัง & ประตู" ก่อน', 'err');
     var pre = val('bPrefix') || 'BOX-', start = num('bStart') || 1, qty = num('bQty') || 0;
     if (qty <= 0) return toast('ระบุจำนวน', null, 'err');
     if (qty > 2000) return toast('จำนวนมากเกินไป', 'สูงสุด 2000', 'err');
@@ -3742,10 +3762,10 @@ $('#btnAddBox').onclick = function() {
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = pre + String(n);
       if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
         lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:true,
+        location:{wh:whB,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:true,
         history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
-    if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,supplier:bsup,tags:addedTags});
-    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · เข้าคลังแล้ว'); renderPrefixDatalist(); renderAll();
+    if (added) auditEntry('CREATE', USER, pre+String(start)+'…'+pre+String(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,wh:whB,supplier:bsup,tags:addedTags});
+    save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · เข้าคลัง ' + whName(whB) + ' แล้ว'); renderPrefixDatalist(); renderAll();
     syncPrefixFromBatchType(); /* advance batch start number for the next run */
     var bTagSingle=$('#bTag'); if(bTagSingle&&!bTagSingle._override&&val('bType')===type)refreshTagId(); /* keep single-add preview in sync */
   }
@@ -8894,6 +8914,10 @@ function renderSetup(){
   if(bTypeBatchSel){bTypeBatchSel.innerHTML=btOptions;bTypeBatchSel.style.display=bts.length?'':'none';if(bts.length===1&&!bTypeBatchSel.value)bTypeBatchSel.value=bts[0].id;}
   if(bTypeEmpty){bTypeEmpty.style.display=bts.length?'none':'block';bTypeEmpty.innerHTML=bts.length?'':'<button class="btn accent" onclick="goSetup(\'btype\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button>';}
   if(noTypeHint)noTypeHint.style.display='none';
+  /* คลังสำหรับลงทะเบียนกล่อง — ใช้ invWhOptions() ตัวเดียวกับ #eWh ด้านล่าง ซึ่งเลือก
+     คลังเดียวที่มีให้อัตโนมัติอยู่แล้วถ้าทั้งระบบมีคลังเดียว (ดู invWhOptions ข้างล่าง) */
+  var bWhSel=$('#bWh');if(bWhSel){var curBWh=bWhSel.value;bWhSel.innerHTML=invWhOptions(curBWh);bWhSel.value=curBWh;}
+  var bWhBatchSel=$('#bWhBatch');if(bWhBatchSel){var curBWhB=bWhBatchSel.value;bWhBatchSel.innerHTML=invWhOptions(curBWhB);bWhBatchSel.value=curBWhB;}
 
   // auto-generated ids
   btIdAuto.refresh(); whIdAuto.refresh(); cIdAuto.refresh(); eIdAuto.refresh();
@@ -9663,8 +9687,8 @@ function invLocText(b) {
      is an error state needing a warning pill, since there's no rack
      placement step left to nag about. */
   if (b.status === 'pending') return '<span class="muted">รอเข้าคลัง (Gate In)</span>';
-  var loc = b.location || {};
-  if (!loc.wh) return '<span class="muted">พร้อมส่งออก</span>';
+  /* locShort() ตัดสินใจ fallback เองแล้ว (คลังเดียวในระบบ = รู้แน่นอนว่าอยู่คลังไหน
+     แม้ location.wh จะว่าง — ดูคอมเมนต์ที่ locShort) ไม่ต้องมี early-return ซ้ำตรงนี้ */
   return locShort(b.location);
 }
 /* วันที่ ส่ง/รับ ล่าสุด — อ่านจาก history ตัวจริงของกล่อง (ล่าสุดที่เป็น
@@ -12056,6 +12080,7 @@ function openColumnMapModal(opts){
       fields:[
         {key:'tag',      label:'บาร์โค้ด (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['tag','barcode','บาร์โค้ด']},
         {key:'typeId',   label:'รหัสประเภทกล่อง', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท']},
+        {key:'wh',       label:'รหัส/ชื่อคลัง (เว้นว่างได้ถ้ามีคลังเดียว)', required:false, aliases:['wh','warehouse','คลัง','รหัสคลัง','ชื่อคลัง']},
         {key:'supplier', label:'รหัสซัพพลายเออร์', required:false, aliases:['supplier','ซัพพลายเออร์','รหัสซัพพลายเออร์']},
         {key:'lot',      label:'Lot/Batch', required:false, aliases:['lot','batch']},
         {key:'expiry',   label:'วันหมดอายุ (YYYY-MM-DD)', required:false, aliases:['expiry','วันหมดอายุ']}
@@ -12075,14 +12100,22 @@ function openColumnMapModal(opts){
         var type=S.boxtypes[typeId];
         var value=type?(type.value||S.cfg.boxValue):S.cfg.boxValue;
         var regTsI=iso();
+        /* คลัง: จับคู่/สร้างจากคอลัมน์ "คลัง" เหมือนตัวนำเข้าอื่น ๆ (window.findWarehouseMatch/
+           autoCreateWarehouseIfNeeded — ดูคอมเมนต์ที่นิยามทั้งสองด้านล่างของไฟล์) ถ้าคอลัมน์
+           นี้ว่างเปล่าไปเลย (ไม่ใช่พิมพ์ชื่อแล้วหาไม่เจอ) แต่ทั้งระบบมีคลังเดียว ก็รู้แน่นอนอยู่
+           แล้วว่าเป็นคลังไหน — ไม่ต้องบังคับกรอกซ้ำ */
+        var whId=m.wh?(window.findWarehouseMatch(m.wh)||window.autoCreateWarehouseIfNeeded(m.wh)||''):'';
+        if(!whId){var soleWh=activeWarehouses();if(soleWh.length===1)whId=soleWh[0].id;}
         /* status:'warehouse' ทันที — เดียวกับที่ "ลงทะเบียนกล่อง" เดี่ยว/เป็นชุดแก้ไปแล้ว
            (ดูคอมเมนต์ที่บรรทัด 3697) นำเข้าจาก Excel ก็คือการลงทะเบียนแบบหนึ่ง ไม่ควรต้อง
-           ผ่าน Gate ขาเข้าซ้ำอีกขั้นก่อนใช้งานได้เหมือนกัน */
+           ผ่าน Gate ขาเข้าซ้ำอีกขั้นก่อนใช้งานได้เหมือนกัน — location.wh มาจากคอลัมน์ "คลัง"
+           ที่ map ไว้ (เดิมปล่อยว่างเสมอ ทำให้คอลัมน์ "ตำแหน่ง" ในตาราง Inventory ไม่มีทาง
+           บอกได้ว่ากล่องอยู่คลังไหนเลย — ดู locShort()) */
         return {tag:tag,type:typeId,value:value,status:'warehouse',cycles:0,
           customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
           lot:m.lot||'',expiry:m.expiry||'',supplier:m.supplier||'',
           regAt:regTsI,regBy:USER,
-          location:{wh:'',zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsI},
+          location:{wh:whId,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsI},
           lastSeenAt:regTsI,labeled:true,
           history:[{dir:'reg',ts:regTsI,recorder:USER,note:'นำเข้าจากไฟล์ Excel/CSV'}]};
       }
