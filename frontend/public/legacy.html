@@ -1986,7 +1986,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
      ลากเล่นได้ (จำลองแรงโน้มถ่วง/สายคล้อง), เอาเมาส์ชี้เพื่อพลิกดูด้านหลัง (เมนูจัดการ)
      พิมพ์บาร์โค้ดจากรหัสบัตรพนักงานจริงด้วย Code128 (ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์) -->
 <div id="empBadgeOverlay" style="position:fixed;inset:0;z-index:400;display:none;">
-  <div onclick="closeEmpBadge()" style="position:absolute;inset:0;background:rgba(20,20,22,.42);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);"></div>
+  <div id="empBadgeBackdrop" class="perf-backdrop" onclick="closeEmpBadge()" style="position:absolute;inset:0;background:rgba(20,20,22,.42);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);"></div>
   <svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;">
     <!-- ทั้งสองเส้นวาดเป็นรูปหลายเหลี่ยม (fill) แทนเส้น stroke ธรรมดา — ความกว้างของสาย
          ต้องแคบ-กว้างสลับกันไปตามความยาว (บิดเกลียว) ซึ่ง stroke-width ค่าเดียวทำไม่ได้
@@ -2144,6 +2144,15 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
      แทนที่ modal แก้ไข-ลบ ของเดิม (openMasterRowActions) ตามแพตเทิร์นเดียวกับ
      บัตรพนักงาน (openEmpBadge) ด้านบน -->
 <style>
+/* Toggled on/off by JS (empBadgeStep/ccStep) for exactly the span of time an
+   overlay card is actively falling/swinging/being dragged — backdrop-filter
+   blur is one of the more expensive things a compositor can be asked to keep
+   redoing every frame while a large layer transforms on top of it, and that
+   window is precisely when the animation is visible as continuous motion in
+   the first place. Restored the instant the card settles, so the resting
+   look (what's on screen 95% of the time anyone's looking at it) is
+   unchanged from before. */
+.perf-backdrop.no-blur{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 #btypeCubeOverlay{position:fixed;inset:0;z-index:400;display:none;}
 #btypeCubeOverlay .btc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
@@ -2340,7 +2349,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   display:grid;place-items:center;pointer-events:none;z-index:4;border-radius:24px;overflow:hidden;}
 </style>
 <div id="custCardOverlay">
-  <div class="cc-backdrop" onclick="closeCustCard()"></div>
+  <div class="cc-backdrop perf-backdrop" onclick="closeCustCard()"></div>
   <div class="cc-shadow" id="ccShadow"></div>
   <div class="cc-hint">ชี้เมาส์ที่การ์ดเพื่อพลิกดูบาร์โค้ดและเมนูจัดการ · กด Esc หรือคลิกพื้นหลังเพื่อปิด</div>
   <div class="cc-card" id="ccCard" onmouseenter="ccToBack()" onmouseleave="ccToFront()">
@@ -4379,6 +4388,14 @@ function empBadgeToast(msg){
 }
 function empBadgeBoot(){
   if(empBadge.booted)return;empBadge.booted=true;
+  /* Looked up once and reused every frame instead of six document.querySelector
+     calls inside empBadgeStep() — the overlay's elements never get replaced
+     while the page is alive, so there's nothing to re-look-up. */
+  empBadge.el={
+    card:$('#empBadgeCard'),flip:$('#empBadgeFlip'),clip:$('#empBadgeClip'),
+    strap:$('#empBadgeStrap'),shade:$('#empBadgeStrapShade'),close:$('#empBadgeClose'),
+    backdrop:$('#empBadgeBackdrop')
+  };
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
   window.addEventListener('pointermove',empBadgeOnMove);
@@ -4392,9 +4409,19 @@ function empBadgeGrab(ev){
   var c=Math.cos(-empBadge.theta),s=Math.sin(-empBadge.theta);
   var dx=ev.clientX-empBadge.cx,dy=ev.clientY-empBadge.cy;
   empBadge.drag={lx:(dx*c-dy*s)/empBadge.s,ly:(dx*s+dy*c)/empBadge.s,x:ev.clientX,y:ev.clientY};
-  var card=$('#empBadgeCard');if(card)card.style.cursor='grabbing';
+  var el=empBadge.el;
+  if(el.card)el.card.style.cursor='grabbing';
+  /* Dragging is exactly the span the reported jank happens in — drop the
+     backdrop blur for its duration, restored the instant the card is let
+     go (empBadgeRelease). See .perf-backdrop.no-blur's comment. */
+  if(el.backdrop)el.backdrop.classList.add('no-blur');
 }
-function empBadgeRelease(){empBadge.drag=null;var card=$('#empBadgeCard');if(card)card.style.cursor='grab';}
+function empBadgeRelease(){
+  empBadge.drag=null;
+  var el=empBadge.el;
+  if(el.card)el.card.style.cursor='grab';
+  if(el.backdrop)el.backdrop.classList.remove('no-blur');
+}
 function openEmpBadge(id){
   var e=S.employees[id];if(!e)return;
   var vw=window.innerWidth,vh=window.innerHeight;
@@ -4453,6 +4480,8 @@ function openEmpBadge(id){
 window.openEmpBadge=openEmpBadge;
 function closeEmpBadge(){
   empBadge.open=false;
+  empBadge.drag=null;
+  if(empBadge.el&&empBadge.el.backdrop)empBadge.el.backdrop.classList.remove('no-blur');
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='none';
 }
 window.closeEmpBadge=closeEmpBadge;
@@ -4471,23 +4500,37 @@ window.empBadgeAction=empBadgeAction;
    — ความกว้างที่ "เห็น" ของริบบิ้นแบนที่บิดไปมุม θ คือ cos(θ) (มองตรงหน้า = เห็นเต็มความกว้าง,
    มองข้าง 90° = เห็นเป็นเส้นบาง) ใส่ minHW กันไม่ให้แคบจนหายไปเป็นช่องว่างเลยตอนกำลังพลิกอยู่
    ครึ่งทาง — ให้ minHW>0 อ่านเหมือนเห็นขอบสายบาง ๆ แทนที่จะเป็นบั๊กสายขาดหาย */
-function empBadgeStrapPolygon(pts,N,flipRad,baseHW,minHW){
-  var left=[],right=[];
+/* Split from the old empBadgeStrapPolygon(): the per-point tangent/normal
+   (the Math.hypot + two divides per point) only depends on [pts], not on
+   which of the two ribbons (strap vs. shade) is being drawn — empBadgeStep()
+   used to call the combined function twice a frame with different widths,
+   redoing that trig for all 17 points both times. Computed once here and
+   handed to empBadgeStrapPolygonFromNormals() for each width instead. */
+function empBadgeStrapNormals(pts,N){
+  var normals=new Array(N+1);
   for(var i=0;i<=N;i++){
-    var t=i/N,dx,dy;
+    var dx,dy;
     if(i===0){dx=pts[1].x-pts[0].x;dy=pts[1].y-pts[0].y;}
     else if(i===N){dx=pts[N].x-pts[N-1].x;dy=pts[N].y-pts[N-1].y;}
     else{dx=pts[i+1].x-pts[i-1].x;dy=pts[i+1].y-pts[i-1].y;}
     var len=Math.hypot(dx,dy)||0.001;
-    var nx=-dy/len,ny=dx/len;
-    var hw=minHW+(baseHW-minHW)*Math.abs(Math.cos(flipRad*t));
-    left.push(pts[i].x+nx*hw,pts[i].y+ny*hw);
-    right.push(pts[i].x-nx*hw,pts[i].y-ny*hw);
+    normals[i]={x:-dy/len,y:dx/len};
   }
-  var d='M'+left[0].toFixed(1)+','+left[1].toFixed(1);
-  for(var i=1;i<=N;i++)d+=' L'+left[i*2].toFixed(1)+','+left[i*2+1].toFixed(1);
-  for(var i=N;i>=0;i--)d+=' L'+right[i*2].toFixed(1)+','+right[i*2+1].toFixed(1);
-  return d+' Z';
+  return normals;
+}
+function empBadgeStrapPolygonFromNormals(pts,normals,N,flipRad,baseHW,minHW){
+  var left=new Array((N+1)*2),right=new Array((N+1)*2);
+  for(var i=0;i<=N;i++){
+    var t=i/N,n=normals[i];
+    var hw=minHW+(baseHW-minHW)*Math.abs(Math.cos(flipRad*t));
+    left[i*2]=pts[i].x+n.x*hw;left[i*2+1]=pts[i].y+n.y*hw;
+    right[i*2]=pts[i].x-n.x*hw;right[i*2+1]=pts[i].y-n.y*hw;
+  }
+  var parts=['M'+left[0].toFixed(1)+','+left[1].toFixed(1)];
+  for(var i=1;i<=N;i++)parts.push(' L'+left[i*2].toFixed(1)+','+left[i*2+1].toFixed(1));
+  for(var i=N;i>=0;i--)parts.push(' L'+right[i*2].toFixed(1)+','+right[i*2+1].toFixed(1));
+  parts.push(' Z');
+  return parts.join('');
 }
 
 function empBadgeTick(){empBadge.raf=requestAnimationFrame(empBadgeTick);empBadgeStep();}
@@ -4498,10 +4541,10 @@ function empBadgeStep(){
   /* ไล่มุมพลิกเข้าหาเป้าหมายเอง (แทน CSS transition เดิม) — ต้องรู้มุมระหว่างทางไปคำนวณ
      บิดเกลียวสายคล้องด้านล่าง ตัวคูณ .16 ให้เข้าที่ในเวลาใกล้เคียง .62s เดิมที่ ~60fps */
   eb.flipCur+=(eb.flipTarget-eb.flipCur)*0.16;
-  var flipEl=$('#empBadgeFlip');if(flipEl)flipEl.style.transform='rotateY('+eb.flipCur.toFixed(2)+'deg)';
+  var flipEl=eb.el.flip;if(flipEl)flipEl.style.transform='rotateY('+eb.flipCur.toFixed(2)+'deg)';
   /* คลิปหนีบต้องพลิกตามบัตรไปด้วย — มันหนีบติดอยู่กับบัตรจริง ๆ ไม่ใช่ลอยแยกอิสระ
      (คงระยะ translate เดิมไว้ แล้วต่อ rotateY ด้วยมุมเดียวกับตัวบัตรทุกเฟรม) */
-  var clipEl=$('#empBadgeClip');if(clipEl)clipEl.style.transform='translate(-50%,-22px) rotateY('+eb.flipCur.toFixed(2)+'deg)';
+  var clipEl=eb.el.clip;if(clipEl)clipEl.style.transform='translate(-50%,-22px) rotateY('+eb.flipCur.toFixed(2)+'deg)';
   /* Entrance: the clip ACCELERATES down to its resting height instead of easing
      into it. An exponential ease (the *0.022 lerp this replaced) spends most of
      its time crawling the last few pixels, which reads as a card drifting down
@@ -4591,16 +4634,19 @@ function empBadgeStep(){
 
   eb.tilt+=(Math.max(-16,Math.min(16,eb.vx*1.6))-eb.tilt)*0.12;
 
-  var card=$('#empBadgeCard');
+  var card=eb.el.card;
   if(card)card.style.transform='translate('+(eb.cx-204)+'px,'+(eb.cy-313.5)+'px) rotate('+eb.theta+'rad) scale('+s+')';
-  /* ริบบิ้นบิดเกลียวตามมุมพลิกจริง (eb.flipCur) — ดู empBadgeStrapPolygon() ด้านบน */
+  /* ริบบิ้นบิดเกลียวตามมุมพลิกจริง (eb.flipCur) — ดู empBadgeStrapPolygonFromNormals() ด้านบน.
+     Normals shared between strap+shade (see comment on empBadgeStrapNormals) —
+     computed once per frame instead of once per ribbon. */
   var flipRad=eb.flipCur*Math.PI/180;
-  var strap=$('#empBadgeStrap');if(strap)strap.setAttribute('d',empBadgeStrapPolygon(eb.pts,eb.N,flipRad,13*s,2*s));
-  var shade=$('#empBadgeStrapShade');if(shade)shade.setAttribute('d',empBadgeStrapPolygon(eb.pts,eb.N,flipRad,3.5*s,0.5*s));
+  var normals=empBadgeStrapNormals(eb.pts,eb.N);
+  var strap=eb.el.strap;if(strap)strap.setAttribute('d',empBadgeStrapPolygonFromNormals(eb.pts,normals,eb.N,flipRad,13*s,2*s));
+  var shade=eb.el.shade;if(shade)shade.setAttribute('d',empBadgeStrapPolygonFromNormals(eb.pts,normals,eb.N,flipRad,3.5*s,0.5*s));
   /* ปุ่มปิดเกาะข้างมุมขวาบนของการ์ด — หาพิกัดมุมนั้นในพิกัดจอ โดยหมุนจุดในระบบพิกัดของการ์ด
      (204,-313.5 = มุมขวาบน ก่อนสเกล) ตามมุมแกว่ง theta เดียวกับที่การ์ดใช้ แล้วเลื่อนออกนอกขอบ
      อีก 30px กันปุ่มทับตัวบัตร — ตัวปุ่มเองแค่เลื่อน (translate) ไม่หมุนตาม จึงตั้งตรงเสมอ */
-  var closeBtn=$('#empBadgeClose');
+  var closeBtn=eb.el.close;
   if(closeBtn){
     var cth=Math.cos(eb.theta),sth=Math.sin(eb.theta);
     var lx=204*s+OVERLAY_BTN_GAP,ly=-313.5*s+21;
@@ -5442,12 +5488,14 @@ function openCustCard(id){
 
   $('#custCardOverlay').style.display='block';
   ccBoot();
+  if(ccState.el&&ccState.el.backdrop)ccState.el.backdrop.classList.add('no-blur');
 }
 window.openCustCard=openCustCard;
 
 function closeCustCard(){
   ccState.open=false;
   if(ccState.raf){cancelAnimationFrame(ccState.raf);ccState.raf=null;}
+  if(ccState.el&&ccState.el.backdrop)ccState.el.backdrop.classList.remove('no-blur');
   var ov=$('#custCardOverlay');if(ov)ov.style.display='none';
 }
 window.closeCustCard=closeCustCard;
@@ -5510,6 +5558,9 @@ window.printCustCardWindow=printCustCardWindow;
 function ccBoot(){
   if(ccState.booted){ccState.raf=requestAnimationFrame(ccTick);return;}
   ccState.booted=true;
+  /* Looked up once and reused every frame instead of three document.querySelector
+     calls inside ccStep() — same reasoning as empBadge.el (see empBadgeBoot). */
+  ccState.el={card:$('#ccCard'),shadow:$('#ccShadow'),close:$('#ccClose'),backdrop:$('#custCardOverlay .cc-backdrop')};
   window.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&ccState.open)closeCustCard();});
   window.addEventListener('resize',function(){
     if(!ccState.open)return;
@@ -5562,14 +5613,19 @@ function ccStep(){
       s.rx*=0.26;s.ry*=0.3;s.rz*=0.4;
       if(Math.abs(s.vy)<3||s.bounce>=3){
         s.rest=true;s.t=0;
-        var card=$('#ccCard');if(card)card.style.pointerEvents='auto';   /* นิ่งแล้ว จับพลิกได้ */
+        var card0=s.el.card;if(card0)card0.style.pointerEvents='auto';   /* นิ่งแล้ว จับพลิกได้ */
+        /* Falling/bouncing is the continuous-motion span the reported jank
+           happens in — blur comes back the instant it settles, so the
+           resting look (what's on screen almost the whole time this card is
+           open) is unchanged. See .perf-backdrop.no-blur's comment. */
+        if(s.el.backdrop)s.el.backdrop.classList.remove('no-blur');
       }
     }
   }
-  var card=$('#ccCard');
+  var card=s.el.card;
   if(card)card.style.transform='translate('+s.x.toFixed(1)+'px,'+s.y.toFixed(1)+'px) scale('+s.s.toFixed(3)
     +') rotateX('+s.rx.toFixed(2)+'deg) rotateY('+s.ry.toFixed(2)+'deg) rotateZ('+s.rz.toFixed(2)+'deg)';
-  var sh=$('#ccShadow');
+  var sh=s.el.shadow;
   if(sh){
     var h=Math.max(0,-s.y),k=Math.max(0,1-h/620);
     sh.style.transform='translateY('+(CC_CH*s.s*0.42).toFixed(1)+'px) scale('+(0.55+k*0.45).toFixed(3)+')';
@@ -5578,7 +5634,7 @@ function ccStep(){
   /* ปุ่มปิดเกาะข้างมุมขวาบนของบัตร ห่างออกไป 30px — หมุนจุดมุมขวาบนตาม rz (มุมหมุนในระนาบ
      จอ) เหมือนที่บัตรหมุน ส่วน rx/ry เป็นการพลิกออกนอกระนาบซึ่งตอนบัตรนิ่งจะเข้าใกล้ 0 อยู่แล้ว
      ตัวปุ่มแค่เลื่อน ไม่หมุนตาม จึงตั้งตรงเสมอ */
-  var ccBtn=$('#ccClose');
+  var ccBtn=s.el.close;
   if(ccBtn){
     var rz=s.rz*Math.PI/180,cz=Math.cos(rz),sz=Math.sin(rz);
     var lx=CC_CW/2*s.s+OVERLAY_BTN_GAP,ly=-CC_CH/2*s.s+22;
