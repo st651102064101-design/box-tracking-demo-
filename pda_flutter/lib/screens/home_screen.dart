@@ -487,33 +487,44 @@ void _showBoxListSheet(BuildContext context, AppController c,
   } else {
     for (final typeId in typeIds) {
       final group = byType[typeId]!;
-      children.add(Padding(
-        padding: const EdgeInsets.fromLTRB(2, 14, 2, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(S?.typeName(typeId) ?? typeId,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800)),
-            ),
-            Text('${group.length}',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: C.muted)),
-          ],
-        ),
-      ));
-      children.addAll(group.map((b) {
-        final sub = status == 'out'
-            ? S!.custName(b.customer)
-            : [
+      children.add(_sectionHeader(S?.typeName(typeId) ?? typeId, group.length));
+      if (status == 'out') {
+        // A box out with a customer is looked up by "whose shelf/truck is
+        // this on", not "which type" alone — nesting a customer sub-header
+        // inside each type group answers that in the same one tap, instead
+        // of leaving the customer as a subtitle line the operator has to
+        // read on every single row to tell two customers' boxes apart.
+        final byCust = <String, List<Box>>{};
+        for (final b in group) {
+          byCust.putIfAbsent(b.customer, () => []).add(b);
+        }
+        final custIds = byCust.keys.toList()
+          ..sort((a, b) {
+            // Boxes with no customer on file sort last, after every named one.
+            if (a.isEmpty != b.isEmpty) return a.isEmpty ? 1 : -1;
+            return S!.custName(a).compareTo(S.custName(b));
+          });
+        for (final custId in custIds) {
+          final custGroup = byCust[custId]!;
+          children.add(_subsectionHeader(
+              custId.isEmpty ? loc.t('ไม่ระบุลูกค้า') : S!.custName(custId),
+              custGroup.length));
+          children.addAll(custGroup.map((b) => _detailRow(
+                title: b.tag,
+                subtitle: S!.typeName(b.type) +
+                    (b.doNo.isNotEmpty ? ' · ${b.doNo}' : ''),
+              )));
+        }
+      } else {
+        children.addAll(group.map((b) => _detailRow(
+              title: b.tag,
+              subtitle: [
                 S!.whName(b.location['wh']?.toString()),
                 if ((b.location['zone'] ?? '').toString().isNotEmpty)
                   '${loc.t('โซน')} ${b.location['zone']}',
-              ].join(' · ');
-        return _detailRow(title: b.tag, subtitle: sub);
-      }));
+              ].join(' · '),
+            )));
+      }
     }
   }
 
@@ -524,10 +535,54 @@ void _showBoxListSheet(BuildContext context, AppController c,
   );
 }
 
-/// "วันนี้" stat tap — every in/out event from today, newest first.
+/// Type-group header shared by the box-list sheet and the today-events
+/// sheet — name left, count right.
+Widget _sectionHeader(String label, int count) => Padding(
+      padding: const EdgeInsets.fromLTRB(2, 14, 2, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          ),
+          Text('$count',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: C.muted)),
+        ],
+      ),
+    );
+
+/// Customer sub-header nested under a type group — indented and lighter
+/// weight than [_sectionHeader] so the two levels stay visually distinct at
+/// a glance.
+Widget _subsectionHeader(String label, int count) => Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 2, 4),
+      child: Row(
+        children: [
+          Icon(Icons.person_outline, size: 13, color: C.faint),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: C.ink2)),
+          ),
+          Text('$count',
+              style: TextStyle(
+                  fontSize: 11.5, fontWeight: FontWeight.w600, color: C.faint)),
+        ],
+      ),
+    );
+
+/// "วันนี้" stat tap — every in/out event from today. A toggle picks รับ vs
+/// ออก instead of showing both mixed in one chronological list — the
+/// question standing at the counter is "what came in today" or "what went
+/// out today", not "everything, sorted by time, tell them apart yourself".
 void _showTodayEventsSheet(BuildContext context, AppController c) {
-  final loc = context.read<LocaleController>();
-  final events = (c.S?.events ?? const []).whereType<Map>().where((e) {
+  final events = (c.S?.events ?? const [])
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .where((e) {
     final dir = e['dir'];
     if (dir != 'in' && dir != 'in-new' && dir != 'out') return false;
     final ts = e['ts']?.toString();
@@ -539,35 +594,191 @@ void _showTodayEventsSheet(BuildContext context, AppController c) {
   }).toList()
     ..sort((a, b) =>
         (b['ts']?.toString() ?? '').compareTo(a['ts']?.toString() ?? ''));
-  _showDetailSheet(
-    context,
-    title: '${loc.t('วันนี้')} (${events.length})',
-    children: events.isEmpty
-        ? [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                  child: Text(loc.t('ยังไม่มีรายการวันนี้'),
-                      style: TextStyle(fontSize: 13, color: C.faint))),
-            ),
-          ]
-        : events.map((e) {
-            final dir = e['dir'];
-            final isOut = dir == 'out';
-            final ts = DateTime.tryParse(e['ts']?.toString() ?? '')?.toLocal();
-            final time = ts == null
-                ? ''
-                : '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
-            final who = (e['recorder'] ?? '').toString();
-            return _detailRow(
-              title: (e['tag'] ?? '').toString(),
-              subtitle: [time, if (who.isNotEmpty) who].join(' · '),
-              trailing: Pill(loc.t(isOut ? 'ออก' : 'เข้า'),
-                  color: isOut ? C.orange : (C.isDark ? Colors.white : C.limeDeep),
-                  bg: isOut ? C.orangeBg : C.limeBg),
-            );
-          }).toList(),
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetCtx) => _TodayEventsSheet(c: c, events: events),
   );
+}
+
+class _TodayEventsSheet extends StatefulWidget {
+  final AppController c;
+  final List<Map<String, dynamic>> events;
+  const _TodayEventsSheet({required this.c, required this.events});
+  @override
+  State<_TodayEventsSheet> createState() => _TodayEventsSheetState();
+}
+
+class _TodayEventsSheetState extends State<_TodayEventsSheet> {
+  late bool _showOut;
+
+  @override
+  void initState() {
+    super.initState();
+    final inN = widget.events.where((e) => e['dir'] != 'out').length;
+    final outN = widget.events.length - inN;
+    // Whichever side actually has something today opens first — a device
+    // that's mostly receiving today shouldn't default to an empty ออก tab.
+    _showOut = outN > 0 && inN == 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = context.watch<LocaleController>();
+    final S = widget.c.S;
+    final inEvents = widget.events.where((e) => e['dir'] != 'out').toList();
+    final outEvents = widget.events.where((e) => e['dir'] == 'out').toList();
+    final shown = _showOut ? outEvents : inEvents;
+
+    String typeNameOf(String tag) {
+      final b = S?.box(tag);
+      final name = b?.type != null ? S?.typeName(b!.type) : null;
+      return (name == null || name.isEmpty) ? loc.t('ไม่ทราบประเภท') : name;
+    }
+
+    String rowSubtitle(Map<String, dynamic> e) {
+      final ts = DateTime.tryParse(e['ts']?.toString() ?? '')?.toLocal();
+      final time = ts == null
+          ? ''
+          : '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
+      final who = (e['recorder'] ?? '').toString();
+      return [time, if (who.isNotEmpty) who].join(' · ');
+    }
+
+    // Grouped by type always (never a flat list, never a dropdown) — เข้า
+    // groups by type only; ออก nests a customer sub-header inside each type
+    // group too, same shape _showBoxListSheet uses for "กล่องที่ออกอยู่".
+    final byType = <String, List<Map<String, dynamic>>>{};
+    for (final e in shown) {
+      byType
+          .putIfAbsent(typeNameOf((e['tag'] ?? '').toString()), () => [])
+          .add(e);
+    }
+    final typeNames = byType.keys.toList()..sort();
+
+    final children = <Widget>[];
+    if (shown.isEmpty) {
+      children.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+            child: Text(loc.t('ยังไม่มีรายการวันนี้'),
+                style: TextStyle(fontSize: 13, color: C.faint))),
+      ));
+    } else {
+      for (final typeName in typeNames) {
+        final group = byType[typeName]!;
+        children.add(_sectionHeader(typeName, group.length));
+        if (_showOut) {
+          final byCust = <String, List<Map<String, dynamic>>>{};
+          for (final e in group) {
+            final b = S?.box((e['tag'] ?? '').toString());
+            final custId = b?.customer ?? '';
+            byCust.putIfAbsent(custId, () => []).add(e);
+          }
+          final custIds = byCust.keys.toList()
+            ..sort((a, b) {
+              if (a.isEmpty != b.isEmpty) return a.isEmpty ? 1 : -1;
+              return S!.custName(a).compareTo(S.custName(b));
+            });
+          for (final custId in custIds) {
+            final custGroup = byCust[custId]!;
+            children.add(_subsectionHeader(
+                custId.isEmpty ? loc.t('ไม่ระบุลูกค้า') : S!.custName(custId),
+                custGroup.length));
+            children.addAll(custGroup.map((e) => _detailRow(
+                  title: (e['tag'] ?? '').toString(),
+                  subtitle: rowSubtitle(e),
+                )));
+          }
+        } else {
+          children.addAll(group.map((e) => _detailRow(
+                title: (e['tag'] ?? '').toString(),
+                subtitle: rowSubtitle(e),
+              )));
+        }
+      }
+    }
+
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + bottom),
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.78),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      decoration: BoxDecoration(
+          color: C.surface, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                  color: C.border2, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text('${loc.t('วันนี้')} (${widget.events.length})',
+              style:
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _dirTab(
+                    label: '${loc.t('รับ')} (${inEvents.length})',
+                    selected: !_showOut,
+                    color: C.isDark ? Colors.white : C.limeDeep,
+                    bg: C.limeBg,
+                    onTap: () => setState(() => _showOut = false)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _dirTab(
+                    label: '${loc.t('ออก')} (${outEvents.length})',
+                    selected: _showOut,
+                    color: C.orange,
+                    bg: C.orangeBg,
+                    onTap: () => setState(() => _showOut = true)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Flexible(
+              child: SingleChildScrollView(child: Column(children: children))),
+        ],
+      ),
+    );
+  }
+
+  Widget _dirTab(
+      {required String label,
+      required bool selected,
+      required Color color,
+      required Color bg,
+      required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? bg : C.neutralBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? color : C.border, width: 1.5),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: selected ? color : C.muted)),
+      ),
+    );
+  }
 }
 
 /// Handover sheet: end this person's session, or hand the device to the next

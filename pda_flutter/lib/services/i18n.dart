@@ -81,11 +81,14 @@ class LocaleController extends ChangeNotifier {
     // shared
     'เข้า': 'In',
     'ออก': 'Out',
+    'รับ': 'Received',
     'โซน': 'Zone',
     'วันนี้': 'Today',
     'ออนไลน์': 'Online',
     'ออฟไลน์': 'Offline',
     'ไม่มีกล่อง': 'No boxes',
+    'ไม่ระบุลูกค้า': 'No customer on file',
+    'ไม่ทราบประเภท': 'Unknown type',
 
     // home screen
     'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง':
@@ -134,8 +137,10 @@ class LocaleController extends ChangeNotifier {
     'เหนี่ยวไกเพื่ออ่านแท็ก RFID': 'Pull the trigger to read an RFID tag',
     'พบ': 'Found',
     'แท็ก': 'tags',
+    'ล้าง': 'Clear',
     'ไม่พบกล่อง': 'Box',
     'ในระบบ': 'not found in the system',
+    'ไม่พบกล่องที่ตรงกับแท็กนี้': 'No box matches this tag',
     'บาร์โค้ด': 'Barcode',
     'ไม่พบกล่องนี้ในระบบ': 'This box is not in the system',
     'ลูกค้า / DO': 'Customer / DO',

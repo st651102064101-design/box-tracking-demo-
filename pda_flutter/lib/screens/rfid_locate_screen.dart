@@ -220,10 +220,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // A read matches on whichever identifier the box is bound by — the
     // reader reports EPC (and sometimes TID) and `rfidCode` is compared to
     // both, since a box commissioned through the current endpoint stores
-    // that value in `rfid`, not in the old EPC/TID pair.
+    // that value in `rfid`, not in the old EPC/TID pair. `want` is null for
+    // a box with nothing bound via /api/boxes/:tag/rfid yet — that used to
+    // bail out of this whole function before it even reached
+    // epcMatchesTag(epc, wantTag) below, which is exactly the fallback path
+    // for a tag that's physically on the box (its own barcode written in as
+    // ASCII) but was never bound through the API. A box register/locate flow
+    // that lets an unbound box be picked (see box_register_screen.dart) has
+    // to actually sweep for it, not silently do nothing every batch.
     final want = _target!.rfidCode?.toUpperCase();
     final wantTag = _target!.tag.toUpperCase();
-    if (want == null || want.isEmpty) return;
 
     int? best;
     for (final r in batch) {
@@ -232,9 +238,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // Also a hit when the EPC is this box's own barcode written as ASCII
       // (how tags are encoded here) — the same read the gate screens resolve
       // through AppController.resolveTag.
-      final isMatch = epc == want ||
-          tid == want ||
-          epcMatchesTag(epc, wantTag);
+      final isMatch =
+          (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
+              epcMatchesTag(epc, wantTag);
       if (!isMatch) continue;
       final rssi = r.rssi ??
           _rssiClose; // no RSSI field on this read: treat as a direct hit
@@ -301,13 +307,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     for (final target in _multiTargets) {
       final want = target.rfidCode?.toUpperCase();
       final wantTag = target.tag.toUpperCase();
-      if (want == null || want.isEmpty) continue;
+      // See _onBatch's comment above — a null/empty `want` (nothing bound
+      // via the API yet) must still fall through to epcMatchesTag below,
+      // not skip this target entirely.
       int? best;
       for (final r in batch) {
         final epc = r.epc.toUpperCase();
         final tid = r.tid?.toUpperCase();
-        final isMatch = epc == want ||
-            tid == want ||
+        final isMatch = (want != null &&
+                want.isNotEmpty &&
+                (epc == want || tid == want)) ||
             epcMatchesTag(epc, wantTag);
         if (!isMatch) continue;
         final rssi = r.rssi ?? _rssiClose;
@@ -496,10 +505,24 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // Kept in sync every rebuild rather than only in initState/step
     // transitions — cheap, and guarantees a system back press always
     // matches whatever the StickyHeader arrow below would do right now.
-    c.systemBackOverride =
-        (_step == _Step.locate || _step == _Step.locateMulti)
-            ? _handleBack
-            : null;
+    //
+    // Guarded on c.screen still being rfidLocate: RootScreen cross-fades
+    // between the outgoing and incoming screen (AnimatedSwitcher), so both
+    // stay mounted and both rebuild off the same notifyListeners() call that
+    // navigates away — including this one, moments after backToHome()/
+    // handleSystemBack() already moved c.screen elsewhere. Without this
+    // guard, that stale rebuild re-asserts _handleBack right after the new
+    // screen just cleared it, leaving systemBackOverride pointing at a
+    // screen that's about to be disposed — the next back press then either
+    // no-ops or throws calling into a defunct State, and the hardware/
+    // gesture back control looks permanently dead from every screen until
+    // the app restarts.
+    if (c.screen == Screen.rfidLocate) {
+      c.systemBackOverride =
+          (_step == _Step.locate || _step == _Step.locateMulti)
+              ? _handleBack
+              : null;
+    }
     return ScanCapture(
       // Live on the pick step only — locate/locateMulti are RFID-only by
       // definition and drive their own reader stream instead. No mode check

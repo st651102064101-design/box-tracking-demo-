@@ -193,11 +193,36 @@ class _TrackScreenState extends State<TrackScreen> {
                 if (hits.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.only(left: 2, bottom: 8),
-                    child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: C.muted)),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: C.muted)),
+                        ),
+                        // Only real once there's something to clear — a
+                        // sweep in RFID mode (or a leftover barcode search)
+                        // that picked up the wrong pile previously had no
+                        // way back to empty short of leaving the screen.
+                        GestureDetector(
+                          onTap: c.clearTrackHits,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.close, size: 14, color: C.muted),
+                              const SizedBox(width: 3),
+                              Text(loc.t('ล้าง'),
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: C.muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   _hitsList(c, hits, hitsIcon, loc),
                   if (box != null) const SizedBox(height: 14),

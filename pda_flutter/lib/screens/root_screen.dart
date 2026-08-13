@@ -52,23 +52,25 @@ class RootScreen extends StatelessWidget {
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    // Cross-fade is the single most-run animation in the
-                    // app — every screen change plays it — so it's the
-                    // first thing low power mode cuts, straight to an
-                    // instant swap.
-                    duration: c.lowPowerMode
-                        ? Duration.zero
-                        : const Duration(milliseconds: 220),
-                    child: _body(c),
+            child: _EdgeSwipeBack(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: AnimatedSwitcher(
+                      // Cross-fade is the single most-run animation in the
+                      // app — every screen change plays it — so it's the
+                      // first thing low power mode cuts, straight to an
+                      // instant swap.
+                      duration: c.lowPowerMode
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      child: _body(c),
+                    ),
                   ),
-                ),
-                const ToastOverlay(),
-                const _OfflineAlertListener(),
-              ],
+                  const ToastOverlay(),
+                  const _OfflineAlertListener(),
+                ],
+              ),
             ),
           ),
         ),
@@ -109,6 +111,69 @@ class RootScreen extends StatelessWidget {
       case Screen.locationInquiry:
         return const LocationInquiryScreen(key: ValueKey('locationInquiry'));
     }
+  }
+}
+
+/// Left-edge swipe-to-go-back — the MC3390R can be configured for the
+/// classic 3-button Android nav bar instead of the gesture-navigation mode
+/// where an OS-level edge swipe already reaches PopScope on its own, so this
+/// gives every screen the same "swipe from the left edge to go back" an
+/// iOS-style app has, regardless of what nav mode the device is set to.
+///
+/// A [Listener], not a [GestureDetector]: Listener only *observes* raw
+/// pointer events and never enters the gesture arena, so it can sit above
+/// every screen in the tree — including ones with their own horizontal-drag
+/// widgets, like ScanModeToggle's draggable pill in common.dart — without
+/// competing for or stealing gestures those already handle. Recognition
+/// happens on pointer-up rather than mid-drag: only a touch that both
+/// started within [_edgeWidth] of the left edge and travelled at least
+/// [_minDx] mostly-horizontally counts, so a vertical scroll that happens to
+/// start near the edge is not misread as a back swipe.
+class _EdgeSwipeBack extends StatefulWidget {
+  final Widget child;
+  const _EdgeSwipeBack({required this.child});
+  @override
+  State<_EdgeSwipeBack> createState() => _EdgeSwipeBackState();
+}
+
+class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
+  static const _edgeWidth = 28.0;
+  static const _minDx = 60.0;
+  // How much vertical drift is tolerated per horizontal pixel travelled —
+  // keeps a diagonal drag from counting while still allowing for the fact
+  // that a thumb swiping "sideways" rarely moves in a perfectly straight
+  // line.
+  static const _maxOffAxisRatio = 0.6;
+
+  Offset? _start;
+  bool _fromEdge = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (e) {
+        _start = e.position;
+        _fromEdge = e.position.dx <= _edgeWidth;
+      },
+      onPointerUp: (e) {
+        final start = _start;
+        if (_fromEdge && start != null) {
+          final dx = e.position.dx - start.dx;
+          final dy = (e.position.dy - start.dy).abs();
+          if (dx >= _minDx && dy <= dx * _maxOffAxisRatio) {
+            context.read<AppController>().handleSystemBack();
+          }
+        }
+        _start = null;
+        _fromEdge = false;
+      },
+      onPointerCancel: (_) {
+        _start = null;
+        _fromEdge = false;
+      },
+      child: widget.child,
+    );
   }
 }
 

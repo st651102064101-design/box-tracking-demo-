@@ -400,6 +400,42 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// results.
   final List<String> trackBarcodeHits = [];
 
+  /// Raw EPCs that have already surfaced the "tag doesn't match any box"
+  /// toast this screen visit, on Track/Cycle Count's RFID sweep — without
+  /// this, a foreign/unbound tag sitting in the pile re-warns on every one
+  /// of the dozens of reads a second a held trigger produces, drowning out
+  /// everything else. Cleared alongside the hit lists in goTrack()/
+  /// goCycleCount() so a fresh visit re-warns instead of staying silent
+  /// forever because of what a previous visit already saw.
+  final Set<String> _unresolvedRfidWarned = {};
+
+  /// Called from _onReaderTag's Screen.track/Screen.cycleCount cases when a
+  /// read resolves to nothing on file — previously a silent no-op
+  /// indistinguishable from "the reader isn't picking anything up at all".
+  /// [decoded] is resolveTag's best-effort text so the toast shows something
+  /// readable when the tag *did* carry an ASCII payload, falling back to the
+  /// raw hex only when even that failed.
+  void _warnUnresolvedRfid(String rawEpc, String decoded) {
+    if (!_unresolvedRfidWarned.add(rawEpc)) return;
+    toastMsg('ไม่พบกล่องที่ตรงกับแท็กนี้',
+        decoded.isNotEmpty ? decoded : rawEpc, ResultKind.warn);
+  }
+
+  /// Clears whichever of [trackRfidHits]/[trackBarcodeHits] matches the
+  /// current scan mode — the "ล้าง" button TrackScreen shows once there's
+  /// something to clear. A sweep that picked up the wrong pile, or a search
+  /// left over from the last box looked up, previously had no way back to
+  /// empty short of leaving the screen and coming back (which also nukes
+  /// trackVal/trackBox — more than the operator actually wanted gone).
+  void clearTrackHits() {
+    if (scanInputMode == ScanInputMode.rfid) {
+      trackRfidHits.clear();
+    } else {
+      trackBarcodeHits.clear();
+    }
+    notifyListeners();
+  }
+
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
   String? connError;
@@ -1190,6 +1226,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     trackTried = false;
     trackRfidHits.clear();
     trackBarcodeHits.clear();
+    _unresolvedRfidWarned.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1231,6 +1268,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void goCycleCount() {
     screen = Screen.cycleCount;
     cycleCountRfidHits.clear();
+    _unresolvedRfidWarned.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1969,10 +2007,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // record must not surface it at all, same reasoning as the
         // Screen.transfer case just below.
         final tag = resolveTag(epc);
-        if (S?.box(tag) != null && !trackRfidHits.contains(tag)) {
-          trackRfidHits.add(tag);
-          rfid.playSound(prefs.rfidSoundId);
-          notifyListeners();
+        if (S?.box(tag) != null) {
+          if (!trackRfidHits.contains(tag)) {
+            trackRfidHits.add(tag);
+            rfid.playSound(prefs.rfidSoundId);
+            notifyListeners();
+          }
+        } else {
+          _warnUnresolvedRfid(epc, tag);
         }
         break;
       case Screen.transfer:
@@ -2009,10 +2051,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // 'counted' list separately, since a tag legitimately re-appears
         // across multiple trigger pulls in one count.
         final ccTag = resolveTag(epc);
-        if (S?.box(ccTag) != null && !cycleCountRfidHits.contains(ccTag)) {
-          cycleCountRfidHits.add(ccTag);
-          rfid.playSound(prefs.rfidSoundId);
-          notifyListeners();
+        if (S?.box(ccTag) != null) {
+          if (!cycleCountRfidHits.contains(ccTag)) {
+            cycleCountRfidHits.add(ccTag);
+            rfid.playSound(prefs.rfidSoundId);
+            notifyListeners();
+          }
+        } else {
+          _warnUnresolvedRfid(epc, ccTag);
         }
         break;
       default:
