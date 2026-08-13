@@ -1216,7 +1216,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div class="kpi red clickable" title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'กล่องที่แจ้งหาย (มูลค่าสูญหาย)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9v.1M18 15v.1"/></svg></span></div><div class="n mono" id="rLossVal">0</div><div class="l">มูลค่าสูญหาย (บาท)</div></div>
   </div>
 
-  <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย / เกินกำหนดคืน</div>
+  <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย</div>
   <div id="ovLost"></div>
 
   <div class="sectlabel reveal">กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง</div>
@@ -8559,35 +8559,14 @@ function renderReports(){
   }
   $('#ovTypeFlow').innerHTML=typeFlowHtml;
 
-  // ===== ติดตามกล่องหาย / เกินกำหนดคืน (รวมในเดียว) =====
+  // ===== ติดตามกล่องหาย =====
+  // (เกินกำหนดคืนย้ายไปอยู่ใน "รายงานรายการค้างคืนเกินกำหนด" ที่หน้าภาพรวมแล้ว —
+  // ตารางนี้เดิมซ้ำข้อมูลเดียวกันโดยไม่มีตัวกรอง/แบ่งหน้า จึงลบออก ไม่เก็บสองที่)
   var lostBoxes=all.filter(function(b){return b.status==='lost';});
-  var overdueBoxes=all.filter(function(b){return b.status==='out'&&isOverdue(b);});
-  var hasProblem=lostBoxes.length||overdueBoxes.length;
+  var hasProblem=lostBoxes.length>0;
   $('#lostSectLabel').style.display=hasProblem?'flex':'none';
 
   var lostHtml='';
-  if(overdueBoxes.length){
-    lostHtml+='<div class="overdue-card">'
-      +'<div class="lost-alert-header"><div class="la-ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></div><div><div class="la-title">เกินกำหนดคืน '+overdueBoxes.length+' ใบ</div><div class="la-sub">กล่องที่ออกไปแล้วเกินระยะเวลาที่กำหนด — ควรติดตามทันที</div></div></div>'
-      +'<table class="alert-table"><thead><tr>'
-      +'<th>Box ID</th><th>ประเภท</th><th>ลูกค้า</th><th>DO</th><th class="r">วันที่ออก</th><th class="r">กำหนดคืน</th><th class="r">เกินมา</th><th>ติดต่อล่าสุด</th><th class="r">มูลค่า (฿)</th><th class="c">จัดการ</th>'
-      +'</tr></thead><tbody>';
-    overdueBoxes.sort(function(a,b){return boxDueDays(a)-boxDueDays(b);}).forEach(function(b){
-      lostHtml+='<tr style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
-        +'<td class="mono"><b>'+esc(b.tag)+'</b></td>'
-        +'<td>'+esc(typeName(b.type))+'</td>'
-        +'<td><b>'+esc(custName(b.customer))+'</b></td>'
-        +'<td class="mono">'+esc(b.do||'-')+'</td>'
-        +'<td class="r mono">'+(b.outAt?dstr(new Date(b.outAt)):'-')+'</td>'
-        +'<td class="r mono">'+(b.dueAt?dstr(new Date(b.dueAt)):'-')+'</td>'
-        +'<td class="r"><span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'-')+'</span></td>'
-        +'<td onclick="event.stopPropagation();openContactModal(&quot;'+esc(b.tag)+'&quot;)" style="cursor:pointer;" title="บันทึก / ดูประวัติการติดต่อลูกค้า">'+lastContactCell(b)+'</td>'
-        +'<td class="r mono">'+money(b.value)+'</td>'
-        +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
-      +'</tr>';
-    });
-    lostHtml+='</tbody></table></div>';
-  }
   if(lostBoxes.length){
     var totalLostVal=lostBoxes.reduce(function(s,b){return s+(b.value||0);},0);
     lostHtml+='<div class="lost-alert-card">'
@@ -13620,7 +13599,7 @@ function openColumnMapModal(opts){
     "ออกไปกี่ใบ กลับมากี่ใบ เหลือในคลังเท่าไหร่ — เห็นทั้งวงจรในหน้าเดียว ตั้งแต่ผ่านประตูออก จนกลับเข้าชั้นวาง":"How many went out, how many came back, how many remain - see the whole cycle on one page, from gate-out to back on the shelf.",
     "กดหัวข้อประเภทเพื่อขยาย/ย่อ":"Click a type heading to expand/collapse",
     "ค้างอยู่":"Outstanding","ทิศ":"Dir","กล่อง":"Box","ประตู/คลัง":"Gate/Warehouse","รถ/ผู้บันทึก":"Vehicle/Recorder",
-    "รายงานกล่องรายตัว — แยกตามประเภท":"Box report - by type","ติดตามกล่องหาย / เกินกำหนดคืน":"Lost / overdue boxes",
+    "รายงานกล่องรายตัว — แยกตามประเภท":"Box report - by type","ติดตามกล่องหาย":"Lost boxes",
     "กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง":"Boxes by warehouse - by actual shelf",
     "ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อเปลี่ยน":"Logged-in / current recorder - click to change",
     "ปฏิบัติงาน ":"Active","ผู้บันทึกล่าสุด ":"Last recorder","กำลังใช้":"Current",
