@@ -405,11 +405,14 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       setState(() => _scanError = '${loc.t('ไม่พบกล่องรหัส')} "$raw"');
       return;
     }
-    if (!b.hasRfid) {
-      setState(() =>
-          _scanError = '${b.tag} ${loc.t('ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้')}');
-      return;
-    }
+    // No hard block for a box with no RFID mapped yet (removed — this used
+    // to stop the operator right here with "ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้",
+    // framing it as an error to fix before they could even try). Any box
+    // that resolves is pickable, same as Track/Transfer never special-case
+    // RFID status either; _locateBody shows a plain notice instead once
+    // inside the sweep step if there's genuinely nothing to match against
+    // (see the box.hasRfid check there) — the entry point itself no longer
+    // gates on it.
     setState(() => _scanError = null);
     if (_multiMode) {
       _addMultiTarget(b);
@@ -529,30 +532,32 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   // ── Step 1: pick ──────────────────────────────────────────────────────
   Widget _pickBody(AppController c, LocaleController loc) {
     final bottom = MediaQuery.of(context).padding.bottom;
-    // Every taggable box, browsable without typing anything — this is what a
+    // Every box, browsable without typing anything — this is what a
     // scan-only pick step falls back to when there's no picking ticket or
-    // pallet label in hand to scan.
-    final allTagged = (c.S?.boxes.toList() ?? const <Box>[])
-        .where((b) => b.hasRfid)
-        .toList()
+    // pallet label in hand to scan. Used to be filtered to b.hasRfid only
+    // (a box with no RFID mapped yet couldn't even be picked here) — removed
+    // per request: picking a box no longer requires it to already be
+    // RFID-mapped, matching how Track/Transfer never gate on RFID status
+    // either. A box with nothing to match against just won't move the meter
+    // once inside the sweep step (see the notice in _locateBody).
+    final allBoxes = (c.S?.boxes.toList() ?? const <Box>[])
       ..sort((a, b) => a.tag.compareTo(b.tag));
 
-    // Distinct types actually present, by display name — a type with zero
-    // tagged boxes right now would just be a dead-end chip. '' stands in for
+    // Distinct types actually present, by display name. '' stands in for
     // "no type set" so it can still be a normal map key.
     final typeNames = <String, String>{}; // type id -> display name
-    for (final b in allTagged) {
+    for (final b in allBoxes) {
       final id = b.type ?? '';
       typeNames[id] = c.S!.typeName(b.type);
     }
     final typeIds = typeNames.keys.toList()
       ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
     if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
-      _typeFilter = null; // the selected type's last box lost its tag/moved out
+      _typeFilter = null; // the selected type's last box moved out
     }
     final tagged = _typeFilter == null
-        ? allTagged
-        : allTagged.where((b) => (b.type ?? '') == _typeFilter).toList();
+        ? allBoxes
+        : allBoxes.where((b) => (b.type ?? '') == _typeFilter).toList();
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
@@ -647,10 +652,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         const SizedBox(height: 14),
         if (_multiMode)
           ..._multiPickList(c, loc)
-        else if (allTagged.isEmpty)
+        else if (allBoxes.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-            child: Text(loc.t('ยังไม่มีกล่องที่ผูกแท็ก RFID ในระบบ'),
+            child: Text(loc.t('ยังไม่มีกล่องในระบบ'),
                 style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
           )
         else ...[
@@ -694,7 +699,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             Padding(
               padding:
                   const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
-              child: Text(loc.t('ไม่มีกล่องประเภทนี้ที่ผูกแท็ก RFID ในระบบ'),
+              child: Text(loc.t('ไม่มีกล่องประเภทนี้ในระบบ'),
                   style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
             )
           else
@@ -931,6 +936,38 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           ),
         ),
         const SizedBox(height: 14),
+        // Picking a box here no longer requires it to already have an RFID
+        // tag mapped (see _pickBody/_onScan) — if it genuinely has none, say
+        // so plainly instead of leaving the operator to wonder why the
+        // meter never moves. box_register_screen.dart is the one place a
+        // tag actually gets bound (see its own comment on why), so this is
+        // a pointer there, not a binding action taken from this screen.
+        if (!b.hasRfid) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: C.orangeBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: C.orangeBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 18, color: C.orange),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    loc.t(
+                        'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ผูกแท็กได้ที่หน้า "ลงทะเบียนกล่อง"'),
+                    style: TextStyle(fontSize: 12.5, color: C.orange, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         Panel(
           padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
           radius: 20,

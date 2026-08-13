@@ -38,6 +38,12 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   /// The open session, straight from the server. Null until one is started.
   Map<String, dynamic>? _session;
 
+  /// How many entries of AppController.cycleCountRfidHits have already been
+  /// submitted — that list only ever grows (see _onReaderTag's
+  /// Screen.cycleCount case), so "new since last build" is everything past
+  /// this index, not the whole list every time.
+  int _consumedRfidHits = 0;
+
   /// Tags queued locally because a scan landed while offline or while another
   /// post was still in flight — flushed on the next successful post so a dead
   /// zone doesn't silently drop reads.
@@ -176,6 +182,24 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
   }
 
+  /// Feeds any AppController.cycleCountRfidHits entries this screen hasn't
+  /// posted yet through the same _submitScan a barcode read uses — called
+  /// post-frame (build() must stay side-effect-free) whenever build() sees
+  /// the hit list grew. Mirrors goCycleCount()'s cycleCountRfidHits.clear():
+  /// if the list is ever shorter than what's already been consumed (a fresh
+  /// session start while this screen never left), consumption resets too
+  /// instead of going negative.
+  void _drainRfidHits(AppController c) {
+    final hits = c.cycleCountRfidHits;
+    if (hits.length < _consumedRfidHits) _consumedRfidHits = 0;
+    if (hits.length <= _consumedRfidHits) return;
+    final fresh = hits.sublist(_consumedRfidHits);
+    _consumedRfidHits = hits.length;
+    for (final epc in fresh) {
+      _submitScan(epc);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
@@ -186,6 +210,11 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     final counted = _list('counted');
     final missing = _list('missing');
     final unexpected = _list('unexpected');
+
+    if (session != null && c.cycleCountRfidHits.length > _consumedRfidHits) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _drainRfidHits(c));
+    }
 
     return ScanCapture(
       // Live only once a session is open — the setup step above has zone
@@ -263,10 +292,23 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                         style: TextStyle(
                             fontSize: 11.5, color: C.faint, height: 1.45)),
                   ] else ...[
-                    // No field: the count is driven by the imager alone (see
-                    // ScanCapture around this screen). A hand-typed code in a
-                    // stock take is worse than a missed one — it reconciles a
-                    // box that nobody actually saw on the shelf.
+                    // RFID sweep as an alternative to the barcode-only imager
+                    // path below — trigger/antenna wiring already existed in
+                    // AppController (_onReaderTrigger allowed this screen),
+                    // the only gap was nothing consuming a found tag; see
+                    // cycleCountRfidHits/_onReaderTag's Screen.cycleCount
+                    // case and _drainRfidHits above. Held trigger in RFID
+                    // mode still lets a hand-typed code slip through the
+                    // same "worse than a missed one" trap the comment below
+                    // warns about for barcode — there's still no free-text
+                    // field either way, on purpose.
+                    ScanModeToggle(onChanged: (_) {}),
+                    const SizedBox(height: 11),
+                    // No field: the count is driven by the imager/antenna
+                    // alone (see ScanCapture around this screen, and the RFID
+                    // toggle above). A hand-typed code in a stock take is
+                    // worse than a missed one — it reconciles a box that
+                    // nobody actually saw on the shelf.
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -278,10 +320,17 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.checklist, color: C.muted),
+                          Icon(
+                              c.scanInputMode == ScanInputMode.rfid
+                                  ? Icons.wifi_tethering
+                                  : Icons.checklist,
+                              color: C.muted),
                           const SizedBox(width: 11),
                           Expanded(
-                            child: Text(loc.t('ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
+                            child: Text(
+                                loc.t(c.scanInputMode == ScanInputMode.rfid
+                                    ? 'กดไกค้างเพื่อกวาดหากล่องบนชั้น'
+                                    : 'ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
                                 style: TextStyle(
                                     fontSize: 14,
                                     color: C.muted,

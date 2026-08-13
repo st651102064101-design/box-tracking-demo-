@@ -380,6 +380,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
   final List<String> trackRfidHits = [];
 
+  /// Same idea as [trackRfidHits], for CycleCountScreen's RFID sweep — a
+  /// stock take used to be barcode-only even though the physical trigger was
+  /// already allowlisted to arm the antenna on this screen (_onReaderTrigger)
+  /// and the server's /scan endpoint already resolves EPC/TID on its own
+  /// (see that screen's _submitScan comment); the one missing piece was a
+  /// Screen.cycleCount case here to actually do something with a found tag.
+  /// CycleCountScreen watches this, POSTs any new entry the same way a
+  /// barcode read would, then clears it — this list is just the hand-off,
+  /// not the count itself (that's server state, S._session).
+  final List<String> cycleCountRfidHits = [];
+
   /// Same idea as [trackRfidHits] but for barcode mode: every distinct box a
   /// scan (or a completed typed code) has resolved to, in the order found.
   /// Without this, a keyboard-wedge scanner that doesn't clear the field
@@ -1219,7 +1230,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
+    cycleCountRfidHits.clear();
     notifyListeners();
+    _connectReader();
   }
 
   /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. The only way to hold, flag
@@ -1973,6 +1986,21 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             b.status == 'warehouse' &&
             !transferRfidHits.contains(t)) {
           transferRfidHits.add(t);
+          rfid.playSound(prefs.rfidSoundId);
+          notifyListeners();
+        }
+        break;
+      case Screen.cycleCount:
+        // Raw EPC, not resolveTag(epc) — CycleCountScreen posts whatever it's
+        // given straight to the server's /scan endpoint, which resolves
+        // barcode/EPC/TID itself (same reasoning as its own _submitScan
+        // comment). Deduping here only stops the same tag re-queuing dozens
+        // of times a second while the trigger's held; the screen dedupes
+        // against the session's own 'counted' list separately, since a tag
+        // legitimately re-appears across multiple trigger pulls in one
+        // count.
+        if (!cycleCountRfidHits.contains(epc)) {
+          cycleCountRfidHits.add(epc);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
         }
