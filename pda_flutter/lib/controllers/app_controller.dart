@@ -1995,20 +1995,22 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         }
         break;
       case Screen.cycleCount:
-        // Raw EPC, not resolveTag(epc), is still what's queued —
-        // CycleCountScreen posts whatever it's given straight to the
-        // server's /scan endpoint, which resolves barcode/EPC/TID itself
-        // (same reasoning as its own _submitScan comment). But resolveTag is
-        // used here first to check the tag actually maps to a box on file —
-        // a stray/foreign tag with no matching record must never queue at
-        // all, same reasoning as Screen.track/Screen.transfer above.
-        // Deduping only stops the same tag re-queuing dozens of times a
-        // second while the trigger's held; the screen dedupes against the
-        // session's own 'counted' list separately, since a tag legitimately
-        // re-appears across multiple trigger pulls in one count.
-        if (S?.box(resolveTag(epc)) != null &&
-            !cycleCountRfidHits.contains(epc)) {
-          cycleCountRfidHits.add(epc);
+        // resolveTag(epc), not the raw hex EPC, is what gets queued — a tag
+        // commissioned by this system carries the box's own barcode written
+        // into the EPC bank as zero-padded ASCII (see resolveTag's own
+        // comment), and that decoded box code is what must reach the
+        // server, not the raw hex the reader returns. resolveTag also
+        // doubles as the existence check: a stray/foreign tag with no
+        // matching box record resolves to nothing recognisable, so
+        // S.box(tag) comes back null and it never queues at all — same
+        // reasoning as Screen.track/Screen.transfer above. Deduping only
+        // stops the same tag re-queuing dozens of times a second while the
+        // trigger's held; the screen dedupes against the session's own
+        // 'counted' list separately, since a tag legitimately re-appears
+        // across multiple trigger pulls in one count.
+        final ccTag = resolveTag(epc);
+        if (S?.box(ccTag) != null && !cycleCountRfidHits.contains(ccTag)) {
+          cycleCountRfidHits.add(ccTag);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
         }
