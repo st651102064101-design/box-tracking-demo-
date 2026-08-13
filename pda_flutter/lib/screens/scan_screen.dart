@@ -805,12 +805,12 @@ class _ScanScreenState extends State<ScanScreen>
             ],
           ),
           const SizedBox(height: 11),
-          const ScanModeToggle(),
-          const SizedBox(height: 11),
-          // No input field — the imager types straight into ScanCapture. The
-          // toggle above still matters though: it decides which of the two
-          // readers is armed at all. What's left here is the count, the one
-          // number the operator is actually watching while they work.
+          // thai_submit build: Gate Out is barcode-only, so there is no
+          // barcode/RFID toggle here at all — see AppController.goScanOut,
+          // which force-resets scanInputMode to barcode on entry regardless.
+          // No input field — the imager types straight into ScanCapture.
+          // What's left here is the count, the one number the operator is
+          // actually watching while they work.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -841,21 +841,10 @@ class _ScanScreenState extends State<ScanScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                        c.scanInputMode == ScanInputMode.rfid
-                            ? Icons.wifi_tethering
-                            : Icons.qr_code_scanner,
-                        size: 16,
-                        color: C.muted),
+                    Icon(Icons.qr_code_scanner, size: 16, color: C.muted),
                     const SizedBox(width: 6),
                     Flexible(
-                      // Says what *this* mode wants, not both at once — an
-                      // instruction that covers every case tells you nothing
-                      // about the one you are in.
-                      child: Text(
-                          loc.t(c.scanInputMode == ScanInputMode.rfid
-                              ? 'เหนี่ยวไกเพื่ออ่านแท็ก RFID'
-                              : 'ยิงบาร์โค้ดกล่อง'),
+                      child: Text(loc.t('ยิงบาร์โค้ดกล่อง'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontSize: 12.5,

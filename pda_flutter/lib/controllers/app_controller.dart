@@ -1169,7 +1169,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void goScanIn() => setMode('in');
-  void goScanOut() => setMode('out');
+  // thai_submit build: Gate Out is barcode-only — no RFID toggle on this
+  // screen at all (see scan_screen.dart, ScanModeToggle removed from its
+  // tree), so scanInputMode is forced back to barcode on entry rather than
+  // trusting whatever another screen (e.g. Track) last left it as.
+  void goScanOut() {
+    scanInputMode = ScanInputMode.barcode;
+    setMode('out');
+  }
 
   // ═══════════════════════ "ล่าสุด" shortcut ═══════════════════════════════
   /// คนละแนวคิดกับ deviceWh/deviceGate (ค่าประจำเครื่อง ตั้งครั้งเดียวตอน
