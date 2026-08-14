@@ -6,6 +6,7 @@ import { env } from '../env.js';
 import { getDb } from '../db/client.js';
 import { gateIn } from '../services/gate.js';
 import { bump } from '../lib/bus.js';
+import { gateWebhookStatus } from '../db/schema.js';
 
 export const rfidRouter = Router();
 
@@ -92,6 +93,17 @@ rfidRouter.post(
       throw httpError(400, 'gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_gate');
     }
 
+    // Marks this gate "connected" for the frontend's status light — updated on
+    // every valid request (secret + gate both check out), tag reads or not,
+    // since a heartbeat/empty payload still proves the reader is reachable
+    // and correctly configured. Fire-and-forget relative to the actual
+    // gate-in below: a status-table hiccup shouldn't block receiving boxes.
+    const db = getDb();
+    await db
+      .insert(gateWebhookStatus)
+      .values({ gateNo: gate, lastSeenAt: new Date() })
+      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: new Date() } });
+
     const reads = extractReads(req.body);
     const epcs = reads.map(extractEpc).filter((e): e is string => e !== null);
     if (!epcs.length) {
@@ -120,7 +132,7 @@ rfidRouter.post(
       }
     });
 
-    const result = await gateIn(getDb(), {
+    const result = await gateIn(db, {
       tags,
       gate,
       recorder: `FX9600 · Gate ${gate}`,

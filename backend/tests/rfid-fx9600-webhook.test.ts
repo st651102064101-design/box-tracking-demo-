@@ -73,4 +73,21 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(res.status).toBe(200);
     expect(res.body.received).toEqual([]);
   });
+
+  it('records the gate as "seen" on any valid hit, tag data or not, for the frontend status light', async () => {
+    await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ status: 'ok' });
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.gateWebhookLastSeen['5']).toBeTruthy();
+    expect(new Date(state.body.gateWebhookLastSeen['5']).getTime()).toBeGreaterThan(Date.now() - 10_000);
+  });
+
+  it('does not record a gate on a rejected (bad-secret) request', async () => {
+    const res = await request(ctx.app)
+      .post(webhookUrl(6))
+      .set({ 'X-Webhook-Secret': 'not-the-secret' })
+      .send({ idHex: '00' });
+    expect(res.status).toBe(401);
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.gateWebhookLastSeen['6']).toBeUndefined();
+  });
 });

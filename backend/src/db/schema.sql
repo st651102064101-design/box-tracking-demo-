@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS gates (
   warehouse_id TEXT
 );
 
+-- Last time a gate's FX9600 webhook (POST /api/rfid/fx9600/:gate/webhook) was
+-- hit, for the frontend's "reader connected?" status light. Deliberately its
+-- own table, not a column on `gates` — replaceState() (PUT /api/state)
+-- deletes and rebuilds every row of `gates` wholesale on every save() from
+-- the legacy UI, which would wipe this on the next unrelated edit. Written
+-- only by the webhook route itself, read-only from the client's point of
+-- view (composeState surfaces it, PUT never touches it).
+CREATE TABLE IF NOT EXISTS gate_webhook_status (
+  gate_no      INTEGER PRIMARY KEY,
+  last_seen_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS locations (
   code       TEXT PRIMARY KEY,
   wh         TEXT,

@@ -18,6 +18,7 @@ import {
   boxTypes,
   warehouses,
   gates,
+  gateWebhookStatus,
   locations,
   employees,
   vehicles,
@@ -54,6 +55,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     btRows,
     whRows,
     gateRows,
+    gateStatusRows,
     locRows,
     empRows,
     vehRows,
@@ -70,6 +72,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     db.select().from(boxTypes),
     db.select().from(warehouses),
     db.select().from(gates),
+    db.select().from(gateWebhookStatus),
     db.select().from(locations),
     db.select().from(employees),
     db.select().from(vehicles),
@@ -98,6 +101,14 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     boxtypes: mapBy(btRows, (r) => r.id),
     warehouses: mapBy(whRows, (r) => r.id),
     gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
+    /* Read-only from the client's point of view — see the schema.sql comment
+       on gate_webhook_status for why this is a separate table from `gates`.
+       Only the FX9600 webhook route (routes/rfid.ts) ever writes to it;
+       replaceState() below doesn't touch it, so nothing sent via PUT
+       /api/state can clobber or fake a "connected" status. */
+    gateWebhookLastSeen: Object.fromEntries(
+      gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()]),
+    ),
     events: eventRows.map((r) => r.data),
     cfg,
     seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),

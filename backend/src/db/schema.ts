@@ -94,6 +94,14 @@ export const gates = pgTable('gates', {
   warehouseId: text('warehouse_id'),
 });
 
+/** Last FX9600 webhook hit per gate, for the frontend's reader-connected
+ *  status light — see the matching table comment in schema.sql for why this
+ *  is its own table instead of a column on `gates`. */
+export const gateWebhookStatus = pgTable('gate_webhook_status', {
+  gateNo: integer('gate_no').primaryKey(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+});
+
 export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),
@@ -269,6 +277,7 @@ export type Schema = {
   boxTypes: typeof boxTypes;
   warehouses: typeof warehouses;
   gates: typeof gates;
+  gateWebhookStatus: typeof gateWebhookStatus;
   locations: typeof locations;
   employees: typeof employees;
   boxes: typeof boxes;
@@ -290,6 +299,7 @@ export const schema = {
   boxTypes,
   warehouses,
   gates,
+  gateWebhookStatus,
   locations,
   employees,
   boxes,
