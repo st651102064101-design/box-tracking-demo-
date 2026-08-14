@@ -1058,7 +1058,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   </div>
   <div class="spacer"></div>
   <div class="who-wrap">
-    <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน"><span class="who-ic svgi" id="whoAvatar" style="width:20px;height:20px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--accentSoft);color:var(--accentInk);font-size:9px;font-weight:700;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.1-4.1 3.9-6.3 7-6.3s5.9 2.2 7 6.3"/></svg></span><span id="whoTxt">demo · SaaS</span></div>
+    <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน"><span class="who-ic svgi" id="whoAvatar" style="width:20px;height:20px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--accentSoft);color:var(--accentInk);font-size:9px;font-weight:700;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.1-4.1 3.9-6.3 7-6.3s5.9 2.2 7 6.3"/></svg></span><span id="whoTxt">demo</span></div>
   </div>
   <button class="langbtn no-print" id="btnLang" onclick="toggleLang()" title="เปลี่ยนภาษา / Switch language"><span data-l="th">TH</span><span class="sep">|</span><span data-l="en">EN</span></button>
   <button class="iconbtn no-print" id="btnTheme" title="สลับโหมดสว่าง/มืด"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 1 1 10.2 4a6 6 0 0 0 9.8 10.5Z"/></svg></span></button>
@@ -9291,8 +9291,9 @@ function renderAll(){
   refreshGateDisplays();
   renderInventory();renderAuditLog();
   initSortToggles();
-  $('#whoTxt').textContent=USER+' · SaaS';
-  var whoEmp=currentEmp();renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
+  var whoEmp=currentEmp();
+  $('#whoTxt').textContent=USER+(whoEmp&&whoEmp.role?' · '+whoEmp.role:'');
+  renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
   save();
 }
 
