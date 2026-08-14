@@ -106,6 +106,41 @@ function requireFx9600Secret(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+/**
+ * Raw request log for on-site FX9600 debugging (see GET /fx9600/debug-log
+ * below) — an in-memory ring buffer, not persisted. This is purely a "what
+ * is the reader actually sending, right now" window for whoever's stood
+ * next to the physical reader with a laptop; it doesn't need to survive a
+ * backend restart or be queryable historically the way real data does.
+ * Every request that passes the secret check is recorded here, heartbeats
+ * included, so "nothing in the log" is itself a meaningful diagnostic
+ * signal (webhook unreachable) distinct from "log has entries but no EPCs"
+ * (reader connected but not sending tag data — the actual bug hunted here).
+ */
+const FX9600_DEBUG_LOG_MAX = 200;
+type Fx9600DebugEntry = {
+  ts: string;
+  gate: number;
+  rawBody: unknown;
+  epcs: string[];
+  decoded: string[];
+  received: string[];
+  unknown: string[];
+};
+const fx9600DebugLog: Fx9600DebugEntry[] = [];
+function pushFx9600DebugEntry(entry: Fx9600DebugEntry) {
+  fx9600DebugLog.unshift(entry);
+  if (fx9600DebugLog.length > FX9600_DEBUG_LOG_MAX) fx9600DebugLog.length = FX9600_DEBUG_LOG_MAX;
+}
+
+rfidRouter.get(
+  '/fx9600/debug-log',
+  requireAuth,
+  asyncHandler(async (_req, res) => {
+    res.json({ entries: fx9600DebugLog });
+  }),
+);
+
 rfidRouter.post(
   '/fx9600/:gate/webhook',
   requireFx9600Secret,
@@ -134,6 +169,15 @@ rfidRouter.post(
       // Same shape as gateIn()'s own response (received: string[]), not a
       // bare count — a caller checking .received.length or .includes(tag)
       // shouldn't need a special case for "nothing to receive".
+      pushFx9600DebugEntry({
+        ts: new Date().toISOString(),
+        gate,
+        rawBody: req.body,
+        epcs: [],
+        decoded: [],
+        received: [],
+        unknown: [],
+      });
       res.json({ ok: true, received: [], unknown: [], count: 0 });
       return;
     }
@@ -168,6 +212,15 @@ rfidRouter.post(
     console.log(
       `[fx9600] gate ${gate}: epc=[${epcs.join(', ')}] decoded=[${tags.join(', ')}] received=[${result.received.join(', ')}] unknown=[${result.unknown.join(', ')}]`,
     );
+    pushFx9600DebugEntry({
+      ts: new Date().toISOString(),
+      gate,
+      rawBody: req.body,
+      epcs,
+      decoded: tags,
+      received: result.received,
+      unknown: result.unknown,
+    });
     // Same reason the handheld routes call this — a reader-driven receive
     // never goes through PUT /api/state, so the dashboards would otherwise
     // sit stale until someone happens to refresh.

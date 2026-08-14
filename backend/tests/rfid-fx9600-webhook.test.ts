@@ -68,6 +68,19 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(state.body.boxes['BOX-B'].status).toBe('warehouse');
   });
 
+  it('records every accepted hit (heartbeats included) in the debug log for on-site troubleshooting', async () => {
+    await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ status: 'ok' });
+    const epcHex = encodeBarcodeToEpcHex('BOX-B');
+    await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ idHex: epcHex });
+
+    const log = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
+    expect(log.status).toBe(200);
+    expect(log.body.entries.length).toBeGreaterThanOrEqual(2);
+    // Newest first.
+    expect(log.body.entries[0].epcs).toContain(epcHex);
+    expect(log.body.entries[0].decoded).toContain('BOX-B');
+  });
+
   it('receives multiple boxes via an array payload, and a bare-array "data" wrapper', async () => {
     const epcHex = encodeBarcodeToEpcHex('BOX-A');
     const res = await request(ctx.app)
