@@ -60,6 +60,24 @@ export function createApp() {
   // Full-state snapshots can be large, but 25mb was needlessly generous for a
   // request body and widened the DoS surface; 10mb comfortably covers real
   // snapshots while capping worst-case memory per request.
+  /* The FX9600 webhook takes its body as raw bytes instead of going through
+     express.json() below, for two reasons found the hard way debugging a
+     live reader:
+       1. Zebra's IoT Connector doesn't document (or let you configure) the
+          Content-Type it sends tag data with, and express.json() silently
+          leaves req.body empty for anything it doesn't recognise as JSON —
+          which is indistinguishable, downstream, from "the reader sent a
+          heartbeat with no tags in it". Parsing the bytes ourselves makes
+          the route work regardless of what header the reader picked.
+       2. It lets the route log exactly what arrived on the wire (see
+          fx9600DebugLog in routes/rfid.ts), which is the only way to tell
+          "reader never sends tag data" apart from "reader sends it and we
+          fail to parse it" — the whole question when a reader connects
+          fine but no boxes ever get received.
+     Mounted before express.json() so it wins for this path; body-parser
+     skips anything already parsed (it sets req._body), so json() below is
+     a no-op here rather than a conflict. */
+  app.use('/api/rfid/fx9600', express.raw({ type: '*/*', limit: '10mb' }));
   app.use(express.json({ limit: '10mb' }));
   /* The SSE URL carries the auth token as a query parameter, because
      EventSource cannot send headers. Access logs are the one place that

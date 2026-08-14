@@ -11,9 +11,16 @@ beforeAll(async () => {
     .put('/api/state')
     .set(auth(ctx.token))
     .send({
+      /* One box per test that expects a receive: the route suppresses repeat
+         reads of the same tag for a minute (see FX9600_REPEAT_SUPPRESS_MS),
+         so tests sharing a box would have the second one silently suppressed
+         depending on execution order. */
       boxes: {
         'BOX-A': { tag: 'BOX-A', type: 'BT-001', value: 450, status: 'pending', cycles: 0, labeled: false, history: [], location: {} },
         'BOX-B': { tag: 'BOX-B', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-C': { tag: 'BOX-C', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-D': { tag: 'BOX-D', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-E': { tag: 'BOX-E', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
       },
       customers: {},
       warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
@@ -66,6 +73,76 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
 
     const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
     expect(state.body.boxes['BOX-B'].status).toBe('warehouse');
+  });
+
+  it('receives a box from the real FX9600 INVENTORY payload shape (array of {data:{idHex}})', async () => {
+    // Captured verbatim off a live FX9600 running IoT Connector in INVENTORY
+    // mode — every element wraps the read one level down, which the old
+    // top-level-only extraction missed, so real reports looked tagless.
+    const epcHex = encodeBarcodeToEpcHex('BOX-D').toLowerCase();
+    const res = await request(ctx.app)
+      .post(webhookUrl(5))
+      .set(secretHeader)
+      .send([
+        {
+          data: { antenna: 1, eventNum: 2558, format: 'epc', idHex: 'e2801191a5030069565def45', peakRssi: -63, reads: 10 },
+          timestamp: '2026-08-14T08:17:27.426+0000',
+          type: 'INVENTORY',
+        },
+        {
+          data: { antenna: 1, eventNum: 2559, format: 'epc', idHex: epcHex, peakRssi: -72, reads: 10 },
+          timestamp: '2026-08-14T08:17:27.430+0000',
+          type: 'INVENTORY',
+        },
+      ]);
+    expect(res.status).toBe(200);
+    expect(res.body.received).toContain('BOX-D');
+    // The foreign tag is reported back as unknown rather than silently dropped.
+    expect(res.body.unknown).toContain('e2801191a5030069565def45');
+  });
+
+  it('suppresses repeats so a stationary box is not re-received every report', async () => {
+    const epcHex = encodeBarcodeToEpcHex('BOX-E').toLowerCase();
+    const payload = [{ data: { idHex: epcHex }, type: 'INVENTORY' }];
+
+    const first = await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send(payload);
+    expect(first.body.received).toContain('BOX-E');
+
+    // Same tag, immediately again — a fixed reader does this once a second.
+    const second = await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send(payload);
+    expect(second.body.received).toEqual([]);
+
+    const log = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
+    expect(log.body.entries[0].repeats).toContain('BOX-E');
+  });
+
+  it('receives a box even when the reader sends tag data with a non-JSON Content-Type', async () => {
+    // Zebra's IoT Connector doesn't let you configure the Content-Type it
+    // posts with, and express.json() silently leaves req.body empty for
+    // anything it doesn't recognise — which downstream is indistinguishable
+    // from "heartbeat with no tags". The route parses raw bytes itself now.
+    const epcHex = encodeBarcodeToEpcHex('BOX-C');
+    const res = await request(ctx.app)
+      .post(webhookUrl(5))
+      .set(secretHeader)
+      .set('Content-Type', 'text/plain')
+      .send(JSON.stringify({ idHex: epcHex }));
+    expect(res.status).toBe(200);
+    expect(res.body.received).toContain('BOX-C');
+  });
+
+  it('logs the raw body and Content-Type so a malformed payload is diagnosable', async () => {
+    await request(ctx.app)
+      .post(webhookUrl(5))
+      .set(secretHeader)
+      .set('Content-Type', 'application/octet-stream')
+      .send('not json at all');
+
+    const log = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
+    const entry = log.body.entries[0];
+    expect(entry.rawBody).toBe('not json at all');
+    expect(entry.contentType).toContain('application/octet-stream');
+    expect(entry.parseError).toBeTruthy();
   });
 
   it('records every accepted hit (heartbeats included) in the debug log for on-site troubleshooting', async () => {

@@ -66,7 +66,41 @@ function extractEpc(read: unknown): string | null {
     const v = obj[field];
     if (typeof v === 'string' && v.trim()) return v.trim();
   }
+  /* What a real FX9600 actually sends: an array whose every element wraps the
+     read one level down, e.g.
+       [{"data":{"antenna":1,"format":"epc","idHex":"...","peakRssi":-72},
+         "timestamp":"...","type":"INVENTORY"}, ...]
+     Only the single-object {data:{...}} form was unwrapped before, so the
+     array-of-wrapped-events case (the one the reader uses) found nothing at
+     the top level and every report was silently treated as a tagless
+     heartbeat — the reason a correctly-configured reader appeared to send
+     data that never matched a box. */
+  if (obj.data && typeof obj.data === 'object') return extractEpc(obj.data);
   return null;
+}
+
+/* A fixed reader re-reports a tag for as long as it stays in the antenna's
+   field — INVENTORY mode does so every second by design. gateIn() appends a
+   history entry (and audit row) per call, so without suppression a box parked
+   near the gate would accumulate one every second indefinitely. Kept in memory
+   rather than a table because the only thing at stake is duplicate noise: the
+   worst case after a restart is one extra receive, which is harmless and
+   self-correcting. */
+const FX9600_REPEAT_SUPPRESS_MS = 60_000;
+const fx9600RecentlySeen = new Map<string, number>();
+function splitRepeats(tags: string[]): { fresh: string[]; repeats: string[] } {
+  const now = Date.now();
+  for (const [tag, ts] of fx9600RecentlySeen) {
+    if (now - ts > FX9600_REPEAT_SUPPRESS_MS) fx9600RecentlySeen.delete(tag);
+  }
+  const fresh: string[] = [];
+  const repeats: string[] = [];
+  for (const tag of tags) {
+    const last = fx9600RecentlySeen.get(tag);
+    if (last !== undefined && now - last < FX9600_REPEAT_SUPPRESS_MS) repeats.push(tag);
+    else fresh.push(tag);
+  }
+  return { fresh, repeats };
 }
 
 function extractReads(body: unknown): unknown[] {
@@ -121,16 +155,45 @@ const FX9600_DEBUG_LOG_MAX = 200;
 type Fx9600DebugEntry = {
   ts: string;
   gate: number;
-  rawBody: unknown;
+  /** Exactly what arrived on the wire, before any parsing — the whole point
+   *  of the raw-body mount in app.ts. Truncated so one oversized report
+   *  can't push the rest of the ring buffer out of memory. */
+  rawBody: string;
+  contentType: string;
+  parseError?: string;
   epcs: string[];
   decoded: string[];
   received: string[];
   unknown: string[];
+  /** Tags skipped because this route already received them within
+   *  FX9600_REPEAT_SUPPRESS_MS — expected and healthy for a fixed reader
+   *  staring at a stationary box, but worth showing so "nothing happened"
+   *  is distinguishable from "nothing was sent". */
+  repeats?: string[];
 };
 const fx9600DebugLog: Fx9600DebugEntry[] = [];
 function pushFx9600DebugEntry(entry: Fx9600DebugEntry) {
   fx9600DebugLog.unshift(entry);
   if (fx9600DebugLog.length > FX9600_DEBUG_LOG_MAX) fx9600DebugLog.length = FX9600_DEBUG_LOG_MAX;
+}
+
+const RAW_BODY_LOG_MAX = 4000;
+
+/**
+ * The webhook's body arrives as raw bytes (see the express.raw mount in
+ * app.ts) so this route can accept it whatever Content-Type the reader
+ * chose, and log what actually came in. Returns the decoded text alongside
+ * the parsed value so the caller can record both.
+ */
+function readWebhookBody(req: Request): { text: string; parsed: unknown; parseError?: string } {
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  const text = raw.toString('utf8');
+  if (!text.trim()) return { text, parsed: {} };
+  try {
+    return { text, parsed: JSON.parse(text) };
+  } catch (e) {
+    return { text, parsed: {}, parseError: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 rfidRouter.get(
@@ -161,7 +224,9 @@ rfidRouter.post(
       .values({ gateNo: gate, lastSeenAt: new Date() })
       .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: new Date() } });
 
-    const reads = extractReads(req.body);
+    const body = readWebhookBody(req);
+    const contentType = req.get('Content-Type') ?? '';
+    const reads = extractReads(body.parsed);
     const epcs = reads.map(extractEpc).filter((e): e is string => e !== null);
     if (!epcs.length) {
       // Not an error — IoT Connector can POST a heartbeat/status payload with
@@ -172,7 +237,9 @@ rfidRouter.post(
       pushFx9600DebugEntry({
         ts: new Date().toISOString(),
         gate,
-        rawBody: req.body,
+        rawBody: body.text.slice(0, RAW_BODY_LOG_MAX),
+        contentType,
+        parseError: body.parseError,
         epcs: [],
         decoded: [],
         received: [],
@@ -192,39 +259,62 @@ rfidRouter.post(
     const tags = epcs.map((epcHex) => {
       try {
         const decoded = decodeEpcHexToBarcode(epcHex);
-        return decoded || epcHex;
+        /* A foreign tag's EPC is arbitrary bytes, and decoding those as ASCII
+           can yield control characters — including NUL, which Postgres
+           rejects outright ("invalid byte sequence for encoding UTF8: 0x00").
+           Since a real reader reports every tag in range, one stranger's tag
+           sharing a batch with our boxes would otherwise fail the whole
+           report and receive nothing at all. Anything that isn't clean
+           printable ASCII is treated as "not one of ours" and matched by raw
+           hex instead (which still resolves a box explicitly bound by
+           rfid_epc). */
+        return decoded && /^[\x20-\x7E]+$/.test(decoded) ? decoded : epcHex;
       } catch {
         return epcHex;
       }
     });
 
-    const result = await gateIn(db, {
-      tags,
-      gate,
-      recorder: `FX9600 · Gate ${gate}`,
-      device: 'fx9600-webhook',
-    });
+    // Deduped before gateIn() rather than inside it: a handheld operator
+    // deliberately re-scanning a box means "receive it again", but a fixed
+    // reader repeating itself just means the box hasn't moved.
+    const { fresh, repeats } = splitRepeats(Array.from(new Set(tags)));
+    const now = Date.now();
+    for (const tag of fresh) fx9600RecentlySeen.set(tag, now);
+
+    const result = fresh.length
+      ? await gateIn(db, {
+          tags: fresh,
+          gate,
+          recorder: `FX9600 · Gate ${gate}`,
+          device: 'fx9600-webhook',
+        })
+      : { ok: true as const, received: [] as string[], unknown: [] as string[], count: 0 };
     // Diagnostic visibility for whoever's debugging a reader in the field —
     // "connected but nothing happens" is otherwise a black box: this shows
     // exactly which EPCs came in, what they decoded to, and whether gateIn()
     // matched a real box. Only logs when there's actual tag data (skips the
     // frequent no-op heartbeats) to keep this from flooding the log.
     console.log(
-      `[fx9600] gate ${gate}: epc=[${epcs.join(', ')}] decoded=[${tags.join(', ')}] received=[${result.received.join(', ')}] unknown=[${result.unknown.join(', ')}]`,
+      `[fx9600] gate ${gate}: epc=${epcs.length} decoded=[${tags.join(', ')}] received=[${result.received.join(', ')}] unknown=[${result.unknown.join(', ')}] repeat=${repeats.length}`,
     );
     pushFx9600DebugEntry({
       ts: new Date().toISOString(),
       gate,
-      rawBody: req.body,
+      rawBody: body.text.slice(0, RAW_BODY_LOG_MAX),
+      contentType,
       epcs,
       decoded: tags,
       received: result.received,
       unknown: result.unknown,
+      repeats,
     });
     // Same reason the handheld routes call this — a reader-driven receive
     // never goes through PUT /api/state, so the dashboards would otherwise
-    // sit stale until someone happens to refresh.
-    bump();
+    // sit stale until someone happens to refresh. Skipped when every tag in
+    // this report was a suppressed repeat: nothing changed, so waking every
+    // connected browser (once a second, per the reader's report interval)
+    // would be pure noise.
+    if (result.received.length) bump();
     res.json(result);
   }),
 );
