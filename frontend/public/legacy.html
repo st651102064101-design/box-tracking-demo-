@@ -8240,7 +8240,14 @@ function buildQuickIn(){
   $('#quickIn').innerHTML=out.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
     out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
 }
-function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
+function scanIn(tag){
+  if(!fixedGatesRef().in){
+    setv('scanIn','');
+    toast('ยังไม่ได้เลือกประตูขาเข้า','กด "เปลี่ยนประตู" ด้านบนก่อนเริ่มสแกน','err');
+    var bar=$('#inGateBar');if(bar)bar.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
   var b=S.boxes[tag];
   if(!b){$('#resultIn').innerHTML='<div class="banner bad">ไม่พบกล่อง '+esc(tag)+(looksThaiGarbled(raw)?' — คีย์บอร์ดอาจอยู่โหมดภาษาไทย กรุณาเปลี่ยนเป็นภาษาอังกฤษแล้วสแกนใหม่':'')+'</div>';setv('scanIn','');return;}
   if(b.status==='warehouse'){$('#resultIn').innerHTML='<div class="banner warn">'+esc(tag)+' อยู่ในคลังอยู่แล้ว</div>';setv('scanIn','');return;}
