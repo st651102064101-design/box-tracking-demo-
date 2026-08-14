@@ -1773,7 +1773,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
               <button type="button" class="btn ghost sm" id="btnWhMyLoc">📍 ตำแหน่งของฉัน</button>
             </div>
             <div id="whMapSearchResults" style="display:none;margin-top:6px;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto;"></div>
-            <div id="whMap" style="height:260px;border-radius:10px;overflow:hidden;margin-top:8px;"></div>
+            <!-- z-index:0 (ต้องคู่กับ position อะไรสักอย่างที่ไม่ static — Leaflet ตั้ง
+                 position:relative ให้ตัว .leaflet-container เองอยู่แล้ว) เพื่อสร้าง
+                 stacking context ใหม่ให้แผนที่ ไม่งั้นปุ่มซูม/attribution ภายในของ Leaflet
+                 (z-index สูงถึง 800–1000 ในตัวมันเอง) จะเทียบ z-index ตรงๆ กับ modal ทั้งหน้า
+                 (เช่น #whPanelOverlay ที่ z-index:410) แล้วลอยทะลุบัง modal ทุกอันที่ z-index
+                 ต่ำกว่า 1000 -->
+            <div id="whMap" style="height:260px;border-radius:10px;overflow:hidden;margin-top:8px;z-index:0;"></div>
             <div class="tag" style="margin-top:5px;">คลิกบนแผนที่เพื่อปักหมุด — ระบบจะกรอกที่ตั้งให้อัตโนมัติ</div>
           </div>
         </div>
