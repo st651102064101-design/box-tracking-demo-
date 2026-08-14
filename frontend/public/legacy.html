@@ -1367,6 +1367,17 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ พร้อมแนบ header <code>X-Webhook-Secret</code> ตามที่ผู้ดูแลระบบตั้งไว้ — ระบบจะรับกล่องเข้าคลังที่ประตูนี้ให้อัตโนมัติทันทีที่อ่านแท็กเจอ</p>
     <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
     <div id="fx9600Status" style="margin-top:10px;"></div>
+    <!-- Log ดิบของ request ที่เข้ามาจริง — ผู้ใช้ขอให้ดูเองจากหน้าเว็บได้เลย ไม่ต้องพึ่งใคร
+         tail docker logs ให้ ดึงจาก GET /api/rfid/fx9600/debug-log (in-memory ring buffer
+         ฝั่ง backend เก็บ 200 รายการล่าสุด รวม heartbeat ด้วย) เปิด/ปิด poll ตาม visibility
+         ของ panel เอง ไม่ยิงถี่ๆ ทิ้งไว้เปล่าประโยชน์ตอนไม่มีใครดู -->
+    <button type="button" class="btn ghost sm" id="btnFx9600LogToggle" style="margin-top:10px;">ดู log ดิบ</button>
+    <div id="fx9600LogPanel" style="display:none;margin-top:10px;">
+      <div class="twrap" style="max-height:320px;overflow-y:auto;">
+        <table style="font-size:12px;"><thead><tr><th>เวลา</th><th>ประตู</th><th>EPC (hex)</th><th>ถอดรหัสได้</th><th>ผลลัพธ์</th></tr></thead>
+          <tbody id="fx9600LogBody"></tbody></table>
+      </div>
+    </div>
   </div>
 
   <div class="gatebox in reveal d1" id="gateInBox">
@@ -7585,6 +7596,39 @@ function renderFx9600Status(g){
     +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px color-mix(in srgb,var(--pos) 22%,transparent);':'')+'"></span>'
     +esc(label)+' <span style="color:var(--muted);font-weight:400;">· เห็นล่าสุด '+ago+'</span></span>';
 }
+/* Log ดิบของ FX9600 webhook — poll GET /api/rfid/fx9600/debug-log (in-memory
+   ring buffer ฝั่ง backend เก็บ 200 รายการล่าสุด รวม heartbeat) ตอน panel เปิดอยู่
+   เท่านั้น ผู้ใช้ขอให้ดู request จริงที่เข้ามาได้เองจากหน้าเว็บ ไม่ต้องพึ่งใคร tail
+   docker logs ให้ — "ไม่มีแถวเลย" ก็เป็นสัญญาณสำคัญพอๆ กับ "มีแถวแต่ EPC ว่างตลอด"
+   (ต่างกันคนละปัญหา: เครื่องอ่านต่อไม่ถึง vs ต่อถึงแต่ไม่ส่งข้อมูลแท็ก) */
+var fx9600LogTimer=null;
+function fx9600LogPoll(){
+  apiFetch('/api/rfid/fx9600/debug-log',{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d)return;
+      var body=$('#fx9600LogBody');if(!body)return;
+      body.innerHTML=d.entries.length?d.entries.map(function(e){
+        var t=new Date(e.ts);
+        var timeTxt=pad(t.getHours(),2)+':'+pad(t.getMinutes(),2)+':'+pad(t.getSeconds(),2);
+        var resultTxt=e.received.length?'<span style="color:var(--pos);">รับเข้า: '+e.received.map(esc).join(', ')+'</span>'
+          :e.unknown.length?'<span style="color:var(--warn);">ไม่รู้จัก: '+e.unknown.map(esc).join(', ')+'</span>'
+          :'<span class="muted">heartbeat (ไม่มีแท็ก)</span>';
+        return '<tr><td class="mono">'+timeTxt+'</td><td>'+e.gate+'</td>'
+          +'<td class="mono" style="word-break:break-all;">'+(e.epcs.length?e.epcs.map(esc).join('<br>'):'<span class="muted">-</span>')+'</td>'
+          +'<td class="mono">'+(e.decoded.length?e.decoded.map(esc).join('<br>'):'<span class="muted">-</span>')+'</td>'
+          +'<td>'+resultTxt+'</td></tr>';
+      }).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:14px;">ยังไม่มี request เข้ามาเลย — เช็คว่าเครื่องอ่านตั้ง URL/secret ถูกไหม</td></tr>';
+    }).catch(function(){});
+}
+$('#btnFx9600LogToggle').addEventListener('click',function(){
+  var panel=$('#fx9600LogPanel');if(!panel)return;
+  var showing=panel.style.display!=='none';
+  panel.style.display=showing?'none':'block';
+  this.textContent=showing?'ดู log ดิบ':'ซ่อน log ดิบ';
+  if(fx9600LogTimer){clearInterval(fx9600LogTimer);fx9600LogTimer=null;}
+  if(!showing){fx9600LogPoll();fx9600LogTimer=setInterval(fx9600LogPoll,3000);}
+});
 function refreshGateDisplays(){
   var gs=allGateNums();
   ['out','in'].forEach(function(dir){
