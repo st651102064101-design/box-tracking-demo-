@@ -1045,6 +1045,346 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .alert .abody{padding:22px 18px 8px;}
   .row{gap:8px;}
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   WIDGET SYSTEM — the app-wide surface language
+   ------------------------------------------------------------------------------
+   Squircle widgets sitting directly on the --bg canvas, a strict 4/2 column
+   grid, and no chrome between them: the background is the separator. Introduced
+   on Overview and promoted here so every tab and every modal speaks it.
+
+   Namespace: .wg-*  and  [data-tint].
+   Families follow WidgetKit's real discipline — .wg is systemSmall (one number),
+   .wg.m is systemMedium (2 cols at the SAME height, not double), .wg.xl spans
+   the full row and holds a list or a table.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── tokens: LIGHT IS THE BASE. every one is re-declared in BOTH dark blocks ── */
+:root{
+  --wgR:26px;                          /* one radius for every family — WidgetKit does not
+                                          scale the corner with the widget, and neither do we */
+  --wgPad:18px;
+  --wgGap:16px;
+  --wgH:clamp(138px,12.4vw,164px);     /* systemSmall height == systemMedium height */
+  --wgLead:1.55;                       /* Thai line-height floor — never go under this */
+  --wgWash:9%;                         /* how much semantic tint washes the head of a card */
+  --wgMarkOp:.07;                      /* glyph watermark opacity */
+  --wgRing:rgba(0,0,0,.055);           /* the hairline, drawn as inset shadow not border,
+                                          so it survives corner-shape:squircle cleanly */
+  --wgSheen:rgba(255,255,255,.85);     /* specular top edge */
+  --wgShadow:0 1px 1px rgba(0,0,0,.035),0 8px 22px -10px rgba(0,0,0,.16);
+  --wgShadowUp:0 2px 4px rgba(0,0,0,.05),0 22px 46px -16px rgba(0,0,0,.24);
+  /* default tint is graphite: in this system "positive" has no hue */
+  --wgTint:var(--ink);
+  --wgTintInk:var(--ink);
+}
+html[data-theme="dark"]{
+  --wgWash:13%;
+  --wgMarkOp:.11;
+  --wgRing:rgba(255,255,255,.10);
+  --wgSheen:rgba(255,255,255,.055);
+  --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
+  --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
+}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]){
+    --wgWash:13%;
+    --wgMarkOp:.11;
+    --wgRing:rgba(255,255,255,.10);
+    --wgSheen:rgba(255,255,255,.055);
+    --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
+    --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
+  }
+}
+
+/* ── semantic tint, inherited from whatever element declares it ── */
+[data-tint="accent"]{--wgTint:var(--accent);--wgTintInk:var(--accentInk);}
+[data-tint="pos"]   {--wgTint:var(--pos);  --wgTintInk:var(--ink);}
+[data-tint="warn"]  {--wgTint:var(--warn); --wgTintInk:var(--warn);}
+[data-tint="neg"]   {--wgTint:var(--neg);  --wgTintInk:var(--neg);}
+
+/* ══ THE BOARD ═══════════════════════════════════════════════════════════════
+   4 columns → 2 → 2. iPhone's home screen never drops below two small widgets
+   per row; a full-width tile holding one 3-digit number is a wasted row on a
+   dock-door tablet. Everything above small goes full width. */
+.wg-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--wgGap);
+  margin:0 0 var(--wgGap);align-items:stretch;}
+.wg-board.units{grid-auto-rows:minmax(var(--wgH),auto);}
+.wg{grid-column:span 1;}
+.wg.m{grid-column:span 2;}
+.wg.l{grid-column:span 2;grid-row:span 2;}
+.wg.xl{grid-column:span 4;}
+@media(max-width:939px){
+  .wg-board{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .wg.m,.wg.l,.wg.xl{grid-column:span 2;}
+}
+@media(max-width:519px){
+  .wg-board{gap:10px;}
+  :root{--wgR:22px;--wgPad:15px;--wgH:126px;}
+  .wg.l{grid-row:auto;}
+}
+
+/* ── board header: title + (optionally) a shared scope control.
+      Rule: a control that governs >1 widget lives HERE. A control that governs
+      exactly one widget lives inside that widget. No hairline rule — the
+      background is the separator.                                          ── */
+.wg-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:38px 4px 14px;min-width:0;}
+.wg-board+.wg-hd,.wg-loose+.wg-hd{margin-top:34px;}
+.wg-hd-t{font-size:19px;font-weight:700;color:var(--ink);
+  /* Thai: -.015em is the floor. SF Pro tolerates -.03em; Thai upper vowels start
+     colliding with the preceding consonant's ascender well before that. */
+  letter-spacing:-.015em;line-height:1.45;}
+.wg-hd-s{font-size:12.5px;font-weight:400;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);}
+.wg-scope{margin-left:auto;min-width:0;max-width:100%;}
+/* dfBarHtml hard-codes margin-bottom:10px inline; the header owns spacing here */
+.wg-scope>div[id^="df-"]{margin-bottom:0!important;}
+@media(max-width:619px){.wg-scope{margin-left:0;width:100%;}}
+
+/* ══ THE WIDGET ══════════════════════════════════════════════════════════════ */
+.wg{
+  position:relative;isolation:isolate;overflow:hidden;min-width:0;
+  display:flex;flex-direction:column;
+  padding:var(--wgPad);
+  border:none;border-radius:var(--wgR);
+  -webkit-appearance:none;appearance:none;
+  font:inherit;text-align:left;color:var(--ink);
+  /* the tint wash: strongest at the head, gone by 58% — the number floats on
+     clean --surface so it never fights the tint for contrast */
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--wgTint) var(--wgWash),var(--surface)) 0%,
+    var(--surface) 58%);
+  box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadow);
+  transition:transform .34s var(--ease),box-shadow .34s var(--ease);
+}
+/* real continuous corners where the engine has them (CSS Borders 4). The
+   superellipse reads optically smaller at the same radius, so bump ~18%. */
+@supports (corner-shape:squircle){
+  .wg,.occ-card,.mdh-banner,.lost-alert-card{corner-shape:squircle;border-radius:calc(var(--wgR)*1.18);}
+}
+.wg[data-act]{cursor:pointer;}
+.wg[data-act]:hover{transform:translateY(-2px);
+  box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadowUp);}
+.wg[data-act]:active{transform:scale(.985);transition-duration:.09s;}
+.wg:focus-visible{outline:none;
+  box-shadow:inset 0 0 0 2.5px var(--accent),inset 0 0 0 .5px var(--wgRing),var(--wgShadowUp);}
+/* drill-in affordance. hover-capable pointers get it on hover; touch devices
+   (the warehouse floor) get it permanently, because there is no hover there. */
+.wg[data-act]::after{content:"\203A";position:absolute;top:calc(var(--wgPad) - 6px);right:var(--wgPad);
+  font-size:21px;line-height:1;font-weight:400;color:var(--faint);opacity:.5;
+  transition:opacity .2s var(--ease),transform .2s var(--ease);}
+@media(hover:hover){
+  .wg[data-act]::after{opacity:0;transform:translateX(-3px);}
+  .wg[data-act]:hover::after{opacity:.75;transform:none;}
+}
+
+/* ── quiet header row ── */
+.wg-top{display:flex;align-items:center;gap:9px;flex:0 0 auto;padding-right:24px;min-width:0;}
+.wg-ic{width:26px;height:26px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--wgTint) 15%,transparent);color:var(--wgTintInk);}
+.wg-ic .svgi{width:15px;height:15px;}
+.wg-ic.dashed{background:transparent;box-shadow:inset 0 0 0 1.25px color-mix(in srgb,var(--ink) 22%,transparent);}
+@supports (corner-shape:squircle){.wg-ic{corner-shape:squircle;border-radius:10px;}}
+.wg-lbl{font-size:12.5px;font-weight:600;color:var(--muted);min-width:0;}
+
+/* ── the one dominant figure ── */
+.wg-fig{margin-top:auto;display:flex;align-items:baseline;gap:7px;min-width:0;padding-top:12px;}
+.wg-n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;
+  /* digits are Latin — negative tracking is safe here and nowhere else */
+  letter-spacing:-.03em;line-height:1;color:var(--wgTintInk);
+  font-size:clamp(30px,3.3vw,38px);}
+.wg.m .wg-n,.wg.l .wg-n{font-size:clamp(38px,4.6vw,54px);}
+.wg-unit{font-size:13px;font-weight:500;color:var(--muted);}
+.wg-sub{margin:6px 0 0;font-size:12.5px;color:var(--muted);}
+
+/* ── glyph watermark, bleeding off the corner (Weather / Fitness) ── */
+.wg-mark{position:absolute;right:-16px;bottom:-20px;width:120px;height:120px;z-index:-1;
+  color:var(--wgTintInk);opacity:var(--wgMarkOp);pointer-events:none;}
+.wg-mark svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.4;
+  stroke-linecap:round;stroke-linejoin:round;}
+
+/* ── opt-in meter. ships inert: appears the moment JS sets --v (0–100) ── */
+.wg-meter{display:none;height:5px;border-radius:5px;margin-top:11px;
+  background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden;}
+.wg-meter[style*="--v"]{display:block;}
+.wg-meter::before{content:"";display:block;height:100%;border-radius:5px;
+  width:calc(var(--v,0)*1%);background:var(--wgTintInk);transition:width .7s var(--ease);}
+
+/* ── several related counts inside ONE squircle (Batteries / Stocks). Internal
+      hairlines are fine — they are inside a single widget, so "no chrome
+      BETWEEN widgets" still holds.                                        ── */
+.wg-split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  margin:14px calc(var(--wgPad)*-1) calc(var(--wgPad)*-1);}
+.wg-split.two{grid-template-columns:repeat(2,minmax(0,1fr));}
+.wg-cell{display:flex;flex-direction:column;gap:0;min-width:0;text-align:left;
+  padding:15px var(--wgPad) var(--wgPad);border-left:.5px solid var(--line);
+  background:none;font:inherit;color:inherit;cursor:pointer;transition:background .18s;}
+.wg-cell:first-child{border-left:none;}
+.wg-cell:hover{background:color-mix(in srgb,var(--ink) 4%,transparent);}
+.wg-cell:active{background:color-mix(in srgb,var(--ink) 7%,transparent);}
+.wg-cell:focus-visible{outline:none;box-shadow:inset 0 0 0 2.5px var(--accent);}
+.wg-cell .wg-top{padding-right:0;}
+.wg-cell .wg-n{font-size:clamp(28px,2.9vw,34px);margin-top:12px;}
+@media(max-width:519px){
+  /* 3 tiles across 360px cannot hold "พักใช้งาน (Hold)" — become list rows */
+  .wg-split,.wg-split.two{grid-template-columns:1fr;}
+  .wg-cell{flex-direction:row;align-items:center;gap:12px;border-left:none;
+    border-top:.5px solid var(--line);padding:13px var(--wgPad);}
+  .wg-cell:first-child{border-top:none;}
+  .wg-cell .wg-n{margin-top:0;margin-left:auto;font-size:27px;}
+}
+
+/* ══ TABLE / CONTENT WIDGET — self-contained: own title, own scope control,
+      own caption, own pager. No board header above it.                   ══ */
+.wg.wg-table{padding:0;}
+.wg-table>.wg-top{padding:16px 18px 13px;flex-wrap:wrap;border-bottom:.5px solid var(--line);gap:10px;}
+.wg-table>.wg-top .wg-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
+.wg-cap{margin:0;padding:11px 18px 3px;font-size:12.5px;color:var(--muted);}
+.wg-cap:empty{display:none;}
+/* board-level caption sits outside a widget, so it aligns to the board header's
+   own 4px gutter rather than a widget's 18px inner padding */
+.wg-cap.board{margin:-6px 0 14px;padding:0 4px;}
+.wg-body{min-width:0;position:relative;}
+.wg-table .twrap{max-height:60vh;-webkit-overflow-scrolling:touch;}
+/* right-edge fade tells a thumb the table scrolls sideways */
+.wg-scrollhint::after{content:"";position:absolute;inset:0 0 0 auto;width:28px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--surface));z-index:3;}
+.wg-table .pagerbar{margin:0;}
+/* a widget that just holds free-form injected markup */
+.wg-loose:empty{display:none;}
+
+/* ══ TOGGLE / ROW WIDGET ═════════════════════════════════════════════════════ */
+.wg-toggle{flex-direction:row;align-items:center;gap:13px;padding:16px 18px;}
+.wg-toggle-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+.wg-toggle-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
+.wg-toggle-sub{font-size:12.5px;color:var(--muted);}
+/* NOTE: no transform here — _setReportsPanelOpen() writes style.transform directly */
+.wg-chev{flex:0 0 auto;color:var(--muted);transition:transform .25s var(--ease);}
+
+/* ══ THAI TYPOGRAPHY — THE EXPLICIT PART ═════════════════════════════════════
+   body ships letter-spacing:-.011em globally. On SF Pro that is invisible; on
+   Anuphan / IBM Plex Sans Thai it pushes สระบน (ิ ี ึ ื ั ็) and วรรณยุกต์
+   (่ ้ ๊ ๋) into the preceding consonant's stem. Every Thai string in this
+   system resets to 0 and takes --wgLead (1.55) so the two-storey mark stack has
+   room. Only Latin digits keep negative tracking (.wg-n), and only display-size
+   Thai keeps a mild -.015em.                                                ── */
+.wg-lbl,.wg-unit,.wg-sub,.wg-cap,.wg-hd-s,.wg-toggle-sub,.wg-cell,
+.wg .empty,.wg .pill,.wg .tag,.wg .days-badge,
+.ocw-name,.ocw-sub,.mdh-list,.dostats,.dohead{
+  letter-spacing:0;line-height:var(--wgLead);
+  /* leave line-breaking to the engine's Thai dictionary; never break-word,
+     which would split a syllable cluster off from its mark */
+  overflow-wrap:normal;word-break:normal;hyphens:none;}
+/* .wg has overflow:hidden for the squircle — guarantee the top mark of a
+   first-line Thai label can never be clipped by the clip edge */
+.wg-lbl,.wg-hd-t,.wg-toggle-lbl{padding-block:1px;}
+/* injected table cells: same reset, they are mostly Thai */
+.tablecard td,.tablecard th,.wg td,.wg th{letter-spacing:0;}
+.tablecard td,.wg td{line-height:1.5;}
+
+@media(max-width:519px){
+  .wg-hd{margin:28px 2px 12px;}
+  .wg-hd-t{font-size:17px;}
+  .wg-table>.wg-top{padding:14px 15px 12px;}
+  .wg-cap{padding:10px 15px 2px;}
+  .wg-cap.board{padding:0 2px;}
+  .wg th,.wg td{padding:11px 13px;}
+  .wg .pagerbar .pg-info{padding:10px 15px;}
+  .wg .pagerbar .pg-nav{padding:8px 15px 10px;}
+  .wg .empty{padding:40px 16px;}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL — rebuilt on the widget language
+   ------------------------------------------------------------------------------
+   One shared shell serves all 31 openModal() call sites, so this is the whole
+   popup layer. Overrides the base .modal rules earlier in this sheet.
+   ══════════════════════════════════════════════════════════════════════════════ */
+.modal .backdrop{background:rgba(0,0,0,.28);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);}
+html[data-theme="dark"] .modal .backdrop{background:rgba(0,0,0,.5);}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]) .modal .backdrop{background:rgba(0,0,0,.5);}
+}
+.modal .sheet{border-radius:var(--wgR);border:none;
+  box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),
+    0 32px 80px -20px rgba(0,0,0,.32),0 4px 12px rgba(0,0,0,.06);
+  /* a settle rather than a slam: overshoot-free spring, matched to --ease */
+  animation:sheetIn .42s var(--ease) both;}
+html[data-theme="dark"] .modal .sheet{box-shadow:inset 0 0 0 .5px var(--wgRing),
+  inset 0 1px 0 var(--wgSheen),0 32px 80px -20px rgba(0,0,0,.8);}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]) .modal .sheet{
+    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),
+      0 32px 80px -20px rgba(0,0,0,.8);}
+}
+@supports (corner-shape:squircle){
+  .modal .sheet{corner-shape:squircle;border-radius:calc(var(--wgR)*1.18);}
+}
+.modal .mhead{padding:20px 24px 15px;gap:11px;
+  border-bottom:.5px solid var(--line);}
+.modal .mhead h3{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.4;}
+/* close button: a quiet grey circle. The old one turned RED on hover, which
+   reads as "destructive" on a button that merely dismisses. */
+.modal .mhead .x{width:30px;height:30px;border:none;border-radius:50%;
+  background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--muted);
+  transition:background .18s,color .18s,transform .18s var(--ease);}
+.modal .mhead .x svg{width:15px;height:15px;stroke-width:2.2;}
+.modal .mhead .x:hover{transform:none;background:color-mix(in srgb,var(--ink) 14%,transparent);
+  color:var(--ink);border-color:transparent;}
+.modal .mhead .x:active{transform:scale(.92);}
+.modal .mbody{padding:20px 24px;}
+.modal .mfoot{padding:15px 24px;border-top:.5px solid var(--line);
+  background:color-mix(in srgb,var(--ink) 2%,var(--surface));}
+html[data-theme="dark"] .modal .mfoot{background:color-mix(in srgb,var(--ink) 4%,var(--surface));}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]) .modal .mfoot{
+    background:color-mix(in srgb,var(--ink) 4%,var(--surface));}
+}
+/* section label inside a modal body — same role .wg-hd plays on a board */
+.modal .c2-label{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:0;
+  line-height:var(--wgLead);margin:0 0 9px;}
+
+/* iOS sheets come up from the bottom edge on a phone, and so do these. Below
+   560px the sheet stops floating and docks, which also buys back the 22px of
+   .modal padding on each side that a 390px screen cannot spare. */
+@media(max-width:560px){
+  .modal{padding:0;align-items:flex-end;}
+  .modal .sheet{width:100%;max-height:92vh;border-radius:var(--wgR) var(--wgR) 0 0;
+    animation:sheetUp .4s var(--ease) both;}
+  @supports (corner-shape:squircle){
+    .modal .sheet{border-radius:calc(var(--wgR)*1.18) calc(var(--wgR)*1.18) 0 0;}
+  }
+  .modal .mhead{padding:18px 18px 13px;}
+  .modal .mbody{padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));}
+  .modal .mfoot{padding:14px 18px calc(14px + env(safe-area-inset-bottom));}
+  .modal .mfoot .btn{flex:1;min-width:130px;}
+}
+@keyframes sheetUp{from{opacity:0;transform:translateY(100%);}to{opacity:1;transform:none;}}
+
+/* ══ ALERT (confirmA) — an iOS alert, not a small modal ══════════════════════ */
+.alert .sheet{width:300px;border-radius:28px;}
+@supports (corner-shape:squircle){.alert .sheet{corner-shape:squircle;border-radius:33px;}}
+.alert .abody{padding:26px 22px 8px;}
+.alert h3{font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.45;margin:0 0 6px;}
+.alert p{font-size:13.5px;line-height:var(--wgLead);letter-spacing:0;}
+.alert .afoot{margin-top:20px;}
+/* was color:var(--accent) — bright lime on white is ~1.6:1, effectively
+   unreadable. --accentInk is the same hue at a legible weight. */
+.alert .afoot button{padding:14px;font-size:16px;font-weight:600;color:var(--accentInk);
+  letter-spacing:0;line-height:var(--wgLead);}
+.alert .afoot button:active{background:color-mix(in srgb,var(--ink) 7%,transparent);}
+@media(max-width:560px){
+  /* an alert is NOT a sheet — it stays centred even when modals dock */
+  .modal.alert{padding:22px;align-items:center;}
+  .modal.alert .sheet{width:300px;max-width:100%;border-radius:28px;
+    animation:sheetIn .42s var(--ease) both;}
+  @supports (corner-shape:squircle){
+    .modal.alert .sheet{border-radius:33px;}
+  }
+}
+
+/* ══ inline links: same contrast bug as the alert buttons had ══════════════ */
+a{color:var(--accentInk);}
 </style>
 <script src="/legacy-sync.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -1127,229 +1467,16 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .mdh-inline-kpi .s{color:var(--warn);font-weight:600;}
   .mdh-inline-kpi .v{color:var(--warn);}
 
-  /* ══════════════════════════════════════════════════════════════════════════
-     OVERVIEW — WIDGET BOARD
-     A home screen, not a report. Squircle widgets on the bare --bg canvas,
-     a strict 4/2 column grid, no chrome between them.
-     Namespace: .wg-*  and  [data-tint]  — verified zero collisions elsewhere.
 
-     WHY THIS SHAPE: the five status counts and the two gate counts are *glance*
-     content — a supervisor holding a tablet by the dock door reads them in
-     under a second and drills in with a thumb — while the overdue and
-     by-customer tables are *sit-down* content. A report layout renders both at
-     the same visual weight; a widget board makes the difference structural.
-     ══════════════════════════════════════════════════════════════════════════ */
+  /* ══ OVERVIEW-SPECIFIC ═══════════════════════════════════════════════════
+     The .wg-* widget system itself now lives in the main stylesheet, because
+     every tab speaks it. What stays here is only the re-shelling of markup
+     that renderOverview()/renderReports() inject into THIS page.        ══ */
 
-  /* ── tokens: LIGHT IS THE BASE. every one is re-declared in BOTH dark blocks ── */
-  :root{
-    --wgR:26px;                          /* one radius for every family — WidgetKit does not scale
-                                            the corner with the widget, and neither do we */
-    --wgPad:18px;
-    --wgGap:16px;
-    --wgH:clamp(138px,12.4vw,164px);     /* systemSmall height == systemMedium height */
-    --wgLead:1.55;                       /* Thai line-height floor — never go under this */
-    --wgWash:9%;                         /* how much semantic tint washes the head of a card */
-    --wgMarkOp:.07;                      /* glyph watermark opacity */
-    --wgRing:rgba(0,0,0,.055);           /* the hairline, drawn as inset shadow not border,
-                                            so it survives corner-shape:squircle cleanly */
-    --wgSheen:rgba(255,255,255,.85);     /* specular top edge */
-    --wgShadow:0 1px 1px rgba(0,0,0,.035),0 8px 22px -10px rgba(0,0,0,.16);
-    --wgShadowUp:0 2px 4px rgba(0,0,0,.05),0 22px 46px -16px rgba(0,0,0,.24);
-  }
-  html[data-theme="dark"]{
-    --wgWash:13%;
-    --wgMarkOp:.11;
-    --wgRing:rgba(255,255,255,.10);
-    --wgSheen:rgba(255,255,255,.055);
-    --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
-    --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
-  }
-  @media (prefers-color-scheme:dark){
-    html:not([data-theme="light"]):not([data-theme="dark"]){
-      --wgWash:13%;
-      --wgMarkOp:.11;
-      --wgRing:rgba(255,255,255,.10);
-      --wgSheen:rgba(255,255,255,.055);
-      --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
-      --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
-    }
-  }
-
-  /* ── semantic tint. inherited down from whatever element declares it.
-        default is graphite: in this system "positive" has no hue.        ── */
-  #tab-overview{--wgTint:var(--ink);--wgTintInk:var(--ink);}
-  #tab-overview [data-tint="accent"]{--wgTint:var(--accent);--wgTintInk:var(--accentInk);}
-  #tab-overview [data-tint="pos"]   {--wgTint:var(--pos);  --wgTintInk:var(--ink);}
-  #tab-overview [data-tint="warn"]  {--wgTint:var(--warn); --wgTintInk:var(--warn);}
-  #tab-overview [data-tint="neg"]   {--wgTint:var(--neg);  --wgTintInk:var(--neg);}
-
-  /* ══ THE BOARD ═══════════════════════════════════════════════════════════
-     4 columns → 2 → 2. iPhone's home screen never drops below two small
-     widgets per row; a full-width tile holding one 3-digit number is a
-     wasted row on a dock-door tablet. Everything ABOVE small goes full width. */
-  #tab-overview .wg-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--wgGap);
-    margin:0 0 var(--wgGap);align-items:stretch;}
-  #tab-overview .wg-board.units{grid-auto-rows:minmax(var(--wgH),auto);}
-  #tab-overview .wg{grid-column:span 1;}
-  #tab-overview .wg.m{grid-column:span 2;}
-  #tab-overview .wg.l{grid-column:span 2;grid-row:span 2;}
-  #tab-overview .wg.xl{grid-column:span 4;}
-  @media(max-width:939px){
-    #tab-overview .wg-board{grid-template-columns:repeat(2,minmax(0,1fr));}
-    #tab-overview .wg.m,#tab-overview .wg.l,#tab-overview .wg.xl{grid-column:span 2;}
-  }
-  @media(max-width:519px){
-    #tab-overview .wg-board{gap:10px;}
-    #tab-overview{--wgR:22px;--wgPad:15px;--wgH:126px;}
-    #tab-overview .wg.l{grid-row:auto;}
-  }
-
-  /* ── board header: title + (optionally) the shared scope control.
-        Rule: a filter that governs >1 widget lives HERE. A filter that governs
-        exactly one widget lives inside that widget. No hairline rule — the
-        background is the separator.                                        ── */
-  #tab-overview .wg-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:38px 4px 14px;min-width:0;}
-  #tab-overview .wg-board+.wg-hd,#tab-overview .wg-loose+.wg-hd{margin-top:34px;}
-  #tab-overview .wg-hd-t{font-size:19px;font-weight:700;color:var(--ink);
-    /* Thai: -.015em is the floor. SF Pro tolerates -.03em; Thai upper vowels
-       start colliding with the preceding consonant's ascender well before that. */
-    letter-spacing:-.015em;line-height:1.45;}
-  #tab-overview .wg-hd-s{font-size:12.5px;font-weight:400;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);}
-  #tab-overview .wg-scope{margin-left:auto;min-width:0;max-width:100%;}
-  /* dfBarHtml hard-codes margin-bottom:10px inline; the board header owns spacing here */
-  #tab-overview .wg-scope>div[id^="df-"]{margin-bottom:0!important;}
-  @media(max-width:619px){#tab-overview .wg-scope{margin-left:0;width:100%;}}
-
-  /* ══ THE WIDGET ══════════════════════════════════════════════════════════ */
-  #tab-overview .wg{
-    position:relative;isolation:isolate;overflow:hidden;min-width:0;
-    display:flex;flex-direction:column;
-    padding:var(--wgPad);
-    border:none;border-radius:var(--wgR);
-    -webkit-appearance:none;appearance:none;
-    font:inherit;text-align:left;color:var(--ink);
-    /* the tint wash: strongest at the head, gone by 58% — the number floats on
-       clean --surface so it never fights the tint for contrast */
-    background:linear-gradient(180deg,
-      color-mix(in srgb,var(--wgTint) var(--wgWash),var(--surface)) 0%,
-      var(--surface) 58%);
-    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadow);
-    transition:transform .34s var(--ease),box-shadow .34s var(--ease);
-  }
-  /* real continuous corners where the engine has them (CSS Borders 4). The
-     superellipse reads optically smaller at the same radius, so bump ~18%. */
-  @supports (corner-shape:squircle){
-    #tab-overview .wg,#tab-overview .occ-card,#tab-overview .mdh-banner,#tab-overview .lost-alert-card{
-      corner-shape:squircle;border-radius:calc(var(--wgR)*1.18);}
-  }
-  #tab-overview .wg[data-act]{cursor:pointer;}
-  #tab-overview .wg[data-act]:hover{transform:translateY(-2px);
-    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadowUp);}
-  #tab-overview .wg[data-act]:active{transform:scale(.985);transition-duration:.09s;}
-  #tab-overview .wg:focus-visible{outline:none;
-    box-shadow:inset 0 0 0 2.5px var(--accent),inset 0 0 0 .5px var(--wgRing),var(--wgShadowUp);}
-  /* drill-in affordance. hover-capable pointers get it on hover; touch devices
-     (the warehouse floor) get it permanently, because there is no hover there. */
-  #tab-overview .wg[data-act]::after{content:"\203A";position:absolute;top:calc(var(--wgPad) - 6px);right:var(--wgPad);
-    font-size:21px;line-height:1;font-weight:400;color:var(--faint);opacity:.5;
-    transition:opacity .2s var(--ease),transform .2s var(--ease);}
-  @media(hover:hover){
-    #tab-overview .wg[data-act]::after{opacity:0;transform:translateX(-3px);}
-    #tab-overview .wg[data-act]:hover::after{opacity:.75;transform:none;}
-  }
-
-  /* ── quiet header row ── */
-  #tab-overview .wg-top{display:flex;align-items:center;gap:9px;flex:0 0 auto;padding-right:24px;min-width:0;}
-  #tab-overview .wg-ic{width:26px;height:26px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;
-    background:color-mix(in srgb,var(--wgTint) 15%,transparent);color:var(--wgTintInk);}
-  #tab-overview .wg-ic .svgi{width:15px;height:15px;}
-  #tab-overview .wg-ic.dashed{background:transparent;box-shadow:inset 0 0 0 1.25px color-mix(in srgb,var(--ink) 22%,transparent);}
-  @supports (corner-shape:squircle){#tab-overview .wg-ic{corner-shape:squircle;border-radius:10px;}}
-  #tab-overview .wg-lbl{font-size:12.5px;font-weight:600;color:var(--muted);min-width:0;}
-
-  /* ── the one dominant figure ── */
-  #tab-overview .wg-fig{margin-top:auto;display:flex;align-items:baseline;gap:7px;min-width:0;padding-top:12px;}
-  #tab-overview .wg-n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;
-    /* digits are Latin — negative tracking is safe here and nowhere else */
-    letter-spacing:-.03em;line-height:1;color:var(--wgTintInk);
-    font-size:clamp(30px,3.3vw,38px);}
-  #tab-overview .wg.m .wg-n,#tab-overview .wg.l .wg-n{font-size:clamp(38px,4.6vw,54px);}
-  #tab-overview .wg-unit{font-size:13px;font-weight:500;color:var(--muted);}
-  #tab-overview .wg-sub{margin:6px 0 0;font-size:12.5px;color:var(--muted);}
-
-  /* ── glyph watermark, bleeding off the corner (Weather / Fitness) ── */
-  #tab-overview .wg-mark{position:absolute;right:-16px;bottom:-20px;width:120px;height:120px;z-index:-1;
-    color:var(--wgTintInk);opacity:var(--wgMarkOp);pointer-events:none;}
-  #tab-overview .wg-mark svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.4;
-    stroke-linecap:round;stroke-linejoin:round;}
-
-  /* ── opt-in meter. ships inert: shows the moment JS sets --v (0–100).
-        one line in renderReports: el.style.setProperty('--v', pct) ── */
-  #tab-overview .wg-meter{display:none;height:5px;border-radius:5px;margin-top:11px;
-    background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden;}
-  #tab-overview .wg-meter[style*="--v"]{display:block;}
-  #tab-overview .wg-meter::before{content:"";display:block;height:100%;border-radius:5px;
-    width:calc(var(--v,0)*1%);background:var(--wgTintInk);transition:width .7s var(--ease);}
-
-  /* ── systemLarge, 3-up: several related counts inside ONE squircle
-        (Batteries / Stocks). Internal hairlines are fine — they are inside a
-        single widget, so "no chrome BETWEEN widgets" still holds.        ── */
-  #tab-overview .wg-split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-    margin:14px calc(var(--wgPad)*-1) calc(var(--wgPad)*-1);}
-  #tab-overview .wg-cell{display:flex;flex-direction:column;gap:0;min-width:0;text-align:left;
-    padding:15px var(--wgPad) var(--wgPad);border-left:.5px solid var(--line);
-    background:none;font:inherit;color:inherit;cursor:pointer;
-    transition:background .18s;}
-  #tab-overview .wg-cell:first-child{border-left:none;}
-  #tab-overview .wg-cell:hover{background:color-mix(in srgb,var(--ink) 4%,transparent);}
-  #tab-overview .wg-cell:active{background:color-mix(in srgb,var(--ink) 7%,transparent);}
-  #tab-overview .wg-cell:focus-visible{outline:none;box-shadow:inset 0 0 0 2.5px var(--accent);}
-  #tab-overview .wg-cell .wg-top{padding-right:0;}
-  #tab-overview .wg-cell .wg-n{font-size:clamp(28px,2.9vw,34px);margin-top:12px;}
-  @media(max-width:519px){
-    /* 3 tiles across 360px cannot hold "พักใช้งาน (Hold)" — become list rows */
-    #tab-overview .wg-split{grid-template-columns:1fr;}
-    #tab-overview .wg-cell{flex-direction:row;align-items:center;gap:12px;border-left:none;
-      border-top:.5px solid var(--line);padding:13px var(--wgPad);}
-    #tab-overview .wg-cell:first-child{border-top:none;}
-    #tab-overview .wg-cell .wg-n{margin-top:0;margin-left:auto;font-size:27px;}
-  }
-
-  /* ══ TABLE WIDGET (systemLarge) — self-contained: own title, own scope
-        control, own caption, own pager. No board header above it.      ══ */
-  #tab-overview .wg.wg-table{padding:0;}
-  #tab-overview .wg-table>.wg-top{padding:16px 18px 13px;flex-wrap:wrap;
-    border-bottom:.5px solid var(--line);gap:10px;}
-  #tab-overview .wg-table>.wg-top .wg-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
-  #tab-overview .wg-cap{margin:0;padding:11px 18px 3px;font-size:12.5px;color:var(--muted);}
-  #tab-overview .wg-cap:empty{display:none;}
-  /* board-level caption sits outside a widget, so it aligns to the board
-     header's own 4px gutter rather than a widget's 18px inner padding */
-  #tab-overview .wg-cap.board{margin:-6px 0 14px;padding:0 4px;}
-  #tab-overview .wg-body{min-width:0;position:relative;}
-  #tab-overview .wg-table .twrap{max-height:60vh;-webkit-overflow-scrolling:touch;}
-  /* right-edge fade tells a thumb the table scrolls sideways */
-  #tab-overview .wg-scrollhint::after{content:"";position:absolute;inset:0 0 0 auto;width:28px;pointer-events:none;
-    background:linear-gradient(90deg,transparent,var(--surface));z-index:3;}
-  #tab-overview .wg-table .pagerbar{margin:0;}
-  /* horizontal escape hatches for the injected wide markup — applied to the
-     INJECTED classes so renderReports() never has to change */
-  #ovTypeFlow .rpt-type-header,#ovTypeFlow .rpt-box-rows.open{min-width:880px;}
-  #tab-overview .lost-alert-card .alert-table{min-width:660px;}
-  #tab-overview .lost-alert-card{overflow:auto;}
-
-  /* ══ TOGGLE WIDGET ══════════════════════════════════════════════════════ */
-  #tab-overview .wg-toggle{flex-direction:row;align-items:center;gap:13px;padding:16px 18px;}
-  #tab-overview .wg-toggle-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
-  #tab-overview .wg-toggle-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
-  #tab-overview .wg-toggle-sub{font-size:12.5px;color:var(--muted);}
-  /* NOTE: no transform here — _setReportsPanelOpen() writes style.transform directly */
-  #tab-overview .wg-chev{flex:0 0 auto;color:var(--muted);transition:transform .25s var(--ease);}
-
-  /* ══ RE-SHELLING THE RUNTIME-INJECTED COMPONENTS ════════════════════════ */
-  /* occupancy: #ovOccupancy IS the grid (bare .occ-card siblings, no wrapper).
-     Kept on .occ-grid's auto-fill rather than the fixed 4-col board, because
-     the warehouse count is variable and auto-fill degrades better at 390px. */
+  /* occupancy: #ovOccupancy IS the grid — renderReports() injects bare
+     .occ-card siblings with no wrapper. Kept on .occ-grid's auto-fill rather
+     than the fixed 4-column board, because the warehouse count is variable
+     and auto-fill degrades better at 390px. */
   #tab-overview .occ-card{border:none;border-radius:var(--wgR);padding:var(--wgPad);
     display:flex;flex-direction:column;min-width:0;
     background:linear-gradient(180deg,color-mix(in srgb,var(--ink) 4%,var(--surface)) 0%,var(--surface) 58%);
@@ -1365,66 +1492,34 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
   /* lost alert: a --neg-washed widget instead of a flat --negSoft slab */
   #tab-overview .lost-alert-card{border:.5px solid color-mix(in srgb,var(--neg) 38%,var(--line));
-    border-radius:var(--wgR);box-shadow:var(--wgShadow);margin-bottom:0;
+    border-radius:var(--wgR);box-shadow:var(--wgShadow);margin-bottom:0;overflow:auto;
     background:linear-gradient(180deg,color-mix(in srgb,var(--neg) 10%,var(--surface)) 0%,var(--surface) 42%);}
+  #tab-overview .lost-alert-card .alert-table{min-width:660px;}
+
+  /* horizontal escape hatches for the injected wide markup — applied to the
+     INJECTED classes so renderReports() never has to change */
+  #ovTypeFlow .rpt-type-header,#ovTypeFlow .rpt-box-rows.open{min-width:880px;}
 
   /* nested DO cards read as smaller widgets inside the by-customer widget */
   #tab-overview .dorow{border-radius:calc(var(--wgR) - 10px);border-color:var(--line);}
 
-  /* master-data health banner — the .mdh-* block above stays verbatim; only the
-     container joins the widget language. */
+  /* master-data health banner — the .mdh-* block above stays verbatim; only
+     the container joins the widget language. */
   #tab-overview .mdh-banner{border-radius:var(--wgR);padding:16px 18px;margin:0 0 22px;
     border:.5px solid color-mix(in srgb,var(--warn) 32%,var(--line));box-shadow:var(--wgShadow);
     background:linear-gradient(180deg,color-mix(in srgb,var(--warn) 12%,var(--surface)) 0%,var(--surface) 60%);}
   #tab-overview .mdh-title{letter-spacing:0;line-height:var(--wgLead);}
   /* was color-mix(...,black) — undefined-looking in dark; token-based now */
   #tab-overview .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 75%,var(--ink));}
-  #tab-overview .wg-loose:empty{display:none;}
 
-  /* ══ HERO — shrunk and de-chromed. Strings and markup untouched so the
-        i18n EXACT dictionary keeps matching.                           ══ */
+  /* HERO — shrunk and de-chromed. Strings and markup untouched so the i18n
+     EXACT dictionary keeps matching. */
   #tab-overview>.hero,#tab-reports>.hero{padding:26px 0 20px;border-bottom:none;margin-bottom:24px;}
   #tab-overview>.hero .h-title,#tab-reports>.hero .h-title{
     font-size:clamp(34px,5.2vw,58px);line-height:1.3;letter-spacing:-.035em;}
   #tab-overview>.hero .h-sub,#tab-reports>.hero .h-sub{
-    font-size:clamp(15px,1.5vw,17px);margin-top:14px;}
-
-  /* ══ THAI TYPOGRAPHY — THE EXPLICIT PART ════════════════════════════════
-     body ships letter-spacing:-.011em globally. On SF Pro that is invisible;
-     on Anuphan / IBM Plex Sans Thai it pushes สระบน (ิ ี ึ ื ั ็) and
-     วรรณยุกต์ (่ ้ ๊ ๋) into the preceding consonant's stem. Every Thai
-     string in this board resets to 0 and takes --wgLead (1.55) so the
-     two-storey mark stack has room. Only Latin digits keep negative tracking
-     (.wg-n), and only display-size Thai keeps a mild -.015em. ── */
-  #tab-overview .wg-lbl,#tab-overview .wg-unit,#tab-overview .wg-sub,#tab-overview .wg-cap,
-  #tab-overview .wg-hd-s,#tab-overview .wg-toggle-sub,
-  #tab-overview .wg-cell,#tab-overview .wg .empty,#tab-overview .wg .pill,
-  #tab-overview .wg .tag,#tab-overview .wg .days-badge,
-  #tab-overview .ocw-name,#tab-overview .ocw-sub,#tab-overview .mdh-list,
-  #tab-overview .dostats,#tab-overview .dohead,
-  #tab-overview>.hero .h-sub,#tab-reports>.hero .h-sub{
-    letter-spacing:0;line-height:var(--wgLead);
-    /* leave line-breaking to the engine's Thai dictionary; never break-word,
-       which would split a syllable cluster off from its mark */
-    overflow-wrap:normal;word-break:normal;hyphens:none;}
-  /* .wg has overflow:hidden for the squircle — guarantee the top mark of a
-     first-line Thai label can never be clipped by the clip edge */
-  #tab-overview .wg-lbl,#tab-overview .wg-hd-t,#tab-overview .wg-toggle-lbl{padding-block:1px;}
-  /* injected table cells: same reset, they are mostly Thai */
-  #tab-overview td,#tab-overview th{letter-spacing:0;}
-  #tab-overview td{line-height:1.5;}
-
-  /* ══ 390px ═══════════════════════════════════════════════════════════════ */
+    font-size:clamp(15px,1.5vw,17px);margin-top:14px;letter-spacing:0;line-height:var(--wgLead);}
   @media(max-width:519px){
-    #tab-overview .wg-hd{margin:28px 2px 12px;}
-    #tab-overview .wg-hd-t{font-size:17px;}
-    #tab-overview .wg-table>.wg-top{padding:14px 15px 12px;}
-    #tab-overview .wg-cap{padding:10px 15px 2px;}
-    #tab-overview .wg-cap.board{padding:0 2px;}
-    #tab-overview th,#tab-overview td{padding:11px 13px;}
-    #tab-overview .pagerbar .pg-info{padding:10px 15px;}
-    #tab-overview .pagerbar .pg-nav{padding:8px 15px 10px;}
-    #tab-overview .empty{padding:40px 16px;}
     #tab-overview>.hero,#tab-reports>.hero{padding:18px 0 14px;margin-bottom:18px;}
   }
   </style>
