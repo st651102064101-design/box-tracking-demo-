@@ -40,8 +40,13 @@ rfidRouter.get(
  *
  * No JWT here — the reader has no operator signed into it to hold one.
  * requireFx9600Secret is the entire auth story: a shared secret configured
- * both here (FX9600_WEBHOOK_SECRET) and in the IoT Connector profile's
- * custom HTTP header.
+ * both here (FX9600_WEBHOOK_SECRET) and in the IoT Connector profile.
+ * Accepted two ways because the FX9600's own "HTTP POST" endpoint config
+ * screen (Zebra IoT Connector) only offers None / Basic Authentication / TLS
+ * for Authentication Type — there is no field for an arbitrary custom
+ * header, so X-Webhook-Secret (still supported, e.g. for curl/testing or a
+ * future reader firmware that does support it) isn't reachable from that
+ * UI at all. HTTP Basic is: any username, password = the secret.
  *
  * IoT Connector's HTTP POST payload shape is configurable per profile
  * (the "REST" template), so this accepts the field names Zebra's stock
@@ -75,9 +80,26 @@ function extractReads(body: unknown): unknown[] {
   return [];
 }
 
+/** Decodes `Authorization: Basic base64(user:pass)`, returning just the
+ *  password half — the username is whatever the IoT Connector profile was
+ *  given and isn't checked against anything. */
+function basicAuthPassword(req: Request): string | null {
+  const header = req.get('Authorization') ?? '';
+  const match = /^Basic\s+(.+)$/i.exec(header);
+  if (!match) return null;
+  try {
+    const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    const sep = decoded.indexOf(':');
+    return sep === -1 ? decoded : decoded.slice(sep + 1);
+  } catch {
+    return null;
+  }
+}
+
 function requireFx9600Secret(req: Request, res: Response, next: NextFunction) {
-  const got = req.get('X-Webhook-Secret') ?? '';
-  if (got !== env.fx9600WebhookSecret) {
+  const headerSecret = req.get('X-Webhook-Secret') ?? '';
+  const basicSecret = basicAuthPassword(req) ?? '';
+  if (headerSecret !== env.fx9600WebhookSecret && basicSecret !== env.fx9600WebhookSecret) {
     res.status(401).json({ error: 'unauthorized', message: 'invalid webhook secret' });
     return;
   }

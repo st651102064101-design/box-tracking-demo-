@@ -39,6 +39,19 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(res.status).toBe(401);
   });
 
+  it('accepts the secret via HTTP Basic auth password (FX9600 UI has no custom-header field)', async () => {
+    const res = await request(ctx.app)
+      .post(webhookUrl(5))
+      .auth('fx9600', env.fx9600WebhookSecret)
+      .send({ status: 'ok' });
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects HTTP Basic auth with the wrong password', async () => {
+    const res = await request(ctx.app).post(webhookUrl(5)).auth('fx9600', 'nope').send({ idHex: '00' });
+    expect(res.status).toBe(401);
+  });
+
   it('rejects a non-numeric gate', async () => {
     const res = await request(ctx.app).post(webhookUrl('north')).set(secretHeader).send({ idHex: '00' });
     expect(res.status).toBe(400);
