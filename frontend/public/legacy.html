@@ -3813,14 +3813,15 @@ function editBox(tag){
      ทำให้ระบบเสียร่องรอยว่ากล่องใบนี้ยังค้างอยู่ที่ลูกค้ารายไหน */
   var canDel=b.status!=='out';
   var delReason=canDel?'':'ลบไม่ได้ — กล่องนี้ออกไปอยู่กับ '+esc(custName(b.customer))+' ยังไม่คืนเข้าคลัง';
-  openModal('<div class="mbody"><h3>แก้ไขกล่อง '+esc(tag)+'</h3>'
+  openModal('<div class="mhead"><h3>แก้ไขกล่อง '+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
     +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType">'+typeOptions+'</select></div>'
     +'<div class="field"><label>Lot</label><input id="mBoxLot" value="'+esc(b.lot||'')+'" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>'
     +'<div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date" value="'+esc(b.expiry||'')+'"></div>'
     +'<div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier">'+supplierOptions(b.supplier)+'</select></div>'
     +(canDel?'':'<div class="small" style="color:var(--neg);margin-top:4px;">'+delReason+'</div>')
     +'</div>'
-    +'<div class="mfoot"><button class="btn red" id="mBoxDelBtn"'+(canDel?'':' disabled title="'+delReason+'"')+'>ลบกล่อง</button><span style="flex:1;"></span><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn">อัปเดตกล่อง</button></div>');
+    +'<div class="mfoot"><button class="btn red" id="mBoxDelBtn"'+(canDel?'':' disabled title="'+delReason+'"')+'><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></span> ลบกล่อง</button><span style="flex:1;"></span><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> อัปเดตกล่อง</button></div>');
   $('#mBoxSaveBtn').onclick=function(){
     var type=val('mBoxType');if(!type)return toast('เลือกประเภทกล่อง','เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน','err');
     var before=Object.assign({},b);
