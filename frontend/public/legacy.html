@@ -2813,20 +2813,29 @@ function authHeaders(){
    as opposed to the legacy S.employees[x].access field below, which used to
    be the only thing gating admin UI even though it's just client-side state
    anyone with API access could rewrite. */
-function decodeJwtRole(t){
+function decodeJwtClaims(t){
   try{
     var b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
     while(b64.length%4)b64+='=';
     var json=decodeURIComponent(atob(b64).split('').map(function(c){
       return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    return JSON.parse(json).role||null;
-  }catch(e){return null;}
+    return JSON.parse(json)||{};
+  }catch(e){return {};}
 }
-var MY_ROLE=(function(){
+var JWT_CLAIMS=(function(){
   var t=null;try{t=localStorage.getItem('smarttrace_jwt');}catch(e){}
-  return t?decodeJwtRole(t):null;
+  return t?decodeJwtClaims(t):{};
 })();
+var MY_ROLE=JWT_CLAIMS.role||null;
+/* Server-verified "this employee record is mine" — set only for accounts that
+   logged in through an employee login (see backend/src/routes/auth.ts), never
+   client-editable. Self-delete guards below check THIS first, falling back to
+   currentEmp()'s name===USER match only when it's unset (e.g. the shared/demo
+   account with no employee login of its own) — a name match alone is fragile
+   (two employees can share a display name) and was the actual hole a
+   self-deletion guard built only on it would have. */
+var MY_EMPLOYEE_ID=JWT_CLAIMS.employeeId||null;
 /* ===== API root — backend จริงรันที่พอร์ต 4000 =====
    ปกติหน้านี้ถูกเสิร์ฟจาก Next (พอร์ต 3000) แล้วเรียก /api/state บน origin เดียวกัน
    แต่ถ้าเปิดจากพอร์ตอื่น (เช่น 5100) หรือเปิดไฟล์ตรงๆ origin นั้นไม่มี /api/state
@@ -3163,7 +3172,12 @@ function setText(id,v){var e=$('#'+id);if(e)e.textContent=(v==null?'':v);}
    "who" chip so both stay in sync without duplicating this logic. */
 function renderAvatar(id,name,photo){
   var e=$('#'+id);if(!e)return;
-  e.innerHTML=avatarHTML(name,photo);
+  /* Fills whatever size the target element already is (it carries its own
+     width/height/border-radius via inline style) — must NOT use avatarHTML()
+     here, which wraps its own fixed-size (default 32px) div and would nest
+     a small avatar inside the target instead of filling it. */
+  if(photo){e.innerHTML='<img src="'+esc(photo)+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';}
+  else{var initials=(name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');e.textContent=initials;}
 }
 /* Same photo-or-initials avatar as renderAvatar(), but returns a markup string
    instead of writing into one fixed element — for spots (e.g. a table row
@@ -4272,7 +4286,11 @@ var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัว�
    /api/auth/users/:id/role), so this client-side check is UX-only, not the real gate. ===== */
 function currentEmp(){var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}return null;}
 function isAdmin(){return MY_ROLE==='admin';}
-window.isAdmin=isAdmin;window.currentEmp=currentEmp;
+/* Whether employee record `id` is the currently-logged-in account's own —
+   see MY_EMPLOYEE_ID above for why this checks the JWT claim before falling
+   back to currentEmp()'s name match. Used by every self-deletion guard. */
+function isSelfEmp(id){return MY_EMPLOYEE_ID?MY_EMPLOYEE_ID===id:(currentEmp()&&currentEmp().id===id);}
+window.isAdmin=isAdmin;window.currentEmp=currentEmp;window.isSelfEmp=isSelfEmp;
 var EMP_STATUS={active:{t:'ปฏิบัติงาน',c:'ok'},leave:{t:'ลา/พักงาน',c:'warn'},inactive:{t:'พ้นสภาพ',c:'bad'}};
 function empFields(){
   return {
@@ -4387,7 +4405,7 @@ function openEmpActions(id){
 window.openEmpActions=openEmpActions;
 function editEmp(id){
   var e=S.employees[id];if(!e)return;
-  var self=currentEmp()&&currentEmp().id===id;
+  var self=isSelfEmp(id);
   if(!isAdmin()&&!self)return toast('ไม่มีสิทธิ์','แก้ไขได้เฉพาะข้อมูลของตัวเอง (เบอร์โทร/อีเมล) — ติดต่อผู้ดูแลระบบเพื่อแก้ไขข้อมูลอื่น','err');
   editingEmp=id;
   eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
@@ -4401,7 +4419,7 @@ function delEmp(id){
   /* Design decision: even an admin may not delete their own logged-in employee
      record — self-deletion has no sane recovery path (locked out, no one left
      to undo it). Force them to have another admin delete the account instead. */
-  if(currentEmp()&&currentEmp().id===id)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
+  if(isSelfEmp(id))return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
 
@@ -4655,13 +4673,18 @@ function openEmpBadge(id,isSelf){
   /* Same permission rules the old action modal enforced: edit is admin-or-self,
      credentials/delete are admin-only, and no one may delete their own account.
      isSelf (passed by pickUser() for the who-chip's own-badge view) is honored
-     as-is on top of the name-match check — see pickUser()'s comment for why
-     the match alone isn't reliable enough on its own for that call path. */
-  var empAdmin=isAdmin(),self=isSelf===true||(currentEmp()&&currentEmp().id===id);
+     as-is on top of isSelfEmp()'s JWT-backed check — see pickUser()'s comment
+     for why a plain name match alone isn't reliable enough for that call path. */
+  var empAdmin=isAdmin(),self=isSelf===true||isSelfEmp(id);
   var credBtn0=$('#empBadgeCredBtn');if(credBtn0)credBtn0.title=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
   var editBtn=$('#empBadgeEditBtn');if(editBtn)editBtn.style.display=(empAdmin||self)?'grid':'none';
   var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'grid':'none';
   var delBtn=$('#empBadgeDelBtn');if(delBtn)delBtn.style.display=(empAdmin&&!self)?'grid':'none';
+  /* ปุ่มล็อกเอาท์แสดงเฉพาะตอนเปิดบัตรจาก who-chip บน navbar (isSelf===true ตรง ๆ จาก
+     pickUser()) — ไม่ใช่ isSelfEmp()/self ด้านบน ซึ่งจะเป็น true ได้แม้เปิดจากแถวของตัวเอง
+     ในตาราง Setup ▸ พนักงานด้วย ต้องแยกกันเพราะออกจากระบบไม่ควรเป็นการกระทำที่ทำได้จาก
+     หน้าจัดการ master — ให้ทำได้แค่ทางเดียวคือกดชื่อตัวเองบน navbar เท่านั้น */
+  var logoutBtn0=$('#empBadgeLogout');if(logoutBtn0)logoutBtn0.style.display=(isSelf===true)?'grid':'none';
 
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='block';
   empBadgeBoot();
@@ -4853,23 +4876,15 @@ function empBadgeStep(){
     var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
     closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
   }
-  var logoutBtn=eb.el.logout;
-  if(logoutBtn){
-    // Same corner as closeBtn, pushed 54px further down that corner's local
-    // y-axis (42px button + 12px gap) — stacks below the X instead of
-    // overlapping it, still tracking the card's swing/tilt the same way.
-    var llx=204*s+OVERLAY_BTN_GAP,lly=-313.5*s+21+54;
-    var lbx=eb.cx+(llx*cth-lly*sth),lby=eb.cy+(llx*sth+lly*cth);
-    logoutBtn.style.transform='translate('+(lbx-21).toFixed(1)+'px,'+(lby-21).toFixed(1)+'px)';
-  }
-  // ปุ่มจัดการ (แก้ไข/ตั้งรหัสผ่าน/พิมพ์บัตร/ลบ) — เกาะมุมเดียวกัน เรียงต่อจากล็อกเอาท์ทีละ
-  // 54px ลงมาเป็นแถวยาว ข้ามปุ่มที่ถูกซ่อนไว้ (display:none จาก openEmpBadge ตามสิทธิ์ผู้ใช้)
-  // เพื่อไม่ให้เหลือช่องว่างเปล่ากลางแถว
-  var actionBtns=eb.el.actionBtns,stackStep=0;
-  if(actionBtns)for(var ai=0;ai<actionBtns.length;ai++){
-    var ab=actionBtns[ai];if(!ab||ab.style.display==='none')continue;
+  // ปุ่มล็อกเอาท์ + ปุ่มจัดการ (แก้ไข/ตั้งรหัสผ่าน/พิมพ์บัตร/ลบ) — เกาะมุมเดียวกับปุ่มปิด
+  // เรียงต่อกันทีละ 54px ลงมาเป็นแถวยาว ข้ามปุ่มที่ถูกซ่อนไว้ (display:none — ล็อกเอาท์ซ่อน
+  // เมื่อเปิดบัตรจากตาราง Setup ไม่ใช่จาก who-chip บน navbar, ปุ่มจัดการซ่อนตามสิทธิ์ผู้ใช้
+  // จาก openEmpBadge) เพื่อไม่ให้เหลือช่องว่างเปล่ากลางแถว
+  var stackBtns=[eb.el.logout].concat(eb.el.actionBtns||[]),stackStep=0;
+  for(var ai=0;ai<stackBtns.length;ai++){
+    var ab=stackBtns[ai];if(!ab||ab.style.display==='none')continue;
     stackStep++;
-    var aly=-313.5*s+21+54*(1+stackStep);
+    var aly=-313.5*s+21+54*stackStep;
     var alx=204*s+OVERLAY_BTN_GAP;
     var abx=eb.cx+(alx*cth-aly*sth),aby=eb.cy+(alx*sth+aly*cth);
     ab.style.transform='translate('+(abx-21).toFixed(1)+'px,'+(aby-21).toFixed(1)+'px)';
@@ -9309,12 +9324,11 @@ function renderSetup(){
     return (e.id+' '+(e.name||'')+' '+(e.role||'')+' '+(e.dept||'')+' '+(e.phone||'')+' '+(e.email||'')+' '+(e.scanCode||'')).toLowerCase().indexOf(sbe)>=0;
   }):Object.values(S.employees);
   var eps=sortTable(epsAll,uiSort.emp,'name');
-  var meId=currentEmp()&&currentEmp().id;
   var pgEmp=pagerSlice('emp',eps);
   $('#empBody').innerHTML=pgEmp.rows.length?pgEmp.rows.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-    var isMe=meId&&e.id===meId;
+    var isMe=isSelfEmp(e.id);
     return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
@@ -9431,8 +9445,7 @@ $('#bulkEmpDel').addEventListener('click',function(){
   /* same self-deletion guard as the single-row delEmp() — silently drop the
      current user's own id from the batch rather than blocking the whole action,
      since it may have slipped in via "select all" */
-  var selfId=currentEmp()&&currentEmp().id;
-  var ids=checked.filter(function(id){return id!==selfId;});
+  var ids=checked.filter(function(id){return !isSelfEmp(id);});
   var skippedSelf=checked.length!==ids.length;
   if(!ids.length)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบ '+ids.length+' พนักงานที่เลือก?',(skippedSelf?'ข้ามบัญชีของตัวเอง 1 ราย · ':'')+'ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานเหล่านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){
