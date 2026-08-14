@@ -1366,6 +1366,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>รับกล่องอัตโนมัติผ่านเครื่องอ่าน RFID (Zebra FX9600)</h3>
     <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ พร้อมแนบ header <code>X-Webhook-Secret</code> ตามที่ผู้ดูแลระบบตั้งไว้ — ระบบจะรับกล่องเข้าคลังที่ประตูนี้ให้อัตโนมัติทันทีที่อ่านแท็กเจอ</p>
     <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
+    <div id="fx9600Status" style="margin-top:10px;"></div>
   </div>
 
   <div class="gatebox in reveal d1" id="gateInBox">
@@ -7548,6 +7549,31 @@ function fixedGatesRef(){
   return S.gatePrefs[USER];
 }
 function saveFixedGates(){save();}
+/* สถานะเครื่องอ่าน FX9600 ต่อประตู — อ่านจาก S.gateWebhookLastSeen (backend
+   เขียนให้ทุกครั้งที่ webhook ถูกยิงเข้ามาแบบ secret ถูกต้อง ไม่ว่าจะมีแท็กหรือ
+   heartbeat เปล่าก็ตาม ดู composeState()/routes/rfid.ts ฝั่ง backend) เขียว =
+   เห็นล่าสุดไม่เกิน 5 นาที, เหลือง = เคยเชื่อมต่อแต่เงียบไปนานแล้ว, เทา = ไม่เคย
+   เห็นเลย — ผู้ใช้ขอให้มีไฟสถานะแทนการเดาว่าตั้งค่าเครื่องอ่านถูกหรือยัง */
+var FX9600_STALE_MS=5*60*1000;
+function renderFx9600Status(g){
+  var el=$('#fx9600Status');if(!el)return;
+  if(!g){el.innerHTML='';return;}
+  var seenIso=(S.gateWebhookLastSeen||{})[g];
+  if(!seenIso){
+    el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);">'
+      +'<span style="width:9px;height:9px;border-radius:50%;background:var(--faint);flex:0 0 auto;"></span>'
+      +'ยังไม่เคยมีข้อมูลจากเครื่องอ่านเข้ามาที่ประตูนี้เลย</span>';
+    return;
+  }
+  var ms=Date.now()-new Date(seenIso).getTime();
+  var fresh=ms<FX9600_STALE_MS;
+  var ago=ms<60000?'เมื่อครู่นี้':ms<3600000?Math.floor(ms/60000)+' นาทีที่แล้ว':ms<86400000?Math.floor(ms/3600000)+' ชม.ที่แล้ว':Math.floor(ms/86400000)+' วันที่แล้ว';
+  var dotColor=fresh?'var(--pos)':'var(--warn)';
+  var label=fresh?'เครื่องอ่านเชื่อมต่ออยู่':'ขาดการเชื่อมต่อ';
+  el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--warn)')+';font-weight:600;">'
+    +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px color-mix(in srgb,var(--pos) 22%,transparent);':'')+'"></span>'
+    +esc(label)+' <span style="color:var(--muted);font-weight:400;">· เห็นล่าสุด '+ago+'</span></span>';
+}
 function refreshGateDisplays(){
   var gs=allGateNums();
   ['out','in'].forEach(function(dir){
@@ -7580,6 +7606,7 @@ function refreshGateDisplays(){
     if(dir==='in'){
       var fxEl=$('#fx9600WebhookUrl');
       if(fxEl)fxEl.textContent=g?apiUrl('/api/rfid/fx9600/'+g+'/webhook'):'เลือกประตูขาเข้าก่อน จึงจะเห็น URL';
+      renderFx9600Status(g);
     }
   });
 }
@@ -13858,6 +13885,11 @@ setInterval(()=>{
   if(liveStream&&(pollTick%8))return;   /* stream healthy → poll rarely */
   syncNow();
 },POLL_MS);
+/* ไฟสถานะเครื่องอ่าน FX9600 โชว์ "เห็นล่าสุด X นาทีที่แล้ว" ซึ่งต้องขยับตามเวลาจริง
+   แม้ไม่มี state เปลี่ยนแปลงอะไรเลย (ไม่งั้นจะค้างข้อความเดิมจนกว่าจะมี SSE bump
+   ครั้งถัดไป ซึ่งอาจไม่มีเลยถ้าเครื่องอ่านหลุดการเชื่อมต่อไปจริง ๆ) — เดินแยกจาก
+   syncNow() ข้างบน เพราะแค่ต้องคำนวณใหม่จาก S ที่มีอยู่แล้ว ไม่ต้องขอข้อมูลใหม่ */
+setInterval(()=>{if(typeof refreshGateDisplays==='function')refreshGateDisplays();},20000);
 
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState!=='visible')return;
