@@ -7311,6 +7311,14 @@ function saveFixedGates(){
    เห็นล่าสุดไม่เกิน 5 นาที, เหลือง = เคยเชื่อมต่อแต่เงียบไปนานแล้ว, เทา = ไม่เคย
    เห็นเลย — ผู้ใช้ขอให้มีไฟสถานะแทนการเดาว่าตั้งค่าเครื่องอ่านถูกหรือยัง */
 var FX9600_STALE_MS=5*60*1000;
+/* ประตูพร้อมใช้งานก็ต่อเมื่อเครื่องอ่าน FX9600 ของประตูนั้นเคยยิง webhook เข้ามา
+   ภายใน FX9600_STALE_MS ล่าสุด — ใช้ค่าเดียวกับ renderFx9600Status() ด้านล่างเพื่อให้
+   badge "ไม่พร้อมใช้งาน" ในตัวเลือกประตู sync กับไฟสถานะที่โชว์อยู่แล้วเสมอ */
+function fx9600Ready(g){
+  var seenIso=(S.gateWebhookLastSeen||{})[g];
+  if(!seenIso)return false;
+  return (Date.now()-new Date(seenIso).getTime())<FX9600_STALE_MS;
+}
 function renderFx9600Status(g){
   var el=$('#fx9600Status');if(!el)return;
   if(!g){el.innerHTML='';return;}
@@ -7399,7 +7407,7 @@ function refreshGateDisplays(){
     if(g&&gs.length&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config actually changed) — drop stale value instead of using it silently */
     if(!g){
       var dirGates=gateNumsForDir(dir);
-      if(dirGates.length===1){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction — auto-select instead of forcing a manual pick */
+      if(dirGates.length===1&&fx9600Ready(dirGates[0])){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction, and its reader is actually answering — auto-select instead of forcing a manual pick */
     }
     var inp=$('#'+(dir==='out'?'outGate':'inGate'));
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
@@ -7431,15 +7439,20 @@ function pickGate(dir){
   var allGs=allGateNums();
   if(!allGs.length){openModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');return;}
   var gs=gateNumsForDir(dir);
-  if(gs.length===1){setFixedGate(dir,gs[0]);return;}
+  if(gs.length===1&&fx9600Ready(gs[0])){setFixedGate(dir,gs[0]);return;} /* skip straight to picking only when that one gate is actually ready — otherwise fall through and show it disabled with the reason, instead of silently assigning a dead gate */
   var excluded=allGs.length-gs.length;
   var excludedNote=excluded>0?('<div class="tag" style="margin-bottom:10px;color:var(--warn);"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ซ่อน '+excluded+' ประตูที่ไม่รองรับทิศทางนี้</div>'):'';
   if(!gs.length){openModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม"</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');return;}
-  var opts=gs.map(function(g){return '<button class="btn ghost sm" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:6px;" onclick="setFixedGate(\''+dir+'\','+g+');closeModal();">'
-    +'<b>ประตู '+g+'</b>'
-    +'<span class="muted">'+esc(whName(gateWh(g)))+'</span>'
-    +'<span style="font-size:11px;font-weight:600;color:'+(dir==='out'?'var(--neg)':'var(--pos)')+';">'+gateTypeLabel(g)+'</span>'
-    +(fixedGatesRef()[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';}).join('');
+  var opts=gs.map(function(g){
+    var ready=fx9600Ready(g);
+    return '<button class="btn ghost sm" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:6px;'+(ready?'':'opacity:.55;cursor:not-allowed;')+'" '
+      +(ready?'onclick="setFixedGate(\''+dir+'\','+g+');closeModal();"':'disabled title="RFID ของประตูนี้ไม่ตอบสนอง — เลือกไม่ได้จนกว่าเครื่องอ่านจะกลับมาส่งสัญญาณ"')+'>'
+      +'<b>ประตู '+g+'</b>'
+      +'<span class="muted">'+esc(whName(gateWh(g)))+'</span>'
+      +'<span style="font-size:11px;font-weight:600;color:'+(dir==='out'?'var(--neg)':'var(--pos)')+';">'+gateTypeLabel(g)+'</span>'
+      +(ready?'':' <span style="font-size:10px;font-weight:700;color:var(--neg);background:var(--negSoft);padding:2px 7px;border-radius:6px;">ไม่พร้อมใช้งาน · RFID ไม่ตอบสนอง</span>')
+      +(fixedGatesRef()[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';
+  }).join('');
   openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำบัญชีนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'+excludedNote+opts
     +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
