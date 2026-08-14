@@ -12508,6 +12508,57 @@ function openColumnMapModal(opts){
      commit pipeline instead of re-implementing it. */
   window.IMPORT_CONFIGS=IMPORT_CONFIGS;
 
+  /* ---- find-or-create helpers for the "คลัง"/"รหัสประเภทกล่อง" columns ----
+     Referenced from box/emp buildRecord() above (and from
+     importParseAndValidate()'s prefix lookup) but never actually defined —
+     every box/employee import with a "คลัง" or "รหัสประเภทกล่อง" column threw
+     a ReferenceError partway through commitImportRows()'s forEach, which
+     aborted before save()/renderAll()/the summary modal ever ran: the
+     preview looked right, "ยืนยันนำเข้า" appeared to do nothing, and nothing
+     reached the server. Only an empty คลัง/typeId column (or a value that
+     happened to already equal an existing id, which resolves before ever
+     reaching these) avoided the crash — which is why this went unnoticed
+     until an import with real "ก-ฮ" data hit it.
+     Both accept either an existing id or a free-text name (matched
+     case-insensitively against id and name), and create a minimal new
+     record on no match — id/name are the only two things an import row can
+     actually supply, everything else (gates, unit, ฯลฯ) is left for the
+     operator to fill in afterward on the master tab, same as any other
+     record someone adds with just a name to start. */
+  function findWarehouseMatch(input){
+    var q=String(input||'').trim();if(!q)return '';
+    if(S.warehouses[q])return q;
+    var ql=q.toLowerCase();
+    var hit=Object.values(S.warehouses).find(function(w){return String(w.id).toLowerCase()===ql||String(w.name||'').toLowerCase()===ql;});
+    return hit?hit.id:'';
+  }
+  window.findWarehouseMatch=findWarehouseMatch;
+  function autoCreateWarehouseIfNeeded(input){
+    var q=String(input||'').trim();if(!q)return '';
+    var id=nextSeqId('WH-',Object.keys(S.warehouses));
+    S.warehouses[id]={id:id,name:q,gates:[],gateType:'both',gateTypes:{},area:'',lat:null,lng:null,status:'active'};
+    rebuildGates();
+    auditEntry('CREATE',USER,id,q,null,S.warehouses[id]);
+    return id;
+  }
+  window.autoCreateWarehouseIfNeeded=autoCreateWarehouseIfNeeded;
+  function findBoxTypeMatch(input){
+    var q=String(input||'').trim();if(!q)return '';
+    if(S.boxtypes[q])return q;
+    var ql=q.toLowerCase();
+    var hit=Object.values(S.boxtypes).find(function(t){return String(t.id).toLowerCase()===ql||String(t.name||'').toLowerCase()===ql;});
+    return hit?hit.id:'';
+  }
+  window.findBoxTypeMatch=findBoxTypeMatch;
+  function autoCreateBoxTypeIfNeeded(input){
+    var q=String(input||'').trim();if(!q)return '';
+    var id=nextSeqId('BT-',Object.keys(S.boxtypes));
+    S.boxtypes[id]={id:id,name:q,unit:'ชิ้น',value:null,dim:''};
+    auditEntry('CREATE',USER,id,q,null,S.boxtypes[id]);
+    return id;
+  }
+  window.autoCreateBoxTypeIfNeeded=autoCreateBoxTypeIfNeeded;
+
   /* ---- Step 1: pick a file → parse → open the column-mapping modal ----
      One shared <input type=file> (#importFileShared) for all six entities —
      which one a click targets is set here right before .click(), same idea
