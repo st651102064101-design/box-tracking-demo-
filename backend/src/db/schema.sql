@@ -82,6 +82,21 @@ CREATE TABLE IF NOT EXISTS gate_webhook_status (
   last_seen_at TIMESTAMPTZ NOT NULL
 );
 
+-- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
+-- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
+-- this in S.gatePrefs and round-trip it through PUT /api/state like
+-- everything else, but stateSchema never declared that key so it was
+-- silently stripped on every save and forgotten on the next reload/device.
+-- Keyed by the JWT's `username` (stable per login), not the display `name`
+-- (two accounts can share a display name) or a per-browser value (the user
+-- explicitly wants this to follow them across devices, not stick to one).
+CREATE TABLE IF NOT EXISTS gate_prefs (
+  username     TEXT PRIMARY KEY,
+  out_gate     TEXT,
+  in_gate      TEXT,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS locations (
   code       TEXT PRIMARY KEY,
   wh         TEXT,

@@ -102,6 +102,16 @@ export const gateWebhookStatus = pgTable('gate_webhook_status', {
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
 });
 
+/** Per-account chosen gate for Gate ขาออก/ขาเข้า — see the matching table
+ *  comment in schema.sql for why this needed its own table (stateSchema
+ *  silently dropped the old S.gatePrefs field on every save). */
+export const gatePrefs = pgTable('gate_prefs', {
+  username: text('username').primaryKey(),
+  outGate: text('out_gate'),
+  inGate: text('in_gate'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),
@@ -278,6 +288,7 @@ export type Schema = {
   warehouses: typeof warehouses;
   gates: typeof gates;
   gateWebhookStatus: typeof gateWebhookStatus;
+  gatePrefs: typeof gatePrefs;
   locations: typeof locations;
   employees: typeof employees;
   boxes: typeof boxes;
@@ -300,6 +311,7 @@ export const schema = {
   warehouses,
   gates,
   gateWebhookStatus,
+  gatePrefs,
   locations,
   employees,
   boxes,

@@ -15,6 +15,7 @@ import { employeePinRouter } from './routes/pin.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
 import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
+import { gatePrefsRouter } from './routes/gatePrefs.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -90,6 +91,7 @@ export function createApp() {
   app.use('/api/cycle-counts', cycleCountsRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/stream', streamRouter);
+  app.use('/api/gate-prefs', gatePrefsRouter);
 
   app.use(notFound);
   app.use(errorHandler);
