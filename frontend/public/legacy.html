@@ -2003,6 +2003,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
      คลิกแถวพนักงานในหน้าตั้งค่า ▸ พนักงาน แล้วบัตรจะ "หล่น" ลงมาจากคลิปแขวนด้านบน
      ลากเล่นได้ (จำลองแรงโน้มถ่วง/สายคล้อง), เอาเมาส์ชี้เพื่อพลิกดูด้านหลัง (เมนูจัดการ)
      พิมพ์บาร์โค้ดจากรหัสบัตรพนักงานจริงด้วย Code128 (ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์) -->
+<style>
+/* ไม่มีรูปพนักงาน — #empBadgeHero (openEmpBadge) ตั้ง --empHeroInitials แทน background-image
+   ตัวหนังสือใหญ่กลางบล็อกสี ให้หน้าตาเหมือนกันไม่ว่าจะมีรูปจริงหรือไม่ (คนละแบบกับ initials
+   วงกลมเล็กแบบเดิม ซึ่งเลิกใช้ไปแล้วเมื่อรูปเปลี่ยนมาเต็มบัตร) */
+.emp-hero-initials::before{content:var(--empHeroInitials);position:absolute;inset:0;display:grid;place-items:center;font-size:96px;font-weight:700;color:var(--accentInk);opacity:.55;}
+</style>
 <div id="empBadgeOverlay" style="position:fixed;inset:0;z-index:400;display:none;">
   <div id="empBadgeBackdrop" class="perf-backdrop" onclick="closeEmpBadge()" style="position:absolute;inset:0;background:rgba(20,20,22,.42);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);"></div>
   <svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;">
@@ -2064,56 +2070,31 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
          ให้ตรงจังหวะ — ถ้าปล่อยให้ CSS transition หมุนเอง JS จะไม่รู้มุมระหว่างทางเลย -->
     <div id="empBadgeFlip" style="position:absolute;inset:0;transform-style:preserve-3d;">
 
-      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);isolation:isolate;">
-        <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
+      <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);isolation:isolate;display:flex;flex-direction:column;">
+        <div style="position:relative;height:66px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);z-index:2;">
           <div style="position:relative;width:87px;height:13px;">
             <div style="position:absolute;inset:0;border-radius:999px;background:#000;mix-blend-mode:destination-out;"></div>
             <div style="position:absolute;inset:0;border-radius:999px;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);pointer-events:none;"></div>
           </div>
         </div>
 
-        <div style="position:relative;padding:27px 30px 0;">
-          <div style="position:absolute;right:-69px;top:-39px;width:225px;height:225px;border-radius:50%;background:var(--accent2);opacity:.5;"></div>
-          <div style="position:relative;display:flex;align-items:center;gap:18px;">
-            <div id="empBadgeAvatar" style="width:111px;height:111px;flex:0 0 auto;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:36px;font-weight:700;border:4px solid var(--surface);box-shadow:0 6px 20px rgba(0,0,0,.12);"></div>
-            <div style="min-width:0;">
-              <div style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:4px 13px;">EMPLOYEE ID</div>
-              <div id="empBadgeId" style="font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:-.01em;margin-top:7px;color:var(--ink);"></div>
-            </div>
+        <!-- รูปพนักงานเต็มพื้นที่ที่เหลือของบัตร (ผู้ใช้ขอให้ใหญ่เต็มบัตรแบบบัตรพนักงาน
+             ทั่วไป แทนรูปวงกลมเล็ก ๆ เดิม) — ไม่มีรูปก็ยังเป็นบล็อกใหญ่เท่ากัน ใส่ initials
+             ตัวโตแทน ไม่ใช่วงกลมเล็กลอยกลาง เพื่อให้ front หน้าตาเหมือนกันทั้งสองกรณี -->
+        <div id="empBadgeHero" style="position:relative;flex:1 1 auto;min-height:0;background:var(--accentSoft);overflow:hidden;">
+          <div style="position:absolute;left:20px;top:18px;z-index:2;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.82);border-radius:999px;padding:4px 13px;">EMPLOYEE ID</div>
+          <div id="empBadgeId" style="position:absolute;left:20px;top:44px;z-index:2;font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.01em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:70px 26px 22px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72) 65%,rgba(0,0,0,.82));z-index:1;">
+            <div id="empBadgeName" style="font-size:29px;font-weight:700;letter-spacing:-.03em;line-height:1.2;color:#fff;"></div>
+            <div id="empBadgeRole" style="font-size:16.5px;color:rgba(255,255,255,.78);margin-top:3px;"></div>
+            <div id="empBadgeStatus" style="display:inline-flex;align-items:center;gap:5px;margin-top:11px;padding:5px 14px;border-radius:999px;font-size:14px;font-weight:600;"></div>
           </div>
         </div>
 
-        <div style="padding:24px 30px 0;">
-          <div id="empBadgeName" style="font-size:33px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
-          <div id="empBadgeRole" style="font-size:19px;color:var(--muted);margin-top:4px;"></div>
-          <div id="empBadgeStatus" style="display:inline-flex;align-items:center;gap:5px;margin-top:13px;padding:6px 16px;border-radius:999px;font-size:16px;font-weight:600;"></div>
-        </div>
+        <!-- คำใบ้ชี้ให้พลิกดูบาร์โค้ด/รายละเอียดที่ย้ายไปหลังบัตรแล้ว -->
+        <div style="flex:0 0 auto;padding:11px 30px;text-align:center;color:var(--faint);font-size:13px;background:var(--surface);z-index:2;">เอาเมาส์ชี้ / แตะเพื่อพลิกดูบาร์โค้ดและข้อมูลเพิ่มเติม</div>
 
-        <div style="padding:21px 30px 0;display:grid;grid-template-columns:1fr 1fr;gap:15px 18px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
-            <div id="empBadgeDept" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">คลัง</div>
-            <div id="empBadgeWh" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">กะ</div>
-            <div id="empBadgeShift" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">เบอร์โทร</div>
-            <div id="empBadgePhone" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
-          </div>
-        </div>
-
-        <!-- บาร์โค้ดย้ายไปหลังบัตรแล้ว (ผู้ใช้ขอให้เหมือนบัตรพนักงานทั่วไป ที่บาร์โค้ด/ราย
-             ละเอียดอยู่ด้านหลัง ด้านหน้าโชว์แค่รูป+ชื่อ+ข้อมูลสำคัญ) เหลือพื้นที่ว่างด้านล่าง
-             จึงใส่คำใบ้ชี้ให้พลิกดูแทนที่บาร์โค้ดเดิม -->
-        <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 30px 20px;text-align:center;color:var(--faint);font-size:13.5px;">เอาเมาส์ชี้ / แตะเพื่อพลิกดูบาร์โค้ดและข้อมูลเพิ่มเติม</div>
-
-        <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;">
+        <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;z-index:3;">
           <div style="transform:rotate(-38deg);text-align:center;line-height:1;white-space:nowrap;">
             <div style="font-size:118px;font-weight:700;letter-spacing:-.04em;color:rgba(255,255,255,.96);text-shadow:0 6px 24px rgba(0,0,0,.55);">พ้นสภาพ</div>
             <div style="font-size:56px;font-weight:700;letter-spacing:.2em;color:rgba(255,255,255,.74);margin-top:10px;">INACTIVE</div>
@@ -2134,12 +2115,28 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           <div id="empBadgeMetaBack" style="font-family:var(--mono);font-size:15px;color:var(--muted);margin-top:3px;"></div>
         </div>
 
-        <!-- เนื้อหาที่เหลือทั้งหมดของด้านหลัง (ข้อมูลเพิ่มเติม + บาร์โค้ด) เลื่อนดูได้เอง —
-             ด้านหน้าโชว์ได้แค่แผนก/คลัง/กะ/เบอร์โทร (พื้นที่จำกัด), รายละเอียดที่เหลือ
-             (อีเมล/วันเริ่มงาน/สิทธิ์/บัญชีเข้าระบบ) ย้ายมาไว้นี่แทน ส่วนบาร์โค้ดก็ย้ายมา
-             จากด้านหน้าด้วย (เดิมอยู่หน้าบัตร ผู้ใช้ขอให้ย้ายมาหลังบัตรเหมือนบัตรพนักงานทั่วไป) -->
+        <!-- เนื้อหาที่เหลือทั้งหมดของด้านหลัง (ข้อมูลเพิ่มเติม + บาร์โค้ด) เลื่อนดูได้เอง — ด้านหน้า
+             ตอนนี้เป็นรูปเต็มบัตร (ผู้ใช้ขอ) เหลือที่แค่พอโชว์ชื่อ/ตำแหน่ง/สถานะทับบนรูป ข้อมูลที่
+             เหลือทั้งหมด (แผนก/คลัง/กะ/เบอร์โทร/อีเมล/วันเริ่มงาน/สิทธิ์/บัญชีเข้าระบบ) ย้ายมาไว้นี่
+             ส่วนบาร์โค้ดก็ย้ายมาจากด้านหน้าเช่นกัน (เหมือนบัตรพนักงานทั่วไปที่บาร์โค้ดอยู่หลังบัตร) -->
         <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 30px 24px;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;">
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
+              <div id="empBadgeDept" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">คลัง</div>
+              <div id="empBadgeWh" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">กะ</div>
+              <div id="empBadgeShift" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">เบอร์โทร</div>
+              <div id="empBadgePhone" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
+            </div>
             <div>
               <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">อีเมล</div>
               <div id="empBadgeEmailBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;word-break:break-all;"></div>
@@ -4668,7 +4665,16 @@ function openEmpBadge(id,isSelf){
   var stFgMap={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'};
   var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
   var scanCode=(e.scanCode||e.id).toUpperCase();
-  renderAvatar('empBadgeAvatar',e.name,e.photo);
+  var hero=$('#empBadgeHero');
+  if(hero){
+    if(e.photo){hero.style.backgroundImage='url("'+e.photo.replace(/"/g,'%22')+'")';hero.style.backgroundSize='cover';hero.style.backgroundPosition='center';}
+    else{
+      hero.style.backgroundImage='none';
+      var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+      hero.style.setProperty('--empHeroInitials','"'+initials.replace(/"/g,'')+'"');
+    }
+    hero.classList.toggle('emp-hero-initials',!e.photo);
+  }
   setText('empBadgeId',e.id);
   setText('empBadgeName',e.name||e.id);
   setText('empBadgeRole',e.role||'-');
