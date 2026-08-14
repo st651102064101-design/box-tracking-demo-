@@ -7557,20 +7557,34 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
    Used to live in localStorage, keyed by device — an employee moving between
    terminals (or logging in on their phone) had to re-pick their gate every
    time, and any account logging in on a shared terminal inherited whoever
-   set it last. Stored on S.gatePrefs[USER] instead, so it round-trips
-   through the same /api/state the rest of S already uses (see save() /
-   loadFromServer()) — the assignment now follows the account, and survives
-   a browser switch or a full state reload since it lives in S itself rather
-   than a separate localStorage read. S gets fully reassigned on reload
-   (loadFromServer() does S=normalizeState(d)), so this reads S.gatePrefs
-   fresh on every call instead of caching a reference that reload would
-   silently orphan. */
+   set it last. Moved to S.gatePrefs[USER] hoping it'd round-trip through
+   the same PUT /api/state the rest of S already uses — it didn't: stateSchema
+   (backend/src/validators/schemas.ts) never declared a `gatePrefs` key, and
+   zod silently drops unknown top-level keys on parse, so every save() quietly
+   threw the pick away server-side. It looked like it worked (S stays in
+   memory for the rest of the tab) but was gone on the next reload and never
+   followed the account anywhere else — see GET/PUT /api/gate-prefs
+   (backend/src/routes/gatePrefs.ts) for the dedicated endpoint that now
+   actually persists it, keyed by the JWT's username. loadGatePrefsFromServer()
+   fetches it once at boot into S.gatePrefs[USER]; fixedGatesRef() just reads
+   that in-memory copy the rest of the session (S gets fully reassigned on
+   reload anyway, so there's nothing stale to worry about). */
 function fixedGatesRef(){
   if(!S.gatePrefs)S.gatePrefs={};
   if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
   return S.gatePrefs[USER];
 }
-function saveFixedGates(){save();}
+function loadGatePrefsFromServer(){
+  return apiFetch('/api/gate-prefs',{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){if(!d)return;var ref=fixedGatesRef();ref.out=d.out||'';ref.in=d.in||'';})
+    .catch(function(){});
+}
+function saveFixedGates(){
+  save();
+  var ref=fixedGatesRef();
+  apiFetch('/api/gate-prefs',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({out:ref.out,in:ref.in})}).catch(function(){});
+}
 /* สถานะเครื่องอ่าน FX9600 ต่อประตู — อ่านจาก S.gateWebhookLastSeen (backend
    เขียนให้ทุกครั้งที่ webhook ถูกยิงเข้ามาแบบ secret ถูกต้อง ไม่ว่าจะมีแท็กหรือ
    heartbeat เปล่าก็ตาม ดู composeState()/routes/rfid.ts ฝั่ง backend) เขียว =
@@ -10030,6 +10044,8 @@ function restoreUiPrefs(){
 }
 
 loadFromServer().then(function(){
+  return loadGatePrefsFromServer();
+}).then(function(){
   restoreUiPrefs();
   renderAll();
   hydrateIcons(document);
