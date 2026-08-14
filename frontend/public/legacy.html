@@ -1068,7 +1068,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 <div class="navwrap"><nav id="nav">
   <span class="pill-bg" id="pillBg"></span>
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
-  <button data-tab="gateout" title="Gate ขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">Gate ขาออก</span></button>
   <button data-tab="gatein" title="Gate ขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">Gate ขาเข้า</span></button>
   <button data-tab="inventory" title="คลังกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังกล่อง</span></button>
   <button data-tab="track" title="ติดตามกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.3"/><circle cx="12" cy="12" r="3.3"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></span></span><span class="navlbl">ติดตามกล่อง</span></button>
@@ -1240,75 +1239,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <p class="muted small" id="ovEventsDesc" style="margin:0 0 10px;"></p>
   <div class="tablecard reveal"><div class="twrap"><div id="ovEvents"></div></div></div>
   <div class="pagerbar" id="pagerOvEvents"></div>
-  </div>
-</section>
-
-<!-- ===================== GATE OUT ===================== -->
-<section class="tab" id="tab-gateout">
-  <div class="hero">
-    <div class="eyebrow reveal">Outbound</div>
-    <h1 class="h-title reveal d1">ผ่านประตู<br>ออกได้เลย</h1>
-    <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วยิงบาร์โค้ด — ระบบผูกประตู·คลังต้นทาง·DO·PO·รถ·คนขับ ให้ทุกกล่องในรอบเดียว</p>
-  </div>
-
-  <div class="card hover reveal">
-    <h3>ใบส่งของ · ข้อมูลรถ</h3>
-    <p class="desc">ตั้งค่าก่อนยิง — ข้อมูลชุดนี้จะผูกกับทุกกล่องที่ออกในรอบนี้ ใช้ย้อนรอยภายหลังได้</p>
-    <div id="outGateBar" style="display:flex;align-items:center;gap:10px;background:var(--accentSoft);border:.5px solid var(--accent);border-radius:14px;padding:12px 16px;margin-bottom:18px;">
-      <span style="font-size:18px;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></span>
-      <div style="flex:1;">
-        <div style="font-size:12px;font-weight:600;color:var(--accentInk);letter-spacing:.04em;">ประตูประจำเครื่องนี้</div>
-        <div id="outGateDisplay" style="font-weight:700;font-size:16px;margin-top:1px;">— ยังไม่ได้ตั้งค่า —</div>
-      </div>
-      <button class="btn ghost sm" id="outGateChangeBtn" onclick="pickGate('out')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
-    </div>
-    <input type="hidden" id="outGate">
-    <div id="outGateHint"></div>
-    <div class="grid g3">
-      <div class="field"><label>เลขที่ DO (สร้างอัตโนมัติ)</label>
-        <div class="auto-tag-row">
-          <input id="doNo" readonly>
-          <button type="button" class="btn ghost sm" id="btnOverrideDoNo">แก้เอง</button>
-        </div>
-      </div>
-      <div class="field"><label>เลขที่ PO (สร้างอัตโนมัติ)</label>
-        <div class="auto-tag-row">
-          <input id="poNo" readonly>
-          <button type="button" class="btn ghost sm" id="btnOverridePoNo">แก้เอง</button>
-        </div>
-      </div>
-      <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
-      <div class="field"><label>กำหนดคืนภายใน (วันที่)</label><div id="doReturnDatePreview" class="tag">เลือกลูกค้าก่อน</div></div>
-      <div class="field" style="display:none;"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
-      <div class="field"><label>ทะเบียนรถ</label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
-      <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
-      <div class="field"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
-      <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
-    </div>
-    <div id="doLookupHint" style="margin-top:14px;"></div>
-    <div id="outVehicleQuick"></div>
-  </div>
-
-  <div class="gatebox reveal d1" id="gateOutBox">
-    <div class="scanline"></div>
-    <div class="geyebrow">GATE · OUTBOUND</div>
-    <h3>ประตูสแกนขาออก</h3>
-    <div class="gsub">ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ</div>
-    <div class="pad">
-      <input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off">
-      <button class="scanbtn" id="btnScanOut">สแกน</button>
-    </div>
-    <div class="quick" id="quickOut"></div>
-    <div class="scanresult" id="resultOut"></div>
-  </div>
-
-  <div class="row" style="margin-top:22px;">
-    <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
-    <button class="btn ghost" id="btnAllocateSuggest" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
-    
-    <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
-    <button class="btn ghost" onclick="exportGateOutExcel()" title="ส่งออกประวัติกล่องที่ผ่าน Gate ขาออกทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-    <span class="muted small" id="outCount"></span>
   </div>
 </section>
 
@@ -3464,7 +3394,6 @@ function switchTab(name){
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
-  if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
@@ -3720,22 +3649,6 @@ setTimeout(function(){refreshTagId();
   var bo=$('#btnOverrideTag');if(bo)bo.addEventListener('click',function(){var t=$('#bTag');
     if(t.readOnly){t.readOnly=false;t._override=true;t.style.opacity='1';t.focus();t.select();bo.textContent='ใช้ Auto';}
     else{t.readOnly=true;t._override=false;t.style.opacity='';bo.textContent='แก้เอง';refreshTagId();}});},120);
-
-/* ===== DO / PO number preview (auto-generated, read-only unless overridden) =====
-   Both follow the same PREFIX-YYYY-MM-DD-HHMMSS pattern and both stay fully
-   user-editable via their own "แก้เอง" toggle — auto-generation is just the
-   default, never a hard lock. */
-function nextDoNoPreview(){return genDocNo('DO');}
-function nextPoNoPreview(){return genDocNo('PO');}
-function refreshDoNoPreview(){var t=$('#doNo');if(t&&!t._override)t.value=nextDoNoPreview();}
-function refreshPoNoPreview(){var t=$('#poNo');if(t&&!t._override)t.value=nextPoNoPreview();}
-setTimeout(function(){refreshDoNoPreview();refreshPoNoPreview();
-  var bo=$('#btnOverrideDoNo');if(bo)bo.addEventListener('click',function(){var t=$('#doNo');
-    if(t.readOnly){t.readOnly=false;t._override=true;t.style.opacity='1';t.focus();t.select();bo.textContent='ใช้ Auto';}
-    else{t.readOnly=true;t._override=false;t.style.opacity='';bo.textContent='แก้เอง';refreshDoNoPreview();}});
-  var bp=$('#btnOverridePoNo');if(bp)bp.addEventListener('click',function(){var t=$('#poNo');
-    if(t.readOnly){t.readOnly=false;t._override=true;t.style.opacity='1';t.focus();t.select();bp.textContent='ใช้ Auto';}
-    else{t.readOnly=true;t._override=false;t.style.opacity='';bp.textContent='แก้เอง';refreshPoNoPreview();}});},120);
 
 /* ===== BOX REGISTRATION MODE SWITCHER ===== */
 var boxRegMode = 'single'; // 'single' | 'batch'
@@ -6251,7 +6164,7 @@ function smarttraceLogout(){
 window.smarttraceLogout=smarttraceLogout;
 function setCurrentUser(name){
   USER=name;try{localStorage.setItem('smarttrace_user',USER);}catch(e){}
-  setv('outRecorder',USER);setv('inRecorder',USER);renderAll();}
+  setv('inRecorder',USER);renderAll();}
 window.setCurrentUser=setCurrentUser;
 /* บัญชีปัจจุบัน — คลิกชิป "who" แล้วเปิดบัตรพนักงานเหมือนหน้า Setup > พนักงาน
    เลย (openEmpBadge) แทนเมนู dropdown เดิม ให้เห็นข้อมูลตัวเองแบบเดียวกับที่
@@ -6678,6 +6591,11 @@ function boxReceiveTs(b){
                  ties & no-expiry boxes fall back to FIFO by receive time.
    mode 'fifo' → oldest received first.
    Only AVAILABLE boxes (status 'warehouse') qualify.
+   Used by availableQtyForType() only now — the "แนะนำหยิบ (FIFO/FEFO)" modal
+   and the Pick List picking-sheet flow that used to sit above the deleted
+   Gate ขาออก page (openAllocateModal/openPickListModal and friends) were
+   removed with it since their only exit was queueing into the Gate Out scan
+   queue; outbound now happens exclusively through the PDA app.
    ============================================================ */
 function allocateSuggest(typeId, qty, mode, excludeTags){
   mode=mode||'fefo';qty=Math.max(0,qty|0);
@@ -6706,194 +6624,6 @@ function availableQtyForType(typeId){
 }
 window.availableQtyForType=availableQtyForType;
 window.allocateSuggest=allocateSuggest;
-
-function openAllocateModal(){
-  var types=Object.values(S.boxtypes);
-  var typeOpts='<option value="">— ทุกประเภท —</option>'+types.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
-  openModal(
-    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบกล่อง (FIFO / FEFO)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-      +'<p class="muted small" style="margin:0 0 14px;">เลือกประเภทและจำนวน ระบบจะจัดลำดับกล่องที่ควรหยิบก่อน — <b>FEFO</b> ใช้วันหมดอายุ, <b>FIFO</b> ใช้ลำดับเข้าคลัง (เฉพาะกล่องสถานะ "พร้อมส่งออก")</p>'
-      +'<div class="grid g3" style="margin-bottom:14px;">'
-        +'<div class="field"><label>ประเภทกล่อง</label><select id="alType">'+typeOpts+'</select></div>'
-        +'<div class="field"><label>จำนวนที่ต้องจ่าย</label><input id="alQty" type="number" min="1" value="5"></div>'
-        +'<div class="field"><label>วิธีจัด</label><select id="alMode"><option value="fefo">FEFO — หมดอายุก่อน ออกก่อน</option><option value="fifo">FIFO — เข้าก่อน ออกก่อน</option></select></div>'
-      +'</div>'
-      +'<div id="alResult"></div>'
-    +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
-      +'<button class="btn accent" id="alQueueBtn">'+IC('pin')+' ไปหยิบตามพิกัด</button></div>'
-  );
-  var sheet=$('#modalSheet');if(sheet)sheet.style.width='640px';
-  function refresh(){
-    var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
-    var list=allocateSuggest(type,qty,mode);
-    $('#alResult').innerHTML=list.length
-      ?'<div class="twrap" style="max-height:46vh;"><table><thead><tr><th>#</th><th>บาร์โค้ด</th><th>ประเภท</th><th>Lot</th><th>หมดอายุ</th><th>เข้าคลังเมื่อ</th><th>ตำแหน่ง</th></tr></thead><tbody>'
-        +list.map(function(b,i){return '<tr><td class="mono">'+(i+1)+'</td><td class="mono"><b>'+esc(b.tag)+'</b></td><td>'+esc(typeName(b.type))+'</td><td>'+esc(b.lot||'-')+'</td><td>'+(b.expiry?esc(b.expiry)+' '+expiryPill(b):'<span class="muted">-</span>')+'</td><td class="small">'+fmtTs(boxReceiveTs(b))+'</td><td class="small">'+locShort(b.location)+'</td></tr>';}).join('')
-        +'</tbody></table></div>'
-      :'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "พร้อมส่งออก" ตามเงื่อนไขนี้</div>';
-  }
-  ['alType','alQty','alMode'].forEach(function(id){var e=$('#'+id);if(e){e.addEventListener('input',refresh);e.addEventListener('change',refresh);}});
-  /* "ไปหยิบตามพิกัด" used to push the suggested tags straight into the
-     Gate-Out scan queue (pendingOut) on click — marking them as shipped
-     before anyone had actually laid hands on a box, let alone scanned its
-     barcode/RFID tag. It now hands the type+qty+mode off to the real Pick
-     List flow instead, which groups the same boxes by shelf location, sorts
-     them into a walking route, and only lets a box reach the scan queue once
-     the operator has physically found it (scanned) or explicitly force-ticked
-     it — see openPickListModal / buildPickRows below. */
-  $('#alQueueBtn').onclick=function(){
-    var type=val('alType'),qty=num('alQty')||0,mode=val('alMode');
-    if(!type)return toast('เลือกประเภทกล่อง',null,'err');
-    if(!qty||qty<1)return toast('กรอกจำนวนให้ถูกต้อง',null,'err');
-    if(!availableQtyForType(type))return toast('ไม่มีกล่องสถานะ "พร้อมส่งออก" ตามเงื่อนไขนี้',null,'err');
-    closeModal();
-    openPickListModal([{type:type,qty:qty,mode:mode}]);
-  };
-  refresh();
-}
-window.openAllocateModal=openAllocateModal;
-
-/* ============================================================
-   PICK LIST / LOCATOR TABLE — location-grouped, route-sorted
-   picking sheet, with per-location scan-confirm or manual tick.
-   ============================================================ */
-/* Route sort key per shelf location. Warehouse walking order: Zone → Rack
-   (numeric) → Shelf/Slot, using a serpentine (S-shape) pattern — on even
-   racks staff walk shelves low→high, on odd racks high→low — so the picker
-   never doubles back down the same aisle. This is the standard low-cost
-   "pick-path optimization" pattern (no extra hardware needed, same data
-   model already captured by the Location/Bin fields + Zebra location
-   barcode labels already in this app). */
-function locRouteKey(loc){loc=loc||{};return {zone:loc.zone||'',rack:loc.rack||'',rackNum:parseFloat(loc.rack)||0,shelf:loc.shelf||'',slot:loc.slot||''};}
-function compareRoute(ka,kb){
-  if(ka.zone!==kb.zone)return ka.zone<kb.zone?-1:1;
-  if(ka.rackNum!==kb.rackNum)return ka.rackNum-kb.rackNum;
-  var serp=(Math.floor(ka.rackNum)%2===0)?1:-1; // even rack: asc, odd rack: desc (serpentine)
-  if(ka.shelf!==kb.shelf)return serp*(ka.shelf<kb.shelf?-1:1);
-  if(ka.slot!==kb.slot)return serp*(ka.slot<kb.slot?-1:1);
-  return 0;
-}
-var pickLines=[]; // {type, qty}
-var pickRows=null; // built by generatePickList(): [{key, loc, locCode, type, tags:[...], confirmed:{tag:true}, forced:bool}]
-var pickShortfalls=[];
-function openPickListModal(presetLines){
-  pickLines=(presetLines&&presetLines.length)?presetLines.slice():[];pickRows=null;
-  var types=Object.values(S.boxtypes);
-  var typeOpts='<option value="">— เลือกประเภทกล่อง —</option>'+types.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>';}).join('');
-  openModal(
-    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.2 12 21 12 21Z"/><circle cx="12" cy="10" r="2.4"/></svg></span> รายการหยิบตามพิกัด (Pick List)</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-      +'<p class="muted small" style="margin:0 0 14px;">เพิ่มประเภท+จำนวนที่ต้องหยิบ ระบบจะเลือกกล่องให้ตาม FEFO/FIFO อัตโนมัติ (เฉพาะกล่องที่อยู่ในคลังเท่านั้น) แล้วจัดกลุ่มตามพิกัดชั้นวาง เรียงเส้นทางเดินแบบ Zone → Rack → Shelf (S-shape) ให้หยิบเที่ยวเดียวครบ</p>'
-      +'<div class="grid g3" style="margin-bottom:10px;">'
-        +'<div class="field"><label>ประเภทกล่อง</label><select id="plType">'+typeOpts+'</select></div>'
-        +'<div class="field"><label>จำนวนที่ต้องการ</label><input id="plQty" type="number" min="1" value="5"><div id="plQtyHint" class="tag" style="margin-top:5px;"></div></div>'
-        +'<div class="field" style="align-self:flex-end;"><button class="btn accent" id="plAddLine" style="width:100%;">'+IC('plus')+' เพิ่มรายการ</button></div>'
-      +'</div>'
-      +'<div id="plLines"></div>'
-      +'<div class="row" style="margin:14px 0;"><button class="btn pos" id="plBuild">'+IC('plus')+' สร้าง Pick List</button></div>'
-      +'<div id="plResult"></div>'
-    +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
-      +'<button class="btn accent" id="plQueueBtn" disabled>'+IC('plus')+' หยิบครบแล้ว → เพิ่มเข้าคิวขาออก</button></div>'
-  );
-  var sheet=$('#modalSheet');if(sheet)sheet.style.width='760px';
-  function renderLines(){
-    $('#plLines').innerHTML=pickLines.length?('<div class="chiplist">'+pickLines.map(function(l,i){
-      return '<span class="chip2"><span>'+esc(typeName(l.type))+' × '+l.qty+'</span><b onclick="removePickLine('+i+')" title="เอาออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';
-    }).join('')+'</div>'):'<p class="muted small" style="margin:0;">ยังไม่มีรายการ — เพิ่มอย่างน้อย 1 ประเภทก่อนสร้าง Pick List</p>';
-  }
-  window.removePickLine=function(i){pickLines.splice(i,1);renderLines();refreshQtyHint();};
-  function refreshQtyHint(){
-    var type=val('plType');var h=$('#plQtyHint');if(!h)return;
-    if(!type){h.textContent='';return;}
-    var avail=availableQtyForType(type);
-    var already=pickLines.filter(function(l){return l.type===type;}).reduce(function(s,l){return s+l.qty;},0);
-    h.innerHTML='พร้อมจ่ายจริง <b>'+avail+'</b> ใบ'+(already?' · ขอไปแล้ว '+already+' ใบ (เหลือ '+Math.max(0,avail-already)+')':'');
-  }
-  $('#plType').addEventListener('change',refreshQtyHint);
-  refreshQtyHint();
-  $('#plAddLine').onclick=function(){
-    var type=val('plType'),qty=num('plQty')||0;
-    if(!type)return toast('เลือกประเภทกล่อง',null,'err');
-    if(!qty||qty<1)return toast('กรอกจำนวนให้ถูกต้อง',null,'err');
-    var already=pickLines.filter(function(l){return l.type===type;}).reduce(function(s,l){return s+l.qty;},0);
-    var avail=availableQtyForType(type);
-    if(already+qty>avail)return toast('เกินจำนวนที่มีในสต็อก',typeName(type)+' พร้อมจ่ายจริง '+avail+' ใบ (เฉพาะกล่องในคลัง) — ตอนนี้ขอไปแล้ว '+already+' ใบ','err');
-    pickLines.push({type:type,qty:qty});renderLines();setv('plQty','5');refreshQtyHint();
-  };
-  $('#plBuild').onclick=function(){
-    if(!pickLines.length)return toast('เพิ่มรายการก่อนอย่างน้อย 1 ประเภท',null,'err');
-    buildPickRows();renderPickTable();
-  };
-  renderLines();
-  /* handed off from "ไปหยิบตามพิกัด" with a line already chosen — skip
-     straight to the picking table instead of an empty form the operator
-     would just have to fill in again. */
-  if(pickLines.length){buildPickRows();renderPickTable();}
-}
-window.openPickListModal=openPickListModal;
-
-function buildPickRows(){
-  var groups={};
-  var usedByType={}; // type -> [tags already claimed by an earlier line in this build]
-  var shortfalls=[];
-  pickLines.forEach(function(line){
-    var excl=usedByType[line.type]||[];
-    var tags=allocateSuggest(line.type,line.qty,line.mode||'fefo',excl);
-    usedByType[line.type]=excl.concat(tags.map(function(b){return b.tag;}));
-    if(tags.length<line.qty)shortfalls.push(typeName(line.type)+': ขอ '+line.qty+' ใบ แต่พร้อมจ่ายจริงเหลือ '+tags.length+' ใบ');
-    tags.forEach(function(b){
-      var loc=b.location||{};var locCode=locationCode(loc)||'(ไม่ระบุพิกัด)';
-      var gk=line.type+'||'+locCode;
-      if(!groups[gk])groups[gk]={key:gk,loc:loc,locCode:locCode,type:line.type,tags:[],confirmed:{},forced:false};
-      groups[gk].tags.push(b.tag);
-    });
-  });
-  pickRows=Object.values(groups).sort(function(a,c){return compareRoute(locRouteKey(a.loc),locRouteKey(c.loc));});
-  pickShortfalls=shortfalls;
-}
-function pickRowDone(row){return row.forced||row.tags.every(function(t){return row.confirmed[t];});}
-function renderPickTable(){
-  var box=$('#plResult');if(!box)return;
-  var shortfallHtml=(pickShortfalls&&pickShortfalls.length)?('<div class="banner warn" style="margin-bottom:10px;">สต็อกเปลี่ยนระหว่างทาง — บางรายการได้ไม่ครบ:<br>'+pickShortfalls.map(esc).join('<br>')+'</div>'):'';
-  if(!pickRows||!pickRows.length){box.innerHTML=shortfallHtml+'<div class="banner warn" style="margin:0;">ไม่มีกล่องสถานะ "พร้อมส่งออก" ตรงเงื่อนไขนี้</div>';$('#plQueueBtn').disabled=true;return;}
-  box.innerHTML=shortfallHtml+'<div class="twrap" style="max-height:48vh;"><table><thead><tr><th>🟩 พิกัดชั้นวาง</th><th>📦 ชนิดกล่อง</th><th>🔢 จำนวน</th><th>🎯 ผลการหยิบ</th></tr></thead><tbody>'
-    +pickRows.map(function(row,ri){
-      var done=pickRowDone(row);var doneCnt=row.tags.filter(function(t){return row.confirmed[t];}).length;
-      return '<tr'+(done?' style="opacity:.55;"':'')+'>'
-        +'<td class="mono"><b>'+esc(row.locCode)+'</b>'+(row.loc&&row.loc.wh?'<div class="tag">'+esc(whName(row.loc.wh))+'</div>':'')+'</td>'
-        +'<td>'+esc(typeName(row.type))+'</td>'
-        +'<td class="r mono">'+row.tags.length+' ใบ'+(done?'':' <span class="muted small">('+doneCnt+'/'+row.tags.length+' สแกนแล้ว)</span>')+'</td>'
-        +'<td>'+(done
-            ?'<span class="pill ok">'+IC('check','tick')+' หยิบครบแล้ว</span>'
-            :'<input id="plScan'+ri+'" placeholder="สแกนยืนยันบาร์โค้ด" autocomplete="off" style="width:150px;display:inline-block;margin-right:6px;"> '
-              +'<label class="small" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" onchange="forcePickRow('+ri+',this.checked)"> หยิบครบแล้ว</label>')
-        +'</td></tr>';
-    }).join('')
-    +'</tbody></table></div>';
-  pickRows.forEach(function(row,ri){
-    var inp=document.getElementById('plScan'+ri);if(!inp)return;
-    function confirmScan(){var raw=inp.value.trim();if(!raw)return;var tag=resolveTag(raw)||raw;
-      if(row.tags.indexOf(tag)<0)return toast('กล่องนี้ไม่อยู่ในรายการหยิบตำแหน่งนี้',tag,'err');
-      row.confirmed[tag]=true;inp.value='';renderPickTable();}
-    inp.addEventListener('keydown',function(e){if(e.key==='Enter')confirmScan();});
-    autoScanBind(inp,confirmScan);
-  });
-  window.forcePickRow=function(ri,checked){pickRows[ri].forced=checked;renderPickTable();};
-  var allDone=pickRows.every(pickRowDone);
-  var btn=$('#plQueueBtn');btn.disabled=!allDone;
-  btn.onclick=function(){
-    var tags=[];pickRows.forEach(function(row){row.tags.forEach(function(t){if(tags.indexOf(t)<0)tags.push(t);});});
-    var stillOk=tags.filter(function(t){var b=S.boxes[t];return b&&b.status==='warehouse'&&!isStagingLoc(b.location||{});});
-    var dropped=tags.length-stillOk.length;
-    stillOk.forEach(function(t){if(pendingOut.indexOf(t)<0)pendingOut.push(t);});
-    closeModal();switchTab('gateout');renderOutResult();
-    if(dropped>0)toast('บางใบถูกใช้ไปก่อนแล้ว',dropped+' ใบไม่พร้อมจ่ายแล้ว ณ ตอนนี้ — เพิ่มเข้าคิวได้ '+stillOk.length+' ใบ','warn');
-    else toast('เพิ่มเข้าคิวขาออกแล้ว',stillOk.length+' ใบจาก '+pickRows.length+' พิกัด (ยิงจริงเพื่อยืนยันได้)','ok');
-  };
-}
 
 /* ============================================================
    LOCATION / BIN BARCODE LABELS  (scan-to-verify the shelf)
@@ -7659,7 +7389,14 @@ function refreshGateDisplays(){
   ['out','in'].forEach(function(dir){
     var fixedGates=fixedGatesRef();
     var g=fixedGates[dir];
-    if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
+    /* gs.length>0 required before treating the saved gate as "gone" — gs comes from
+       S.gates, which can be transiently empty right after adoptServerState() replaces
+       S wholesale from a sync payload that doesn't carry gates (stateSig() doesn't
+       diff on gates, so a same-signature sync can still land with gates omitted).
+       Without this guard, that transient emptiness looked identical to "user deleted
+       the gate", so this line wiped the saved choice AND persisted the wipe to the
+       server — the reported "ตั้งประตูแล้วรีเฟรชยังจำอยู่ แต่ผ่านไปพักหนึ่งกลับไม่ได้เลือก" bug. */
+    if(g&&gs.length&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config actually changed) — drop stale value instead of using it silently */
     if(!g){
       var dirGates=gateNumsForDir(dir);
       if(dirGates.length===1){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction — auto-select instead of forcing a manual pick */
@@ -8010,218 +7747,6 @@ function renderVehicleQuick(){
   renderVehicleDatalist();
   renderVehicleTypeField('out');renderVehicleTypeField('in');
 }
-function lookupDO(){
-  var doNo=val('doNo');if(!doNo)return;
-  var rec=S.doRecords[doNo];
-  var hint=$('#doLookupHint');if(!hint)return;
-  if(!rec){hint.innerHTML='';return;}
-  if(!val('doCustomer'))setv('doCustomer',rec.customer);
-  var poEl=$('#poNo');if(poEl&&!poEl._override){setv('poNo',rec.po||'');poEl._override=true;var pob=$('#btnOverridePoNo');if(pob)pob.textContent='ใช้ Auto';}
-  if(!val('outPlate'))setv('outPlate',rec.plate||'');
-  if(!val('outDriver'))setv('outDriver',rec.driver||'');
-  if(!val('outDriverTel'))setv('outDriverTel',rec.tel||'');
-  if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
-  hint.innerHTML='<div class="banner info" style="margin-bottom:0;"><span class="bi"><span class="svgi pulse"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5c.5 3.4 1.6 4.5 5 5-3.4.5-4.5 1.6-5 5-.5-3.4-1.6-4.5-5-5 3.4-.5 4.5-1.6 5-5Z"/><path d="M18.5 13.5c.25 1.6.8 2.15 2.5 2.5-1.7.35-2.25.9-2.5 2.5-.25-1.6-.8-2.15-2.5-2.5 1.7-.35 2.25-.9 2.5-2.5Z"/></svg></span></span><div>พบใบส่งของเดิม <b>'+esc(doNo)+'</b> — ดึงลูกค้า/รถมาให้แล้ว</div>'
-    +'<button type="button" class="btn ghost sm" onclick="$(\'#doLookupHint\').innerHTML=\'\';">ซ่อน</button></div>';
-}
-window.lookupDO=lookupDO;
-/* ===== GATE OUT ===== */
-function buildQuickOut(){
-  var wh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&!isStagingLoc(b.location||{});}).slice(0,6);
-  $('#quickOut').innerHTML=wh.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
-    wh.map(function(b){return '<button onclick="scanOut(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
-}
-function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);if(!tag)return;
-  var b=S.boxes[tag];
-  if(!b){$('#resultOut').innerHTML='<div class="banner bad">ไม่พบกล่อง '+esc(tag)+' ในระบบ'+(looksThaiGarbled(raw)?' — คีย์บอร์ดอาจอยู่โหมดภาษาไทย กรุณาเปลี่ยนเป็นภาษาอังกฤษแล้วสแกนใหม่':'')+'</div>';setv('scanOut','');return;}
-  if(b.status==='out'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ออกไปแล้ว (ยังไม่คืน)</div>';setv('scanOut','');return;}
-  if(b.status==='lost'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' ถูกตีเป็นสูญหาย</div>';setv('scanOut','');return;}
-  if(b.status==='pending'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง (สแกนเข้าครั้งแรกก่อน)</div>';setv('scanOut','');return;}
-  if(b.status==='hold'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้</div>';setv('scanOut','');return;}
-  if(b.status==='damage'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' สถานะชำรุด (Damage) — จ่ายออกไม่ได้</div>';setv('scanOut','');return;}
-  if(pendingOut.indexOf(tag)<0)pendingOut.push(tag);
-  setv('scanOut','');renderOutResult();$('#scanOut').focus();
-}
-window.scanOut=scanOut;
-/* สภาพกล่องตอนจ่ายออก: เดิมใช้ค่าเดียวทับทั้งคิว ทั้งที่ยิงมาหลายใบพร้อมกันอาจมี
-   ใบไหนชำรุด/มีตำหนิปนอยู่ก็ได้ — เก็บแยกรายใบไว้ใน map นี้ (key=tag) ค่าเริ่มต้น
-   'good' ถ้ายังไม่เคยเลือก */
-var outConditionMap={};
-var OUT_COND_LABEL={good:'สมบูรณ์',minor:'มีตำหนิเล็กน้อย',damaged:'ชำรุด'};
-function setOutCondition(t,v){outConditionMap[t]=v;}
-window.setOutCondition=setOutCondition;
-/* Per-box ship-date override (key=tag, value=ISO ts) — set only when the box
-   was queued via the Gate ขาออก .xlsx/.csv import and its file supplied a
-   parseable Timestamp column. saveOutbound() uses this instead of "now" so
-   รายงานลูกค้าส่งของช้า (which reads b.outAt) counts lateness from the real
-   ship date on file, not from whenever the import happened to be confirmed. */
-var pendingOutTsMap={};
-/* Per-box DO/PO/recorder overrides — same idea as pendingOutTsMap, set only
-   when a Gate ขาออก import file supplied its own เลขที่ DO/PO/ผู้บันทึก column
-   for that row. saveOutbound() prefers these over the single batch-wide form
-   value, so a file that genuinely mixes DO/PO numbers or recorders per row
-   isn't flattened onto whatever's typed in the form. */
-var pendingOutDoMap={};
-var pendingOutPoMap={};
-var pendingOutRecorderMap={};
-/* Per-box destination-customer override — a Gate ขาออก import file that
-   ships to several different customers in one batch (common: one truck run
-   covering multiple stops) used to be impossible to auto-ship at all,
-   because saveOutbound() only ever had ONE "ลูกค้าปลายทาง" field for the
-   whole queue. Each row now resolves/auto-creates its own customer during
-   import (see processOutRows) and stores it here; saveOutbound() prefers
-   this over the single top-level doCustomer field per box, same pattern as
-   pendingOutDoMap/PoMap/RecorderMap. */
-var pendingOutCustMap={};
-/* Per-box "ยืมได้กี่วัน" override — a Gate ขาออก import file that supplies its
-   own จำนวนวันที่ยืมได้ per row computes THAT box's due date from its actual
-   ship date + N days, instead of falling back to the customer's fixed
-   returnDate policy (custDueTs) that every other shipment to that customer
-   shares. Lets one file mix "customer's usual policy" rows (column left
-   blank) with "this batch is special, N days only" rows. */
-var pendingOutReturnDaysMap={};
-function outConditionSelectHtml(t){
-  var cur=outConditionMap[t]||'good';
-  return '<select class="chip2-cond" onchange="setOutCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
-    +['good','minor','damaged'].map(function(v){return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+OUT_COND_LABEL[v]+'</option>';}).join('')
-    +'</select>';
-}
-function renderOutResult(){
-  /* "แนะนำหยิบ (FIFO/FEFO)" only ever suggests boxes currently status
-     'warehouse' — with none on hand there's nothing it could ever
-     recommend, so hide it instead of showing a button that always opens to
-     an empty result. */
-  var allocBtn=$('#btnAllocateSuggest');
-  if(allocBtn)allocBtn.style.display=Object.values(S.boxes).some(function(b){return b.status==='warehouse';})?'':'none';
-  $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
-  if(!pendingOut.length){$('#resultOut').innerHTML='';return;}
-  $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
-}
-function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];renderOutResult();}
-window.unqueueOut=unqueueOut;
-document.getElementById('doNo').addEventListener('blur',lookupDO);
-document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
-/* ===== Due-date preview: the return deadline now lives entirely on the
-   customer master (S.customers[x].returnDate) — this just reflects it
-   read-only under #doReturnDatePreview, refreshed whenever the customer
-   selection changes. No per-shipment override; ship-date no longer factors
-   into the calc at all (see custDueTs). ===== */
-window.refreshDueDatePreview=function(){
-  var preview=document.getElementById('doReturnDatePreview');if(!preview)return;
-  var c=S.customers[val('doCustomer')];
-  if(c&&c.returnDate)preview.innerHTML='<b>'+esc(c.returnDate)+'</b>';
-  else preview.textContent='เลือกลูกค้าก่อน';
-};
-(function(){var cs=document.getElementById('doCustomer');if(!cs)return;
-  cs.addEventListener('change',window.refreshDueDatePreview);
-})();
-$('#btnScanOut').onclick=function(){scanOut();};
-$('#scanOut').addEventListener('keydown',function(e){if(e.key==='Enter')scanOut();});
-autoScanBind($('#scanOut'),scanOut);
-
-/* ===== saveOutbound: validate → commit boxes/history/events → persist →
-   audit → reset the form → auto-print the ZPL Delivery-Order label ===== */
-function saveOutbound(){
-  if(requireCustomerSetup())return;
-  if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
-  var cust=val('doCustomer');
-  /* A Gate ขาออก import file that ships to several different customers in
-     one batch (multi-stop truck run) resolves/auto-creates its own customer
-     PER ROW during import (pendingOutCustMap) instead of forcing everything
-     onto the single "ลูกค้าปลายทาง" field above — that field now only needs
-     a value for boxes that didn't come with their own resolved customer
-     (manual scanning, or an import row where the destination column was
-     blank/unmapped). */
-  var missingCust=pendingOut.some(function(t){return !pendingOutCustMap[t]&&!cust;});
-  if(missingCust)return toast('เลือกลูกค้าปลายทาง','บางใบไม่มีลูกค้าปลายทางจากไฟล์ — เลือกลูกค้าด้านบนสำหรับใบที่เหลือ','err');
-  /* ผังงานเฟส 1 กำหนดให้บันทึกสภาพกล่องตอนยิงออก — เก็บไว้ทั้งบนกล่องและใน
-     history เพื่อเทียบตอนรับคืนว่ากล่องเสียหายระหว่างอยู่กับลูกค้าหรือออกไปเสียแล้ว
-     แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
-     ค่าเดียวทับทั้งคิวเหมือนเดิม */
-  var gate=val('outGate');if(!gate)return toast('เลือกประตูขาออก',null,'err');
-  var recorder=val('outRecorder');if(!recorder)return toast('กรอกชื่อผู้บันทึก',null,'err');
-  var doNoInput=$('#doNo');var doNo=val('doNo');
-  if(!doNoInput._override){doNo=nextDoNoPreview();}
-  if(!doNo)return toast('กรอกเลขที่ DO',null,'err');
-  var poNoInput=$('#poNo');var po=val('poNo');
-  if(!poNoInput._override){po=nextPoNoPreview();}
-  var plate=val('outPlate'),driver=val('outDriver'),tel=val('outDriverTel'),wh=gateWh(gate);
-  if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
-  var outTs=iso();
-  /* Boxes queued from a Gate ขาออก import that supplied a parseable Timestamp
-     column ship with THAT date instead of "now" (pendingOutTsMap), so aging
-     reports (รายงานลูกค้าส่งของช้า, due-date) count from the file's real ship
-     date rather than whenever the import happened to get confirmed. Likewise
-     DO/PO/recorder/customer fall back to whatever the import file supplied
-     per row (pendingOutDoMap/pendingOutPoMap/pendingOutRecorderMap/
-     pendingOutCustMap) before falling back to this batch's single form
-     value — รอบคืน (return days) follows whichever customer the box actually
-     ships to, not the form's customer if they differ. */
-  var extraDoRecords={};
-  /* Representative due date for the printed DO label/toast — the label is
-     ONE physical piece of paper for the batch, so it can't show a different
-     due date per box the way b.dueDate (set per-box below) correctly does
-     when a multi-customer import gives boxes different return-day policies.
-     Uses the top-level form customer as "the" customer for that purpose,
-     same as it always did before per-box due dates existed. */
-  var batchDueDateStr=ddmmyyyy(new Date(custDueTs(cust,outTs)));
-  pendingOut.forEach(function(t){var b=S.boxes[t];var cond=outConditionMap[t]||'good';
-    var custForBox=pendingOutCustMap[t]||cust;
-    var tsForBox=pendingOutTsMap[t]||outTs;
-    var doForBox=pendingOutDoMap[t]||doNo;
-    var poForBox=pendingOutPoMap[t]||po;
-    var recorderForBox=pendingOutRecorderMap[t]||recorder;
-    var returnDaysForBox=pendingOutReturnDaysMap[t];
-    var dueTs=(returnDaysForBox!=null)
-      ?new Date(new Date(tsForBox).getTime()+returnDaysForBox*86400000).toISOString()
-      :custDueTs(custForBox,tsForBox);
-    var dueDateStr=ddmmyyyy(new Date(dueTs));
-    b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.lastSeenAt=tsForBox;b.outCondition=cond;
-    b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,platform:'web'});
-    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,platform:'web'});
-    if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel};});
-  var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};pendingOutReturnDaysMap={};
-  rememberVehicle(plate,driver,val('outVehicle'),tel);
-  if(cust){S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver,tel:tel};}
-  Object.keys(extraDoRecords).forEach(function(k){S.doRecords[k]=extraDoRecords[k];});
-  save();
-  patchAuditGateOut(auditTags,doNo,po,cust,plate,driver,recorder);
-  ['outPlate','outDriver','outDriverTel'].forEach(function(i){setv(i,'');});
-  if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
-  doNoInput._override=false;doNoInput.readOnly=true;doNoInput.style.opacity='';
-  var doOverrideBtn=$('#btnOverrideDoNo');if(doOverrideBtn)doOverrideBtn.textContent='แก้เอง';
-  refreshDoNoPreview();
-  poNoInput._override=false;poNoInput.readOnly=true;poNoInput.style.opacity='';
-  var poOverrideBtn=$('#btnOverridePoNo');if(poOverrideBtn)poOverrideBtn.textContent='แก้เอง';
-  refreshPoNoPreview();
-  var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
-  renderVehicleQuick();
-  /* Auto-print the Delivery Order label straight to the Zebra on the warehouse LAN.
-     Fire-and-forget: the outbound is already saved, so a printer/LAN failure never
-     blocks the workflow — it just warns. Works fully offline (no external internet). */
-  printDeliveryOrderLabel(doNo, custName(cust), batchDueDateStr, n);
-  toast('ส่งออกสำเร็จ',n+' ใบ → '+custName(cust)+' · '+doNo);renderAll();$('#scanOut').focus();
-}
-$('#btnShipOut').onclick=saveOutbound;
-
-/* ล้างข้อมูลหน้า Gate ขาออก — เคลียร์คิวสแกนที่ยังไม่ยืนยัน + ข้อมูลรถ/คนขับที่กรอกไว้
-   (ยังคงประตูประจำเครื่อง และ DO/PO ที่ระบบสร้างให้อัตโนมัติไว้) ถามยืนยันถ้ามีคิวค้าง */
-function clearGateOut(){
-  function doClear(){
-    pendingOut=[];outConditionMap={};
-    ['outPlate','outDriver','outVehicle','outDriverTel'].forEach(function(i){setv(i,'');});
-    var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
-    renderOutResult();renderVehicleQuick();
-    toast('ล้างข้อมูลขาออกแล้ว','คิวสแกนและข้อมูลรถถูกล้าง — ประตู/DO ยังคงเดิม','info');
-    var so=$('#scanOut');if(so)so.focus();
-  }
-  if(pendingOut.length){
-    confirmA('ล้างข้อมูลขาออก?','มีกล่องในคิวสแกน '+pendingOut.length+' ใบ ที่ยังไม่ได้ยืนยันส่งออก — ล้างทั้งหมดและเริ่มใหม่?','ล้างข้อมูล',true).then(function(ok){if(ok)doClear();});
-  }else doClear();
-}
-window.clearGateOut=clearGateOut;
-
 /* ===== GATE IN ===== */
 function buildQuickIn(){
   var out=Object.values(S.boxes).filter(function(b){return b.status==='out';}).slice(0,6);
@@ -8248,7 +7773,7 @@ function renderInResult(){
   if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();return;}
   $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · '+pendingIn.length+' ใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
     var isNew=(!b.cycles||b.cycles===0)&&!(b.history||[]).some(function(h){return h.dir==='out';});
-    var badge=isNew?'<span class="c2-new" title="ระบบตรวจ: กล่องใหม่จาก Supplier (รับเข้าครั้งแรก)">ใหม่</span>':'<span class="c2-new" style="background:var(--accentSoft);color:var(--accent);" title="ระบบตรวจ: กล่องเคยออกไปแล้ว = รับคืนจากลูกค้า (รอบที่ '+((b.cycles||0)+1)+')">คืน · รอบ '+((b.cycles||0)+1)+'</span>';
+    var badge=isNew?'<span class="c2-new" title="ระบบตรวจ: กล่องใหม่จาก Supplier (รับเข้าครั้งแรก)">ใหม่</span>':'<span class="c2-new" style="background:var(--accentSoft);color:var(--accentInk);" title="ระบบตรวจ: กล่องเคยออกไปแล้ว = รับคืนจากลูกค้า (รอบที่ '+((b.cycles||0)+1)+')">คืน · รอบ '+((b.cycles||0)+1)+'</span>';
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span><b onclick="unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
   if(typeof schedule==='function')schedule();
 }
@@ -8306,7 +7831,6 @@ function autoFillVehicle(plateId,vTypeId,driverId,telId){
   if(tl&&!tl.value)tl.value=v.tel||'';
 }
 $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','inVehicle','inDriver','inDriverTel');});
-$('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
 
 /* Auto-dash a Thai mobile number as it's typed — 095-000-0000 (3-3-4) —
    instead of making the operator type the dashes themselves. Reformats on
@@ -9762,8 +9286,8 @@ $('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-c
 /* ===== RENDER ALL ===== */
 function renderAll(){
   renderOverview();renderReports();renderSetup();renderTrack();
-  buildQuickOut();buildQuickIn();buildQuickTrack();
-  renderOutResult();renderInResult();renderVehicleQuick();
+  buildQuickIn();buildQuickTrack();
+  renderInResult();renderVehicleQuick();
   refreshGateDisplays();
   renderInventory();renderAuditLog();
   initSortToggles();
@@ -10399,8 +9923,11 @@ function showGateTodayList(dir){
     h+='<p class="muted small" id="gateTodayNoRes" style="display:none;text-align:center;padding:20px 0;">ไม่พบผลลัพธ์ที่ตรงกับคำค้นหา</p>';
   }
   h+='</div>';
+  /* Gate ขาออก is now handled exclusively via the PDA barcode-scanner app —
+     there's no web tab to jump to for outbound, so only offer the shortcut
+     for the inbound (ขาเข้า) direction, which still lives here. */
   h+='<div class="mfoot"><button class="btn ghost" onclick="closeModal()">ปิด</button>'
-    +'<button class="btn accent" onclick="closeModal();switchTab(\''+(isOut?'gateout':'gatein')+'\');">ไปที่ Gate '+(isOut?'ขาออก':'ขาเข้า')+'</button></div>';
+    +(isOut?'':'<button class="btn accent" onclick="closeModal();switchTab(\'gatein\');">ไปที่ Gate ขาเข้า</button>')+'</div>';
   openModal(h);
   if(evs.length)renderGateTodayRows();
 }
@@ -10473,25 +10000,11 @@ function exportTruckManifestExcel(){
 }
 window.exportTruckManifestExcel=exportTruckManifestExcel;
 
-/* Gate ขาออก/ขาเข้า Export Excel — ทั้งระบบ (ทุกครั้งที่เคยผ่าน Gate นั้นๆ ตลอด
-   ประวัติ S.events ไม่ใช่แค่คิวที่กำลังสแกนอยู่ตอนนี้) แยกไฟล์กันชัดเจน:
-   ปุ่มที่ Gate ขาออกมีแต่แถวกล่องที่ "ออก" เท่านั้น ปุ่มที่ Gate ขาเข้ามีแต่แถว
-   กล่องที่ "เข้า" (รวมกล่องใหม่ที่ลงทะเบียนตอนรับเข้า — dir 'in-new') เท่านั้น */
-function exportGateOutExcel(){
-  var rows=S.events.filter(function(e){return e.dir==='out';})
-    .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
-    .map(function(e){
-      return [barcodeCell(e.tag), typeName(e.type), e.customerName||custName(e.customer)||'-',
-        e.do||'-', e.po||'-', e.gate!=null?e.gate:'-', e.wh?whName(e.wh):'-',
-        e.plate||'-', e.driver||'-', e.tel||'-', e.recorder||'-', fmtTs(e.ts)];
-    });
-  if(!rows.length)return toast('ยังไม่มีข้อมูล','ยังไม่เคยมีกล่องผ่าน Gate ขาออกเลย','err');
-  downloadXLS('gate-ขาออก-'+dstr()+'.xlsx',
-    ['บาร์โค้ด','ประเภทกล่อง','ลูกค้า/ปลายทาง','DO','PO','ประตู','คลัง','ทะเบียนรถ','คนขับ','เบอร์โทรคนขับ','ผู้บันทึก','เวลาที่ส่งออก'],
-    rows,{barcodeCols:[0]});
-}
-window.exportGateOutExcel=exportGateOutExcel;
-
+/* Gate ขาเข้า Export Excel — ทั้งระบบ (ทุกครั้งที่เคยผ่าน Gate นั้นๆ ตลอด
+   ประวัติ S.events ไม่ใช่แค่คิวที่กำลังสแกนอยู่ตอนนี้) มีแต่แถวกล่องที่ "เข้า"
+   (รวมกล่องใหม่ที่ลงทะเบียนตอนรับเข้า — dir 'in-new') เท่านั้น. The matching
+   Gate ขาออก export was removed along with the Gate ขาออก page — outbound
+   is handled exclusively via the PDA app now. */
 function exportGateInExcel(){
   var rows=S.events.filter(function(e){return e.dir==='in'||e.dir==='in-new';})
     .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
@@ -11841,28 +11354,12 @@ function importInvFromRows(rows, colMap) {
 (function() { var fe = document.getElementById('invImportFile'); if (fe) fe.addEventListener('change', handleInvImportFile); })();
 
 /* Patch gate events to audit log */
-var _origShipOut = document.getElementById('btnShipOut').onclick;
-// We hook audit log into existing gate events via a wrapper in renderAll
-function patchAuditGateOut(tags, doNo, po, cust, plate, driver, recorder) {
-  /* Read each box's OWN do/po/customer off S.boxes rather than the
-     batch-level params — a Gate ขาออก import can ship different tags to
-     different customers/DOs in one confirm (see pendingOutCustMap/
-     pendingOutDoMap in saveOutbound()), so the audit trail needs to reflect
-     what actually got saved on that specific box, not what the top form
-     happened to hold. */
-  tags.forEach(function(t) {
-    var b=S.boxes[t]||{};
-    auditEntry('GATE_OUT', recorder, t, typeName(b.type),
-      null, { do: b.do||doNo, po: b.po||po, customer: custName(b.customer||cust), plate: plate, driver: driver });
-  });
-}
 function patchAuditGateIn(tags, gate, wh, recorder) {
   tags.forEach(function(t) {
     auditEntry('GATE_IN', recorder, t, typeName((S.boxes[t] || {}).type),
       null, { gate: gate, wh: whName(wh) });
   });
 }
-window.patchAuditGateOut = patchAuditGateOut;
 window.patchAuditGateIn = patchAuditGateIn;
 
 /* ===== AUDIT LOG RENDER ===== */
@@ -13624,7 +13121,7 @@ function openColumnMapModal(opts){
     "ยังไม่กลับเข้าคลัง":"Not yet returned","ตัวเลขสำคัญ":"Key figures","กล่องทั้งหมดในระบบ":"Total boxes in system",
     "ออกไปแล้ว (ยังไม่คืน)":"Out (not returned)","รับคืนสะสม (ครั้ง)":"Returns (times)","เกินกำหนดคืน":"Overdue",
     "รอบหมุนเวียนรวม":"Total cycles","มูลค่าสูญหาย (บาท)":"Loss value (THB)","พิมพ์ภาพรวม":"Print overview",
-    "ภาพรวม":"Overview","Gate ขาออก":"Gate Out","Gate ขาเข้า":"Gate In","คลังกล่อง":"Inventory",
+    "ภาพรวม":"Overview","Gate ขาเข้า":"Gate In","คลังกล่อง":"Inventory",
     "ติดตามกล่อง":"Track Box","ตั้งค่า (Master)":"Setup (Master)",
     "สลับโหมดสว่าง/มืด":"Toggle light/dark","ใส่ข้อมูลตัวอย่าง":"Load sample data","เมนู":"Menu",
     /* ---- Location Master (rack map / hierarchical table) — added while building the multi-warehouse rack map ---- */
