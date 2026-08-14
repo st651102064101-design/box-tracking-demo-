@@ -3482,7 +3482,7 @@ function switchTab(name){
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
   if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
-  if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
+  if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
   if(name==='overview'){restoreReportsPanelState();}
