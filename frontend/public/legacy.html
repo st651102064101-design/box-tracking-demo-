@@ -2051,7 +2051,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   <button id="empBadgeCredBtn" onclick="event.stopPropagation();empBadgeAction('cred')" title="ตั้งรหัสผ่าน" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11 V8 A4 4 0 0 1 16 8 V11"/></svg>
   </button>
-  <button id="empBadgePrintBtn" onclick="event.stopPropagation();empBadgeAction('print')" title="พิมพ์บัตรใหม่ (ZPL ^BC)" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+  <button id="empBadgePrintBtn" onclick="event.stopPropagation();empBadgeAction('print')" title="พิมพ์บัตรพนักงาน" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="5"/><path d="M6 14 H4 A2 2 0 0 1 2 12 V10 A2 2 0 0 1 4 8 H20 A2 2 0 0 1 22 10 V12 A2 2 0 0 1 20 14 H18"/><rect x="6" y="13" width="12" height="8"/></svg>
   </button>
   <button id="empBadgeDelBtn" onclick="event.stopPropagation();empBadgeAction('del')" title="ลบพนักงานออกจากระบบ" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
@@ -2166,7 +2166,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
             <div id="empBadgeBarcode" style="height:52px;border-radius:4px;background-color:#fff;"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
               <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:15px;letter-spacing:.1em;color:var(--ink2);"></span>
-              <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--faint);">CODE 128 · ZPL ^BC</span>
+              <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--faint);">CODE 128</span>
             </div>
           </div>
         </div>
@@ -4553,11 +4553,16 @@ function printEmpBadge(id){
   );
 }
 window.printEmpBadge=printEmpBadge;
+/* เปิดหน้าต่างพิมพ์แล้วสั่งพิมพ์ให้เลยอัตโนมัติ (w.print()) แทนที่จะแค่เปิดพรีวิว
+   แล้วให้ผู้ใช้กด Ctrl/Cmd+P เอง — ผู้ใช้ขอให้ปุ่มนี้ "ใช้งานพิมพ์ได้จริง" ไม่ใช่แค่
+   preview ยังกด Ctrl/Cmd+P สำรองไว้ในคำใบ้ เผื่อเบราว์เซอร์บาง engine ไม่ trigger
+   print dialog อัตโนมัติให้ (เช่น บาง config ของ Safari) */
 function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
   var code=(e.scanCode||e.id).toUpperCase();
   var meta=[e.role,e.dept].filter(Boolean).join(' · ');
   var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
+  var photoHtml=e.photo?'<img src="'+esc(e.photo)+'" style="width:16mm;height:16mm;border-radius:50%;object-fit:cover;flex:0 0 auto;">':'';
   var w=window.open('','_blank','width=560,height=460');
   if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
   w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
@@ -4568,10 +4573,11 @@ function printEmpBadgeWindow(id){
     +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
     +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
     +'justify-content:space-between;}'
-    +'.top{display:flex;align-items:baseline;justify-content:space-between;gap:4mm;}'
-    +'.nm{font-size:14pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;}'
-    +'.mt{font-size:8pt;color:#666;margin-top:.6mm;}'
-    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;}'
+    +'.top{display:flex;align-items:center;gap:3mm;}'
+    +'.who{flex:1;min-width:0;}'
+    +'.nm{font-size:13pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    +'.mt{font-size:7.5pt;color:#666;margin-top:.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;align-self:flex-start;}'
     +'.bc{text-align:center;}'
     +'.bc svg{display:block;margin:0 auto;}'
     +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
@@ -4579,15 +4585,19 @@ function printEmpBadgeWindow(id){
     +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
     +'</style></head><body><div class="card">'
-    +'<div class="top"><div><div class="nm">'+esc(e.name||e.id)+'</div>'
+    +'<div class="top">'+photoHtml+'<div class="who"><div class="nm">'+esc(e.name||e.id)+'</div>'
     +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
     +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
     +'</div><div class="brand">◈ Smart Tracking</div></div>'
-    +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
-    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'<div class="bc" style="width:56mm;align-self:center;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
+    +'</div><div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ขนาดบัตร 86 × 54 มม.</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
+  /* รอให้เบราว์เซอร์ layout เสร็จก่อนสั่งพิมพ์ (โดยเฉพาะรูปพนักงานที่โหลดจาก data URL
+     — ถึงจะโหลดเร็วเพราะเป็น base64 ฝังในตัว ไม่ใช่ network request แต่ก็ยังมี timing
+     เล็กน้อยก่อน layout เสร็จ) ให้เวลาสั้น ๆ กันบัตรพิมพ์ออกมาโดยไม่มีรูป */
+  setTimeout(function(){try{w.focus();w.print();}catch(err){}},250);
 }
 window.printEmpBadgeWindow=printEmpBadgeWindow;
 
