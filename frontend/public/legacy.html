@@ -1364,20 +1364,9 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
        so setting up the physical reader doesn't require reading source. -->
   <div class="card hover reveal d1" id="fx9600InfoCard" style="border-style:dashed;">
     <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>รับกล่องอัตโนมัติผ่านเครื่องอ่าน RFID (Zebra FX9600)</h3>
-    <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ พร้อมแนบ header <code>X-Webhook-Secret</code> ตามที่ผู้ดูแลระบบตั้งไว้ — ระบบจะรับกล่องเข้าคลังที่ประตูนี้ให้อัตโนมัติทันทีที่อ่านแท็กเจอ</p>
+    <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ (Authentication Type: <b>Basic</b> — รหัสผ่านคือ secret ที่ผู้ดูแลระบบตั้งไว้) — กล่องที่เครื่องอ่านเจอจะ<b>เข้าคิวสแกนด้านล่างให้อัตโนมัติ</b> รอคุณกด "ยืนยันรับเข้าคลัง" อีกที ไม่รับเข้าเองทันที เพราะเครื่องอ่านเห็นทุกกล่องที่อยู่ในระยะ รวมกล่องที่ยังอยู่บนรถหรือแค่เดินผ่าน</p>
     <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
     <div id="fx9600Status" style="margin-top:10px;"></div>
-    <!-- Log ดิบของ request ที่เข้ามาจริง — ผู้ใช้ขอให้ดูเองจากหน้าเว็บได้เลย ไม่ต้องพึ่งใคร
-         tail docker logs ให้ ดึงจาก GET /api/rfid/fx9600/debug-log (in-memory ring buffer
-         ฝั่ง backend เก็บ 200 รายการล่าสุด รวม heartbeat ด้วย) เปิด/ปิด poll ตาม visibility
-         ของ panel เอง ไม่ยิงถี่ๆ ทิ้งไว้เปล่าประโยชน์ตอนไม่มีใครดู -->
-    <button type="button" class="btn ghost sm" id="btnFx9600LogToggle" style="margin-top:10px;">ดู log ดิบ</button>
-    <div id="fx9600LogPanel" style="display:none;margin-top:10px;">
-      <div class="twrap" style="max-height:320px;overflow-y:auto;">
-        <table style="font-size:12px;"><thead><tr><th>เวลา</th><th>EPC (hex)</th><th>ถอดรหัสได้</th><th>ผลลัพธ์</th><th>ข้อมูลดิบที่เครื่องส่งมา</th></tr></thead>
-          <tbody id="fx9600LogBody"></tbody></table>
-      </div>
-    </div>
   </div>
 
   <div class="gatebox in reveal d1" id="gateInBox">
@@ -2006,6 +1995,24 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
         </table>
       </div>
       <div class="pagerbar" id="pagerAudit"></div>
+    </div>
+  </div>
+
+  <!-- Log ดิบของ request ที่เครื่องอ่าน RFID ยิงเข้ามาจริง — อยู่นอก .ssec ทั้งหมด จึงเห็นได้
+       ทุก sub-tab ของหน้าตั้งค่า (ตั้งใจไม่เอาไปซ่อนใน modal ตั้งค่าระบบ เพราะเวลาไล่ปัญหา
+       หน้าเครื่องจริงต้องเปิดค้างไว้ดูควบคู่กับการขยับแท็ก) ดึงจาก
+       GET /api/rfid/fx9600/debug-log — ring buffer ในหน่วยความจำฝั่ง backend เก็บ 200
+       รายการล่าสุด รวม heartbeat ด้วย จึงแยกออกว่า "เครื่องอ่านต่อไม่ถึง" (ไม่มีแถวเลย) กับ
+       "ต่อถึงแต่ไม่ส่งข้อมูลแท็ก" (มีแถวแต่ EPC ว่าง) ซึ่งคนละปัญหากัน -->
+  <div class="card hover reveal" id="fx9600LogCard" style="border-style:dashed;margin-top:20px;">
+    <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>Log ดิบจากเครื่องอ่าน RFID (Zebra FX9600)</h3>
+    <p class="desc" style="margin:0 0 10px;">ทุก request ที่เครื่องอ่านยิงเข้ามาล่าสุด 200 รายการ พร้อมข้อมูลดิบที่ส่งมาจริง — ใช้ไล่ปัญหาตอนติดตั้งเครื่องอ่าน เช่น เชื่อมต่อได้แต่ไม่มีกล่องเข้าคิว</p>
+    <button type="button" class="btn ghost sm" id="btnFx9600LogToggle">ดู log ดิบ</button>
+    <div id="fx9600LogPanel" style="display:none;margin-top:10px;">
+      <div class="twrap" style="max-height:320px;overflow-y:auto;">
+        <table style="font-size:12px;"><thead><tr><th>เวลา</th><th>EPC (hex)</th><th>ถอดรหัสได้</th><th>ผลลัพธ์</th><th>ข้อมูลดิบที่เครื่องส่งมา</th></tr></thead>
+          <tbody id="fx9600LogBody"></tbody></table>
+      </div>
     </div>
   </div>
 </section>
@@ -8250,8 +8257,46 @@ function renderInResult(){
     return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span><b onclick="unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
   if(typeof schedule==='function')schedule();
 }
-function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});renderInResult();if(typeof schedule==='function')schedule();}
+function unqueueIn(t){
+  pendingIn=pendingIn.filter(function(x){return x!==t;});
+  /* ต้องลบฝั่งเซิร์ฟเวอร์ด้วย ไม่ใช่แค่ในหน้าจอ — กล่องยังวางอยู่หน้าเครื่องอ่าน
+     ถ้าลบแค่ในหน้าจอ รอบ poll ถัดไป (2 วิ) มันจะเด้งกลับเข้าคิวทันที เหมือนกดไม่ติด */
+  var g=fixedGatesRef().in;
+  if(g)apiFetch('/api/rfid/pending/'+encodeURIComponent(g)+'/'+encodeURIComponent(t),{method:'DELETE',headers:authHeaders()}).catch(function(){});
+  renderInResult();if(typeof schedule==='function')schedule();
+}
 window.unqueueIn=unqueueIn;
+/* คิวจากเครื่องอ่าน RFID ติดตั้งถาวร — backend ไม่รับกล่องเข้าคลังเองแล้ว (ดู
+   routes/rfid.ts) แต่พักไว้ในคิวของประตูนั้น หน้านี้ดึงมาเติมลงคิวสแกนเดียวกับที่
+   การยิงบาร์โค้ดใช้ ผู้ใช้จึงเห็นเป็น chip เหมือนกันทุกประการ แล้วค่อยกดยืนยันรับเข้าคลัง
+   เอง — เจตนาคือเครื่องอ่านเห็นทุกอย่างที่อยู่ในระยะ (รวมกล่องบนรถที่ยังไม่ลง หรือกล่อง
+   ที่เดินผ่านเฉยๆ) จะรับเข้าอัตโนมัติไม่ได้ ต้องให้คนตัดสินใจ
+   กรองซ้ำฝั่งนี้อีกชั้นด้วยเหตุผลเดียวกับ scanIn(): กล่องที่อยู่ในคลังอยู่แล้วไม่ควรเข้าคิว */
+function fx9600QueuePoll(){
+  var g=fixedGatesRef().in;
+  if(!g)return;
+  apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d||!d.tags||!d.tags.length)return;
+      var added=0;
+      d.tags.forEach(function(t){
+        var b=S.boxes[t];
+        if(!b||b.status==='warehouse')return;
+        if(pendingIn.indexOf(t)>=0)return;
+        pendingIn.push(t);added++;
+      });
+      /* เสียงเดียวกับ toast สำเร็จ — คนยืนอยู่หน้าประตูมักไม่ได้จ้องจอ ต้องรู้ด้วยหูว่า
+         เครื่องอ่านจับกล่องเพิ่มเข้าคิวแล้ว (ไม่ใช้ toast เพราะจะเด้งรัวตามจังหวะรถเข้า) */
+      if(added){renderInResult();if(typeof playToastSound==='function')playToastSound('ok');}
+    }).catch(function(){});
+}
+window.fx9600QueuePoll=fx9600QueuePoll;
+/* เดินเฉพาะตอนอยู่แท็บ Gate ขาเข้าจริงๆ — ไม่ต้องยิงถี่ๆ ทิ้งไว้ตอนผู้ใช้อยู่หน้าอื่น */
+setInterval(function(){
+  var tab=$('#tab-gatein');
+  if(tab&&tab.classList.contains('active'))fx9600QueuePoll();
+},2000);
 $('#btnScanIn').onclick=function(){scanIn();};
 $('#scanIn').addEventListener('keydown',function(e){if(e.key==='Enter')scanIn();});
 autoScanBind($('#scanIn'),scanIn);
@@ -8323,6 +8368,13 @@ $('#btnCheckIn').onclick=function(){
   });
   var n=pendingIn.length;var auditTagsIn=pendingIn.slice();
   var typesIn={};auditTagsIn.forEach(function(t){var bb=S.boxes[t];if(bb)typesIn[bb.type]=true;});
+  /* บอกเซิร์ฟเวอร์ว่ากล่องชุดนี้ยืนยันแล้ว ไม่งั้นเครื่องอ่านที่ยังเห็นกล่องอยู่จะดันกลับ
+     เข้าคิวใหม่ทันที ส่งเฉพาะ tag ที่เพิ่งยืนยัน ไม่ล้างทั้งประตู เผื่อมีกล่องคันถัดไป
+     เข้าคิวมาแล้วระหว่างที่คนกำลังกดยืนยันชุดนี้ */
+  (function(tags){
+    var g=fixedGatesRef().in;
+    if(g&&tags.length)apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({tags:tags})}).catch(function(){});
+  })(auditTagsIn);
   pendingIn=[];
   rememberVehicle(plate,driver,vehicle,tel);
   save();
@@ -8343,6 +8395,12 @@ $('#btnCheckIn').onclick=function(){
    (ยังคงประตูประจำเครื่องไว้) ถามยืนยันถ้ามีคิวค้าง */
 function clearGateIn(){
   function doClear(){
+    /* ล้างคิวฝั่งเซิร์ฟเวอร์ด้วย เหตุผลเดียวกับ unqueueIn() — ไม่งั้นกล่องที่ยังอยู่หน้า
+       เครื่องอ่านจะไหลกลับเข้าคิวทันทีหลังกดล้าง */
+    (function(){
+      var g=fixedGatesRef().in;
+      if(g)apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{method:'DELETE',headers:authHeaders()}).catch(function(){});
+    })();
     pendingIn=[];
     ['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
     renderInResult();renderVehicleQuick();
