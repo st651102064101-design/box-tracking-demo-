@@ -295,11 +295,21 @@ rfidRouter.post(
     // since a heartbeat/empty payload still proves the reader is reachable
     // and correctly configured. Fire-and-forget relative to the actual
     // gate-in below: a status-table hiccup shouldn't block receiving boxes.
+    //
+    // Also records the reader's own source IP so the frontend can offer a
+    // "manage this reader" button pointed at the FX9600's admin UI without
+    // anyone hardcoding an address — the reader tells us where it's calling
+    // from on every request. `req.ip` (not header-trusting; no reverse proxy
+    // sits between the reader and this route) sometimes carries the
+    // IPv4-mapped-IPv6 "::ffff:" prefix Node uses for dual-stack sockets —
+    // stripped so the stored value is a plain IPv4 the admin UI link works with.
+    const rawIp = req.ip ?? req.socket.remoteAddress ?? null;
+    const lastIp = rawIp ? rawIp.replace(/^::ffff:/, '') : null;
     const db = getDb();
     await db
       .insert(gateWebhookStatus)
-      .values({ gateNo: gate, lastSeenAt: new Date() })
-      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: new Date() } });
+      .values({ gateNo: gate, lastSeenAt: new Date(), lastIp })
+      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: new Date(), lastIp } });
 
     const body = readWebhookBody(req);
     const contentType = req.get('Content-Type') ?? '';

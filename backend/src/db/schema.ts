@@ -101,6 +101,9 @@ export const gates = pgTable('gates', {
 export const gateWebhookStatus = pgTable('gate_webhook_status', {
   gateNo: integer('gate_no').primaryKey(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+  /** Source IP of the most recent webhook hit — lets the frontend link straight
+   *  to the reader's own admin UI without anyone hardcoding an address. */
+  lastIp: text('last_ip'),
 });
 
 /** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation

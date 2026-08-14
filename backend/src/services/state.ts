@@ -109,6 +109,13 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     gateWebhookLastSeen: Object.fromEntries(
       gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()]),
     ),
+    /* Source IP of the reader's most recent webhook hit — lets the frontend
+       link straight to the FX9600's own admin UI (readers serve one on their
+       IP) without anyone hardcoding an address. Same read-only-from-client
+       reasoning as gateWebhookLastSeen above. */
+    gateWebhookLastIp: Object.fromEntries(
+      gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp as string]),
+    ),
     events: eventRows.map((r) => r.data),
     cfg,
     seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),

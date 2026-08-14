@@ -81,6 +81,11 @@ CREATE TABLE IF NOT EXISTS gate_webhook_status (
   gate_no      INTEGER PRIMARY KEY,
   last_seen_at TIMESTAMPTZ NOT NULL
 );
+-- Source IP of the most recent webhook hit, so the frontend can offer a
+-- "manage this reader" button pointed at the FX9600's own admin UI
+-- (readers serve one at their IP over HTTP(S)) without anyone hardcoding
+-- it — the reader tells us where it's calling from every time it posts.
+ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_ip TEXT;
 
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
