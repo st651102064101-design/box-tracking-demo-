@@ -2117,9 +2117,11 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
         <!-- เนื้อหาที่เหลือทั้งหมดของด้านหลัง (ข้อมูลเพิ่มเติม + บาร์โค้ด) เลื่อนดูได้เอง — ด้านหน้า
              ตอนนี้เป็นรูปเต็มบัตร (ผู้ใช้ขอ) เหลือที่แค่พอโชว์ชื่อ/ตำแหน่ง/สถานะทับบนรูป ข้อมูลที่
-             เหลือทั้งหมด (แผนก/คลัง/กะ/เบอร์โทร/อีเมล/วันเริ่มงาน/สิทธิ์/บัญชีเข้าระบบ) ย้ายมาไว้นี่
-             ส่วนบาร์โค้ดก็ย้ายมาจากด้านหน้าเช่นกัน (เหมือนบัตรพนักงานทั่วไปที่บาร์โค้ดอยู่หลังบัตร) -->
-        <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 30px 24px;">
+             เหลือทั้งหมด (แผนก/คลัง/กะ/เบอร์โทร/อีเมล/วันเริ่มงาน/สิทธิ์) ย้ายมาไว้นี่ — ส่วนบาร์โค้ด
+             ย้ายมาจากด้านหน้าเช่นกัน (เหมือนบัตรพนักงานทั่วไปที่บาร์โค้ดอยู่หลังบัตร) และตั้งใจให้เป็น
+             flex column เพื่อให้บาร์โค้ด (margin-top:auto ด้านล่าง) ชิดขอบล่างสุดเสมอเมื่อเนื้อหา
+             สั้นกว่าพื้นที่ที่มี -->
+        <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 30px 24px;display:flex;flex-direction:column;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;">
             <div>
               <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
@@ -2149,13 +2151,12 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
               <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">สิทธิ์การใช้งาน</div>
               <div id="empBadgeAccessBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
             </div>
-            <div>
-              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">บัญชีเข้าสู่ระบบ</div>
-              <div id="empBadgeLoginBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
-            </div>
           </div>
 
-          <div style="margin-top:22px;padding-top:18px;border-top:.5px solid var(--line);">
+          <!-- margin-top:auto ดันบาร์โค้ดลงไปชิดขอบล่างสุดของบัตรเสมอเมื่อเนื้อหาด้านบน
+               สั้นกว่าพื้นที่ที่มี (ผู้ใช้ขอ) — ถ้าเนื้อหายาวเกินจนล้น กล่อง overflow-y:auto
+               ด้านนอกจะเลื่อนตามปกติ ไม่กระทบกัน -->
+          <div style="margin-top:auto;padding-top:18px;border-top:.5px solid var(--line);">
             <div id="empBadgeBarcode" style="height:52px;border-radius:4px;background-color:#fff;"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
               <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:15px;letter-spacing:.1em;color:var(--ink2);"></span>
@@ -4360,6 +4361,10 @@ $('#ePhotoFile').addEventListener('change',function(ev){
   reader.readAsDataURL(file);
 });
 $('#btnRemoveEPhoto').addEventListener('click',resetEPhoto);
+/* วันเริ่มงาน default เป็นวันนี้ตั้งแต่โหลดฟอร์มครั้งแรก — ผู้ใช้ขอไม่ให้ปล่อยว่าง/null
+   ไปตั้งแต่แรกเริ่ม ไม่ใช่แค่ตอน reset ฟอร์มหลังบันทึก (ดู resetEPhoto call sites ด้านล่าง
+   ที่ก็ตั้งค่านี้ซ้ำทุกครั้งที่ฟอร์มเคลียร์เหมือนกัน) */
+setv('eStart',dstr());
 var editingEmp=null;
 /* self-service: a non-admin editing their own record may only change these — everything
    else stays disabled in the form (see renderSetup's field-lock pass), so val() on those
@@ -4397,13 +4402,13 @@ $('#btnAddEmp').onclick=function(){
   save();
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
-  ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();setv('eStart',dstr());
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
-  ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();setv('eStart',dstr());
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
@@ -4689,7 +4694,6 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeEmailBack',e.email||'-');
   setText('empBadgeStartBack',e.startDate?dstr(new Date(e.startDate)):'-');
   setText('empBadgeAccessBack',EMP_ACCESS[e.access]||'-');
-  setText('empBadgeLoginBack',e.hasLogin?(e.loginUsername||'ตั้งไว้แล้ว'):'ยังไม่ได้ตั้ง');
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,52);
   var inactive=e.status==='inactive';
   var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
