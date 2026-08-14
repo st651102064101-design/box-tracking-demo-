@@ -3808,13 +3808,19 @@ function editBox(tag){
   var b=S.boxes[tag];if(!b)return;
   var bts=Object.values(S.boxtypes);
   var typeOptions=bts.map(function(t){return '<option value="'+esc(t.id)+'"'+(t.id===b.type?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');
+  /* กล่องที่ "ออกไปแล้ว" (อยู่กับลูกค้า ยังไม่คืน) ลบไม่ได้ — เหตุผลเดียวกับที่ปุ่มลบหลาย
+     รายการ (#bulkBoxDel ด้านล่าง) กันไว้อยู่แล้ว: ลบทิ้งตอนที่กล่องยังไม่กลับเข้าคลังจะ
+     ทำให้ระบบเสียร่องรอยว่ากล่องใบนี้ยังค้างอยู่ที่ลูกค้ารายไหน */
+  var canDel=b.status!=='out';
+  var delReason=canDel?'':'ลบไม่ได้ — กล่องนี้ออกไปอยู่กับ '+esc(custName(b.customer))+' ยังไม่คืนเข้าคลัง';
   openModal('<div class="mbody"><h3>แก้ไขกล่อง '+esc(tag)+'</h3>'
     +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType">'+typeOptions+'</select></div>'
     +'<div class="field"><label>Lot</label><input id="mBoxLot" value="'+esc(b.lot||'')+'" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>'
     +'<div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date" value="'+esc(b.expiry||'')+'"></div>'
     +'<div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier">'+supplierOptions(b.supplier)+'</select></div>'
+    +(canDel?'':'<div class="small" style="color:var(--neg);margin-top:4px;">'+delReason+'</div>')
     +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn">อัปเดตกล่อง</button></div>');
+    +'<div class="mfoot"><button class="btn red" id="mBoxDelBtn"'+(canDel?'':' disabled title="'+delReason+'"')+'>ลบกล่อง</button><span style="flex:1;"></span><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn">อัปเดตกล่อง</button></div>');
   $('#mBoxSaveBtn').onclick=function(){
     var type=val('mBoxType');if(!type)return toast('เลือกประเภทกล่อง','เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน','err');
     var before=Object.assign({},b);
@@ -3823,6 +3829,8 @@ function editBox(tag){
     save();closeModal();
     toast('อัปเดตกล่องแล้ว',tag);renderAll();
   };
+  var delBtn=$('#mBoxDelBtn');
+  if(delBtn&&canDel)delBtn.onclick=function(){closeModal();openDeleteBoxModal(tag);};
 }
 window.editBox=editBox;
 
