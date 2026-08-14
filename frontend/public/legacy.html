@@ -2108,13 +2108,10 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
         </div>
 
-        <div style="position:absolute;left:0;right:0;bottom:0;padding:18px 30px 20px;background:var(--surface2);border-top:.5px solid var(--line);">
-          <div id="empBadgeBarcode" style="height:52px;border-radius:4px;background-color:#fff;"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
-            <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:15px;letter-spacing:.1em;color:var(--ink2);"></span>
-            <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--faint);">CODE 128 · ZPL ^BC</span>
-          </div>
-        </div>
+        <!-- บาร์โค้ดย้ายไปหลังบัตรแล้ว (ผู้ใช้ขอให้เหมือนบัตรพนักงานทั่วไป ที่บาร์โค้ด/ราย
+             ละเอียดอยู่ด้านหลัง ด้านหน้าโชว์แค่รูป+ชื่อ+ข้อมูลสำคัญ) เหลือพื้นที่ว่างด้านล่าง
+             จึงใส่คำใบ้ชี้ให้พลิกดูแทนที่บาร์โค้ดเดิม -->
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 30px 20px;text-align:center;color:var(--faint);font-size:13.5px;">เอาเมาส์ชี้ / แตะเพื่อพลิกดูบาร์โค้ดและข้อมูลเพิ่มเติม</div>
 
         <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;">
           <div style="transform:rotate(-38deg);text-align:center;line-height:1;white-space:nowrap;">
@@ -2125,28 +2122,48 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
       </div>
 
       <div style="position:absolute;inset:0;border-radius:32px;background:var(--surface);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);box-shadow:0 40px 90px rgba(0,0,0,.34),0 3px 9px rgba(0,0,0,.18);display:flex;flex-direction:column;isolation:isolate;">
-        <div style="position:relative;height:66px;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
+        <div style="position:relative;height:66px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;background:var(--surface2);border-bottom:.5px solid var(--line);">
           <div style="position:relative;width:87px;height:13px;">
             <div style="position:absolute;inset:0;border-radius:999px;background:#000;mix-blend-mode:destination-out;"></div>
             <div style="position:absolute;inset:0;border-radius:999px;box-shadow:inset 0 1px 3px rgba(0,0,0,.25);pointer-events:none;"></div>
           </div>
         </div>
 
-        <div style="padding:26px 30px 0;">
-          <div style="font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accentInk);">จัดการพนักงาน</div>
-          <div id="empBadgeNameBack" style="font-size:27px;font-weight:700;letter-spacing:-.03em;margin-top:6px;"></div>
-          <div id="empBadgeMetaBack" style="font-family:var(--mono);font-size:16px;color:var(--muted);margin-top:3px;"></div>
+        <div style="flex:0 0 auto;padding:24px 30px 0;">
+          <div id="empBadgeNameBack" style="font-size:25px;font-weight:700;letter-spacing:-.03em;"></div>
+          <div id="empBadgeMetaBack" style="font-family:var(--mono);font-size:15px;color:var(--muted);margin-top:3px;"></div>
         </div>
 
-        <!-- ปุ่มจัดการ (แก้ไข/ตั้งรหัสผ่าน/พิมพ์บัตร/ลบ) ย้ายออกไปเป็นปุ่มวงกลมลอยมุมขวาบนแล้ว
-             (#empBadgeEditBtn ฯลฯ เรียงต่อจากปุ่มปิด/ล็อกเอาท์) — ต้อง hover เพื่อพลิกดูด้านนี้
-             ใช้ไม่ได้บนมือถือ/แท็บเล็ตอยู่แล้ว ด้านนี้จึงเหลือไว้แค่โชว์ข้อมูลอ้างอิง -->
-        <div style="padding:6px 30px 0;font-size:14px;color:var(--muted);">ใช้ปุ่มวงกลมมุมขวาบนของจอเพื่อจัดการพนักงานคนนี้</div>
+        <!-- เนื้อหาที่เหลือทั้งหมดของด้านหลัง (ข้อมูลเพิ่มเติม + บาร์โค้ด) เลื่อนดูได้เอง —
+             ด้านหน้าโชว์ได้แค่แผนก/คลัง/กะ/เบอร์โทร (พื้นที่จำกัด), รายละเอียดที่เหลือ
+             (อีเมล/วันเริ่มงาน/สิทธิ์/บัญชีเข้าระบบ) ย้ายมาไว้นี่แทน ส่วนบาร์โค้ดก็ย้ายมา
+             จากด้านหน้าด้วย (เดิมอยู่หน้าบัตร ผู้ใช้ขอให้ย้ายมาหลังบัตรเหมือนบัตรพนักงานทั่วไป) -->
+        <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 30px 24px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;">
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">อีเมล</div>
+              <div id="empBadgeEmailBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;word-break:break-all;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">วันเริ่มงาน</div>
+              <div id="empBadgeStartBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">สิทธิ์การใช้งาน</div>
+              <div id="empBadgeAccessBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">บัญชีเข้าสู่ระบบ</div>
+              <div id="empBadgeLoginBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
+            </div>
+          </div>
 
-        <div style="margin-top:auto;padding:0 30px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-          <div>
-            <div style="font-size:13px;font-weight:600;letter-spacing:.05em;color:var(--faint);">รหัสสแกน</div>
-            <div id="empBadgeScanCodeBack" style="font-family:var(--mono);font-size:15px;color:var(--ink2);margin-top:2px;"></div>
+          <div style="margin-top:22px;padding-top:18px;border-top:.5px solid var(--line);">
+            <div id="empBadgeBarcode" style="height:52px;border-radius:4px;background-color:#fff;"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
+              <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:15px;letter-spacing:.1em;color:var(--ink2);"></span>
+              <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--faint);">CODE 128 · ZPL ^BC</span>
+            </div>
           </div>
         </div>
 
@@ -4661,9 +4678,12 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeShift',EMP_SHIFT[e.shift]||'-');
   setText('empBadgePhone',e.phone||'-');
   setText('empBadgeScanCode',scanCode);
-  setText('empBadgeScanCodeBack',scanCode);
   setText('empBadgeNameBack',e.name||e.id);
   setText('empBadgeMetaBack',e.id+' · '+(EMP_ACCESS[e.access]||'-'));
+  setText('empBadgeEmailBack',e.email||'-');
+  setText('empBadgeStartBack',e.startDate?dstr(new Date(e.startDate)):'-');
+  setText('empBadgeAccessBack',EMP_ACCESS[e.access]||'-');
+  setText('empBadgeLoginBack',e.hasLogin?(e.loginUsername||'ตั้งไว้แล้ว'):'ยังไม่ได้ตั้ง');
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,52);
   var inactive=e.status==='inactive';
   var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
