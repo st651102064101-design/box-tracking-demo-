@@ -160,6 +160,14 @@ rfidRouter.post(
       recorder: `FX9600 · Gate ${gate}`,
       device: 'fx9600-webhook',
     });
+    // Diagnostic visibility for whoever's debugging a reader in the field —
+    // "connected but nothing happens" is otherwise a black box: this shows
+    // exactly which EPCs came in, what they decoded to, and whether gateIn()
+    // matched a real box. Only logs when there's actual tag data (skips the
+    // frequent no-op heartbeats) to keep this from flooding the log.
+    console.log(
+      `[fx9600] gate ${gate}: epc=[${epcs.join(', ')}] decoded=[${tags.join(', ')}] received=[${result.received.join(', ')}] unknown=[${result.unknown.join(', ')}]`,
+    );
     // Same reason the handheld routes call this — a reader-driven receive
     // never goes through PUT /api/state, so the dashboards would otherwise
     // sit stale until someone happens to refresh.
