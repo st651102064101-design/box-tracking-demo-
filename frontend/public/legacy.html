@@ -3983,20 +3983,29 @@ function whAreaSetMode(mode){
 window.whAreaSetMode=whAreaSetMode;
 $all('#whAreaModeSw .ivs-btn').forEach(function(b){b.onclick=function(){whAreaSetMode(b.dataset.mode);};});
 /* ตำแหน่งของฉัน — ยังไม่เคยมี navigator.geolocation ใช้ที่ไหนในไฟล์นี้มาก่อน เขียนใหม่
-   ตามแพทเทิร์นเดียวกับ whMapSetPin (ปักหมุด + reverse-geocode กรอก #whArea ให้) */
-$('#btnWhMyLoc').onclick=function(){
-  if(!navigator.geolocation)return toast('เบราว์เซอร์นี้ไม่รองรับ','การหาตำแหน่งปัจจุบัน','err');
-  var btn=$('#btnWhMyLoc');btn.disabled=true;var origText=btn.textContent;btn.textContent='กำลังหาตำแหน่ง…';
-  navigator.geolocation.getCurrentPosition(function(pos){
-    btn.disabled=false;btn.textContent=origText;
-    whMapEnsure();
-    whMapInst.setView([pos.coords.latitude,pos.coords.longitude],15);
-    whMapSetPin(pos.coords.latitude,pos.coords.longitude);
-  },function(err){
-    btn.disabled=false;btn.textContent=origText;
-    toast('หาตำแหน่งไม่สำเร็จ',err&&err.message?err.message:'กรุณาอนุญาตการเข้าถึงตำแหน่งของเบราว์เซอร์','err');
-  },{enableHighAccuracy:true,timeout:10000});
-};
+   ตามแพทเทิร์นเดียวกับ whMapSetPin (ปักหมุด + reverse-geocode กรอก #whArea ให้)
+   Geolocation API ใช้ได้เฉพาะ "secure context" (HTTPS หรือ localhost) — เปิดผ่าน HTTP
+   ธรรมดาบน IP วง LAN (ที่ระบบนี้ deploy จริง) เบราว์เซอร์จะปฏิเสธทันทีตั้งแต่ก่อนถาม
+   สิทธิ์ด้วยซ้ำ (ข้อความ error "Origin does not have permission to use Geolocation
+   service" ไม่ใช่การถูกปฏิเสธสิทธิ์ — เป็นเพราะ origin นี้ไม่มีสิทธิ์ขอตั้งแต่แรก) ขึ้น error
+   toast ให้ผู้ใช้เห็นซ้ำ ๆ ทั้งที่กดยังไงก็ไม่มีทางสำเร็จ จึงซ่อนปุ่มทิ้งไปเลยตั้งแต่โหลดหน้า
+   ถ้าตรวจแล้วว่าใช้ไม่ได้จริง แทนที่จะปล่อยให้กดแล้วเจอ error ทุกครั้ง */
+(function(){
+  var btn=$('#btnWhMyLoc');if(!btn)return;
+  if(!navigator.geolocation||!window.isSecureContext){btn.style.display='none';return;}
+  btn.onclick=function(){
+    btn.disabled=true;var origText=btn.textContent;btn.textContent='กำลังหาตำแหน่ง…';
+    navigator.geolocation.getCurrentPosition(function(pos){
+      btn.disabled=false;btn.textContent=origText;
+      whMapEnsure();
+      whMapInst.setView([pos.coords.latitude,pos.coords.longitude],15);
+      whMapSetPin(pos.coords.latitude,pos.coords.longitude);
+    },function(err){
+      btn.disabled=false;btn.textContent=origText;
+      toast('หาตำแหน่งไม่สำเร็จ',err&&err.message?err.message:'กรุณาอนุญาตการเข้าถึงตำแหน่งของเบราว์เซอร์','err');
+    },{enableHighAccuracy:true,timeout:10000});
+  };
+})();
 /* ค้นหาสถานที่บนแผนที่ (forward geocoding) — ไม่เคยมีมาก่อน มีแต่ reverse (คลิกแผนที่
    → ที่อยู่) ใน whMapSetPin ด้านบน ใช้ endpoint /search ตัวเดียวกับ Nominatim ที่ /reverse
    ใช้อยู่แล้ว ไม่ต้องเพิ่ม dependency ใหม่ */
