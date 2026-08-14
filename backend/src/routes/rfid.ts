@@ -4,9 +4,9 @@ import { requireAuth } from '../middleware/auth.js';
 import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, decodeEpcHexToBarcode, type EpcBits } from '../lib/rfid.js';
 import { env } from '../env.js';
 import { getDb } from '../db/client.js';
-import { gateIn } from '../services/gate.js';
-import { bump } from '../lib/bus.js';
-import { gateWebhookStatus } from '../db/schema.js';
+import { resolveBoxesByCodes } from '../services/rfid.js';
+import { gateWebhookStatus, gatePendingReads } from '../db/schema.js';
+import { and, eq, gte } from 'drizzle-orm';
 
 export const rfidRouter = Router();
 
@@ -204,6 +204,83 @@ rfidRouter.get(
   }),
 );
 
+/* ─── the reader's pending queue for Gate ขาเข้า ───────────────────────────
+   Populated by the webhook below, drained by the operator confirming (or
+   dismissing) chips in the UI. Reads older than this are ignored rather than
+   deleted on a timer: a box that passed by ten minutes ago and was never
+   confirmed shouldn't still be sitting in someone's queue, but nothing needs
+   to run in the background to make that true. */
+const PENDING_TTL_MS = 10 * 60 * 1000;
+
+rfidRouter.get(
+  '/pending/:gate',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gate = Number(req.params.gate);
+    if (!Number.isInteger(gate) || gate <= 0) {
+      throw httpError(400, 'gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_gate');
+    }
+    const rows = await getDb()
+      .select()
+      .from(gatePendingReads)
+      .where(
+        and(
+          eq(gatePendingReads.gateNo, gate),
+          gte(gatePendingReads.seenAt, new Date(Date.now() - PENDING_TTL_MS)),
+        ),
+      );
+    res.json({ tags: rows.map((r) => r.tag) });
+  }),
+);
+
+/** Drops one box from the queue — the chip's ✕ button. Without this the
+ *  reader would just re-queue it on its next report, since the box is still
+ *  sitting in range. */
+rfidRouter.delete(
+  '/pending/:gate/:tag',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gate = Number(req.params.gate);
+    if (!Number.isInteger(gate) || gate <= 0) {
+      throw httpError(400, 'gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_gate');
+    }
+    await getDb()
+      .delete(gatePendingReads)
+      .where(and(eq(gatePendingReads.gateNo, gate), eq(gatePendingReads.tag, req.params.tag)));
+    // Suppression is keyed on "already queued", so a tag the operator
+    // deliberately removed must forget that too — otherwise it can't come
+    // back until the window lapses, even if the box really is re-presented.
+    fx9600RecentlySeen.delete(req.params.tag);
+    res.json({ ok: true });
+  }),
+);
+
+/** Clears the whole queue for a gate — used right after the operator confirms
+ *  the receive, so the boxes they just booked in don't immediately reappear. */
+rfidRouter.delete(
+  '/pending/:gate',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gate = Number(req.params.gate);
+    if (!Number.isInteger(gate) || gate <= 0) {
+      throw httpError(400, 'gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_gate');
+    }
+    const tags = Array.isArray(req.body?.tags) ? (req.body.tags as unknown[]).filter((t): t is string => typeof t === 'string') : null;
+    if (tags && tags.length) {
+      for (const tag of tags) {
+        await getDb()
+          .delete(gatePendingReads)
+          .where(and(eq(gatePendingReads.gateNo, gate), eq(gatePendingReads.tag, tag)));
+        fx9600RecentlySeen.delete(tag);
+      }
+    } else {
+      await getDb().delete(gatePendingReads).where(eq(gatePendingReads.gateNo, gate));
+      fx9600RecentlySeen.clear();
+    }
+    res.json({ ok: true });
+  }),
+);
+
 rfidRouter.post(
   '/fx9600/:gate/webhook',
   requireFx9600Secret,
@@ -274,21 +351,46 @@ rfidRouter.post(
       }
     });
 
-    // Deduped before gateIn() rather than inside it: a handheld operator
-    // deliberately re-scanning a box means "receive it again", but a fixed
-    // reader repeating itself just means the box hasn't moved.
-    const { fresh, repeats } = splitRepeats(Array.from(new Set(tags)));
+    /* Queue for the operator instead of receiving outright. A fixed reader
+       sees everything in range — boxes still on the truck, boxes carried past
+       the door, boxes sitting on a nearby rack — so auto-receiving would book
+       in things that never actually arrived. The reads land in
+       gate_pending_reads, surface as chips in Gate ขาเข้า, and only become a
+       real gate-in when someone presses ยืนยันรับเข้าคลัง (which goes through
+       the same PUT /api/state path a manual barcode scan already used).
+       Only codes that resolve to a real box are queued: a gate typically has
+       a dozen foreign tags in range, and listing those as chips would bury
+       the boxes that matter. */
+    const unique = Array.from(new Set(tags));
+    const { resolved, missing } = await resolveBoxesByCodes(db, unique);
+    /* Boxes already sitting in the warehouse are skipped, matching what the
+       operator gets from a manual barcode scan ("อยู่ในคลังอยู่แล้ว"). Without
+       this, a reader whose field covers nearby racks would permanently fill
+       the queue with stock that's already booked in and can't be received
+       again. */
+    const boxTags = Array.from(
+      new Set(
+        Array.from(resolved.values())
+          .filter((r) => r.status !== 'warehouse')
+          .map((r) => r.tag),
+      ),
+    );
+    const { fresh, repeats } = splitRepeats(boxTags);
     const now = Date.now();
     for (const tag of fresh) fx9600RecentlySeen.set(tag, now);
 
-    const result = fresh.length
-      ? await gateIn(db, {
-          tags: fresh,
-          gate,
-          recorder: `FX9600 · Gate ${gate}`,
-          device: 'fx9600-webhook',
-        })
-      : { ok: true as const, received: [] as string[], unknown: [] as string[], count: 0 };
+    if (boxTags.length) {
+      // seen_at refreshed even for repeats so a box sitting in range keeps the
+      // queue entry alive rather than ageing out from under the operator.
+      await db
+        .insert(gatePendingReads)
+        .values(boxTags.map((tag) => ({ gateNo: gate, tag, seenAt: new Date() })))
+        .onConflictDoUpdate({
+          target: [gatePendingReads.gateNo, gatePendingReads.tag],
+          set: { seenAt: new Date() },
+        });
+    }
+    const result = { ok: true as const, received: fresh, unknown: missing, count: fresh.length };
     // Diagnostic visibility for whoever's debugging a reader in the field —
     // "connected but nothing happens" is otherwise a black box: this shows
     // exactly which EPCs came in, what they decoded to, and whether gateIn()
@@ -308,13 +410,13 @@ rfidRouter.post(
       unknown: result.unknown,
       repeats,
     });
-    // Same reason the handheld routes call this — a reader-driven receive
-    // never goes through PUT /api/state, so the dashboards would otherwise
-    // sit stale until someone happens to refresh. Skipped when every tag in
-    // this report was a suppressed repeat: nothing changed, so waking every
-    // connected browser (once a second, per the reader's report interval)
-    // would be pure noise.
-    if (result.received.length) bump();
+    /* Deliberately no bump() here any more. It made sense while this route
+       received boxes directly (box state changed, so every browser needed to
+       refetch), but queuing touches nothing in the /api/state snapshot — the
+       queue has its own endpoint the Gate ขาเข้า screen polls. Waking every
+       connected client to re-pull the full state once a second, per the
+       reader's report interval, for data that didn't change would be pure
+       waste. The receive itself still bumps, via the normal save() path. */
     res.json(result);
   }),
 );

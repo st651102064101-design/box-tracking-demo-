@@ -90,6 +90,20 @@ CREATE TABLE IF NOT EXISTS gate_webhook_status (
 -- Keyed by the JWT's `username` (stable per login), not the display `name`
 -- (two accounts can share a display name) or a per-browser value (the user
 -- explicitly wants this to follow them across devices, not stick to one).
+-- Boxes a fixed RFID reader has seen at a gate but that nobody has confirmed
+-- into the warehouse yet. The reader feeds this queue; the operator reviews it
+-- as chips in Gate ขาเข้า and presses "ยืนยันรับเข้าคลัง" to actually receive —
+-- deliberately NOT auto-receiving, since a reader sees everything in range
+-- including boxes merely passing by or sitting on a truck that hasn't been
+-- unloaded. Rows are upserted (seen_at refreshed) on every read, deleted when
+-- the operator confirms or removes the chip, and ignored once stale.
+CREATE TABLE IF NOT EXISTS gate_pending_reads (
+  gate_no  INTEGER NOT NULL,
+  tag      TEXT    NOT NULL,
+  seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (gate_no, tag)
+);
+
 CREATE TABLE IF NOT EXISTS gate_prefs (
   username     TEXT PRIMARY KEY,
   out_gate     TEXT,

@@ -23,6 +23,7 @@ import {
   jsonb,
   timestamp,
   index,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 /* ─── auth ────────────────────────────────────────────────────────────────*/
@@ -101,6 +102,19 @@ export const gateWebhookStatus = pgTable('gate_webhook_status', {
   gateNo: integer('gate_no').primaryKey(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
 });
+
+/** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
+ *  before they're actually received — see the matching table comment in
+ *  schema.sql for why reader reads queue instead of auto-receiving. */
+export const gatePendingReads = pgTable(
+  'gate_pending_reads',
+  {
+    gateNo: integer('gate_no').notNull(),
+    tag: text('tag').notNull(),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.gateNo, t.tag] }) }),
+);
 
 /** Per-account chosen gate for Gate ขาออก/ขาเข้า — see the matching table
  *  comment in schema.sql for why this needed its own table (stateSchema
@@ -288,6 +302,7 @@ export type Schema = {
   warehouses: typeof warehouses;
   gates: typeof gates;
   gateWebhookStatus: typeof gateWebhookStatus;
+  gatePendingReads: typeof gatePendingReads;
   gatePrefs: typeof gatePrefs;
   locations: typeof locations;
   employees: typeof employees;
@@ -311,6 +326,7 @@ export const schema = {
   warehouses,
   gates,
   gateWebhookStatus,
+  gatePendingReads,
   gatePrefs,
   locations,
   employees,

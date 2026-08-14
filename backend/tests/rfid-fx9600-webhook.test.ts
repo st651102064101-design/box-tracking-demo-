@@ -21,6 +21,10 @@ beforeAll(async () => {
         'BOX-C': { tag: 'BOX-C', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
         'BOX-D': { tag: 'BOX-D', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
         'BOX-E': { tag: 'BOX-E', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-F': { tag: 'BOX-F', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-G': { tag: 'BOX-G', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-H': { tag: 'BOX-H', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
+        'BOX-I': { tag: 'BOX-I', type: 'BT-001', value: 450, status: 'warehouse', cycles: 1, labeled: true, history: [], location: {} },
       },
       customers: {},
       warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
@@ -65,14 +69,46 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(res.body.error).toBe('invalid_gate');
   });
 
-  it('receives a box in via a single-object payload carrying the ASCII-decoded barcode', async () => {
+  it('queues a box for confirmation rather than receiving it outright', async () => {
     const epcHex = encodeBarcodeToEpcHex('BOX-B');
     const res = await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ idHex: epcHex });
     expect(res.status).toBe(200);
     expect(res.body.received).toContain('BOX-B');
 
+    // Queued, not booked in — a fixed reader sees boxes that never actually
+    // arrive, so the operator confirms before anything changes status.
     const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
-    expect(state.body.boxes['BOX-B'].status).toBe('warehouse');
+    expect(state.body.boxes['BOX-B'].status).toBe('out');
+
+    const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).toContain('BOX-B');
+  });
+
+  it('drops a tag from the queue on request, and lets the reader re-queue it after', async () => {
+    const epcHex = encodeBarcodeToEpcHex('BOX-F');
+    await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ idHex: epcHex });
+
+    await request(ctx.app).delete('/api/rfid/pending/5/BOX-F').set(auth(ctx.token));
+    let pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).not.toContain('BOX-F');
+
+    // Removing it also clears the repeat-suppression memory, or the box could
+    // not be re-presented until the window lapsed.
+    await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ idHex: epcHex });
+    pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).toContain('BOX-F');
+  });
+
+  it('clears only the named tags when the operator confirms a receive', async () => {
+    await request(ctx.app)
+      .post(webhookUrl(5))
+      .set(secretHeader)
+      .send([{ data: { idHex: encodeBarcodeToEpcHex('BOX-G') } }, { data: { idHex: encodeBarcodeToEpcHex('BOX-H') } }]);
+
+    await request(ctx.app).delete('/api/rfid/pending/5').set(auth(ctx.token)).send({ tags: ['BOX-G'] });
+    const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).not.toContain('BOX-G');
+    expect(pending.body.tags).toContain('BOX-H');
   });
 
   it('receives a box from the real FX9600 INVENTORY payload shape (array of {data:{idHex}})', async () => {
@@ -97,11 +133,16 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
       ]);
     expect(res.status).toBe(200);
     expect(res.body.received).toContain('BOX-D');
-    // The foreign tag is reported back as unknown rather than silently dropped.
+    // The foreign tag is reported back as unknown rather than silently dropped,
+    // and must NOT reach the queue — a gate has a dozen strangers' tags in
+    // range and listing them as chips would bury the real boxes.
     expect(res.body.unknown).toContain('e2801191a5030069565def45');
+    const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).toContain('BOX-D');
+    expect(pending.body.tags).not.toContain('e2801191a5030069565def45');
   });
 
-  it('suppresses repeats so a stationary box is not re-received every report', async () => {
+  it('suppresses repeats so a stationary box is not re-queued every report', async () => {
     const epcHex = encodeBarcodeToEpcHex('BOX-E').toLowerCase();
     const payload = [{ data: { idHex: epcHex }, type: 'INVENTORY' }];
 
@@ -114,6 +155,19 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
 
     const log = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
     expect(log.body.entries[0].repeats).toContain('BOX-E');
+  });
+
+  it('does not queue a box that is already in the warehouse', async () => {
+    // BOX-I starts in the warehouse — the state a box is in once it's already
+    // been booked in and is merely sitting within the antenna's range.
+    const res = await request(ctx.app)
+      .post(webhookUrl(5))
+      .set(secretHeader)
+      .send({ idHex: encodeBarcodeToEpcHex('BOX-I') });
+    expect(res.status).toBe(200);
+
+    const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).not.toContain('BOX-I');
   });
 
   it('receives a box even when the reader sends tag data with a non-JSON Content-Type', async () => {
@@ -167,8 +221,8 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(res.status).toBe(200);
     expect(res.body.received).toContain('BOX-A');
 
-    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
-    expect(state.body.boxes['BOX-A'].status).toBe('warehouse');
+    const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    expect(pending.body.tags).toContain('BOX-A');
   });
 
   it('ignores a heartbeat/status payload with no tag data instead of erroring', async () => {
