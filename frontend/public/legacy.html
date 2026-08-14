@@ -1374,7 +1374,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <button type="button" class="btn ghost sm" id="btnFx9600LogToggle" style="margin-top:10px;">ดู log ดิบ</button>
     <div id="fx9600LogPanel" style="display:none;margin-top:10px;">
       <div class="twrap" style="max-height:320px;overflow-y:auto;">
-        <table style="font-size:12px;"><thead><tr><th>เวลา</th><th>ประตู</th><th>EPC (hex)</th><th>ถอดรหัสได้</th><th>ผลลัพธ์</th></tr></thead>
+        <table style="font-size:12px;"><thead><tr><th>เวลา</th><th>EPC (hex)</th><th>ถอดรหัสได้</th><th>ผลลัพธ์</th><th>ข้อมูลดิบที่เครื่องส่งมา</th></tr></thead>
           <tbody id="fx9600LogBody"></tbody></table>
       </div>
     </div>
@@ -7625,13 +7625,29 @@ function fx9600LogPoll(){
       body.innerHTML=d.entries.length?d.entries.map(function(e){
         var t=new Date(e.ts);
         var timeTxt=pad(t.getHours(),2)+':'+pad(t.getMinutes(),2)+':'+pad(t.getSeconds(),2);
+        /* เรียงตามความสำคัญที่คนดูอยากรู้: รับเข้าได้จริง > อ่านซ้ำกล่องเดิม (ปกติมาก
+           สำหรับเครื่องอ่านติดตั้งถาวรที่จ้องกล่องที่วางนิ่งอยู่ ไม่ใช่ปัญหา) > เจอแท็กแต่
+           ไม่ใช่กล่องในระบบ > ไม่มีแท็กเลย */
+        var repeats=e.repeats||[];
         var resultTxt=e.received.length?'<span style="color:var(--pos);">รับเข้า: '+e.received.map(esc).join(', ')+'</span>'
-          :e.unknown.length?'<span style="color:var(--warn);">ไม่รู้จัก: '+e.unknown.map(esc).join(', ')+'</span>'
+          :repeats.length?'<span class="muted">อ่านซ้ำกล่องเดิม: '+repeats.map(esc).join(', ')+'</span>'
+          :e.unknown.length?'<span style="color:var(--warn);">ไม่ใช่กล่องในระบบ: '+e.unknown.length+' แท็ก</span>'
           :'<span class="muted">heartbeat (ไม่มีแท็ก)</span>';
-        return '<tr><td class="mono">'+timeTxt+'</td><td>'+e.gate+'</td>'
+        /* ข้อมูลดิบคือหัวใจของ panel นี้ — ที่ผ่านมาแยกไม่ออกเลยว่า "เครื่องอ่านไม่ส่งข้อมูล
+           แท็กมา" กับ "ส่งมาแต่เราแกะไม่ได้ (Content-Type ไม่ใช่ JSON)" ต่างกันตรงไหน
+           เพราะทั้งคู่จบลงที่ epcs ว่างเปล่าเหมือนกัน — โชว์ body ที่มาจริงกับ Content-Type
+           ให้เห็นกับตา จะได้ตอบคำถามนั้นได้โดยไม่ต้องเดา */
+        var rawTxt=(e.rawBody||'').trim();
+        var rawCell=rawTxt?'<details><summary class="muted" style="cursor:pointer;">'+esc(e.contentType||'(ไม่ระบุ)')+' · '+rawTxt.length+' ตัวอักษร</summary>'
+            +'<pre class="mono" style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin:4px 0 0;max-height:160px;overflow:auto;">'+esc(rawTxt)+'</pre>'
+            +(e.parseError?'<div style="color:var(--neg);font-size:11px;margin-top:3px;">แกะ JSON ไม่ได้: '+esc(e.parseError)+'</div>':'')
+          +'</details>'
+          :'<span class="muted">(body ว่าง)</span>';
+        return '<tr><td class="mono">'+timeTxt+'</td>'
           +'<td class="mono" style="word-break:break-all;">'+(e.epcs.length?e.epcs.map(esc).join('<br>'):'<span class="muted">-</span>')+'</td>'
           +'<td class="mono">'+(e.decoded.length?e.decoded.map(esc).join('<br>'):'<span class="muted">-</span>')+'</td>'
-          +'<td>'+resultTxt+'</td></tr>';
+          +'<td>'+resultTxt+'</td>'
+          +'<td style="max-width:340px;">'+rawCell+'</td></tr>';
       }).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:14px;">ยังไม่มี request เข้ามาเลย — เช็คว่าเครื่องอ่านตั้ง URL/secret ถูกไหม</td></tr>';
     }).catch(function(){});
 }
