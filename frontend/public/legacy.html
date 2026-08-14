@@ -1114,6 +1114,307 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   /* the density KPI card itself, while rack locations are unset */
   .mdh-inline-kpi .s{color:var(--warn);font-weight:600;}
   .mdh-inline-kpi .v{color:var(--warn);}
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     OVERVIEW — WIDGET BOARD
+     A home screen, not a report. Squircle widgets on the bare --bg canvas,
+     a strict 4/2 column grid, no chrome between them.
+     Namespace: .wg-*  and  [data-tint]  — verified zero collisions elsewhere.
+
+     WHY THIS SHAPE: the five status counts and the two gate counts are *glance*
+     content — a supervisor holding a tablet by the dock door reads them in
+     under a second and drills in with a thumb — while the overdue and
+     by-customer tables are *sit-down* content. A report layout renders both at
+     the same visual weight; a widget board makes the difference structural.
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /* ── tokens: LIGHT IS THE BASE. every one is re-declared in BOTH dark blocks ── */
+  :root{
+    --wgR:26px;                          /* one radius for every family — WidgetKit does not scale
+                                            the corner with the widget, and neither do we */
+    --wgPad:18px;
+    --wgGap:16px;
+    --wgH:clamp(138px,12.4vw,164px);     /* systemSmall height == systemMedium height */
+    --wgLead:1.55;                       /* Thai line-height floor — never go under this */
+    --wgWash:9%;                         /* how much semantic tint washes the head of a card */
+    --wgMarkOp:.07;                      /* glyph watermark opacity */
+    --wgRing:rgba(0,0,0,.055);           /* the hairline, drawn as inset shadow not border,
+                                            so it survives corner-shape:squircle cleanly */
+    --wgSheen:rgba(255,255,255,.85);     /* specular top edge */
+    --wgShadow:0 1px 1px rgba(0,0,0,.035),0 8px 22px -10px rgba(0,0,0,.16);
+    --wgShadowUp:0 2px 4px rgba(0,0,0,.05),0 22px 46px -16px rgba(0,0,0,.24);
+  }
+  html[data-theme="dark"]{
+    --wgWash:13%;
+    --wgMarkOp:.11;
+    --wgRing:rgba(255,255,255,.10);
+    --wgSheen:rgba(255,255,255,.055);
+    --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
+    --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
+  }
+  @media (prefers-color-scheme:dark){
+    html:not([data-theme="light"]):not([data-theme="dark"]){
+      --wgWash:13%;
+      --wgMarkOp:.11;
+      --wgRing:rgba(255,255,255,.10);
+      --wgSheen:rgba(255,255,255,.055);
+      --wgShadow:0 1px 1px rgba(0,0,0,.6),0 10px 26px -12px rgba(0,0,0,.8);
+      --wgShadowUp:0 2px 4px rgba(0,0,0,.7),0 26px 54px -18px rgba(0,0,0,.9);
+    }
+  }
+
+  /* ── semantic tint. inherited down from whatever element declares it.
+        default is graphite: in this system "positive" has no hue.        ── */
+  #tab-overview{--wgTint:var(--ink);--wgTintInk:var(--ink);}
+  #tab-overview [data-tint="accent"]{--wgTint:var(--accent);--wgTintInk:var(--accentInk);}
+  #tab-overview [data-tint="pos"]   {--wgTint:var(--pos);  --wgTintInk:var(--ink);}
+  #tab-overview [data-tint="warn"]  {--wgTint:var(--warn); --wgTintInk:var(--warn);}
+  #tab-overview [data-tint="neg"]   {--wgTint:var(--neg);  --wgTintInk:var(--neg);}
+
+  /* ══ THE BOARD ═══════════════════════════════════════════════════════════
+     4 columns → 2 → 2. iPhone's home screen never drops below two small
+     widgets per row; a full-width tile holding one 3-digit number is a
+     wasted row on a dock-door tablet. Everything ABOVE small goes full width. */
+  #tab-overview .wg-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--wgGap);
+    margin:0 0 var(--wgGap);align-items:stretch;}
+  #tab-overview .wg-board.units{grid-auto-rows:minmax(var(--wgH),auto);}
+  #tab-overview .wg{grid-column:span 1;}
+  #tab-overview .wg.m{grid-column:span 2;}
+  #tab-overview .wg.l{grid-column:span 2;grid-row:span 2;}
+  #tab-overview .wg.xl{grid-column:span 4;}
+  @media(max-width:939px){
+    #tab-overview .wg-board{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #tab-overview .wg.m,#tab-overview .wg.l,#tab-overview .wg.xl{grid-column:span 2;}
+  }
+  @media(max-width:519px){
+    #tab-overview .wg-board{gap:10px;}
+    #tab-overview{--wgR:22px;--wgPad:15px;--wgH:126px;}
+    #tab-overview .wg.l{grid-row:auto;}
+  }
+
+  /* ── board header: title + (optionally) the shared scope control.
+        Rule: a filter that governs >1 widget lives HERE. A filter that governs
+        exactly one widget lives inside that widget. No hairline rule — the
+        background is the separator.                                        ── */
+  #tab-overview .wg-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:38px 4px 14px;min-width:0;}
+  #tab-overview .wg-board+.wg-hd,#tab-overview .wg-loose+.wg-hd{margin-top:34px;}
+  #tab-overview .wg-hd-t{font-size:19px;font-weight:700;color:var(--ink);
+    /* Thai: -.015em is the floor. SF Pro tolerates -.03em; Thai upper vowels
+       start colliding with the preceding consonant's ascender well before that. */
+    letter-spacing:-.015em;line-height:1.45;}
+  #tab-overview .wg-hd-s{font-size:12.5px;font-weight:400;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);}
+  #tab-overview .wg-scope{margin-left:auto;min-width:0;max-width:100%;}
+  /* dfBarHtml hard-codes margin-bottom:10px inline; the board header owns spacing here */
+  #tab-overview .wg-scope>div[id^="df-"]{margin-bottom:0!important;}
+  @media(max-width:619px){#tab-overview .wg-scope{margin-left:0;width:100%;}}
+
+  /* ══ THE WIDGET ══════════════════════════════════════════════════════════ */
+  #tab-overview .wg{
+    position:relative;isolation:isolate;overflow:hidden;min-width:0;
+    display:flex;flex-direction:column;
+    padding:var(--wgPad);
+    border:none;border-radius:var(--wgR);
+    -webkit-appearance:none;appearance:none;
+    font:inherit;text-align:left;color:var(--ink);
+    /* the tint wash: strongest at the head, gone by 58% — the number floats on
+       clean --surface so it never fights the tint for contrast */
+    background:linear-gradient(180deg,
+      color-mix(in srgb,var(--wgTint) var(--wgWash),var(--surface)) 0%,
+      var(--surface) 58%);
+    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadow);
+    transition:transform .34s var(--ease),box-shadow .34s var(--ease);
+  }
+  /* real continuous corners where the engine has them (CSS Borders 4). The
+     superellipse reads optically smaller at the same radius, so bump ~18%. */
+  @supports (corner-shape:squircle){
+    #tab-overview .wg,#tab-overview .occ-card,#tab-overview .mdh-banner,#tab-overview .lost-alert-card{
+      corner-shape:squircle;border-radius:calc(var(--wgR)*1.18);}
+  }
+  #tab-overview .wg[data-act]{cursor:pointer;}
+  #tab-overview .wg[data-act]:hover{transform:translateY(-2px);
+    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadowUp);}
+  #tab-overview .wg[data-act]:active{transform:scale(.985);transition-duration:.09s;}
+  #tab-overview .wg:focus-visible{outline:none;
+    box-shadow:inset 0 0 0 2.5px var(--accent),inset 0 0 0 .5px var(--wgRing),var(--wgShadowUp);}
+  /* drill-in affordance. hover-capable pointers get it on hover; touch devices
+     (the warehouse floor) get it permanently, because there is no hover there. */
+  #tab-overview .wg[data-act]::after{content:"\203A";position:absolute;top:calc(var(--wgPad) - 6px);right:var(--wgPad);
+    font-size:21px;line-height:1;font-weight:400;color:var(--faint);opacity:.5;
+    transition:opacity .2s var(--ease),transform .2s var(--ease);}
+  @media(hover:hover){
+    #tab-overview .wg[data-act]::after{opacity:0;transform:translateX(-3px);}
+    #tab-overview .wg[data-act]:hover::after{opacity:.75;transform:none;}
+  }
+
+  /* ── quiet header row ── */
+  #tab-overview .wg-top{display:flex;align-items:center;gap:9px;flex:0 0 auto;padding-right:24px;min-width:0;}
+  #tab-overview .wg-ic{width:26px;height:26px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--wgTint) 15%,transparent);color:var(--wgTintInk);}
+  #tab-overview .wg-ic .svgi{width:15px;height:15px;}
+  #tab-overview .wg-ic.dashed{background:transparent;box-shadow:inset 0 0 0 1.25px color-mix(in srgb,var(--ink) 22%,transparent);}
+  @supports (corner-shape:squircle){#tab-overview .wg-ic{corner-shape:squircle;border-radius:10px;}}
+  #tab-overview .wg-lbl{font-size:12.5px;font-weight:600;color:var(--muted);min-width:0;}
+
+  /* ── the one dominant figure ── */
+  #tab-overview .wg-fig{margin-top:auto;display:flex;align-items:baseline;gap:7px;min-width:0;padding-top:12px;}
+  #tab-overview .wg-n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;
+    /* digits are Latin — negative tracking is safe here and nowhere else */
+    letter-spacing:-.03em;line-height:1;color:var(--wgTintInk);
+    font-size:clamp(30px,3.3vw,38px);}
+  #tab-overview .wg.m .wg-n,#tab-overview .wg.l .wg-n{font-size:clamp(38px,4.6vw,54px);}
+  #tab-overview .wg-unit{font-size:13px;font-weight:500;color:var(--muted);}
+  #tab-overview .wg-sub{margin:6px 0 0;font-size:12.5px;color:var(--muted);}
+
+  /* ── glyph watermark, bleeding off the corner (Weather / Fitness) ── */
+  #tab-overview .wg-mark{position:absolute;right:-16px;bottom:-20px;width:120px;height:120px;z-index:-1;
+    color:var(--wgTintInk);opacity:var(--wgMarkOp);pointer-events:none;}
+  #tab-overview .wg-mark svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.4;
+    stroke-linecap:round;stroke-linejoin:round;}
+
+  /* ── opt-in meter. ships inert: shows the moment JS sets --v (0–100).
+        one line in renderReports: el.style.setProperty('--v', pct) ── */
+  #tab-overview .wg-meter{display:none;height:5px;border-radius:5px;margin-top:11px;
+    background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden;}
+  #tab-overview .wg-meter[style*="--v"]{display:block;}
+  #tab-overview .wg-meter::before{content:"";display:block;height:100%;border-radius:5px;
+    width:calc(var(--v,0)*1%);background:var(--wgTintInk);transition:width .7s var(--ease);}
+
+  /* ── systemLarge, 3-up: several related counts inside ONE squircle
+        (Batteries / Stocks). Internal hairlines are fine — they are inside a
+        single widget, so "no chrome BETWEEN widgets" still holds.        ── */
+  #tab-overview .wg-split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    margin:14px calc(var(--wgPad)*-1) calc(var(--wgPad)*-1);}
+  #tab-overview .wg-cell{display:flex;flex-direction:column;gap:0;min-width:0;text-align:left;
+    padding:15px var(--wgPad) var(--wgPad);border-left:.5px solid var(--line);
+    background:none;font:inherit;color:inherit;cursor:pointer;
+    transition:background .18s;}
+  #tab-overview .wg-cell:first-child{border-left:none;}
+  #tab-overview .wg-cell:hover{background:color-mix(in srgb,var(--ink) 4%,transparent);}
+  #tab-overview .wg-cell:active{background:color-mix(in srgb,var(--ink) 7%,transparent);}
+  #tab-overview .wg-cell:focus-visible{outline:none;box-shadow:inset 0 0 0 2.5px var(--accent);}
+  #tab-overview .wg-cell .wg-top{padding-right:0;}
+  #tab-overview .wg-cell .wg-n{font-size:clamp(28px,2.9vw,34px);margin-top:12px;}
+  @media(max-width:519px){
+    /* 3 tiles across 360px cannot hold "พักใช้งาน (Hold)" — become list rows */
+    #tab-overview .wg-split{grid-template-columns:1fr;}
+    #tab-overview .wg-cell{flex-direction:row;align-items:center;gap:12px;border-left:none;
+      border-top:.5px solid var(--line);padding:13px var(--wgPad);}
+    #tab-overview .wg-cell:first-child{border-top:none;}
+    #tab-overview .wg-cell .wg-n{margin-top:0;margin-left:auto;font-size:27px;}
+  }
+
+  /* ══ TABLE WIDGET (systemLarge) — self-contained: own title, own scope
+        control, own caption, own pager. No board header above it.      ══ */
+  #tab-overview .wg.wg-table{padding:0;}
+  #tab-overview .wg-table>.wg-top{padding:16px 18px 13px;flex-wrap:wrap;
+    border-bottom:.5px solid var(--line);gap:10px;}
+  #tab-overview .wg-table>.wg-top .wg-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
+  #tab-overview .wg-cap{margin:0;padding:11px 18px 3px;font-size:12.5px;color:var(--muted);}
+  #tab-overview .wg-cap:empty{display:none;}
+  /* board-level caption sits outside a widget, so it aligns to the board
+     header's own 4px gutter rather than a widget's 18px inner padding */
+  #tab-overview .wg-cap.board{margin:-6px 0 14px;padding:0 4px;}
+  #tab-overview .wg-body{min-width:0;position:relative;}
+  #tab-overview .wg-table .twrap{max-height:60vh;-webkit-overflow-scrolling:touch;}
+  /* right-edge fade tells a thumb the table scrolls sideways */
+  #tab-overview .wg-scrollhint::after{content:"";position:absolute;inset:0 0 0 auto;width:28px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,var(--surface));z-index:3;}
+  #tab-overview .wg-table .pagerbar{margin:0;}
+  /* horizontal escape hatches for the injected wide markup — applied to the
+     INJECTED classes so renderReports() never has to change */
+  #ovTypeFlow .rpt-type-header,#ovTypeFlow .rpt-box-rows.open{min-width:880px;}
+  #tab-overview .lost-alert-card .alert-table{min-width:660px;}
+  #tab-overview .lost-alert-card{overflow:auto;}
+
+  /* ══ TOGGLE WIDGET ══════════════════════════════════════════════════════ */
+  #tab-overview .wg-toggle{flex-direction:row;align-items:center;gap:13px;padding:16px 18px;}
+  #tab-overview .wg-toggle-txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+  #tab-overview .wg-toggle-lbl{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.015em;}
+  #tab-overview .wg-toggle-sub{font-size:12.5px;color:var(--muted);}
+  /* NOTE: no transform here — _setReportsPanelOpen() writes style.transform directly */
+  #tab-overview .wg-chev{flex:0 0 auto;color:var(--muted);transition:transform .25s var(--ease);}
+
+  /* ══ RE-SHELLING THE RUNTIME-INJECTED COMPONENTS ════════════════════════ */
+  /* occupancy: #ovOccupancy IS the grid (bare .occ-card siblings, no wrapper).
+     Kept on .occ-grid's auto-fill rather than the fixed 4-col board, because
+     the warehouse count is variable and auto-fill degrades better at 390px. */
+  #tab-overview .occ-card{border:none;border-radius:var(--wgR);padding:var(--wgPad);
+    display:flex;flex-direction:column;min-width:0;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--ink) 4%,var(--surface)) 0%,var(--surface) 58%);
+    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadow);}
+  #tab-overview .occ-card:hover{transform:translateY(-2px);
+    box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadowUp);}
+  #tab-overview .occ-card .ocw-name{font-size:14px;}
+  #tab-overview .occ-card .ocw-sub{margin-bottom:auto;}
+  #tab-overview .occ-card .ocw-n{font-size:clamp(30px,3.3vw,38px);letter-spacing:-.03em;margin-top:12px;}
+  #tab-overview .occ-card .ocw-bar{height:5px;border-radius:5px;margin-top:11px;
+    background:color-mix(in srgb,var(--ink) 10%,transparent);}
+  #tab-overview .occ-card .ocw-fill{background:var(--ink);}
+
+  /* lost alert: a --neg-washed widget instead of a flat --negSoft slab */
+  #tab-overview .lost-alert-card{border:.5px solid color-mix(in srgb,var(--neg) 38%,var(--line));
+    border-radius:var(--wgR);box-shadow:var(--wgShadow);margin-bottom:0;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--neg) 10%,var(--surface)) 0%,var(--surface) 42%);}
+
+  /* nested DO cards read as smaller widgets inside the by-customer widget */
+  #tab-overview .dorow{border-radius:calc(var(--wgR) - 10px);border-color:var(--line);}
+
+  /* master-data health banner — the .mdh-* block above stays verbatim; only the
+     container joins the widget language. */
+  #tab-overview .mdh-banner{border-radius:var(--wgR);padding:16px 18px;margin:0 0 22px;
+    border:.5px solid color-mix(in srgb,var(--warn) 32%,var(--line));box-shadow:var(--wgShadow);
+    background:linear-gradient(180deg,color-mix(in srgb,var(--warn) 12%,var(--surface)) 0%,var(--surface) 60%);}
+  #tab-overview .mdh-title{letter-spacing:0;line-height:var(--wgLead);}
+  /* was color-mix(...,black) — undefined-looking in dark; token-based now */
+  #tab-overview .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 75%,var(--ink));}
+  #tab-overview .wg-loose:empty{display:none;}
+
+  /* ══ HERO — shrunk and de-chromed. Strings and markup untouched so the
+        i18n EXACT dictionary keeps matching.                           ══ */
+  #tab-overview>.hero,#tab-reports>.hero{padding:26px 0 20px;border-bottom:none;margin-bottom:24px;}
+  #tab-overview>.hero .h-title,#tab-reports>.hero .h-title{
+    font-size:clamp(34px,5.2vw,58px);line-height:1.3;letter-spacing:-.035em;}
+  #tab-overview>.hero .h-sub,#tab-reports>.hero .h-sub{
+    font-size:clamp(15px,1.5vw,17px);margin-top:14px;}
+
+  /* ══ THAI TYPOGRAPHY — THE EXPLICIT PART ════════════════════════════════
+     body ships letter-spacing:-.011em globally. On SF Pro that is invisible;
+     on Anuphan / IBM Plex Sans Thai it pushes สระบน (ิ ี ึ ื ั ็) and
+     วรรณยุกต์ (่ ้ ๊ ๋) into the preceding consonant's stem. Every Thai
+     string in this board resets to 0 and takes --wgLead (1.55) so the
+     two-storey mark stack has room. Only Latin digits keep negative tracking
+     (.wg-n), and only display-size Thai keeps a mild -.015em. ── */
+  #tab-overview .wg-lbl,#tab-overview .wg-unit,#tab-overview .wg-sub,#tab-overview .wg-cap,
+  #tab-overview .wg-hd-s,#tab-overview .wg-toggle-sub,
+  #tab-overview .wg-cell,#tab-overview .wg .empty,#tab-overview .wg .pill,
+  #tab-overview .wg .tag,#tab-overview .wg .days-badge,
+  #tab-overview .ocw-name,#tab-overview .ocw-sub,#tab-overview .mdh-list,
+  #tab-overview .dostats,#tab-overview .dohead,
+  #tab-overview>.hero .h-sub,#tab-reports>.hero .h-sub{
+    letter-spacing:0;line-height:var(--wgLead);
+    /* leave line-breaking to the engine's Thai dictionary; never break-word,
+       which would split a syllable cluster off from its mark */
+    overflow-wrap:normal;word-break:normal;hyphens:none;}
+  /* .wg has overflow:hidden for the squircle — guarantee the top mark of a
+     first-line Thai label can never be clipped by the clip edge */
+  #tab-overview .wg-lbl,#tab-overview .wg-hd-t,#tab-overview .wg-toggle-lbl{padding-block:1px;}
+  /* injected table cells: same reset, they are mostly Thai */
+  #tab-overview td,#tab-overview th{letter-spacing:0;}
+  #tab-overview td{line-height:1.5;}
+
+  /* ══ 390px ═══════════════════════════════════════════════════════════════ */
+  @media(max-width:519px){
+    #tab-overview .wg-hd{margin:28px 2px 12px;}
+    #tab-overview .wg-hd-t{font-size:17px;}
+    #tab-overview .wg-table>.wg-top{padding:14px 15px 12px;}
+    #tab-overview .wg-cap{padding:10px 15px 2px;}
+    #tab-overview .wg-cap.board{padding:0 2px;}
+    #tab-overview th,#tab-overview td{padding:11px 13px;}
+    #tab-overview .pagerbar .pg-info{padding:10px 15px;}
+    #tab-overview .pagerbar .pg-nav{padding:8px 15px 10px;}
+    #tab-overview .empty{padding:40px 16px;}
+    #tab-overview>.hero,#tab-reports>.hero{padding:18px 0 14px;margin-bottom:18px;}
+  }
   </style>
   <div id="mdHealthBanner"></div>
 
@@ -1123,54 +1424,165 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="h-sub reveal d2">สถานะกล่อง แตะเพื่อดูรายการ — กดปุ่ม "รายงานเพิ่มเติม" ด้านล่างเพื่อดูรายละเอียดเพิ่มเติม</p>
   </div>
 
-  <div id="df-ovStatusNow-mount"></div>
-  <p class="muted small" id="ovStatusNowDesc" style="margin:0 0 10px;"></p>
-  <div class="kpis reveal" style="margin-top:8px;">
-    <div class="kpi green clickable" title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'พร้อมส่งออก'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></div><div class="n mono" id="kInNow">0</div><div class="l">พร้อมส่งออก</div></div>
-    <div class="kpi teal clickable" title="ดูกล่องที่ออกอยู่" onclick="goInventory({status:'out',label:'ออกอยู่'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kOutNow">0</div><div class="l">ออกอยู่</div></div>
-    <div class="kpi red clickable" title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'สูญหาย'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M8 9l3 4 3-3 4 5"/><path d="M18 15h2v-2"/></svg></span></div><div class="n mono" id="kLostNow">0</div><div class="l">สูญหาย</div></div>
-    <div class="kpi orange clickable" title="ดูกล่องที่พักใช้งาน" onclick="goInventory({status:'hold',label:'พักใช้งาน (Hold)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></div><div class="n mono" id="kHoldNow">0</div><div class="l">พักใช้งาน (Hold)</div></div>
-    <div class="kpi purple clickable" title="ดูกล่องชำรุด" onclick="goInventory({status:'damage',label:'ชำรุด (Damage)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></div><div class="n mono" id="kDamageNow">0</div><div class="l">ชำรุด (Damage)</div></div>
+  <!-- ═══ BOARD 1 — สถานะกล่องตอนนี้ (4 cols × 2 rows, zero orphans) ═══════
+       The ovStatusNow filter governs all five counts, so it lives in the board
+       header rather than inside any one widget. -->
+  <div class="wg-hd reveal">
+    <span class="wg-hd-t">สถานะกล่องตอนนี้</span>
+    <div class="wg-scope" id="df-ovStatusNow-mount"></div>
   </div>
+  <p class="wg-cap board" id="ovStatusNowDesc"></p>
 
-  <div class="sectlabel reveal">ความเคลื่อนไหว</div>
-  <div id="df-ovMove-mount"></div>
-  <p class="muted small" id="ovMoveDesc" style="margin:0 0 10px;"></p>
-  <div class="kpis reveal">
-    <div class="kpi green clickable" title="ดูกล่องที่ผ่าน Gate เข้า" onclick="showGateTodayList('in');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kInToday">0</div><div class="l" id="kInTodayLabel">เข้า</div></div>
-    <div class="kpi teal clickable" title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></div><div class="n mono" id="kOutToday">0</div><div class="l" id="kOutTodayLabel">ออก</div></div>
-  </div>
-
-  <div class="sectlabel reveal">รายงานรายการค้างคืนเกินกำหนด</div>
-  <div id="df-ovOverdue-mount"></div>
-  <p class="muted small" id="ovOverdueDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th class="r">เกินมา</th></tr></thead><tbody id="ovOverdueBody"></tbody></table></div></div>
-  <div class="pagerbar" id="pagerOvOverdue"></div>
-
-  <div class="sectlabel reveal">สรุปตามลูกค้า <span class="muted small" style="font-weight:400;margin-left:6px;">แตะแถวเพื่อดูราย DO</span></div>
-  <div id="df-ovByCust-mount"></div>
-  <p class="muted small" id="ovByCustDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal"><div class="twrap"><div id="ovByCust"></div></div></div>
-
-  <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
-       เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
-       ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านล่างเพื่อกาง/ซ่อน — เดิม
-       เป็นปุ่ม ghost เล็กๆ ไม่บอกด้วยว่าข้างในมีอะไร ทำให้คนไม่รู้ว่าคุ้มจะกดไหม
-       ตอนนี้เต็มความกว้าง เห็นชัด พร้อมบรรทัดสรุปหัวข้อข้างในไว้ตัดสินใจก่อนกด
-       และจำสถานะกาง/ซ่อนไว้ข้ามการโหลดหน้าถัดไป (ดู REPORTS_OPEN_KEY) ====== -->
-  <div class="row no-print reveal" style="margin-top:22px;">
-    <button class="btn ghost" id="btnToggleReports" onclick="toggleReportsPanel()" style="width:100%;justify-content:space-between;padding:14px 16px;">
-      <span style="display:flex;align-items:center;gap:10px;text-align:left;">
-        <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span>
-        <span>
-          <span id="btnToggleReportsLbl" style="display:block;font-weight:700;">รายงานเพิ่มเติม</span>
-          <span class="muted small" style="font-weight:400;">ค้างคืน · ส่งคืนล่าสุด · อัตราคืน/สูญหาย · ตำแหน่งจัดเก็บ · แยกตามประเภท · ประวัติ Gate</span>
-        </span>
+  <div class="wg-board units reveal d1">
+    <!-- systemMedium · accent: the number ops wants to go UP -->
+    <button type="button" class="wg m" data-tint="accent" data-act
+            title="ดูกล่องในคลัง" onclick="goInventory({status:'warehouse',label:'พร้อมส่งออก'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></span>
+        <span class="wg-lbl">พร้อมส่งออก</span>
       </span>
-      <span class="svgi" id="btnToggleReportsChevron" style="transition:transform .2s var(--ease);flex:0 0 auto;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      <span class="wg-fig"><span class="wg-n mono" id="kInNow">0</span><span class="wg-unit">ใบ</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span>
+    </button>
+
+    <!-- systemMedium · graphite: "out" is neither good nor bad -->
+    <button type="button" class="wg m" data-act
+            title="ดูกล่องที่ออกอยู่" onclick="goInventory({status:'out',label:'ออกอยู่'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
+        <span class="wg-lbl">ออกอยู่</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="kOutNow">0</span><span class="wg-unit">ใบ</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span>
+    </button>
+
+    <!-- systemLarge · ONE widget, three exception counts. Turns
+         5-numbers-into-4-columns from an orphan problem into a statement:
+         lost + hold + damage are one operational object — the pile that is
+         not moving. Each cell keeps its own goInventory() drill-in. -->
+    <div class="wg xl">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 15.8v.1"/></svg></span></span>
+        <span class="wg-lbl">ต้องตรวจสอบ</span>
+      </div>
+      <div class="wg-split">
+        <button type="button" class="wg-cell" data-tint="neg"
+                title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'สูญหาย'});">
+          <span class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M8 9l3 4 3-3 4 5"/><path d="M18 15h2v-2"/></svg></span></span><span class="wg-lbl">สูญหาย</span></span>
+          <span class="wg-n mono" id="kLostNow">0</span>
+        </button>
+        <button type="button" class="wg-cell"
+                title="ดูกล่องที่พักใช้งาน" onclick="goInventory({status:'hold',label:'พักใช้งาน (Hold)'});">
+          <span class="wg-top"><span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></span><span class="wg-lbl">พักใช้งาน (Hold)</span></span>
+          <span class="wg-n mono" id="kHoldNow">0</span>
+        </button>
+        <button type="button" class="wg-cell" data-tint="warn"
+                title="ดูกล่องชำรุด" onclick="goInventory({status:'damage',label:'ชำรุด (Damage)'});">
+          <span class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></span><span class="wg-lbl">ชำรุด (Damage)</span></span>
+          <span class="wg-n mono" id="kDamageNow">0</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BOARD 2 — ความเคลื่อนไหว ═══════════════════════════════════════
+       Its own board header, because ovMove is a genuinely different time axis
+       from ovStatusNow (gate crossings in a window vs. current state) and
+       sharing one control would quietly conflate them. -->
+  <div class="wg-hd reveal">
+    <span class="wg-hd-t">ความเคลื่อนไหว</span>
+    <div class="wg-scope" id="df-ovMove-mount"></div>
+  </div>
+  <p class="wg-cap board" id="ovMoveDesc"></p>
+
+  <div class="wg-board units reveal">
+    <button type="button" class="wg m" data-tint="accent" data-act
+            title="ดูกล่องที่ผ่าน Gate เข้า" onclick="showGateTodayList('in');">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span>
+        <span class="wg-lbl" id="kInTodayLabel">เข้า</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="kInToday">0</span><span class="wg-unit">ใบ</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span>
+    </button>
+
+    <button type="button" class="wg m" data-act
+            title="ดูกล่องที่ผ่าน Gate ออก" onclick="showGateTodayList('out');">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
+        <span class="wg-lbl" id="kOutTodayLabel">ออก</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="kOutToday">0</span><span class="wg-unit">ใบ</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span>
     </button>
   </div>
 
+  <!-- ═══ TABLE WIDGET — ค้างคืนเกินกำหนด ═══════════════════════════════
+       Self-contained: own title, own scope control, own caption, own pager.
+       No board header above it, because its filter governs only itself. -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic" data-tint="neg"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span></span>
+        <span class="wg-lbl">รายงานรายการค้างคืนเกินกำหนด</span>
+        <div class="wg-scope" id="df-ovOverdue-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovOverdueDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap">
+          <table>
+            <thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th class="r">เกินมา</th></tr></thead>
+            <tbody id="ovOverdueBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pagerbar" id="pagerOvOverdue"></div>
+    </div>
+  </div>
+
+  <!-- ═══ TABLE WIDGET — สรุปตามลูกค้า ═══════════════════════════════════
+       #ovByCust receives a COMPLETE table, so it stays a bare div inside
+       .twrap with no hand-authored thead. Rendered by renderReports(), even
+       though it sits outside #tab-reports — do not "consolidate" this. -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg></span></span>
+        <span class="wg-lbl">สรุปตามลูกค้า</span>
+        <div class="wg-scope" id="df-ovByCust-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovByCustDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap"><div id="ovByCust"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ THE TOGGLE, AS A PRESSABLE WIDGET ═══════════════════════════════
+       Was a ghost button that didn't say what was inside; now a real widget
+       with a summary sub-line so you can decide before pressing. -->
+  <div class="wg-board reveal no-print">
+    <button type="button" class="wg xl wg-toggle" data-act id="btnToggleReports"
+            onclick="toggleReportsPanel()">
+      <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a1 1 0 0 1 1-1h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M8 13h8M8 17h5M8 9h3"/></svg></span></span>
+      <span class="wg-toggle-txt">
+        <span class="wg-toggle-lbl" id="btnToggleReportsLbl">รายงานเพิ่มเติม</span>
+        <span class="wg-toggle-sub">ค้างคืน · ส่งคืนล่าสุด · อัตราคืน/สูญหาย · ตำแหน่งจัดเก็บ · แยกตามประเภท · ประวัติ Gate</span>
+      </span>
+      <span class="svgi wg-chev" id="btnToggleReportsChevron"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+  </div>
+
+  <!-- ===== รายงานเพิ่มเติม — เดิมเป็นแท็บแยก ย้ายมาไว้ในหน้าภาพรวมนี้เลย เพราะ
+       เนื้อหาทั้งหมดเป็น "รายละเอียดเพิ่มเติม" ของหน้าเดียวกัน ไม่ใช่งานคนละ
+       ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านบนเพื่อกาง/ซ่อน
+       และจำสถานะกาง/ซ่อนไว้ข้ามการโหลดหน้าถัดไป (ดู REPORTS_OPEN_KEY)
+
+       ห้ามย้าย style="display:none;" ไปเป็น class หรือ [hidden] เด็ดขาด —
+       toggleReportsPanel() ตัดสินทิศทางด้วย el.style.display==='none' ถ้าย้าย
+       ออกไป คลิกแรกจะอ่านได้ว่า "เปิดอยู่แล้ว" แล้วสั่งปิดแผงที่ปิดอยู่ ทำให้
+       เปิดไม่ได้อีกเลย และห้ามใส่ class="tab" เพราะ switchTab() ทำ $all('.tab')
+       แล้วจะไปถอด .active/opacity ของแผงนี้ทิ้ง ====== -->
   <div id="tab-reports" style="display:none;">
   <div class="hero">
     <div class="eyebrow reveal">รายงาน &amp; สถิติ</div>
@@ -1178,67 +1590,178 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <p class="h-sub reveal d2">ทุกอย่างที่ไม่ใช่ตัวเลขสถานะกล่องโดยตรง — มูลค่า อัตราการคืน รายงานหน้างานจาก PDA ผังคลัง และประวัติล่าสุด</p>
   </div>
 
-  <div class="sectlabel reveal">รายการของที่ยังไม่ได้คืน</div>
-  <div id="df-ovUnreturned-mount"></div>
-  <p class="muted small" id="ovUnreturnedDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal"><div class="twrap"><table><thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th>สถานะ</th></tr></thead><tbody id="ovUnreturnedBody"></tbody></table></div></div>
-  <div class="pagerbar" id="pagerOvUnreturned"></div>
-
-  <div class="sectlabel reveal">ส่งคืนล่าสุด</div>
-  <div id="df-ovRecent-mount"></div>
-  <p class="muted small" id="ovRecentDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal" id="ovRecentReturns"></div>
-  <div class="pagerbar" id="pagerOvRecent"></div>
-
-  <style>
-  /* SOW: no Putaway/staging — chip style kept unused, no caller left */
-  .stg-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 8px 7px 14px;border-radius:999px;
-    background:var(--accentSoft);color:var(--accentInk);border:.5px solid var(--line2);white-space:nowrap;
-    font-family:var(--mono);font-size:13px;font-weight:700;}
-  .stg-chip button{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;
-    background:color-mix(in srgb,var(--ink) 9%,transparent);color:var(--ink2);transition:background .2s;}
-  .stg-chip button:hover{background:color-mix(in srgb,var(--ink) 18%,transparent);}
-  .stg-chip button.del{background:var(--negSoft);color:var(--neg);}
-  .stg-chip button svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .stg-chip.filter{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--muted);}
-  .stg-type-badge{font-family:var(--sans,inherit);font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:999px;
-    background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink2);}
-  .stg-chip.filter .stg-type-badge{background:color-mix(in srgb,var(--ink) 14%,transparent);}
-  #stgList{display:flex;flex-wrap:wrap;gap:9px;align-items:center;min-height:37px;}
-  </style>
-
-  <div class="sectlabel reveal">ตัวเลขสำคัญ</div>
-  <div class="kpis">
-    <div class="kpi teal reveal clickable" title="ดูกล่องทั้งหมด" onclick="goInventory({label:'กล่องทั้งหมดในระบบ'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></div><div class="n mono" id="kTotal">0</div><div class="l">กล่องทั้งหมดในระบบ</div></div>
-    <div class="kpi purple reveal d3 clickable" title="ไป Gate ขาเข้า" onclick="goInventory({status:'returned',label:'กล่องที่รับคืนสะสม (cycles ≥ 1)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></div><div class="n mono" id="kReturned">0</div><div class="l">รับคืนสะสม (ครั้ง)</div></div>
+  <!-- ═══ TABLE WIDGET — รายการของที่ยังไม่ได้คืน ═══════════════════════
+       Painted by renderOverview() even though it lives inside the collapsed
+       panel. The render split does NOT follow the visual split. -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
+        <span class="wg-lbl">รายการของที่ยังไม่ได้คืน</span>
+        <div class="wg-scope" id="df-ovUnreturned-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovUnreturnedDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap">
+          <table>
+            <thead><tr><th>รหัสกล่อง</th><th>ประเภท</th><th>ลูกค้า</th><th>วันที่ส่งออก</th><th>ครบกำหนดคืน</th><th>สถานะ</th></tr></thead>
+            <tbody id="ovUnreturnedBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pagerbar" id="pagerOvUnreturned"></div>
+    </div>
   </div>
 
-  <div class="sectlabel reveal">อัตราการคืน &amp; การสูญหาย</div>
-  <div id="df-ovRates-mount"></div>
-  <p class="muted small" id="ovRatesDesc" style="margin:0 0 10px;"></p>
-  <div class="kpis reveal">
-    <div class="kpi green clickable" title="ดูรายงานประเภทกล่อง" onclick="goInventory({status:'returned',label:'กล่องที่เคยออก-คืนแล้ว (ข้อมูล Return Rate)'});"><div class="ic"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></div><div class="n mono" id="rReturn">0%</div><div class="l">Return Rate</div></div>
-    <div class="kpi teal clickable" title="ดูรายงานประเภทกล่อง" onclick="goInventory({status:'returned',label:'กล่องที่หมุนเวียนสะสม (รอบหมุน ≥ 1)'});"><div class="ic"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></div><div class="n mono" id="rCycles">0</div><div class="l">รอบหมุนเวียนรวม</div></div>
-    <div class="kpi red clickable" title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'กล่องที่แจ้งหาย'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M8 9l3 4 3-3 4 5"/><path d="M18 15h2v-2"/></svg></span></div><div class="n mono" id="rLossPct">0%</div><div class="l">Loss Rate</div></div>
-    <div class="kpi red clickable" title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'กล่องที่แจ้งหาย (มูลค่าสูญหาย)'});"><div class="ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9v.1M18 15v.1"/></svg></span></div><div class="n mono" id="rLossVal">0</div><div class="l">มูลค่าสูญหาย (บาท)</div></div>
+  <!-- ═══ TABLE WIDGET — ส่งคืนล่าสุด ═══════════════════════════════════
+       Fixes existing responsive debt: #ovRecentReturns used to BE the
+       .tablecard with no .twrap, so its injected 4-column table had no
+       horizontal escape at 390px. The id now sits on a bare div INSIDE
+       .twrap — legal, because it receives a complete <table>. -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic" data-tint="accent"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></span>
+        <span class="wg-lbl">ส่งคืนล่าสุด</span>
+        <div class="wg-scope" id="df-ovRecent-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovRecentDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap"><div id="ovRecentReturns"></div></div>
+      </div>
+      <div class="pagerbar" id="pagerOvRecent"></div>
+    </div>
   </div>
 
-  <div class="sectlabel reveal" id="lostSectLabel" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ติดตามกล่องหาย</div>
-  <div id="ovLost"></div>
+  <!-- ═══ BOARD — ตัวเลขสำคัญ ═════════════════════════════════════════════
+       No scope control in this board header, and that absence is the signal:
+       these are lifetime totals, not windowed counts. Both graphite — a
+       cumulative count is neither good nor bad. -->
+  <div class="wg-hd reveal">
+    <span class="wg-hd-t">ตัวเลขสำคัญ</span>
+  </div>
 
-  <div class="sectlabel reveal">กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง</div>
+  <div class="wg-board units reveal">
+    <button type="button" class="wg m" data-act
+            title="ดูกล่องทั้งหมด" onclick="goInventory({label:'กล่องทั้งหมดในระบบ'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></span>
+        <span class="wg-lbl">กล่องทั้งหมดในระบบ</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="kTotal">0</span><span class="wg-unit">ใบ</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span>
+    </button>
+
+    <button type="button" class="wg m" data-act
+            title="ดูกล่องที่รับคืนสะสม" onclick="goInventory({status:'returned',label:'กล่องที่รับคืนสะสม (cycles ≥ 1)'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span>
+        <span class="wg-lbl">รับคืนสะสม</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="kReturned">0</span><span class="wg-unit">ครั้ง</span></span>
+      <span class="wg-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span>
+    </button>
+  </div>
+
+  <!-- ═══ BOARD — อัตราการคืน & การสูญหาย ════════════════════════════════
+       Four systemSmall widgets filling the row exactly. Tint is semantic:
+       --accent on the rate the business wants UP, --neg on both loss figures. -->
+  <div class="wg-hd reveal">
+    <span class="wg-hd-t">อัตราการคืน &amp; การสูญหาย</span>
+    <div class="wg-scope" id="df-ovRates-mount"></div>
+  </div>
+  <p class="wg-cap board" id="ovRatesDesc"></p>
+
+  <div class="wg-board units reveal">
+    <button type="button" class="wg" data-tint="accent" data-act
+            title="ดูรายงานประเภทกล่อง" onclick="goInventory({status:'returned',label:'กล่องที่เคยออก-คืนแล้ว (ข้อมูล Return Rate)'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></span>
+        <span class="wg-lbl">Return Rate</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="rReturn">0%</span></span>
+      <div class="wg-meter"></div>
+    </button>
+
+    <button type="button" class="wg" data-act
+            title="ดูรายงานประเภทกล่อง" onclick="goInventory({status:'returned',label:'กล่องที่หมุนเวียนสะสม (รอบหมุน ≥ 1)'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></span>
+        <span class="wg-lbl">รอบหมุนเวียนรวม</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="rCycles">0</span></span>
+    </button>
+
+    <button type="button" class="wg" data-tint="neg" data-act
+            title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'กล่องที่แจ้งหาย'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14h16M8 9l3 4 3-3 4 5"/><path d="M18 15h2v-2"/></svg></span></span>
+        <span class="wg-lbl">Loss Rate</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="rLossPct">0%</span></span>
+    </button>
+
+    <button type="button" class="wg" data-tint="neg" data-act
+            title="ดูกล่องหาย" onclick="goInventory({status:'lost',label:'กล่องที่แจ้งหาย (มูลค่าสูญหาย)'});">
+      <span class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9v.1M18 15v.1"/></svg></span></span>
+        <span class="wg-lbl">มูลค่าสูญหาย (บาท)</span>
+      </span>
+      <span class="wg-fig"><span class="wg-n mono" id="rLossVal">0</span></span>
+    </button>
+  </div>
+
+  <!-- lost tracker: renderReports() hard-codes style.display='flex', and
+       .wg-hd IS display:flex — so the shown state lays out correctly. Keeps
+       its inline display:none for the hidden state. -->
+  <div class="wg-hd reveal" id="lostSectLabel" data-tint="neg" style="display:none;">
+    <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></span>
+    <span class="wg-hd-t">ติดตามกล่องหาย</span>
+  </div>
+  <div class="wg-loose" id="ovLost"></div>
+
+  <div class="wg-hd reveal">
+    <span class="wg-hd-t">กล่องเก็บอยู่คลังไหน — ตามชั้นวางจริง</span>
+  </div>
+  <!-- #ovOccupancy IS the grid: renderReports() injects bare .occ-card
+       siblings with no wrapper. Kept on .occ-grid's auto-fill rather than the
+       fixed 4-column board, because the warehouse count is variable and
+       auto-fill degrades better at 390px. -->
   <div class="occ-grid reveal" id="ovOccupancy"></div>
 
-  <div class="sectlabel reveal">รายงานกล่องรายตัว — แยกตามประเภท <span class="muted small" style="font-weight:400;margin-left:6px;">กดหัวข้อประเภทเพื่อขยาย/ย่อ</span></div>
-  <div id="df-ovTypeFlow-mount"></div>
-  <p class="muted small" id="ovTypeFlowDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal" id="ovTypeFlow"></div>
+  <!-- ═══ TABLE WIDGET — รายงานกล่องรายตัว แยกตามประเภท ═════════════════
+       The scroll container must sit OUTSIDE #ovTypeFlow, because JS writes
+       its innerHTML. #ovTypeFlow .rpt-type-header{min-width:880px} then
+       rescues the 10-column grid at 390px with zero JS changes. -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>
+        <span class="wg-lbl">รายงานกล่องรายตัว — แยกตามประเภท</span>
+        <div class="wg-scope" id="df-ovTypeFlow-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovTypeFlowDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap"><div id="ovTypeFlow"></div></div>
+      </div>
+    </div>
+  </div>
 
-  <div class="sectlabel reveal">ประวัติการผ่าน Gate</div>
-  <div id="df-ovEvents-mount"></div>
-  <p class="muted small" id="ovEventsDesc" style="margin:0 0 10px;"></p>
-  <div class="tablecard reveal"><div class="twrap"><div id="ovEvents"></div></div></div>
-  <div class="pagerbar" id="pagerOvEvents"></div>
+  <!-- ═══ TABLE WIDGET — ประวัติการผ่าน Gate ════════════════════════════ -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span>
+        <span class="wg-lbl">ประวัติการผ่าน Gate</span>
+        <div class="wg-scope" id="df-ovEvents-mount"></div>
+      </div>
+      <p class="wg-cap" id="ovEventsDesc"></p>
+      <div class="wg-body wg-scrollhint">
+        <div class="twrap"><div id="ovEvents"></div></div>
+      </div>
+      <div class="pagerbar" id="pagerOvEvents"></div>
+    </div>
+  </div>
   </div>
 </section>
 
