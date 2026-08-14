@@ -2009,12 +2009,6 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
      คลิกแถวพนักงานในหน้าตั้งค่า ▸ พนักงาน แล้วบัตรจะ "หล่น" ลงมาจากคลิปแขวนด้านบน
      ลากเล่นได้ (จำลองแรงโน้มถ่วง/สายคล้อง), เอาเมาส์ชี้เพื่อพลิกดูด้านหลัง (เมนูจัดการ)
      พิมพ์บาร์โค้ดจากรหัสบัตรพนักงานจริงด้วย Code128 (ตัวเดียวกับที่ ZPL ^BC ใช้พิมพ์) -->
-<style>
-/* ไม่มีรูปพนักงาน — #empBadgeHero (openEmpBadge) ตั้ง --empHeroInitials แทน background-image
-   ตัวหนังสือใหญ่กลางบล็อกสี ให้หน้าตาเหมือนกันไม่ว่าจะมีรูปจริงหรือไม่ (คนละแบบกับ initials
-   วงกลมเล็กแบบเดิม ซึ่งเลิกใช้ไปแล้วเมื่อรูปเปลี่ยนมาเต็มบัตร) */
-.emp-hero-initials::before{content:var(--empHeroInitials);position:absolute;inset:0;display:grid;place-items:center;font-size:96px;font-weight:700;color:var(--accentInk);opacity:.55;}
-</style>
 <div id="empBadgeOverlay" style="position:fixed;inset:0;z-index:400;display:none;">
   <div id="empBadgeBackdrop" class="perf-backdrop" onclick="closeEmpBadge()" style="position:absolute;inset:0;background:rgba(20,20,22,.42);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);"></div>
   <svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;">
@@ -2084,21 +2078,49 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
           </div>
         </div>
 
-        <!-- รูปพนักงานเต็มพื้นที่ที่เหลือของบัตร (ผู้ใช้ขอให้ใหญ่เต็มบัตรแบบบัตรพนักงาน
-             ทั่วไป แทนรูปวงกลมเล็ก ๆ เดิม) — ไม่มีรูปก็ยังเป็นบล็อกใหญ่เท่ากัน ใส่ initials
-             ตัวโตแทน ไม่ใช่วงกลมเล็กลอยกลาง เพื่อให้ front หน้าตาเหมือนกันทั้งสองกรณี -->
-        <div id="empBadgeHero" style="position:relative;flex:1 1 auto;min-height:0;background:var(--accentSoft);overflow:hidden;">
-          <div style="position:absolute;left:20px;top:18px;z-index:2;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.82);border-radius:999px;padding:4px 13px;">EMPLOYEE ID</div>
-          <div id="empBadgeId" style="position:absolute;left:20px;top:44px;z-index:2;font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.01em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5);"></div>
-          <div style="position:absolute;left:0;right:0;bottom:0;padding:70px 26px 22px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72) 65%,rgba(0,0,0,.82));z-index:1;">
-            <div id="empBadgeName" style="font-size:29px;font-weight:700;letter-spacing:-.03em;line-height:1.2;color:#fff;"></div>
-            <div id="empBadgeRole" style="font-size:16.5px;color:rgba(255,255,255,.78);margin-top:3px;"></div>
-            <div id="empBadgeStatus" style="display:inline-flex;align-items:center;gap:5px;margin-top:11px;padding:5px 14px;border-radius:999px;font-size:14px;font-weight:600;"></div>
+        <!-- รูปพนักงาน — เคยลองทำเต็มพื้นที่บัตรแบบบัตรพนักงานทั่วไปมาก่อน แต่ผู้ใช้บอกว่า
+             ใหญ่เกินไป ปรับกลับมาเป็นวงกลมขนาดพอดี (130px, ใหญ่กว่าวงกลมเดิม 111px
+             เล็กน้อยเพื่อให้ยังเห็นหน้าชัดกว่าของเดิม) วางคู่กับป้าย EMPLOYEE ID แบบเดียว
+             กับก่อนหน้านี้ — ไม่มีรูปก็ใช้ initials ตัวโตแทนในวงกลมเดียวกัน (renderAvatar) -->
+        <div style="flex:0 0 auto;position:relative;padding:24px 26px 0;">
+          <div style="position:absolute;right:-69px;top:-39px;width:200px;height:200px;border-radius:50%;background:var(--accent2);opacity:.5;"></div>
+          <div style="position:relative;display:flex;align-items:center;gap:16px;">
+            <div id="empBadgeAvatar" style="width:130px;height:130px;flex:0 0 auto;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:40px;font-weight:700;border:4px solid var(--surface);box-shadow:0 6px 20px rgba(0,0,0,.12);overflow:hidden;"></div>
+            <div style="min-width:0;">
+              <div style="display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:4px 12px;">EMPLOYEE ID</div>
+              <div id="empBadgeId" style="font-family:var(--mono);font-size:21px;font-weight:700;letter-spacing:-.01em;margin-top:6px;color:var(--ink);"></div>
+            </div>
           </div>
         </div>
 
-        <!-- คำใบ้ชี้ให้พลิกดูบาร์โค้ด/รายละเอียดที่ย้ายไปหลังบัตรแล้ว -->
-        <div style="flex:0 0 auto;padding:11px 30px;text-align:center;color:var(--faint);font-size:13px;background:var(--surface);z-index:2;">เอาเมาส์ชี้ / แตะเพื่อพลิกดูบาร์โค้ดและข้อมูลเพิ่มเติม</div>
+        <div style="flex:0 0 auto;padding:18px 26px 0;">
+          <div id="empBadgeName" style="font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
+          <div id="empBadgeRole" style="font-size:16px;color:var(--muted);margin-top:3px;"></div>
+          <div id="empBadgeStatus" style="display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 14px;border-radius:999px;font-size:14px;font-weight:600;"></div>
+        </div>
+
+        <div style="flex:0 0 auto;padding:18px 26px 0;display:grid;grid-template-columns:1fr 1fr;gap:13px 16px;">
+          <div>
+            <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
+            <div id="empBadgeDept" style="font-size:16px;font-weight:500;color:var(--ink);margin-top:2px;"></div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">คลัง</div>
+            <div id="empBadgeWh" style="font-size:16px;font-weight:500;color:var(--ink);margin-top:2px;"></div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">กะ</div>
+            <div id="empBadgeShift" style="font-size:16px;font-weight:500;color:var(--ink);margin-top:2px;"></div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">เบอร์โทร</div>
+            <div id="empBadgePhone" style="font-size:16px;font-weight:500;color:var(--ink);margin-top:2px;font-family:var(--mono);"></div>
+          </div>
+        </div>
+
+        <!-- คำใบ้ชี้ให้พลิกดูบาร์โค้ด/รายละเอียดที่เหลือด้านหลัง — flex:1 ดันให้คำใบ้อยู่กึ่งกลาง
+             พื้นที่ว่างที่เหลือของบัตรเสมอ ไม่ว่าเนื้อหาด้านบนจะสูงแค่ไหน -->
+        <div style="flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px 30px;text-align:center;color:var(--faint);font-size:13px;z-index:2;">เอาเมาส์ชี้ / แตะเพื่อพลิกดูบาร์โค้ดและข้อมูลเพิ่มเติม</div>
 
         <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;z-index:3;">
           <div style="transform:rotate(-38deg);text-align:center;line-height:1;white-space:nowrap;">
@@ -2123,28 +2145,13 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
 
         <!-- เนื้อหาที่เหลือทั้งหมดของด้านหลัง (ข้อมูลเพิ่มเติม + บาร์โค้ด) เลื่อนดูได้เอง — ด้านหน้า
              ตอนนี้เป็นรูปเต็มบัตร (ผู้ใช้ขอ) เหลือที่แค่พอโชว์ชื่อ/ตำแหน่ง/สถานะทับบนรูป ข้อมูลที่
-             เหลือทั้งหมด (แผนก/คลัง/กะ/เบอร์โทร/อีเมล/วันเริ่มงาน/สิทธิ์) ย้ายมาไว้นี่ — ส่วนบาร์โค้ด
-             ย้ายมาจากด้านหน้าเช่นกัน (เหมือนบัตรพนักงานทั่วไปที่บาร์โค้ดอยู่หลังบัตร) และตั้งใจให้เป็น
-             flex column เพื่อให้บาร์โค้ด (margin-top:auto ด้านล่าง) ชิดขอบล่างสุดเสมอเมื่อเนื้อหา
-             สั้นกว่าพื้นที่ที่มี -->
+             เหลือ (อีเมล/วันเริ่มงาน/สิทธิ์ — แผนก/คลัง/กะ/เบอร์โทร กลับไปอยู่หน้าบัตรแล้ว
+             หลังลดขนาดรูปทำให้มีที่พอ) ย้ายมาไว้นี่ — ส่วนบาร์โค้ดย้ายมาจากด้านหน้าเช่นกัน
+             (เหมือนบัตรพนักงานทั่วไปที่บาร์โค้ดอยู่หลังบัตร) และตั้งใจให้เป็น flex column
+             เพื่อให้บาร์โค้ด (margin-top:auto ด้านล่าง) ชิดขอบล่างสุดเสมอเมื่อเนื้อหาสั้นกว่า
+             พื้นที่ที่มี -->
         <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 30px 24px;display:flex;flex-direction:column;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;">
-            <div>
-              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
-              <div id="empBadgeDept" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-            </div>
-            <div>
-              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">คลัง</div>
-              <div id="empBadgeWh" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-            </div>
-            <div>
-              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">กะ</div>
-              <div id="empBadgeShift" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-            </div>
-            <div>
-              <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">เบอร์โทร</div>
-              <div id="empBadgePhone" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
-            </div>
             <div>
               <div style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:var(--faint);">อีเมล</div>
               <div id="empBadgeEmailBack" style="font-size:15px;font-weight:500;color:var(--ink);margin-top:3px;word-break:break-all;"></div>
@@ -4689,16 +4696,7 @@ function openEmpBadge(id,isSelf){
   var stFgMap={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'};
   var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
   var scanCode=(e.scanCode||e.id).toUpperCase();
-  var hero=$('#empBadgeHero');
-  if(hero){
-    if(e.photo){hero.style.backgroundImage='url("'+e.photo.replace(/"/g,'%22')+'")';hero.style.backgroundSize='cover';hero.style.backgroundPosition='center';}
-    else{
-      hero.style.backgroundImage='none';
-      var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
-      hero.style.setProperty('--empHeroInitials','"'+initials.replace(/"/g,'')+'"');
-    }
-    hero.classList.toggle('emp-hero-initials',!e.photo);
-  }
+  renderAvatar('empBadgeAvatar',e.name,e.photo);
   setText('empBadgeId',e.id);
   setText('empBadgeName',e.name||e.id);
   setText('empBadgeRole',e.role||'-');
@@ -5835,10 +5833,13 @@ function printCustCardWindow(id){
     +'<div class="mt">'+esc(kindTxt)+(meta?' · '+esc(meta):'')+'</div>'
     +'</div><div class="brand">◈ Smart Tracking</div></div>'
     +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
-    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</div><div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ขนาดบัตร 86 × 54 มม.</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
+  /* เหมือนบัตรพนักงาน (printEmpBadgeWindow) — สั่งพิมพ์ให้อัตโนมัติแทนที่จะรอผู้ใช้
+     กด Ctrl/Cmd+P เอง ให้เวลา layout สั้น ๆ ก่อน */
+  setTimeout(function(){try{w.focus();w.print();}catch(err){}},250);
 }
 window.printCustCardWindow=printCustCardWindow;
 
