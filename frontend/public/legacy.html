@@ -2624,6 +2624,33 @@ a{color:var(--accentInk);}
       </div>
     </div>
     </div>
+
+    <!-- แก้ไขกล่อง — เดิมเป็น openModal() ที่สร้าง HTML ใหม่ทุกครั้งที่คลิกแถว ย้ายมาเป็น
+         การ์ดถาวรใน DOM แบบเดียวกับ 5 การ์ด master อื่น ให้ openCardDrawer() ยืมไปแสดงใน
+         side drawer ได้ (ผู้ใช้ขอ) — ต่างจากการ์ดอื่นตรงที่ค่าฟิลด์ (ประเภท/Lot/หมดอายุ/
+         ซัพพลายเออร์/สถานะปุ่มลบ) ต้องเซ็ตใหม่ทุกครั้งที่ editBox(tag) ถูกเรียก เพราะแต่ละ
+         ครั้งเป็นกล่องคนละใบ ไม่มี "ค่าเริ่มต้นว่าง" แบบฟอร์มเพิ่มใหม่ — ห้ามลบทิ้ง และห้าม
+         ใส่ display:none ที่ตัวการ์ดเอง ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="boxEditCard">
+      <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span></span><span class="wg-lbl">แก้ไขข้อมูลทะเบียนกล่อง</span></div>
+      <p class="wg-cap">แก้ไขได้เฉพาะ field ทะเบียน (ประเภท/Lot/หมดอายุ/ซัพพลายเออร์) — การย้ายพิกัด/Hold/ชำรุด/กล่องหาย ทำที่หน้าติดตามกล่องเท่านั้น</p>
+      <div class="wg-body">
+      <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType"></select></div>
+      <div class="field" style="margin-top:14px;"><label>Lot</label><input id="mBoxLot" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>
+      <div class="field" style="margin-top:14px;"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date"></div>
+      <div class="field" style="margin-top:14px;"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier"></select></div>
+      <p class="small" id="boxEditDelReason" style="display:none;color:var(--neg);margin-top:10px;"></p>
+      </div>
+      <div class="wg-foot">
+        <button class="btn red" id="mBoxDelBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></span> ลบกล่อง</button>
+        <div class="spacer"></div>
+        <button class="btn gray" id="btnCancelBoxEdit">ยกเลิก</button>
+        <button class="btn accent" id="mBoxSaveBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> อัปเดตกล่อง</button>
+      </div>
+    </div>
+    </div>
+
     <div class="wg-board">
     <div class="wg xl wg-table">
       <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">กล่องที่ลงทะเบียน</span><span class="tag" id="cntBox"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addBox()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ลงทะเบียนกล่อง</button></div><div class="wg-hd-row">
@@ -4404,7 +4431,8 @@ function _dwRestoreNodes(){
    editingXxx และค่าที่ค้างอยู่เหมือนกดยกเลิกจริง ไม่ใช่แค่ซ่อนหน้าต่างแล้วปล่อยฟอร์ม
    ค้างในสถานะ "กำลังแก้ไข" แบบมองไม่เห็น */
 var CARD_CANCEL_BTN={btypeFormCard:'btnCancelBtype',whFormCard:'btnCancelWh',
-  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp',boxRegCard:'btnCancelBox'};
+  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp',boxRegCard:'btnCancelBox',
+  boxEditCard:'btnCancelBoxEdit'};
 var _dwClosing=false;
 /* force=true → ปิดโดยไม่ถามเรื่องข้อมูลที่ยังไม่ได้บันทึก (ใช้ตอนบันทึกสำเร็จแล้ว) */
 function closeDrawer(force){
@@ -4937,9 +4965,12 @@ $all('#boxModeSw .ivs-btn').forEach(function(btn) {
    Hold/ชำรุด/กล่องหาย ฯลฯ) ต้องทำที่หน้า Inventory เท่านั้น — เพื่อไม่ให้มี
    เมนูซ้ำกันสองที่ หน้านี้จึงมีแค่ แก้ไข field ทะเบียน (ประเภท/Lot/หมดอายุ/
    ซัพพลายเออร์) กับลบ ตรงกับรูปแบบเดียวกับตาราง "ประเภทกล่อง" ข้างล่าง */
-/* คลิกแถวกล่อง → เด้ง modal แก้ไขทันที แทนการเด้งไปแท็บ "ประเภทกล่อง" แล้วเลื่อนขึ้นไป
+/* คลิกแถวกล่อง → เด้ง drawer แก้ไขทันที แทนการเด้งไปแท็บ "ประเภทกล่อง" แล้วเลื่อนขึ้นไป
    กรอกฟอร์มลงทะเบียนกล่องด้านบนแบบเดิม (ผู้ใช้ขอ — คลิกแล้วต้องเห็นฟอร์มทันทีไม่ต้องเลื่อน/
-   สลับแท็บ) ใช้ element ของตัวเอง (mBox...) แยกจากฟอร์มลงทะเบียนกล่องจริง ไม่แตะฟอร์มนั้นเลย */
+   สลับแท็บ) ใช้ element ของตัวเอง (mBox...) แยกจากฟอร์มลงทะเบียนกล่องจริง ไม่แตะฟอร์มนั้นเลย
+   เดิมเป็น openModal() สร้าง HTML ใหม่ทุกครั้งที่คลิก — ย้ายมาเป็นการ์ดถาวรใน DOM
+   (#boxEditCard) แบบเดียวกับการ์ด master อื่น เพื่อให้เปิดใน side drawer ได้ (ผู้ใช้ขอ)
+   ค่าฟิลด์ต้องเซ็ตใหม่ทุกครั้งที่เรียกเพราะแต่ละครั้งเป็นกล่องคนละใบ */
 function editBox(tag){
   var b=S.boxes[tag];if(!b)return;
   var bts=Object.values(S.boxtypes);
@@ -4949,27 +4980,34 @@ function editBox(tag){
      ทำให้ระบบเสียร่องรอยว่ากล่องใบนี้ยังค้างอยู่ที่ลูกค้ารายไหน */
   var canDel=b.status!=='out';
   var delReason=canDel?'':'ลบไม่ได้ — กล่องนี้ออกไปอยู่กับ '+esc(custName(b.customer))+' ยังไม่คืนเข้าคลัง';
-  openModal('<div class="mhead"><h3>แก้ไขกล่อง '+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-    +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType">'+typeOptions+'</select></div>'
-    +'<div class="field"><label>Lot</label><input id="mBoxLot" value="'+esc(b.lot||'')+'" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>'
-    +'<div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date" value="'+esc(b.expiry||'')+'"></div>'
-    +'<div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier">'+supplierOptions(b.supplier)+'</select></div>'
-    +(canDel?'':'<div class="small" style="color:var(--neg);margin-top:4px;">'+delReason+'</div>')
-    +'</div>'
-    +'<div class="mfoot"><button class="btn red" id="mBoxDelBtn"'+(canDel?'':' disabled title="'+delReason+'"')+'><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></span> ลบกล่อง</button><span style="flex:1;"></span><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> อัปเดตกล่อง</button></div>');
+  $('#mBoxType').innerHTML=typeOptions;
+  setv('mBoxLot',b.lot||'');
+  setv('mBoxExpiry',b.expiry||'');
+  $('#mBoxSupplier').innerHTML=supplierOptions(b.supplier);
+  var delReasonEl=$('#boxEditDelReason');
+  if(delReasonEl){delReasonEl.style.display=canDel?'none':'block';delReasonEl.textContent=delReason;}
+  var delBtn=$('#mBoxDelBtn');
+  if(delBtn){
+    delBtn.disabled=!canDel;delBtn.title=canDel?'':delReason;
+    delBtn.onclick=canDel?function(){closeDrawer(true);openDeleteBoxModal(tag);}:null;
+  }
   $('#mBoxSaveBtn').onclick=function(){
-    var type=val('mBoxType');if(!type)return toast('เลือกประเภทกล่อง','เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน','err');
+    clearFieldErrors($('#boxEditCard'));
+    var type=val('mBoxType');if(!type)return fieldError('mBoxType','เลือกประเภทกล่อง — เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน');
     var before=Object.assign({},b);
     b.type=type;b.lot=val('mBoxLot');b.expiry=val('mBoxExpiry');b.supplier=val('mBoxSupplier');
     auditEntry('UPDATE',USER,tag,typeName(type),before,Object.assign({},b));
-    save();closeModal();
+    save();
     toast('อัปเดตกล่องแล้ว',tag);renderAll();
+    closeCardDrawerIfActive('boxEditCard');
   };
-  var delBtn=$('#mBoxDelBtn');
-  if(delBtn&&canDel)delBtn.onclick=function(){closeModal();openDeleteBoxModal(tag);};
+  openCardDrawer('boxEditCard','แก้ไขกล่อง '+esc(tag),'แก้ไขข้อมูลทะเบียนของกล่อง '+esc(tag));
 }
 window.editBox=editBox;
+/* ปิด drawer เฉยๆ ไม่ล้างฟอร์ม (การ์ดนี้ไม่มี "ค่าเริ่มต้น" ให้ยกเลิกกลับ — editBox()
+   เซ็ตค่าใหม่ทับทุกครั้งที่เปิดอยู่แล้ว) — closeDrawer() เรียกปุ่มนี้ผ่าน CARD_CANCEL_BTN
+   เวลาผู้ใช้ปิดด้วย X/scrim/Esc เท่านั้น */
+$('#btnCancelBoxEdit').onclick=function(){closeCardDrawerIfActive('boxEditCard');};
 
 /* ปิด drawer เฉยๆ ไม่ล้างฟอร์ม (ดูคอมเมนต์เหนือ #btnCancelBox ใน HTML) — closeDrawer()
    เรียกปุ่มนี้ผ่าน CARD_CANCEL_BTN เวลาผู้ใช้ปิดด้วย X/scrim/Esc เท่านั้น */
@@ -5779,6 +5817,7 @@ function printEmpBadge(id){
   );
 }
 window.printEmpBadge=printEmpBadge;
+
 function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
   var code=(e.scanCode||e.id).toUpperCase();
