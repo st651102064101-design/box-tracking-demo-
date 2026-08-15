@@ -8212,6 +8212,12 @@ function refreshGateDisplays(){
       var fxEl=$('#fx9600WebhookUrl');
       if(fxEl)fxEl.textContent=g?apiUrl('/api/rfid/fx9600/'+g+'/webhook'):'เลือกประตูขาเข้าก่อน จึงจะเห็น URL';
       renderFx9600Status(g);
+      /* โหมดยิงมือ = ไม่มีเครื่องอ่านมาเกี่ยว การ์ดนี้ทั้งใบสอนวิธีตั้งค่า IoT
+         Connector บน FX9600 ให้ยิง webhook เข้ามา ซึ่งไม่มีความหมายอะไรเลยตอนนี้
+         และ URL/secret ที่โชว์อยู่จะยิ่งชวนสับสนว่ายังต้องตั้งเครื่องอ่านอยู่ไหม
+         — ซ่อนทั้งการ์ด ไม่ใช่แค่เนื้อหาข้างใน */
+      var fxCard=$('#fx9600InfoCard');
+      if(fxCard)fxCard.closest('.wg-board').style.display=gateManual()?'none':'';
       var chip=$('#inGateModeChip');
       if(chip){
         chip.innerHTML=gateManual()
