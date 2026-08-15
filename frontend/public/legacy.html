@@ -1921,6 +1921,11 @@ a{color:var(--accentInk);}
         <div style="font-size:12px;font-weight:600;color:var(--pos);letter-spacing:.04em;">ประตูประจำเครื่องนี้</div>
         <div id="inGateDisplay" style="font-weight:700;font-size:16px;margin-top:1px;">— ยังไม่ได้ตั้งค่า —</div>
       </div>
+      <!-- โหมดรับของประจำเครื่องนี้ (RFID อัตโนมัติ / ยิงมือด้วยบาร์โค้ด) — เขียนโดย
+           refreshGateDisplays() ต้องเห็นตลอดเวลาที่ยืนทำงาน ไม่ใช่เห็นแค่ตอนเปิด
+           หน้าต่างเลือกประตู เพราะ "ทำไมยิงเข้าคิวเองไม่ได้" กับ "ทำไมกล่องโผล่มาเอง"
+           คือคำถามเดียวกันที่ตอบด้วยการรู้ว่าตอนนี้อยู่โหมดไหน -->
+      <div id="inGateModeChip" style="flex:0 0 auto;"></div>
       <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
     </div>
     <input type="hidden" id="inGate">
@@ -8050,9 +8055,52 @@ function fx9600Ready(g){
   if(!seenIso)return false;
   return (Date.now()-new Date(seenIso).getTime())<FX9600_STALE_MS;
 }
+/* ── โหมดรับกล่องเข้าประจำ "เครื่องนี้" ────────────────────────────────────────
+   'rfid' (ค่าเริ่มต้น เสมอ) = ปล่อยให้เครื่องอ่าน RFID (MC3390R / FX9600) ยิงกล่อง
+   เข้าคิวเอง — เป็นวิธีทำงานปกติของหน้างาน
+   'barcode'                = คนยืนยิงเองทีละใบด้วยเครื่องอ่านบาร์โค้ดมือถือ
+
+   มีไว้เพราะ fx9600Ready() ปิดปุ่มเลือกประตูทุกบานเมื่อเครื่องอ่านเงียบ ซึ่งถูกแล้ว
+   ตอนที่ตั้งใจจะใช้ RFID (กันเลือกประตูที่รับของไม่ได้จริง) แต่กลายเป็นทางตัน
+   สนิทเมื่อเครื่องอ่านเสีย/เน็ตหลุด — ของยังมาส่งอยู่ แต่ทั้งจอทำอะไรไม่ได้เลย
+   โหมดนี้คือทางออกฉุกเฉินนั้น
+
+   เก็บใน localStorage ไม่ใช่ uiPrefSet() ทั้งที่ประตูเก็บแบบผูกบัญชี เพราะ "มี
+   เครื่องอ่านบาร์โค้ดเสียบอยู่ไหม / เครื่องอ่าน RFID ตัวนี้เสียไหม" เป็นคุณสมบัติ
+   ของ *เครื่องที่ยืนอยู่* ไม่ใช่ของคน ถ้าเก็บผูกบัญชี คนที่สลับไปยิงมือเพราะประตู 1
+   เสีย แล้วเดินไปล็อกอินที่ประตู 2 ซึ่งเครื่องอ่านปกติดี จะยังติดโหมดยิงมือค้างมา
+   ด้วยโดยไม่รู้ตัว = ปิด RFID ทิ้งเงียบๆ ทั้งที่มันใช้ได้ */
+var GATE_INPUT_MODE_KEY='smarttrace_gate_input_mode';
+var gateInputMode='rfid';
+try{var _gim=localStorage.getItem(GATE_INPUT_MODE_KEY);if(_gim==='barcode')gateInputMode='barcode';}catch(e){}
+function gateManual(){return gateInputMode==='barcode';}
+/* ประตูเลือกได้เมื่อเครื่องอ่านตอบสนอง — หรือเมื่อคนบอกว่าจะยิงมือ ซึ่งไม่ต้องพึ่ง
+   เครื่องอ่านเลย เงื่อนไขนี้คือจุดเดียวที่ตัดสินว่าเลือกประตูได้ไหม */
+function gateSelectable(g){return gateManual()||fx9600Ready(g);}
+function setGateInputMode(mode,reopenDir){
+  gateInputMode=(mode==='barcode')?'barcode':'rfid';
+  try{localStorage.setItem(GATE_INPUT_MODE_KEY,gateInputMode);}catch(e){}
+  refreshGateDisplays();
+  /* วาด modal ใหม่ทั้งใบ ปุ่มประตูที่เคย disabled ต้องกดได้ทันทีในจังหวะเดียวกับที่
+     สลับโหมด ไม่ใช่ต้องปิดแล้วเปิดใหม่เอง (openModal เขียนทับ innerHTML อยู่แล้ว)
+     — แต่ถ้าเหลือประตูเดียวและมันเพิ่งใช้ได้เพราะสลับมาโหมดยิงมือ pickGate จะเลือก
+     ให้เลยโดยไม่วาดอะไร (คืน false) แผ่นที่ค้างอยู่บนจอตอนนั้นคือของเก่า ต้องปิดเอง */
+  if(reopenDir&&!pickGate(reopenDir))closeModal();
+  var si=$('#scanIn');if(si&&gateManual())si.focus();
+}
+window.setGateInputMode=setGateInputMode;window.gateManual=gateManual;
 function renderFx9600Status(g){
   var el=$('#fx9600Status');if(!el)return;
   if(!g){el.innerHTML='';return;}
+  /* โหมดยิงมือ: เครื่องอ่านเงียบเป็นเรื่องที่ "รู้อยู่แล้ว" ไม่ใช่ความผิดพลาดที่ยัง
+     ไม่มีใครจัดการ — ขึ้นเป็นสถานะโหมดพร้อมทางกลับ ไม่ใช่ไฟเตือนสีส้มลอยๆ */
+  if(gateManual()){
+    el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--warn);font-weight:600;">'
+      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span>'
+      +'เครื่องนี้ตั้งเป็นยิงมือด้วยบาร์โค้ด <span style="color:var(--muted);font-weight:400;">· ไม่ได้ใช้เครื่องอ่าน RFID รับกล่องเข้าคิว</span></span>'
+      +' <button type="button" class="btn ghost sm" style="margin-left:8px;" onclick="setGateInputMode(\'rfid\')">กลับไปใช้ RFID อัตโนมัติ</button>';
+    return;
+  }
   var seenIso=(S.gateWebhookLastSeen||{})[g];
   if(!seenIso){
     el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);">'
@@ -8144,7 +8192,7 @@ function refreshGateDisplays(){
     if(g&&gs.length&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config actually changed) — drop stale value instead of using it silently */
     if(!g){
       var dirGates=gateNumsForDir(dir);
-      if(dirGates.length===1&&fx9600Ready(dirGates[0])){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction, and its reader is actually answering — auto-select instead of forcing a manual pick */
+      if(dirGates.length===1&&gateSelectable(dirGates[0])){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction, and it's actually usable — reader answering, or the terminal is in barcode mode and doesn't need one — auto-select instead of forcing a manual pick */
     }
     var inp=$('#'+(dir==='out'?'outGate':'inGate'));
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
@@ -8169,32 +8217,65 @@ function refreshGateDisplays(){
       var fxEl=$('#fx9600WebhookUrl');
       if(fxEl)fxEl.textContent=g?apiUrl('/api/rfid/fx9600/'+g+'/webhook'):'เลือกประตูขาเข้าก่อน จึงจะเห็น URL';
       renderFx9600Status(g);
+      var chip=$('#inGateModeChip');
+      if(chip){
+        chip.innerHTML=gateManual()
+          ?'<button type="button" class="btn ghost sm" onclick="setGateInputMode(\'rfid\')" title="กลับไปให้เครื่องอ่าน RFID ยิงเข้าคิวเองอัตโนมัติ" style="color:var(--warn);">'
+            +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ยิงมือ · บาร์โค้ด</button>'
+          :'';
+      }
     }
   });
 }
 function pickGate(dir){
   var allGs=allGateNums();
-  if(!allGs.length){openModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');return;}
+  if(!allGs.length){openModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');return true;}
   var gs=gateNumsForDir(dir);
-  if(gs.length===1&&fx9600Ready(gs[0])){setFixedGate(dir,gs[0]);return;} /* skip straight to picking only when that one gate is actually ready — otherwise fall through and show it disabled with the reason, instead of silently assigning a dead gate */
+  if(gs.length===1&&gateSelectable(gs[0])){setFixedGate(dir,gs[0]);return false;} /* returns false = resolved without drawing a sheet; skip straight to picking only when that one gate is actually usable — otherwise fall through and show it disabled with the reason AND the barcode-mode way out, instead of silently assigning a dead gate */
   var excluded=allGs.length-gs.length;
   var excludedNote=excluded>0?('<div class="tag" style="margin-bottom:10px;color:var(--warn);"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ซ่อน '+excluded+' ประตูที่ไม่รองรับทิศทางนี้</div>'):'';
-  if(!gs.length){openModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม"</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');return;}
+  if(!gs.length){openModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม"</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');return true;}
+  var manual=gateManual();
   var opts=gs.map(function(g){
     var ready=fx9600Ready(g);
-    return '<button class="btn ghost sm" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:6px;'+(ready?'':'opacity:.55;cursor:not-allowed;')+'" '
-      +(ready?'onclick="setFixedGate(\''+dir+'\','+g+');closeModal();"':'disabled title="RFID ของประตูนี้ไม่ตอบสนอง — เลือกไม่ได้จนกว่าเครื่องอ่านจะกลับมาส่งสัญญาณ"')+'>'
+    var selectable=manual||ready;
+    /* ป้ายบอกสถานะเครื่องอ่านยังขึ้นเหมือนเดิมแม้อยู่โหมดยิงมือ — คนต้องรู้ว่า RFID
+       ยังเสียอยู่ (จะได้ตามช่างมาซ่อม) แค่ไม่ใช่เหตุผลที่จะห้ามเลือกประตูอีกต่อไป */
+    var badge=ready?''
+      :manual?' <span style="font-size:10px;font-weight:700;color:var(--warn);background:var(--warnSoft);padding:2px 7px;border-radius:6px;">RFID ไม่ตอบสนอง · ใช้ยิงมือแทนได้</span>'
+             :' <span style="font-size:10px;font-weight:700;color:var(--neg);background:var(--negSoft);padding:2px 7px;border-radius:6px;">ไม่พร้อมใช้งาน · RFID ไม่ตอบสนอง</span>';
+    return '<button class="btn ghost sm" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:6px;'+(selectable?'':'opacity:.55;cursor:not-allowed;')+'" '
+      +(selectable?'onclick="setFixedGate(\''+dir+'\','+g+');closeModal();"':'disabled title="RFID ของประตูนี้ไม่ตอบสนอง — สลับไปโหมด \'ยิงมือ · บาร์โค้ด\' ด้านบนถ้าต้องการรับของต่อโดยไม่ใช้เครื่องอ่าน"')+'>'
       +'<b>ประตู '+g+'</b>'
       +'<span class="muted">'+esc(whName(gateWh(g)))+'</span>'
       +'<span style="font-size:11px;font-weight:600;color:'+(dir==='out'?'var(--neg)':'var(--pos)')+';">'+gateTypeLabel(g)+'</span>'
-      +(ready?'':' <span style="font-size:10px;font-weight:700;color:var(--neg);background:var(--negSoft);padding:2px 7px;border-radius:6px;">ไม่พร้อมใช้งาน · RFID ไม่ตอบสนอง</span>')
+      +badge
       +(fixedGatesRef()[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';
   }).join('');
+  /* สวิตช์โหมดรับของประจำเครื่องนี้ — RFID เป็นค่าเริ่มต้นและอยู่ซ้ายเสมอ ยิงมือคือ
+     ทางเลือกสำรอง ไม่ใช่ทางเลือกที่เท่ากัน */
+  var modeSw='<div class="seg-filter" style="display:flex;width:100%;margin-bottom:8px;">'
+    +'<button type="button" class="sf-btn'+(manual?'':' active')+'" style="flex:1;justify-content:center;" onclick="setGateInputMode(\'rfid\',\''+dir+'\')" title="ให้เครื่องอ่าน RFID ยิงกล่องเข้าคิวเองอัตโนมัติ — วิธีปกติ">'
+      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span> RFID อัตโนมัติ</button>'
+    +'<button type="button" class="sf-btn'+(manual?' active':'')+'" style="flex:1;justify-content:center;" onclick="setGateInputMode(\'barcode\',\''+dir+'\')" title="ยิงเองทีละใบด้วยเครื่องอ่านบาร์โค้ดมือถือ — ใช้เมื่อเครื่องอ่าน RFID เสียหรือไม่มี">'
+      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ยิงมือ · บาร์โค้ด</button>'
+    +'</div>'
+    +'<p class="muted small" style="margin:0 0 12px;">'
+      +(manual?'ยิงทีละใบเข้าช่อง "ประตูสแกนขาเข้า" ได้เลย ไม่ต้องรอเครื่องอ่าน RFID — จำไว้เฉพาะเครื่องนี้ เครื่องอื่นยังเป็น RFID ตามเดิม'
+             :'เครื่องอ่าน RFID ยิงกล่องเข้าคิวให้เอง — เลือกได้เฉพาะประตูที่เครื่องอ่านยังตอบสนองอยู่')
+    +'</p>';
+  /* ทางตันที่ต้องบอกทางออกให้ตรงๆ: อยู่โหมด RFID แล้วไม่มีประตูไหนพร้อมสักบานเดียว
+     แปลว่าคนกดปิด modal ไปก็ทำอะไรต่อไม่ได้ ถ้าไม่บอกว่าให้สลับโหมด */
+  var deadEnd=(!manual&&!gs.some(fx9600Ready))
+    ?'<div class="banner warn" style="margin-bottom:12px;">ตอนนี้ไม่มีประตูไหนที่เครื่องอ่าน RFID ตอบสนองเลย — ถ้าของมาส่งอยู่และต้องรับเข้าตอนนี้ ให้สลับไป <b>"ยิงมือ · บาร์โค้ด"</b> ด้านบน แล้วเลือกประตูได้ตามปกติ</div>'
+    :'';
   openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำบัญชีนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'+excludedNote+opts
+    +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'
+    +modeSw+deadEnd+excludedNote+opts
     +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
+  return true;
 }
 function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
@@ -8545,6 +8626,9 @@ window.unqueueIn=unqueueIn;
 function fx9600QueuePoll(){
   var g=fixedGatesRef().in;
   if(!g)return;
+  /* โหมดยิงมือ = คนคุมคิวเอง ถ้ายังดูดคิวจากเครื่องอ่านมาด้วยจะกลายเป็นว่ามีกล่องโผล่
+     เข้าคิวเองโดยที่ไม่มีใครยิง — ซึ่งเป็นพฤติกรรมที่คนสลับมาโหมดนี้กำลังหนีอยู่พอดี */
+  if(gateManual())return;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()})
     .then(function(r){return r.ok?r.json():null;})
     .then(function(d){
