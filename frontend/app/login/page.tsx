@@ -5,6 +5,13 @@ import { login, forgotPassword, resetPassword, setToken } from '@/lib/api';
 
 type Mode = 'login' | 'forgot-request' | 'forgot-reset';
 
+// Key for remembering who last signed in on this device, so the login screen
+// can skip straight to "just type your password" instead of making them
+// retype a username every single time — the same quick-switch pattern as a
+// phone/OS lock screen. Plain username only (never a password), so the risk
+// of keeping it in localStorage is the same as any "remember me" field.
+const LAST_USER_KEY = 'st_last_login_user';
+
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
@@ -14,14 +21,24 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  // The account offered for one-click quick login (last account that signed
+  // in on this device, or ?u=<username> from the app's "switch account"
+  // flow — both are "you already told us who you are, just confirm with
+  // your password" cases, so they share the same compact UI below).
+  const [quickUser, setQuickUser] = useState('');
+  // true once the person picks "ไม่ใช่ฉัน" and wants the plain username field back.
+  const [useOtherAccount, setUseOtherAccount] = useState(false);
 
-  // Prefilled when arriving from the web app's "switch account" flow (see
-  // switchToEmployee in legacy.html) — ?u=<their username>, so the person
-  // just switching identity only has to type their own password, not
-  // remember/retype the username they were just shown.
+  // ?u= (from switchToEmployee in legacy.html) takes priority over whatever
+  // was last remembered on this device — it's an explicit "log in as this
+  // person" request, not a passive default.
   useEffect(() => {
     const u = new URLSearchParams(window.location.search).get('u');
-    if (u) setUsername(u);
+    const remembered = u || window.localStorage.getItem(LAST_USER_KEY) || '';
+    if (remembered) {
+      setQuickUser(remembered);
+      setUsername(remembered);
+    }
   }, []);
 
   function switchMode(next: Mode) {
@@ -30,6 +47,22 @@ export default function LoginPage() {
     setNotice('');
   }
 
+  // "ไม่ใช่ฉัน" — drop back to a blank, editable username field without
+  // forgetting quickUser, so "กลับไปเข้าสู่ระบบด้วย <quickUser>" can restore
+  // the quick-login card without the person having to type the name again.
+  function useOther() {
+    setUseOtherAccount(true);
+    setUsername('');
+    setError('');
+  }
+  function useQuickAgain() {
+    setUseOtherAccount(false);
+    setUsername(quickUser);
+    setError('');
+  }
+
+  const showQuickLogin = mode === 'login' && !!quickUser && !useOtherAccount;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -37,8 +70,10 @@ export default function LoginPage() {
     setBusy(true);
     try {
       if (mode === 'login') {
-        const res = await login(username.trim(), password);
+        const trimmed = username.trim();
+        const res = await login(trimmed, password);
         setToken(res.token);
+        window.localStorage.setItem(LAST_USER_KEY, trimmed);
         window.location.replace('/');
         return;
       }
@@ -82,8 +117,32 @@ export default function LoginPage() {
 
         <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">{title}</h2>
 
+        {/* Quick login — this device already knows who signed in last (or the
+            app sent us here with ?u=), so skip straight to "confirm with your
+            password" instead of making them retype a username every time.
+            "ไม่ใช่ฉัน" swaps back to a blank field without losing quickUser,
+            so it's just as fast to switch to someone else. */}
+        {showQuickLogin && (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2.5">
+            <div className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-sm font-bold text-white">
+              {quickUser.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] text-ink-2/60">เข้าสู่ระบบล่าสุดในชื่อ</p>
+              <p className="truncate text-sm font-semibold text-ink">{quickUser}</p>
+            </div>
+            <button
+              type="button"
+              onClick={useOther}
+              className="flex-none text-xs font-medium text-ink-2/60 hover:text-ink"
+            >
+              ไม่ใช่ฉัน
+            </button>
+          </div>
+        )}
+
         <form onSubmit={submit} className="space-y-3">
-          {mode !== 'forgot-reset' && (
+          {mode !== 'forgot-reset' && !showQuickLogin && (
             <Field
               label="ชื่อผู้ใช้ หรือ อีเมล"
               value={username}
@@ -92,6 +151,16 @@ export default function LoginPage() {
               autoFocus
               autoComplete="username"
             />
+          )}
+
+          {mode === 'login' && useOtherAccount && quickUser && (
+            <button
+              type="button"
+              onClick={useQuickAgain}
+              className="-mt-1 block text-xs font-medium text-ink-2/60 hover:text-ink"
+            >
+              กลับไปเข้าสู่ระบบด้วย “{quickUser}”
+            </button>
           )}
 
           {mode === 'forgot-reset' && (
@@ -125,6 +194,7 @@ export default function LoginPage() {
               onChange={setPassword}
               type="password"
               placeholder="••••••"
+              autoFocus={showQuickLogin}
               autoComplete="current-password"
             />
           )}
