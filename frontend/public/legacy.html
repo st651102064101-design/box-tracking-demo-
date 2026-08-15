@@ -86,9 +86,16 @@ html[data-theme="dark"]{
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 /* กันหน้าขยับซ้าย-ขวาตอนสลับไปมาระหว่างหน้าที่มี/ไม่มีสกอลบาร์แนวตั้ง — ปกติสกอลบาร์
    กินพื้นที่ viewport ไปด้วย พอหน้าไหนเนื้อหาสั้นกว่าจอ (ไม่มีสกอลบาร์) เนื้อหาก็จะขยับ
-   ไปเต็มความกว้างที่เพิ่มมา ทำให้ดูเหมือนทั้งหน้ากระตุกไปทางขวาเวลาสลับแท็บ/หน้า —
-   scrollbar-gutter:stable จองพื้นที่สกอลบาร์ไว้เสมอไม่ว่าจะมีสกอลบาร์จริงหรือไม่ */
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scrollbar-gutter:stable;}
+   ไปเต็มความกว้างที่เพิ่มมา ทำให้ดูเหมือนทั้งหน้ากระตุกไปทางขวาเวลาสลับแท็บ/หน้า
+   เคยลอง scrollbar-gutter:stable บน html มาก่อน — ใช้ไม่ได้ผลจริง เพราะ overflow-y ของ
+   html เองยังเป็นค่า default 'visible' อยู่ (สกอลของทั้งหน้าที่เห็นจริงมาจาก overflow
+   ของ body "ลอย" ขึ้นไปควบคุม viewport แทนตาม spec การ propagate overflow จาก body สู่
+   root เมื่อ html เว้น overflow ไว้เป็น visible) — scrollbar-gutter จะไม่มีผลกับกล่องที่
+   overflow เป็น visible ตามสเปก จึงต้องกำหนด overflow-y ให้ html ตรงๆ (ไม่ใช่ปล่อยให้
+   ลอยมาจาก body) ให้ html เป็นตัวคุมสกอลจริงเอง แล้วบังคับ 'scroll' (ไม่ใช่ 'auto') ให้
+   สกอลบาร์โชว์ตลอดแทนจะโผล่/หายตามเนื้อหา วิธีนี้เข้ากันได้กับทุกเบราว์เซอร์มากกว่า
+   scrollbar-gutter (ซึ่งพัง/ไม่มีผลจริงในบางเอนจิน) */
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;overflow-y:scroll;}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);
   font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-.011em;overflow-x:hidden;}
 ::selection{background:var(--accentSoft);color:var(--accentInk);}
