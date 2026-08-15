@@ -5811,8 +5811,8 @@ function empCardFrontHtml(e){
     +'<div style="position:relative;z-index:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;font-weight:700;margin-top:1mm;color:var(--ink);">'+esc(e.id)+'</div>'
     +'<div style="position:relative;z-index:1;margin-top:3.4mm;">'
       +'<div style="font-size:12.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
-      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
-      +'<div style="display:inline-flex;align-items:center;margin-top:2mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
+      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:1.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
+      +'<div style="display:inline-flex;align-items:center;margin-top:2.8mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
     +'</div>'
     +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3mm;border-top:.18mm solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:2.4mm 3mm;text-align:left;">'
       +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">แผนก</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept||'-')+'</div></div>'
