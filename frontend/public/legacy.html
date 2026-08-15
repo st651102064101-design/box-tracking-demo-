@@ -4163,37 +4163,9 @@ function playToastSound(kind){
     });
   }catch(e){}
 }
-/* ── ระบบมีปัญหาที่ต้องให้คนหน้างานรู้ตัว "ทันที" ──────────────────────────────
-   playToastSound('err') คือเสียงระดับ "แจ้งผล" — สั้น เบา ปนไปกับ toast ที่ไหล
-   ผ่านจอตลอดเวลา (เช่น "ยังไม่ได้เลือกประตู") คนที่ไม่ได้จ้องจอจะไม่ได้ยินความ
-   ต่างจากเสียง toast ปกติ
-
-   เคสที่ระบบต้องหยุดคนทำงานจริงๆ — เครื่องอ่าน RFID ที่ประตูใช้งานอยู่ตายกลางคัน,
-   สลับกลับ RFID ไม่ได้เพราะเครื่องอ่านยังไม่ฟื้น — มากับ alert()/confirm() ของ
-   เบราว์เซอร์อยู่แล้ว (บล็อกจนกว่าจะกดรับทราบ) แต่กล่องพวกนั้นไม่มีเสียงเลย ถ้าไม่ได้
-   จ้องจอตอนมันเด้งขึ้นมาก็จะไม่รู้ตัวจนกว่าจะเดินมาเห็นเอง
-
-   เสียงนี้จึงต้องต่างจาก playToastSound ชัดเจน: ดังกว่า (0.28 ไม่ใช่ 0.18), เตือน
-   ซ้ำ 3 จังหวะไม่ใช่ 2, และไล่โทนต่ำลงเรื่อยๆ (ไม่ใช่แค่คู่โน้ตเดียว) เพื่อให้แยกออก
-   จากเสียง toast ทันทีที่ได้ยิน แม้ไม่ได้มองจอ ต้องเรียกคู่กับ alert()/confirm()
-   ของ browser เสมอ — ไม่ใช่แทนที่ dialog เหล่านั้น */
-function playAlertSound(){
-  var ctx=_toastAudioCtxGet();if(!ctx)return;
-  if(ctx.state==='suspended'){ctx.resume().catch(function(){});}
-  try{
-    var now=ctx.currentTime;
-    [880,660,440].forEach(function(freq,i){
-      var osc=ctx.createOscillator(),gain=ctx.createGain();
-      osc.type='square';osc.frequency.value=freq;
-      var start=now+i*0.16;
-      gain.gain.setValueAtTime(0,start);
-      gain.gain.linearRampToValueAtTime(0.28,start+0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001,start+0.13);
-      osc.connect(gain);gain.connect(ctx.destination);
-      osc.start(start);osc.stop(start+0.15);
-    });
-  }catch(e){}
-}
+/* playAlertSound() (สามจังหวะ square wave ไล่โทนลง เตือนตอนระบบมีปัญหา) ถูกลบออก
+   ตามที่ผู้ใช้ขอ — เคสที่มันเคยดังคือ alert()/confirm() ของเบราว์เซอร์ ซึ่งบล็อกหน้าจอ
+   จนกว่าจะกดรับทราบอยู่แล้ว ตัวกล่องเองทำหน้าที่หยุดคนได้โดยไม่ต้องมีเสียง */
 function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=document.createElement('div');
   t.className='toast '+kind;var ic=kind==='err'?IC('close','tick'):kind==='info'?IC('info','tick'):kind==='warn'?IC('warn','tick'):IC('check','tick');
   t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(title)+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
@@ -8398,7 +8370,6 @@ function setGateInputMode(mode,reopenDir){
       why='ตอนนี้ไม่มีประตูไหนที่เครื่องอ่าน RFID ตอบสนองเลย — เลือกโหมด "RFID อัตโนมัติ" ไปก็ยังเลือกประตูไม่ได้อยู่ดี ระบบจึงไม่บันทึกโหมดนี้ไว้ ใช้ "ยิงมือ · บาร์โค้ด" ต่อไปก่อน จนกว่าเครื่องอ่านจะกลับมา';
     }
     if(!okToRfid){
-      playAlertSound();
       alert(why);
       /* วาดใหม่ ให้แท็บเด้งกลับไปตรงกับโหมดจริง — เช็คค่าที่คืนมาแบบเดียวกับ
          ทางปกติด้านล่าง เผื่อ pickGate เลือกให้เองโดยไม่วาดอะไร (คืน false) แล้ว
@@ -8632,7 +8603,6 @@ function warnIfFixedGateWentDead(g){
      ค้างครึ่งๆ อยู่ข้างหลังกล่อง และ refreshGateDisplays() รอบนี้จะยังวาดไม่จบ */
   setTimeout(function(){
     if(gateManual()||fx9600Ready(g))return;  /* เครื่องอ่านฟื้นระหว่างรอ — ไม่ต้องถามแล้ว */
-    playAlertSound();
     var ok=confirm('เครื่องอ่าน RFID ของประตู '+g+' ไม่ตอบสนอง\n\n'
       +'ประตูนี้ถูกตั้งไว้ตอนที่เครื่องอ่านยังใช้งานได้ ตอนนี้กล่องจะไม่ถูกยิงเข้าคิวให้อัตโนมัติอีกแล้ว\n\n'
       +'กด "ตกลง" เพื่อใช้ประตู '+g+' ต่อในโหมดยิงมือด้วยบาร์โค้ด (รับของต่อได้ทันที)\n'
