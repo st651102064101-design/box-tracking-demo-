@@ -1205,10 +1205,16 @@ html[data-theme="dark"]{
   color:var(--ink);letter-spacing:-.015em;}
 /* a table widget's head carries its own search / import / export controls. These
    sizings came from .tablehead, which these heads replaced — without them an
-   <input> in the head goes full-width and pushes every button onto its own row. */
-.wg-form>.wg-top .spacer,.wg-table>.wg-top .spacer{flex:1;}
-.wg-form>.wg-top input,.wg-form>.wg-top select,
-.wg-table>.wg-top input,.wg-table>.wg-top select{width:auto;padding:9px 14px;font-size:14px;}
+   <input> in the head goes full-width and pushes every button onto its own row.
+   DIRECT CHILDREN ONLY. A descendant selector here also reaches the .df-n
+   number input nested inside a .wg-scope date filter (.wg-scope > .df-sw >
+   .ivs-btn > input), whose whole design is a 2.6em chip sized to hold "12" —
+   width:auto blows it out to the default 20-character intrinsic width and the
+   unit label next to it ("วัน"/"เดือน") gets shoved out of the pill. Anything
+   mounted into .wg-scope brings its own sizing and must not be touched here. */
+.wg-form>.wg-top>.spacer,.wg-table>.wg-top>.spacer{flex:1;}
+.wg-form>.wg-top>input,.wg-form>.wg-top>select,
+.wg-table>.wg-top>input,.wg-table>.wg-top>select{width:auto;padding:9px 14px;font-size:14px;}
 .wg-form>.wg-body{padding:16px 18px 18px;}
 /* the caption belongs to the head, so it sits ABOVE the hairline — which means
    the head gives its own hairline up whenever a caption follows it, or the two
