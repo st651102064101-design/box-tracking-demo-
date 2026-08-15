@@ -2465,7 +2465,8 @@ a{color:var(--accentInk);}
   <input type="file" id="importFileShared" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
 
   <div class="row no-print reveal" style="margin-bottom:22px;">
-    <button class="btn ghost sm stab active" data-stab="btype" title="ประเภทกล่อง / กล่องที่ลงทะเบียน"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภท &amp; ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="btype" title="ประเภทกล่อง"></span><span class="sf-badge" data-stab-badge="box" title="กล่องที่ลงทะเบียน"></span></button>
+    <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
+    <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
@@ -2532,9 +2533,11 @@ a{color:var(--accentInk);}
       </div>
     </div>
     </div>
-
-    <!-- ลงทะเบียนกล่อง — ย้ายมารวมกับประเภทกล่องในหน้าเดียวกัน (เดิมแยกแท็บ)
-         ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+  </div>
+  <div class="ssec" id="ssec-box" style="display:none;">
+    <!-- ลงทะเบียนกล่อง — เดิมรวมอยู่ในแท็บเดียวกับประเภทกล่อง แยกเป็นแท็บของตัวเองแล้ว
+         (ผู้ใช้ขอ) แท็บใหม่นี้ยังอ่านประเภทกล่อง/คลังจากแท็บอื่นตามปกติ ไม่ได้ตัดขาดกัน
+         แค่แยกหน้าจอ — ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
          ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ ลงทะเบียนกล่อง"
          แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
          ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — ซ่อนที่ .wg-board ที่ห่ออยู่แทน
@@ -4644,15 +4647,14 @@ function showSetupSub(stab){
   if(!btn||!sec)return false;
   $all('.stab').forEach(function(x){x.classList.remove('active');});btn.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});sec.style.display='block';
-  if(stab==='btype'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  if(stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
   return true;
 }
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
   showSetupSub(b.dataset.stab);
   /* ในหน้าตั้งค่า "อยู่หน้าไหน" ยังไม่พอ — ต้องจำด้วยว่ากำลังดูข้อมูลชุดไหนอยู่
      (ประเภทกล่อง/ลูกค้า/คลัง/พนักงาน/กล่อง) ไม่งั้นกลับมาก็ต้องไล่กดหาใหม่ทุกครั้ง */
-  uiPrefSet('setupTab',b.dataset.stab);
-});});
+  uiPrefSet('setupTab',b.dataset.stab);});});
 
 /* ===== ตั้งค่าระบบ → เชื่อมต่อ PDA: QR ตั้งค่าที่อยู่เซิร์ฟเวอร์ของเครื่องพกพา =====
    ปัญหาเดิม: เครื่อง PDA ที่ยังจำ IP เก่าอยู่ ต้องให้คนเดินไปกดตั้งค่าแล้วพิมพ์
@@ -10415,12 +10417,9 @@ window.tglRpt=tglRpt;
 
 /* ===== SETUP render tables ===== */
 /* จำนวนรายการต่อแท็บย่อยของหน้า Master — ให้เห็นภาพรวมโดยไม่ต้องคลิกเข้าไปดูก่อน
-   แท็บ "ประเภท & ลงทะเบียนกล่อง" รวมสองเรื่องไว้ในแท็บเดียว — เดิมมี badge slot เดียว
-   (data-stab-badge="btype") ที่โชว์แค่จำนวนประเภทกล่อง จำนวนกล่องจริงที่ลงทะเบียนแล้ว
-   (นับแยกอยู่แล้วใน counts.box) ไม่เคยถูกแสดงที่ไหนเลย ผู้ใช้เห็นเลขเดียว ("3") แล้ว
-   เข้าใจผิดว่านับรวมทั้งสองอย่าง — เพิ่ม badge slot ที่สอง (data-stab-badge="box")
-   ใน HTML ของปุ่มนี้ แล้วต่อ suffix หน่วยให้สองอันนี้โดยเฉพาะ ("3 ประเภท" / "11 กล่อง")
-   กันสับสนว่าเลขไหนคือเลขไหนโดยไม่ต้อง hover ดู title */
+   "ประเภทกล่อง" กับ "ลงทะเบียนกล่อง" เคยรวมอยู่ในแท็บเดียว (แชร์ data-stab-badge="btype"
+   ตัวเดียว) — แยกเป็นสองแท็บแล้ว (ผู้ใช้ขอ) แต่ยังต่อ suffix หน่วยให้สองคีย์นี้โดยเฉพาะ
+   ("3 ประเภท" / "11 กล่อง") ไว้เหมือนเดิม กันสับสนว่าเลขไหนคือเลขไหนโดยไม่ต้อง hover ดู title */
 function refreshStabBadges(){
   var counts={btype:Object.keys(S.boxtypes||{}).length,wh:Object.keys(S.warehouses||{}).length,
     box:Object.keys(S.boxes||{}).length,cust:Object.keys(S.customers||{}).length,
