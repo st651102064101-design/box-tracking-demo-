@@ -1315,6 +1315,54 @@ html[data-theme="dark"]{
   .wg-scan.slim .pad{flex-direction:row;}
 }
 
+/* ══ GATE IN — STEP FLOW ═════════════════════════════════════════════════════
+   หน้า Gate ขาเข้าเดินเป็นขั้น: เลือกประตู → ถามว่าจะกรอกข้อมูลรถไหม → (ฟอร์มรถ)
+   → สแกน ทีละขั้น ไม่กองรวมกันในหน้าเดียว
+   .gi-strip = แถบสรุปที่อยู่เหนือทุกขั้น บอกสิ่งที่ตัดสินใจไปแล้วและกดกลับไปแก้ได้ */
+.gi-strip{display:flex;align-items:center;gap:12px;margin:0 0 var(--wgGap);
+  padding:13px 17px;border-radius:var(--wgR);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--pos) 11%,var(--surface)) 0%,var(--surface) 62%);
+  box-shadow:inset 0 0 0 .5px var(--wgRing),inset 0 1px 0 var(--wgSheen),var(--wgShadow);}
+@supports (corner-shape:squircle){.gi-strip{corner-shape:squircle;border-radius:calc(var(--wgR)*1.18);}}
+.gi-strip-ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--pos) 16%,transparent);color:var(--pos);}
+.gi-strip-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.gi-strip-main{flex:1;min-width:0;}
+.gi-strip-k{font-size:11.5px;font-weight:600;color:var(--pos);letter-spacing:.04em;line-height:1.4;}
+.gi-strip-v{font-weight:700;font-size:15.5px;margin-top:1px;letter-spacing:0;line-height:var(--wgLead);}
+/* แถบสรุปข้อมูลรถ — รองจากแถบประตู จึงเป็นเทาเรียบๆ ไม่แย่งสายตา */
+.gi-strip.gi-strip-sub{background:var(--surface2);box-shadow:inset 0 0 0 .5px var(--wgRing);
+  padding:11px 17px;}
+.gi-strip-sub .gi-strip-ic{background:color-mix(in srgb,var(--ink) 9%,transparent);color:var(--ink2);}
+.gi-strip-sub .gi-strip-k{color:var(--muted);}
+.gi-strip-sub .gi-strip-v{font-size:14px;font-weight:600;}
+@media(max-width:619px){
+  .gi-strip{flex-wrap:wrap;}
+  .gi-strip-main{flex:1 1 100%;order:-1;}
+}
+/* การ์ดขั้นตอน — จัดกลางแนวตั้ง ให้มีสิ่งเดียวให้ตัดสินใจต่อหนึ่งหน้าจอ */
+.gi-step-ic{width:52px;height:52px;margin:0 auto 16px;border-radius:16px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accentInk);}
+@supports (corner-shape:squircle){.gi-step-ic{corner-shape:squircle;border-radius:19px;}}
+.gi-step-ic svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.gi-step-t{font-size:clamp(19px,2.1vw,23px);font-weight:700;letter-spacing:-.015em;
+  line-height:1.4;margin:0 0 8px;color:var(--ink);}
+.gi-step-s{font-size:14px;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);
+  max-width:52ch;margin:0 auto 22px;}
+.gi-choices{display:flex;gap:11px;justify-content:center;flex-wrap:wrap;}
+/* ปุ่มทางเลือกบนจอ dock ต้องกดง่ายด้วยถุงมือ — กว้างขั้นต่ำ ไม่ใช่ปุ่มขนาดข้อความ */
+.gi-choices .btn{min-width:210px;justify-content:center;}
+@media(max-width:519px){
+  .gi-choices{flex-direction:column;}
+  .gi-choices .btn{width:100%;min-width:0;}
+}
+/* hero ของแท็บนี้ย่อลงแบบเดียวกับ Overview — ตัวอักษร 80px กินพื้นที่ครึ่งจอแรก
+   ทั้งที่งานจริงของหน้านี้อยู่ถัดลงไป (สตริงและมาร์กอัปไม่แตะ i18n จึงยังตรงคีย์) */
+#tab-gatein>.hero{padding:24px 0 18px;border-bottom:none;margin-bottom:22px;}
+#tab-gatein>.hero .h-title{font-size:clamp(30px,4.4vw,48px);line-height:1.3;letter-spacing:-.035em;}
+#tab-gatein>.hero .h-sub{font-size:clamp(14px,1.4vw,16px);margin-top:12px;letter-spacing:0;line-height:var(--wgLead);}
+@media(max-width:519px){#tab-gatein>.hero{padding:16px 0 12px;margin-bottom:16px;}}
+
 /* ══ THAI TYPOGRAPHY — THE EXPLICIT PART ═════════════════════════════════════
    body ships letter-spacing:-.011em globally. On SF Pro that is invisible; on
    Anuphan / IBM Plex Sans Thai it pushes สระบน (ิ ี ึ ื ั ็) and วรรณยุกต์
@@ -1935,36 +1983,80 @@ a{color:var(--accentInk);}
     <p class="h-sub reveal d2">รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบรับกล่องเข้าคลังนั้นทันทีให้อัตโนมัติ แล้วตัดยอดว่า "คืนแล้ว"</p>
   </div>
 
-  <div class="wg-board">
+  <!-- ══ แถบสรุปสิ่งที่ตัดสินใจไปแล้ว ═══════════════════════════════════════════
+       อยู่เหนือทุกขั้นตอน เห็นตลอดว่า "ยิงเข้าประตูไหน โหมดอะไร รถคันไหน" และแตะ
+       เพื่อย้อนกลับไปแก้ได้ทุกเมื่อ — ไม่ต้องถอยเป็นขั้นๆ (pattern เดียวกับแถบสรุป
+       ในหน้า checkout ของแอปทั่วไป) ซ่อนทั้งแถบตอนยังไม่ได้เลือกประตู เพราะตอนนั้น
+       ยังไม่มีอะไรให้สรุป — ขั้นตอน "เลือกประตู" ด้านล่างพูดแทนอยู่แล้ว -->
+  <div class="gi-strip reveal" id="giStrip" style="display:none;">
+    <span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span>
+    <div class="gi-strip-main">
+      <div class="gi-strip-k">ประตูประจำเครื่องนี้</div>
+      <div id="inGateDisplay" class="gi-strip-v">— ยังไม่ได้ตั้งค่า —</div>
+    </div>
+    <!-- โหมดรับของประจำเครื่องนี้ (RFID อัตโนมัติ / ยิงมือด้วยบาร์โค้ด) — เขียนโดย
+         refreshGateDisplays() ต้องเห็นตลอดเวลาที่ยืนทำงาน ไม่ใช่เห็นแค่ตอนเปิด
+         หน้าต่างเลือกประตู เพราะ "ทำไมยิงเข้าคิวเองไม่ได้" กับ "ทำไมกล่องโผล่มาเอง"
+         คือคำถามเดียวกันที่ตอบด้วยการรู้ว่าตอนนี้อยู่โหมดไหน -->
+    <div id="inGateModeChip" style="flex:0 0 auto;"></div>
+    <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
+  </div>
+  <!-- สรุปข้อมูลรถที่กรอกไว้ (ถ้ามี) — เขียนโดย renderGateInStep() -->
+  <div class="gi-strip gi-strip-sub" id="giStripVehicle" style="display:none;"></div>
+
+  <input type="hidden" id="inGate">
+  <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
+
+  <!-- ══ ขั้นที่ 1 — เลือกประตู ═══════════════════════════════════════════════
+       ขึ้นเฉพาะตอนยังไม่เคยเลือก ประตูจำแบบผูกบัญชี คนที่เคยตั้งไว้แล้วจะข้ามขั้นนี้
+       ไปตลอด ไม่เจออีกเลย ปุ่มเปิด pickGate('in') ตัวเดิม ไม่ทำ UI เลือกประตูขึ้นมา
+       ใหม่ซ้ำอีกชุด — ตัวนั้นถือ logic ทั้งหมดไว้แล้ว (เครื่องอ่านพร้อมไหม, โหมด
+       ยิงมือ, ประตูที่ไม่รองรับทิศทาง, ทางตันเมื่อไม่มีประตูไหนพร้อมเลย) -->
+  <div class="wg-board" id="giStepGate" style="display:none;">
+    <div class="wg xl wg-form reveal">
+      <div class="wg-body" style="text-align:center;padding:34px 22px;">
+        <div class="gi-step-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></div>
+        <h3 class="gi-step-t">เลือกประตูขาเข้าก่อนเริ่มรับของ</h3>
+        <p class="gi-step-s">ตั้งครั้งเดียว — ระบบจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ครั้งหน้าจะเข้าหน้าสแกนให้ทันที ไม่ต้องเลือกอีก</p>
+        <button class="btn accent big" onclick="pickGate('in')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span> เลือกประตู</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ขั้นที่ 2 — จะบันทึกข้อมูลรถไหม ═════════════════════════════════════
+       ทุกช่องในฟอร์มรถไม่บังคับกรอกอยู่แล้ว ส่วนใหญ่ของรอบรับของจึงข้ามได้ — เดิม
+       ฟอร์ม 5 ช่องนี้นอนขวางอยู่ระหว่างคนกับช่องสแกนทุกครั้ง ถามตรงๆ ครั้งเดียว
+       แล้วพาไปช่องสแกนเลยเร็วกว่าและเงียบกว่ามาก
+       ปุ่ม "ข้ามไปสแกนเลย" เป็นปุ่มหลัก (accent) เพราะเป็นทางที่ใช้บ่อยที่สุด -->
+  <div class="wg-board" id="giStepAsk" style="display:none;">
+    <div class="wg xl wg-form reveal">
+      <div class="wg-body" style="text-align:center;padding:30px 22px;">
+        <div class="gi-step-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></div>
+        <h3 class="gi-step-t">บันทึกข้อมูลรถ/คนขับด้วยไหม?</h3>
+        <p class="gi-step-s">ทะเบียนรถ · ชื่อคนขับ · ประเภทรถ · เบอร์โทร · หมายเหตุ — ไม่บังคับกรอก มีไว้ใช้ย้อนรอยภายหลังถ้ากรอกไว้</p>
+        <div class="gi-choices">
+          <button class="btn accent big" onclick="gateInSkipVehicle()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ข้ามไปสแกนเลย</button>
+          <button class="btn ghost big" onclick="gateInFillVehicle()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span> กรอกข้อมูลรถ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ขั้นที่ 3 — ฟอร์มข้อมูลรถ (เฉพาะคนที่เลือกจะกรอก) ═══════════════════ -->
+  <div class="wg-board" id="giStepVehicle" style="display:none;">
   <div class="wg xl wg-form reveal">
     <div class="wg-top">
       <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></span>
       <span class="wg-lbl">ใบส่งของ · ข้อมูลรถ</span>
     </div>
-    <p class="wg-cap">ระบุก่อนยิงได้ถ้ามีข้อมูล — ทุกช่องไม่บังคับกรอก ปล่อยว่างได้ ใช้ย้อนรอยภายหลังได้ถ้ากรอกไว้</p>
+    <p class="wg-cap">ทุกช่องไม่บังคับกรอก ปล่อยว่างได้ ใช้ย้อนรอยภายหลังได้ถ้ากรอกไว้</p>
     <div class="wg-body">
-    <div id="inGateBar" style="display:flex;align-items:center;gap:10px;background:var(--posSoft);border:.5px solid var(--pos);border-radius:14px;padding:12px 16px;margin-bottom:18px;">
-      <span style="font-size:18px;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></span>
-      <div style="flex:1;">
-        <div style="font-size:12px;font-weight:600;color:var(--pos);letter-spacing:.04em;">ประตูประจำเครื่องนี้</div>
-        <div id="inGateDisplay" style="font-weight:700;font-size:16px;margin-top:1px;">— ยังไม่ได้ตั้งค่า —</div>
-      </div>
-      <!-- โหมดรับของประจำเครื่องนี้ (RFID อัตโนมัติ / ยิงมือด้วยบาร์โค้ด) — เขียนโดย
-           refreshGateDisplays() ต้องเห็นตลอดเวลาที่ยืนทำงาน ไม่ใช่เห็นแค่ตอนเปิด
-           หน้าต่างเลือกประตู เพราะ "ทำไมยิงเข้าคิวเองไม่ได้" กับ "ทำไมกล่องโผล่มาเอง"
-           คือคำถามเดียวกันที่ตอบด้วยการรู้ว่าตอนนี้อยู่โหมดไหน -->
-      <div id="inGateModeChip" style="flex:0 0 auto;"></div>
-      <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
-    </div>
-    <input type="hidden" id="inGate">
-    <div id="inGateHint"></div>
     <!-- ไม่มีสวิตช์ "ประเภทรถที่เข้า" แล้ว — กล่องใหม่จาก Supplier กับกล่องที่ลูกค้า
          คืนแยกกันเองอยู่แล้วจากประวัติของกล่อง (isNewBox ใน #btnCheckIn) คนที่ยืน
          หน้าประตูไม่ต้องบอกระบบซ้ำ ช่อง "รถของคู่ค้า" ที่ขึ้นเฉพาะโหมด Supplier
          เลยหมดที่ใช้ไปด้วย — history/event ยังมีคีย์ partner เหมือนเดิม (val()
          คืน '' เมื่อไม่มี element) รูปร่างข้อมูลเก่าจึงไม่เปลี่ยน -->
     <div class="grid g3">
-      <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><div id="inVehicleField"></div></div>
@@ -1976,12 +2068,19 @@ a{color:var(--accentInk);}
     <datalist id="dl-driver"></datalist>
     <datalist id="dl-tel"></datalist>
     </div>
+    <div class="wg-foot">
+      <button class="btn ghost" onclick="gateInGo('ask')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></span> ย้อนกลับ</button>
+      <div class="spacer"></div>
+      <button class="btn accent" onclick="gateInGo('scan')">ถัดไป — ไปหน้าสแกน <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span></button>
+    </div>
   </div>
   </div>
 
   <!-- การ์ดตั้งค่าเครื่องอ่าน FX9600 ย้ายไปอยู่ Setup > "คลัง & ประตู" แล้ว —
        เป็นงานติดตั้งครั้งเดียวของผู้ดูแล ไม่ใช่ของคนที่ยืนรับของอยู่หน้าประตู -->
 
+  <!-- ══ ขั้นที่ 4 — สแกน ════════════════════════════════════════════════════ -->
+  <div id="giStepScan" style="display:none;">
   <div class="wg-board">
     <div class="wg xl wg-scan reveal d1" data-tint="accent" id="gateInBox">
       <div class="wg-top">
@@ -2015,6 +2114,7 @@ a{color:var(--accentInk);}
     <button class="btn ghost" onclick="clearGateIn()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <button class="btn ghost" onclick="exportGateInExcel()" title="ส่งออกประวัติกล่องที่ผ่าน Gate ขาเข้าทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="inCount"></span>
+  </div>
   </div>
 </section>
 
@@ -4287,7 +4387,18 @@ function switchTab(name){
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
-  if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();},300);}
+  if(name==='gatein'){setTimeout(function(){
+    if(requireGateSetup('in'))return;
+    var r=$('#inRecorder');if(r&&!r.value)r.value=USER;
+    refreshGateDisplays();gateInResolveStep();
+    /* โฟกัสช่องสแกนเฉพาะตอนอยู่ขั้นสแกนจริงๆ — เดิมโฟกัสทุกครั้งที่เข้าแท็บ ซึ่งตอนนี้
+       ช่องนั้นอาจถูกซ่อนอยู่ (อยู่คนละขั้น หรืออยู่โหมด RFID ที่ไม่มีช่องให้พิมพ์) */
+    if(gateInStep==='scan'&&gateManual()){var si=$('#scanIn');if(si)si.focus();}
+    /* ยังไม่เคยเลือกประตู — เปิดหน้าต่างเลือกให้เลย ขั้นแรกของหน้านี้คือ "เลือกประตู"
+       ไม่ใช่ "อ่านการ์ดแล้วค่อยกดปุ่มเพื่อเลือกประตู" */
+    if(gateInStep==='gate')pickGate('in');
+    if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();
+  },300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
   if(name==='overview'){restoreReportsPanelState();}
@@ -8556,7 +8667,11 @@ function pickGate(dir){
     +'</div></div>');
   return true;
 }
-function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();
+  /* เพิ่งเลือกประตูเสร็จจากขั้น "เลือกประตู" — เดินต่อไปขั้นถัดไปให้เลย ไม่ปล่อยให้
+     ค้างอยู่หน้าเดิมที่เพิ่งทำเสร็จไปแล้ว */
+  if(dir==='in'&&typeof gateInResolveStep==='function')gateInResolveStep();
+  toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== VEHICLE MEMORY / DO LOOKUP ===== */
@@ -8860,11 +8975,83 @@ function renderVehicleQuick(){
 /* ===== GATE IN ===== */
 /* buildQuickIn() (เดโมยิงเร็ว — สุ่มกล่อง status='out' 6 ใบมาให้กด) ถูกลบออก
    พร้อม #quickIn ในมาร์กอัป */
+
+/* ══ ขั้นตอนของหน้า Gate ขาเข้า ═══════════════════════════════════════════════
+   เดิมทุกอย่างกองอยู่หน้าเดียว: แถบประตู → ฟอร์มรถ 5 ช่อง → ช่องสแกน คนที่มายืน
+   รับของต้องเลื่อนผ่านฟอร์มที่ "ไม่บังคับกรอก" ทุกครั้ง กว่าจะถึงสิ่งที่ทำจริงเกือบ
+   ทุกรอบคือยิงกล่อง ตอนนี้เดินเป็นขั้น ทีละเรื่อง:
+
+     gate    เลือกประตู   — ข้ามอัตโนมัติถ้าเคยเลือกไว้แล้ว (จำผูกบัญชี)
+     ask     จะกรอกข้อมูลรถไหม
+     vehicle ฟอร์มรถ      — เฉพาะคนที่ตอบว่าจะกรอก
+     scan    ช่องสแกน + ปุ่มยืนยัน
+
+   gateInAskAnswered = ตอบคำถามของ "รอบรับของนี้" ไปแล้วหรือยัง รีเซ็ตเมื่อจบรอบ
+   (กดยืนยันรับเข้าคลัง / ล้างข้อมูล) เพราะรถคันใหม่คือรอบใหม่ที่ควรถามอีกครั้ง —
+   ไม่ใช่ถามทุกครั้งที่สลับแท็บกลับมาระหว่างที่ยังยิงคันเดิมค้างอยู่ */
+var gateInStep='scan',gateInAskAnswered=false;
+/* เลือกขั้นที่ควรอยู่ ณ ตอนนี้ — เรียกได้บ่อยเท่าไหร่ก็ได้ (renderAll เรียกทุกครั้ง)
+   กติกา: ดันออกจากขั้นที่ "ไม่ถูกต้องแล้ว" เท่านั้น ไม่ลากคนออกจากขั้นที่กำลังทำอยู่
+   — ถ้ากำลังกรอกฟอร์มรถค้างอยู่แล้ว sync จากเซิร์ฟเวอร์เด้ง render ใหม่ ต้องไม่โดน
+   เตะกลับไปหน้าสแกนกลางคัน */
+function gateInResolveStep(){
+  var hasGate=!!fixedGatesRef().in;
+  if(!hasGate)gateInStep='gate';
+  else if(gateInStep==='gate')gateInStep=gateInAskAnswered?'scan':'ask';
+  else if(gateInStep==='ask'&&(gateInAskAnswered||pendingIn.length))gateInStep='scan';
+  renderGateInStep();
+}
+function renderGateInStep(){
+  var hasGate=!!fixedGatesRef().in;
+  var show={gate:'giStepGate',ask:'giStepAsk',vehicle:'giStepVehicle',scan:'giStepScan'};
+  Object.keys(show).forEach(function(k){
+    var el=$('#'+show[k]);if(el)el.style.display=(gateInStep===k)?'':'none';
+  });
+  var strip=$('#giStrip');if(strip)strip.style.display=hasGate?'':'none';
+  /* สรุปข้อมูลรถ ขึ้นเฉพาะตอนกรอกไว้จริงและไม่ได้อยู่ในฟอร์มนั้นเอง (อยู่ในฟอร์มก็เห็น
+     ค่าอยู่แล้ว การสรุปซ้ำด้านบนคือพูดสองรอบ) */
+  var vs=$('#giStripVehicle');
+  if(vs){
+    var bits=[];
+    var plate=val('inPlate'),driver=val('inDriver'),tel=val('inDriverTel'),note=val('inNote');
+    if(plate)bits.push(esc(plate));
+    if(driver)bits.push(esc(driver));
+    if(tel)bits.push(esc(tel));
+    if(note)bits.push(esc(note));
+    if(bits.length&&gateInStep!=='vehicle'){
+      vs.style.display='';
+      vs.innerHTML='<span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>'
+        +'<div class="gi-strip-main"><div class="gi-strip-k">ข้อมูลรถ</div><div class="gi-strip-v">'+bits.join(' · ')+'</div></div>'
+        +'<button class="btn ghost sm" onclick="gateInGo(\'vehicle\')" style="flex:0 0 auto;">แก้ไข</button>';
+    }else if(!bits.length&&gateInStep==='scan'){
+      /* ยังไม่ได้กรอกและกำลังยิงอยู่ — เปิดทางกลับไปกรอกไว้ เผื่อนึกขึ้นได้ทีหลังว่า
+         ต้องบันทึกทะเบียนรถคันนี้ จะได้ไม่ต้องล้างคิวทิ้งแล้วเริ่มใหม่ */
+      vs.style.display='';
+      vs.innerHTML='<span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>'
+        +'<div class="gi-strip-main"><div class="gi-strip-k">ข้อมูลรถ</div><div class="gi-strip-v" style="color:var(--muted);font-weight:500;">ไม่ได้บันทึก</div></div>'
+        +'<button class="btn ghost sm" onclick="gateInGo(\'vehicle\')" style="flex:0 0 auto;">เพิ่มข้อมูลรถ</button>';
+    }else vs.style.display='none';
+  }
+}
+function gateInGo(step){
+  gateInStep=step;
+  if(step==='vehicle'||step==='scan')gateInAskAnswered=true;
+  renderGateInStep();
+  if(step==='scan'){var si=$('#scanIn');if(si&&gateManual())si.focus();}
+  if(step==='vehicle'){var p=$('#inPlate');if(p)p.focus();}
+}
+function gateInSkipVehicle(){gateInGo('scan');}
+function gateInFillVehicle(){gateInGo('vehicle');}
+/* จบรอบรับของ — รถคันถัดไปควรถูกถามเรื่องข้อมูลรถใหม่อีกครั้ง */
+function gateInResetBatch(){gateInAskAnswered=false;gateInStep=fixedGatesRef().in?'ask':'gate';renderGateInStep();}
+window.gateInGo=gateInGo;window.gateInSkipVehicle=gateInSkipVehicle;
+window.gateInFillVehicle=gateInFillVehicle;window.gateInResetBatch=gateInResetBatch;
+
 function scanIn(tag){
   if(!fixedGatesRef().in){
     setv('scanIn','');
-    toast('ยังไม่ได้เลือกประตูขาเข้า','กด "เปลี่ยนประตู" ด้านบนก่อนเริ่มสแกน','err');
-    var bar=$('#inGateBar');if(bar)bar.scrollIntoView({behavior:'smooth',block:'center'});
+    toast('ยังไม่ได้เลือกประตูขาเข้า','กด "เลือกประตู" ก่อนเริ่มสแกน','err');
+    gateInGo('gate');
     return;
   }
   var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
@@ -9017,7 +9204,9 @@ $('#btnCheckIn').onclick=function(){
   }else{
     toast('บันทึกสำเร็จ',newCount+' ใบใหม่ · '+returnCount+' ใบคืน → '+whName(wh),'ok');
   }
-  renderAll();if(typeof schedule==='function')schedule();$('#scanIn').focus();
+  /* จบรอบนี้แล้ว — รถคันถัดไปคือรอบใหม่ ย้อนกลับไปขั้น "จะกรอกข้อมูลรถไหม" */
+  gateInResetBatch();
+  renderAll();if(typeof schedule==='function')schedule();
 };
 
 /* ล้างข้อมูลหน้า Gate ขาเข้า — เคลียร์คิวสแกนที่ยังไม่ยืนยัน + ข้อมูลรถ/คนขับ/หมายเหตุ
@@ -9034,8 +9223,8 @@ function clearGateIn(){
     ['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
     renderInResult();renderVehicleQuick();
     if(typeof schedule==='function')schedule();
+    gateInResetBatch(); /* ล้างแล้ว = เริ่มรอบใหม่ กลับไปถามเรื่องข้อมูลรถอีกครั้ง */
     toast('ล้างข้อมูลขาเข้าแล้ว','คิวสแกนและข้อมูลรถถูกล้าง — ประตูยังคงเดิม','info');
-    var si=$('#scanIn');if(si)si.focus();
   }
   if(pendingIn.length){
     confirmA('ล้างข้อมูลขาเข้า?','มีกล่องในคิวสแกน '+pendingIn.length+' ใบ ที่ยังไม่ได้ยืนยันรับคืน — ล้างทั้งหมดและเริ่มใหม่?','ล้างข้อมูล',true).then(function(ok){if(ok)doClear();});
@@ -10371,6 +10560,9 @@ function renderAll(){
   buildQuickTrack();
   renderInResult();renderVehicleQuick();
   refreshGateDisplays();
+  /* หลัง refreshGateDisplays() เสมอ — มันเป็นตัวที่ตัดสินว่าประตูที่ตั้งไว้ยังใช้ได้
+     อยู่ไหม ซึ่งเป็นเงื่อนไขแรกที่ gateInResolveStep() ใช้เลือกขั้น */
+  gateInResolveStep();
   renderInventory();renderAuditLog();
   initSortToggles();
   var whoEmp=currentEmp();
