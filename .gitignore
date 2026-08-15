@@ -6,5 +6,11 @@ frontend/.next/
 
 # local dev config + on-disk PGlite database — contains JWT_SECRET, never commit
 .env
+
+# local ops file: brings every container up as one "boxtracking" compose
+# project. Stays out of the branch because c8ad347 ("WEB_APP: keep only
+# frontend") deliberately stripped this branch down to frontend/ — and the
+# file references images built from the other branches' sources.
+/docker-compose.yml
 backend/.env
 backend/.pglite-dev/
