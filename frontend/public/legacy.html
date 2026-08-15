@@ -1970,15 +1970,17 @@ a{color:var(--accentInk);}
       </div>
       <h3 class="wg-scan-t" id="gateInBoxTitle">ประตูสแกนขาเข้า</h3>
       <p class="wg-scan-s" id="gateInBoxSub">ยิงหรือพิมพ์รหัส บาร์โค้ด กล่องที่คืนกลับ — ระบบเช็คอินเข้าคลังตามประตูทันที</p>
-      <!-- ช่องยิงมือ (.pad) กับปุ่มเดโม (.quick) มีไว้สำหรับโหมด "ยิงมือ · บาร์โค้ด"
-           เท่านั้น — โหมด RFID (ค่าเริ่มต้น) ให้เครื่องอ่าน MC3390R/FX9600 ยิงกล่อง
-           เข้าคิวเองอัตโนมัติ มีช่องให้พิมพ์/ยิงเองอยู่ข้างๆ จะชวนงงว่าต้องทำเองไหม
-           — ซ่อนไว้ในโหมด RFID, refreshGateDisplays() เป็นคนสลับ (ดู gateManual()) -->
+      <!-- ช่อง .pad มีไว้สำหรับโหมด "ยิงมือ · บาร์โค้ด" เท่านั้น — โหมด RFID
+           (ค่าเริ่มต้น) ให้เครื่องอ่าน MC3390R/FX9600 ยิงกล่องเข้าคิวเองอัตโนมัติ
+           มีช่องให้พิมพ์/ยิงเองอยู่ข้างๆ จะชวนงงว่าต้องทำเองไหม — ซ่อนไว้ในโหมด
+           RFID, refreshGateDisplays() เป็นคนสลับ (ดู gateManual())
+
+           ปุ่มเดโมยิงเร็ว (.quick) ถูกลบออก — สุ่มกล่องที่ status='out' มาให้กด
+           แทนการยิงจริง มีประโยชน์เฉพาะตอนสาธิต ไม่ใช่การใช้งานจริงหน้างาน -->
       <div class="pad" id="gateInManualPad">
         <input id="scanIn" placeholder="ยิงด้วย PDA/เครื่องอ่านบาร์โค้ด หรือพิมพ์แล้วกด Enter" autocomplete="off">
         <button class="scanbtn" id="btnScanIn">สแกน</button>
       </div>
-      <div class="quick" id="quickIn"></div>
       <!-- โหมด RFID: บอกตรงๆ ว่ากำลังรออะไรอยู่ แทนที่จะปล่อยว่างเฉยๆ -->
       <p class="wg-scan-s" id="gateInAutoHint" style="display:none;margin-top:14px;">
         <span class="svgi" style="vertical-align:-3px;margin-right:4px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>
@@ -8294,18 +8296,21 @@ function refreshGateDisplays(){
          — ซ่อนทั้งการ์ด ไม่ใช่แค่เนื้อหาข้างใน */
       var fxCard=$('#fx9600InfoCard');
       if(fxCard)fxCard.closest('.wg-board').style.display=gateManual()?'none':'';
-      /* โหมด RFID: ช่องยิงมือ+ปุ่มเดโมไม่ต้องใช้ เครื่องอ่านกรอกคิวให้เองอยู่แล้ว —
-         สลับเป็นข้อความบอกสถานะรอกล่องแทน โหมดยิงมือ: กลับไปเป็นช่องกรอกตามเดิม */
+      /* โหมด RFID: ช่องยิงมือไม่ต้องใช้ เครื่องอ่านกรอกคิวให้เองอยู่แล้ว — สลับเป็น
+         ข้อความบอกสถานะรอกล่องแทน โหมดยิงมือ: กลับไปเป็นช่องกรอกตามเดิม */
       var manualNow=gateManual();
-      var pad=$('#gateInManualPad'),quick=$('#quickIn'),autoHint=$('#gateInAutoHint');
+      var pad=$('#gateInManualPad'),autoHint=$('#gateInAutoHint');
       if(pad)pad.style.display=manualNow?'':'none';
-      if(quick)quick.style.display=manualNow?'':'none';
       if(autoHint)autoHint.style.display=manualNow?'none':'';
+      /* ป้ายปุ่มต้องบอก "กดแล้วจะเกิดอะไร" ไม่ใช่ "ตอนนี้อยู่โหมดไหน" — ก่อนหน้านี้
+         ปุ่มเขียนว่า "ยิงมือ · บาร์โค้ด" (บอกโหมดปัจจุบัน) แต่ onclick กลับสลับไป
+         RFID ป้ายกับการกระทำสวนทางกัน คนอ่านแล้วเข้าใจผิดว่ากดแล้วจะได้ยิงมือ
+         ทั้งที่กดแล้วจะปิดยิงมือ ตอนนี้ให้ป้ายบอกปลายทางตรงๆ: กดปุ่มนี้ = เปิด RFID */
       var chip=$('#inGateModeChip');
       if(chip){
         chip.innerHTML=gateManual()
-          ?'<button type="button" class="btn ghost sm" onclick="setGateInputMode(\'rfid\')" title="กลับไปให้เครื่องอ่าน RFID ยิงเข้าคิวเองอัตโนมัติ" style="color:var(--warn);">'
-            +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ยิงมือ · บาร์โค้ด</button>'
+          ?'<button type="button" class="btn ghost sm" onclick="setGateInputMode(\'rfid\')" title="ตอนนี้: ยิงมือด้วยบาร์โค้ด — กดเพื่อสลับกลับไปใช้เครื่องอ่าน RFID" style="color:var(--warn);">'
+            +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span> ใช้เครื่องอ่าน RFID (FX9600)</button>'
           :'';
       }
       warnIfFixedGateWentDead(g);
@@ -8697,11 +8702,8 @@ function renderVehicleQuick(){
   renderVehicleTypeField('out');renderVehicleTypeField('in');
 }
 /* ===== GATE IN ===== */
-function buildQuickIn(){
-  var out=Object.values(S.boxes).filter(function(b){return b.status==='out';}).slice(0,6);
-  $('#quickIn').innerHTML=out.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
-    out.map(function(b){return '<button onclick="scanIn(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
-}
+/* buildQuickIn() (เดโมยิงเร็ว — สุ่มกล่อง status='out' 6 ใบมาให้กด) ถูกลบออก
+   พร้อม #quickIn ในมาร์กอัป */
 function scanIn(tag){
   if(!fixedGatesRef().in){
     setv('scanIn','');
@@ -10210,7 +10212,7 @@ $('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-c
 /* ===== RENDER ALL ===== */
 function renderAll(){
   renderOverview();renderReports();renderSetup();renderTrack();
-  buildQuickIn();buildQuickTrack();
+  buildQuickTrack();
   renderInResult();renderVehicleQuick();
   refreshGateDisplays();
   renderInventory();renderAuditLog();
