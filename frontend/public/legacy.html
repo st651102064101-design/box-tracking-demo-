@@ -1237,6 +1237,26 @@ html[data-theme="dark"]{
 .wg-foot .spacer{flex:1;}
 /* a widget's own form grid never inherits the board's 4 columns */
 .wg-form .grid{margin:0;}
+
+/* ── a .wg-form MODALIZED for editing (see openCardModal in the script) ──────
+   sits directly inside .mbody, which is already the modal's own card — the
+   widget's gradient/ring/shadow/radius on top of that reads as a second,
+   redundant card nested inside the first. Strip it down to plain sectioned
+   content and let .mbody's own padding be the only inset; keep the internal
+   hairlines (head/caption/body) because they still separate meaning, not
+   because they're still "a card". */
+.modal .mbody>.wg.wg-form{background:none;box-shadow:none;border-radius:0;
+  overflow:visible;padding:0;}
+.modal .mbody>.wg.wg-form>.wg-top,
+.modal .mbody>.wg.wg-form>.wg-cap,
+.modal .mbody>.wg.wg-form>.wg-body,
+.modal .mbody>.wg.wg-form>.wg-foot{padding-left:0;padding-right:0;}
+.modal .mbody>.wg.wg-form>.wg-foot{background:none;box-shadow:none;
+  margin-top:18px;padding-top:16px;border-top:.5px solid var(--line);}
+/* the head repeats the modal's own <h3> title one line down — redundant once
+   the card is the entire modal body, so it's hidden rather than shown twice */
+.modal .mbody>.wg.wg-form>.wg-top{display:none;}
+.modal .mbody>.wg.wg-form>.wg-cap{border-bottom:none;padding-top:0;margin-top:-4px;}
 /* .desc used to be styled only as .card .desc; these bodies are no longer cards */
 .wg-form .desc{color:var(--muted);font-size:14px;margin:0 0 20px;line-height:1.5;}
 /* .hint had NO rule anywhere in the sheet — it inherited body text and read as
@@ -2198,7 +2218,7 @@ a{color:var(--accentInk);}
 
   <div class="ssec" id="ssec-btype">
     <div class="wg-board">
-    <div class="wg xl wg-form">
+    <div class="wg xl wg-form" id="btypeFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span></span><span class="wg-lbl">ประเภทกล่อง (Box Type Master)</span></div>
       <p class="wg-cap">สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป</p>
       <div class="wg-body">
@@ -2379,7 +2399,7 @@ a{color:var(--accentInk);}
     </div>
 
     <div class="wg-board">
-    <div class="wg xl wg-form">
+    <div class="wg xl wg-form" id="whFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span></span><span class="wg-lbl">คลัง &amp; ประตู (Warehouse / Gate Map)</span></div>
       <p class="wg-cap">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="wg-body">
@@ -2466,7 +2486,7 @@ a{color:var(--accentInk);}
 
   <div class="ssec" id="ssec-cust" style="display:none;">
     <div class="wg-board">
-    <div class="wg xl wg-form">
+    <div class="wg xl wg-form" id="custFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span></span><span class="wg-lbl">ลูกค้า / ปลายทาง</span></div>
       <div class="wg-body">
       <div class="grid g3">
@@ -4061,8 +4081,66 @@ function confirmA(title,body,okLabel,danger){return new Promise(function(res){va
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
   m.classList.add('show');$('#aOk').onclick=function(){m.classList.remove('show');res(true);};
   $('#aCancel').onclick=function(){m.classList.remove('show');res(false);};});}
-function openModal(h){$('#modalSheet').innerHTML=h;$('#modal').classList.add('show');renderLocDatalist();}
-function closeModal(){$('#modal').classList.remove('show');if(fx9600LogTimer){clearInterval(fx9600LogTimer);fx9600LogTimer=null;}}
+/* ── โหมดใช้ "การ์ดฟอร์มเดิม" เป็นเนื้อหา modal (แก้ไข Setup master data) ──────
+   ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน ใช้การ์ด inline เดิมทั้งเพิ่มและแก้ไข —
+   editXxx() เติมค่าลงฟิลด์แล้วสลับปุ่มเป็น "อัปเดต..." อยู่แล้ว ตรรกะ validate/save
+   ทั้งหมดของทั้ง 4 entity ผูกกับ id ฟิลด์เดิมพวกนี้ ทำซ้ำใหม่ในภาษา modal จะเสี่ยง
+   สองชุด logic เพี้ยนไม่ตรงกัน
+
+   แทนที่จะ copy ฟิลด์ ฟังก์ชันนี้ "ย้าย" DOM node ของการ์ดตัวจริง (ไม่ใช่ clone)
+   เข้าไปอยู่ใน modal ชั่วคราว — id, event listener (#btnAddXxx.onclick ฯลฯ),
+   ตัวสร้างรหัสอัตโนมัติ (btIdAuto ฯลฯ) ทำงานเหมือนเดิมทุกอย่างเพราะเป็น element
+   ตัวเดียวกัน ไม่มี logic ซ้ำเลย ตอนปิด modal จะย้ายกลับไปที่ตำแหน่งเดิมเป๊ะ (จำตำแหน่ง
+   ด้วย comment node คั่นไว้) แท็บ Setup ปกติจึงไม่มีอะไรเปลี่ยนตอนไม่มีใครกำลังแก้ไข */
+var _modalizedCard=null,_modalizedAnchor=null;
+function openCardModal(cardId,title){
+  var card=$('#'+cardId);if(!card)return;
+  restoreModalizedCard(); /* กันเผื่อมีการ์ดค้างอยู่ใน modal จากรอบก่อน (ไม่ควรเกิด แต่ปลอดภัยไว้ก่อน) */
+  _modalizedCard=card;
+  _modalizedAnchor=document.createComment('card-modal-anchor:'+cardId);
+  card.parentNode.insertBefore(_modalizedAnchor,card);
+  $('#modalSheet').innerHTML='<div class="mhead"><h3>'+esc(title)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" id="cardModalBody"></div>';
+  $('#cardModalBody').appendChild(card);
+  $('#modal').classList.add('show');
+}
+function restoreModalizedCard(){
+  if(_modalizedCard&&_modalizedAnchor&&_modalizedAnchor.parentNode){
+    _modalizedAnchor.parentNode.insertBefore(_modalizedCard,_modalizedAnchor);
+    _modalizedAnchor.remove();
+  }
+  _modalizedCard=null;_modalizedAnchor=null;
+}
+/* เรียกท้าย save/cancel ของฟอร์มที่อาจถูก modalize อยู่ — ปิด modal เฉพาะตอนการ์ด
+   ใบนั้นเป็นตัวที่อยู่ใน modal จริงๆ (กันเผื่อกดปุ่มจากแท็บอื่นระหว่าง modal เปิดค้าง
+   ด้วยเหตุผลอื่น ซึ่งไม่ควรเกิดแต่เช็คไว้ปลอดภัยกว่า) ถ้าตอนนี้การ์ดยังอยู่ inline
+   ปกติ (โหมดเพิ่มใหม่) จะไม่ทำอะไรเลย */
+function closeCardModalIfActive(cardId){if(_modalizedCard&&_modalizedCard.id===cardId)closeModal();}
+window.openCardModal=openCardModal;
+/* การ์ดไหนคู่กับปุ่ม "ยกเลิกแก้ไข" ตัวไหน — ใช้ตอนปิด modal ผ่าน X/พื้นหลัง (ไม่ใช่
+   ปุ่ม "ยกเลิกแก้ไข" หรือ "อัปเดต..." เอง) เพื่อให้ทั้งสถานะ editingXxx และค่าที่
+   กรอกค้างไว้ในฟอร์มถูกล้างเหมือนกดยกเลิกจริง ไม่ใช่แค่ปิดหน้าต่างเฉยๆ แล้วปล่อย
+   ฟอร์มค้างอยู่ในสถานะ "กำลังแก้ไข" แบบมองไม่เห็น (ปุ่มยังเขียนว่า "อัปเดต..." บนการ์ด
+   ที่กลับไปอยู่ที่เดิมแล้ว) */
+var CARD_CANCEL_BTN={btypeFormCard:'btnCancelBtype',whFormCard:'btnCancelWh',
+  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp'};
+function openModal(h){restoreModalizedCard();$('#modalSheet').innerHTML=h;$('#modal').classList.add('show');renderLocDatalist();}
+var _closingModal=false;
+function closeModal(){
+  if(_closingModal)return; /* ปุ่ม "ยกเลิกแก้ไข" ด้านล่างเรียก closeCardModalIfActive
+    ซึ่งวนกลับมาเรียก closeModal() อีกที — flag นี้กันไม่ให้ทำงานซ้ำสอง (ล้างค่าฟอร์ม
+    ซ้ำไม่มีผลเสีย แต่ restoreModalizedCard() รอบสองจะย้าย element ที่ไม่มีอยู่แล้ว) */
+  _closingModal=true;
+  if(_modalizedCard){
+    var cancelId=CARD_CANCEL_BTN[_modalizedCard.id];
+    var cancelBtn=cancelId&&$('#'+cancelId);
+    if(cancelBtn)cancelBtn.click(); /* ใช้ logic ยกเลิกตัวจริงของฟอร์มนั้น ไม่ทำซ้ำเอง —
+      กันสองชุด logic เพี้ยนไม่ตรงกัน เหมือนเหตุผลที่ openCardModal ย้าย DOM แทนก็อปฟิลด์ */
+  }
+  restoreModalizedCard();
+  $('#modal').classList.remove('show');
+  if(fx9600LogTimer){clearInterval(fx9600LogTimer);fx9600LogTimer=null;}
+  _closingModal=false;
+}
 $('#modal').addEventListener('click',function(e){if(e.target.closest('[data-close]'))closeModal();});
 /* ===== forced (non-dismissible) modal =====
    Used when a Gate screen can't function at all (no warehouse/gate configured
@@ -4625,12 +4703,13 @@ $('#btnAddBtype').onclick=function(){
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
   save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
   ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();
-  toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
+  toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();closeCardModalIfActive('btypeFormCard');};
 $('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();closeCardModalIfActive('btypeFormCard');};
 function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
   setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
-  $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';
+  openCardModal('btypeFormCard','แก้ไขประเภทกล่อง '+esc(id));}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
@@ -4822,12 +4901,17 @@ $('#btnAddWh').onclick=function(){
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
   renderWhGateTypeList();
-  toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
+  toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();closeCardModalIfActive('whFormCard');};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
-  renderWhGateTypeList();};
-function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
+  renderWhGateTypeList();closeCardModalIfActive('whFormCard');};
+function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
+  /* ย้ายการ์ดเข้า modal ก่อนเซ็ตค่าใดๆ — โดยเฉพาะก่อน whAreaSetMode('map') ด้านล่าง
+     ซึ่งวัดขนาด container จริงตอนสร้าง/invalidateSize() แผนที่ Leaflet ถ้าย้าย DOM
+     หลังจากนั้น แผนที่จะยังอิงขนาด/ตำแหน่งเดิมตอนอยู่ inline ผิดตำแหน่ง */
+  openCardModal('whFormCard','แก้ไขคลัง '+esc(id));
+  whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
   setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');
   setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');setv('whMapSearch','');
@@ -4837,7 +4921,7 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.ed
   whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
   setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
-  $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';}
 function delWh(id){
   var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องผูกกับคลังนี้ '+used+' ใบ','err');
@@ -4900,10 +4984,10 @@ $('#btnAddCust').onclick=function(){
   editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';
-  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();};
+  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();closeCardModalIfActive('custFormCard');};
 $('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
-  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';};
+  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';closeCardModalIfActive('custFormCard');};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
 var CUST_KIND={customer:{t:'ลูกค้า',c:'ok'},supplier:{t:'ซัพพลายเออร์',c:'purple'},both:{t:'ลูกค้า + ซัพพลายเออร์',c:'gray'}};
@@ -4944,7 +5028,9 @@ function custEarliestDueDate(id){
   return earliest==null?null:ddmmyyyy(new Date(earliest));
 }
 window.custEarliestDueDate=custEarliestDueDate;
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');custSyncKindFields();
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;
+  openCardModal('custFormCard','แก้ไขลูกค้า '+esc(id));
+  cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');custSyncKindFields();
   /* ระเบียนที่มี c.returnDays อยู่แล้ว (บันทึก/import ตั้งแต่มีฟิลด์นี้) ใช้ค่านั้นตรงๆ
      ไม่เพี้ยน — ระเบียนเก่าก่อนมีฟิลด์นี้ค่อย fallback ไปคำนวณย้อนจาก returnDate
      (วันที่คงที่ที่เคยบันทึกไว้) เป็นจำนวนวันคงเหลือนับจากวันนี้แทน ซึ่งจะคลาดเคลื่อนไป
@@ -4961,7 +5047,7 @@ function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.
   setv('cTaxId',c.taxId||'');setv('cContactPerson',c.contactPerson||'');setv('cStatus',c.status||'active');syncStatusToggle('cStatus');
   setv('cCreditLimit',c.creditLimit||'');setv('cFineRate',c.fineRate||'');setv('cLostFine',c.lostFine||'');
   var cHH=$('#custHeldHint');if(cHH){cHH.style.display='block';cHH.innerHTML='กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: <b>'+custHeldCount(id)+' ใบ</b>';}
-  $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
    is still stuck on a real box out in the field — the tag keeps answering
@@ -5128,10 +5214,12 @@ $('#btnAddEmp').onclick=function(){
   ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
   eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();setv('eStart',dstr());
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
+  closeCardModalIfActive('empFormCard');
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
   ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
   eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();setv('eStart',dstr());
+  closeCardModalIfActive('empFormCard');
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
@@ -5150,11 +5238,16 @@ function editEmp(id){
   var self=isSelfEmp(id);
   if(!isAdmin()&&!self)return toast('ไม่มีสิทธิ์','แก้ไขได้เฉพาะข้อมูลของตัวเอง (เบอร์โทร/อีเมล) — ติดต่อผู้ดูแลระบบเพื่อแก้ไขข้อมูลอื่น','err');
   editingEmp=id;
+  /* การ์ดนี้ซ่อนเป็น display:none อยู่ปกติสำหรับผู้ใช้ที่ไม่ใช่แอดมิน (renderSetup()
+     ด้านล่างเป็นคนสั่งให้โผล่มาตอนกำลังแก้ไขตัวเอง) — ย้ายเข้า modal ได้แม้ตอนนี้ยัง
+     ซ่อนอยู่ เพราะ renderSetup() ท้ายฟังก์ชันนี้จะปรับ display ให้ถูกไม่ว่าการ์ดจะ
+     อยู่ตำแหน่งไหนในหน้า (เป็น inline style property ของ element เอง ไม่ผูกกับตำแหน่ง) */
+  openCardModal('empFormCard','แก้ไขพนักงาน '+esc(id));
   eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
   setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
-  $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnCancelEmp').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});
+  $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnCancelEmp').style.display='inline-flex';
   renderSetup();}
 function delEmp(id){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
