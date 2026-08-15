@@ -5829,9 +5829,15 @@ window.printEmpBadge=printEmpBadge;
    แล้วให้ผู้ใช้กด Ctrl/Cmd+P เอง — ผู้ใช้ขอให้ปุ่มนี้ "ใช้งานพิมพ์ได้จริง" ไม่ใช่แค่
    preview ยังกด Ctrl/Cmd+P สำรองไว้ในคำใบ้ เผื่อเบราว์เซอร์บาง engine ไม่ trigger
    print dialog อัตโนมัติให้ (เช่น บาง config ของ Safari)
-   พิมพ์สองหน้า (หน้า+หลัง) คนละแผ่น ขนาด CR80 86×54mm เท่ากันทั้งคู่ — page-break-after
-   คั่นกลาง ให้เครื่องพิมพ์บัตร/เครื่องพิมพ์ทั่วไปที่ตั้งกระดาษเป็น 86×54mm ตัดออกมาได้
-   บัตรละสองด้านพอดี ไปห้อยคอใช้งานได้จริง (เคลือบพลาสติกทับอีกทีถ้าต้องการ) */
+   เดิมเคยลอง @page{size:86mm 54mm} หวังให้พิมพ์เป็นกระดาษบัตรขนาดจริง — ใช้ไม่ได้กับ
+   เครื่องพิมพ์จริง (เฉพาะ "Save as PDF" เท่านั้นที่จะยอมรับขนาดกระดาษกำหนดเองแบบนี้)
+   เครื่องพิมพ์จริงที่ตั้งกระดาษ A4/Letter ไว้ในถาด จะเมินค่านี้แล้ว "ขยายเนื้อหาให้เต็ม
+   หน้ากระดาษที่มีจริง" แทน ทำให้บัตรออกมาใหญ่เท่าโปสเตอร์ ไม่ใช่ขนาดบัตรจริงตามที่ผู้ใช้ขอ
+   (ห้อยคอได้จริง) — แก้โดยไม่พึ่ง @page ขนาดพิเศษเลย ปล่อยให้ใช้กระดาษที่ตั้งไว้ตามปกติ
+   (A4/Letter) แล้วให้ตัวการ์ดเองคงขนาด 86×54mm จริงตามหน่วย mm (เหมือนที่พรีวิวในโมดัล
+   render แล้วได้ขนาดถูกต้องอยู่แล้ว) วางกึ่งกลางหน้า พร้อมคำเตือนให้เลือก "ขนาดจริง 100%"
+   ในกล่องโต้ตอบพิมพ์ (ไม่ใช่ "พอดีหน้ากระดาษ") ไม่งั้นเบราว์เซอร์บางตัวจะ auto-scale ให้
+   เองอยู่ดี — พิมพ์แล้วตัดตามขอบบัตรได้ขนาดจริงเสมอไม่ว่ากระดาษที่ใช้จะใหญ่แค่ไหน */
 function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
   var w=window.open('','_blank','width=560,height=780');
@@ -5839,18 +5845,18 @@ function printEmpBadgeWindow(id){
   w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
     +'<title>บัตรพนักงาน '+esc(e.id)+'</title><style>'
     +empCardRootCSS()
-    +'@page{size:86mm 54mm;margin:0;}'
+    +'@page{margin:12mm;}'
     +'*{box-sizing:border-box;}'
     +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
     +'background:#ececed;display:flex;flex-direction:column;align-items:center;gap:6mm;padding:6mm 0 18mm;}'
-    +'.pg{page-break-after:always;}'
+    +'.pg{page-break-after:always;display:flex;justify-content:center;}'
     +'.pg:last-child{page-break-after:auto;}'
     +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
     +'</style></head><body>'
     +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
     +'<div class="pg">'+empCardBackHtml(e)+'</div>'
-    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — บัตร 2 หน้า ขนาด 86 × 54 มม. ต่อหน้า</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 86 × 54 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
