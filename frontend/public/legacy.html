@@ -1930,18 +1930,13 @@ a{color:var(--accentInk);}
     </div>
     <input type="hidden" id="inGate">
     <div id="inGateHint"></div>
-    <div class="field" style="margin-bottom:14px;">
-      <label>ประเภทรถที่เข้า</label>
-      <div class="inv-view-sw" id="inGateModeSw">
-        <button type="button" class="ivs-btn active" data-mode="return" onclick="setInGateMode('return')">คืนกล่อง (ลูกค้า)</button>
-        <button type="button" class="ivs-btn" data-mode="supplier" onclick="setInGateMode('supplier')">รับกล่อง Supplier</button>
-      </div>
-    </div>
+    <!-- ไม่มีสวิตช์ "ประเภทรถที่เข้า" แล้ว — กล่องใหม่จาก Supplier กับกล่องที่ลูกค้า
+         คืนแยกกันเองอยู่แล้วจากประวัติของกล่อง (isNewBox ใน #btnCheckIn) คนที่ยืน
+         หน้าประตูไม่ต้องบอกระบบซ้ำ ช่อง "รถของคู่ค้า" ที่ขึ้นเฉพาะโหมด Supplier
+         เลยหมดที่ใช้ไปด้วย — history/event ยังมีคีย์ partner เหมือนเดิม (val()
+         คืน '' เมื่อไม่มี element) รูปร่างข้อมูลเก่าจึงไม่เปลี่ยน -->
     <div class="grid g3">
       <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
-      <div class="field" id="inPartnerFieldWrap"><label>รถของคู่ค้า</label><select id="inPartner"></select>
-        <div id="inPartnerHint" style="display:none;"></div>
-        <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
       <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><div id="inVehicleField"></div></div>
@@ -9658,47 +9653,15 @@ function refreshStabBadges(){
     if(el)el.textContent=counts[k]?(nf(counts[k])+(suffix[k]||'')):'';
   });
 }
-/* Gate ขาเข้า: คืนกล่อง (ลูกค้า) vs รับกล่อง Supplier — เดิม "รถของคู่ค้า"
-   เป็น dropdown รวมทั้งลูกค้าและซัพพลายเออร์ให้เลือกเอง แม้ตอนคืนกล่องจริง
-   ระบบรู้อยู่แล้วว่ากล่องเป็นของลูกค้าไหนจากประวัติกล่องเอง (isNewBox ใน
-   #btnCheckIn) จึงไม่จำเป็นต้องเลือกซ้ำ — ซ่อนช่องนี้ไปเลยตอนคืนกล่อง ส่วน
-   รับกล่องใหม่จาก Supplier ไม่มีอะไรผูกไว้ล่วงหน้า จึงยังต้องเลือกอยู่
-   (กรองให้เหลือเฉพาะซัพพลายเออร์ ไม่ปนลูกค้าเข้ามาให้เลือกผิด) */
-var inGateMode='return';
-function setInGateMode(mode,persist){
-  inGateMode=mode;
-  $all('#inGateModeSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mode===mode);});
-  renderInPartnerField();
-  if(persist!==false)uiPrefSet('inGateMode',mode);
-}
-window.setInGateMode=setInGateMode;
-function renderInPartnerField(){
-  var wrap=$('#inPartnerFieldWrap');
-  var inPartnerSel=$('#inPartner'),inPartnerHint=$('#inPartnerHint');
-  if(inGateMode==='return'){
-    if(wrap)wrap.style.display='none';
-    if(inPartnerSel)inPartnerSel.value='';
-    return;
-  }
-  if(wrap)wrap.style.display='';
-  if(!inPartnerSel)return;
-  var keepP=inPartnerSel.value;
-  var partners=Object.values(S.customers).filter(function(c){var k=c.kind||'customer';return k==='supplier'||k==='both';});
-  inPartnerSel.style.display=partners.length?'':'none';
-  if(inPartnerHint){
-    inPartnerHint.style.display=partners.length?'none':'block';
-    inPartnerHint.innerHTML=partners.length?'':'<button type="button" class="btn accent sm" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';
-  }
-  inPartnerSel.innerHTML=partners.length
-    ? '<option value="">— เลือกซัพพลายเออร์เจ้าของรถ —</option>'+partners.map(function(c){
-        var k=c.kind||'customer';
-        var tg=k==='both'?'ลูกค้า + ซัพพลายเออร์':'ซัพพลายเออร์';
-        return '<option value="'+esc(c.id)+'">'+esc(c.name)+' · '+tg+'</option>';}).join('')
-    : '';
-  if(keepP)inPartnerSel.value=keepP;
-  else if(partners.length===1)inPartnerSel.value=partners[0].id;
-}
-window.renderInPartnerField=renderInPartnerField;
+/* Gate ขาเข้าไม่มีโหมด "คืนกล่อง (ลูกค้า) / รับกล่อง Supplier" อีกแล้ว — สวิตช์นั้น
+   ให้คนบอกระบบในสิ่งที่ระบบรู้เองอยู่แล้ว: #btnCheckIn แยกกล่องใหม่ออกจากกล่องคืน
+   ด้วย isNewBox (กล่องที่ไม่เคยมี history dir==='out' = ยังไม่เคยถูกจ่ายออก =
+   ของใหม่จาก Supplier) ทุกใบในคิวเดียวกัน ไม่ว่าสวิตช์จะชี้ไปทางไหน สวิตช์จึงไม่เคย
+   เปลี่ยนผลลัพธ์ของการรับเข้าเลย มีผลอย่างเดียวคือโชว์/ซ่อนช่อง "รถของคู่ค้า"
+
+   ช่องนั้นถูกลบไปพร้อมกัน เพราะโหมดเดียวที่ทำให้มันโผล่มาได้หายไปแล้ว ส่วนคีย์
+   partner ยังเขียนลง history/event เหมือนเดิม (val('inPartner') คืน '' เมื่อไม่มี
+   element) เพื่อไม่ให้รูปร่างข้อมูลของ record ใหม่ต่างจากของเก่า */
 
 function renderSetup(){
   refreshStabBadges();
@@ -9749,7 +9712,6 @@ function renderSetup(){
   var hasSup=Object.values(S.customers).some(isSupplierKind);
   if(bSupSel){var keepS=bSupSel.value;bSupSel.innerHTML=hasSup?supplierOptions(keepS):'';if(keepS)bSupSel.value=keepS;bSupSel.style.display=hasSup?'':'none';}
   if(bSupHint){bSupHint.style.display=hasSup?'none':'block';bSupHint.innerHTML=hasSup?'':'<button type="button" class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มซัพพลายเออร์</button>';}
-  renderInPartnerField();
   if(doCustHint){doCustHint.style.display=hasCust?'none':'block';doCustHint.innerHTML=hasCust?'':'<button class="btn accent" onclick="goSetup(\'cust\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button>';}
 
   // box table
@@ -10450,8 +10412,8 @@ window.seedDemo=seedDemo;
    toggles, once per boot after S has actually loaded — the plain `var
    invViewMode = 'serial'` etc. declarations above ran at parse time, before
    loadFromServer() resolved, so they can only ever hold the hardcoded
-   fallback until this runs. persist:false on setBoxRegMode/setInGateMode
-   avoids writing the value straight back as if the user had just clicked it. */
+   fallback until this runs. persist:false on setBoxRegMode avoids writing the
+   value straight back as if the user had just clicked it. */
 function restoreUiPrefs(){
   invViewMode=uiPrefGet('invView','serial');
   var invBtn=document.querySelector('#invViewSw .ivs-btn[data-view="'+invViewMode+'"]');
@@ -10462,7 +10424,6 @@ function restoreUiPrefs(){
     if(summary)summary.style.display=invViewMode==='summary'?'':'none';
   }
   if(typeof setBoxRegMode==='function')setBoxRegMode(uiPrefGet('boxRegMode','single'));
-  if(typeof setInGateMode==='function')setInGateMode(uiPrefGet('inGateMode','return'),false);
 
   var fbs=$('#filtBoxStatus');if(fbs)fbs.value=uiPrefGet('filtBoxStatus','');
   var fam=$('#filtAuditModule');if(fam)fam.value=uiPrefGet('filtAuditModule','');
