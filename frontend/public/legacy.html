@@ -1254,6 +1254,118 @@ html[data-theme="dark"]{
 .wg-foot .spacer{flex:1;}
 /* a widget's own form grid never inherits the board's 4 columns */
 .wg-form .grid{margin:0;}
+
+/* ── a .wg-form hosted inside the side drawer (see openCardDrawer in the script)
+   The drawer panel IS the card now — the widget's own gradient/ring/shadow/
+   radius on top of that reads as a second card nested inside the first. Strip
+   it to plain sectioned content and let the drawer's padding be the only
+   inset; keep the internal hairlines, which still separate meaning. */
+.drawer-body>.wg.wg-form{background:none;box-shadow:none;border-radius:0;
+  overflow:visible;padding:0;}
+.drawer-body>.wg.wg-form>.wg-top,
+.drawer-body>.wg.wg-form>.wg-cap,
+.drawer-body>.wg.wg-form>.wg-body{padding-left:0;padding-right:0;}
+/* the head repeats the drawer's own <h3> one line down — hidden, not shown twice */
+.drawer-body>.wg.wg-form>.wg-top{display:none;}
+.drawer-body>.wg.wg-form>.wg-cap{border-bottom:none;padding:0 0 14px;}
+.drawer-body>.wg.wg-form>.wg-body{padding-top:0;padding-bottom:0;}
+/* the drawer is ~560px — every multi-column form grid inside it collapses to a
+   single column, except the short paired fields opted in via .g2 below */
+.drawer-body .grid{grid-template-columns:1fr;}
+.drawer-body .grid.dw2{grid-template-columns:1fr 1fr;}
+@media(max-width:560px){.drawer-body .grid.dw2{grid-template-columns:1fr;}}
+
+/* ══ SIDE DRAWER ═════════════════════════════════════════════════════════════
+   Right-hand slide-over for creating/editing master data. The list stays
+   visible behind it, so you keep the context you were working in — a centred
+   modal covers exactly the table you are adding a row to. */
+.drawer{position:fixed;inset:0;z-index:120;pointer-events:none;}
+.drawer.show{pointer-events:auto;}
+.drawer-scrim{position:absolute;inset:0;background:rgba(0,0,0,.34);
+  opacity:0;transition:opacity .24s var(--ease);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+.drawer.show .drawer-scrim{opacity:1;}
+.drawer-panel{position:absolute;top:0;right:0;height:100%;width:560px;max-width:100%;
+  display:flex;flex-direction:column;background:var(--surface);
+  box-shadow:-24px 0 60px -20px rgba(0,0,0,.28),inset 1px 0 0 var(--line);
+  transform:translateX(100%);transition:transform .26s var(--ease);}
+.drawer.show .drawer-panel{transform:translateX(0);}
+@media(prefers-reduced-motion:reduce){
+  .drawer-scrim,.drawer-panel{transition-duration:.01ms;}
+}
+@media(max-width:600px){.drawer-panel{width:100%;}}
+/* head + foot stay put; only the middle scrolls, so บันทึก is always in reach */
+.drawer-head{flex:0 0 auto;display:flex;align-items:flex-start;gap:12px;
+  padding:20px 24px 15px;border-bottom:.5px solid var(--line);background:var(--surface);}
+.drawer-head-txt{flex:1;min-width:0;}
+.drawer-head h3{font-size:19px;font-weight:700;letter-spacing:-.015em;line-height:1.4;margin:0;color:var(--ink);}
+.drawer-sub{font-size:12.5px;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);margin:3px 0 0;}
+.drawer-sub:empty{display:none;}
+.drawer-head .x{flex:0 0 auto;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--ink2);transition:background .18s,color .18s;}
+.drawer-head .x:hover{background:color-mix(in srgb,var(--ink) 11%,transparent);color:var(--ink);}
+.drawer-head .x .svgi{width:16px;height:16px;}
+.drawer-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:20px 24px;}
+.drawer-foot{flex:0 0 auto;display:flex;align-items:center;gap:11px;
+  padding:15px 24px calc(15px + env(safe-area-inset-bottom));
+  border-top:.5px solid var(--line);
+  background:color-mix(in srgb,var(--ink) 3.5%,var(--surface));}
+html[data-theme="dark"] .drawer-foot{background:color-mix(in srgb,var(--ink) 5%,var(--surface));}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]) .drawer-foot{
+    background:color-mix(in srgb,var(--ink) 5%,var(--surface));}
+}
+.drawer-foot:empty{display:none;}
+/* the card's own .wg-foot lands here — it arrives with widget padding/tint it no
+   longer needs, because the drawer footer already provides both */
+.drawer-foot>.wg-foot{display:contents;background:none;box-shadow:none;padding:0;}
+/* ยกเลิก sits left, บันทึก right and most prominent */
+.drawer-foot .spacer{flex:1;}
+.drawer-foot .btn{flex:0 0 auto;}
+@media(max-width:519px){
+  .drawer-head{padding:16px 18px 12px;}
+  .drawer-body{padding:16px 18px;}
+  .drawer-foot{padding:12px 18px calc(12px + env(safe-area-inset-bottom));}
+  .drawer-foot .btn{flex:1 1 auto;justify-content:center;}
+}
+/* ── field-level validation, shown under the offending input rather than only
+      as a toast that scrolls away before it can be acted on ── */
+.field.err>input,.field.err>select,.field.err>textarea,
+.field.err .auto-tag-row>input{border-color:var(--neg);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--neg) 18%,transparent);}
+.field-err{font-size:12px;color:var(--neg);font-weight:600;letter-spacing:0;
+  line-height:var(--wgLead);margin-top:-1px;}
+/* ── photo picker — replaces the raw <input type=file> chrome ────────────────
+   The input itself stays in the DOM (same id, same change handler); it's only
+   visually hidden and driven by <label for>, so nothing about how the file is
+   read changes. Not display:none — that makes the control unfocusable and
+   breaks programmatic .click() in some browsers. */
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;}
+.photo-pick{display:flex;align-items:center;gap:16px;padding:14px 16px;
+  border-radius:16px;background:var(--surface2);box-shadow:inset 0 0 0 .5px var(--line2);}
+@supports (corner-shape:squircle){.photo-pick{corner-shape:squircle;border-radius:19px;}}
+.photo-pick-av{width:64px;height:64px;flex:0 0 auto;border-radius:50%;overflow:hidden;
+  background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;
+  font-size:20px;font-weight:700;box-shadow:inset 0 0 0 .5px var(--line2);}
+.photo-pick-av img{width:100%;height:100%;object-fit:cover;display:block;}
+.photo-pick-txt{flex:1;min-width:0;}
+.photo-pick-lbl{display:block;font-size:13px;font-weight:600;color:var(--ink2);letter-spacing:-.01em;}
+.photo-pick-hint{font-size:12px;color:var(--muted);letter-spacing:0;line-height:var(--wgLead);margin-top:1px;}
+.photo-pick-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
+/* the "เลือกรูป" control is a <label for>, so it needs the button's own cursor */
+.photo-pick-btns label.btn{cursor:pointer;}
+/* ── the "+ เพิ่ม…" primary action in a table widget's head ── */
+.wg-top .btn.addbtn{border-radius:999px;font-weight:600;}
+.wg-hd-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;min-width:0;}
+.wg-hd-row+.wg-hd-row{margin-top:12px;padding-top:12px;border-top:.5px solid var(--line);}
+.wg-hd-row .spacer{flex:1;}
+/* row 2 holds search + import/export; the search input carries the row */
+.wg-hd-row>input{flex:1 1 220px;min-width:0;width:auto;padding:9px 14px;font-size:14px;}
+@media(max-width:519px){
+  .wg-hd-row>input{flex:1 1 100%;}
+}
 /* .desc used to be styled only as .card .desc; these bodies are no longer cards */
 .wg-form .desc{color:var(--muted);font-size:14px;margin:0 0 20px;line-height:1.5;}
 /* .hint had NO rule anywhere in the sheet — it inherited body text and read as
@@ -2363,8 +2475,14 @@ a{color:var(--accentInk);}
 
 
   <div class="ssec" id="ssec-btype">
-    <div class="wg-board">
-    <div class="wg xl wg-form">
+    <!-- ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+         ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ เพิ่ม…" หรือ "แก้ไข"
+         แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
+         ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — renderSetup() ใช้ display
+         ของ #empFormCard คุมสิทธิ์ (ซ่อนทั้งฟอร์มสำหรับคนที่ไม่ใช่แอดมิน) ถ้าไปทับตรงนั้น
+         จะพังเรื่องสิทธิ์ — ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="btypeFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span></span><span class="wg-lbl">ประเภทกล่อง (Box Type Master)</span></div>
       <p class="wg-cap">สร้างหรือแก้ไขประเภทกล่อง — จะปรากฏให้เลือกตอนลงทะเบียนกล่อง · ขนาด/น้ำหนักเชิงลึกจะพัฒนาในเฟสถัดไป</p>
       <div class="wg-body">
@@ -2392,14 +2510,18 @@ a{color:var(--accentInk);}
         </div>
       </div>
       </div>
-      <div class="wg-foot"><button class="btn accent" id="btnAddBtype">บันทึกประเภท</button>
-        <button class="btn gray" id="btnCancelBtype" style="display:none;">ยกเลิกแก้ไข</button></div>
+      <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
+           ปุ่มยกเลิกไม่ซ่อนตามสถานะแก้ไขอีกต่อไป มันคือปุ่ม "ยกเลิก" ของ drawer ที่ต้อง
+           มีทั้งตอนเพิ่มและตอนแก้ไข (closeDrawer ก็กดปุ่มนี้เพื่อล้างฟอร์ม) -->
+      <div class="wg-foot"><button class="btn gray" id="btnCancelBtype">ยกเลิก</button>
+        <div class="spacer"></div>
+        <button class="btn accent" id="btnAddBtype">บันทึกประเภท</button></div>
     </div>
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-lbl">รายการประเภทกล่อง</span><span class="tag" id="cntBtype"></span><div class="spacer"></div><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายการประเภทกล่อง</span><span class="tag" id="cntBtype"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addBtype()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button></div><div class="wg-hd-row"><input id="schBtype" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('btype')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportBtypeExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      </div></div>
       <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBtype" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อประเภท</th><th>หน่วย</th><th class="r">มูลค่า (บาท)</th><th>ขนาด</th><th class="r">กล่องที่ใช้</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="btypeBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerBtype"></div>
@@ -2516,8 +2638,14 @@ a{color:var(--accentInk);}
     </div>
   </div>
   <div class="ssec" id="ssec-wh" style="display:none;">
-    <div class="wg-board">
-    <div class="wg xl wg-form">
+    <div class="wg-board" style="display:none;">
+    <!-- ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+         ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ เพิ่ม…" หรือ "แก้ไข"
+         แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
+         ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — renderSetup() ใช้ display
+         ของ #empFormCard คุมสิทธิ์ (ซ่อนทั้งฟอร์มสำหรับคนที่ไม่ใช่แอดมิน) ถ้าไปทับตรงนั้น
+         จะพังเรื่องสิทธิ์ — ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg xl wg-form" id="whFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span></span><span class="wg-lbl">คลัง &amp; ประตู (Warehouse / Gate Map)</span></div>
       <p class="wg-cap">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="wg-body">
@@ -2582,14 +2710,18 @@ a{color:var(--accentInk);}
         </div>
       </div>
       </div>
-      <div class="wg-foot"><button class="btn accent" id="btnAddWh">บันทึกคลัง</button>
-        <button class="btn gray" id="btnCancelWh" style="display:none;">ยกเลิกแก้ไข</button></div>
+      <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
+           ปุ่มยกเลิกไม่ซ่อนตามสถานะแก้ไขอีกต่อไป มันคือปุ่ม "ยกเลิก" ของ drawer ที่ต้อง
+           มีทั้งตอนเพิ่มและตอนแก้ไข (closeDrawer ก็กดปุ่มนี้เพื่อล้างฟอร์ม) -->
+      <div class="wg-foot"><button class="btn gray" id="btnCancelWh">ยกเลิก</button>
+        <div class="spacer"></div>
+        <button class="btn accent" id="btnAddWh">บันทึกคลัง</button></div>
     </div>
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-lbl">คลังและประตู</span><span class="tag" id="cntWh"></span><div class="spacer"></div><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">คลังและประตู</span><span class="tag" id="cntWh"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addWh()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button></div><div class="wg-hd-row"><input id="schWh" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ประตู" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('wh')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportWhExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      </div></div>
       <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllWh" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อคลัง</th><th>ประตู</th><th class="r">จำนวนประตู</th><th>ประเภทประตู</th><th class="r">กล่องที่เก็บอยู่</th><th>พื้นที่</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="whBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerWh"></div>
@@ -2603,8 +2735,14 @@ a{color:var(--accentInk);}
   </div>
 
   <div class="ssec" id="ssec-cust" style="display:none;">
-    <div class="wg-board">
-    <div class="wg xl wg-form">
+    <!-- ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+         ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ เพิ่ม…" หรือ "แก้ไข"
+         แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
+         ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — renderSetup() ใช้ display
+         ของ #empFormCard คุมสิทธิ์ (ซ่อนทั้งฟอร์มสำหรับคนที่ไม่ใช่แอดมิน) ถ้าไปทับตรงนั้น
+         จะพังเรื่องสิทธิ์ — ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="custFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span></span><span class="wg-lbl">ลูกค้า / ปลายทาง</span></div>
       <div class="wg-body">
       <div class="grid g3">
@@ -2653,14 +2791,18 @@ a{color:var(--accentInk);}
       <div class="tag" id="custFineNote" style="margin-top:2px;max-width:640px;">วิธีคิดค่าปรับ: <b>ค่าปรับเกินกำหนดคืน</b> = อัตรา/วัน × จำนวนวันที่เกินกำหนดคืน × จำนวนกล่องที่เกินกำหนดอยู่ตอนนี้ (คำนวณสดทุกครั้ง ไม่ได้บันทึกเป็นยอดค้างชำระ) · <b>ค่าปรับกล่องหาย</b> = อัตรานี้ × จำนวนกล่องที่สถานะเป็น "สูญหาย" ของลูกค้ารายนี้ — ดูยอดรวมปัจจุบันได้ที่บัตรลูกค้า (แตะแถวลูกค้าในตารางด้านล่าง)</div>
       <div class="hint" id="custHeldHint" style="display:none;margin-top:10px;"></div>
       </div>
-      <div class="wg-foot"><button class="btn accent" id="btnAddCust">บันทึกลูกค้า</button>
-        <button class="btn gray" id="btnCancelCust" style="display:none;">ยกเลิกแก้ไข</button></div>
+      <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
+           ปุ่มยกเลิกไม่ซ่อนตามสถานะแก้ไขอีกต่อไป มันคือปุ่ม "ยกเลิก" ของ drawer ที่ต้อง
+           มีทั้งตอนเพิ่มและตอนแก้ไข (closeDrawer ก็กดปุ่มนี้เพื่อล้างฟอร์ม) -->
+      <div class="wg-foot"><button class="btn gray" id="btnCancelCust">ยกเลิก</button>
+        <div class="spacer"></div>
+        <button class="btn accent" id="btnAddCust">บันทึกลูกค้า</button></div>
     </div>
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-lbl">รายการลูกค้า</span><span class="tag" id="cntCust"></span><div class="spacer"></div><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายการลูกค้า</span><span class="tag" id="cntCust"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addCust()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button></div><div class="wg-hd-row"><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+      </div></div>
       <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerCust"></div>
@@ -2674,21 +2816,37 @@ a{color:var(--accentInk);}
   </div>
 
   <div class="ssec" id="ssec-emp" style="display:none;">
-    <div class="wg-board">
+    <!-- ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+         ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ เพิ่ม…" หรือ "แก้ไข"
+         แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
+         ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — renderSetup() ใช้ display
+         ของ #empFormCard คุมสิทธิ์ (ซ่อนทั้งฟอร์มสำหรับคนที่ไม่ใช่แอดมิน) ถ้าไปทับตรงนั้น
+         จะพังเรื่องสิทธิ์ — ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg-board" style="display:none;">
     <div class="wg xl wg-form" id="empFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span></span><span class="wg-lbl">พนักงาน</span></div>
       <p class="wg-cap">รายชื่อผู้ปฏิบัติงานที่เลือกเป็น "ผู้บันทึก" ได้จากปุ่มมุมขวาบน — ไม่กระทบประวัติเดิมเมื่อแก้ไข/ลบ</p>
       <div class="wg-body">
-      <div class="row" style="align-items:center;gap:14px;margin-bottom:6px;">
-        <div id="ePhotoPreview" style="width:64px;height:64px;flex:0 0 auto;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:20px;font-weight:700;overflow:hidden;"></div>
-        <div class="field" style="margin:0;">
-          <label>รูปพนักงาน</label>
-          <input type="file" id="ePhotoFile" accept="image/*" style="max-width:260px;">
+      <!-- อัปโหลดรูป: ปุ่ม "เลือกรูป" ตัวจริงคือ <label for> ที่ชี้ไป input[type=file]
+           ซึ่งถูกซ่อนไว้ (ไม่ใช่ display:none บน input โดยตรง เพราะจะทำให้ .click()
+           จากที่อื่นและการ validate ของเบราว์เซอร์มีปัญหาในบางเบราว์เซอร์ — ใช้
+           .visually-hidden แทน) #ePhotoFile / #ePhotoPreview / #btnRemoveEPhoto
+           คง id เดิมทั้งหมด renderEPhotoPreview()/resetEPhoto() จึงทำงานเหมือนเดิม -->
+      <div class="photo-pick">
+        <div id="ePhotoPreview" class="photo-pick-av"></div>
+        <div class="photo-pick-txt">
+          <label class="photo-pick-lbl" for="ePhotoFile">รูปพนักงาน</label>
+          <div class="photo-pick-hint">ไฟล์ภาพ · ใช้บนบัตรพนักงานและในตาราง</div>
+          <div class="photo-pick-btns">
+            <label class="btn ghost sm" for="ePhotoFile"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-4 3 2.4L16 12l4 4"/></svg></span> เลือกรูป</label>
+            <button type="button" class="btn ghost sm" id="btnRemoveEPhoto" style="display:none;">ลบรูป</button>
+          </div>
+          <input type="file" id="ePhotoFile" accept="image/*" class="visually-hidden">
         </div>
-        <button type="button" class="btn ghost sm" id="btnRemoveEPhoto" style="display:none;">ลบรูป</button>
       </div>
-      <div class="grid g3">
-        <div class="field"><label>รหัสพนักงาน (สร้างอัตโนมัติ)</label>
+      <div class="field" style="margin-top:16px;"><label for="eName">ชื่อ–นามสกุล <span class="req">*</span></label><input id="eName" placeholder="เช่น สมศรี ใจดี"></div>
+      <div class="grid dw2" style="margin-top:14px;">
+        <div class="field"><label for="eId">รหัสพนักงาน (สร้างอัตโนมัติ)</label>
           <div class="auto-tag-row">
             <input id="eId" readonly>
             <button type="button" class="iconbtn" id="btnRegenEId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
@@ -2696,13 +2854,12 @@ a{color:var(--accentInk);}
             <button type="button" class="btn ghost sm" id="btnOverrideEId">แก้เอง</button>
           </div>
         </div>
-        <div class="field"><label>ชื่อ–นามสกุล <span class="req">*</span></label><input id="eName" placeholder="เช่น สมศรี ใจดี"></div>
-        <div class="field"><label>ตำแหน่ง</label><input id="eRole" placeholder="เช่น พนักงานคลัง"></div>
+        <div class="field"><label for="eRole">ตำแหน่ง</label><input id="eRole" placeholder="เช่น พนักงานคลัง"></div>
       </div>
-      <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>
-        <div class="field"><label>คลังที่สังกัด</label><select id="eWh"></select></div>
-        <div class="field"><label>กะการทำงาน</label>
+      <div class="field" style="margin-top:14px;"><label for="eDept">แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>
+      <div class="grid dw2" style="margin-top:14px;">
+        <div class="field"><label for="eWh">คลังที่สังกัด</label><select id="eWh"></select></div>
+        <div class="field"><label for="eShift">กะการทำงาน</label>
           <select id="eShift">
             <option value="morning">กะเช้า (08:00–17:00)</option>
             <option value="afternoon">กะบ่าย (14:00–22:00)</option>
@@ -2711,14 +2868,14 @@ a{color:var(--accentInk);}
           </select>
         </div>
       </div>
-      <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>เบอร์โทรศัพท์</label><input id="ePhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
-        <div class="field"><label>อีเมล</label><input id="eEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>
-        <div class="field"><label>วันเริ่มงาน</label><input id="eStart" type="date"></div>
+      <div class="grid dw2" style="margin-top:14px;">
+        <div class="field"><label for="ePhone">เบอร์โทรศัพท์</label><input id="ePhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
+        <div class="field"><label for="eStart">วันเริ่มงาน</label><input id="eStart" type="date"></div>
       </div>
-      <div class="grid g3" style="margin-top:14px;">
-        <div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
-        <div class="field"><label>สิทธิ์การใช้งาน</label>
+      <div class="field" style="margin-top:14px;"><label for="eEmail">อีเมล</label><input id="eEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>
+      <div class="field" style="margin-top:14px;"><label for="eScan">รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
+      <div class="grid dw2" style="margin-top:14px;">
+        <div class="field"><label for="eAccess">สิทธิ์การใช้งาน</label>
           <select id="eAccess">
             <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ (ยิง Gate)</option>
             <option value="supervisor" title="สิทธิ์เท่าพนักงานปฏิบัติการ — เป็นแค่ตำแหน่งงาน ไม่ได้เพิ่มสิทธิ์พิเศษในระบบ">หัวหน้างาน</option>
@@ -2744,13 +2901,17 @@ a{color:var(--accentInk);}
         <b>ผู้ชมอย่างเดียว</b> — ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย
       </p>
       </div>
-      <div class="wg-foot"><button class="btn accent" id="btnAddEmp">บันทึกพนักงาน</button>
-        <button class="btn gray" id="btnCancelEmp" style="display:none;">ยกเลิกแก้ไข</button></div>
+      <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
+           #btnCancelEmp ไม่ซ่อนตามสถานะแก้ไขอีกต่อไป มันคือปุ่ม "ยกเลิก" ของ drawer
+           ที่ต้องมีทั้งตอนเพิ่มและตอนแก้ไข (closeDrawer ก็กดปุ่มนี้เพื่อล้างฟอร์ม) -->
+      <div class="wg-foot"><button class="btn gray" id="btnCancelEmp">ยกเลิก</button>
+        <div class="spacer"></div>
+        <button class="btn accent" id="btnAddEmp">บันทึกพนักงาน</button></div>
     </div>
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-lbl">รายชื่อพนักงาน</span><span class="tag" id="cntEmp"></span><div class="spacer"></div><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายชื่อพนักงาน</span><span class="tag" id="cntEmp"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" id="btnAddEmpTop" onclick="addEmp()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มพนักงาน</button></div><div class="wg-hd-row"><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div></div>
       <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerEmp"></div>
@@ -2834,6 +2995,27 @@ a{color:var(--accentInk);}
 <div class="toast-zone" id="toastZone"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
+
+<!-- ===== Side drawer (เพิ่ม/แก้ไขข้อมูลหลัก) =========================================
+     ใบเดียวใช้ร่วมกันทุก master (ประเภทกล่อง/คลัง&ประตู/ลูกค้า/พนักงาน) — openCardDrawer()
+     ย้าย "การ์ดฟอร์มตัวจริง" เข้ามาไว้ใน .drawer-body แล้วย้ายกลับที่เดิมตอนปิด จึงไม่มี
+     ฟอร์มสำเนาชุดที่สองให้ต้องคอยไล่แก้ให้ตรงกัน (เหตุผลเดียวกับตอนที่เคยทำเป็น modal)
+     .wg-foot ของการ์ดถูกย้ายมาไว้ที่ .drawer-foot ต่างหาก เพื่อให้ปุ่มบันทึกติดอยู่ก้น
+     drawer เสมอ ไม่เลื่อนหนีไปพร้อมเนื้อฟอร์ม -->
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-scrim" data-drawer-close></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <header class="drawer-head">
+      <div class="drawer-head-txt">
+        <h3 id="drawerTitle">เพิ่มข้อมูล</h3>
+        <p class="drawer-sub" id="drawerSub"></p>
+      </div>
+      <button type="button" class="x" id="drawerClose" data-drawer-close aria-label="ปิด" title="ปิด (Esc)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button>
+    </header>
+    <div class="drawer-body" id="drawerBody"></div>
+    <footer class="drawer-foot" id="drawerFoot"></footer>
+  </aside>
+</div>
 
 <!-- ===== พนักงาน — บัตรพนักงานเสมือน (physics ID badge) =====
      คลิกแถวพนักงานในหน้าตั้งค่า ▸ พนักงาน แล้วบัตรจะ "หล่น" ลงมาจากคลิปแขวนด้านบน
@@ -4140,6 +4322,142 @@ function confirmA(title,body,okLabel,danger){return new Promise(function(res){va
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
   m.classList.add('show');$('#aOk').onclick=function(){m.classList.remove('show');res(true);};
   $('#aCancel').onclick=function(){m.classList.remove('show');res(false);};});}
+/* ══ SIDE DRAWER ที่ยืม "การ์ดฟอร์มตัวจริง" มาเป็นเนื้อหา ═══════════════════════
+   ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน ใช้การ์ดใบเดียวทั้งเพิ่มและแก้ไข — ตรรกะ
+   validate/save/สิทธิ์/ตัวสร้างรหัสอัตโนมัติ ผูกกับ id ฟิลด์ในการ์ดนั้นทั้งหมด สร้าง
+   ฟอร์มชุดที่สองในภาษา drawer = มี logic สองชุดให้เพี้ยนไม่ตรงกัน
+
+   ฟังก์ชันนี้จึง "ย้าย" DOM node ของการ์ดตัวจริง (ไม่ clone) เข้ามาไว้ใน drawer แล้ว
+   ย้ายกลับที่เดิมตอนปิด — element ตัวเดียวกัน id เดียวกัน listener เดียวกัน
+   .wg-foot ของการ์ดถูกแยกไปไว้ที่ท้าย drawer เพื่อให้ปุ่มบันทึกติดก้นเสมอ */
+var _dwCard=null,_dwAnchor=null,_dwFoot=null,_dwFootAnchor=null,_dwTrigger=null,_dwBaseline='';
+/* ค่าทุกฟิลด์ในการ์ด ณ ตอนเปิด — ใช้เทียบว่าผู้ใช้แก้อะไรไปแล้วหรือยัง (dirty check) */
+function _dwSnapshot(card){
+  if(!card)return '';
+  return $all('input,select,textarea',card).map(function(el){
+    return el.id+'='+(el.type==='checkbox'||el.type==='radio'?(el.checked?1:0):(el.value||''));
+  }).join('');
+}
+function drawerIsDirty(){return !!_dwCard&&_dwSnapshot(_dwCard)!==_dwBaseline;}
+function openCardDrawer(cardId,title,sub){
+  var card=$('#'+cardId);if(!card)return;
+  _dwRestoreNodes(); /* กันการ์ดค้างจากรอบก่อน */
+  _dwTrigger=document.activeElement&&document.activeElement.tagName==='BUTTON'?document.activeElement:null;
+  _dwCard=card;
+  _dwAnchor=document.createComment('drawer-anchor:'+cardId);
+  card.parentNode.insertBefore(_dwAnchor,card);
+  $('#drawerTitle').textContent=title||'';
+  $('#drawerSub').textContent=sub||'';
+  $('#drawerBody').appendChild(card);
+  /* ยก .wg-foot ของการ์ด (ปุ่มบันทึก/ยกเลิก) ไปไว้ที่ footer ของ drawer */
+  var foot=card.querySelector(':scope > .wg-foot');
+  if(foot){
+    _dwFoot=foot;
+    _dwFootAnchor=document.createComment('drawer-foot-anchor');
+    foot.parentNode.insertBefore(_dwFootAnchor,foot);
+    $('#drawerFoot').appendChild(foot);
+  }
+  clearFieldErrors(card);
+  _dwBaseline=_dwSnapshot(card);
+  $('#drawer').classList.add('show');
+  $('#drawer').setAttribute('aria-hidden','false');
+  document.body.style.overflow='hidden';
+  /* โฟกัสช่องแรกที่กรอกได้จริง — ข้าม readonly/disabled (เช่น #eId ที่ระบบสร้างให้) */
+  setTimeout(function(){
+    var first=$all('input,select,textarea',card).filter(function(el){
+      return !el.disabled&&!el.readOnly&&el.type!=='hidden'&&el.offsetParent!==null;})[0];
+    if(first)first.focus();
+  },260);
+}
+function _dwRestoreNodes(){
+  /* foot กลับเข้าการ์ดก่อน แล้วค่อยย้ายการ์ดกลับ — สลับลำดับแล้ว anchor ของ foot
+     จะลอยอยู่นอกการ์ดที่ย้ายไปแล้ว */
+  if(_dwFoot&&_dwFootAnchor&&_dwFootAnchor.parentNode){
+    _dwFootAnchor.parentNode.insertBefore(_dwFoot,_dwFootAnchor);
+    _dwFootAnchor.remove();
+  }
+  _dwFoot=null;_dwFootAnchor=null;
+  if(_dwCard&&_dwAnchor&&_dwAnchor.parentNode){
+    _dwAnchor.parentNode.insertBefore(_dwCard,_dwAnchor);
+    _dwAnchor.remove();
+  }
+  _dwCard=null;_dwAnchor=null;
+}
+/* การ์ดไหนคู่กับปุ่ม "ยกเลิก" ตัวไหน — ปิด drawer ด้วย X/scrim/ESC ต้องล้างสถานะ
+   editingXxx และค่าที่ค้างอยู่เหมือนกดยกเลิกจริง ไม่ใช่แค่ซ่อนหน้าต่างแล้วปล่อยฟอร์ม
+   ค้างในสถานะ "กำลังแก้ไข" แบบมองไม่เห็น */
+var CARD_CANCEL_BTN={btypeFormCard:'btnCancelBtype',whFormCard:'btnCancelWh',
+  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp'};
+var _dwClosing=false;
+/* force=true → ปิดโดยไม่ถามเรื่องข้อมูลที่ยังไม่ได้บันทึก (ใช้ตอนบันทึกสำเร็จแล้ว) */
+function closeDrawer(force){
+  if(!_dwCard||_dwClosing)return;
+  if(!force&&drawerIsDirty()){
+    confirmA('มีข้อมูลที่ยังไม่ได้บันทึก','ต้องการออกโดยไม่บันทึกหรือไม่?','ออกโดยไม่บันทึก',true)
+      .then(function(ok){if(ok)closeDrawer(true);});
+    return;
+  }
+  _dwClosing=true;
+  var cancelId=CARD_CANCEL_BTN[_dwCard.id];
+  var cancelBtn=cancelId&&$('#'+cancelId);
+  /* ใช้ logic ยกเลิกตัวจริงของฟอร์มนั้น ไม่เขียนซ้ำเอง — เหตุผลเดียวกับที่ย้าย DOM
+     แทนการก็อปฟิลด์ */
+  if(cancelBtn)cancelBtn.click();
+  clearFieldErrors(_dwCard);
+  _dwRestoreNodes();
+  $('#drawer').classList.remove('show');
+  $('#drawer').setAttribute('aria-hidden','true');
+  document.body.style.overflow='';
+  $('#drawerFoot').innerHTML='';
+  if(_dwTrigger&&document.contains(_dwTrigger))_dwTrigger.focus();
+  _dwTrigger=null;
+  _dwClosing=false;
+}
+/* เรียกท้าย save/cancel ของฟอร์ม — ปิดเฉพาะตอนการ์ดใบนั้นอยู่ใน drawer จริงๆ
+   force เสมอ เพราะมาถึงตรงนี้แปลว่าบันทึก (หรือยกเลิก) เสร็จแล้ว ไม่มีอะไรค้าง */
+function closeCardDrawerIfActive(cardId){if(_dwCard&&_dwCard.id===cardId)closeDrawer(true);}
+window.openCardDrawer=openCardDrawer;window.closeDrawer=closeDrawer;
+$('#drawer').addEventListener('click',function(e){if(e.target.closest('[data-drawer-close]'))closeDrawer();});
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape')return;
+  /* drawer อยู่ชั้นบนสุดของ overlay ทั้งหลาย — ปิดมันก่อน และห้ามให้ ESC เดียวกัน
+     ไหลไปปิด modal/alert ที่อาจซ้อนอยู่ด้านหลัง */
+  if($('#drawer').classList.contains('show')){e.preventDefault();closeDrawer();}
+});
+
+/* ── ข้อความ error ระดับฟิลด์ ────────────────────────────────────────────────
+   toast อย่างเดียวไม่พอสำหรับฟอร์มที่ยาวกว่าหนึ่งหน้าจอ: มันลอยขึ้นมุมจอแล้วหายไป
+   โดยไม่เคยชี้ว่าช่องไหนผิด ตัวนี้ทำเครื่องหมายที่ช่องนั้นตรงๆ พร้อมเลื่อน+โฟกัสไป
+   ช่องแรกที่ผิด แล้วคืน false เพื่อให้ผู้เรียกเขียน `if(!fieldError(...))return;` ได้ */
+function clearFieldErrors(scope){
+  $all('.field.err',scope||document).forEach(function(f){f.classList.remove('err');});
+  $all('.field-err',scope||document).forEach(function(e){e.remove();});
+}
+function fieldError(id,msg){
+  var el=$('#'+id);if(!el){toast(msg,null,'err');return false;}
+  var f=el.closest('.field')||el.parentNode;
+  f.classList.add('err');
+  if(!f.querySelector('.field-err')){
+    var p=document.createElement('p');p.className='field-err';p.textContent=msg;f.appendChild(p);
+  }else f.querySelector('.field-err').textContent=msg;
+  try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(_){}
+  setTimeout(function(){try{el.focus();}catch(_){}},60);
+  return false;
+}
+window.fieldError=fieldError;window.clearFieldErrors=clearFieldErrors;
+/* ปุ่มบันทึกระหว่างกำลังบันทึก — กันกดซ้ำ และบอกว่าระบบกำลังทำงานอยู่ */
+function btnBusy(btn,label){
+  if(!btn)return function(){};
+  var txt=btn.textContent,dis=btn.disabled,busy=label||'กำลังบันทึก...';
+  btn.disabled=true;btn.textContent=busy;
+  return function(){
+    btn.disabled=dis;
+    /* ถ้า handler เปลี่ยนป้ายปุ่มเองระหว่างทาง (เช่น "อัปเดตพนักงาน" กลับเป็น
+       "บันทึกพนักงาน" หลังบันทึกเสร็จ) ห้ามเอาป้ายเดิมกลับไปทับของใหม่ */
+    if(btn.textContent===busy)btn.textContent=txt;
+  };
+}
+
 function openModal(h){$('#modalSheet').innerHTML=h;$('#modal').classList.add('show');renderLocDatalist();}
 function closeModal(){$('#modal').classList.remove('show');}
 $('#modal').addEventListener('click',function(e){if(e.target.closest('[data-close]'))closeModal();});
@@ -4746,14 +5064,15 @@ $('#btnAddBtype').onclick=function(){
   var dimClean = val('btDim').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x'); var dimParts = dimClean.split('x'); if(dimParts.length>3) dimClean=dimParts.slice(0,3).join('x');
   S.boxtypes[id]={id:id,name:nm,unit:unit,value:val('btValue')===''?null:num('btValue'),dim:dimClean};
   auditEntry(editingBtype?'UPDATE':'CREATE',USER,id,nm,before,S.boxtypes[id]);
-  save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
+  save();editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';
   ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();
-  toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();};
-$('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';$('#btnCancelBtype').style.display='none';
-  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();};
+  toast('บันทึกประเภทกล่องแล้ว',id+' · '+nm);renderAll();closeCardDrawerIfActive('btypeFormCard');};
+$('#btnCancelBtype').onclick=function(){editingBtype=null;$('#btnAddBtype').textContent='บันทึกประเภท';
+  ['btName','btUnit','btValue','btDim','btDimW','btDimL','btDimH'].forEach(function(i){setv(i,'');});btIdAuto.reset();closeCardDrawerIfActive('btypeFormCard');};
 function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAuto.edit(t.id);setv('btName',t.name);setv('btUnit',t.unit||'');setv('btValue',t.value==null?'':t.value);var dimVal=(t.dim||'').replace(/\s+/g,'').replace(/[X×]/g,'x').replace(/[^0-9x]/g,'').replace(/^x+/,'').replace(/x{2,}/g,'x');var parts=dimVal.split('x');if(parts.length>3)dimVal=parts.slice(0,3).join('x');setv('btDim',dimVal);
   setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
-  $('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnCancelBtype').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddBtype').textContent='อัปเดตประเภท';
+  openCardDrawer('btypeFormCard','แก้ไขประเภทกล่อง '+esc(id),'แก้ไขข้อมูลประเภทกล่องในระบบ');}
 function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
@@ -4941,16 +5260,21 @@ $('#btnAddWh').onclick=function(){
   S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,area:area,lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,status:status};rebuildGates();
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
-  editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
+  editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
   renderWhGateTypeList();
-  toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();};
-$('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';$('#btnCancelWh').style.display='none';
+  toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();closeCardDrawerIfActive('whFormCard');};
+$('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
-  renderWhGateTypeList();};
-function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.edit(w.id);setv('whName',w.name);
+  renderWhGateTypeList();closeCardDrawerIfActive('whFormCard');};
+function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
+  /* ย้ายการ์ดเข้า modal ก่อนเซ็ตค่าใดๆ — โดยเฉพาะก่อน whAreaSetMode('map') ด้านล่าง
+     ซึ่งวัดขนาด container จริงตอนสร้าง/invalidateSize() แผนที่ Leaflet ถ้าย้าย DOM
+     หลังจากนั้น แผนที่จะยังอิงขนาด/ตำแหน่งเดิมตอนอยู่ inline ผิดตำแหน่ง */
+  openCardDrawer('whFormCard','แก้ไขคลัง '+esc(id),'แก้ไขข้อมูลคลังและช่วงประตูในระบบ');
+  whIdAuto.edit(w.id);setv('whName',w.name);
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
   setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');
   setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');setv('whMapSearch','');
@@ -4960,7 +5284,7 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;whIdAuto.ed
   whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
   setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
-  $('#btnAddWh').textContent='อัปเดตคลัง';$('#btnCancelWh').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddWh').textContent='อัปเดตคลัง';}
 function delWh(id){
   var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องผูกกับคลังนี้ '+used+' ใบ','err');
@@ -5020,13 +5344,13 @@ $('#btnAddCust').onclick=function(){
     returnDate:returnDate,returnDays:returnDays};
   auditEntry(editingCust?'UPDATE':'CREATE',USER,id,nm,before,S.customers[id]);
   save();
-  editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
+  editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
   var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';
-  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();};
-$('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';$('#btnCancelCust').style.display='none';
+  toast(before?'อัปเดตลูกค้าแล้ว':'บันทึกลูกค้าแล้ว',id+' · '+nm+' · กำหนดคืน '+returnDate);renderAll();closeCardDrawerIfActive('custFormCard');};
+$('#btnCancelCust').onclick=function(){editingCust=null;$('#btnAddCust').textContent='บันทึกลูกค้า';
   CUST_FIELDS.forEach(function(i){setv(i,'');});setv('cKind','customer');setv('cStatus','active');syncStatusToggle('cStatus');cIdAuto.reset();custSyncKindFields();
-  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';};
+  var cHH=$('#custHeldHint');if(cHH)cHH.style.display='none';closeCardDrawerIfActive('custFormCard');};
 /* ป้ายประเภทคู่ค้า — ระเบียนที่บันทึกไว้ก่อนมีฟิลด์นี้ไม่มีค่า kind จึงถือเป็น
    ลูกค้า ซึ่งตรงกับความหมายเดิมของทะเบียนนี้ (ปลายทางขาออกอย่างเดียว) */
 var CUST_KIND={customer:{t:'ลูกค้า',c:'ok'},supplier:{t:'ซัพพลายเออร์',c:'purple'},both:{t:'ลูกค้า + ซัพพลายเออร์',c:'gray'}};
@@ -5067,7 +5391,9 @@ function custEarliestDueDate(id){
   return earliest==null?null:ddmmyyyy(new Date(earliest));
 }
 window.custEarliestDueDate=custEarliestDueDate;
-function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');custSyncKindFields();
+function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;
+  openCardDrawer('custFormCard','แก้ไขลูกค้า '+esc(id),'แก้ไขข้อมูลลูกค้า/ปลายทางในระบบ');
+  cIdAuto.edit(c.id);setv('cName',c.name);setv('cKind',c.kind||'customer');custSyncKindFields();
   /* ระเบียนที่มี c.returnDays อยู่แล้ว (บันทึก/import ตั้งแต่มีฟิลด์นี้) ใช้ค่านั้นตรงๆ
      ไม่เพี้ยน — ระเบียนเก่าก่อนมีฟิลด์นี้ค่อย fallback ไปคำนวณย้อนจาก returnDate
      (วันที่คงที่ที่เคยบันทึกไว้) เป็นจำนวนวันคงเหลือนับจากวันนี้แทน ซึ่งจะคลาดเคลื่อนไป
@@ -5084,7 +5410,7 @@ function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;cIdAuto.
   setv('cTaxId',c.taxId||'');setv('cContactPerson',c.contactPerson||'');setv('cStatus',c.status||'active');syncStatusToggle('cStatus');
   setv('cCreditLimit',c.creditLimit||'');setv('cFineRate',c.fineRate||'');setv('cLostFine',c.lostFine||'');
   var cHH=$('#custHeldHint');if(cHH){cHH.style.display='block';cHH.innerHTML='กล่องค้างอยู่ที่ลูกค้านี้ตอนนี้: <b>'+custHeldCount(id)+' ใบ</b>';}
-  $('#btnAddCust').textContent='อัปเดตลูกค้า';$('#btnCancelCust').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});}
+  $('#btnAddCust').textContent='อัปเดตลูกค้า';}
 /* ===== DELETE BOX — requires a physical scan re-confirmation =====
    A plain Yes/No dialog lets someone delete a box record while the RFID inlay
    is still stuck on a real box out in the field — the tag keeps answering
@@ -5213,11 +5539,15 @@ $('#btnAddEmp').onclick=function(){
   var firstEver0=isNew0&&Object.keys(S.employees).length===0;
   var selfEditing0=!isNew0&&currentEmp()&&currentEmp().id===editingEmp;
   if(!firstEver0&&!isAdmin()&&!selfEditing0)return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะเพิ่ม/แก้ไขพนักงานได้','err');
-  var id=val('eId'),nm=val('eName');if(!nm)return toast('กรอกชื่อพนักงาน',null,'err');
+  /* ข้อผิดพลาดระดับฟิลด์แสดงใต้ช่องที่ผิดและโฟกัสไปช่องนั้น — ล้างของรอบก่อนก่อนตรวจ
+     ใหม่เสมอ ไม่งั้นข้อความเก่าจะค้างอยู่ใต้ช่องที่แก้ถูกแล้ว */
+  clearFieldErrors($('#empFormCard'));
+  var id=val('eId'),nm=val('eName');
+  if(!nm)return fieldError('eName','กรอกชื่อ–นามสกุลของพนักงาน');
   var ePhoneRaw=val('ePhone');
-  if(ePhoneRaw&&!isValidThaiPhone(ePhoneRaw))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
+  if(ePhoneRaw&&!isValidThaiPhone(ePhoneRaw))return fieldError('ePhone','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');
   var eEmailRaw=val('eEmail');
-  if(eEmailRaw&&!isValidEmail(eEmailRaw))return toast('อีเมลไม่ถูกต้อง','กรอกในรูปแบบ name@company.com','err');
+  if(eEmailRaw&&!isValidEmail(eEmailRaw))return fieldError('eEmail','กรอกในรูปแบบ name@company.com');
   if(!id){id=nextSeqId('EMP-',Object.keys(S.employees));}
   var isNew=!editingEmp;
   var firstEver=isNew&&Object.keys(S.employees).length===0;
@@ -5229,7 +5559,7 @@ $('#btnAddEmp').onclick=function(){
   rec.scanCode=(rec.scanCode||'').trim()||id;
   var dupe=Object.values(S.employees).filter(function(x){
     return x.id!==id&&x.id!==editingEmp&&(x.scanCode||'').toUpperCase()===rec.scanCode.toUpperCase();})[0];
-  if(dupe)return toast('รหัสสแกนซ้ำ','รหัส '+rec.scanCode+' ถูกใช้กับ '+(dupe.name||dupe.id)+' ('+dupe.id+') แล้ว','err');
+  if(dupe)return fieldError('eScan','รหัส '+rec.scanCode+' ถูกใช้กับ '+(dupe.name||dupe.id)+' ('+dupe.id+') แล้ว');
   S.employees[id]=rec;
   /* Self-registration: the very first employee registers themselves while still on the
      default account — attribute the audit to that person (they are the one logged in),
@@ -5239,14 +5569,16 @@ $('#btnAddEmp').onclick=function(){
   auditEntry(isNew?'CREATE':'UPDATE',actor,id,nm,before,S.employees[id]);
   save();
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
-  editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
+  editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
   eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
+  closeCardDrawerIfActive('empFormCard');
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
-$('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';$('#btnCancelEmp').style.display='none';
+$('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
   eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  closeCardDrawerIfActive('empFormCard');
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
    renderSetup's field-lock pass) — everything else about employee records stays admin-only */
@@ -5265,11 +5597,16 @@ function editEmp(id){
   var self=currentEmp()&&currentEmp().id===id;
   if(!isAdmin()&&!self)return toast('ไม่มีสิทธิ์','แก้ไขได้เฉพาะข้อมูลของตัวเอง (เบอร์โทร/อีเมล) — ติดต่อผู้ดูแลระบบเพื่อแก้ไขข้อมูลอื่น','err');
   editingEmp=id;
+  /* การ์ดนี้ซ่อนเป็น display:none อยู่ปกติสำหรับผู้ใช้ที่ไม่ใช่แอดมิน (renderSetup()
+     ด้านล่างเป็นคนสั่งให้โผล่มาตอนกำลังแก้ไขตัวเอง) — ย้ายเข้า modal ได้แม้ตอนนี้ยัง
+     ซ่อนอยู่ เพราะ renderSetup() ท้ายฟังก์ชันนี้จะปรับ display ให้ถูกไม่ว่าการ์ดจะ
+     อยู่ตำแหน่งไหนในหน้า (เป็น inline style property ของ element เอง ไม่ผูกกับตำแหน่ง) */
+  openCardDrawer('empFormCard','แก้ไขพนักงาน '+esc(id),'แก้ไขข้อมูลพนักงานและสิทธิ์การใช้งาน');
   eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
   setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
-  $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnCancelEmp').style.display='inline-flex';$('#tab-setup').scrollIntoView({behavior:'smooth',block:'start'});
+  $('#btnAddEmp').textContent='อัปเดตพนักงาน';
   renderSetup();}
 function delEmp(id){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
@@ -5279,6 +5616,42 @@ function delEmp(id){
   if(currentEmp()&&currentEmp().id===id)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
+/* ── "+ เพิ่ม…" — เปิด drawer ในโหมดสร้างใหม่ ────────────────────────────────
+   ล้างฟอร์มด้วยปุ่ม "ยกเลิกแก้ไข" ตัวจริงของแต่ละ entity ก่อนเสมอ ไม่เขียน logic
+   ล้างค่าซ้ำเอง — ถ้าเพิ่งกดแก้ไขระเบียนอื่นค้างไว้ ค่าเก่าจะยังอยู่ในช่อง แล้วการ
+   "เพิ่มใหม่" จะกลายเป็นการแก้ระเบียนเดิมโดยไม่รู้ตัว */
+function _openAddDrawer(cancelBtnId,cardId,title,sub){
+  var c=$('#'+cancelBtnId);if(c)c.click();
+  openCardDrawer(cardId,title,sub);
+}
+function addBtype(){_openAddDrawer('btnCancelBtype','btypeFormCard','เพิ่มประเภทกล่อง','กรอกข้อมูลเพื่อสร้างประเภทกล่องใหม่ในระบบ');}
+function addWh(){_openAddDrawer('btnCancelWh','whFormCard','เพิ่มคลัง & ประตู','กรอกข้อมูลเพื่อสร้างคลังและช่วงประตูใหม่ในระบบ');}
+function addCust(){_openAddDrawer('btnCancelCust','custFormCard','เพิ่มลูกค้า','กรอกข้อมูลเพื่อสร้างลูกค้า/ปลายทางใหม่ในระบบ');}
+function addEmp(){
+  if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะเพิ่มพนักงานได้','err');
+  _openAddDrawer('btnCancelEmp','empFormCard','เพิ่มพนักงาน','กรอกข้อมูลเพื่อสร้างพนักงานใหม่ในระบบ');
+}
+window.addBtype=addBtype;window.addWh=addWh;window.addCust=addCust;window.addEmp=addEmp;
+
+/* ── สถานะ "กำลังบันทึก..." ของปุ่มบันทึกทั้ง 4 master ────────────────────────
+   ห่อ handler เดิมแทนการไปแก้ทีละตัว — ตรรกะบันทึกไม่ถูกแตะเลย
+   งานบันทึกเป็น sync (แก้ S ในหน่วยความจำ) ส่วน save() ที่ยิงขึ้นเซิร์ฟเวอร์เป็น
+   fire-and-forget อยู่แล้ว ถ้าเรียก handler ตรงๆ ปุ่มจะเปลี่ยนหน้าตาไม่ทันให้เห็น
+   เพราะงานจบก่อนเบราว์เซอร์ได้วาดเฟรมถัดไป จึงเว้นสองเฟรมให้สถานะ busy ขึ้นจริง
+   ประโยชน์หลักคือกันกดซ้ำระหว่างที่ยังประมวลผลไม่จบ */
+['btnAddBtype','btnAddWh','btnAddCust','btnAddEmp'].forEach(function(id){
+  var btn=$('#'+id);if(!btn||!btn.onclick)return;
+  var inner=btn.onclick;
+  btn.onclick=function(){
+    if(btn.disabled)return;
+    var restore=btnBusy(btn,'กำลังบันทึก...');
+    var self=this,args=arguments;
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      try{inner.apply(self,args);}finally{restore();}
+    });});
+  };
+});
+
 
 /* ===== per-employee web login (admin only) =====
    One account per employee — set here, checked at /login via the backend's
@@ -10248,6 +10621,11 @@ function renderSetup(){
   });
   var empAddBtn=$('#btnAddEmp');
   if(empAddBtn)empAddBtn.disabled=!(empAdmin||empSelfEditing);
+  /* ปุ่ม "+ เพิ่มพนักงาน" เหนือตาราง — เพิ่มพนักงานใหม่เป็นสิทธิ์แอดมินล้วน (ต่างจาก
+     ฟอร์มที่ยังเปิดให้คนแก้ข้อมูลติดต่อของตัวเองได้) ซ่อนไปเลยดีกว่าโชว์ปุ่มที่กดแล้ว
+     โดนปฏิเสธ ยกเว้นตอนยังไม่มีพนักงานสักคน ซึ่งคนแรกต้องลงทะเบียนตัวเองได้ */
+  var empAddTop=$('#btnAddEmpTop');
+  if(empAddTop)empAddTop.style.display=(empAdmin||!Object.keys(S.employees||{}).length)?'':'none';
   var empLockNote=$('#empLockNote');
   if(!empLockNote&&empFormCard){
     empLockNote=document.createElement('p');empLockNote.id='empLockNote';empLockNote.className='desc';
