@@ -8082,6 +8082,21 @@ function gateManual(){return gateInputMode==='barcode';}
    เครื่องอ่านเลย เงื่อนไขนี้คือจุดเดียวที่ตัดสินว่าเลือกประตูได้ไหม */
 function gateSelectable(g){return gateManual()||fx9600Ready(g);}
 function setGateInputMode(mode,reopenDir){
+  /* "กลับไปใช้ RFID อัตโนมัติ" (เรียกแบบไม่ส่ง reopenDir จากป้าย/แถบสถานะ) คือคน
+     ยืนยันจะปิดโหมดยิงมือทั้งที่ยังไม่ได้ไปเลือกประตูใหม่ — ถ้าเครื่องอ่านของ
+     ประตูขาเข้าที่ตั้งไว้ตอนนี้ยังไม่ตอบสนอง สลับไปแล้วจะพาเข้ากลับไปที่ทางตันเดิม
+     (เลือกประตูไม่ได้เลยสักบาน) เงียบๆ จึงต้องกันไว้ตรงนี้ ก่อนเปลี่ยน state ด้วยซ้ำ
+
+     เจตนาต่างจาก setGateInputMode('rfid',dir) ที่มาจากแท็บในหน้าต่างเลือกประตู —
+     ที่นั่นคนกำลังจะไปเลือกประตูอื่นต่อ ไม่ใช่ยืนยันประตูเดิม จึงปล่อยให้สลับแท็บได้
+     เสมอ แล้วให้ deadEnd banner ในนั้นบอกเองว่าไม่มีประตูไหนพร้อมเลย */
+  if(mode!=='barcode'&&!reopenDir){
+    var curIn=fixedGatesRef().in;
+    if(!fx9600Ready(curIn)){
+      alert('เครื่องอ่าน RFID ของประตูขาเข้าที่ตั้งไว้ตอนนี้ยังไม่ตอบสนอง — สลับกลับไปโหมด RFID อัตโนมัติไม่ได้ในตอนนี้ ใช้ "ยิงมือ · บาร์โค้ด" ต่อไปก่อน จนกว่าเครื่องอ่านจะกลับมา');
+      return;
+    }
+  }
   gateInputMode=(mode==='barcode')?'barcode':'rfid';
   try{localStorage.setItem(GATE_INPUT_MODE_KEY,gateInputMode);}catch(e){}
   refreshGateDisplays();
