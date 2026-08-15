@@ -5722,27 +5722,82 @@ function code39Svg(text){
     +'shape-rendering="crispEdges" fill="#000">'+rects+'</svg>';
 }
 
-/* Opens a print view sized to a CR80 card (86×54mm) so badges can be printed
-   on card stock, cut out, and laminated. */
+/* บัตรพิมพ์จริง — ขนาด CR80 (86×54mm) หน้า+หลัง ใช้ดีไซน์เดียวกับบัตรฟิสิกส์บนจอ
+   (openEmpBadge) ทุกกระเบียดนิ้ว: วงกลมสีเขียวมุมบน, รูปวงกลม+ป้าย EMPLOYEE ID,
+   ชื่อ/ตำแหน่ง/สถานะ หน้าบัตร, กริดแผนก-คลัง-กะ-เบอร์; หลังบัตรเป็นอีเมล/วันเริ่มงาน/
+   สิทธิ์ + บาร์โค้ด — เพื่อให้พิมพ์ออกมาแล้วห้อยคอใช้งานได้จริงตามที่เห็นบนจอ ไม่ใช่
+   การ์ดแบบง่ายแยกดีไซน์กันคนละแบบเหมือนเดิม เขียนเป็น mm ล้วน ใช้ได้ทั้งพรีวิวในโมดัล
+   (เบราว์เซอร์แปลง mm เป็น px ให้อัตโนมัติ) และหน้าต่างพิมพ์จริงโดยไม่ต้องปรับอะไร */
+function empCardFrontHtml(e){
+  var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
+  var stBg={ok:'var(--posSoft)',warn:'var(--warnSoft)',bad:'var(--negSoft)'}[st.c]||'var(--posSoft)';
+  var stFg={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'}[st.c]||'var(--pos)';
+  var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
+  var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+  var avatarInner=e.photo?'<img src="'+esc(e.photo)+'" style="width:100%;height:100%;object-fit:cover;">':'<span>'+esc(initials)+'</span>';
+  return '<div class="ecard" style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:4.5mm 5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
+    +'<div style="position:absolute;right:-12mm;top:-9mm;width:32mm;height:32mm;border-radius:50%;background:var(--accent2);opacity:.5;"></div>'
+    +'<div style="position:relative;z-index:1;display:flex;align-items:center;gap:3.2mm;">'
+      +'<div style="width:13mm;height:13mm;flex:0 0 auto;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:11pt;font-weight:700;border:.6mm solid var(--surface);box-shadow:0 1mm 2.4mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
+      +'<div style="min-width:0;">'
+        +'<div style="display:inline-flex;align-items:center;font-size:6.6pt;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:.9mm 2.6mm;">EMPLOYEE ID</div>'
+        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;font-weight:700;margin-top:1mm;color:var(--ink);">'+esc(e.id)+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:3mm;">'
+      +'<div style="font-size:12.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
+      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:.5mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
+      +'<div style="display:inline-flex;align-items:center;margin-top:1.6mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:2.4mm;border-top:.18mm solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:1.8mm 3mm;">'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">แผนก</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept||'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">คลัง</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(whTxt)+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">กะ</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_SHIFT[e.shift]||'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">เบอร์โทร</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;font-family:ui-monospace,Menlo,Consolas,monospace;">'+esc(e.phone||'-')+'</div></div>'
+    +'</div>'
+    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:2;"><div style="transform:rotate(-22deg);font-size:14pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +'</div>';
+}
+function empCardBackHtml(e){
+  var scanCode=(e.scanCode||e.id).toUpperCase();
+  return '<div style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:4.5mm 5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
+    +'<div style="font-size:12pt;font-weight:700;letter-spacing:-.02em;">'+esc(e.name||e.id)+'</div>'
+    +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;color:var(--muted);margin-top:.6mm;">'+esc(e.id)+' · '+esc(EMP_ACCESS[e.access]||'-')+'</div>'
+    +'<div style="margin-top:3mm;display:grid;grid-template-columns:1fr 1fr;gap:2mm 3mm;">'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">อีเมล</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;word-break:break-all;">'+esc(e.email||'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">วันเริ่มงาน</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+(e.startDate?esc(dstr(new Date(e.startDate))):'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">สิทธิ์การใช้งาน</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_ACCESS[e.access]||'-')+'</div></div>'
+    +'</div>'
+    +'<div style="margin-top:auto;padding-top:2.6mm;border-top:.18mm solid var(--line);">'
+      +'<div style="height:11mm;">'+code128SVG(scanCode,52)+'</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.2mm;">'
+        +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;letter-spacing:.08em;color:var(--ink2);">'+esc(scanCode)+'</span>'
+        +'<span style="font-size:6.5pt;font-weight:700;letter-spacing:.06em;color:var(--faint);">CODE 128</span>'
+      +'</div>'
+    +'</div>'
+    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(-22deg);font-size:14pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +'</div>';
+}
+/* :root ของ CSS var สีธีมสว่าง ยกมาจาก body หลัก (บรรทัด ~22-35) แบบ hardcode — หน้าต่าง
+   พิมพ์เป็นเอกสารแยก (document.write) ไม่มี :root ของแอปให้ใช้ และตัวบัตรตั้งใจให้พิมพ์
+   เป็นธีมสว่างเสมอไม่ว่าแอปจะอยู่โหมดมืดหรือไม่ (กระดาษ/บัตรพลาสติกไม่มี "โหมดมืด") */
+function empCardRootCSS(){
+  return ':root{--surface:#ffffff;--surface2:#fbfbfd;--ink:#1d1d1f;--ink2:#424245;--muted:#86868b;--faint:#aeaeb2;'
+    +'--line:#e3e3e8;--line2:#d2d2d7;--accent:#a8f931;--accent2:#bdfb63;--accentSoft:#eefccb;--accentInk:#4d7a0a;--accentContrast:#16330a;'
+    +'--pos:#3a3a3c;--posSoft:#eceeef;--neg:#d70015;--negSoft:#ffeceb;--warn:#bf5d00;--warnSoft:#fff2e0;}';
+}
 /* คลิกแล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่ใช่พุ่งไปเปิดหน้าต่างพิมพ์เต็มจอทันที —
    หน้าต่างพิมพ์จริง (badgeWindowHtml) ยังใช้ป๊อปอัปเดิมอยู่ แต่ยกไปเป็นขั้นถัดไป
-   หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน */
+   หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน — พรีวิวใช้เทมเพลต empCardFrontHtml/BackHtml ตัวเดียว
+   กับที่หน้าต่างพิมพ์จริงใช้ (ผ่าน mm units ที่เบราว์เซอร์แปลงเป็น px ให้เอง) เพื่อไม่ให้
+   สิ่งที่เห็นในพรีวิวกับสิ่งที่พิมพ์ออกมาจริงเพี้ยนไปคนละแบบ */
 function printEmpBadge(id){
   var e=S.employees[id];if(!e)return;
-  var code=(e.scanCode||e.id).toUpperCase();
-  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
   openModal(
     '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody" style="display:flex;justify-content:center;padding:24px 16px;">'
-      +'<div style="width:280px;background:#fff;color:#111;border-radius:10px;padding:16px 18px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;">'
-        +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">'
-          +'<div><div style="font-size:15px;font-weight:700;letter-spacing:-.2px;">'+esc(e.name||e.id)+'</div>'
-          +(meta?'<div style="font-size:11px;color:#666;margin-top:2px;">'+esc(meta)+'</div>':'')
-          +(wh?'<div style="font-size:11px;color:#666;">'+esc(wh)+'</div>':'')
-          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ Smart Tracking</div></div>'
-        +'<div style="text-align:center;margin-top:10px;">'+code128SVG(code,80)+'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:1.5px;margin-top:4px;">'+esc(code)+'</div></div>'
-      +'</div>'
+    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
+      +empCardFrontHtml(e)
+      +empCardBackHtml(e)
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printEmpBadgeWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
   );
@@ -5751,41 +5806,29 @@ window.printEmpBadge=printEmpBadge;
 /* เปิดหน้าต่างพิมพ์แล้วสั่งพิมพ์ให้เลยอัตโนมัติ (w.print()) แทนที่จะแค่เปิดพรีวิว
    แล้วให้ผู้ใช้กด Ctrl/Cmd+P เอง — ผู้ใช้ขอให้ปุ่มนี้ "ใช้งานพิมพ์ได้จริง" ไม่ใช่แค่
    preview ยังกด Ctrl/Cmd+P สำรองไว้ในคำใบ้ เผื่อเบราว์เซอร์บาง engine ไม่ trigger
-   print dialog อัตโนมัติให้ (เช่น บาง config ของ Safari) */
+   print dialog อัตโนมัติให้ (เช่น บาง config ของ Safari)
+   พิมพ์สองหน้า (หน้า+หลัง) คนละแผ่น ขนาด CR80 86×54mm เท่ากันทั้งคู่ — page-break-after
+   คั่นกลาง ให้เครื่องพิมพ์บัตร/เครื่องพิมพ์ทั่วไปที่ตั้งกระดาษเป็น 86×54mm ตัดออกมาได้
+   บัตรละสองด้านพอดี ไปห้อยคอใช้งานได้จริง (เคลือบพลาสติกทับอีกทีถ้าต้องการ) */
 function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
-  var code=(e.scanCode||e.id).toUpperCase();
-  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
-  var photoHtml=e.photo?'<img src="'+esc(e.photo)+'" style="width:16mm;height:16mm;border-radius:50%;object-fit:cover;flex:0 0 auto;">':'';
-  var w=window.open('','_blank','width=560,height=460');
+  var w=window.open('','_blank','width=560,height=780');
   if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
   w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
     +'<title>บัตรพนักงาน '+esc(e.id)+'</title><style>'
+    +empCardRootCSS()
     +'@page{size:86mm 54mm;margin:0;}'
     +'*{box-sizing:border-box;}'
     +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
-    +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
-    +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
-    +'justify-content:space-between;}'
-    +'.top{display:flex;align-items:center;gap:3mm;}'
-    +'.who{flex:1;min-width:0;}'
-    +'.nm{font-size:13pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-    +'.mt{font-size:7.5pt;color:#666;margin-top:.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
-    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;align-self:flex-start;}'
-    +'.bc{text-align:center;}'
-    +'.bc svg{display:block;margin:0 auto;}'
-    +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
-    +'margin-top:1mm;text-align:center;}'
-    +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
+    +'background:#ececed;display:flex;flex-direction:column;align-items:center;gap:6mm;padding:6mm 0 18mm;}'
+    +'.pg{page-break-after:always;}'
+    +'.pg:last-child{page-break-after:auto;}'
+    +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
-    +'</style></head><body><div class="card">'
-    +'<div class="top">'+photoHtml+'<div class="who"><div class="nm">'+esc(e.name||e.id)+'</div>'
-    +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
-    +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
-    +'</div><div class="brand">◈ Smart Tracking</div></div>'
-    +'<div class="bc" style="width:56mm;align-self:center;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
-    +'</div><div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</style></head><body>'
+    +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
+    +'<div class="pg">'+empCardBackHtml(e)+'</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — บัตร 2 หน้า ขนาด 86 × 54 มม. ต่อหน้า</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
