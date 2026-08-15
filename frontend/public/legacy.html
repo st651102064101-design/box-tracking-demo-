@@ -1951,24 +1951,8 @@ a{color:var(--accentInk);}
   </div>
   </div>
 
-  <!-- thai_submit build: boxes arrive at this gate via a fixed Zebra FX9600
-       reader's IoT Connector HTTP-POST profile, not manual scanning or
-       Excel import — this just surfaces the webhook URL that profile needs
-       to be pointed at (see backend/src/routes/rfid.ts's fx9600Webhook),
-       so setting up the physical reader doesn't require reading source. -->
-  <div class="wg-board">
-  <div class="wg xl wg-form reveal d1" id="fx9600InfoCard">
-    <div class="wg-top">
-      <span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span></span>
-      <span class="wg-lbl">รับกล่องอัตโนมัติผ่านเครื่องอ่าน RFID (Zebra FX9600)</span>
-    </div>
-    <div class="wg-body">
-    <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ (Authentication Type: <b>Basic</b> — รหัสผ่านคือ secret ที่ผู้ดูแลระบบตั้งไว้) — กล่องที่เครื่องอ่านเจอจะ<b>เข้าคิวสแกนด้านล่างให้อัตโนมัติ</b> รอคุณกด "ยืนยันรับเข้าคลัง" อีกที ไม่รับเข้าเองทันที เพราะเครื่องอ่านเห็นทุกกล่องที่อยู่ในระยะ รวมกล่องที่ยังอยู่บนรถหรือแค่เดินผ่าน</p>
-    <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
-    <div id="fx9600Status" style="margin-top:10px;"></div>
-    </div>
-  </div>
-  </div>
+  <!-- การ์ดตั้งค่าเครื่องอ่าน FX9600 ย้ายไปอยู่ Setup > "คลัง & ประตู" แล้ว —
+       เป็นงานติดตั้งครั้งเดียวของผู้ดูแล ไม่ใช่ของคนที่ยืนรับของอยู่หน้าประตู -->
 
   <div class="wg-board">
     <div class="wg xl wg-scan reveal d1" data-tint="accent" id="gateInBox">
@@ -2356,6 +2340,34 @@ a{color:var(--accentInk);}
     </div>
   </div>
   <div class="ssec" id="ssec-wh" style="display:none;">
+    <!-- thai_submit build: boxes arrive at a gate via a fixed Zebra FX9600
+         reader's IoT Connector HTTP-POST profile, not manual scanning or
+         Excel import — this surfaces the webhook URL that profile needs to be
+         pointed at (see backend/src/routes/rfid.ts's fx9600Webhook), so
+         setting up the physical reader doesn't require reading source.
+
+         Lives HERE and not on Gate In: pointing a reader at a URL is a
+         one-time install job for whoever owns the gate map, done from the
+         same screen where the gates themselves are defined. The person
+         standing at the dock receiving boxes never needs it, and on Gate In
+         it sat between them and the scan box. The URL still tracks whichever
+         inbound gate is currently fixed (refreshGateDisplays writes both ids,
+         and renderSetup() calls it), and it still hides itself in barcode
+         mode, where no reader is involved at all. -->
+    <div class="wg-board">
+    <div class="wg xl wg-form reveal d1" id="fx9600InfoCard">
+      <div class="wg-top">
+        <span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span></span>
+        <span class="wg-lbl">รับกล่องอัตโนมัติผ่านเครื่องอ่าน RFID (Zebra FX9600)</span>
+      </div>
+      <div class="wg-body">
+      <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ (Authentication Type: <b>Basic</b> — รหัสผ่านคือ secret ที่ผู้ดูแลระบบตั้งไว้) — กล่องที่เครื่องอ่านเจอจะ<b>เข้าคิวสแกนในหน้า Gate ขาเข้าให้อัตโนมัติ</b> รอคนหน้างานกด "ยืนยันรับเข้าคลัง" อีกที ไม่รับเข้าเองทันที เพราะเครื่องอ่านเห็นทุกกล่องที่อยู่ในระยะ รวมกล่องที่ยังอยู่บนรถหรือแค่เดินผ่าน</p>
+      <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
+      <div id="fx9600Status" style="margin-top:10px;"></div>
+      </div>
+    </div>
+    </div>
+
     <div class="wg-board">
     <div class="wg xl wg-form">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span></span><span class="wg-lbl">คลัง &amp; ประตู (Warehouse / Gate Map)</span></div>
