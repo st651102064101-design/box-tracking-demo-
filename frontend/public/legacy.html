@@ -2558,6 +2558,33 @@ a{color:var(--accentInk);}
       </div>
     </div>
     </div>
+
+    <!-- แก้ไขกล่อง — เดิมเป็น openModal() ที่สร้าง HTML ใหม่ทุกครั้งที่คลิกแถว ย้ายมาเป็น
+         การ์ดถาวรใน DOM แบบเดียวกับ 5 การ์ด master อื่น ให้ openCardDrawer() ยืมไปแสดงใน
+         side drawer ได้ (ผู้ใช้ขอ) — ต่างจากการ์ดอื่นตรงที่ค่าฟิลด์ (ประเภท/Lot/หมดอายุ/
+         ซัพพลายเออร์/สถานะปุ่มลบ) ต้องเซ็ตใหม่ทุกครั้งที่ editBox(tag) ถูกเรียก เพราะแต่ละ
+         ครั้งเป็นกล่องคนละใบ ไม่มี "ค่าเริ่มต้นว่าง" แบบฟอร์มเพิ่มใหม่ — ห้ามลบทิ้ง และห้าม
+         ใส่ display:none ที่ตัวการ์ดเอง ซ่อนที่ .wg-board ที่ห่ออยู่แทน -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="boxEditCard">
+      <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span></span><span class="wg-lbl">แก้ไขข้อมูลทะเบียนกล่อง</span></div>
+      <p class="wg-cap">แก้ไขได้เฉพาะ field ทะเบียน (ประเภท/Lot/หมดอายุ/ซัพพลายเออร์) — การย้ายพิกัด/Hold/ชำรุด/กล่องหาย ทำที่หน้าติดตามกล่องเท่านั้น</p>
+      <div class="wg-body">
+      <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType"></select></div>
+      <div class="field" style="margin-top:14px;"><label>Lot</label><input id="mBoxLot" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>
+      <div class="field" style="margin-top:14px;"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date"></div>
+      <div class="field" style="margin-top:14px;"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier"></select></div>
+      <p class="small" id="boxEditDelReason" style="display:none;color:var(--neg);margin-top:10px;"></p>
+      </div>
+      <div class="wg-foot">
+        <button class="btn red" id="mBoxDelBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></span> ลบกล่อง</button>
+        <div class="spacer"></div>
+        <button class="btn gray" id="btnCancelBoxEdit">ยกเลิก</button>
+        <button class="btn accent" id="mBoxSaveBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> อัปเดตกล่อง</button>
+      </div>
+    </div>
+    </div>
+
     <div class="wg-board">
     <div class="wg xl wg-table">
       <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">กล่องที่ลงทะเบียน</span><span class="tag" id="cntBox"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addBox()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ลงทะเบียนกล่อง</button></div><div class="wg-hd-row">
@@ -4419,7 +4446,8 @@ function _dwRestoreNodes(){
    editingXxx และค่าที่ค้างอยู่เหมือนกดยกเลิกจริง ไม่ใช่แค่ซ่อนหน้าต่างแล้วปล่อยฟอร์ม
    ค้างในสถานะ "กำลังแก้ไข" แบบมองไม่เห็น */
 var CARD_CANCEL_BTN={btypeFormCard:'btnCancelBtype',whFormCard:'btnCancelWh',
-  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp',boxRegCard:'btnCancelBox'};
+  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp',boxRegCard:'btnCancelBox',
+  boxEditCard:'btnCancelBoxEdit'};
 var _dwClosing=false;
 /* force=true → ปิดโดยไม่ถามเรื่องข้อมูลที่ยังไม่ได้บันทึก (ใช้ตอนบันทึกสำเร็จแล้ว) */
 function closeDrawer(force){
@@ -4923,9 +4951,12 @@ $all('#boxModeSw .ivs-btn').forEach(function(btn) {
    Hold/ชำรุด/กล่องหาย ฯลฯ) ต้องทำที่หน้า Inventory เท่านั้น — เพื่อไม่ให้มี
    เมนูซ้ำกันสองที่ หน้านี้จึงมีแค่ แก้ไข field ทะเบียน (ประเภท/Lot/หมดอายุ/
    ซัพพลายเออร์) กับลบ ตรงกับรูปแบบเดียวกับตาราง "ประเภทกล่อง" ข้างล่าง */
-/* คลิกแถวกล่อง → เด้ง modal แก้ไขทันที แทนการเด้งไปแท็บ "ประเภทกล่อง" แล้วเลื่อนขึ้นไป
+/* คลิกแถวกล่อง → เด้ง drawer แก้ไขทันที แทนการเด้งไปแท็บ "ประเภทกล่อง" แล้วเลื่อนขึ้นไป
    กรอกฟอร์มลงทะเบียนกล่องด้านบนแบบเดิม (ผู้ใช้ขอ — คลิกแล้วต้องเห็นฟอร์มทันทีไม่ต้องเลื่อน/
-   สลับแท็บ) ใช้ element ของตัวเอง (mBox...) แยกจากฟอร์มลงทะเบียนกล่องจริง ไม่แตะฟอร์มนั้นเลย */
+   สลับแท็บ) ใช้ element ของตัวเอง (mBox...) แยกจากฟอร์มลงทะเบียนกล่องจริง ไม่แตะฟอร์มนั้นเลย
+   เดิมเป็น openModal() สร้าง HTML ใหม่ทุกครั้งที่คลิก — ย้ายมาเป็นการ์ดถาวรใน DOM
+   (#boxEditCard) แบบเดียวกับการ์ด master อื่น เพื่อให้เปิดใน side drawer ได้ (ผู้ใช้ขอ)
+   ค่าฟิลด์ต้องเซ็ตใหม่ทุกครั้งที่เรียกเพราะแต่ละครั้งเป็นกล่องคนละใบ */
 function editBox(tag){
   var b=S.boxes[tag];if(!b)return;
   var bts=Object.values(S.boxtypes);
@@ -4935,27 +4966,34 @@ function editBox(tag){
      ทำให้ระบบเสียร่องรอยว่ากล่องใบนี้ยังค้างอยู่ที่ลูกค้ารายไหน */
   var canDel=b.status!=='out';
   var delReason=canDel?'':'ลบไม่ได้ — กล่องนี้ออกไปอยู่กับ '+esc(custName(b.customer))+' ยังไม่คืนเข้าคลัง';
-  openModal('<div class="mhead"><h3>แก้ไขกล่อง '+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-    +'<div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="mBoxType">'+typeOptions+'</select></div>'
-    +'<div class="field"><label>Lot</label><input id="mBoxLot" value="'+esc(b.lot||'')+'" placeholder="วันที่-คลัง-กะ-ลำดับ"></div>'
-    +'<div class="field"><label>วันหมดอายุ / ตรวจสอบครั้งถัดไป (ถ้ามี)</label><input id="mBoxExpiry" type="date" value="'+esc(b.expiry||'')+'"></div>'
-    +'<div class="field"><label>ซัพพลายเออร์ที่ส่งกล่องมา</label><select id="mBoxSupplier">'+supplierOptions(b.supplier)+'</select></div>'
-    +(canDel?'':'<div class="small" style="color:var(--neg);margin-top:4px;">'+delReason+'</div>')
-    +'</div>'
-    +'<div class="mfoot"><button class="btn red" id="mBoxDelBtn"'+(canDel?'':' disabled title="'+delReason+'"')+'><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg></span> ลบกล่อง</button><span style="flex:1;"></span><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="mBoxSaveBtn"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> อัปเดตกล่อง</button></div>');
+  $('#mBoxType').innerHTML=typeOptions;
+  setv('mBoxLot',b.lot||'');
+  setv('mBoxExpiry',b.expiry||'');
+  $('#mBoxSupplier').innerHTML=supplierOptions(b.supplier);
+  var delReasonEl=$('#boxEditDelReason');
+  if(delReasonEl){delReasonEl.style.display=canDel?'none':'block';delReasonEl.textContent=delReason;}
+  var delBtn=$('#mBoxDelBtn');
+  if(delBtn){
+    delBtn.disabled=!canDel;delBtn.title=canDel?'':delReason;
+    delBtn.onclick=canDel?function(){closeDrawer(true);openDeleteBoxModal(tag);}:null;
+  }
   $('#mBoxSaveBtn').onclick=function(){
-    var type=val('mBoxType');if(!type)return toast('เลือกประเภทกล่อง','เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน','err');
+    clearFieldErrors($('#boxEditCard'));
+    var type=val('mBoxType');if(!type)return fieldError('mBoxType','เลือกประเภทกล่อง — เพิ่มประเภทที่แท็บ "ประเภทกล่อง" ก่อน');
     var before=Object.assign({},b);
     b.type=type;b.lot=val('mBoxLot');b.expiry=val('mBoxExpiry');b.supplier=val('mBoxSupplier');
     auditEntry('UPDATE',USER,tag,typeName(type),before,Object.assign({},b));
-    save();closeModal();
+    save();
     toast('อัปเดตกล่องแล้ว',tag);renderAll();
+    closeCardDrawerIfActive('boxEditCard');
   };
-  var delBtn=$('#mBoxDelBtn');
-  if(delBtn&&canDel)delBtn.onclick=function(){closeModal();openDeleteBoxModal(tag);};
+  openCardDrawer('boxEditCard','แก้ไขกล่อง '+esc(tag),'แก้ไขข้อมูลทะเบียนของกล่อง '+esc(tag));
 }
 window.editBox=editBox;
+/* ปิด drawer เฉยๆ ไม่ล้างฟอร์ม (การ์ดนี้ไม่มี "ค่าเริ่มต้น" ให้ยกเลิกกลับ — editBox()
+   เซ็ตค่าใหม่ทับทุกครั้งที่เปิดอยู่แล้ว) — closeDrawer() เรียกปุ่มนี้ผ่าน CARD_CANCEL_BTN
+   เวลาผู้ใช้ปิดด้วย X/scrim/Esc เท่านั้น */
+$('#btnCancelBoxEdit').onclick=function(){closeCardDrawerIfActive('boxEditCard');};
 
 /* ปิด drawer เฉยๆ ไม่ล้างฟอร์ม (ดูคอมเมนต์เหนือ #btnCancelBox ใน HTML) — closeDrawer()
    เรียกปุ่มนี้ผ่าน CARD_CANCEL_BTN เวลาผู้ใช้ปิดด้วย X/scrim/Esc เท่านั้น */
@@ -5747,12 +5785,17 @@ function code39Svg(text){
     +'shape-rendering="crispEdges" fill="#000">'+rects+'</svg>';
 }
 
-/* บัตรพิมพ์จริง — ขนาด CR80 (86×54mm) หน้า+หลัง ใช้ดีไซน์เดียวกับบัตรฟิสิกส์บนจอ
-   (openEmpBadge) ทุกกระเบียดนิ้ว: วงกลมสีเขียวมุมบน, รูปวงกลม+ป้าย EMPLOYEE ID,
-   ชื่อ/ตำแหน่ง/สถานะ หน้าบัตร, กริดแผนก-คลัง-กะ-เบอร์; หลังบัตรเป็นอีเมล/วันเริ่มงาน/
-   สิทธิ์ + บาร์โค้ด — เพื่อให้พิมพ์ออกมาแล้วห้อยคอใช้งานได้จริงตามที่เห็นบนจอ ไม่ใช่
-   การ์ดแบบง่ายแยกดีไซน์กันคนละแบบเหมือนเดิม เขียนเป็น mm ล้วน ใช้ได้ทั้งพรีวิวในโมดัล
+/* บัตรพิมพ์จริง — แนวตั้ง (portrait, 54×86mm) หน้า+หลัง ห้อยคอด้วยคลิป/สายคล้องจริงได้
+   (ผู้ใช้ขอ — บัตรห้อยคอมาตรฐานเป็นแนวตั้งเสมอ ไม่ใช่แนวนอนแบบบัตรเครดิต) จัดวางแบบ
+   ตรงกลาง-แนวตั้งซ้อนกัน (avatar → EMPLOYEE ID → ชื่อ/ตำแหน่ง/สถานะ → กริดรายละเอียด)
+   ให้เหมือนบัตรฟิสิกส์บนจอ (openEmpBadge) มากที่สุดเท่าที่ความกว้าง 54mm จะพอ — แถบร่อง
+   บนสุด (.notch) จำลองรูเจาะร้อยคลิปห้อยคอจริง เขียนเป็น mm ล้วน ใช้ได้ทั้งพรีวิวในโมดัล
    (เบราว์เซอร์แปลง mm เป็น px ให้อัตโนมัติ) และหน้าต่างพิมพ์จริงโดยไม่ต้องปรับอะไร */
+function empCardNotchHtml(){
+  return '<div style="position:relative;z-index:1;display:flex;justify-content:center;margin-bottom:3mm;">'
+    +'<div style="width:16mm;height:3mm;border-radius:999px;background:var(--surface2);box-shadow:inset 0 .3mm .8mm rgba(0,0,0,.22);"></div>'
+    +'</div>';
+}
 function empCardFrontHtml(e){
   var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
   var stBg={ok:'var(--posSoft)',warn:'var(--warnSoft)',bad:'var(--negSoft)'}[st.c]||'var(--posSoft)';
@@ -5760,47 +5803,45 @@ function empCardFrontHtml(e){
   var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
   var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
   var avatarInner=e.photo?'<img src="'+esc(e.photo)+'" style="width:100%;height:100%;object-fit:cover;">':'<span>'+esc(initials)+'</span>';
-  return '<div class="ecard" style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:4.5mm 5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
-    +'<div style="position:absolute;right:-12mm;top:-9mm;width:32mm;height:32mm;border-radius:50%;background:var(--accent2);opacity:.5;"></div>'
-    +'<div style="position:relative;z-index:1;display:flex;align-items:center;gap:3.2mm;">'
-      +'<div style="width:13mm;height:13mm;flex:0 0 auto;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:11pt;font-weight:700;border:.6mm solid var(--surface);box-shadow:0 1mm 2.4mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
-      +'<div style="min-width:0;">'
-        +'<div style="display:inline-flex;align-items:center;font-size:6.6pt;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:.9mm 2.6mm;">EMPLOYEE ID</div>'
-        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;font-weight:700;margin-top:1mm;color:var(--ink);">'+esc(e.id)+'</div>'
-      +'</div>'
+  return '<div class="ecard" style="position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
+    +'<div style="position:absolute;left:50%;top:-16mm;transform:translateX(-50%);width:38mm;height:38mm;border-radius:50%;background:var(--accent2);opacity:.5;"></div>'
+    +empCardNotchHtml()
+    +'<div style="position:relative;z-index:1;width:19mm;height:19mm;flex:0 0 auto;align-self:center;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:13pt;font-weight:700;border:.6mm solid var(--surface);box-shadow:0 1mm 2.4mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:2.6mm;display:inline-flex;align-items:center;align-self:center;font-size:6.6pt;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:.9mm 2.6mm;">EMPLOYEE ID</div>'
+    +'<div style="position:relative;z-index:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;font-weight:700;margin-top:1mm;color:var(--ink);">'+esc(e.id)+'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:3.4mm;">'
+      +'<div style="font-size:12.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
+      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
+      +'<div style="display:inline-flex;align-items:center;margin-top:2mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
     +'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:3mm;">'
-      +'<div style="font-size:12.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
-      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:.5mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
-      +'<div style="display:inline-flex;align-items:center;margin-top:1.6mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
-    +'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:2.4mm;border-top:.18mm solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:1.8mm 3mm;">'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3mm;border-top:.18mm solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:2.4mm 3mm;text-align:left;">'
       +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">แผนก</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept||'-')+'</div></div>'
       +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">คลัง</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(whTxt)+'</div></div>'
       +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">กะ</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_SHIFT[e.shift]||'-')+'</div></div>'
       +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">เบอร์โทร</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;font-family:ui-monospace,Menlo,Consolas,monospace;">'+esc(e.phone||'-')+'</div></div>'
     +'</div>'
-    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:2;"><div style="transform:rotate(-22deg);font-size:14pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:2;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
     +'</div>';
 }
 function empCardBackHtml(e){
   var scanCode=(e.scanCode||e.id).toUpperCase();
-  return '<div style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:4.5mm 5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
-    +'<div style="font-size:12pt;font-weight:700;letter-spacing:-.02em;">'+esc(e.name||e.id)+'</div>'
-    +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;color:var(--muted);margin-top:.6mm;">'+esc(e.id)+' · '+esc(EMP_ACCESS[e.access]||'-')+'</div>'
-    +'<div style="margin-top:3mm;display:grid;grid-template-columns:1fr 1fr;gap:2mm 3mm;">'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">อีเมล</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;word-break:break-all;">'+esc(e.email||'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">วันเริ่มงาน</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+(e.startDate?esc(dstr(new Date(e.startDate))):'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">สิทธิ์การใช้งาน</div><div style="font-size:7.4pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_ACCESS[e.access]||'-')+'</div></div>'
+  return '<div style="position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
+    +empCardNotchHtml()
+    +'<div style="position:relative;z-index:1;font-size:12pt;font-weight:700;letter-spacing:-.02em;">'+esc(e.name||e.id)+'</div>'
+    +'<div style="position:relative;z-index:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;color:var(--muted);margin-top:.8mm;">'+esc(e.id)+' · '+esc(EMP_ACCESS[e.access]||'-')+'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:4mm;display:flex;flex-direction:column;gap:3mm;text-align:left;">'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">อีเมล</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;word-break:break-all;">'+esc(e.email||'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">วันเริ่มงาน</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+(e.startDate?esc(dstr(new Date(e.startDate))):'-')+'</div></div>'
+      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">สิทธิ์การใช้งาน</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_ACCESS[e.access]||'-')+'</div></div>'
     +'</div>'
-    +'<div style="margin-top:auto;padding-top:2.6mm;border-top:.18mm solid var(--line);">'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3.4mm;border-top:.18mm solid var(--line);">'
       +'<div style="height:11mm;">'+code128SVG(scanCode,52)+'</div>'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.2mm;">'
-        +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;letter-spacing:.08em;color:var(--ink2);">'+esc(scanCode)+'</span>'
-        +'<span style="font-size:6.5pt;font-weight:700;letter-spacing:.06em;color:var(--faint);">CODE 128</span>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.4mm;">'
+        +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.6pt;letter-spacing:.06em;color:var(--ink2);">'+esc(scanCode)+'</span>'
+        +'<span style="font-size:6.2pt;font-weight:700;letter-spacing:.05em;color:var(--faint);">CODE 128</span>'
       +'</div>'
     +'</div>'
-    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(-22deg);font-size:14pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
     +'</div>';
 }
 /* :root ของ CSS var สีธีมสว่าง ยกมาจาก body หลัก (บรรทัด ~22-35) แบบ hardcode — หน้าต่าง
@@ -5837,7 +5878,7 @@ window.printEmpBadge=printEmpBadge;
    เครื่องพิมพ์จริงที่ตั้งกระดาษ A4/Letter ไว้ในถาด จะเมินค่านี้แล้ว "ขยายเนื้อหาให้เต็ม
    หน้ากระดาษที่มีจริง" แทน ทำให้บัตรออกมาใหญ่เท่าโปสเตอร์ ไม่ใช่ขนาดบัตรจริงตามที่ผู้ใช้ขอ
    (ห้อยคอได้จริง) — แก้โดยไม่พึ่ง @page ขนาดพิเศษเลย ปล่อยให้ใช้กระดาษที่ตั้งไว้ตามปกติ
-   (A4/Letter) แล้วให้ตัวการ์ดเองคงขนาด 86×54mm จริงตามหน่วย mm (เหมือนที่พรีวิวในโมดัล
+   (A4/Letter) แล้วให้ตัวการ์ดเองคงขนาด 54×86mm จริงตามหน่วย mm (เหมือนที่พรีวิวในโมดัล
    render แล้วได้ขนาดถูกต้องอยู่แล้ว) วางกึ่งกลางหน้า พร้อมคำเตือนให้เลือก "ขนาดจริง 100%"
    ในกล่องโต้ตอบพิมพ์ (ไม่ใช่ "พอดีหน้ากระดาษ") ไม่งั้นเบราว์เซอร์บางตัวจะ auto-scale ให้
    เองอยู่ดี — พิมพ์แล้วตัดตามขอบบัตรได้ขนาดจริงเสมอไม่ว่ากระดาษที่ใช้จะใหญ่แค่ไหน */
@@ -5859,7 +5900,7 @@ function printEmpBadgeWindow(id){
     +'</style></head><body>'
     +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
     +'<div class="pg">'+empCardBackHtml(e)+'</div>'
-    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 86 × 54 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 54 × 86 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
