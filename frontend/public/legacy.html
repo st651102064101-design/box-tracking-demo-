@@ -8250,6 +8250,9 @@ document.addEventListener('click',function(ev){
   if(fx9600LogTimer){clearInterval(fx9600LogTimer);fx9600LogTimer=null;}
   if(!showing){fx9600LogPoll();fx9600LogTimer=setInterval(fx9600LogPoll,3000);}
 });
+/* dir -> gate number that looked orphaned on the MOST RECENT pass but hasn't
+   been confirmed yet — see the wipe guard inside refreshGateDisplays() below. */
+var gateOrphanSuspect={out:'',in:''};
 function refreshGateDisplays(){
   var gs=allGateNums();
   ['out','in'].forEach(function(dir){
@@ -8261,8 +8264,34 @@ function refreshGateDisplays(){
        diff on gates, so a same-signature sync can still land with gates omitted).
        Without this guard, that transient emptiness looked identical to "user deleted
        the gate", so this line wiped the saved choice AND persisted the wipe to the
-       server — the reported "ตั้งประตูแล้วรีเฟรชยังจำอยู่ แต่ผ่านไปพักหนึ่งกลับไม่ได้เลือก" bug. */
-    if(g&&gs.length&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config actually changed) — drop stale value instead of using it silently */
+       server — the reported "ตั้งประตูแล้วรีเฟรชยังจำอยู่ แต่ผ่านไปพักหนึ่งกลับไม่ได้เลือก" bug.
+
+       That guard only covers gs (the full gate list) going empty. It does NOT
+       cover the narrower case reported here: gs stays non-empty, but THIS ONE
+       gate's key is transiently missing from S.gates mid-sync while the rest
+       of the list is present — same root cause (a sync payload landing with
+       gates incomplete), same wrong conclusion ("user deleted gate 1"), same
+       destructive fix (wipe + persist immediately, on a screen where the
+       person had ALREADY picked this gate and is actively working manual
+       mode against it). A single-pass reading of S.gates can't tell "really
+       deleted" apart from "sync mid-flight" — so don't decide on one pass.
+       First time a gate looks orphaned: don't wipe, don't touch the display
+       at all this pass — the last known-good render (gate name, hint chip)
+       stays exactly as it was, because it was correct. Only if the SAME gate
+       still looks orphaned on the NEXT pass (this runs every 20s — see the
+       setInterval near the bottom of the file — so that's a real gap, not a
+       sync race) does it commit the wipe and flip the display. */
+    if(g&&gs.length&&!gateWh(g)){
+      if(gateOrphanSuspect[dir]===g){
+        fixedGates[dir]='';saveFixedGates();g='';
+        gateOrphanSuspect[dir]='';
+      }else{
+        gateOrphanSuspect[dir]=g;
+        return; /* forEach — skips straight to the other direction, leaves this one's DOM untouched */
+      }
+    }else{
+      gateOrphanSuspect[dir]='';
+    }
     if(!g){
       var dirGates=gateNumsForDir(dir);
       if(dirGates.length===1&&gateSelectable(dirGates[0])){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction, and it's actually usable — reader answering, or the terminal is in barcode mode and doesn't need one — auto-select instead of forcing a manual pick */
@@ -8282,7 +8311,14 @@ function refreshGateDisplays(){
       else if(gs.length){disp.innerHTML='<span style="color:var(--neg);">ยังไม่ได้ตั้งค่า — กด "เปลี่ยนประตู"</span>';}
       else{disp.innerHTML='<span style="color:var(--muted);">ยังไม่มีประตูในระบบ</span> <button class="btn sm accent" onclick="goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>';}
     }
-    if(hint&&g)updateGateHint(dir==='out'?'outGate':'inGate',dir==='out'?'outGateHint':'inGateHint');
+    /* ต้องเรียกทุกรอบไม่มีเงื่อนไข ไม่ใช่แค่ตอน g เป็นจริง — เดิม `if(hint&&g)` ทำให้
+       พอ g กลายเป็นค่าว่าง (ประตูถูกล้างจริงๆ) เงื่อนไขไม่ผ่าน ฟังก์ชันนี้เลยไม่ถูก
+       เรียก ป้าย hint (เช่น "ประตู 1 → ABSS") เลยค้างโชว์ค่าของรอบก่อนหน้าต่อไป
+       ทั้งที่ disp ด้านบนอัปเดตเป็น "ยังไม่ได้ตั้งค่า" ไปแล้ว — สองกล่องขัดกันเอง
+       บนจอเดียว updateGateHint() เองอ่าน val(selId) จากอินพุตที่เพิ่งตั้งค่าไปแล้ว
+       (บรรทัด inp.value=g||'' ด้านบน) ดังนั้นเรียกทุกรอบแล้วให้มันตัดสินเองว่าจะโชว์
+       อะไรตาม inp ปัจจุบัน — ไม่จำเป็นต้องเช็ค g จากภายนอกอีกชั้น */
+    if(hint)updateGateHint(dir==='out'?'outGate':'inGate',dir==='out'?'outGateHint':'inGateHint');
     // FX9600 webhook URL is gate-specific (see routes/rfid.ts) — recomputed
     // alongside inGateDisplay so it always names whichever gate is actually
     // selected right now, not whatever gate happened to be picked earlier.
