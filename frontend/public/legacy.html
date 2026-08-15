@@ -3668,7 +3668,29 @@ function normalizeState(d){
   d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
+  /* gatePrefs ไม่ได้เดินทางมากับ /api/state — มันมีตารางและ endpoint ของตัวเอง
+     (/api/gate-prefs) เพราะ stateSchema ฝั่ง backend ไม่ประกาศคีย์นี้ แล้ว zod ก็ทิ้ง
+     คีย์แปลกปลอมเงียบๆ (ดูคอมเมนต์ยาวเหนือ fixedGatesRef()) แปลว่า d.gatePrefs ที่
+     เข้ามาตรงนี้เป็น {} "เสมอ" ไม่ว่าผู้ใช้จะเคยเลือกประตูไว้หรือไม่
+
+     ทุกครั้งที่ S ถูกแทนที่ทั้งก้อน จึงต้องอุ้มค่าเดิมที่ loadGatePrefsFromServer()
+     เติมไว้ในหน่วยความจำข้ามมาด้วย ไม่งั้นมันหายไปพร้อมกับ S ก้อนเก่า
+
+     บั๊กที่เจอ: adoptServerState() (realtime sync ผ่าน SSE/poll) เรียก
+     adoptStateSnapshot() -> S=normalizeState(payload) ทุกครั้งที่ signature ฝั่ง
+     เซิร์ฟเวอร์เปลี่ยน ซึ่งเกิดได้ตลอดเวลาจากคนอื่นแก้ข้อมูลอะไรก็ได้ในระบบ ผลคือประตู
+     ที่เลือกไว้ "หายไปเองกลางคัน" ทั้งที่แถวใน DB ยังอยู่ครบ หน้าจอเลยขึ้น "ยังไม่ได้
+     ตั้งค่า — กด เปลี่ยนประตู" — และถ้าบังเอิญมีประตูที่เลือกได้เหลือบานเดียว
+     refreshGateDisplays() จะ auto-select แล้ว saveFixedGates() ทับค่าใน DB จริงๆ ด้วย
+     คอมเมนต์เดิมเหนือ fixedGatesRef() เขียนว่า "S โดนแทนที่ตอน reload อยู่แล้ว ไม่มี
+     อะไรค้างให้กังวล" — ซึ่งมองข้ามว่า S ถูกแทนที่ระหว่าง session ได้ด้วย ไม่ใช่แค่ตอน
+     reload */
   d.gatePrefs=d.gatePrefs||{};
+  if(typeof S!=='undefined'&&S&&S.gatePrefs){
+    Object.keys(S.gatePrefs).forEach(function(u){
+      if(!d.gatePrefs[u])d.gatePrefs[u]=S.gatePrefs[u];
+    });
+  }
   d.dfPrefs=d.dfPrefs||{};
   d.uiPrefs=d.uiPrefs||{};
   d.vehicleTypes=d.vehicleTypes||[];
@@ -8173,8 +8195,13 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
    (backend/src/routes/gatePrefs.ts) for the dedicated endpoint that now
    actually persists it, keyed by the JWT's username. loadGatePrefsFromServer()
    fetches it once at boot into S.gatePrefs[USER]; fixedGatesRef() just reads
-   that in-memory copy the rest of the session (S gets fully reassigned on
-   reload anyway, so there's nothing stale to worry about). */
+   that in-memory copy for the rest of the session.
+
+   Because it does NOT ride along in /api/state, that in-memory copy is the
+   only thing holding it — and S gets wholly reassigned mid-session, not just
+   on reload (adoptServerState() does it on every realtime sync). normalizeState()
+   therefore carries gatePrefs across each reassignment; see the comment there.
+   Do not "simplify" that carry-over away by assuming the payload has it. */
 function fixedGatesRef(){
   if(!S.gatePrefs)S.gatePrefs={};
   if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
