@@ -2533,9 +2533,17 @@ a{color:var(--accentInk);}
     </div>
     </div>
 
-    <!-- ลงทะเบียนกล่อง — ย้ายมารวมกับประเภทกล่องในหน้าเดียวกัน (เดิมแยกแท็บ) -->
-    <div class="wg-board">
-    <div class="wg xl wg-form">
+    <!-- ลงทะเบียนกล่อง — ย้ายมารวมกับประเภทกล่องในหน้าเดียวกัน (เดิมแยกแท็บ)
+         ฟอร์มนี้ไม่แสดงในหน้าอีกต่อไป — ตารางคือเนื้อหาหลักของหน้า ส่วนการ์ดใบนี้
+         ถูก openCardDrawer() ยืมไปแสดงใน side drawer ตอนกด "+ ลงทะเบียนกล่อง"
+         แล้วย้ายกลับมาที่นี่ตอนปิด (ดู _dwRestoreNodes) จึงต้องคงอยู่ใน DOM ไว้ที่เดิม
+         ห้ามลบทิ้ง และห้ามใส่ display:none ที่ตัวการ์ดเอง — ซ่อนที่ .wg-board ที่ห่ออยู่แทน
+         ต่างจากอีก 4 การ์ด master ตรงที่ปุ่มบันทึก (#btnAddBox) ไม่ปิด drawer หลังบันทึกสำเร็จ
+         (ดูคอมเมนต์ที่ btnAddBox.onclick) — เพราะฟอร์มนี้ออกแบบมาให้ลงทะเบียนกล่องต่อกันได้
+         หลายใบรวด (บาร์โค้ดสร้างเลขถัดไปให้อัตโนมัติทุกครั้งหลังบันทึก) ปิดแล้วต้องเปิดใหม่
+         ทุกใบจะขัดเวิร์กโฟลว์เดิมที่ผู้ใช้คุ้นเคย -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="boxRegCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span></span><span class="wg-lbl">ลงทะเบียนกล่อง (Barcode)</span></div>
       <p class="wg-cap">ระบบสร้างรหัสให้อัตโนมัติ ป้องกันรหัสซ้ำ — ลงทะเบียนแล้วกล่องจะอยู่สถานะ "พร้อมส่งออก" พร้อมใช้งาน</p>
       <div class="wg-body">
@@ -2601,7 +2609,13 @@ a{color:var(--accentInk);}
       </div>
 
       </div>
+      <!-- #btnCancelBox ปิด drawer เฉยๆ (ไม่ล้างฟอร์ม) ต่างจากปุ่ม "ยกเลิก" ของอีก 4 การ์ด
+           master — เพราะการ์ดนี้ไม่มีโหมด "กำลังแก้ไข" ให้ยกเลิกกลับ (add-only, ไม่มี
+           editingBox) ปุ่มนี้จึงมีไว้แค่ให้ closeDrawer()/CARD_CANCEL_BTN เรียก .click()
+           ได้แบบเดียวกับการ์ดอื่นตอนปิดผ่าน X/scrim/Esc เท่านั้น -->
       <div class="wg-foot">
+        <button class="btn gray" id="btnCancelBox">ปิด</button>
+        <div class="spacer"></div>
         <button class="btn accent" id="btnAddBox">บันทึกรับเข้า</button>
         <span class="muted small" id="noTypeHint" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ยังไม่มีประเภทกล่อง — เพิ่มที่แท็บ "ประเภทกล่อง" ก่อน</span>
       </div>
@@ -2609,7 +2623,7 @@ a{color:var(--accentInk);}
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-lbl">กล่องที่ลงทะเบียน</span><span class="tag" id="cntBox"></span><div class="spacer"></div>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">กล่องที่ลงทะเบียน</span><span class="tag" id="cntBox"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addBox()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ลงทะเบียนกล่อง</button></div><div class="wg-hd-row">
         <select id="filtBoxStatus" style="width:auto;">
           <option value="">ทุกสถานะ</option>
           <option value="pending">รอเข้าคลัง (Gate In)</option>
@@ -2623,7 +2637,7 @@ a{color:var(--accentInk);}
         <button class="btn ghost sm" onclick="printAllLabels()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ฉลากทั้งหมด</button>
         <button class="btn ghost sm" onclick="openImportModal('box')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
         <button class="btn ghost sm" onclick="exportBoxExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
-      </div>
+      </div></div>
       <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllBox" title="เลือกทั้งหมด"></th><th>บาร์โค้ด</th><th>ประเภท</th><th class="r">มูลค่า (บาท)</th><th>สถานะ</th><th>ตำแหน่ง / ลูกค้า</th><th>Lot / หมดอายุ</th><th class="r">รอบ</th></tr></thead>
         <tbody id="boxBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerBox"></div>
@@ -4387,7 +4401,7 @@ function _dwRestoreNodes(){
    editingXxx และค่าที่ค้างอยู่เหมือนกดยกเลิกจริง ไม่ใช่แค่ซ่อนหน้าต่างแล้วปล่อยฟอร์ม
    ค้างในสถานะ "กำลังแก้ไข" แบบมองไม่เห็น */
 var CARD_CANCEL_BTN={btypeFormCard:'btnCancelBtype',whFormCard:'btnCancelWh',
-  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp'};
+  custFormCard:'btnCancelCust',empFormCard:'btnCancelEmp',boxRegCard:'btnCancelBox'};
 var _dwClosing=false;
 /* force=true → ปิดโดยไม่ถามเรื่องข้อมูลที่ยังไม่ได้บันทึก (ใช้ตอนบันทึกสำเร็จแล้ว) */
 function closeDrawer(force){
@@ -4954,6 +4968,10 @@ function editBox(tag){
   if(delBtn&&canDel)delBtn.onclick=function(){closeModal();openDeleteBoxModal(tag);};
 }
 window.editBox=editBox;
+
+/* ปิด drawer เฉยๆ ไม่ล้างฟอร์ม (ดูคอมเมนต์เหนือ #btnCancelBox ใน HTML) — closeDrawer()
+   เรียกปุ่มนี้ผ่าน CARD_CANCEL_BTN เวลาผู้ใช้ปิดด้วย X/scrim/Esc เท่านั้น */
+$('#btnCancelBox').onclick=function(){closeCardDrawerIfActive('boxRegCard');};
 
 $('#btnAddBox').onclick = function() {
   if (boxRegMode === 'single') {
@@ -5631,7 +5649,11 @@ function addEmp(){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะเพิ่มพนักงานได้','err');
   _openAddDrawer('btnCancelEmp','empFormCard','เพิ่มพนักงาน','กรอกข้อมูลเพื่อสร้างพนักงานใหม่ในระบบ');
 }
-window.addBtype=addBtype;window.addWh=addWh;window.addCust=addCust;window.addEmp=addEmp;
+/* ไม่ใช้ _openAddDrawer — การ์ดนี้ไม่มีฟอร์มให้ล้าง (ไม่มี editingBox/โหมดแก้ไข) เปิด
+   drawer ตรงๆ พร้อมค่าที่เคยกรอกค้างไว้ (บาร์โค้ดถัดไป/ประเภท/คลังล่าสุด) เลย เพื่อให้
+   ลงทะเบียนกล่องต่อกันหลายใบรวดได้เร็ว ไม่ต้องกรอกประเภท/คลังซ้ำทุกครั้ง */
+function addBox(){openCardDrawer('boxRegCard','ลงทะเบียนกล่อง','สร้างบาร์โค้ดและลงทะเบียนกล่องใหม่เข้าคลัง');}
+window.addBtype=addBtype;window.addWh=addWh;window.addCust=addCust;window.addEmp=addEmp;window.addBox=addBox;
 
 /* ── สถานะ "กำลังบันทึก..." ของปุ่มบันทึกทั้ง 4 master ────────────────────────
    ห่อ handler เดิมแทนการไปแก้ทีละตัว — ตรรกะบันทึกไม่ถูกแตะเลย
@@ -5639,7 +5661,7 @@ window.addBtype=addBtype;window.addWh=addWh;window.addCust=addCust;window.addEmp
    fire-and-forget อยู่แล้ว ถ้าเรียก handler ตรงๆ ปุ่มจะเปลี่ยนหน้าตาไม่ทันให้เห็น
    เพราะงานจบก่อนเบราว์เซอร์ได้วาดเฟรมถัดไป จึงเว้นสองเฟรมให้สถานะ busy ขึ้นจริง
    ประโยชน์หลักคือกันกดซ้ำระหว่างที่ยังประมวลผลไม่จบ */
-['btnAddBtype','btnAddWh','btnAddCust','btnAddEmp'].forEach(function(id){
+['btnAddBtype','btnAddWh','btnAddCust','btnAddEmp','btnAddBox'].forEach(function(id){
   var btn=$('#'+id);if(!btn||!btn.onclick)return;
   var inner=btn.onclick;
   btn.onclick=function(){
