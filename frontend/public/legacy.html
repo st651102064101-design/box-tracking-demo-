@@ -17581,11 +17581,10 @@ document.addEventListener('visibilitychange',()=>{
 /* auto-hide the top bar (header + nav) on scroll down, bring it back on scroll up —
    only meaningful in "top" layout since "sidebar" layout pins them to the left edge */
 (function(){
-  var lastY=window.scrollY,hidden=false,ticking=false;
+  var lastY=window.scrollY,hidden=false,scheduled=false;
   function chromeH(){var c=$('.chrome');return c?c.getBoundingClientRect().height:58;}
   function setVar(){document.documentElement.style.setProperty('--chrome-h',chromeH()+'px');}
   function tick(){
-    ticking=false;
     var y=Math.max(0,window.scrollY);
     if(document.documentElement.getAttribute('data-layout')!=='top'){
       if(hidden){hidden=false;document.documentElement.classList.remove('topbar-hidden');}
@@ -17597,7 +17596,16 @@ document.addEventListener('visibilitychange',()=>{
     else if(dy<-6&&hidden){hidden=false;document.documentElement.classList.remove('topbar-hidden');}
     lastY=y;
   }
-  window.addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(tick);}},{passive:true});
+  /* เดิมใช้ requestAnimationFrame คุมความถี่ — rAF ไม่รับประกันว่าจะยิงตรงเวลาเสมอ
+     (แท็บที่ถูก throttle เพราะไม่ได้โฟกัส/โหมดประหยัดพลังงานของเบราว์เซอร์/OS บางระบบ
+     หน่วง rAF ได้นานผิดปกติหรือไม่ยิงเลยจนกว่าแท็บจะกลับมาโฟกัส) ผลคือ navbar
+     ค้างซ่อนไม่โผล่กลับมาตอนเลื่อนขึ้นในบางสภาวะ เปลี่ยนมาคุมจังหวะด้วย setTimeout
+     ธรรมดาแทน ทำงานคงที่ไม่ขึ้นกับตารางเวลาของเฟรมเรนเดอร์เลย */
+  window.addEventListener('scroll',function(){
+    if(scheduled)return;
+    scheduled=true;
+    setTimeout(function(){scheduled=false;tick();},50);
+  },{passive:true});
   window.addEventListener('resize',setVar);
   window.addEventListener('load',setVar);
   setVar();
