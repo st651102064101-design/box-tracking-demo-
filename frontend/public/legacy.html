@@ -4790,8 +4790,14 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
      transition:max-width .32s) การวัด offsetLeft/offsetWidth ณ จังหวะนั้นจะได้ค่า "ก่อน"
      ทรานซิชันเริ่มขยับ ไม่ใช่ค่าสุดท้ายหลังยุบเสร็จ — pill เลยไปหยุดผิดตำแหน่ง (ค้างเลย
      ปุ่มจริงไปทับเนื้อหาถัดไป) ต้องจับ transitionend ซ้ำอีกทีเพื่อ sync ตำแหน่งให้ตรงจริง
-     หลังทรานซิชันจบ ครอบคลุมทุกกรณีทั่วไป ไม่ผูกกับ .df-collapsible โดยเฉพาะ */
+     หลังทรานซิชันจบ ครอบคลุมทุกกรณีทั่วไป ไม่ผูกกับ .df-collapsible โดยเฉพาะ
+     ต้องข้าม .seg-pill เอง — ตัวมันเองก็มี transition:transform/width ผูกอยู่ (เพื่อเลื่อน
+     นุ่มๆ ตอนสลับปุ่ม) พอ segPillMove() ขยับมันแล้ว transitionend ของมันเองจะเด้งกลับมา
+     เรียก segPillMove() ซ้ำอีกที กลายเป็นวนเรียกตัวเองไม่จบ ทำให้เห็นเป็นอาการ "วิ่งไปมา"
+     สั่นตลอดเวลาแทนที่จะเลื่อนไปหยุดนิ่งครั้งเดียว — ปล่อยให้แค่ transitionend ของ
+     "องค์ประกอบอื่น" ในกลุ่ม (เช่น .df-collapsible ที่ยุบ) เป็นคนสั่ง sync แทน */
   document.addEventListener('transitionend',function(e){
+    if(e.target&&e.target.classList&&e.target.classList.contains('seg-pill'))return;
     var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
     if(wrap)segPillMove(wrap);
   },true);
