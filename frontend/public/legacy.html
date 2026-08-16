@@ -4753,9 +4753,16 @@ function segPillMove(wrap){
      เพราะ .df-collapsible ไม่มี position เป็นของตัวเอง (ไม่กลายเป็น offsetParent ใหม่) */
   var active=wrap.querySelector('.ivs-btn.active,.sf-btn.active');
   var pill=segPillEnsure(wrap);
-  if(!active){pill.style.width='0';return;}
-  pill.style.width=active.offsetWidth+'px';
-  pill.style.transform='translateX('+active.offsetLeft+'px)';
+  var w=active?active.offsetWidth+'px':'0';
+  var x=active?active.offsetLeft:0;
+  /* กันเขียนซ้ำค่าเดิม — ตัวกันหลักของอาการ "วิ่งไปมา": ถ้าอะไรก็ตามเรียก segPillMove()
+     ถี่ๆ ซ้ำๆ (transitionend/MutationObserver ที่อาจหลุดรอดมาได้จากจุดอื่นที่คาดไม่ถึง)
+     แต่ตำแหน่งจริงไม่ได้เปลี่ยนเลย ก็จะไม่แตะ style เลย — ไม่มีการเขียนซ้ำ = ไม่มี
+     transition ใหม่เกิดขึ้นให้วนต่อ ปลอดภัยไว้ก่อนโดยไม่ต้องรู้สาเหตุที่แท้จริงทุกจุด */
+  if(pill.dataset.w===w&&pill.dataset.x===String(x))return;
+  pill.dataset.w=w;pill.dataset.x=String(x);
+  pill.style.width=w;
+  pill.style.transform='translateX('+x+'px)';
 }
 function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).forEach(segPillMove);}
 (function(){
@@ -4795,8 +4802,18 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
      นุ่มๆ ตอนสลับปุ่ม) พอ segPillMove() ขยับมันแล้ว transitionend ของมันเองจะเด้งกลับมา
      เรียก segPillMove() ซ้ำอีกที กลายเป็นวนเรียกตัวเองไม่จบ ทำให้เห็นเป็นอาการ "วิ่งไปมา"
      สั่นตลอดเวลาแทนที่จะเลื่อนไปหยุดนิ่งครั้งเดียว — ปล่อยให้แค่ transitionend ของ
-     "องค์ประกอบอื่น" ในกลุ่ม (เช่น .df-collapsible ที่ยุบ) เป็นคนสั่ง sync แทน */
+     "องค์ประกอบอื่น" ในกลุ่ม (เช่น .df-collapsible ที่ยุบ) เป็นคนสั่ง sync แทน
+
+     ยังไม่พอ — .ivs-btn/.sf-btn เองก็มี transition:all .2s (เปลี่ยนสี/เงาตอน hover หรือ
+     ตอนสลับ .active) "all" หมายถึงทุกพร็อพเพอร์ตี้ที่เปลี่ยน แต่ละอันยิง transitionend
+     ของตัวเอง เมาส์แค่ลอยผ่านปุ่มในกลุ่มเดียวกัน (ไม่ได้กดอะไรเลย) ก็ทำให้ handler นี้
+     ทำงานรัวๆ ได้ — จำกัดด้วย e.propertyName ให้ตอบสนองเฉพาะพร็อพเพอร์ตี้ที่จริงๆ มีผล
+     กับ "ตำแหน่ง/ความกว้าง" ของ layout (ตรงกับที่ .df-collapsible ใช้จริง) พร็อพเพอร์ตี้
+     สี/เงาของปุ่มจะไม่โดนจับเลย ตัดสัญญาณรบกวนออกไปตั้งแต่ต้นทาง ไม่ต้องพึ่งตัวกันเขียนซ้ำ
+     ใน segPillMove() (ซึ่งยังคงไว้เป็นเกราะชั้นที่สอง) เพียงอย่างเดียว */
+  var SEG_LAYOUT_PROPS={'max-width':1,'width':1,'margin-left':1,'margin-right':1,'margin':1,'padding-left':1,'padding-right':1,'left':1,'right':1,'flex-basis':1};
   document.addEventListener('transitionend',function(e){
+    if(!SEG_LAYOUT_PROPS[e.propertyName])return;
     if(e.target&&e.target.classList&&e.target.classList.contains('seg-pill'))return;
     var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
     if(wrap)segPillMove(wrap);
