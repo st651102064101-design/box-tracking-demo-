@@ -1270,9 +1270,16 @@ html[data-theme="dark"]{
    width:auto blows it out to the default 20-character intrinsic width and the
    unit label next to it ("วัน"/"เดือน") gets shoved out of the pill. Anything
    mounted into .wg-scope brings its own sizing and must not be touched here. */
-.wg-form>.wg-top>.spacer,.wg-table>.wg-top>.spacer{flex:1;}
-.wg-form>.wg-top>input,.wg-form>.wg-top>select,
-.wg-table>.wg-top>input,.wg-table>.wg-top>select{width:auto;padding:9px 14px;font-size:14px;}
+/* descendant (space), ไม่ใช่ลูกตรง (>) — ตั้งแต่ .wg-top บางตัวถูกแยกเป็นสองแถวย่อย
+   (.wg-hd-row) เพื่อวางปุ่ม "+ เพิ่ม..." ไว้แถวบน .spacer/input/select ที่เคยเป็นลูกตรง
+   ของ .wg-top เลยกลายเป็นหลานผ่าน .wg-hd-row แทน — ตัวเลือกแบบ > เดิมเลยไม่แมตช์อีกต่อไป
+   ทำให้ input/select ในแถบเครื่องมือ (เช่น ตัวกรองสถานะ + ช่องค้นหาของตาราง "กล่องที่
+   ลงทะเบียน") หลุดไปใช้ padding/font-size เริ่มต้นที่ใหญ่กว่าแทน สูงไม่เท่ากับปุ่มข้างๆ
+   ยังคงสโคปไว้แค่ .wg-top เท่านั้น (ไม่ใช้ descendant กว้างระดับ .wg-form/.wg-table
+   ทั้งก้อน) ไม่งั้นจะไปโดน select ในฟอร์ม .wg-body ด้วย ซึ่งต้องการ padding ขนาดเต็มปกติ */
+.wg-form>.wg-top .spacer,.wg-table>.wg-top .spacer{flex:1;}
+.wg-form>.wg-top input,.wg-form>.wg-top select,
+.wg-table>.wg-top input,.wg-table>.wg-top select{width:auto;padding:9px 14px;font-size:14px;}
 .wg-form>.wg-body{padding:16px 18px 18px;}
 /* the caption belongs to the head, so it sits ABOVE the hairline — which means
    the head gives its own hairline up whenever a caption follows it, or the two
