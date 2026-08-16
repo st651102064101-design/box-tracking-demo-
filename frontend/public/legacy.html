@@ -1768,6 +1768,27 @@ a{color:var(--accentInk);}
   /* was color-mix(...,black) — undefined-looking in dark; token-based now */
   #tab-overview .mdh-inline:hover{color:color-mix(in srgb,var(--warn) 75%,var(--ink));}
 
+  /* กราฟแนวโน้ม 7 วันล่าสุด — โทน Apple Health/Screen Time: ตัวเลขใหญ่นำหน้า
+     กราฟแท่งเรียบ ไม่มีกรอบ/แกนหนักๆ เส้นกริดบางจางๆ แค่บอกระดับคร่าวๆ แท่งโค้งมน
+     สีนุ่มสองสี (เข้า = accent เขียวมะนาวเดิมของระบบ, ออก = ink หรี่ๆ) แทนสีสดจัด */
+  #tab-overview .wg-chart .wg-body{padding-top:4px;}
+  #tab-overview .trend-kpis{display:flex;gap:32px;flex-wrap:wrap;margin-bottom:18px;}
+  #tab-overview .trend-kpi{display:flex;flex-direction:column;gap:3px;}
+  #tab-overview .trend-kpi-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;}
+  #tab-overview .trend-kpi-dot.in{background:var(--accent);}
+  #tab-overview .trend-kpi-dot.out{background:var(--ink2);}
+  #tab-overview .trend-kpi .tk-n{font-family:var(--mono);font-size:clamp(26px,3vw,34px);font-weight:700;
+    letter-spacing:-.02em;line-height:1.05;color:var(--ink);}
+  #tab-overview .trend-kpi:first-child .tk-n{color:var(--accentInk);}
+  #tab-overview .trend-kpi .tk-lbl{display:flex;align-items:center;font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;}
+  #tab-overview .trend-svg{width:100%;height:auto;display:block;overflow:visible;}
+  #tab-overview .trend-grid{stroke:var(--line);stroke-width:1;}
+  #tab-overview .trend-bar-in{fill:var(--accent);transition:opacity .15s;}
+  #tab-overview .trend-bar-out{fill:var(--ink2);opacity:.32;transition:opacity .15s;}
+  #tab-overview .trend-bar-in:hover,#tab-overview .trend-bar-out:hover{opacity:.75;}
+  #tab-overview .trend-axis-lbl{fill:var(--muted);font-size:11px;font-family:var(--font);}
+  #tab-overview .trend-axis-lbl.today{fill:var(--ink);font-weight:700;}
+
   /* HERO — shrunk and de-chromed. Strings and markup untouched so the i18n
      EXACT dictionary keeps matching. */
   #tab-overview>.hero,#tab-reports>.hero{padding:26px 0 20px;border-bottom:none;margin-bottom:24px;}
@@ -1785,6 +1806,26 @@ a{color:var(--accentInk);}
     <div class="eyebrow reveal">ภาพรวมแบบเรียลไทม์</div>
     <h1 class="h-title reveal d1">กล่องทุกใบ<br>รู้อยู่ที่ไหน</h1>
     <p class="h-sub reveal d2">สถานะกล่อง แตะเพื่อดูรายการ — กดปุ่ม "รายงานเพิ่มเติม" ด้านล่างเพื่อดูรายละเอียดเพิ่มเติม</p>
+  </div>
+
+  <!-- ═══ กราฟแนวโน้ม 7 วันล่าสุด — กราฟแท่งเข้า/ออกแบบ Apple Health ═══════════
+       ข้อมูลจริงจาก S.events (ผ่าน Gate เข้า/ออก) จัดกลุ่มรายวัน เรนเดอร์ผ่าน
+       renderOverviewTrend() แบบ SVG ล้วน (ไม่มีไลบรารีกราฟภายนอก) ดูฟังก์ชันนั้น
+       สำหรับ logic การคำนวณ -->
+  <div class="wg-board reveal">
+    <div class="wg xl wg-chart">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2.5 4-6"/></svg></span></span>
+        <span class="wg-lbl">แนวโน้มการเคลื่อนไหว 7 วันล่าสุด</span>
+      </div>
+      <div class="wg-body">
+        <div class="trend-kpis">
+          <div class="trend-kpi"><span class="tk-n mono" id="ovTrendInTotal">0</span><span class="tk-lbl"><span class="trend-kpi-dot in"></span>เข้า 7 วัน</span></div>
+          <div class="trend-kpi"><span class="tk-n mono" id="ovTrendOutTotal">0</span><span class="tk-lbl"><span class="trend-kpi-dot out"></span>ออก 7 วัน</span></div>
+        </div>
+        <div id="ovTrendChart"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ BOARD 1 — สถานะกล่องตอนนี้ (4 cols × 2 rows, zero orphans) ═══════
@@ -10440,8 +10481,53 @@ window.dfOnCustomChange=dfOnCustomChange;
   if(mount)mount.innerHTML=dfBarHtml(id);
 });
 
+/* กราฟแท่งแนวโน้ม 7 วันล่าสุด (เข้า/ออก) — SVG ล้วน ไม่พึ่งไลบรารีกราฟภายนอก จับคู่กับ
+   #ovTrendChart ใน HTML เรียกจาก renderOverview() ทุกครั้งที่ข้อมูลเปลี่ยน */
+var TREND_WD_TH=['อา','จ','อ','พ','พฤ','ศ','ส'];
+function renderOverviewTrend(){
+  var host=$('#ovTrendChart');if(!host)return;
+  var days=[];
+  for(var i=6;i>=0;i--){
+    var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);
+    days.push({key:dstr(d),date:d,in:0,out:0});
+  }
+  var byKey={};days.forEach(function(r){byKey[r.key]=r;});
+  S.events.forEach(function(e){
+    var t=new Date(e.ts);if(isNaN(t))return;
+    var row=byKey[dstr(t)];if(!row)return;
+    if(e.dir==='out')row.out++;
+    else if(e.dir==='in'||e.dir==='in-new')row.in++;
+  });
+  var totalIn=days.reduce(function(s,r){return s+r.in;},0);
+  var totalOut=days.reduce(function(s,r){return s+r.out;},0);
+  setText('ovTrendInTotal',nf(totalIn));
+  setText('ovTrendOutTotal',nf(totalOut));
+  var maxV=1;days.forEach(function(r){maxV=Math.max(maxV,r.in,r.out);});
+  var W=700,H=180,padT=10,padB=24,plotH=H-padT-padB;
+  var groupW=W/days.length,barW=Math.min(22,groupW*.26),gap=5;
+  var todayKey=dstr(new Date());
+  var grid=[0,.5,1].map(function(f){
+    var y=padT+plotH*(1-f);
+    return '<line x1="0" y1="'+y+'" x2="'+W+'" y2="'+y+'" class="trend-grid"/>';
+  }).join('');
+  var bars=days.map(function(r,idx){
+    var cx=groupW*idx+groupW/2;
+    var hIn=Math.max(2,Math.round(r.in/maxV*plotH)),hOut=Math.max(2,Math.round(r.out/maxV*plotH));
+    var xIn=cx-gap/2-barW,xOut=cx+gap/2;
+    var yIn=padT+plotH-hIn,yOut=padT+plotH-hOut;
+    var wd=TREND_WD_TH[r.date.getDay()];
+    var lblCls=r.key===todayKey?'trend-axis-lbl today':'trend-axis-lbl';
+    return '<g>'
+      +'<rect class="trend-bar-in" x="'+xIn.toFixed(1)+'" y="'+yIn+'" width="'+barW.toFixed(1)+'" height="'+hIn+'" rx="4"><title>'+wd+' '+r.date.getDate()+' — เข้า '+r.in+' ใบ</title></rect>'
+      +'<rect class="trend-bar-out" x="'+xOut.toFixed(1)+'" y="'+yOut+'" width="'+barW.toFixed(1)+'" height="'+hOut+'" rx="4"><title>'+wd+' '+r.date.getDate()+' — ออก '+r.out+' ใบ</title></rect>'
+      +'<text x="'+cx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" class="'+lblCls+'">'+wd+'</text>'
+    +'</g>';
+  }).join('');
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" class="trend-svg" role="img" aria-label="กราฟแนวโน้มการเคลื่อนไหว 7 วันล่าสุด">'+grid+bars+'</svg>';
+}
 function renderOverview(){
   var all=Object.values(S.boxes);
+  renderOverviewTrend();
 
   // สถานะกล่องหลัก (ในคลัง/ออกอยู่/หาย/hold/damage) — ตัวกรองของตัวเอง แยกจาก
   // "ความเคลื่อนไหว" ด้านล่าง กรองว่านับเฉพาะกล่องที่ขยับล่าสุด (lastSeenAt) อยู่
