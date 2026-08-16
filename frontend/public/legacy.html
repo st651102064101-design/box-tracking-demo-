@@ -156,6 +156,32 @@ nav button.active{color:var(--ink);font-weight:600;}
 nav button.peek{color:var(--ink2);}   /* tab the pill is currently hovering over mid-drag */
 nav button.active,nav button.peek{touch-action:pan-y;}  /* let the pill drag horizontally without the page scrolling */
 
+/* ── แฮมเบอร์เกอร์เมนูมือถือ ──────────────────────────────────────────────────
+   จอกว้าง/โหมด sidebar: #btnMobileNav ซ่อนอยู่เสมอ, nav แสดงตามปกติ (แถบแนวนอน
+   หรือแถบข้าง) จอมือถือ (≤680px) + top layout เท่านั้น: สลับเป็นปุ่มแฮมเบอร์เกอร์ + nav
+   พับเก็บ กดแล้วกางลงมาเป็นเมนูแนวตั้งแทนแถบเลื่อนแนวนอน 5 แท็บ — ตัดที่ 680px เพราะ
+   เป็นจุดเดียวกับที่ header เริ่มหดตัวอยู่แล้ว (ดู @media(max-width:680px) ของ .chrome-inner
+   ด้านล่าง) ถือเป็น breakpoint "มือถือ" ของระบบนี้อยู่แล้ว */
+#btnMobileNav{display:none;}
+@media(max-width:680px){
+  html[data-layout="top"] #btnMobileNav{display:grid;}
+  /* display:none/block แทน max-height animation — เคยลอง max-height:0→70vh + transition
+     มาก่อน แต่ชนกับ position:sticky ของ .navwrap แปลกๆ (computed max-height ค้างที่ 0
+     เสมอไม่ว่าจะตั้งค่าอะไร แม้ inline !important) สลับ display ตรงๆ ไม่มี animation
+     ทำงานเสถียรกว่ามาก และเป็น overlay เต็มจอด้านล่าง header แทนแถบเลื่อนที่โตขึ้นมา —
+     รองรับรายการยาวได้ดีกว่าด้วย */
+  html[data-layout="top"] .navwrap{display:none;}
+  html[data-layout="top"][data-mobile-nav="1"] .navwrap{display:block;position:fixed;top:var(--chrome-h,58px);left:0;right:0;
+    bottom:0;z-index:96;overflow-y:auto;background:var(--bg);border-top:.5px solid var(--line);
+    box-shadow:0 16px 34px rgba(0,0,0,.24);}
+  html[data-layout="top"] nav{flex-direction:column;align-items:stretch;gap:2px;max-width:none;padding:10px;overflow-x:visible;}
+  html[data-layout="top"] nav button{width:100%;justify-content:flex-start;padding:12px 14px;border-radius:12px;}
+  html[data-layout="top"] nav button .ico{margin-right:10px;}
+  html[data-layout="top"] #pillBg{display:none;}   /* เส้นทางแนวนอนเท่านั้น — ในเมนูแนวตั้งใช้พื้นหลังทึบของปุ่มเองแทน (กฎถัดไป) */
+  html[data-layout="top"] nav button.active{background:color-mix(in srgb,var(--ink) 8%,transparent);}
+  html[data-layout="top"] #btnSidebarCollapse{display:none;}   /* ปุ่มนี้มีความหมายเฉพาะโหมด sidebar (จอกว้าง) เท่านั้น ไม่โผล่ในเมนูมือถือ */
+}
+
 /* ── liquid-glass pill ──────────────────────────────────────────────────────
    Three stacked layers fake a real lens, since backdrop-filter alone cannot refract:
      .pill-bg  — the body: faint tint + specular top edge + cast shadow
@@ -1623,6 +1649,10 @@ a{color:var(--accentInk);}
 </script>
 
 <header class="chrome"><div class="chrome-inner">
+  <!-- แฮมเบอร์เกอร์เมนู — จอมือถือเท่านั้น (แสดงผ่าน media query ใน CSS) ซ่อนแท็บหลักทั้ง 5
+       (nav ปกติ) ไว้หลังปุ่มนี้แทนที่จะแสดงเป็นแถบเลื่อนแนวนอน กดแล้ว nav กางลงมาเป็น
+       เมนูแนวตั้ง — ดู toggleMobileNav()/closeMobileNav() ท้ายไฟล์ -->
+  <button class="iconbtn no-print" id="btnMobileNav" onclick="toggleMobileNav()" title="เมนู" aria-expanded="false" aria-controls="nav"><span class="svgi" id="btnMobileNavIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></button>
   <div class="brand" onclick="switchTab('overview')">
     <div class="mark"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span></div>
     <div><div class="nm">Smart Tracking</div><div class="sub">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
@@ -4595,6 +4625,9 @@ function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.st
   function onDown(e){
     if(e.button!==undefined&&e.button!==0)return;
     if(typeof effectiveLayout==='function'&&effectiveLayout()!=='top')return;
+    /* จอมือถือ nav กลายเป็นเมนูแนวตั้ง (ดู isMobileNavBp/แฮมเบอร์เกอร์ท้ายไฟล์) — ลาก
+       แนวนอนไม่มีความหมายในเลย์เอาต์นั้น ปล่อยให้แค่แตะเลือกตามปกติ */
+    if(typeof isMobileNavBp==='function'&&isMobileNavBp())return;
     var b=e.target.closest?e.target.closest('#nav button[data-tab]'):null;
     if(!b||!b.classList.contains('active'))return;
     var bg=$('#pillBg');if(!bg)return;
@@ -4764,6 +4797,34 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
   document.addEventListener('pointerup',onUp);
   document.addEventListener('pointercancel',onUp);
 })();
+
+/* ===== แฮมเบอร์เกอร์เมนูมือถือ ===== */
+function isMobileNavBp(){return window.matchMedia('(max-width:680px)').matches&&document.documentElement.getAttribute('data-layout')==='top';}
+function openMobileNav(){
+  if(!isMobileNavBp())return;
+  document.documentElement.setAttribute('data-mobile-nav','1');
+  var btn=$('#btnMobileNav');if(btn)btn.setAttribute('aria-expanded','true');
+}
+function closeMobileNav(){
+  if(document.documentElement.getAttribute('data-mobile-nav')!=='1')return;
+  document.documentElement.removeAttribute('data-mobile-nav');
+  var btn=$('#btnMobileNav');if(btn)btn.setAttribute('aria-expanded','false');
+}
+function toggleMobileNav(){
+  if(document.documentElement.getAttribute('data-mobile-nav')==='1')closeMobileNav();else openMobileNav();
+}
+window.toggleMobileNav=toggleMobileNav;
+/* คลิกนอกเมนู/กด Esc/ย่อจอกลับมากว้างเกิน breakpoint ต้องพับเมนูกลับเสมอ — เหมือน
+   drawer/modal ตัวอื่นในระบบ ไม่ปล่อยให้ค้างกางอยู่แบบมองไม่เห็นเหตุผล */
+document.addEventListener('click',function(e){
+  if(document.documentElement.getAttribute('data-mobile-nav')!=='1')return;
+  if(e.target.closest('#nav')||e.target.closest('#btnMobileNav'))return;
+  closeMobileNav();
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&document.documentElement.getAttribute('data-mobile-nav')==='1')closeMobileNav();
+});
+window.addEventListener('resize',function(){if(!isMobileNavBp())closeMobileNav();});
 function switchTab(name){
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
@@ -4777,6 +4838,7 @@ function switchTab(name){
      invisible (blank/black screen) since nothing had ever added the class.
      display:none → block can't itself transition, hence the opacity:0 write
      + forced reflow + rAF-deferred opacity:1 below. */
+  closeMobileNav();   /* เลือกแท็บแล้วต้องพับเมนูมือถือกลับเสมอ ไม่งั้นค้างกางอยู่ทับหน้าใหม่ */
   window.scrollTo(0,0);
   $all('.tab').forEach(function(t){t.classList.remove('active');t.style.opacity='';t.style.transition='';});
   var tab=$('#tab-'+name);
