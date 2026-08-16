@@ -4711,16 +4711,21 @@ function segPillMove(wrap){
 }
 function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).forEach(segPillMove);}
 (function(){
-  /* จับได้สองทาง: (1) ปุ่มในกลุ่มเดิมสลับ .active — เช่น setStatusToggle/dfSetMode สั่ง
+  /* จับได้สามทาง: (1) ปุ่มในกลุ่มเดิมสลับ .active — เช่น setStatusToggle/dfSetMode สั่ง
      classList.toggle (2) กลุ่ม .inv-view-sw/.seg-filter ใหม่โผล่มาทั้งดุ้น — เช่น drawer
-     เปิดฟอร์ม หรือ initSortToggles() แทรก HTML สด ไม่ต้องแก้ setter เดิมสักตัวเดียว */
+     เปิดฟอร์ม หรือ initSortToggles() แทรก HTML สด (3) wrap เองสลับ data-collapsed — ตัว
+     กรองวันที่ (.df-sw) ยุบปุ่มที่เหลือเข้า .df-collapsible ตอนเลือก "ระบุวัน" (dfSyncUI)
+     ไม่ต้องแก้ setter เดิมสักตัวเดียว */
   new MutationObserver(function(muts){
     var wraps=new Set();
     muts.forEach(function(m){
       if(m.type==='attributes'){
         var t=m.target;
-        if(t.nodeType===1&&(t.classList.contains('ivs-btn')||t.classList.contains('sf-btn'))){
+        if(t.nodeType!==1)return;
+        if(t.classList.contains('ivs-btn')||t.classList.contains('sf-btn')){
           var w=t.closest('.inv-view-sw,.seg-filter');if(w)wraps.add(w);
+        }else if(t.classList.contains('inv-view-sw')||t.classList.contains('seg-filter')){
+          wraps.add(t);
         }
       }else if(m.type==='childList'){
         m.addedNodes.forEach(function(n){
@@ -4731,7 +4736,17 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
       }
     });
     wraps.forEach(segPillMove);
-  }).observe(document.body,{attributes:true,attributeFilter:['class'],subtree:true,childList:true});
+  }).observe(document.body,{attributes:true,attributeFilter:['class','data-collapsed'],subtree:true,childList:true});
+  /* ตัว MutationObserver ด้านบนจับ "จังหวะเริ่ม" การเปลี่ยน (เช่น data-collapsed พลิก)
+     ได้ก็จริง แต่ถ้าการเปลี่ยนนั้นมี CSS transition ผูกอยู่ (.df-collapsible ยุบด้วย
+     transition:max-width .32s) การวัด offsetLeft/offsetWidth ณ จังหวะนั้นจะได้ค่า "ก่อน"
+     ทรานซิชันเริ่มขยับ ไม่ใช่ค่าสุดท้ายหลังยุบเสร็จ — pill เลยไปหยุดผิดตำแหน่ง (ค้างเลย
+     ปุ่มจริงไปทับเนื้อหาถัดไป) ต้องจับ transitionend ซ้ำอีกทีเพื่อ sync ตำแหน่งให้ตรงจริง
+     หลังทรานซิชันจบ ครอบคลุมทุกกรณีทั่วไป ไม่ผูกกับ .df-collapsible โดยเฉพาะ */
+  document.addEventListener('transitionend',function(e){
+    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
+    if(wrap)segPillMove(wrap);
+  },true);
   window.addEventListener('resize',function(){segPillMoveAll();});
   setTimeout(segPillMoveAll,0);
 })();
