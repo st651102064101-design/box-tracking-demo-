@@ -5809,7 +5809,15 @@ var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัว�
    themselves admin. MY_ROLE comes from the server-signed JWT, so it can't be self-granted;
    the backend also independently enforces this on every write (see /api/state, /api/masters,
    /api/auth/users/:id/role), so this client-side check is UX-only, not the real gate. ===== */
-function currentEmp(){var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}return null;}
+/* MY_EMPLOYEE_ID (จาก JWT claim ของบัญชีที่ล็อกอินผ่านพนักงานโดยตรง — server-verified)
+   ต้องมาก่อนเสมอถ้ามี แม่นกว่า USER (สตริง "ผู้บันทึก" ฝั่ง client เก็บใน localStorage
+   ล้วนๆ) มาก — USER พังได้ง่าย เช่น ค้างค่าเก่าจากอุปกรณ์/เซสชันก่อนหน้าที่ไม่ตรงกับชื่อ
+   พนักงานคนไหนเลย (ดูคอมเมนต์ MY_EMPLOYEE_ID ด้านบนสำหรับเคสบัญชี demo/shared ที่ไม่มี
+   employeeId ผูกไว้ — กรณีนั้นค่อย fallback มาเทียบชื่อกับ USER ต่อ) */
+function currentEmp(){
+  if(MY_EMPLOYEE_ID&&S.employees[MY_EMPLOYEE_ID])return S.employees[MY_EMPLOYEE_ID];
+  var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}return null;
+}
 function isAdmin(){return MY_ROLE==='admin';}
 /* Whether employee record `id` is the currently-logged-in account's own —
    see MY_EMPLOYEE_ID above for why this checks the JWT claim before falling
@@ -11381,9 +11389,17 @@ function renderAll(){
   gateInResolveStep();
   renderInventory();renderAuditLog();
   initSortToggles();
-  var whoEmp=currentEmp();
-  $('#whoTxt').textContent=USER+(whoEmp&&whoEmp.role?' · '+whoEmp.role:'');
-  renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
+  /* ป้าย "who" มุมขวาบนต้องเป็นชื่อพนักงานจริงเสมอ ห้ามโชว์ USER ดิบๆ — USER เป็นสตริง
+     "ผู้บันทึก" ฝั่ง client (ดูคอมเมนต์ currentEmp) ถ้าค้างค่าที่ไม่ตรงกับพนักงานคนไหนเลย
+     (เช่น อุปกรณ์/เซสชันเก่าเคยตั้งไว้ผิด หรือบัญชี demo/shared ที่ไม่เคยเลือกผู้บันทึก)
+     เดิมจะหล่นไปโชว์ USER เฉยๆ ซึ่งอาจเป็นอะไรก็ได้ที่ไม่ใช่ชื่อคน (เช่นเคยเจอค้างเป็น
+     "ผู้ดูแลระบบ" — เป็นป้ายสิทธิ์ ไม่ใช่ชื่อ) — ไม่เจอพนักงานที่ตรงกับ USER เลย ให้ถือว่า
+     "ยังไม่ได้เลือกผู้บันทึก" แล้วชี้ไปคนแรกในระบบแทน (พฤติกรรมเดียวกับที่ pickUser()
+     ทำอยู่แล้วตอนกดชิปนี้ในเคสเดียวกัน — ที่นี่แค่ทำให้ "สิ่งที่โชว์" ตรงกับ "สิ่งที่จะเกิด
+     ขึ้นถ้ากด" ไม่ใช่คนละเรื่องกัน) รูปแบบ "ชื่อ : ตำแหน่ง" ตามที่ผู้ใช้ขอ */
+  var whoEmp=currentEmp()||Object.values(S.employees||{})[0]||null;
+  $('#whoTxt').textContent=whoEmp?(whoEmp.name+(whoEmp.role?' : '+whoEmp.role:'')):USER;
+  renderAvatar('whoAvatar',whoEmp?whoEmp.name:USER,whoEmp&&whoEmp.photo);
   save();
 }
 
