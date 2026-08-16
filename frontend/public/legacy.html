@@ -4792,31 +4792,52 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
     });
     wraps.forEach(segPillMove);
   }).observe(document.body,{attributes:true,attributeFilter:['class','data-collapsed'],subtree:true,childList:true});
-  /* ตัว MutationObserver ด้านบนจับ "จังหวะเริ่ม" การเปลี่ยน (เช่น data-collapsed พลิก)
-     ได้ก็จริง แต่ถ้าการเปลี่ยนนั้นมี CSS transition ผูกอยู่ (.df-collapsible ยุบด้วย
-     transition:max-width .32s) การวัด offsetLeft/offsetWidth ณ จังหวะนั้นจะได้ค่า "ก่อน"
-     ทรานซิชันเริ่มขยับ ไม่ใช่ค่าสุดท้ายหลังยุบเสร็จ — pill เลยไปหยุดผิดตำแหน่ง (ค้างเลย
-     ปุ่มจริงไปทับเนื้อหาถัดไป) ต้องจับ transitionend ซ้ำอีกทีเพื่อ sync ตำแหน่งให้ตรงจริง
-     หลังทรานซิชันจบ ครอบคลุมทุกกรณีทั่วไป ไม่ผูกกับ .df-collapsible โดยเฉพาะ
-     ต้องข้าม .seg-pill เอง — ตัวมันเองก็มี transition:transform/width ผูกอยู่ (เพื่อเลื่อน
-     นุ่มๆ ตอนสลับปุ่ม) พอ segPillMove() ขยับมันแล้ว transitionend ของมันเองจะเด้งกลับมา
-     เรียก segPillMove() ซ้ำอีกที กลายเป็นวนเรียกตัวเองไม่จบ ทำให้เห็นเป็นอาการ "วิ่งไปมา"
-     สั่นตลอดเวลาแทนที่จะเลื่อนไปหยุดนิ่งครั้งเดียว — ปล่อยให้แค่ transitionend ของ
-     "องค์ประกอบอื่น" ในกลุ่ม (เช่น .df-collapsible ที่ยุบ) เป็นคนสั่ง sync แทน
+  /* เคยลองจับ transitionend เพื่อ sync ตำแหน่งอีกทีหลัง .df-collapsible ยุบ/กางเสร็จ
+     (เช่นตอนเลือก "ระบุวัน") แต่พบว่าพังได้ในอีกเคสที่คาดไม่ถึงกว่านั้น: การกางแถบกลับตอน
+     เมาส์ชี้ (:hover) มาจาก CSS pseudo-class ล้วนๆ ไม่ผ่าน class/attribute ใดๆ เลย —
+     บางจังหวะทรานซิชันค้างกลางทาง (ไม่ไปถึงค่าสุดท้ายเลย ยืนยันด้วย computed max-width
+     ที่ค้างเป็นเลขทศนิยมกลางๆ ไม่ใช่ 0 หรือค่าสุดท้าย) ทำให้ transitionend ไม่ยิงเลย —
+     pill เลยค้างตำแหน่งเดิมทั้งที่ปุ่ม active ("ระบุวัน") ขยับไปไกลลิบแล้ว หน้าตาที่เห็น
+     คือปุ่มดูพัง/เลขชิดกันผิดที่ (ปัญหาที่ผู้ใช้รายงานมา)
 
-     ยังไม่พอ — .ivs-btn/.sf-btn เองก็มี transition:all .2s (เปลี่ยนสี/เงาตอน hover หรือ
-     ตอนสลับ .active) "all" หมายถึงทุกพร็อพเพอร์ตี้ที่เปลี่ยน แต่ละอันยิง transitionend
-     ของตัวเอง เมาส์แค่ลอยผ่านปุ่มในกลุ่มเดียวกัน (ไม่ได้กดอะไรเลย) ก็ทำให้ handler นี้
-     ทำงานรัวๆ ได้ — จำกัดด้วย e.propertyName ให้ตอบสนองเฉพาะพร็อพเพอร์ตี้ที่จริงๆ มีผล
-     กับ "ตำแหน่ง/ความกว้าง" ของ layout (ตรงกับที่ .df-collapsible ใช้จริง) พร็อพเพอร์ตี้
-     สี/เงาของปุ่มจะไม่โดนจับเลย ตัดสัญญาณรบกวนออกไปตั้งแต่ต้นทาง ไม่ต้องพึ่งตัวกันเขียนซ้ำ
-     ใน segPillMove() (ซึ่งยังคงไว้เป็นเกราะชั้นที่สอง) เพียงอย่างเดียว */
-  var SEG_LAYOUT_PROPS={'max-width':1,'width':1,'margin-left':1,'margin-right':1,'margin':1,'padding-left':1,'padding-right':1,'left':1,'right':1,'flex-basis':1};
-  document.addEventListener('transitionend',function(e){
-    if(!SEG_LAYOUT_PROPS[e.propertyName])return;
-    if(e.target&&e.target.classList&&e.target.classList.contains('seg-pill'))return;
+     เปลี่ยนมาใช้ ResizeObserver แทนทั้งยวง — จับ "ขนาดที่ render จริง" ของแต่ละ wrap
+     โดยตรง ไม่สนใจว่าอะไรเป็นต้นเหตุ (class เปลี่ยน/attribute เปลี่ยน/:hover ล้วนๆ/
+     transition ทำงานหรือค้างกลางทาง) ยิงต่อเนื่องทุกเฟรมที่ขนาดขยับจริงตลอดทรานซิชัน
+     ไม่ใช่รอ "จบ" ครั้งเดียวแบบ transitionend เกาะปุ่ม pill จึงตามการขยาย/ยุบของ
+     .df-collapsible ได้แบบเรียลไทม์แม้ทรานซิชันจะค้าง/ถูกขัดจังหวะกลางทางก็ตาม */
+  if(typeof ResizeObserver!=='function'){window.addEventListener('resize',function(){segPillMoveAll();});setTimeout(segPillMoveAll,0);return;}
+  var segRO=new ResizeObserver(function(entries){
+    entries.forEach(function(en){
+      var wrap=en.target.closest?en.target.closest('.inv-view-sw,.seg-filter'):null;
+      if(wrap)segPillMove(wrap);
+    });
+  });
+  function segObserve(wrap){segRO.observe(wrap);}
+  $all('.inv-view-sw,.seg-filter').forEach(segObserve);
+  /* wrap ใหม่ที่โผล่มาทีหลัง (drawer/modal ที่เพิ่งเปิด) ต้องลงทะเบียนกับ ResizeObserver
+     ด้วย ไม่งั้นจะไม่มีใครคอยจับขนาดของมันเลย — ใช้ MutationObserver ตัวเดิมข้างบนต่อยอด
+     แทนที่จะสร้างอีกตัว เพิ่ม branch นี้เข้าไปในตัวเดียวกัน */
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes&&m.addedNodes.forEach(function(n){
+        if(n.nodeType!==1)return;
+        if(n.matches&&n.matches('.inv-view-sw,.seg-filter'))segObserve(n);
+        if(n.querySelectorAll)$all('.inv-view-sw,.seg-filter',n).forEach(segObserve);
+      });
+    });
+  }).observe(document.body,{childList:true,subtree:true});
+  /* ResizeObserver ตามติดระหว่างทรานซิชันได้ดีอยู่แล้ว แต่เฟรมสุดท้ายที่ขนาดนิ่งพอดี
+     บางทีก็ไม่ยิง callback อีกรอบ (เหลือคลาดเคลื่อนไม่กี่ px) — ตั้งเวลาเช็คซ้ำอีกทีหลัง
+     พ้นระยะทรานซิชันที่ยาวที่สุดที่ใช้จริง (.df-collapsible ยาว .32s) ตอน mouse เข้า/ออก
+     wrap พอดี (จุดที่ :hover เริ่ม/เลิกสั่งกาง-ยุบ) เก็บตกความคลาดเคลื่อนเล็กน้อยที่เหลือ
+     mouseenter/mouseleave ไม่ bubble แต่ดักจากช่วง capture ได้ */
+  document.addEventListener('mouseenter',function(e){
     var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
-    if(wrap)segPillMove(wrap);
+    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
+  },true);
+  document.addEventListener('mouseleave',function(e){
+    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
+    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
   },true);
   window.addEventListener('resize',function(){segPillMoveAll();});
   setTimeout(segPillMoveAll,0);
