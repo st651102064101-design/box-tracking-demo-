@@ -116,6 +116,27 @@ CREATE TABLE IF NOT EXISTS gate_prefs (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Per-account UI preferences for the legacy single-page app: which tab the
+-- account was last on, which sub-view/record it had open, plus the smaller
+-- per-account view settings (theme, layout, list mode, saved filter values).
+--
+-- Its own table for the same reason gate_prefs got one: the legacy UI kept
+-- these in S.uiPrefs and round-tripped them through PUT /api/state, but
+-- stateSchema never declared a `uiPrefs` key, so Zod stripped the whole thing
+-- on every single save — the values never reached the database at all and
+-- were lost on reload or on any other device. They are also per-account UI
+-- state, not shared application data, so they must not live in the one big
+-- `S` snapshot that every client receives and would overwrite for each other.
+--
+-- A single jsonb bag rather than a column per key on purpose: these are
+-- free-form client-owned view settings that get added and renamed as the UI
+-- changes, and nothing server-side ever queries an individual key.
+CREATE TABLE IF NOT EXISTS ui_prefs (
+  username     TEXT PRIMARY KEY,
+  data         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS locations (
   code       TEXT PRIMARY KEY,
   wh         TEXT,

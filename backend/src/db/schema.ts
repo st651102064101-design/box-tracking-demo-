@@ -129,6 +129,16 @@ export const gatePrefs = pgTable('gate_prefs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Per-account UI state for the legacy SPA — last tab, the record/sub-view it
+ *  had open, and the smaller per-account view settings. See the matching table
+ *  comment in schema.sql for why this needed its own table (stateSchema has no
+ *  `uiPrefs` key, so the old S.uiPrefs was stripped on every save). */
+export const uiPrefs = pgTable('ui_prefs', {
+  username: text('username').primaryKey(),
+  data: jsonb('data').notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),
