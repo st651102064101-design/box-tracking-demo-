@@ -716,6 +716,21 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
   font-size:15px;display:grid;place-items:center;transition:transform .15s var(--ease);}
 .lineitem .del:hover{transform:scale(1.1);}
 
+/* ── tooltip (custom, replaces native title=) ────────────────────────────────
+   ทั้งแอปใช้ attribute title="" ล้วนสำหรับ tooltip เดิม — native tooltip ของ
+   เบราว์เซอร์ (OS chrome) ไม่มีทาง CSS ไปแต่งสีให้ตามธีมมืด/สว่างได้เลย เป็นสี
+   เดียวตายตัวของระบบปฏิบัติการ ตัวนี้แทนที่ด้วย tooltip ของแอปเอง ใช้ตัวแปรสี
+   ธีมเดียวกับที่เหลือทั้งแอป (var(--ink)/var(--surface)) จึงสลับมืด/สว่างเองอัตโนมัติ
+   โดยไม่ต้องเขียน media query แยก ส่วนภาษาอ่านจาก attribute title สด ๆ ตรงจุด
+   ที่กำลังจะโชว์ ซึ่ง MutationObserver ของ i18n (ดูสคริปต์ท้ายไฟล์) แปลไว้ให้แล้ว
+   ก่อนหน้านั้น — ไม่ต้องมีพจนานุกรมชุดที่สอง */
+#appTooltip{position:fixed;z-index:9999;max-width:260px;padding:6px 11px;border-radius:8px;
+  background:var(--ink);color:var(--surface);font-size:12.5px;line-height:1.4;font-weight:500;
+  box-shadow:var(--shadow-lg);pointer-events:none;opacity:0;transform:translateY(3px);
+  transition:opacity .12s var(--ease),transform .12s var(--ease);white-space:pre-line;}
+#appTooltip.show{opacity:1;transform:none;}
+@media(hover:none){#appTooltip{display:none;}}  /* จอสัมผัสไม่มี hover ให้ดัก — เลี่ยง tooltip ค้าง */
+
 /* toast */
 .toast-zone{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:0;right:0;display:flex;flex-direction:column;
   align-items:center;gap:11px;z-index:400;pointer-events:none;}
@@ -3231,6 +3246,7 @@ a{color:var(--accentInk);}
 </main>
 
 <div class="toast-zone" id="toastZone"></div>
+<div id="appTooltip" role="tooltip"></div>
 <div class="modal" id="modal"><div class="backdrop" data-close></div><div class="sheet" id="modalSheet"></div></div>
 <div class="modal alert" id="alertM"><div class="backdrop"></div><div class="sheet" id="alertSheet"></div></div>
 
@@ -4648,6 +4664,84 @@ function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=docum
   t.className='toast '+kind;var ic=kind==='err'?IC('close','tick'):kind==='info'?IC('info','tick'):kind==='warn'?IC('warn','tick'):IC('check','tick');
   t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(title)+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
   z.appendChild(t);playToastSound(kind);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},2600);}
+/* ── Custom tooltip: delegated, theme-aware, i18n-aware ─────────────────────
+   ดักที่ document ระดับเดียว (ไม่ผูก listener แยกทีละ element) จึงครอบคลุมทุก
+   element ที่มี title="" ในหน้า ทั้งที่มีอยู่แล้วตอนโหลดและที่ถูกสร้างเพิ่มทีหลัง
+   (ตาราง/การ์ดที่ render ใหม่ตลอดเวลาในแอปนี้) โดยไม่ต้องรีบายด์อะไรเลย
+
+   ต้อง "ถอด" attribute title ออกชั่วคราวระหว่าง hover — ไม่งั้นเบราว์เซอร์จะโชว์
+   native tooltip ของตัวเองซ้อนทับ title ของแอปหลัง hover ค้างไว้ ~1 วินาที กลาย
+   เป็น tooltip สองอันซ้อนกัน (ของเราที่ styled ไว้ + ของเบราว์เซอร์ที่ไม่มีใครคุมสี
+   ได้) เก็บค่าเดิมไว้ที่ data-tip แล้วคืนกลับตอนเมาส์ออก */
+(function(){
+  var tip=null,cur=null;
+  function ensure(){ if(!tip)tip=document.getElementById('appTooltip'); return tip; }
+  function place(x,y){
+    var el=ensure();if(!el)return;
+    var pad=10,r=el.getBoundingClientRect();
+    var vw=window.innerWidth,vh=window.innerHeight;
+    var left=Math.min(Math.max(pad,x+14),vw-r.width-pad);
+    var top=Math.min(Math.max(pad,y+18),vh-r.height-pad);
+    el.style.left=left+'px';el.style.top=top+'px';
+  }
+  function findTarget(node){
+    while(node&&node!==document.body){
+      if(node.nodeType===1&&(node.hasAttribute('title')||node.hasAttribute('data-tip')))return node;
+      node=node.parentNode;
+    }
+    return null;
+  }
+  function show(el,x,y){
+    var el2=ensure();if(!el2)return;
+    var text=el.getAttribute('data-tip');
+    if(text==null){
+      text=el.getAttribute('title');
+      if(text==null||text==='')return;
+      el.setAttribute('data-tip',text);
+      el.removeAttribute('title');   /* กัน native tooltip ซ้อน ดูคอมเมนต์ด้านบน */
+    }
+    if(!text)return;
+    cur=el;
+    el2.textContent=text;
+    place(x,y);
+    el2.classList.add('show');
+  }
+  function hide(){
+    if(cur&&cur.hasAttribute('data-tip')){
+      /* คืน title กลับก่อนเสมอ — translateAttrs (โมดูล i18n) ทำงานกับ title=""
+         เท่านั้น ถ้าไม่คืนกลับ องค์ประกอบนี้จะหลุดจากระบบแปลภาษาไปตลอดหลัง hover
+         ครั้งแรก */
+      cur.setAttribute('title',cur.getAttribute('data-tip'));
+      cur.removeAttribute('data-tip');
+    }
+    cur=null;
+    var el=ensure();if(el)el.classList.remove('show');
+  }
+  document.addEventListener('mouseover',function(e){
+    var t=findTarget(e.target);
+    if(!t){ if(cur)hide(); return; }
+    if(t===cur)return;
+    if(cur)hide();
+    show(t,e.clientX,e.clientY);
+  });
+  document.addEventListener('mousemove',function(e){
+    if(cur)place(e.clientX,e.clientY);
+  });
+  document.addEventListener('mouseout',function(e){
+    if(!cur)return;
+    var to=e.relatedTarget;
+    if(to&&cur.contains&&cur.contains(to))return;
+    if(findTarget(to)===cur)return;
+    hide();
+  });
+  /* ปุ่มที่กดแล้วปิด/ย้ายตัวเองทันที (เช่น ปุ่มพลิกบัตร, ปุ่มลบแถว) ไม่ได้รอ mouseout
+     ก่อนหาย — ทำให้ tooltip ค้างชี้ตำแหน่งเดิมทั้งที่ element หายไปแล้ว ปิดทุกครั้ง
+     ที่มีการคลิกที่ใดก็ได้ในหน้า กันไว้ */
+  document.addEventListener('click',function(){ if(cur)hide(); },true);
+  document.addEventListener('scroll',function(){ if(cur)hide(); },true);
+  window.addEventListener('blur',function(){ if(cur)hide(); });
+})();
+
 function confirmA(title,body,okLabel,danger){return new Promise(function(res){var m=$('#alertM');
   $('#alertSheet').innerHTML='<div class="abody"><h3>'+esc(title)+'</h3><p>'+esc(body||'')+'</p></div>'+
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
