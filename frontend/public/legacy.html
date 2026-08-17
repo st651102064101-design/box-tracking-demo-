@@ -10554,11 +10554,47 @@ window.restoreReportsPanelState=restoreReportsPanelState;
    สถานะที่เกิดจากการนำทาง (เช่น invStatusFilter ที่ตั้งจากการกดการ์ด KPI หน้าภาพรวม)
    ไม่งั้นตัวกรองเก่าจะโผล่กลับมาเองในบริบทที่ไม่ได้ขอ */
 /* ตัวแปรสถานะของ store อยู่ต้นไฟล์ ไม่ใช่ตรงนี้ — ดูคอมเมนต์ที่ประกาศ UIP */
-function uiPrefsLoad(){
+/* กระจกเงาของ UIP บนเครื่อง — ตาราง ui_prefs ฝั่ง server ยังเป็นแหล่งความจริงเสมอ
+   ตัวนี้ใช้เฉพาะตอนบูตแล้วดึงของจริงไม่สำเร็จ (เน็ตสะดุด/backend เพิ่งรีสตาร์ท) ซึ่ง
+   เดิมทำให้ UIP ว่างเปล่า → uiPrefGet('tab') คืน null → เด้งกลับหน้าภาพรวมทุกครั้ง
+   ทั้งที่ค่าที่จำไว้ยังอยู่ครบใน DB. ผูกคีย์กับ username ในโทเคน ไม่ใช่ USER ที่แก้เองได้
+   คนละบัญชีบนเครื่องเดียวกันจึงไม่หยิบของกันเอง */
+function uiPrefsCacheKey(){
+  return 'smarttrace_uiprefs:'+((JWT_CLAIMS&&JWT_CLAIMS.username)||USER||'');
+}
+function uiPrefsCacheSave(){
+  try{localStorage.setItem(uiPrefsCacheKey(),JSON.stringify(UIP));}catch(e){}
+}
+function uiPrefsCacheLoad(){
+  try{
+    var raw=localStorage.getItem(uiPrefsCacheKey());
+    if(!raw)return null;
+    var d=JSON.parse(raw);
+    return (d&&typeof d==='object'&&!Array.isArray(d))?d:null;
+  }catch(e){return null;}
+}
+/* ลองซ้ำอีกครั้งก่อนยอมแพ้ — คำขอนี้ยิงพร้อมกับ /api/state ตอนบูต พลาดครั้งเดียว
+   แล้วเลิกเลยจะเสียหน้าที่จำไว้ทั้งชุด ทั้งที่ retry สั้นๆ ก็มักได้ */
+function uiPrefsFetchOnce(){
   return apiFetch('/api/ui-prefs',{headers:authHeaders()})
-    .then(function(r){return r.ok?r.json():null;})
-    .then(function(d){if(d&&typeof d==='object'&&!Array.isArray(d))UIP=d;})
-    .catch(function(){})
+    .then(function(r){
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.json();
+    });
+}
+function uiPrefsLoad(){
+  return uiPrefsFetchOnce()
+    .catch(function(){
+      return new Promise(function(res){setTimeout(res,600);}).then(uiPrefsFetchOnce);
+    })
+    .then(function(d){
+      if(d&&typeof d==='object'&&!Array.isArray(d)){UIP=d;uiPrefsCacheSave();}
+    })
+    .catch(function(e){
+      var cached=uiPrefsCacheLoad();
+      if(cached)UIP=cached;
+      console.warn('[Smart Tracking] โหลดค่าหน้าจอรายบัญชีไม่สำเร็จ'+(cached?' — ใช้ค่าที่จำไว้บนเครื่องแทน':''),e);
+    })
     .then(function(){UIP_LOADED=true;});
 }
 /* รวบการเขียนหลายคีย์ที่เกิดติดๆ กัน (เช่นสลับแท็บแล้วมีตัวกรองถูกตั้งตามไปด้วย)
@@ -10568,6 +10604,7 @@ function uiPrefsFlush(){
   UIP_TIMER=null;
   var patch=UIP_DIRTY;UIP_DIRTY={};
   if(!Object.keys(patch).length)return;
+  uiPrefsCacheSave();   /* กระจกเงาบนเครื่องต้องตามทันของจริงเสมอ ดู uiPrefsCacheKey() */
   apiFetch('/api/ui-prefs',{method:'PUT',
     headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
     body:JSON.stringify(patch)}).catch(function(){});
