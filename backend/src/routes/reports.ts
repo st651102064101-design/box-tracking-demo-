@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, events } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { writeAuditLog } from '../services/audit.js';
 import { bump } from '../lib/bus.js';
 
@@ -29,7 +29,11 @@ import { bump } from '../lib/bus.js';
  */
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+/* POST /api/reports files an exception against a box (ของหาย / ช่องเก็บเต็ม)
+   from the handheld — it changes that box's state, so box.update is the
+   permission that governs it, not report.view (which is about reading the
+   reporting screens). */
+const canWrite = requirePermission('box.update');
 
 const locationShape = z.object({
   wh: z.string().trim().optional().default(''),

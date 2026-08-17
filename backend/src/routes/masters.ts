@@ -4,7 +4,7 @@ import { getDb } from '../db/client.js';
 import { boxTypes, customers } from '../db/schema.js';
 import { boxTypeSchema, customerSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
@@ -14,7 +14,13 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 export const mastersRouter = Router();
 mastersRouter.use(requireAuth);
 /** 'viewer' may only GET; writes require 'admin' or 'staff'. */
-const canWrite = requireRole('admin', 'staff');
+/* Box types are master data; customers/suppliers are partners — two different
+   permissions, so "may add a customer" no longer implies "may re-price the
+   entire box catalogue". */
+const canManageMaster = requirePermission('master.manage');
+const canCreatePartner = requirePermission('partner.create');
+const canUpdatePartner = requirePermission('partner.update');
+const canDeletePartner = requirePermission('partner.delete');
 
 /* ─── box types ────────────────────────────────────────────────────────────*/
 mastersRouter.get(
@@ -27,7 +33,7 @@ mastersRouter.get(
 
 mastersRouter.post(
   '/box-types',
-  canWrite,
+  canManageMaster,
   asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse(req.body);
     const db = getDb();
@@ -47,7 +53,7 @@ mastersRouter.post(
 
 mastersRouter.put(
   '/box-types/:id',
-  canWrite,
+  canManageMaster,
   asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
@@ -70,7 +76,7 @@ mastersRouter.put(
 
 mastersRouter.delete(
   '/box-types/:id',
-  canWrite,
+  canManageMaster,
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(boxTypes).where(eq(boxTypes.id, req.params.id)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
@@ -89,7 +95,7 @@ mastersRouter.get(
 
 mastersRouter.post(
   '/customers',
-  canWrite,
+  canCreatePartner,
   asyncHandler(async (req, res) => {
     const input = customerSchema.parse(req.body);
     const db = getDb();
@@ -109,7 +115,7 @@ mastersRouter.post(
 
 mastersRouter.put(
   '/customers/:id',
-  canWrite,
+  canUpdatePartner,
   asyncHandler(async (req, res) => {
     const input = customerSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
@@ -132,7 +138,7 @@ mastersRouter.put(
 
 mastersRouter.delete(
   '/customers/:id',
-  canWrite,
+  canDeletePartner,
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(customers).where(eq(customers.id, req.params.id)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบลูกค้า', 'not_found');

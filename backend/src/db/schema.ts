@@ -41,8 +41,42 @@ export const users = pgTable('users', {
   /** bcrypt hash of a pending "ลืมรหัสผ่าน?" email OTP; cleared once used. */
   passwordResetOtpHash: text('password_reset_otp_hash'),
   passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+  /** RBAC role this account resolves its permissions through. Nullable for
+   *  accounts created before RBAC existed — those fall back to mapping the
+   *  legacy `role` string onto a seeded role (see roleKeyForLegacy). */
+  roleId: integer('role_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* ─── RBAC: roles + their permission grants ───────────────────────────────
+ * Permission KEYS are developer-defined (src/lib/permissions.ts) and are not
+ * a table — only the grants are data. `key` is the stable identifier code and
+ * seeds refer to (users.role_id points at the row, but `key` is what survives
+ * an admin renaming "Admin" to "ผู้ดูแลระบบ"). `system` marks Super Admin:
+ * locked against edit/disable/delete so a bad custom role can't lock everyone
+ * out of the system.
+ */
+export const roles = pgTable('roles', {
+  id: serial('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  active: boolean('active').notNull().default(true),
+  system: boolean('system').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rolePermissions = pgTable(
+  'role_permissions',
+  {
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    permission: text('permission').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.roleId, t.permission] }) }),
+);
 
 /* ─── singletons: config (cfg) + sequences (seq) ──────────────────────────*/
 export const config = pgTable('config', {

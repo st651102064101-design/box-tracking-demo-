@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, boxTypes, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -13,7 +13,11 @@ import { bump } from '../lib/bus.js';
 /** Read-only box queries (real reporting API alongside the state bridge). */
 export const boxesRouter = Router();
 boxesRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+/* RBAC replaces the old blanket admin/staff check: each write now names the
+   permission it actually needs, so a role can be allowed to register boxes
+   without also being allowed to delete them. */
+const canCreate = requirePermission('box.create');
+const canUpdate = requirePermission('box.update');
 
 /**
  * Count-by-status only — backs the filter-tab badges (see legacy.html's
@@ -130,7 +134,7 @@ const createBoxSchema = z.object({
  */
 boxesRouter.post(
   '/',
-  canWrite,
+  canCreate,
   asyncHandler(async (req, res) => {
     const input = createBoxSchema.parse(req.body);
     const db = getDb();
@@ -199,7 +203,7 @@ boxesRouter.post(
  */
 boxesRouter.post(
   '/:tag/label',
-  canWrite,
+  canUpdate,
   asyncHandler(async (req, res) => {
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
@@ -243,7 +247,7 @@ const putawaySchema = z.object({
  */
 boxesRouter.post(
   '/:tag/putaway',
-  canWrite,
+  canUpdate,
   asyncHandler(async (req, res) => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
@@ -298,7 +302,7 @@ boxesRouter.get(
  */
 boxesRouter.post(
   '/:tag/rfid',
-  canWrite,
+  canUpdate,
   asyncHandler(async (req, res) => {
     const input = rfidAssociateSchema.parse(req.body);
     const result = await associateTag(getDb(), {
@@ -319,7 +323,7 @@ boxesRouter.post(
 /** Detaches whatever RFID tag a box currently carries. */
 boxesRouter.delete(
   '/:tag/rfid',
-  canWrite,
+  canUpdate,
   asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user!.username);
     bump(req.get('X-Client-Id'));
@@ -353,7 +357,7 @@ const holdSchema = z.object({
  */
 boxesRouter.post(
   '/:tag/hold',
-  canWrite,
+  canUpdate,
   asyncHandler(async (req, res) => {
     const input = holdSchema.parse(req.body);
     const db = getDb();

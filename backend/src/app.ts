@@ -17,6 +17,7 @@ import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
 import { gatePrefsRouter } from './routes/gatePrefs.js';
 import { uiPrefsRouter } from './routes/uiPrefs.js';
+import { rolesRouter } from './routes/roles.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -112,6 +113,7 @@ export function createApp() {
   app.use('/api/stream', streamRouter);
   app.use('/api/gate-prefs', gatePrefsRouter);
   app.use('/api/ui-prefs', uiPrefsRouter);
+  app.use('/api/roles', rolesRouter);
 
   app.use(notFound);
   app.use(errorHandler);
