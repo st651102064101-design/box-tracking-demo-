@@ -6168,52 +6168,87 @@ function empCardNotchHtml(){
     +'<div style="width:16mm;height:3mm;border-radius:999px;background:var(--surface2);box-shadow:inset 0 .3mm .8mm rgba(0,0,0,.22);"></div>'
     +'</div>';
 }
+/* ข้อมูลบริษัทที่พิมพ์ลงบัตรจริง — รวมไว้จุดเดียวให้หน้า/หลังใช้ค่าเดียวกัน และแก้ที่เดียว
+   เมื่อบริษัทเปลี่ยนเบอร์ติดต่อ/อายุบัตร */
+var EMP_CARD_ORG={name:'ABSS',tel:'0xx-xxx-xxxx',validUntil:'31/12/2027'};
+/* Card ID ของบัตรฟิสิกส์ — ตั้งใจ "ไม่ใช่" รหัสพนักงาน เพื่อไม่ให้คนที่เห็นบัตรเดารหัส
+   ในระบบได้ตรง ๆ เป็น hash คงที่จากรหัสพนักงาน → 8 หลักฐานสิบหก รูปแบบ XXXX-XXXX
+   ค่าเดิมทุกครั้งที่พิมพ์ใบเดิม (ไม่ random) */
+function empCardId(e){
+  if(e.cardId)return String(e.cardId).toUpperCase();
+  var s=String(e.id||'')+'|'+EMP_CARD_ORG.name,h1=0x811c9dc5,h2=0x01000193;
+  for(var i=0;i<s.length;i++){
+    h1=((h1^s.charCodeAt(i))*16777619)>>>0;
+    h2=((h2+s.charCodeAt(i)*(i+7))*2654435761)>>>0;
+  }
+  var hex=('0000'+(h1>>>16).toString(16)).slice(-4)+('0000'+(h2>>>16).toString(16)).slice(-4);
+  return (hex.slice(0,4)+'-'+hex.slice(4)).toUpperCase();
+}
+/* ค่าที่ encode ลงบาร์โค้ด — ใช้ "รหัสบัตรพนักงาน" (scanCode) ที่ลงทะเบียนไว้ในระบบถ้ามี
+   ไม่งั้นถอยไปใช้ Card ID ภายใน โดยไม่ยิงรหัสพนักงานตรง ๆ ลงบัตร */
+function empCardScanValue(e){
+  return String(e.scanCode||empCardId(e).replace('-','')).toUpperCase();
+}
+/* tone: ด้านหน้ามีวงกลมเขียวอ่อนอยู่หลังหัวบัตร — ใช้สีเขียวเข้ม (accentInk) ให้บรรทัดรอง
+   ยังอ่านออกบนพื้นเขียว ส่วนด้านหลังพื้นขาวล้วนใช้สีเทาจาง (faint) ตามปกติ */
+function empCardOrgMarkHtml(sub,tone){
+  return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:.8mm;">'
+    +'<div style="display:inline-flex;align-items:center;gap:1.4mm;">'
+      +'<span style="width:3.4mm;height:3.4mm;border-radius:1mm;background:var(--accent);"></span>'
+      +'<span style="font-size:9.5pt;font-weight:700;letter-spacing:.16em;color:var(--ink);">'+esc(EMP_CARD_ORG.name)+'</span>'
+    +'</div>'
+    +(sub?'<div style="font-size:5.4pt;font-weight:600;letter-spacing:.14em;color:'+(tone||'var(--faint)')+';">'+esc(sub)+'</div>':'')
+    +'</div>';
+}
+function empCardInactiveHtml(e){
+  return e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:3;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'';
+}
+/* เปลือกบัตรใช้ร่วมกันหน้า/หลัง — Design Language เดียวกันตามที่ผู้ใช้ขอ ขนาดยังเป็น
+   54×86mm เท่าเดิม (บัตรห้อยคอมาตรฐาน) */
+var EMP_CARD_SHELL='position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:4mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);';
 function empCardFrontHtml(e){
-  var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
-  var stBg={ok:'var(--posSoft)',warn:'var(--warnSoft)',bad:'var(--negSoft)'}[st.c]||'var(--posSoft)';
-  var stFg={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'}[st.c]||'var(--pos)';
-  var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
   var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
   var avatarInner=e.photo?'<img src="'+esc(e.photo)+'" style="width:100%;height:100%;object-fit:cover;">':'<span>'+esc(initials)+'</span>';
-  return '<div class="ecard" style="position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
-    +'<div style="position:absolute;left:50%;top:-16mm;transform:translateX(-50%);width:38mm;height:38mm;border-radius:50%;background:var(--accent2);opacity:.5;"></div>'
+  return '<div class="ecard" style="'+EMP_CARD_SHELL+'">'
+    +'<div style="position:absolute;left:50%;top:-26mm;transform:translateX(-50%);width:50mm;height:50mm;border-radius:50%;background:var(--accent2);opacity:.36;"></div>'
     +empCardNotchHtml()
-    +'<div style="position:relative;z-index:1;width:19mm;height:19mm;flex:0 0 auto;align-self:center;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:13pt;font-weight:700;border:.6mm solid var(--surface);box-shadow:0 1mm 2.4mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:2.6mm;display:inline-flex;align-items:center;align-self:center;font-size:6.6pt;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:.9mm 2.6mm;">EMPLOYEE ID</div>'
-    +'<div style="position:relative;z-index:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;font-weight:700;margin-top:1mm;color:var(--ink);">'+esc(e.id)+'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:3.4mm;">'
-      +'<div style="font-size:12.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
-      +(e.role?'<div style="font-size:7.6pt;color:var(--muted);margin-top:1.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
-      +'<div style="display:inline-flex;align-items:center;margin-top:2.8mm;padding:.8mm 2.6mm;border-radius:999px;font-size:7pt;font-weight:600;background:'+stBg+';color:'+stFg+';">'+esc(st.t)+'</div>'
+    +empCardOrgMarkHtml('EMPLOYEE ID CARD','var(--accentInk)')
+    +'<div style="position:relative;z-index:1;width:25mm;height:25mm;flex:0 0 auto;align-self:center;margin-top:5mm;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:15pt;font-weight:700;border:.7mm solid var(--surface);box-shadow:0 1mm 2.6mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:5mm;">'
+      +'<div style="font-size:13.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
+      +(e.role?'<div style="font-size:8.4pt;font-weight:500;color:var(--ink2);margin-top:1.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
+      +(e.dept?'<div style="font-size:7.4pt;color:var(--muted);margin-top:1.2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept)+'</div>':'')
     +'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3mm;border-top:.18mm solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:2.4mm 3mm;text-align:left;">'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">แผนก</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept||'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">คลัง</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(whTxt)+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">กะ</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_SHIFT[e.shift]||'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">เบอร์โทร</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;font-family:ui-monospace,Menlo,Consolas,monospace;">'+esc(e.phone||'-')+'</div></div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:4mm;border-top:.18mm solid var(--line);display:flex;flex-direction:column;align-items:center;gap:2.4mm;">'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5pt;font-weight:700;letter-spacing:.08em;color:var(--ink);">'+esc(e.id)+'</div>'
+      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentContrast);">EMPLOYEE</div>'
     +'</div>'
-    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:2;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +empCardInactiveHtml(e)
     +'</div>';
 }
 function empCardBackHtml(e){
-  var scanCode=(e.scanCode||e.id).toUpperCase();
-  return '<div style="position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:3mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
+  var scanCode=empCardScanValue(e);
+  return '<div style="'+EMP_CARD_SHELL+'">'
     +empCardNotchHtml()
-    +'<div style="position:relative;z-index:1;font-size:12pt;font-weight:700;letter-spacing:-.02em;">'+esc(e.name||e.id)+'</div>'
-    +'<div style="position:relative;z-index:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;color:var(--muted);margin-top:.8mm;">'+esc(e.id)+' · '+esc(EMP_ACCESS[e.access]||'-')+'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:4mm;display:flex;flex-direction:column;gap:3mm;text-align:left;">'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">อีเมล</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;word-break:break-all;">'+esc(e.email||'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">วันเริ่มงาน</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+(e.startDate?esc(dstr(new Date(e.startDate))):'-')+'</div></div>'
-      +'<div><div style="font-size:5.6pt;font-weight:600;letter-spacing:.04em;color:var(--faint);">สิทธิ์การใช้งาน</div><div style="font-size:7.6pt;font-weight:500;color:var(--ink);margin-top:.3mm;">'+esc(EMP_ACCESS[e.access]||'-')+'</div></div>'
+    +empCardOrgMarkHtml('CARD INFORMATION')
+    +'<div style="position:relative;z-index:1;margin-top:5mm;">'
+      +'<div style="font-size:5.4pt;font-weight:600;letter-spacing:.14em;color:var(--faint);">EMPLOYEE ID</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11pt;font-weight:700;letter-spacing:.08em;color:var(--ink);margin-top:1mm;">'+esc(e.id)+'</div>'
     +'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3.4mm;border-top:.18mm solid var(--line);">'
-      +'<div style="height:11mm;">'+code128SVG(scanCode,52)+'</div>'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.4mm;">'
-        +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.6pt;letter-spacing:.06em;color:var(--ink2);">'+esc(scanCode)+'</span>'
-        +'<span style="font-size:6.2pt;font-weight:700;letter-spacing:.05em;color:var(--faint);">CODE 128</span>'
-      +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:4.4mm;padding:3mm 2mm 2.2mm;border-radius:2.6mm;background:var(--surface2);">'
+      +'<div style="height:16mm;display:flex;align-items:center;justify-content:center;">'+code128SVG(scanCode,52)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.4pt;letter-spacing:.1em;color:var(--ink2);margin-top:1.6mm;">'+esc(scanCode)+'</div>'
     +'</div>'
-    +(e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'')
+    +'<div style="position:relative;z-index:1;margin-top:4.4mm;display:grid;grid-template-columns:1fr 1fr;gap:3mm;text-align:left;">'
+      +'<div><div style="font-size:5.2pt;font-weight:600;letter-spacing:.1em;color:var(--faint);">CARD ID</div><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;font-weight:600;color:var(--ink);margin-top:.6mm;">'+esc(empCardId(e))+'</div></div>'
+      +'<div><div style="font-size:5.2pt;font-weight:600;letter-spacing:.1em;color:var(--faint);">VALID UNTIL</div><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;font-weight:600;color:var(--ink);margin-top:.6mm;">'+esc(EMP_CARD_ORG.validUntil)+'</div></div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3.4mm;border-top:.18mm solid var(--line);font-size:5.4pt;line-height:1.55;color:var(--muted);">'
+      +'บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(EMP_CARD_ORG.name)+'<br>'
+      +'หากพบกรุณาส่งคืนบริษัท / ฝ่ายทรัพยากรบุคคล<br>'
+      +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink2);">Tel. '+esc(EMP_CARD_ORG.tel)+'</span>'
+    +'</div>'
+    +empCardInactiveHtml(e)
     +'</div>';
 }
 /* :root ของ CSS var สีธีมสว่าง ยกมาจาก body หลัก (บรรทัด ~22-35) แบบ hardcode — หน้าต่าง
