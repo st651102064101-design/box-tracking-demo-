@@ -672,15 +672,24 @@ class RfidReaderController(private val context: Context) :
             s.setSession(SESSION.SESSION_S0)
             s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_A)
             s.Action.setSLFlag(SL_FLAG.SL_ALL)
-            // Gen2's dynamic-Q collision-avoidance algorithm sizes its slot
-            // count from this estimate — left unset (0), the reader assumes
-            // a near-empty field and re-collides constantly once a real
-            // pallet's worth of tags (a few hundred) is actually in range,
-            // which throttles effective throughput far below what the
-            // hardware can do. 300 matches a dense pallet sweep on this
-            // hardware without over-sizing Q for the common case of far
-            // fewer tags (oversized Q wastes empty slots instead).
-            s.setTagPopulation(300)
+            // Gen2 sizes its slot count as 2^Q, and this estimate is what
+            // picks the STARTING Q. 300 was set here to help a dense pallet
+            // sweep, and it did the opposite of what its own comment claimed:
+            // 300 starts Q at ~8, i.e. 256 slots per inventory round. Point
+            // the reader at four tags — the settings-screen read test, or a
+            // handful of boxes at the gate — and ~252 of those slots are
+            // empty air the reader still has to clock through before the
+            // round ends. That is exactly the "1… 2… 3… 4…" crawl.
+            //
+            // Dynamic Q is self-correcting, but only in one direction in
+            // practice: it ratchets Q *up* fast when it sees collisions and
+            // creeps it back *down* slowly across many empty slots. So the
+            // starting estimate should be biased LOW — a handheld sees a
+            // handful of tags almost every time, and the rare dense pallet
+            // costs a few collisions before Q climbs to fit it. Starting
+            // high, as before, taxed every single read for a case that
+            // almost never happens.
+            s.setTagPopulation(16)
             rd.Config.Antennas.setSingulationControl(1, s)
 
             rd.Actions.PreFilters.deleteAll()
