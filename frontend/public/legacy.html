@@ -6450,11 +6450,23 @@ function empCardRootCSS(){
    สิ่งที่เห็นในพรีวิวกับสิ่งที่พิมพ์ออกมาจริงเพี้ยนไปคนละแบบ */
 function printEmpBadge(id){
   var e=S.employees[id];if(!e)return;
+  /* เคารพตัวเลือก "หลังบัตรเป็นกระดาษเปล่า" ที่ผู้ใช้ตั้งไว้ (จำอยู่ใน DB ต่อบัญชี —
+     ดู empBadgeBackBlank) คนที่ใช้บัตรพลาสติกที่พิมพ์ด้านหลังมาแล้วกดพิมพ์ ต้องได้
+     หน้าเดียว ไม่ใช่ได้หน้าหลังเปล่า ๆ ออกมาเปลืองบัตรและทำให้เรียงหน้าผิด
+     พรีวิวกับหน้าต่างพิมพ์อ่านค่าเดียวกัน สิ่งที่เห็นจึงเท่ากับสิ่งที่ออกจากเครื่องพิมพ์ */
+  var backBlank=empBadgeBackBlank();
   openModal(
     '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
-      +empCardFrontHtml(e)
-      +empCardBackHtml(e)
+    +'<div class="mbody" style="padding:24px 16px;color:#111;">'
+      +'<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;">'
+        +empCardFrontHtml(e)
+        +(backBlank?'':empCardBackHtml(e))
+      +'</div>'
+      +'<p class="desc" style="text-align:center;margin-top:16px;">'
+        +(backBlank
+          ?'พิมพ์<b>หน้าเดียว</b> — ตั้งไว้ว่าหลังบัตรเป็นกระดาษเปล่า เปลี่ยนได้ที่ปุ่มสลับหลังบัตรบนบัตรพนักงาน'
+          :'พิมพ์ <b>2 หน้า</b> — หน้าและหลัง (ตัดตามขอบแล้วประกบกัน)')
+      +'</p>'
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printEmpBadgeWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
   );
@@ -6490,8 +6502,12 @@ function printEmpBadgeWindow(id){
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
     +'</style></head><body>'
     +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
-    +'<div class="pg">'+empCardBackHtml(e)+'</div>'
-    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 54 × 86 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
+    /* หน้าหลังไม่ถูกส่งไปที่เครื่องพิมพ์เลยเมื่อตั้งเป็นกระดาษเปล่า — ไม่ใช่ส่งไป
+       แล้วซ่อน ซึ่งยังกินกระดาษ/บัตรไปหนึ่งแผ่นอยู่ดี */
+    +(empBadgeBackBlank()?'':'<div class="pg">'+empCardBackHtml(e)+'</div>')
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 54 × 86 มม. ต่อหน้า ตัดตามขอบได้เลย'
+    +(empBadgeBackBlank()?' — พิมพ์หน้าเดียว (ตั้งไว้ว่าหลังบัตรเป็นกระดาษเปล่า)':'')
+    +'</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
