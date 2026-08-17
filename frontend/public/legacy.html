@@ -3061,7 +3061,7 @@ a{color:var(--accentInk);}
     <div class="wg-board">
     <div class="wg xl wg-table">
       <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายชื่อพนักงาน</span><span class="tag" id="cntEmp"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" id="btnAddEmpTop" onclick="addEmp()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มพนักงาน</button></div><div class="wg-hd-row"><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div></div>
-      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>กะ</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerEmp"></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -5981,7 +5981,6 @@ window.delBox=delBox;window.delCust=delCust;window.editCust=editCust;
 
 /* ===== SETUP: employees CRUD ===== */
 /* label maps for the WMS employee master */
-var EMP_SHIFT={morning:'กะเช้า',afternoon:'กะบ่าย',night:'กะดึก',general:'ทั่วไป'};
 var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัวหน้างาน',admin:'ผู้ดูแลระบบ',viewer:'ผู้ชม'};
 /* ===== permission helpers: only an account whose JWT role is 'admin' may add/edit/delete
    employee records or change anyone's role. This used to check S.employees[x].access, but
@@ -8190,7 +8189,7 @@ window.pickUser=pickUser;
    but is locked to admin-only (see isAdmin()/renderSetup()). */
 /* Two-step wizard: step 1 collects identity (name/role/phone/email — the same
    fields every account needs), step 2 collects the rest of the employee
-   master record (dept/wh/shift/start date/scan code) so this first employee
+   master record (dept/scan code) so this first employee
    ends up with a complete record instead of one they have to go back and
    fill in later from the พนักงาน page. Step 1's answers are held in
    `frStep1` (a closure var) across the two renders — this is one flow, just
@@ -8234,17 +8233,8 @@ function openFirstRegisterModal(){
     var h='<div class="mhead"><h3>ข้อมูลเพิ่มเติม</h3></div>'
       +'<div class="mbody">'
       +'<p class="muted small" style="margin:0 0 16px;">ไม่บังคับกรอก — เพิ่มทีหลังได้ที่หน้า "พนักงาน" เช่นกัน</p>'
-      +'<div class="grid g3">'
+      +'<div class="grid dw2">'
       +'<div class="field"><label>แผนก / หน่วยงาน</label><input id="frDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>'
-      +'<div class="field"><label>กะการทำงาน</label>'
-        +'<select id="frShift">'
-          +'<option value="">— ไม่ระบุ —</option>'
-          +'<option value="morning">กะเช้า (08:00–17:00)</option>'
-          +'<option value="afternoon">กะบ่าย (14:00–22:00)</option>'
-          +'<option value="night">กะดึก (22:00–06:00)</option>'
-          +'<option value="general">ทั่วไป / ยืดหยุ่น</option>'
-        +'</select>'
-      +'</div>'
       +'<div class="field"><label>รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="frScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>'
       +'</div>'
       +'</div>'
@@ -8254,7 +8244,7 @@ function openFirstRegisterModal(){
     $('#btnFirstReg2').onclick=function(){
       var phoneDigits=normPhoneDigits(frStep1.phone);
       var id=nextSeqId('EMP-',Object.keys(S.employees));
-      var rec={id:id,name:frStep1.name,role:frStep1.role,dept:val('frDept'),wh:'',shift:val('frShift'),
+      var rec={id:id,name:frStep1.name,role:frStep1.role,dept:val('frDept'),wh:'',
         phone:phoneDigits,email:frStep1.email.toLowerCase(),startDate:'',
         scanCode:val('frScan'),access:'admin',status:'active'};
       rec.scanCode=(rec.scanCode||'').trim()||id;
@@ -11865,7 +11855,7 @@ function renderSetup(){
   var empSelfEditing=!!(editingEmp&&currentEmp()&&currentEmp().id===editingEmp);
   var empFormCard=$('#empFormCard');
   if(empFormCard)empFormCard.style.display=(empAdmin||empSelfEditing)?'':'none';
-  var empFormIds=['eName','eRole','eDept','eWh','eShift','ePhone','eEmail','eStart','eScan','eRoleId','eStatus'];
+  var empFormIds=['eName','eRole','eDept','eWh','ePhone','eEmail','eScan','eRoleId','eStatus'];
   empFormIds.forEach(function(i){
     var el=document.getElementById(i);if(!el)return;
     if(empAdmin)el.disabled=false;
@@ -11906,10 +11896,10 @@ function renderSetup(){
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var isMe=isSelfEmp(e.id);
     return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
-      +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
+      +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+esc(empRoleLabel(e))+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
-  }).join(''):emptyRow(12,'ยังไม่มีพนักงาน');
+  }).join(''):emptyRow(11,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
   if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
@@ -14551,11 +14541,11 @@ window.exportBoxExcel = exportBoxExcel;
 
 function exportEmpExcel() {
   var eps = Object.values(S.employees).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'แผนก', 'คลังที่สังกัด', 'กะ', 'เบอร์โทรศัพท์', 'สิทธิ์การใช้งาน', 'สถานะ'];
+  var headers = ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'แผนก', 'คลังที่สังกัด', 'เบอร์โทรศัพท์', 'สิทธิ์การใช้งาน', 'สถานะ'];
   var rows = eps.map(function(e) {
     return [e.id, e.name || '', e.role || '', e.dept || '',
       e.wh && S.warehouses[e.wh] ? S.warehouses[e.wh].name : '',
-      EMP_SHIFT[e.shift] || '', e.phone || '',
+      e.phone || '',
       empRoleLabel(e), (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
   downloadXLS('employees-' + dstr() + '.xlsx', headers, rows);
@@ -14666,11 +14656,11 @@ function exportAllMastersExcel(mode) {
   });
 
   var eps = Object.values(S.employees).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var empHeaders = ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'แผนก', 'คลังที่สังกัด', 'กะ', 'เบอร์โทรศัพท์', 'สิทธิ์การใช้งาน', 'สถานะ'];
+  var empHeaders = ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'แผนก', 'คลังที่สังกัด', 'เบอร์โทรศัพท์', 'สิทธิ์การใช้งาน', 'สถานะ'];
   var empRows = eps.map(function(e) {
     return [e.id, e.name || '', e.role || '', e.dept || '',
       e.wh && S.warehouses[e.wh] ? S.warehouses[e.wh].name : '',
-      EMP_SHIFT[e.shift] || '', e.phone || '',
+      e.phone || '',
       empRoleLabel(e), (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
 
@@ -14942,7 +14932,6 @@ function openColumnMapModal(opts){
     gateType:'ประเภทประตูต้องเป็น both/in/out',
     kind:'ประเภทคู่ค้าต้องเป็น customer/supplier/both',
     custStatus:'สถานะต้องเป็น active/inactive/blocked',
-    shift:'กะต้องเป็น morning/afternoon/night/general',
     access:'สิทธิ์ต้องเป็น operator/supervisor/admin/viewer',
     empStatus:'สถานะต้องเป็น active/inactive'
   };
@@ -15110,7 +15099,6 @@ function openColumnMapModal(opts){
         {key:'role',      label:'ตำแหน่ง', required:false, aliases:['role','ตำแหน่ง']},
         {key:'dept',      label:'แผนก/หน่วยงาน', required:false, aliases:['dept','แผนก']},
         {key:'wh',        label:'รหัสคลังที่สังกัด', required:false, aliases:['wh','คลัง']},
-        {key:'shift',     label:'กะ (morning/afternoon/night/general)', required:false, aliases:['shift','กะ']},
         {key:'phone',     label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร']},
         {key:'email',     label:'อีเมล', required:false, aliases:['email','อีเมล']},
         {key:'startDate', label:'วันเริ่มงาน', required:false, aliases:['startdate','วันเริ่มงาน']},
@@ -15125,7 +15113,6 @@ function openColumnMapModal(opts){
         if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
         /* ไม่เช็คว่าคลังมีอยู่จริงแล้วหรือยัง — ถ้ายังไม่มี buildRecord() จะสร้างให้
            อัตโนมัติตอนยืนยันนำเข้า (เหมือนประเภทกล่องของ "ลงทะเบียนกล่อง" ด้านบน) */
-        if(!enumOk(m.shift,['morning','afternoon','night','general']))e.push(ENUM_ERR.shift);
         if(!enumOk(m.access,['operator','supervisor','admin','viewer']))e.push(ENUM_ERR.access);
         if(!enumOk(m.status,['active','inactive']))e.push(ENUM_ERR.empStatus);
         return e;
@@ -15133,7 +15120,7 @@ function openColumnMapModal(opts){
       buildRecord:function(m,id){
         var wh=m.wh?(window.findWarehouseMatch(m.wh)||window.autoCreateWarehouseIfNeeded(m.wh)||''):'';
         return {id:id,name:m.name,role:m.role||'',dept:m.dept||'',wh:wh,
-          shift:m.shift||'',phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
+          phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
           startDate:m.startDate||'',scanCode:(m.scanCode||'').trim()||id,
           access:(m.access||'operator').toLowerCase(),status:(m.status||'active').toLowerCase()};
       }
