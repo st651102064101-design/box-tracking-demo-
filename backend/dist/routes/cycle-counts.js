@@ -3,7 +3,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { boxes, cycleCounts, events } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { cycleCountOpenSchema, cycleCountScanSchema } from '../validators/schemas.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -26,7 +26,9 @@ import { bump } from '../lib/bus.js';
  */
 export const cycleCountsRouter = Router();
 cycleCountsRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+/* A stock take adjusts box records, so it rides on box.update; closing one
+   out with adjustments applied is a master-data change. */
+const canWrite = requirePermission('box.update');
 /** Tags currently believed to be sitting in this warehouse/zone. */
 async function expectedTags(wh, zone) {
     const db = getDb();
@@ -224,7 +226,7 @@ cycleCountsRouter.post('/:id/close', canWrite, asyncHandler(async (req, res) => 
  * when someone has actually walked the aisle and confirmed the boxes aren't
  * there. Separate endpoint, never automatic.
  */
-cycleCountsRouter.post('/:id/mark-missing-lost', requireRole('admin'), asyncHandler(async (req, res) => {
+cycleCountsRouter.post('/:id/mark-missing-lost', requirePermission('master.manage'), asyncHandler(async (req, res) => {
     const db = getDb();
     const row = await loadOr404(req.params.id);
     const result = present(row);

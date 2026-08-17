@@ -13,7 +13,7 @@
  *     fidelity (nested history[], gateTypes{}, etc.) — nothing is ever lost.
  * ============================================================================
  */
-import { pgTable, serial, integer, text, boolean, numeric, jsonb, timestamp, index, } from 'drizzle-orm/pg-core';
+import { pgTable, serial, integer, text, boolean, numeric, jsonb, timestamp, index, primaryKey, } from 'drizzle-orm/pg-core';
 /* ─── auth ────────────────────────────────────────────────────────────────*/
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
@@ -29,8 +29,36 @@ export const users = pgTable('users', {
     /** bcrypt hash of a pending "ลืมรหัสผ่าน?" email OTP; cleared once used. */
     passwordResetOtpHash: text('password_reset_otp_hash'),
     passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+    /** RBAC role this account resolves its permissions through. Nullable for
+     *  accounts created before RBAC existed — those fall back to mapping the
+     *  legacy `role` string onto a seeded role (see roleKeyForLegacy). */
+    roleId: integer('role_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+/* ─── RBAC: roles + their permission grants ───────────────────────────────
+ * Permission KEYS are developer-defined (src/lib/permissions.ts) and are not
+ * a table — only the grants are data. `key` is the stable identifier code and
+ * seeds refer to (users.role_id points at the row, but `key` is what survives
+ * an admin renaming "Admin" to "ผู้ดูแลระบบ"). `system` marks Super Admin:
+ * locked against edit/disable/delete so a bad custom role can't lock everyone
+ * out of the system.
+ */
+export const roles = pgTable('roles', {
+    id: serial('id').primaryKey(),
+    key: text('key').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    active: boolean('active').notNull().default(true),
+    system: boolean('system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const rolePermissions = pgTable('role_permissions', {
+    roleId: integer('role_id')
+        .notNull()
+        .references(() => roles.id, { onDelete: 'cascade' }),
+    permission: text('permission').notNull(),
+}, (t) => ({ pk: primaryKey({ columns: [t.roleId, t.permission] }) }));
 /* ─── singletons: config (cfg) + sequences (seq) ──────────────────────────*/
 export const config = pgTable('config', {
     id: integer('id').primaryKey().default(1),
@@ -75,6 +103,42 @@ export const warehouses = pgTable('warehouses', {
 export const gates = pgTable('gates', {
     gateNo: integer('gate_no').primaryKey(),
     warehouseId: text('warehouse_id'),
+});
+/** Last FX9600 webhook hit per gate, for the frontend's reader-connected
+ *  status light — see the matching table comment in schema.sql for why this
+ *  is its own table instead of a column on `gates`. */
+export const gateWebhookStatus = pgTable('gate_webhook_status', {
+    gateNo: integer('gate_no').primaryKey(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    /** Source IP of the most recent webhook hit — lets the frontend link straight
+     *  to the reader's own admin UI without anyone hardcoding an address. */
+    lastIp: text('last_ip'),
+});
+/** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
+ *  before they're actually received — see the matching table comment in
+ *  schema.sql for why reader reads queue instead of auto-receiving. */
+export const gatePendingReads = pgTable('gate_pending_reads', {
+    gateNo: integer('gate_no').notNull(),
+    tag: text('tag').notNull(),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.gateNo, t.tag] }) }));
+/** Per-account chosen gate for Gate ขาออก/ขาเข้า — see the matching table
+ *  comment in schema.sql for why this needed its own table (stateSchema
+ *  silently dropped the old S.gatePrefs field on every save). */
+export const gatePrefs = pgTable('gate_prefs', {
+    username: text('username').primaryKey(),
+    outGate: text('out_gate'),
+    inGate: text('in_gate'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+/** Per-account UI state for the legacy SPA — last tab, the record/sub-view it
+ *  had open, and the smaller per-account view settings. See the matching table
+ *  comment in schema.sql for why this needed its own table (stateSchema has no
+ *  `uiPrefs` key, so the old S.uiPrefs was stripped on every save). */
+export const uiPrefs = pgTable('ui_prefs', {
+    username: text('username').primaryKey(),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const locations = pgTable('locations', {
     code: text('code').primaryKey(),
@@ -238,6 +302,9 @@ export const schema = {
     boxTypes,
     warehouses,
     gates,
+    gateWebhookStatus,
+    gatePendingReads,
+    gatePrefs,
     locations,
     employees,
     boxes,

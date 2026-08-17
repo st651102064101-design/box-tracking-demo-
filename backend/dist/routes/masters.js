@@ -4,7 +4,7 @@ import { getDb } from '../db/client.js';
 import { boxTypes, customers } from '../db/schema.js';
 import { boxTypeSchema, customerSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
  * granular REST pattern to extend for the remaining masters (warehouses,
@@ -13,13 +13,19 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 export const mastersRouter = Router();
 mastersRouter.use(requireAuth);
 /** 'viewer' may only GET; writes require 'admin' or 'staff'. */
-const canWrite = requireRole('admin', 'staff');
+/* Box types are master data; customers/suppliers are partners — two different
+   permissions, so "may add a customer" no longer implies "may re-price the
+   entire box catalogue". */
+const canManageMaster = requirePermission('master.manage');
+const canCreatePartner = requirePermission('partner.create');
+const canUpdatePartner = requirePermission('partner.update');
+const canDeletePartner = requirePermission('partner.delete');
 /* ─── box types ────────────────────────────────────────────────────────────*/
 mastersRouter.get('/box-types', asyncHandler(async (_req, res) => {
     const rows = await getDb().select().from(boxTypes);
     res.json({ items: rows.map((r) => r.data) });
 }));
-mastersRouter.post('/box-types', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.post('/box-types', canManageMaster, asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse(req.body);
     const db = getDb();
     const existing = await db.select().from(boxTypes).where(eq(boxTypes.id, input.id));
@@ -35,7 +41,7 @@ mastersRouter.post('/box-types', canWrite, asyncHandler(async (req, res) => {
     });
     res.status(201).json(input);
 }));
-mastersRouter.put('/box-types/:id', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.put('/box-types/:id', canManageMaster, asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
     const updated = await db
@@ -54,7 +60,7 @@ mastersRouter.put('/box-types/:id', canWrite, asyncHandler(async (req, res) => {
         throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
     res.json(input);
 }));
-mastersRouter.delete('/box-types/:id', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.delete('/box-types/:id', canManageMaster, asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(boxTypes).where(eq(boxTypes.id, req.params.id)).returning();
     if (!deleted.length)
         throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
@@ -65,7 +71,7 @@ mastersRouter.get('/customers', asyncHandler(async (_req, res) => {
     const rows = await getDb().select().from(customers);
     res.json({ items: rows.map((r) => r.data) });
 }));
-mastersRouter.post('/customers', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.post('/customers', canCreatePartner, asyncHandler(async (req, res) => {
     const input = customerSchema.parse(req.body);
     const db = getDb();
     const existing = await db.select().from(customers).where(eq(customers.id, input.id));
@@ -81,7 +87,7 @@ mastersRouter.post('/customers', canWrite, asyncHandler(async (req, res) => {
     });
     res.status(201).json(input);
 }));
-mastersRouter.put('/customers/:id', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.put('/customers/:id', canUpdatePartner, asyncHandler(async (req, res) => {
     const input = customerSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
     const updated = await db
@@ -100,7 +106,7 @@ mastersRouter.put('/customers/:id', canWrite, asyncHandler(async (req, res) => {
         throw httpError(404, 'ไม่พบลูกค้า', 'not_found');
     res.json(input);
 }));
-mastersRouter.delete('/customers/:id', canWrite, asyncHandler(async (req, res) => {
+mastersRouter.delete('/customers/:id', canDeletePartner, asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(customers).where(eq(customers.id, req.params.id)).returning();
     if (!deleted.length)
         throw httpError(404, 'ไม่พบลูกค้า', 'not_found');

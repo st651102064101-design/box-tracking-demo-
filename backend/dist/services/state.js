@@ -11,7 +11,7 @@
  * while the extracted typed columns stay available for real SQL/reporting.
  */
 import { asc, desc } from 'drizzle-orm';
-import { boxes, customers, boxTypes, warehouses, gates, locations, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
+import { boxes, customers, boxTypes, warehouses, gates, gateWebhookStatus, locations, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v) => {
     if (!v)
@@ -28,12 +28,13 @@ const toInt = (v) => {
 };
 /* ─── DB → S ───────────────────────────────────────────────────────────────*/
 export async function composeState(db) {
-    const [boxRows, custRows, btRows, whRows, gateRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
+    const [boxRows, custRows, btRows, whRows, gateRows, gateStatusRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
         db.select().from(boxes),
         db.select().from(customers),
         db.select().from(boxTypes),
         db.select().from(warehouses),
         db.select().from(gates),
+        db.select().from(gateWebhookStatus),
         db.select().from(locations),
         db.select().from(employees),
         db.select().from(vehicles),
@@ -58,6 +59,17 @@ export async function composeState(db) {
         boxtypes: mapBy(btRows, (r) => r.id),
         warehouses: mapBy(whRows, (r) => r.id),
         gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
+        /* Read-only from the client's point of view — see the schema.sql comment
+           on gate_webhook_status for why this is a separate table from `gates`.
+           Only the FX9600 webhook route (routes/rfid.ts) ever writes to it;
+           replaceState() below doesn't touch it, so nothing sent via PUT
+           /api/state can clobber or fake a "connected" status. */
+        gateWebhookLastSeen: Object.fromEntries(gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()])),
+        /* Source IP of the reader's most recent webhook hit — lets the frontend
+           link straight to the FX9600's own admin UI (readers serve one on their
+           IP) without anyone hardcoding an address. Same read-only-from-client
+           reasoning as gateWebhookLastSeen above. */
+        gateWebhookLastIp: Object.fromEntries(gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp])),
         events: eventRows.map((r) => r.data),
         cfg,
         seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),
@@ -86,7 +98,7 @@ export async function composeState(db) {
     };
 }
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
-export async function replaceState(db, s) {
+export async function replaceState(db, s, actor) {
     await db.transaction(async (tx) => {
         // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
         // own web-app login (username/passwordHash) never round-trip through the
@@ -233,6 +245,33 @@ export async function replaceState(db, s) {
                 updatedAt: new Date(),
             };
         }));
+        /* Bootstrap self-registration: the legacy UI's "ลงทะเบียนผู้ใช้งานคนแรก"
+           modal (opened client-side whenever S.employees comes back empty) tells
+           the operator they'll "automatically get Admin access" — but the modal
+           never collects a password, and this endpoint had no notion of linking
+           the employee row it creates to any `users` account at all. The result
+           was a real employee record with name/phone/email saved correctly, but
+           userId/username/passwordHash all left null, so that person could never
+           actually log in as themselves — only the request's own already-
+           authenticated account (bootstrapped from the seed admin) could reach
+           this endpoint at all (requireRole('admin','staff') above), and that's
+           exactly the account this bootstrap employee is standing in for. Link
+           them to it: only when the employees table was genuinely empty before
+           this write (pinById, captured pre-wipe above, is the "before" state),
+           the caller authenticated via a `users` row (not an employee login —
+           employeeId is only set on the latter, see JwtPayload), and the
+           incoming row doesn't already carry an explicit userId of its own.
+           Also requires exactly one incoming employee — an empty table plus a
+           multi-row batch import (Master ▸ Excel) landing in the same instant
+           is a real possibility and must NOT link every imported employee to
+           whichever admin happened to run the import. */
+        const incomingEmployeeCount = Object.keys(s.employees ?? {}).length;
+        const bootstrapUserId = pinById.size === 0 &&
+            incomingEmployeeCount === 1 &&
+            actor &&
+            actor.employeeId === undefined
+            ? toInt(actor.sub)
+            : null;
         await chunkInsert(tx, employees, Object.entries(s.employees ?? {}).map(([id, raw]) => {
             const e = raw;
             const pin = pinById.get(id);
@@ -246,7 +285,7 @@ export async function replaceState(db, s) {
                    silently dropped on the very next unrelated state save. Same
                    reasoning for the PIN/login columns, captured into pinById above
                    since they never round-trip through `data` at all (see composeState). */
-                userId: toInt(e.userId),
+                userId: toInt(e.userId) ?? bootstrapUserId,
                 data: e,
                 pinHash: pin?.pinHash ?? null,
                 pinResetOtpHash: pin?.pinResetOtpHash ?? null,

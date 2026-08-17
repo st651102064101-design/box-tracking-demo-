@@ -3,6 +3,9 @@ const nodeEnv = process.env.NODE_ENV ?? 'development';
 if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET must be set in production — refusing to start with the dev fallback secret.');
 }
+if (nodeEnv === 'production' && !process.env.FX9600_WEBHOOK_SECRET) {
+    throw new Error('FX9600_WEBHOOK_SECRET must be set in production — refusing to start with the dev fallback secret.');
+}
 /** Centralised, typed access to environment configuration. */
 export const env = {
     port: Number(process.env.PORT ?? 4000),
@@ -18,6 +21,13 @@ export const env = {
         password: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',
         name: process.env.SEED_ADMIN_NAME ?? 'ผู้ดูแลระบบ',
     },
+    // Shared secret the Zebra FX9600's IoT Connector HTTP destination profile
+    // sends back on every tag-read webhook POST (see routes/rfid.ts's
+    // fx9600Webhook) — the fixed reader has no operator logged in to hold a
+    // JWT, so this is the entire auth story for that one endpoint. Same
+    // production guard as JWT_SECRET: refuse to boot on the dev default once
+    // this is actually reachable from outside a laptop.
+    fx9600WebhookSecret: process.env.FX9600_WEBHOOK_SECRET ?? 'dev-insecure-fx9600-secret-change-me',
     usePglite: String(process.env.USE_PGLITE ?? 'false').toLowerCase() === 'true',
     pgliteDir: process.env.PGLITE_DIR ?? './.pglite',
     databaseUrl: process.env.DATABASE_URL ?? 'postgres://boxtrace:boxtrace@localhost:5432/boxtrace',

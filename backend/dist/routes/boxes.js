@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, boxTypes, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -12,7 +12,11 @@ import { bump } from '../lib/bus.js';
 /** Read-only box queries (real reporting API alongside the state bridge). */
 export const boxesRouter = Router();
 boxesRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+/* RBAC replaces the old blanket admin/staff check: each write now names the
+   permission it actually needs, so a role can be allowed to register boxes
+   without also being allowed to delete them. */
+const canCreate = requirePermission('box.create');
+const canUpdate = requirePermission('box.update');
 /**
  * Count-by-status only — backs the filter-tab badges (see legacy.html's
  * `#invStatusSeg`) without pulling every box's full jsonb `data` blob the way
@@ -114,7 +118,7 @@ const createBoxSchema = z.object({
  * look correct in this API's own responses and simply not exist on the web
  * dashboard.
  */
-boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/', canCreate, asyncHandler(async (req, res) => {
     const input = createBoxSchema.parse(req.body);
     const db = getDb();
     const tag = input.tag.toUpperCase();
@@ -177,7 +181,7 @@ boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
  * box has no barcode a gate scan could ever resolve again). Mirrors
  * legacy.html's "ยืนยันติดป้ายเสร็จแล้ว" button.
  */
-boxesRouter.post('/:tag/label', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/label', canUpdate, asyncHandler(async (req, res) => {
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
     if (!box)
@@ -216,7 +220,7 @@ const putawaySchema = z.object({
  * box moving out of 'pending' for the first time logs `dir:'putaway'`,
  * anything already 'warehouse' being moved again logs `dir:'relocate'`.
  */
-boxesRouter.post('/:tag/putaway', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/putaway', canUpdate, asyncHandler(async (req, res) => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
@@ -265,7 +269,7 @@ boxesRouter.get('/:code', asyncHandler(async (req, res) => {
  * swap) an RFID tag to a box that's already registered by barcode. See
  * services/rfid.ts for the reused-TID and already-tagged exception rules.
  */
-boxesRouter.post('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/rfid', canUpdate, asyncHandler(async (req, res) => {
     const input = rfidAssociateSchema.parse(req.body);
     const result = await associateTag(getDb(), {
         tag: req.params.tag,
@@ -281,7 +285,7 @@ boxesRouter.post('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
     res.json(result);
 }));
 /** Detaches whatever RFID tag a box currently carries. */
-boxesRouter.delete('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.delete('/:tag/rfid', canUpdate, asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user.username);
     bump(req.get('X-Client-Id'));
     res.json(result);
@@ -309,7 +313,7 @@ const holdSchema = z.object({
  * 'warehouse'/'hold'/'damage' — i.e. a box physically on hand — can move
  * between those three.
  */
-boxesRouter.post('/:tag/hold', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/hold', canUpdate, asyncHandler(async (req, res) => {
     const input = holdSchema.parse(req.body);
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));

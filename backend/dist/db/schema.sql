@@ -22,6 +22,28 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
+-- RBAC. Permission keys are developer-defined in src/lib/permissions.ts and
+-- deliberately not a table — only the grants below are data.
+CREATE TABLE IF NOT EXISTS roles (
+  id          SERIAL PRIMARY KEY,
+  key         TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  active      BOOLEAN NOT NULL DEFAULT true,
+  system      BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id    INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,
+  PRIMARY KEY (role_id, permission)
+);
+
+-- Additive migration for databases created before RBAC existed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
+
 CREATE TABLE IF NOT EXISTS config (
   id          INTEGER PRIMARY KEY DEFAULT 1,
   aging_days  INTEGER NOT NULL DEFAULT 15,
@@ -68,6 +90,73 @@ CREATE TABLE IF NOT EXISTS warehouses (
 CREATE TABLE IF NOT EXISTS gates (
   gate_no      INTEGER PRIMARY KEY,
   warehouse_id TEXT
+);
+
+-- Last time a gate's FX9600 webhook (POST /api/rfid/fx9600/:gate/webhook) was
+-- hit, for the frontend's "reader connected?" status light. Deliberately its
+-- own table, not a column on `gates` — replaceState() (PUT /api/state)
+-- deletes and rebuilds every row of `gates` wholesale on every save() from
+-- the legacy UI, which would wipe this on the next unrelated edit. Written
+-- only by the webhook route itself, read-only from the client's point of
+-- view (composeState surfaces it, PUT never touches it).
+CREATE TABLE IF NOT EXISTS gate_webhook_status (
+  gate_no      INTEGER PRIMARY KEY,
+  last_seen_at TIMESTAMPTZ NOT NULL
+);
+-- Source IP of the most recent webhook hit, so the frontend can offer a
+-- "manage this reader" button pointed at the FX9600's own admin UI
+-- (readers serve one at their IP over HTTP(S)) without anyone hardcoding
+-- it — the reader tells us where it's calling from every time it posts.
+ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_ip TEXT;
+
+-- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
+-- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
+-- this in S.gatePrefs and round-trip it through PUT /api/state like
+-- everything else, but stateSchema never declared that key so it was
+-- silently stripped on every save and forgotten on the next reload/device.
+-- Keyed by the JWT's `username` (stable per login), not the display `name`
+-- (two accounts can share a display name) or a per-browser value (the user
+-- explicitly wants this to follow them across devices, not stick to one).
+-- Boxes a fixed RFID reader has seen at a gate but that nobody has confirmed
+-- into the warehouse yet. The reader feeds this queue; the operator reviews it
+-- as chips in Gate ขาเข้า and presses "ยืนยันรับเข้าคลัง" to actually receive —
+-- deliberately NOT auto-receiving, since a reader sees everything in range
+-- including boxes merely passing by or sitting on a truck that hasn't been
+-- unloaded. Rows are upserted (seen_at refreshed) on every read, deleted when
+-- the operator confirms or removes the chip, and ignored once stale.
+CREATE TABLE IF NOT EXISTS gate_pending_reads (
+  gate_no  INTEGER NOT NULL,
+  tag      TEXT    NOT NULL,
+  seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (gate_no, tag)
+);
+
+CREATE TABLE IF NOT EXISTS gate_prefs (
+  username     TEXT PRIMARY KEY,
+  out_gate     TEXT,
+  in_gate      TEXT,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Per-account UI preferences for the legacy single-page app: which tab the
+-- account was last on, which sub-view/record it had open, plus the smaller
+-- per-account view settings (theme, layout, list mode, saved filter values).
+--
+-- Its own table for the same reason gate_prefs got one: the legacy UI kept
+-- these in S.uiPrefs and round-tripped them through PUT /api/state, but
+-- stateSchema never declared a `uiPrefs` key, so Zod stripped the whole thing
+-- on every single save — the values never reached the database at all and
+-- were lost on reload or on any other device. They are also per-account UI
+-- state, not shared application data, so they must not live in the one big
+-- `S` snapshot that every client receives and would overwrite for each other.
+--
+-- A single jsonb bag rather than a column per key on purpose: these are
+-- free-form client-owned view settings that get added and renamed as the UI
+-- changes, and nothing server-side ever queries an individual key.
+CREATE TABLE IF NOT EXISTS ui_prefs (
+  username     TEXT PRIMARY KEY,
+  data         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS locations (
