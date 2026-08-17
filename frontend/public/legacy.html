@@ -11724,7 +11724,7 @@ function renderSetup(){
   var empSelfEditing=!!(editingEmp&&currentEmp()&&currentEmp().id===editingEmp);
   var empFormCard=$('#empFormCard');
   if(empFormCard)empFormCard.style.display=(empAdmin||empSelfEditing)?'':'none';
-  var empFormIds=['eName','eRole','eDept','eWh','eShift','ePhone','eEmail','eStart','eScan','eAccess','eStatus'];
+  var empFormIds=['eName','eRole','eDept','eWh','eShift','ePhone','eEmail','eStart','eScan','eRoleId','eStatus'];
   empFormIds.forEach(function(i){
     var el=document.getElementById(i);if(!el)return;
     if(empAdmin)el.disabled=false;
