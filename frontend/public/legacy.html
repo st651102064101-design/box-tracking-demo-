@@ -2909,7 +2909,6 @@ a{color:var(--accentInk);}
     <div class="wg-board" style="display:none;">
     <div class="wg xl wg-form" id="empFormCard">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span></span><span class="wg-lbl">พนักงาน</span></div>
-      <p class="wg-cap">รายชื่อผู้ปฏิบัติงานที่เลือกเป็น "ผู้บันทึก" ได้จากปุ่มมุมขวาบน — ไม่กระทบประวัติเดิมเมื่อแก้ไข/ลบ</p>
       <div class="wg-body">
       <!-- อัปโหลดรูป: ปุ่ม "เลือกรูป" ตัวจริงคือ <label for> ที่ชี้ไป input[type=file]
            ซึ่งถูกซ่อนไว้ (ไม่ใช่ display:none บน input โดยตรง เพราะจะทำให้ .click()
@@ -2930,7 +2929,7 @@ a{color:var(--accentInk);}
       </div>
       <div class="field" style="margin-top:16px;"><label for="eName">ชื่อ–นามสกุล <span class="req">*</span></label><input id="eName" placeholder="เช่น สมศรี ใจดี"></div>
       <div class="grid dw2" style="margin-top:14px;">
-        <div class="field"><label for="eId">รหัสพนักงาน (สร้างอัตโนมัติ)</label>
+        <div class="field"><label for="eId" id="eIdLabel">รหัสพนักงาน (สร้างอัตโนมัติ)</label>
           <div class="auto-tag-row">
             <input id="eId" readonly>
             <button type="button" class="iconbtn" id="btnRegenEId" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
@@ -2940,22 +2939,17 @@ a{color:var(--accentInk);}
         </div>
         <div class="field"><label for="eRole">ตำแหน่ง</label><input id="eRole" placeholder="เช่น พนักงานคลัง"></div>
       </div>
-      <div class="field" style="margin-top:14px;"><label for="eDept">แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>
+      <!-- แผนกยังอยู่ เพราะมันถูกพิมพ์ลงบัตรพนักงานจริง (empCardFrontHtml/empBadgeDept)
+           และใช้ค้นหาในตารางพนักงาน ไม่ใช่ช่องที่กรอกทิ้งไว้เฉย ๆ -->
       <div class="grid dw2" style="margin-top:14px;">
+        <div class="field"><label for="eDept">แผนก / หน่วยงาน</label><input id="eDept" placeholder="เช่น คลังกล่อง, จัดส่ง"></div>
         <div class="field"><label for="eWh">คลังที่สังกัด</label><select id="eWh"></select></div>
-        <div class="field"><label for="eShift">กะการทำงาน</label>
-          <select id="eShift">
-            <option value="morning">กะเช้า (08:00–17:00)</option>
-            <option value="afternoon">กะบ่าย (14:00–22:00)</option>
-            <option value="night">กะดึก (22:00–06:00)</option>
-            <option value="general">ทั่วไป / ยืดหยุ่น</option>
-          </select>
-        </div>
       </div>
-      <div class="grid dw2" style="margin-top:14px;">
-        <div class="field"><label for="ePhone">เบอร์โทรศัพท์</label><input id="ePhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
-        <div class="field"><label for="eStart">วันเริ่มงาน</label><input id="eStart" type="date"></div>
-      </div>
+      <!-- ตัด "กะการทำงาน" กับ "วันเริ่มงาน" ออกจากฟอร์ม — ทั้งระบบไม่มี logic ที่อ่านค่าสองตัวนี้
+           ไปทำอะไรเลย (ไม่มีตารางกะ ไม่มีการคิดอายุงาน) มีแค่เก็บแล้วพิมพ์กลับออกมา
+           คีย์ข้อมูลยังอยู่ใน record และยัง import/export ได้ตามเดิม — empFields() คงค่าเดิม
+           ของเรคอร์ดไว้ให้ ไม่ได้ล้างทิ้งเวลากดบันทึก -->
+      <div class="field" style="margin-top:14px;"><label for="ePhone">เบอร์โทรศัพท์ <span class="muted small">(ไม่บังคับ)</span></label><input id="ePhone" type="tel" inputmode="tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
       <div class="field" style="margin-top:14px;"><label for="eEmail">อีเมล</label><input id="eEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>
       <div class="field" style="margin-top:14px;"><label for="eScan">รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
       <div class="grid dw2" style="margin-top:14px;">
@@ -2963,7 +2957,9 @@ a{color:var(--accentInk);}
              ไปตั้งที่แท็บ "บทบาทและสิทธิ์" ที่เดียว (ดู #ssec-role) -->
         <div class="field"><label for="eRoleId">บทบาท</label>
           <select id="eRoleId"></select>
-          <p class="desc" id="eRoleDesc" style="margin-top:6px;"></p>
+          <!-- คำอธิบายบทบาทตั้งเองได้ยาวแค่ไหนก็ได้ ตัดเหลือ 2 บรรทัดไม่ให้ดันฟอร์มยืด
+               ข้อความเต็มยังอ่านได้จาก title ตอนชี้เมาส์ และที่แท็บบทบาทและสิทธิ์ -->
+          <p class="desc" id="eRoleDesc" style="margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"></p>
           <button type="button" class="btn ghost sm" id="btnViewRolePerms" style="margin-top:8px;">ดูสิทธิ์ทั้งหมด</button>
         </div>
         <div class="field"><label>สถานะ</label>
@@ -2978,8 +2974,7 @@ a{color:var(--accentInk);}
         </div>
       </div>
       <p class="desc" style="margin-top:10px;">
-        สิทธิ์ของพนักงานมาจาก <b>บทบาท</b> ที่เลือกไว้ข้างบน ไม่ได้ตั้งทีละรายการที่นี่ —
-        ถ้าต้องการเพิ่ม/ลดสิทธิ์ ให้ไปแก้ที่แท็บ <b>บทบาทและสิทธิ์</b> ซึ่งจะมีผลกับทุกคนที่อยู่ในบทบาทนั้น
+        เพิ่ม/ลดสิทธิ์ได้ที่แท็บ <b>บทบาทและสิทธิ์</b> — มีผลกับทุกคนในบทบาทนั้น
       </p>
       </div>
       <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
@@ -5679,6 +5674,24 @@ function currentEmp(){var list=Object.values(S.employees||{});for(var i=0;i<list
 function isAdmin(){return MY_ROLE==='admin';}
 window.isAdmin=isAdmin;window.currentEmp=currentEmp;
 var EMP_STATUS={active:{t:'ปฏิบัติงาน',c:'ok'},leave:{t:'ลา/พักงาน',c:'warn'},inactive:{t:'พ้นสภาพ',c:'bad'}};
+/* รหัสพนักงานของคนที่มีอยู่แล้วห้ามแก้ในหน้านี้ — มันคือคีย์ที่ประวัติ Gate, บัตร PDA
+   (scanCode) และเรคอร์ดฝั่งเซิร์ฟเวอร์ผูกไว้ทั้งหมด การพิมพ์ทับเลยเป็นการสร้างคนใหม่
+   โดยไม่ตั้งใจมากกว่าการ "แก้ชื่อรหัส" ตอนเพิ่มพนักงานใหม่ยังกด "แก้เอง" ได้ตามเดิม */
+function setEmpIdLocked(on){
+  var t=$('#eId');
+  if(t){t.readOnly=!!on;t._override=!!on;t.style.opacity=on?'':'1';}
+  ['btnOverrideEId','btnRegenEId'].forEach(function(id){
+    var b=$('#'+id);if(b)b.style.display=on?'none':'';
+  });
+  var lb=$('#eIdLabel');
+  if(lb)lb.textContent=on?'รหัสพนักงาน (แก้ไขไม่ได้)':'รหัสพนักงาน (สร้างอัตโนมัติ)';
+}
+/* ค่าเดิมของช่องที่ถูกตัดออกจากฟอร์ม (กะ/วันเริ่มงาน) ของเรคอร์ดที่กำลังแก้อยู่
+   เพิ่มพนักงานใหม่ = ยังไม่มีเรคอร์ด จึงเป็นค่าว่างตามปกติ */
+function empPrevField(k){
+  var e=editingEmp?(S.employees||{})[editingEmp]:null;
+  return (e&&e[k])||'';
+}
 function empFields(){
   return {
     id:val('eId'),
@@ -5686,10 +5699,13 @@ function empFields(){
     role:val('eRole'),
     dept:val('eDept'),
     wh:val('eWh'),
-    shift:val('eShift'),
+    /* กะการทำงาน/วันเริ่มงาน ไม่มีช่องกรอกในฟอร์มแล้ว — อ่านค่าเดิมของเรคอร์ดกลับมา
+       ไม่ใช่ val() ของ element ที่ไม่มีอยู่จริง ซึ่งจะคืน '' แล้วล้างข้อมูลที่เคย
+       import เข้ามาทิ้งทุกครั้งที่มีคนกดบันทึกพนักงานคนนั้น */
+    shift:empPrevField('shift'),
     phone:val('ePhone'),
     email:val('eEmail'),
-    startDate:val('eStart'),
+    startDate:empPrevField('startDate'),
     scanCode:val('eScan'),
     /* roleId คือสิทธิ์จริง (ผูกกับตาราง roles ฝั่งเซิร์ฟเวอร์) ส่วน access เก็บไว้
        เพื่อความเข้ากันได้กับข้อมูลเดิม/PDA ที่ยังอ่านค่านี้อยู่ — ค่าที่บันทึกลง S
@@ -5784,15 +5800,15 @@ $('#btnAddEmp').onclick=function(){
   assignEmpRoleOnServer(rec);
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
-  ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
+  eIdAuto.reset();setEmpIdLocked(false);setv('eWh','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
   renderEmpRoleOptions('');
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
   closeCardDrawerIfActive('empFormCard');
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
-  ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
+  eIdAuto.reset();setEmpIdLocked(false);setv('eWh','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
   renderEmpRoleOptions('');
   closeCardDrawerIfActive('empFormCard');
   renderSetup();};
@@ -5818,9 +5834,9 @@ function editEmp(id){
      ซ่อนอยู่ เพราะ renderSetup() ท้ายฟังก์ชันนี้จะปรับ display ให้ถูกไม่ว่าการ์ดจะ
      อยู่ตำแหน่งไหนในหน้า (เป็น inline style property ของ element เอง ไม่ผูกกับตำแหน่ง) */
   openCardDrawer('empFormCard','แก้ไขพนักงาน '+esc(id),'แก้ไขข้อมูลพนักงานและสิทธิ์การใช้งาน');
-  eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
-  setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
-  setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
+  eIdAuto.edit(e.id);setEmpIdLocked(true);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
+  setv('eWh',e.wh||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
+  setv('eScan',e.scanCode||'');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
   renderEmpRoleOptions(e.roleId!=null?String(e.roleId):'');
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';
@@ -11305,7 +11321,10 @@ window.renderEmpRoleOptions=renderEmpRoleOptions;
 function syncEmpRoleDesc(){
   var r=empRoleById(val('eRoleId'));
   var d=$('#eRoleDesc');
-  if(d)d.textContent=r?(r.description||('มี '+nf((r.permissions||[]).length)+' สิทธิ์')):'เลือกบทบาทเพื่อกำหนดสิทธิ์ของพนักงานคนนี้';
+  if(d){
+    d.textContent=r?(r.description||('มี '+nf((r.permissions||[]).length)+' สิทธิ์')):'เลือกบทบาทเพื่อกำหนดสิทธิ์ของพนักงานคนนี้';
+    d.title=d.textContent;   /* ถูก clamp เหลือ 2 บรรทัด — ข้อความเต็มอยู่ที่ tooltip */
+  }
   var btn=$('#btnViewRolePerms');
   if(btn)btn.style.display=r?'':'none';
 }
