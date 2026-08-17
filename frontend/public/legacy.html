@@ -622,6 +622,15 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .pill.gray{background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--muted);border:.5px solid var(--line);}
 .pill.hold{background:color-mix(in srgb,#f59e0b 18%,transparent);color:#b45309;border:.5px solid color-mix(in srgb,#f59e0b 45%,transparent);}
 .pill.dmg{background:color-mix(in srgb,#f97316 20%,transparent);color:#c2410c;border:.5px solid color-mix(in srgb,#f97316 48%,transparent);}
+/* สถานะการเข้าถึงในตารางพนักงาน — แยกด้วยไอคอน+ข้อความ ไม่ใช่สีอย่างเดียว
+   (อ่านออกทั้งคนตาบอดสีและตอนพิมพ์ขาวดำ) ใช้ .pill เดิมของระบบเป็นฐาน */
+.acc-ic{font-weight:800;font-size:11px;line-height:1;}
+.acc-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+/* ลำดับความสำคัญบนจอแคบ: ชื่อ → บทบาท → การเข้าถึง → ปุ่ม
+   คอลัมน์รอง (แผนก/คลัง/เบอร์/ตำแหน่ง) ซ่อนก่อน แต่คำเตือนเรื่องสิทธิ์ต้องไม่หาย */
+@media(max-width:900px){
+  #empBody tr>td.col-sec,#empHead th.col-sec{display:none;}
+}
 .lifestep{display:flex;align-items:flex-start;width:100%;}
 .lifestep-node{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;min-width:64px;}
 .lifestep-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid var(--line);color:var(--muted);background:var(--posSoft);flex:0 0 auto;transition:all .2s var(--ease);}
@@ -2987,8 +2996,17 @@ a{color:var(--accentInk);}
     </div>
     <div class="wg-board">
     <div class="wg xl wg-table">
-      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายชื่อพนักงาน</span><span class="tag" id="cntEmp"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" id="btnAddEmpTop" onclick="addEmp()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มพนักงาน</button></div><div class="wg-hd-row"><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div></div>
-      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>คลัง</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายชื่อพนักงาน</span><span class="tag" id="cntEmp"></span><button type="button" class="pill warn" id="empNeedsSetup" style="display:none;border:none;cursor:pointer;" onclick="filterEmpNeedsSetup()" title="กดเพื่อกรองเฉพาะคนที่ตั้งค่าสิทธิ์ยังไม่ครบ"></button><div class="spacer"></div><button type="button" class="btn accent sm addbtn" id="btnAddEmpTop" onclick="addEmp()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มพนักงาน</button></div><div class="wg-hd-row"><input id="schEmp" placeholder="ค้นหา / สแกนบัตร · รหัส · ชื่อ · แผนก · เบอร์" autocomplete="off"><select id="filtEmpAccess" style="width:auto;" title="กรองตามสถานะการเข้าถึงระบบ">
+          <option value="">การเข้าถึงทั้งหมด</option>
+          <option value="attention">⚠ ต้องตั้งค่า</option>
+          <option value="ready">พร้อมใช้งาน</option>
+          <option value="norole">ยังไม่ได้กำหนดบทบาท</option>
+          <option value="noperm">บทบาทไม่มีสิทธิ์</option>
+          <option value="roleoff">บทบาทถูกปิดใช้งาน</option>
+          <option value="disabled">บัญชีถูกปิดใช้งาน</option>
+          <option value="noweb">ไม่เปิดบัญชี Web</option>
+        </select><button class="btn ghost sm" onclick="openImportModal('emp')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportEmpExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button></div></div>
+      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead id="empHead"><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllEmp" title="เลือกทั้งหมด"></th><th></th><th>รหัส</th><th>ชื่อ–นามสกุล</th><th class="col-sec">ตำแหน่ง</th><th class="col-sec">แผนก</th><th class="col-sec">คลัง</th><th class="col-sec">เบอร์โทร</th><th>บทบาท</th><th>การเข้าถึง</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="empBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerEmp"></div>
       <div class="bulkbar" id="bulkEmp" style="display:none;">
@@ -5772,6 +5790,14 @@ $('#btnAddEmp').onclick=function(){
   if(ePhoneRaw&&!isValidThaiPhone(ePhoneRaw))return fieldError('ePhone','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678');
   var eEmailRaw=val('eEmail');
   if(eEmailRaw&&!isValidEmail(eEmailRaw))return fieldError('eEmail','กรอกในรูปแบบ name@company.com');
+  /* บทบาทเป็นข้อบังคับเฉพาะคนที่ "เปิดบัญชีเว็บ" ไว้แล้ว (มี username/รหัสผ่าน — ดู
+     hasLogin ที่ composeState ส่งมา) เพราะล็อกอินได้แต่ไม่มีบทบาท = เข้าไปแล้วทำอะไร
+     ไม่ได้เลยและไม่มีอะไรบอกว่าทำไม ส่วนคนที่ใช้แค่ PDA หรือถูกเลือกเป็นผู้บันทึก
+     ไม่ต้องมีบทบาทก็ได้ ไม่ถือเป็นข้อผิดพลาด */
+  var prevEmp=editingEmp?S.employees[editingEmp]:null;
+  if(prevEmp&&prevEmp.hasLogin&&!val('eRoleId')){
+    return fieldError('eRoleId','กรุณากำหนดบทบาทก่อนเปิดใช้งานบัญชี');
+  }
   if(!id){id=nextSeqId('EMP-',Object.keys(S.employees));}
   var isNew=!editingEmp;
   var firstEver=isNew&&Object.keys(S.employees).length===0;
@@ -11020,7 +11046,12 @@ function roleMemberRowHtml(m){
   if(m.employeeId)bits.push('<span class="tag mono">'+esc(m.employeeId)+'</span>');
   if(m.username)bits.push('<span class="tag">บัญชี '+esc(m.username)+'</span>');
   if(!m.employeeId)bits.push('<span class="tag">บัญชีระบบ</span>');
-  if(emp&&emp.dept)bits.push('<span class="tag">'+esc(emp.dept)+'</span>');
+  if(emp&&emp.wh&&S.warehouses[emp.wh])bits.push('<span class="tag">'+esc(S.warehouses[emp.wh].name)+'</span>');
+  else if(emp&&emp.dept)bits.push('<span class="tag">'+esc(emp.dept)+'</span>');
+  if(emp){
+    var est=EMP_STATUS[emp.status||'active']||EMP_STATUS.active;
+    bits.push('<span class="pill '+est.c+'" style="font-size:11px;">'+esc(est.t)+'</span>');
+  }
   /* ปุ่มเปิดข้อมูลพนักงานมีให้เฉพาะคนที่มีเรคอร์ดพนักงานจริงและบัญชีนี้แก้ได้ —
      บัญชีระบบล้วน ๆ ไม่มีหน้าให้เปิด */
   var act=(emp&&hasPerm('employee.update'))
@@ -11358,13 +11389,121 @@ window.viewRolePerms=viewRolePerms;
 function assignEmpRoleOnServer(rec){
   if(!rec||!rec.id)return;
   if(!hasPerm('permission.manage'))return;
+  /* ช่องบทบาทถูก disable เมื่อโหลดรายการบทบาทจากเซิร์ฟเวอร์ไม่สำเร็จ (ดู
+     renderEmpRoleOptions) — ตอนนั้น val('eRoleId') เป็นค่าว่างเพราะ "ไม่รู้" ไม่ใช่
+     เพราะผู้ใช้เลือกจะเอาบทบาทออก ส่งไปตามนั้นเท่ากับล้างบทบาทของพนักงานทิ้งจากการ
+     กดบันทึกเบอร์โทรเฉย ๆ */
+  var sel=$('#eRoleId');
+  if(sel&&sel.disabled)return;
   rbacSend('PUT','/api/roles/assign-employee/'+encodeURIComponent(rec.id),{roleId:rec.roleId})
     .then(function(){return loadRoles();})
     .catch(function(e){toast('ตั้งบทบาทไม่สำเร็จ',e.message||'','err');});
 }
 window.assignEmpRoleOnServer=assignEmpRoleOnServer;
 
-/* ชื่อบทบาทที่จะโชว์ในตาราง/Export — ชื่อสดจาก RBAC ถ้าโหลดมาแล้ว ไม่งั้นใช้ชื่อที่
+/* กำหนดบทบาทจากแถวในตารางได้เลย ไม่ต้องเปิด drawer แก้ไขพนักงานแล้วเลื่อนหาช่องบทบาท
+   ใช้ endpoint เดิม (/api/roles/assign-employee/:id ผ่าน assignEmpRoleOnServer) และ
+   โมดัลกลางตัวเดิมของระบบ — ไม่ได้สร้างเส้นทางบันทึกสิทธิ์ขึ้นมาใหม่ */
+function quickAssignRole(id){
+  var e=S.employees[id];if(!e)return;
+  if(!hasPerm('permission.manage'))return toast('ไม่มีสิทธิ์','ต้องมีสิทธิ์จัดการสิทธิ์ (permission.manage) จึงจะกำหนดบทบาทได้','err');
+  var roles=(RBAC.roles||[]).filter(function(r){return r.active;});
+  if(!roles.length)return toast('ยังไม่มีบทบาทให้เลือก','สร้างบทบาทที่แท็บ "บทบาทและสิทธิ์" ก่อน','err');
+  var h='<div class="mhead"><h3>กำหนดบทบาทให้ '+esc(id)+'</h3>'
+    +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+    +'<p class="desc" style="margin-top:0;">'+esc(e.name||id)+(e.dept?' · '+esc(e.dept):'')+'</p>'
+    +'<div class="field"><label for="qarRole">เลือกบทบาท</label><select id="qarRole">'
+      +'<option value="">— เลือกบทบาท —</option>'
+      +roles.map(function(r){
+        var cnt=r.system?'สิทธิ์ทั้งหมด':nf((r.permissions||[]).length)+' สิทธิ์';
+        return '<option value="'+r.id+'">'+esc(r.name)+' — '+cnt+'</option>';
+      }).join('')
+    +'</select></div>'
+    +'<p class="desc" style="margin-top:10px;">สิทธิ์มาจากบทบาท แก้บทบาทที่แท็บ <b>บทบาทและสิทธิ์</b> แล้วมีผลกับทุกคนในบทบาทนั้น</p>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><div class="spacer"></div>'
+    +'<button class="btn accent" id="qarSave">บันทึกบทบาท</button></div>';
+  openModal(h);
+  $('#qarSave').onclick=function(){
+    var v=val('qarRole');
+    if(!v)return toast('ยังไม่ได้เลือกบทบาท','เลือกบทบาทที่ต้องการก่อนกดบันทึก','err');
+    var r=empRoleById(v);
+    var rec=S.employees[id];
+    rec.roleId=Number(v);rec.roleName=r?r.name:'';rec.access=empAccessForRole(v);
+    assignEmpRoleOnServer(rec);
+    auditEntry('UPDATE',USER,id,rec.name||id,null,{roleId:rec.roleId,roleName:rec.roleName});
+    save();
+    closeModal();
+    toast('กำหนดบทบาทแล้ว',(rec.name||id)+' · '+(r?r.name:''));
+    renderAll();
+  };
+}
+window.quickAssignRole=quickAssignRole;
+
+/* ── Employee → Role → Permissions → Access Status ──────────────────────────
+   ตอบคำถามเดียวในตารางพนักงาน: "คนนี้เข้าใช้งานระบบได้จริงหรือยัง" ซึ่ง '-'
+   ในคอลัมน์สิทธิ์เดิมตอบไม่ได้ — ไม่รู้ว่าไม่มีบทบาท, บทบาทว่างเปล่า, หรือบทบาท
+   ถูกปิด. สถานะคำนวณสด ๆ จากบทบาทฝั่งเซิร์ฟเวอร์ (RBAC.roles) ไม่ได้ก๊อป
+   permission ลงไปเก็บที่ตัวพนักงาน — บทบาทยังเป็นแหล่งความจริงเดียว แก้บทบาท
+   แล้วทุกคนในบทบาทนั้นเปลี่ยนตามทันทีที่ loadRoles() ครั้งถัดไป
+
+   ลำดับการตัดสิน (หยุดที่ข้อแรกที่เข้าเงื่อนไข):
+     1. พนักงานพ้นสภาพ            → บัญชีถูกปิดใช้งาน
+     2. ไม่มีบทบาท + ไม่มีบัญชีเว็บ → ไม่เปิดบัญชี Web (ปกติ ไม่ใช่ปัญหา — คนที่ใช้
+                                     แค่ PDA/เป็นผู้บันทึก ไม่จำเป็นต้องมีบทบาท)
+     3. ไม่มีบทบาท + มีบัญชีเว็บ    → ยังไม่ได้กำหนดบทบาท (ล็อกอินได้แต่ทำอะไรไม่ได้)
+     4. บทบาทถูกปิดใช้งาน         → บทบาทถูกปิดใช้งาน
+     5. บทบาทของระบบ (Super Admin) → สิทธิ์ทั้งหมด
+     6. บทบาทมี 0 permission      → บทบาทไม่มีสิทธิ์
+     7. นอกนั้น                   → พร้อมใช้งาน · N สิทธิ์ */
+var EMP_ACC={
+  ready:   {label:'พร้อมใช้งาน',        ic:'✓', cls:'ok',   warn:false},
+  all:     {label:'สิทธิ์ทั้งหมด',        ic:'🔒', cls:'ok',   warn:false},
+  norole:  {label:'ยังไม่ได้กำหนดบทบาท', ic:'!', cls:'bad',  warn:true},
+  noperm:  {label:'บทบาทไม่มีสิทธิ์',     ic:'!', cls:'warn', warn:true},
+  roleoff: {label:'บทบาทถูกปิดใช้งาน',   ic:'⏸', cls:'warn', warn:true},
+  disabled:{label:'บัญชีถูกปิดใช้งาน',    ic:'⏸', cls:'gray', warn:false},
+  noweb:   {label:'ไม่เปิดบัญชี Web',     ic:'—', cls:'gray', warn:false},
+  unknown: {label:'ดูสิทธิ์ไม่ได้',        ic:'?', cls:'gray', warn:false}
+};
+function empAccessState(e){
+  if(!e)return {key:'unknown',role:null};
+  if((e.status||'active')!=='active')return {key:'disabled',role:empRoleById(e.roleId)};
+  var rolesKnown=!!(RBAC.roles&&RBAC.roles.length);
+  var r=empRoleById(e.roleId);
+  /* บัญชีที่ไม่มีสิทธิ์ role.manage อ่าน /api/roles ไม่ได้ RBAC.roles เลยว่าง — ห้าม
+     สรุปว่า "ไม่มีบทบาท" จากตรงนั้น ไม่งั้นทุกคนจะขึ้นคำเตือนผิด ๆ */
+  if(!rolesKnown&&e.roleId!=null)return {key:'unknown',role:null};
+  if(!r)return {key:(e.hasLogin?'norole':'noweb'),role:null};
+  if(!r.active)return {key:'roleoff',role:r};
+  if(r.system)return {key:'all',role:r};
+  if(!(r.permissions||[]).length)return {key:'noperm',role:r};
+  return {key:'ready',role:r};
+}
+function empAccessNeedsSetup(e){return !!EMP_ACC[empAccessState(e).key].warn;}
+function empAccessCellHtml(e){
+  var st=empAccessState(e),d=EMP_ACC[st.key];
+  var cnt=st.role&&!st.role.system?(st.role.permissions||[]).length:null;
+  var tip=d.label+(cnt!=null?' · '+nf(cnt)+' สิทธิ์':'');
+  var sub='';
+  if(st.key==='ready')sub='<span class="acc-sub">'+nf(cnt)+' สิทธิ์</span>';
+  else if(st.key==='roleoff')sub='<span class="acc-sub">'+esc(st.role.name)+'</span>';
+  /* ไม่มีบัญชีเว็บ = ไม่ผิดอะไร (ป้ายจึงเป็นสีกลาง ไม่นับรวมในตัวเลข "ต้องตั้งค่า")
+     แต่ยังต้องเห็นว่ายังไม่มีบทบาท และกำหนดได้จากตรงนี้เลย ถ้าวันหนึ่งจะเปิดบัญชีให้ */
+  else if(st.key==='noweb')sub='<span class="acc-sub">ยังไม่ได้กำหนดบทบาท</span>';
+  var act=((st.key==='norole'||st.key==='noweb')&&hasPerm('permission.manage'))
+    ? '<button class="btn ghost sm" style="margin-top:6px;" onclick="event.stopPropagation();quickAssignRole(\''+esc(e.id)+'\')">+ กำหนดบทบาท</button>'
+    : '';
+  return '<span class="pill '+d.cls+'" title="'+esc(tip)+'"><span class="acc-ic">'+d.ic+'</span>'+esc(d.label)+'</span>'+sub+act;
+}
+function empRoleCellHtml(e){
+  var r=empRoleById(e.roleId);
+  if(r)return (r.system?'<span class="role-lock" title="บทบาทของระบบ">🔒</span> ':'')+esc(r.name);
+  if(e.roleId!=null&&e.roleName)return esc(e.roleName);
+  return '<span class="muted">—</span>';
+}
+/* ชื่อบทบาทที่จะโชว์ใน Export — ชื่อสดจาก RBAC ถ้าโหลดมาแล้ว ไม่งั้นใช้ชื่อที่
    บันทึกไว้ตอนกดบันทึก แล้วค่อยถอยไปที่ป้าย access เดิมสำหรับข้อมูลก่อนมี RBAC */
 function empRoleLabel(e){
   if(!e)return '-';
@@ -11569,6 +11708,19 @@ function renderSetup(){
   var epsAll=sbe?Object.values(S.employees).filter(function(e){
     return (e.id+' '+(e.name||'')+' '+(e.role||'')+' '+(e.dept||'')+' '+(e.phone||'')+' '+(e.email||'')+' '+(e.scanCode||'')).toLowerCase().indexOf(sbe)>=0;
   }):Object.values(S.employees);
+  /* ตัวกรองการเข้าถึงทำงานต่อจากช่องค้นหา และมาก่อน sort/pager — ใช้ร่วมกันได้ทั้งสามอย่าง */
+  var accFilt=val('filtEmpAccess');
+  if(accFilt)epsAll=epsAll.filter(function(e){
+    return accFilt==='attention'?empAccessNeedsSetup(e):empAccessState(e).key===accFilt;
+  });
+  /* ป้ายเตือนหัวตาราง — นับจากพนักงานทั้งหมด ไม่ใช่เฉพาะที่ค้นหา/กรองอยู่ ไม่งั้นตัวเลข
+     จะหายไปเองตอนกรอง ทั้งที่ปัญหายังอยู่ */
+  var needFix=Object.values(S.employees).filter(empAccessNeedsSetup).length;
+  var needEl=$('#empNeedsSetup');
+  if(needEl){
+    needEl.style.display=needFix?'':'none';
+    needEl.innerHTML='<span class="acc-ic">⚠</span>'+nf(needFix)+' คนต้องตั้งค่าสิทธิ์';
+  }
   var eps=sortTable(epsAll,uiSort.emp,'name');
   var meId=currentEmp()&&currentEmp().id;
   var pgEmp=pagerSlice('emp',eps);
@@ -11576,11 +11728,12 @@ function renderSetup(){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
     var isMe=meId&&e.id===meId;
-    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
-      +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
-      +'<td>'+esc(empRoleLabel(e))+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
+    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td class="col-sec">'+esc(e.role||'-')+'</td>'
+      +'<td class="col-sec">'+esc(e.dept||'-')+'</td><td class="col-sec">'+whTxt+'</td><td class="col-sec mono">'+esc(e.phone||'-')+'</td>'
+      +'<td>'+empRoleCellHtml(e)+'</td><td>'+empAccessCellHtml(e)+'</td>'
+      +'<td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
-  }).join(''):emptyRow(11,'ยังไม่มีพนักงาน');
+  }).join(''):emptyRow(12,(sbe||accFilt)?'ไม่พบพนักงานที่ตรงกับเงื่อนไข':'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
   if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
@@ -11597,6 +11750,16 @@ function renderSetupResetCust(){pagerReset('cust');renderSetup();}
 function renderSetupResetEmp(){pagerReset('emp');renderSetup();}
 $('#schBox').addEventListener('input',renderSetupResetBox);
 $('#filtBoxStatus').addEventListener('change',function(){uiPrefSet('filtBoxStatus',this.value);renderSetupResetBox();});
+$('#filtEmpAccess').addEventListener('change',function(){uiPrefSet('filtEmpAccess',this.value);renderSetupResetEmp();});
+/* ป้าย "N คนต้องตั้งค่าสิทธิ์" — กดแล้วกรองเหลือเฉพาะคนที่มีปัญหาทันที */
+function filterEmpNeedsSetup(){
+  var sel=$('#filtEmpAccess');if(!sel)return;
+  sel.value='attention';
+  uiPrefSet('filtEmpAccess','attention');
+  renderSetupResetEmp();
+  goSetup('emp');
+}
+window.filterEmpNeedsSetup=filterEmpNeedsSetup;
 /* box-type search â works by typing OR by scanning a barcode of the type code.
    autoScanBind runs the scanner-Thai auto-fix (autoFixScannerThai) before filtering,
    so a scanner firing while the OS keyboard is in Thai mode still finds the right row. */
@@ -12145,6 +12308,7 @@ function restoreUiPrefs(){
   if(st&&typeof showSetupSub==='function')showSetupSub(st);
 
   var fbs=$('#filtBoxStatus');if(fbs)fbs.value=uiPrefGet('filtBoxStatus','');
+  var fea=$('#filtEmpAccess');if(fea)fea.value=uiPrefGet('filtEmpAccess','');
   var fam=$('#filtAuditModule');if(fam)fam.value=uiPrefGet('filtAuditModule','');
   var faa=$('#filtAuditAction');if(faa)faa.value=uiPrefGet('filtAuditAction','');
 
