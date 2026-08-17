@@ -87,6 +87,10 @@ export async function composeState(db) {
             {
                 ...r.data,
                 userId: r.userId,
+                /* Overrides whatever copy of roleId the blob is carrying: the column
+                   is the one permission checks read, so the screen must show that
+                   and not a stale value from the last client that saved state. */
+                roleId: r.roleId,
                 hasPin: !!r.pinHash,
                 hasLogin: !!r.passwordHash,
                 loginUsername: r.username ?? null,
@@ -113,6 +117,12 @@ export async function replaceState(db, s, actor) {
             pinResetExpiresAt: employees.pinResetExpiresAt,
             username: employees.username,
             passwordHash: employees.passwordHash,
+            /* role_id is captured here for a second reason on top of "the blob
+               doesn't carry it": it must never be taken FROM the blob. Anyone
+               who can save state could otherwise hand themselves a Super Admin
+               role by editing one number in the payload. Roles change only
+               through PUT /api/roles/assign*, which checks permission.manage. */
+            roleId: employees.roleId,
         })
             .from(employees)).map((r) => [r.id, r]));
         // 1) wipe all domain tables (users are untouched)
@@ -286,6 +296,9 @@ export async function replaceState(db, s, actor) {
                    reasoning for the PIN/login columns, captured into pinById above
                    since they never round-trip through `data` at all (see composeState). */
                 userId: toInt(e.userId) ?? bootstrapUserId,
+                /* Carried over from the row that existed before the wipe, never read
+                   from `e` — see the roleId comment on pinById above. */
+                roleId: pin?.roleId ?? null,
                 data: e,
                 pinHash: pin?.pinHash ?? null,
                 pinResetOtpHash: pin?.pinResetOtpHash ?? null,

@@ -190,6 +190,10 @@ CREATE TABLE IF NOT EXISTS employees (
 
 -- Additive migrations for databases created before these columns existed.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
+-- Employees are a second principal (own username/password_hash below), so they
+-- carry their own role rather than borrowing one through a linked users row
+-- that most of them don't have.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_otp_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_expires_at TIMESTAMPTZ;

@@ -69,9 +69,15 @@ export async function effectivePermissions(user) {
     const db = getDb();
     let roleId = null;
     if (user.employeeId) {
+        /* An employee's own role wins over the one on any linked `users` row.
+           Employees are the common case and most have no linked account at all,
+           which is why the role lives on the employee record itself; the linked
+           account is only consulted for employees created back when going through
+           `users` was the only way to have one. */
         const rows = await db.select().from(employees).where(eq(employees.id, String(user.sub)));
+        roleId = rows[0]?.roleId ?? null;
         const linkedUserId = rows[0]?.userId ?? null;
-        if (linkedUserId != null) {
+        if (roleId == null && linkedUserId != null) {
             const u = await db.select().from(users).where(eq(users.id, linkedUserId));
             roleId = u[0]?.roleId ?? null;
         }

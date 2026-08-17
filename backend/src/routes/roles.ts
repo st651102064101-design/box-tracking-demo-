@@ -55,15 +55,18 @@ function keyFromName(name: string, taken: Set<string>): string {
   return key;
 }
 
-/** How many accounts sit on each role — the number the delete guard and the
- *  role table's "พนักงาน" column both need. */
+/** How many principals sit on each role — the number the delete guard and the
+ *  role table's "พนักงาน" column both need. Counts BOTH tables: employees carry
+ *  their own role, and system/service accounts live in `users`. Counting only
+ *  one of them would let a role still in use by the other be deleted. */
 async function memberCounts(): Promise<Map<number, number>> {
   const db = getDb();
-  const rows = await db.select({ roleId: users.roleId }).from(users);
   const counts = new Map<number, number>();
-  for (const r of rows) {
-    if (r.roleId != null) counts.set(r.roleId, (counts.get(r.roleId) ?? 0) + 1);
-  }
+  const bump = (id: number | null) => {
+    if (id != null) counts.set(id, (counts.get(id) ?? 0) + 1);
+  };
+  (await db.select({ roleId: users.roleId }).from(users)).forEach((r) => bump(r.roleId));
+  (await db.select({ roleId: employees.roleId }).from(employees)).forEach((r) => bump(r.roleId));
   return counts;
 }
 
@@ -142,14 +145,32 @@ rolesRouter.get(
           .where(inArray(employees.userId, userRows.map((u) => u.id)))
       : [];
     const empByUser = new Map(empRows.map((e) => [e.userId, e]));
-    res.json({
-      members: userRows.map((u) => ({
-        userId: u.id,
+    /* Employees whose own role_id points here — the majority, and the ones an
+       admin actually has to move before the role can be deleted. */
+    const ownEmpRows = await db.select().from(employees).where(eq(employees.roleId, roleId));
+    const seen = new Set<string>();
+    const members = [
+      ...userRows.map((u) => ({
+        userId: u.id as number | null,
         username: u.username,
         name: u.name,
         employeeId: empByUser.get(u.id)?.id ?? null,
       })),
+      ...ownEmpRows.map((e) => ({
+        userId: e.userId ?? null,
+        username: e.username ?? '',
+        name: e.name ?? e.id,
+        employeeId: e.id,
+      })),
+    ].filter((m) => {
+      /* An employee linked to a users row that is also on this role would
+         otherwise be listed twice. */
+      const key = m.employeeId ? 'e:' + m.employeeId : 'u:' + m.userId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
+    res.json({ members });
   }),
 );
 
@@ -293,7 +314,54 @@ rolesRouter.delete(
   }),
 );
 
-/* ─── assign a role to an account ─────────────────────────────────────────*/
+/* ─── assign a role to an employee ────────────────────────────────────────*/
+/** The path the employee form uses. Separate from /assign/:userId because an
+ *  employee usually has no `users` row at all — routing everything through
+ *  that one was what made roles apply only to accounts with a web login. */
+rolesRouter.put(
+  '/assign-employee/:employeeId',
+  canGrant,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const employeeId = String(req.params.employeeId);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const [emp] = await db.select().from(employees).where(eq(employees.id, employeeId));
+    if (!emp) {
+      return res.status(404).json({ error: 'not_found', message: 'ไม่พบพนักงานคนนี้' });
+    }
+
+    /* null clears the role (พนักงานที่ยังไม่ได้กำหนดบทบาท) — a valid state, and
+       the only way back out of a role without picking another one. */
+    const roleId = body.roleId == null || body.roleId === '' ? null : Number(body.roleId);
+    if (roleId != null) {
+      const [role] = await db.select().from(roles).where(eq(roles.id, roleId));
+      if (!role) {
+        return res.status(400).json({ error: 'bad_request', message: 'ไม่พบบทบาทที่เลือก' });
+      }
+    }
+
+    /* Same last-Super-Admin guard as /assign/:userId: whoever is the final
+       holder of the keys may not hand them away, including to themselves. */
+    if (emp.roleId != null && emp.roleId !== roleId) {
+      const [current] = await db.select().from(roles).where(eq(roles.id, emp.roleId));
+      if (current?.key === SUPER_ADMIN_KEY && ((await memberCounts()).get(current.id) ?? 0) <= 1) {
+        return forbidden(res, 'ลดสิทธิ์ Super Admin คนสุดท้ายในระบบไม่ได้');
+      }
+    }
+
+    /* Deliberately does NOT touch a linked `users` row. PUT /api/state links a
+       newly created employee to whichever account saved it (see bootstrapUserId
+       in services/state.ts), so an admin who adds a warehouse hand and gives
+       them a junior role would be writing that junior role onto their OWN
+       account. Employee logins resolve through employees.role_id now; system
+       accounts are moved explicitly via /assign/:userId. */
+    await db.update(employees).set({ roleId }).where(eq(employees.id, employeeId));
+    invalidateRoleCache();
+    res.json({ ok: true, employeeId, roleId });
+  }),
+);
+
+/* ─── assign a role to a system account ───────────────────────────────────*/
 rolesRouter.put(
   '/assign/:userId',
   canGrant,

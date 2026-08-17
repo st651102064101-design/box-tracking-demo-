@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { bootstrap, auth, type TestCtx } from './helpers.js';
 import { getDb } from '../src/db/client.js';
-import { users, roles } from '../src/db/schema.js';
+import { users, roles, employees } from '../src/db/schema.js';
 import { hashPassword } from '../src/lib/password.js';
 import { invalidateRoleCache } from '../src/lib/effectivePermissions.js';
 import { ALL_PERMISSIONS } from '../src/lib/permissions.js';
@@ -188,5 +188,74 @@ describe('enforcement — a hidden button is not the boundary', () => {
 
     await db.update(roles).set({ active: true }).where(eq(roles.id, staffRole.id));
     invalidateRoleCache();
+  });
+});
+
+describe('employees carry their own role', () => {
+  it('applies a role to an employee with no users row, and state saves cannot change it', async () => {
+    const db = getDb();
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    const sa = list.body.roles.find((r: { key: string }) => r.key === 'super_admin');
+
+    /* An employee record with no linked account at all — the common case, and
+       the one that used to end up with no permissions whatsoever. */
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({ employees: { 'EMP-900': { id: 'EMP-900', name: 'สมหญิง' } } });
+
+    const assigned = await request(ctx.app)
+      .put('/api/roles/assign-employee/EMP-900')
+      .set(auth(ctx.token))
+      .send({ roleId: staff.id });
+    expect(assigned.status).toBe(200);
+
+    const [emp] = await db.select().from(employees).where(eq(employees.id, 'EMP-900'));
+    expect(emp.roleId).toBe(staff.id);
+    /* PUT /api/state links a new employee to the account that saved it, so the
+       admin's own account must be left exactly where it was — giving a new hire
+       a junior role must not demote whoever created them. */
+    const [me] = await db.select().from(users).where(eq(users.username, 'admin'));
+    const [saRole] = await db.select().from(roles).where(eq(roles.key, 'super_admin'));
+    expect(me.roleId).toBe(saRole.id);
+
+    /* The blob claiming Super Admin must not move the column — otherwise
+       "save the app state" would be a privilege-escalation endpoint. */
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({ employees: { 'EMP-900': { id: 'EMP-900', name: 'สมหญิง', roleId: sa.id } } });
+
+    const [after] = await db.select().from(employees).where(eq(employees.id, 'EMP-900'));
+    expect(after.roleId).toBe(staff.id);
+
+    /* …and the state the UI reads back shows the column, not the blob's copy. */
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.employees['EMP-900'].roleId).toBe(staff.id);
+  });
+
+  it('counts employees as members, so their role cannot be deleted underneath them', async () => {
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    expect(staff.members).toBeGreaterThanOrEqual(2); // somchai (users) + EMP-900 (employees)
+
+    const del = await request(ctx.app).delete(`/api/roles/${staff.id}`).set(auth(ctx.token));
+    expect(del.status).toBe(409);
+
+    const members = await request(ctx.app)
+      .get(`/api/roles/${staff.id}/members`)
+      .set(auth(ctx.token));
+    expect(members.body.members.map((m: { employeeId: string }) => m.employeeId)).toContain('EMP-900');
+  });
+
+  it('lets a role be cleared back to none', async () => {
+    const res = await request(ctx.app)
+      .put('/api/roles/assign-employee/EMP-900')
+      .set(auth(ctx.token))
+      .send({ roleId: null });
+    expect(res.status).toBe(200);
+    const [emp] = await getDb().select().from(employees).where(eq(employees.id, 'EMP-900'));
+    expect(emp.roleId).toBeNull();
   });
 });

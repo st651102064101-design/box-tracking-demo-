@@ -196,6 +196,14 @@ export const employees = pgTable('employees', {
    *  of being an independent, client-editable permission. Nullable: employees
    *  created before this link existed, or without a login account. */
   userId: integer('user_id').references(() => users.id),
+  /** RBAC role for this employee's own login (employees.username below is a
+   *  second, separate principal from the `users` table). Employees are the
+   *  common case — most have a PDA/web login of their own and no `users` row
+   *  at all — so the role has to live here, not only on the linked account.
+   *  Never written from the PUT /api/state payload: it is a typed column the
+   *  legacy `S` blob knows nothing about, and letting the client set it would
+   *  make "save the app state" a way to promote yourself. */
+  roleId: integer('role_id'),
   data: jsonb('data').notNull().default({}),
   /** bcrypt hash of the employee's PDA PIN — never the raw digits. */
   pinHash: text('pin_hash'),
