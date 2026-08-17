@@ -3117,48 +3117,32 @@ a{color:var(--accentInk);}
           </div>
         </div>
 
-        <div style="position:relative;padding:27px 30px 0;">
-          <div style="position:absolute;right:-69px;top:-39px;width:225px;height:225px;border-radius:50%;background:var(--accent2);opacity:.5;"></div>
-          <div style="position:relative;display:flex;align-items:center;gap:18px;">
-            <div id="empBadgeAvatar" style="width:111px;height:111px;flex:0 0 auto;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:36px;font-weight:700;border:4px solid var(--surface);box-shadow:0 6px 20px rgba(0,0,0,.12);"></div>
-            <div style="min-width:0;">
-              <div style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--accentContrast);background:rgba(255,255,255,.72);border-radius:999px;padding:4px 13px;">EMPLOYEE ID</div>
-              <div id="empBadgeId" style="font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:-.01em;margin-top:7px;color:var(--ink);"></div>
+        <!-- ด้านหน้าเน้น Identity อย่างเดียว: ABSS → รูป → ชื่อ → ตำแหน่ง → แผนก/สาขา →
+             รหัสพนักงาน → EMPLOYEE — เรียงกึ่งกลางแนวตั้งให้ตรงกับบัตรที่พิมพ์จริง
+             (empCardFrontHtml) ข้อมูล HR ที่เหลือ (กะ/เบอร์โทร/คลัง/สถานะ) และบาร์โค้ด
+             ถอดออกจากด้านหน้าแล้ว — เป็นข้อมูลที่ไม่ควรอยู่บนบัตรที่ห้อยคอให้คนนอกเห็น
+             ส่วนบาร์โค้ดย้ายไปอยู่หลังบัตรเหมือนบัตรพนักงานจริง -->
+        <div style="position:relative;padding:22px 30px 0;text-align:center;">
+          <div style="position:absolute;left:50%;top:-186px;transform:translateX(-50%);width:376px;height:376px;border-radius:50%;background:var(--accent2);opacity:.36;"></div>
+          <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="display:inline-flex;align-items:center;gap:10px;">
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--accent);"></span>
+              <span style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
             </div>
+            <div style="font-size:12px;font-weight:600;letter-spacing:.16em;color:var(--accentInk);">EMPLOYEE ID CARD</div>
           </div>
+          <div id="empBadgeAvatar" style="position:relative;width:172px;height:172px;margin:30px auto 0;border-radius:50%;background:var(--accentSoft);color:var(--accentInk);display:grid;place-items:center;font-size:52px;font-weight:700;border:5px solid var(--surface);box-shadow:0 6px 20px rgba(0,0,0,.12);overflow:hidden;"></div>
         </div>
 
-        <div style="padding:24px 30px 0;">
-          <div id="empBadgeName" style="font-size:33px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
-          <div id="empBadgeRole" style="font-size:19px;color:var(--muted);margin-top:4px;"></div>
-          <div id="empBadgeStatus" style="display:inline-flex;align-items:center;gap:5px;margin-top:13px;padding:6px 16px;border-radius:999px;font-size:16px;font-weight:600;"></div>
+        <div style="padding:30px 30px 0;text-align:center;">
+          <div id="empBadgeName" style="font-size:31px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
+          <div id="empBadgeRole" style="font-size:18px;font-weight:500;color:var(--ink2);margin-top:9px;"></div>
+          <div id="empBadgeDept" style="font-size:16px;color:var(--muted);margin-top:5px;"></div>
         </div>
 
-        <div style="padding:21px 30px 0;display:grid;grid-template-columns:1fr 1fr;gap:15px 18px;">
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">แผนก</div>
-            <div id="empBadgeDept" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">คลัง</div>
-            <div id="empBadgeWh" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">กะ</div>
-            <div id="empBadgeShift" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;"></div>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:.05em;color:var(--faint);">เบอร์โทร</div>
-            <div id="empBadgePhone" style="font-size:18px;font-weight:500;color:var(--ink);margin-top:3px;font-family:var(--mono);"></div>
-          </div>
-        </div>
-
-        <div style="position:absolute;left:0;right:0;bottom:0;padding:18px 30px 20px;background:var(--surface2);border-top:.5px solid var(--line);">
-          <div id="empBadgeBarcode" style="height:52px;border-radius:4px;background-color:#fff;"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
-            <span id="empBadgeScanCode" style="font-family:var(--mono);font-size:15px;letter-spacing:.1em;color:var(--ink2);"></span>
-            <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--faint);">CODE 128 · ZPL ^BC</span>
-          </div>
+        <div style="position:absolute;left:26px;right:26px;bottom:26px;padding-top:20px;border-top:.5px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:11px;">
+          <div id="empBadgeId" style="font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:.08em;color:var(--ink);"></div>
+          <div style="display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentContrast);">EMPLOYEE</div>
         </div>
 
         <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;">
@@ -3198,10 +3182,23 @@ a{color:var(--accentInk);}
           </button>
         </div>
 
-        <div style="margin-top:auto;padding:0 30px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-          <div>
-            <div style="font-size:13px;font-weight:600;letter-spacing:.05em;color:var(--faint);">รหัสสแกน</div>
-            <div id="empBadgeScanCodeBack" style="font-family:var(--mono);font-size:15px;color:var(--ink2);margin-top:2px;"></div>
+        <!-- ข้อมูลบัตร (Card Information) — ชุดเดียวกับหลังบัตรที่พิมพ์จริง
+             (empCardBackHtml): บาร์โค้ด + Card ID + วันหมดอายุ เดิมตรงนี้โชว์ "รหัสสแกน"
+             เป็นรหัสพนักงานดิบ ๆ ซึ่งไม่ควรอยู่บนบัตรให้คนนอกเห็น -->
+        <div style="margin-top:auto;padding:0 30px 22px;">
+          <div style="padding-top:16px;border-top:.5px solid var(--line);">
+            <div id="empBadgeBarcode" style="height:58px;border-radius:4px;background-color:#fff;display:flex;align-items:center;justify-content:center;"></div>
+            <div id="empBadgeScanCodeBack" style="font-family:var(--mono);font-size:14px;letter-spacing:.1em;color:var(--ink2);text-align:center;margin-top:7px;"></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:14px;">
+            <div>
+              <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:var(--faint);">CARD ID</div>
+              <div id="empBadgeCardId" style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink);margin-top:3px;"></div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:var(--faint);">VALID UNTIL</div>
+              <div id="empBadgeValidUntil" style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink);margin-top:3px;"></div>
+            </div>
           </div>
         </div>
 
@@ -5791,68 +5788,198 @@ function code39Svg(text){
     +'shape-rendering="crispEdges" fill="#000">'+rects+'</svg>';
 }
 
-/* Opens a print view sized to a CR80 card (86×54mm) so badges can be printed
-   on card stock, cut out, and laminated. */
+function empCardNotchHtml(){
+  return '<div style="position:relative;z-index:1;display:flex;justify-content:center;margin-bottom:3mm;">'
+    +'<div style="width:16mm;height:3mm;border-radius:999px;background:var(--surface2);box-shadow:inset 0 .3mm .8mm rgba(0,0,0,.22);"></div>'
+    +'</div>';
+}
+/* ข้อมูลบริษัทที่พิมพ์ลงบัตรจริง — รวมไว้จุดเดียวให้หน้า/หลังใช้ค่าเดียวกัน และแก้ที่เดียว
+   เมื่อบริษัทเปลี่ยนเบอร์ติดต่อ/อายุบัตร */
+var EMP_CARD_ORG={name:'ABSS',tel:'0xx-xxx-xxxx',validUntil:'31/12/2027'};
+/* Card ID ของบัตรฟิสิกส์ — ตั้งใจ "ไม่ใช่" รหัสพนักงาน เพื่อไม่ให้คนที่เห็นบัตรเดารหัส
+   ในระบบได้ตรง ๆ เป็น hash คงที่จากรหัสพนักงาน → 8 หลักฐานสิบหก รูปแบบ XXXX-XXXX
+   ค่าเดิมทุกครั้งที่พิมพ์ใบเดิม (ไม่ random) */
+function empCardId(e){
+  if(e.cardId)return String(e.cardId).toUpperCase();
+  var s=String(e.id||'')+'|'+EMP_CARD_ORG.name,h1=0x811c9dc5,h2=0x01000193;
+  for(var i=0;i<s.length;i++){
+    h1=((h1^s.charCodeAt(i))*16777619)>>>0;
+    h2=((h2+s.charCodeAt(i)*(i+7))*2654435761)>>>0;
+  }
+  var hex=('0000'+(h1>>>16).toString(16)).slice(-4)+('0000'+(h2>>>16).toString(16)).slice(-4);
+  return (hex.slice(0,4)+'-'+hex.slice(4)).toUpperCase();
+}
+/* ค่าที่ encode ลงบาร์โค้ด — ใช้ "รหัสบัตรพนักงาน" (scanCode) ที่ลงทะเบียนไว้ในระบบถ้ามี
+   ไม่งั้นถอยไปใช้ Card ID ภายใน โดยไม่ยิงรหัสพนักงานตรง ๆ ลงบัตร */
+function empCardScanValue(e){
+  return String(e.scanCode||empCardId(e).replace('-','')).toUpperCase();
+}
+/* tone: ด้านหน้ามีวงกลมเขียวอ่อนอยู่หลังหัวบัตร — ใช้สีเขียวเข้ม (accentInk) ให้บรรทัดรอง
+   ยังอ่านออกบนพื้นเขียว ส่วนด้านหลังพื้นขาวล้วนใช้สีเทาจาง (faint) ตามปกติ */
+function empCardOrgMarkHtml(sub,tone){
+  return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:.8mm;">'
+    +'<div style="display:inline-flex;align-items:center;gap:1.4mm;">'
+      +'<span style="width:3.4mm;height:3.4mm;border-radius:1mm;background:var(--accent);"></span>'
+      +'<span style="font-size:9.5pt;font-weight:700;letter-spacing:.16em;color:var(--ink);">'+esc(EMP_CARD_ORG.name)+'</span>'
+    +'</div>'
+    +(sub?'<div style="font-size:5.4pt;font-weight:600;letter-spacing:.14em;color:'+(tone||'var(--faint)')+';">'+esc(sub)+'</div>':'')
+    +'</div>';
+}
+function empCardInactiveHtml(e){
+  return e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:3;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'';
+}
+/* เปลือกบัตรใช้ร่วมกันหน้า/หลัง — Design Language เดียวกันตามที่ผู้ใช้ขอ ขนาดยังเป็น
+   54×86mm เท่าเดิม (บัตรห้อยคอมาตรฐาน) */
+var EMP_CARD_SHELL='position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:4mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);';
+/* ข้อมูลบริษัทที่พิมพ์ลงบัตรจริง — รวมไว้จุดเดียวให้หน้า/หลังใช้ค่าเดียวกัน และแก้ที่เดียว
+   เมื่อบริษัทเปลี่ยนเบอร์ติดต่อ/อายุบัตร */
+var EMP_CARD_ORG={name:'ABSS',tel:'0xx-xxx-xxxx',validUntil:'31/12/2027'};
+/* Card ID ของบัตรฟิสิกส์ — ตั้งใจ "ไม่ใช่" รหัสพนักงาน เพื่อไม่ให้คนที่เห็นบัตรเดารหัส
+   ในระบบได้ตรง ๆ เป็น hash คงที่จากรหัสพนักงาน → 8 หลักฐานสิบหก รูปแบบ XXXX-XXXX
+   ค่าเดิมทุกครั้งที่พิมพ์ใบเดิม (ไม่ random) */
+function empCardId(e){
+  if(e.cardId)return String(e.cardId).toUpperCase();
+  var s=String(e.id||'')+'|'+EMP_CARD_ORG.name,h1=0x811c9dc5,h2=0x01000193;
+  for(var i=0;i<s.length;i++){
+    h1=((h1^s.charCodeAt(i))*16777619)>>>0;
+    h2=((h2+s.charCodeAt(i)*(i+7))*2654435761)>>>0;
+  }
+  var hex=('0000'+(h1>>>16).toString(16)).slice(-4)+('0000'+(h2>>>16).toString(16)).slice(-4);
+  return (hex.slice(0,4)+'-'+hex.slice(4)).toUpperCase();
+}
+/* ค่าที่ encode ลงบาร์โค้ด — ใช้ "รหัสบัตรพนักงาน" (scanCode) ที่ลงทะเบียนไว้ในระบบถ้ามี
+   ไม่งั้นถอยไปใช้ Card ID ภายใน โดยไม่ยิงรหัสพนักงานตรง ๆ ลงบัตร */
+function empCardScanValue(e){
+  return String(e.scanCode||empCardId(e).replace('-','')).toUpperCase();
+}
+/* tone: ด้านหน้ามีวงกลมเขียวอ่อนอยู่หลังหัวบัตร — ใช้สีเขียวเข้ม (accentInk) ให้บรรทัดรอง
+   ยังอ่านออกบนพื้นเขียว ส่วนด้านหลังพื้นขาวล้วนใช้สีเทาจาง (faint) ตามปกติ */
+function empCardOrgMarkHtml(sub,tone){
+  return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:.8mm;">'
+    +'<div style="display:inline-flex;align-items:center;gap:1.4mm;">'
+      +'<span style="width:3.4mm;height:3.4mm;border-radius:1mm;background:var(--accent);"></span>'
+      +'<span style="font-size:9.5pt;font-weight:700;letter-spacing:.16em;color:var(--ink);">'+esc(EMP_CARD_ORG.name)+'</span>'
+    +'</div>'
+    +(sub?'<div style="font-size:5.4pt;font-weight:600;letter-spacing:.14em;color:'+(tone||'var(--faint)')+';">'+esc(sub)+'</div>':'')
+    +'</div>';
+}
+function empCardInactiveHtml(e){
+  return e.status==='inactive'?'<div style="position:absolute;inset:0;background:rgba(12,12,14,.5);display:flex;align-items:center;justify-content:center;z-index:3;"><div style="transform:rotate(-22deg);font-size:13pt;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.94);text-align:center;">พ้นสภาพ<br>INACTIVE</div></div>':'';
+}
+/* เปลือกบัตรใช้ร่วมกันหน้า/หลัง — Design Language เดียวกันตามที่ผู้ใช้ขอ ขนาดยังเป็น
+   54×86mm เท่าเดิม (บัตรห้อยคอมาตรฐาน) */
+var EMP_CARD_SHELL='position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:4mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);';
+function empCardFrontHtml(e){
+  var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+  var avatarInner=e.photo?'<img src="'+esc(e.photo)+'" style="width:100%;height:100%;object-fit:cover;">':'<span>'+esc(initials)+'</span>';
+  return '<div class="ecard" style="'+EMP_CARD_SHELL+'">'
+    +'<div style="position:absolute;left:50%;top:-26mm;transform:translateX(-50%);width:50mm;height:50mm;border-radius:50%;background:var(--accent2);opacity:.36;"></div>'
+    +empCardNotchHtml()
+    +empCardOrgMarkHtml('EMPLOYEE ID CARD','var(--accentInk)')
+    +'<div style="position:relative;z-index:1;width:25mm;height:25mm;flex:0 0 auto;align-self:center;margin-top:5mm;border-radius:50%;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);display:flex;align-items:center;justify-content:center;font-size:15pt;font-weight:700;border:.7mm solid var(--surface);box-shadow:0 1mm 2.6mm rgba(0,0,0,.14);">'+avatarInner+'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:5mm;">'
+      +'<div style="font-size:13.5pt;font-weight:700;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.name||e.id)+'</div>'
+      +(e.role?'<div style="font-size:8.4pt;font-weight:500;color:var(--ink2);margin-top:1.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.role)+'</div>':'')
+      +(e.dept?'<div style="font-size:7.4pt;color:var(--muted);margin-top:1.2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept)+'</div>':'')
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:4mm;border-top:.18mm solid var(--line);display:flex;flex-direction:column;align-items:center;gap:2.4mm;">'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5pt;font-weight:700;letter-spacing:.08em;color:var(--ink);">'+esc(e.id)+'</div>'
+      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentContrast);">EMPLOYEE</div>'
+    +'</div>'
+    +empCardInactiveHtml(e)
+    +'</div>';
+}
+function empCardBackHtml(e){
+  var scanCode=empCardScanValue(e);
+  return '<div style="'+EMP_CARD_SHELL+'">'
+    +empCardNotchHtml()
+    +empCardOrgMarkHtml('CARD INFORMATION')
+    +'<div style="position:relative;z-index:1;margin-top:5mm;">'
+      +'<div style="font-size:5.4pt;font-weight:600;letter-spacing:.14em;color:var(--faint);">EMPLOYEE ID</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11pt;font-weight:700;letter-spacing:.08em;color:var(--ink);margin-top:1mm;">'+esc(e.id)+'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:4.4mm;padding:3mm 2mm 2.2mm;border-radius:2.6mm;background:var(--surface2);">'
+      +'<div style="height:16mm;display:flex;align-items:center;justify-content:center;">'+code128SVG(scanCode,52)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.4pt;letter-spacing:.1em;color:var(--ink2);margin-top:1.6mm;">'+esc(scanCode)+'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:4.4mm;display:grid;grid-template-columns:1fr 1fr;gap:3mm;text-align:left;">'
+      +'<div><div style="font-size:5.2pt;font-weight:600;letter-spacing:.1em;color:var(--faint);">CARD ID</div><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;font-weight:600;color:var(--ink);margin-top:.6mm;">'+esc(empCardId(e))+'</div></div>'
+      +'<div><div style="font-size:5.2pt;font-weight:600;letter-spacing:.1em;color:var(--faint);">VALID UNTIL</div><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt;font-weight:600;color:var(--ink);margin-top:.6mm;">'+esc(EMP_CARD_ORG.validUntil)+'</div></div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:3.4mm;border-top:.18mm solid var(--line);font-size:5.4pt;line-height:1.55;color:var(--muted);">'
+      +'บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(EMP_CARD_ORG.name)+'<br>'
+      +'หากพบกรุณาส่งคืนบริษัท / ฝ่ายทรัพยากรบุคคล<br>'
+      +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink2);">Tel. '+esc(EMP_CARD_ORG.tel)+'</span>'
+    +'</div>'
+    +empCardInactiveHtml(e)
+    +'</div>';
+}
+function empCardRootCSS(){
+  return ':root{--surface:#ffffff;--surface2:#fbfbfd;--ink:#1d1d1f;--ink2:#424245;--muted:#86868b;--faint:#aeaeb2;'
+    +'--line:#e3e3e8;--line2:#d2d2d7;--accent:#a8f931;--accent2:#bdfb63;--accentSoft:#eefccb;--accentInk:#4d7a0a;--accentContrast:#16330a;'
+    +'--pos:#3a3a3c;--posSoft:#eceeef;--neg:#d70015;--negSoft:#ffeceb;--warn:#bf5d00;--warnSoft:#fff2e0;'
+    /* ตัวแปรกลุ่ม "panel" ยกมาจาก :root หลักเช่นกัน — ใช้เฉพาะบัตรคู่ค้า (ccCardFrontHtml/
+       BackHtml) เพราะออกแบบตามบัตรฟิสิกส์บนจอ (ccFrontHtml/ccBackHtml) ซึ่งใช้ธีม panel
+       ไม่ใช่ธีม card ปกติแบบบัตรพนักงาน */
+    +'--panelGrad1:#f3f3f5;--panelGrad2:#e7e7ea;--panelInk:#1d1d1f;--panelInkSoft:rgba(29,29,31,.62);'
+    +'--panelBorder:rgba(0,0,0,.1);--panelChipBg:rgba(0,0,0,.05);--panelChipBorder:rgba(0,0,0,.12);}';
+}
 /* คลิกแล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่ใช่พุ่งไปเปิดหน้าต่างพิมพ์เต็มจอทันที —
    หน้าต่างพิมพ์จริง (badgeWindowHtml) ยังใช้ป๊อปอัปเดิมอยู่ แต่ยกไปเป็นขั้นถัดไป
-   หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน */
+   หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน — พรีวิวใช้เทมเพลต empCardFrontHtml/BackHtml ตัวเดียว
+   กับที่หน้าต่างพิมพ์จริงใช้ (ผ่าน mm units ที่เบราว์เซอร์แปลงเป็น px ให้เอง) เพื่อไม่ให้
+   สิ่งที่เห็นในพรีวิวกับสิ่งที่พิมพ์ออกมาจริงเพี้ยนไปคนละแบบ */
 function printEmpBadge(id){
   var e=S.employees[id];if(!e)return;
-  var code=(e.scanCode||e.id).toUpperCase();
-  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
   openModal(
     '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody" style="display:flex;justify-content:center;padding:24px 16px;">'
-      +'<div style="width:280px;background:#fff;color:#111;border-radius:10px;padding:16px 18px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;">'
-        +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">'
-          +'<div><div style="font-size:15px;font-weight:700;letter-spacing:-.2px;">'+esc(e.name||e.id)+'</div>'
-          +(meta?'<div style="font-size:11px;color:#666;margin-top:2px;">'+esc(meta)+'</div>':'')
-          +(wh?'<div style="font-size:11px;color:#666;">'+esc(wh)+'</div>':'')
-          +'</div><div style="font-size:10px;font-weight:700;white-space:nowrap;">◈ Smart Tracking</div></div>'
-        +'<div style="text-align:center;margin-top:10px;">'+code128SVG(code,80)+'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:1.5px;margin-top:4px;">'+esc(code)+'</div></div>'
-      +'</div>'
+    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
+      +empCardFrontHtml(e)
+      +empCardBackHtml(e)
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printEmpBadgeWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
   );
 }
 window.printEmpBadge=printEmpBadge;
-
+/* เปิดหน้าต่างพิมพ์แล้วสั่งพิมพ์ให้เลยอัตโนมัติ (w.print()) แทนที่จะแค่เปิดพรีวิว
+   แล้วให้ผู้ใช้กด Ctrl/Cmd+P เอง — ผู้ใช้ขอให้ปุ่มนี้ "ใช้งานพิมพ์ได้จริง" ไม่ใช่แค่
+   preview ยังกด Ctrl/Cmd+P สำรองไว้ในคำใบ้ เผื่อเบราว์เซอร์บาง engine ไม่ trigger
+   print dialog อัตโนมัติให้ (เช่น บาง config ของ Safari)
+   เดิมเคยลอง @page{size:86mm 54mm} หวังให้พิมพ์เป็นกระดาษบัตรขนาดจริง — ใช้ไม่ได้กับ
+   เครื่องพิมพ์จริง (เฉพาะ "Save as PDF" เท่านั้นที่จะยอมรับขนาดกระดาษกำหนดเองแบบนี้)
+   เครื่องพิมพ์จริงที่ตั้งกระดาษ A4/Letter ไว้ในถาด จะเมินค่านี้แล้ว "ขยายเนื้อหาให้เต็ม
+   หน้ากระดาษที่มีจริง" แทน ทำให้บัตรออกมาใหญ่เท่าโปสเตอร์ ไม่ใช่ขนาดบัตรจริงตามที่ผู้ใช้ขอ
+   (ห้อยคอได้จริง) — แก้โดยไม่พึ่ง @page ขนาดพิเศษเลย ปล่อยให้ใช้กระดาษที่ตั้งไว้ตามปกติ
+   (A4/Letter) แล้วให้ตัวการ์ดเองคงขนาด 54×86mm จริงตามหน่วย mm (เหมือนที่พรีวิวในโมดัล
+   render แล้วได้ขนาดถูกต้องอยู่แล้ว) วางกึ่งกลางหน้า พร้อมคำเตือนให้เลือก "ขนาดจริง 100%"
+   ในกล่องโต้ตอบพิมพ์ (ไม่ใช่ "พอดีหน้ากระดาษ") ไม่งั้นเบราว์เซอร์บางตัวจะ auto-scale ให้
+   เองอยู่ดี — พิมพ์แล้วตัดตามขอบบัตรได้ขนาดจริงเสมอไม่ว่ากระดาษที่ใช้จะใหญ่แค่ไหน */
 function printEmpBadgeWindow(id){
   var e=S.employees[id];if(!e)return;
-  var code=(e.scanCode||e.id).toUpperCase();
-  var meta=[e.role,e.dept].filter(Boolean).join(' · ');
-  var wh=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'';
-  var w=window.open('','_blank','width=560,height=460');
+  var w=window.open('','_blank','width=560,height=780');
   if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
   w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
     +'<title>บัตรพนักงาน '+esc(e.id)+'</title><style>'
-    +'@page{size:86mm 54mm;margin:0;}'
+    +empCardRootCSS()
+    +'@page{margin:12mm;}'
     +'*{box-sizing:border-box;}'
     +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
-    +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
-    +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
-    +'justify-content:space-between;}'
-    +'.top{display:flex;align-items:baseline;justify-content:space-between;gap:4mm;}'
-    +'.nm{font-size:14pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;}'
-    +'.mt{font-size:8pt;color:#666;margin-top:.6mm;}'
-    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;}'
-    +'.bc{text-align:center;}'
-    +'.bc svg{display:block;margin:0 auto;}'
-    +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
-    +'margin-top:1mm;text-align:center;}'
-    +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
+    +'background:#ececed;display:flex;flex-direction:column;align-items:center;gap:6mm;padding:6mm 0 18mm;}'
+    +'.pg{page-break-after:always;display:flex;justify-content:center;}'
+    +'.pg:last-child{page-break-after:auto;}'
+    +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
-    +'</style></head><body><div class="card">'
-    +'<div class="top"><div><div class="nm">'+esc(e.name||e.id)+'</div>'
-    +(meta?'<div class="mt">'+esc(meta)+'</div>':'')
-    +(wh?'<div class="mt">'+esc(wh)+'</div>':'')
-    +'</div><div class="brand">◈ Smart Tracking</div></div>'
-    +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
-    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</style></head><body>'
+    +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
+    +'<div class="pg">'+empCardBackHtml(e)+'</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 54 × 86 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
+  /* รอให้เบราว์เซอร์ layout เสร็จก่อนสั่งพิมพ์ (โดยเฉพาะรูปพนักงานที่โหลดจาก data URL
+     — ถึงจะโหลดเร็วเพราะเป็น base64 ฝังในตัว ไม่ใช่ network request แต่ก็ยังมี timing
+     เล็กน้อยก่อน layout เสร็จ) ให้เวลาสั้น ๆ กันบัตรพิมพ์ออกมาโดยไม่มีรูป */
+  setTimeout(function(){try{w.focus();w.print();}catch(err){}},250);
 }
 window.printEmpBadgeWindow=printEmpBadgeWindow;
 
@@ -5937,25 +6064,20 @@ function openEmpBadge(id,isSelf){
   empBadge.flipCur=0;empBadge.flipTarget=0;   /* เปิดใหม่ทุกครั้งเริ่มที่หน้าตรง ๆ ทันที ไม่ไล่มุมพลิกจากใบเดิม */
   empBadge._noBlur=false;   /* ให้ตรงกับ DOM จริงเสมอ — closeEmpBadge() ลบคลาส no-blur ทิ้งไปแล้วตอนปิดใบก่อน */
 
-  var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
-  var stBgMap={ok:'var(--posSoft)',warn:'var(--warnSoft)',bad:'var(--negSoft)'};
-  var stFgMap={ok:'var(--pos)',warn:'var(--warn)',bad:'var(--neg)'};
-  var whTxt=e.wh&&S.warehouses[e.wh]?S.warehouses[e.wh].name:'-';
-  var scanCode=(e.scanCode||e.id).toUpperCase();
+  /* ค่าที่โชว์บนบัตรบนจอ = ชุดเดียวกับบัตรที่พิมพ์จริง (empCardScanValue/empCardId/
+     EMP_CARD_ORG) เพื่อให้บัตรบนจอกับบัตรที่ออกมาจากเครื่องพิมพ์ตรงกันเป๊ะ */
+  var scanCode=empCardScanValue(e);
   renderAvatar('empBadgeAvatar',e.name,e.photo);
   setText('empBadgeId',e.id);
   setText('empBadgeName',e.name||e.id);
   setText('empBadgeRole',e.role||'-');
-  var stEl=$('#empBadgeStatus');if(stEl){stEl.textContent=st.t;stEl.style.background=stBgMap[st.c]||'var(--posSoft)';stEl.style.color=stFgMap[st.c]||'var(--pos)';}
   setText('empBadgeDept',e.dept||'-');
-  setText('empBadgeWh',whTxt);
-  setText('empBadgeShift',EMP_SHIFT[e.shift]||'-');
-  setText('empBadgePhone',e.phone||'-');
-  setText('empBadgeScanCode',scanCode);
   setText('empBadgeScanCodeBack',scanCode);
+  setText('empBadgeCardId',empCardId(e));
+  setText('empBadgeValidUntil',EMP_CARD_ORG.validUntil);
   setText('empBadgeNameBack',e.name||e.id);
-  setText('empBadgeMetaBack',e.id+' · '+(EMP_ACCESS[e.access]||'-'));
-  var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,52);
+  setText('empBadgeMetaBack',e.id);
+  var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,58);
   var inactive=e.status==='inactive';
   var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
   if(fi)fi.style.display=inactive?'grid':'none';
@@ -6865,40 +6987,45 @@ function ccStatusBanner(c){
     +'</div></div>';
 }
 
+/* สีประจำประเภทคู่ค้า — ลูกค้าเขียวตาม accent ของ BoxTrace, ซัพพลายเออร์น้ำเงิน เพื่อให้
+   แยกประเภทได้ตั้งแต่ระยะไกลโดยไม่ต้องอ่านตัวหนังสือ แต่ยังเป็น Design Language เดียวกัน
+   (ทรง/ระยะ/ตัวอักษรเหมือนกันหมด ต่างแค่สี) — dark คือชุดสีบนบัตรฟิสิกส์บนจอที่พื้นเข้ม
+   light คือชุดสีบนบัตรที่พิมพ์ลงกระดาษขาว */
+function ccKindTone(kindMeta,dark){
+  var sup=kindMeta.icon==='in';
+  if(dark)return sup?{ink:'#a9c8ff',soft:'rgba(90,140,255,.22)'}:{ink:'var(--accentContrast)',soft:'var(--accent2)'};
+  return sup?{ink:'#1b4fa8',soft:'#e4edff'}:{ink:'var(--accentInk)',soft:'var(--accentSoft)'};
+}
+/* บัตรนี้เป็น "บัตรประจำตัวคู่ค้า" ไว้ระบุว่าเป็นใครและสแกนทำรายการ — ไม่ใช่แดชบอร์ด
+   ยอดยืม ข้อมูลที่เปลี่ยนตามการยืม (กำหนดคืน/ยืมอยู่กี่ใบ/เกินกำหนด/ค่าปรับ/รับเข้าสะสม)
+   ถอดออกจากทั้งสองด้านแล้ว เพราะบัตรจริงพิมพ์ครั้งเดียวแต่ตัวเลขพวกนี้เปลี่ยนทุกวัน —
+   ให้ไปดูในระบบหลังสแกนแทน เหลือบนบัตรเฉพาะข้อมูลคงที่: ชื่อ → รหัส → ประเภท → สาขา */
 function ccFrontHtml(c,stats,kindMeta){
   var st=CC_STATUS_DARK[c.status]||CC_STATUS_DARK.active;
-  var rightBlock;
-  if(stats.isCustK){
-    rightBlock=''
-      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">กำหนดคืน</div>'
-      +'<div style="font-family:var(--mono);font-size:17px;margin-top:3px;">'+esc(c.returnDate||'—')+'</div>'
-      +'<div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:600;'
-        +(stats.overdue?'background:color-mix(in srgb,var(--neg) 26%,transparent);color:#ff8a83;':'background:var(--accent2);color:var(--accentContrast);')+'">'
-        +'ยืมอยู่ '+nf(stats.held)+' ใบ'+(stats.overdue?' · เกินกำหนด '+nf(stats.overdue):'')+'</div>'
-      +(stats.overdueFine>0?'<div style="font-size:11px;color:#ff8a83;margin-top:6px;">ค่าปรับสะสม ~'+money(stats.overdueFine)+' ฿</div>':'');
-  }else{
-    rightBlock=''
-      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">รับเข้าแล้ว (สะสม)</div>'
-      +'<div style="font-family:var(--mono);font-size:22px;margin-top:3px;">'+nf(stats.supplied)+' ใบ</div>';
-  }
+  var tone=ccKindTone(kindMeta,true);
+  var code=String(c.id).toUpperCase();
   return ''
-    +'<div style="position:relative;padding:26px 30px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">'
-      +'<div>'
+    +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
+      +'<div style="flex:0 0 auto;padding:26px 30px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;">'
         +'<div style="display:flex;align-items:center;gap:9px;">'
           +'<div style="width:24px;height:24px;border-radius:7px;background:var(--accent2);color:var(--accentContrast);display:grid;place-items:center;font-size:14px;font-weight:700;">B</div>'
           +'<div style="font-size:17px;font-weight:600;letter-spacing:-.02em;">BoxTrace</div>'
         +'</div>'
-        +'<div class="cc-tag" style="margin-top:12px;background:rgba(255,255,255,.12);">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</div>'
+        +'<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;background:'+st.bg+';color:'+st.fg+';white-space:nowrap;">'+esc(st.t)+'</div>'
       +'</div>'
-      +'<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;background:'+st.bg+';color:'+st.fg+';white-space:nowrap;">'+esc(st.t)+'</div>'
-    +'</div>'
-    +'<div style="position:relative;padding:18px 30px 0;font-family:var(--mono);font-size:25px;font-weight:500;letter-spacing:.04em;">'+esc(c.id)+'</div>'
-    +'<div style="position:absolute;left:30px;right:30px;bottom:24px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">'
-      +'<div style="min-width:0;">'
-        +'<div style="font-size:20px;font-weight:600;letter-spacing:-.02em;">'+esc(c.name)+'</div>'
-        +'<div style="font-size:13px;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.contactPerson||'—')+(c.addr?' · '+esc(c.addr):'')+'</div>'
+      +'<div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:18px 30px;">'
+        +'<div style="font-size:29px;font-weight:700;letter-spacing:-.03em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:var(--mono);font-size:21px;font-weight:500;letter-spacing:.06em;color:var(--panelInk);opacity:.88;margin-top:9px;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:16px;">'
+          +'<span class="cc-tag" style="background:'+tone.soft+';color:'+tone.ink+';">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:500;background:rgba(255,255,255,.12);color:var(--panelInk);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
       +'</div>'
-      +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
+      /* บาร์โค้ดสแกนอยู่ด้านหน้าด้วย — คนถือบัตรยื่นให้สแกนได้โดยไม่ต้องพลิกบัตร */
+      +'<div style="flex:0 0 auto;background:#fff;padding:9px 0 7px;text-align:center;">'
+        +code128SVG(code,34)
+        +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#666;margin-top:3px;">'+esc(code)+'</div>'
+      +'</div>'
     +'</div>';
 }
 
@@ -6921,60 +7048,37 @@ function ccActRowHtml(stats){
     +ccActSm('print',CC_ACT_ICONS.print,'พิมพ์บัตร')
     +ccActSm('del',CC_ACT_ICONS.del,stats.held?'มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้':'ลบออกจากระบบ',stats.held?' disabled':'');
 }
-/* รายละเอียดคู่ค้าแบบเต็ม — เดิมหลังบัตรมีแค่ชื่อ/รหัส/เบอร์-อีเมลรวมบรรทัดเดียว ไม่พอ
-   ให้เห็นข้อมูลทั้งหมดโดยไม่ต้องกด "แก้ไขข้อมูล" ออกไปดู เพิ่มเป็นตารางฟิลด์ละบรรทัด
-   ข้ามฟิลด์ที่ไม่มีค่าไปเลย ไม่โชว์ "—" ให้รกบัตร */
-function ccDetailRows(c){
-  var items=[
-    ['ที่อยู่/สาขา',c.addr],
-    ['เบอร์โทร',c.phone||c.contact],
-    ['อีเมล',c.email],
-    ['เลขผู้เสียภาษี',c.taxId],
-    ['ผู้ติดต่อ',c.contactPerson],
-    ['วงเงินเครดิต',c.creditLimit?money(Number(c.creditLimit))+' ฿':''],
-    ['อัตราค่าปรับเกินกำหนด',c.fineRate?money(Number(c.fineRate))+' ฿/วัน':''],
-    ['ค่าปรับกล่องหาย',c.lostFine?money(Number(c.lostFine))+' ฿/ใบ':''],
-    ['ยืมได้กี่วัน',(c.returnDays!=null&&c.returnDays!=='')?nf(c.returnDays)+' วัน':'']
-  ].filter(function(r){return r[1];});
-  if(!items.length)return '<div style="font-size:12.5px;color:var(--panelInkSoft);">ยังไม่มีข้อมูลเพิ่มเติม — กด "แก้ไขข้อมูล" เพื่อกรอก</div>';
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">'
-    +items.map(function(r){
-      return '<div><div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--panelInkSoft);text-transform:uppercase;">'+esc(r[0])+'</div>'
-        +'<div style="font-size:13px;color:var(--panelInk);margin-top:2px;word-break:break-word;">'+esc(r[1])+'</div></div>';
-    }).join('')
-    +'</div>';
-}
+/* ด้านหลังเน้นการสแกนอย่างเดียว — ชื่อ/รหัส/ประเภท/สาขา แล้วบาร์โค้ดใหญ่เต็มความกว้าง
+   ตารางรายละเอียด (เบอร์/อีเมล/เครดิต/ค่าปรับ) และยอดค่าปรับสะสมถอดออกจากบัตรแล้ว —
+   เป็นข้อมูลติดต่อ/ตัวเลขที่เปลี่ยนตลอด ให้ดูในระบบหลังสแกนหรือหน้า "แก้ไขข้อมูล" แทน */
 function ccBackHtml(c,stats){
   var code=String(c.id).toUpperCase();
-  var fineBits=[];
-  if(stats.overdue)fineBits.push('เกินกำหนด '+nf(stats.overdue)+' ใบ × '+money(Number(c.fineRate)||0)+' ฿/วัน = ~'+money(stats.overdueFine)+' ฿');
-  if(stats.lostCount)fineBits.push('สูญหาย '+nf(stats.lostCount)+' ใบ × '+money(Number(c.lostFine)||0)+' ฿ = '+money(stats.lostFineTotal)+' ฿');
-  var fineHtml=fineBits.length
-    ?'<div style="margin-top:12px;"><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--panelInkSoft);text-transform:uppercase;">ค่าปรับปัจจุบัน (ประมาณ)</div>'
-      +fineBits.map(function(t){return '<div style="font-size:12.5px;color:var(--panelInk);margin-top:3px;">'+esc(t)+'</div>';}).join('')
-      +'<div style="font-size:14px;font-weight:700;margin-top:4px;color:#ff8a83;">รวม '+money(stats.overdueFine+stats.lostFineTotal)+' ฿</div></div>'
-    :'';
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,true);
   return ''
     +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
-      +'<div style="flex:0 0 auto;padding:20px 30px 0;">'
-        +'<div style="min-width:0;">'
-          +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
-          +'<div style="font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:4px;">'+esc(c.name)+'</div>'
-          +'<div style="font-family:var(--mono);font-size:12.5px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+'</div>'
-        +'</div>'
+      +'<div style="flex:0 0 auto;padding:22px 30px 0;display:flex;align-items:center;gap:9px;">'
+        +'<div style="width:22px;height:22px;border-radius:7px;background:var(--accent2);color:var(--accentContrast);display:grid;place-items:center;font-size:13px;font-weight:700;">B</div>'
+        +'<div style="font-size:15px;font-weight:600;letter-spacing:-.02em;">BoxTrace</div>'
       +'</div>'
-      +'<div style="flex:1;min-height:0;overflow-y:auto;padding:14px 30px 6px;">'
-        +ccDetailRows(c)
-        +fineHtml
+      +'<div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 30px 8px;">'
+        +'<div style="font-size:21px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:var(--mono);font-size:14px;letter-spacing:.06em;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:14px;">'
+          +'<span class="cc-tag" style="background:'+tone.soft+';color:'+tone.ink+';">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:500;background:rgba(255,255,255,.12);color:var(--panelInk);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
+        +'<div style="font-size:11.5px;line-height:1.6;color:var(--panelInkSoft);margin-top:16px;">'
+          +'ใช้สำหรับระบบยืม–คืนกล่อง BoxTrace<br>หากบัตรสูญหาย กรุณาติดต่อเจ้าหน้าที่'
+        +'</div>'
       +'</div>'
       /* บาร์โค้ดชิดขอบล่างสุด กว้างเท่าตัวบัตรจริง (ไม่มี padding ซ้าย/ขวา) —
          hover แล้ว fade บาร์โค้ดลง โผล่ปุ่มพิมพ์ตรงกลางแทน กดพิมพ์ได้ทันที */
       +'<div class="cc-bc-wrap" style="flex:0 0 auto;" onclick="ccAction(\'print\')">'
         +'<div class="cc-bc-content" style="text-align:center;">'
-          +code128SVG(code,42)
-          +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#666;margin-top:4px;">'+esc(code)+' · CODE 128</div>'
+          +code128SVG(code,54)
+          +'<div style="font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:#666;margin-top:5px;">'+esc(code)+'</div>'
         +'</div>'
-        +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บาร์โค้ด</button></div>'
+        +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บัตร</button></div>'
       +'</div>'
     +'</div>';
 }
@@ -7032,46 +7136,126 @@ function ccAction(kind){
   var id=ccState.id,c=S.customers[id];if(!c)return;
   if(kind==='edit'){closeCustCard();editCust(id);}
   else if(kind==='boxes'){closeCustCard();goInventory({cust:id,status:'out',label:'กล่องของ '+(c.name||id)+' (ยืมอยู่)'});}
-  else if(kind==='print'){printCustCardWindow(id);}
+  else if(kind==='print'){closeCustCard();printCustCard(id);}
   else if(kind==='del'){closeCustCard();delCust(id);}
 }
 window.ccAction=ccAction;
 
-/* บัตรพิมพ์จริง ขนาด CR80 (86×54มม.) เหมือนบัตรพนักงาน — ไม่ใช่แค่ของประดับ */
+/* บัตรพิมพ์จริง — ขนาด CR80 แนวนอน (86×54mm) หน้า+หลัง ใช้ดีไซน์เดียวกับบัตรฟิสิกส์บนจอ
+   (ccFrontHtml/ccBackHtml — โลโก้ BoxTrace, ป้ายประเภทคู่ค้า, สถานะ, รหัส, ชื่อ/ที่อยู่,
+   กำหนดคืน/ยืมอยู่ หรือ รับเข้าแล้ว) แทนการ์ดง่ายๆ แยกดีไซน์คนละแบบเหมือนเดิม — คู่ค้า
+   เป็นการ์ดแนวนอนแบบบัตรสมาชิก (ตรงข้ามกับบัตรพนักงานที่เป็นบัตรห้อยคอแนวตั้ง) เขียนเป็น
+   mm ล้วนที่ขนาดจริง 86×54mm ใช้ CSS var ชุด panel* (เพิ่มไว้ใน empCardRootCSS แล้ว) */
+function ccCardStatusBannerPrint(c){
+  var b=CC_STATUS_BANNER[c.status];
+  if(!b)return '';
+  return '<div style="position:absolute;inset:0;background:rgba(12,12,14,.55);display:flex;align-items:center;justify-content:center;z-index:2;">'
+    +'<div style="transform:rotate(-18deg);text-align:center;line-height:1;white-space:nowrap;">'
+    +'<div style="font-size:12pt;font-weight:700;letter-spacing:-.03em;color:rgba(255,255,255,.96);">'+esc(b.th)+'</div>'
+    +'<div style="font-size:6.5pt;font-weight:700;letter-spacing:.16em;color:'+b.enColor+';margin-top:2mm;">'+b.en+'</div>'
+    +'</div></div>';
+}
+var CC_PRINT_SHELL='position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;border-radius:4mm;'
+  +'background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);color:var(--panelInk);'
+  +'font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);';
+function ccCardFrontHtml(c){
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,false);
+  var st=CC_STATUS_DARK[c.status]||CC_STATUS_DARK.active;
+  var code=String(c.id).toUpperCase();
+  return '<div style="'+CC_PRINT_SHELL+'">'
+    +'<div style="position:absolute;inset:0;background:radial-gradient(60% 90% at 15% 115%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 60%);opacity:.5;"></div>'
+    +'<div style="position:relative;z-index:1;height:100%;display:flex;flex-direction:column;">'
+      +'<div style="flex:0 0 auto;padding:4.4mm 5mm 0;display:flex;align-items:center;justify-content:space-between;gap:3mm;">'
+        +'<div style="display:flex;align-items:center;gap:1.6mm;">'
+          +'<div style="width:4.4mm;height:4.4mm;flex:0 0 auto;border-radius:1.2mm;background:var(--accent2);color:var(--accentContrast);display:flex;align-items:center;justify-content:center;font-size:7.5pt;font-weight:700;">B</div>'
+          +'<div style="font-size:8.5pt;font-weight:600;letter-spacing:-.01em;">BoxTrace</div>'
+        +'</div>'
+        +'<div style="display:inline-flex;align-items:center;flex:0 0 auto;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:600;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);white-space:nowrap;">'+esc(st.t)+'</div>'
+      +'</div>'
+      +'<div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:2.6mm 5mm;">'
+        +'<div style="font-size:13pt;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10pt;font-weight:500;letter-spacing:.04em;margin-top:1.2mm;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:1.6mm;margin-top:2.4mm;">'
+          +'<span style="display:inline-flex;align-items:center;padding:.7mm 2.4mm;border-radius:999px;font-size:6.6pt;font-weight:600;background:'+tone.soft+';color:'+tone.ink+';">'+esc(kindMeta.text)+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:.7mm 2.4mm;border-radius:999px;font-size:6.6pt;font-weight:500;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
+      +'</div>'
+      +'<div style="flex:0 0 auto;background:#fff;padding:1.4mm 0 1mm;text-align:center;">'
+        +'<div style="height:6.5mm;">'+code128SVG(code,30)+'</div>'
+        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:6pt;letter-spacing:.08em;color:#666;margin-top:.6mm;">'+esc(code)+'</div>'
+      +'</div>'
+    +'</div>'
+    +ccCardStatusBannerPrint(c)
+    +'</div>';
+}
+function ccCardBackHtml(c){
+  var scanCode=String(c.id).toUpperCase();
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,false);
+  return '<div style="'+CC_PRINT_SHELL+'padding:4.4mm 5mm;display:flex;flex-direction:column;">'
+    +'<div style="position:relative;z-index:1;display:flex;align-items:center;gap:1.6mm;">'
+      +'<div style="width:4mm;height:4mm;flex:0 0 auto;border-radius:1.2mm;background:var(--accent2);color:var(--accentContrast);display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:700;">B</div>'
+      +'<div style="font-size:8pt;font-weight:600;letter-spacing:-.01em;">BoxTrace</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:2.4mm;">'
+      +'<div style="font-size:10.5pt;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.4pt;letter-spacing:.05em;color:var(--panelInkSoft);margin-top:.5mm;">'+esc(c.id)+'</div>'
+      +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:1.6mm;margin-top:1.8mm;">'
+        +'<span style="display:inline-flex;align-items:center;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:600;background:'+tone.soft+';color:'+tone.ink+';">'+esc(kindMeta.text)+'</span>'
+        +(c.addr?'<span style="display:inline-flex;align-items:center;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:500;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);">'+esc(c.addr)+'</span>':'')
+      +'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:2mm;text-align:center;">'
+      +'<div style="height:11mm;">'+code128SVG(scanCode,50)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7pt;letter-spacing:.08em;color:var(--panelInk);margin-top:.8mm;">'+esc(scanCode)+'</div>'
+      +'<div style="font-size:5.2pt;line-height:1.5;color:var(--panelInkSoft);margin-top:1.4mm;">ใช้สำหรับระบบยืม–คืนกล่อง BoxTrace<br>หากบัตรสูญหาย กรุณาติดต่อเจ้าหน้าที่</div>'
+    +'</div>'
+    +ccCardStatusBannerPrint(c)
+    +'</div>';
+}
+/* กดพิมพ์แล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่พุ่งไปเปิดหน้าต่างพิมพ์ทันที — แบบเดียวกับ
+   บัตรพนักงาน (printEmpBadge) พรีวิวใช้เทมเพลตตัวเดียวกับที่หน้าต่างพิมพ์จริงใช้
+   (ccCardFrontHtml/BackHtml ผ่านหน่วย mm) สิ่งที่เห็นกับสิ่งที่พิมพ์ออกมาจึงตรงกัน */
+function printCustCard(id){
+  var c=S.customers[id];if(!c)return;
+  openModal(
+    '<div class="mhead"><h3>บัตรคู่ค้า '+esc(c.name||c.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
+      +ccCardFrontHtml(c)
+      +ccCardBackHtml(c)
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printCustCardWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
+  );
+}
+window.printCustCard=printCustCard;
+/* ไม่พึ่ง @page{size} เพื่อบังคับขนาดกระดาษ — เครื่องพิมพ์จริงที่ตั้งกระดาษ A4/Letter
+   ไว้ในถาดจะเมินค่านี้แล้วขยายเนื้อหาให้เต็มหน้าแทน (เหตุผลเดียวกับที่แก้ไปแล้วใน
+   printEmpBadgeWindow) — ปล่อยให้ใช้กระดาษปกติ ตัวการ์ดเองคงขนาดจริง 86×54mm ตามหน่วย mm
+   พร้อมคำเตือนให้เลือก "ขนาดจริง / 100%" ในกล่องพิมพ์
+   บัตรคู่ค้าเป็นแนวนอน 86×54mm สองใบวางซ้อนกันยังสูงแค่ ~114mm — พิมพ์ลงกระดาษ A4/Letter
+   แผ่นเดียวได้สบาย จึงไม่ตัดหน้า (ต่างจากบัตรพนักงานแนวตั้ง 86mm×2 ที่ต้องแยกหน้า) */
 function printCustCardWindow(id){
   var c=S.customers[id];if(!c)return;
-  var code=String(c.id).toUpperCase();
-  var meta=[c.phone||c.contact,c.email].filter(Boolean).join(' · ');
-  var kindTxt=ccKindMeta(c).text;
-  var w=window.open('','_blank','width=560,height=460');
+  var w=window.open('','_blank','width=560,height=780');
   if(!w)return toast('เปิดหน้าต่างพิมพ์ไม่ได้','เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตแล้วลองใหม่','err');
   w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8">'
     +'<title>บัตรคู่ค้า '+esc(c.id)+'</title><style>'
-    +'@page{size:86mm 54mm;margin:0;}'
+    +empCardRootCSS()
+    +'@page{margin:12mm;}'
     +'*{box-sizing:border-box;}'
     +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
-    +'background:#ececed;display:flex;align-items:center;justify-content:center;min-height:100vh;}'
-    +'.card{width:86mm;height:54mm;background:#fff;padding:5mm 6mm;display:flex;flex-direction:column;'
-    +'justify-content:space-between;}'
-    +'.top{display:flex;align-items:baseline;justify-content:space-between;gap:4mm;}'
-    +'.nm{font-size:13pt;font-weight:700;letter-spacing:-.2pt;line-height:1.15;}'
-    +'.mt{font-size:8pt;color:#666;margin-top:.6mm;}'
-    +'.brand{font-size:7.5pt;font-weight:700;color:#111;white-space:nowrap;}'
-    +'.bc{text-align:center;}'
-    +'.bc svg{display:block;margin:0 auto;}'
-    +'.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9pt;letter-spacing:1.2pt;'
-    +'margin-top:1mm;text-align:center;}'
-    +'@media print{body{background:none;min-height:0;}.hint{display:none;}}'
+    +'background:#ececed;display:flex;flex-direction:column;align-items:center;gap:6mm;padding:6mm 0 18mm;}'
+    +'.pg{display:flex;justify-content:center;break-inside:avoid;page-break-inside:avoid;}'
+    +'@media print{body{background:none;padding:0;gap:8mm;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
-    +'</style></head><body><div class="card">'
-    +'<div class="top"><div><div class="nm">'+esc(c.name||c.id)+'</div>'
-    +'<div class="mt">'+esc(kindTxt)+(meta?' · '+esc(meta):'')+'</div>'
-    +'</div><div class="brand">◈ Smart Tracking</div></div>'
-    +'<div class="bc" style="width:56mm;">'+code128SVG(code,80)+'<div class="code">'+esc(code)+'</div></div>'
-    +'</div><div class="hint">กด Ctrl/Cmd + P เพื่อพิมพ์ — ขนาดบัตร 86 × 54 มม.</div>'
+    +'</style></head><body>'
+    +'<div class="pg">'+ccCardFrontHtml(c)+'</div>'
+    +'<div class="pg">'+ccCardBackHtml(c)+'</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 86 × 54 มม. หน้า-หลังอยู่ในกระดาษแผ่นเดียว ตัดตามขอบได้เลย</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
+  /* สั่งพิมพ์ให้เลยหลัง layout เสร็จ แทนที่จะให้ผู้ใช้กด Ctrl/Cmd+P เอง */
+  setTimeout(function(){try{w.focus();w.print();}catch(err){}},250);
 }
 window.printCustCardWindow=printCustCardWindow;
 
