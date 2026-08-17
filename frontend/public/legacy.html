@@ -3358,7 +3358,7 @@ a{color:var(--accentInk);}
 
         <div style="flex:0 0 auto;margin:0 26px;padding:20px 0 26px;border-top:.5px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:11px;">
           <div id="empBadgeId" style="font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:.08em;color:var(--ink);"></div>
-          <div style="display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentContrast);">EMPLOYEE</div>
+          <div style="display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>
         </div>
 
         <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;z-index:3;">
@@ -6400,7 +6400,7 @@ function empCardFrontHtml(e){
     +'</div>'
     +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:4mm;border-top:.18mm solid var(--line);display:flex;flex-direction:column;align-items:center;gap:2.4mm;">'
       +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5pt;font-weight:700;letter-spacing:.08em;color:var(--ink);">'+esc(e.id)+'</div>'
-      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentContrast);">EMPLOYEE</div>'
+      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>'
     +'</div>'
     +empCardInactiveHtml(e)
     +'</div>';
@@ -6433,8 +6433,12 @@ function empCardBackHtml(e){
 /* :root ของ CSS var สีธีมสว่าง ยกมาจาก body หลัก (บรรทัด ~22-35) แบบ hardcode — หน้าต่าง
    พิมพ์เป็นเอกสารแยก (document.write) ไม่มี :root ของแอปให้ใช้ และตัวบัตรตั้งใจให้พิมพ์
    เป็นธีมสว่างเสมอไม่ว่าแอปจะอยู่โหมดมืดหรือไม่ (กระดาษ/บัตรพลาสติกไม่มี "โหมดมืด") */
-function empCardRootCSS(){
-  return ':root{--surface:#ffffff;--surface2:#fbfbfd;--ink:#1d1d1f;--ink2:#424245;--muted:#86868b;--faint:#aeaeb2;'
+/* sel เป็น :root ตอนใช้ในหน้าต่างพิมพ์จริง (document แยกต่างหาก ไม่มี :root ของแอปให้ชน)
+   และเป็น class scope ตอนใช้ในโมดัลพรีวิว (document เดียวกับแอป — ประกาศทับ :root ตรงนี้
+   จะไปเปลี่ยนธีมทั้งหน้าโดยไม่ตั้งใจ) ดู printPreviewLightScopeHtml() ด้านล่าง */
+function empCardRootCSS(sel){
+  sel=sel||':root';
+  return sel+'{--surface:#ffffff;--surface2:#fbfbfd;--ink:#1d1d1f;--ink2:#424245;--muted:#86868b;--faint:#aeaeb2;'
     +'--line:#e3e3e8;--line2:#d2d2d7;--accent:#a8f931;--accent2:#bdfb63;--accentSoft:#eefccb;--accentInk:#4d7a0a;--accentContrast:#16330a;'
     +'--pos:#3a3a3c;--posSoft:#eceeef;--neg:#d70015;--negSoft:#ffeceb;--warn:#bf5d00;--warnSoft:#fff2e0;'
     /* ตัวแปรกลุ่ม "panel" ยกมาจาก :root หลักเช่นกัน — ใช้เฉพาะบัตรคู่ค้า (ccCardFrontHtml/
@@ -6443,6 +6447,18 @@ function empCardRootCSS(){
     +'--panelGrad1:#f3f3f5;--panelGrad2:#e7e7ea;--panelInk:#1d1d1f;--panelInkSoft:rgba(29,29,31,.62);'
     +'--panelBorder:rgba(0,0,0,.1);--panelChipBg:rgba(0,0,0,.05);--panelChipBorder:rgba(0,0,0,.12);}';
 }
+/* บัตรพลาสติกจริงพิมพ์บนกระดาษ/พลาสติกสีขาวเสมอ ไม่ว่าแอปจะอยู่ธีมมืดหรือสว่าง —
+   พรีวิวในโมดัลจึงต้องบังคับใช้ตัวแปรสีธีมสว่างชุดเดียวกับหน้าต่างพิมพ์จริงเสมอ ไม่ใช่
+   ปล่อยให้การ์ดสืบทอด var(--surface)/var(--ink) ฯลฯ ของหน้าแอปที่กำลังเป็นธีมมืดอยู่ —
+   ถ้าปล่อยไว้ ตัวการ์ดพื้นเข้ม + มบody ที่ตั้ง color:#111 ไว้เดา (คิดว่าพื้นขาว) จะกลายเป็น
+   ตัวหนังสือเข้มเกือบดำซ้อนบนพื้นเข้มเกือบดำ อ่านไม่ออกทั้งใบ — เกิดจริงกับชื่อพนักงานบน
+   การ์ดพรีวิวตอนแอปอยู่ธีมมืด ใช้ scope class แทน :root เพื่อไม่ให้ไปเปลี่ยนธีมทั้งหน้า */
+var PRINT_PREVIEW_LIGHT_SCOPE='pp-light-scope';
+function printPreviewLightWrapOpen(){
+  return '<style>'+empCardRootCSS('.'+PRINT_PREVIEW_LIGHT_SCOPE)+'</style>'
+    +'<div class="'+PRINT_PREVIEW_LIGHT_SCOPE+'" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;color:#111;">';
+}
+function printPreviewLightWrapClose(){return '</div>';}
 /* คลิกแล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่ใช่พุ่งไปเปิดหน้าต่างพิมพ์เต็มจอทันที —
    หน้าต่างพิมพ์จริง (badgeWindowHtml) ยังใช้ป๊อปอัปเดิมอยู่ แต่ยกไปเป็นขั้นถัดไป
    หลังผู้ใช้กด "พิมพ์" ในโมดัลแทน — พรีวิวใช้เทมเพลต empCardFrontHtml/BackHtml ตัวเดียว
@@ -6457,11 +6473,11 @@ function printEmpBadge(id){
   var backBlank=empBadgeBackBlank();
   openModal(
     '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody" style="padding:24px 16px;color:#111;">'
-      +'<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;">'
+    +'<div class="mbody" style="padding:24px 16px;">'
+      +printPreviewLightWrapOpen()
         +empCardFrontHtml(e)
         +(backBlank?'':empCardBackHtml(e))
-      +'</div>'
+      +printPreviewLightWrapClose()
       +'<p class="desc" style="text-align:center;margin-top:16px;">'
         +(backBlank
           ?'พิมพ์<b>หน้าเดียว</b> — ตั้งไว้ว่าหลังบัตรเป็นกระดาษเปล่า เปลี่ยนได้ที่ปุ่มสลับหลังบัตรบนบัตรพนักงาน'
@@ -6618,7 +6634,6 @@ function openEmpBadge(id,isSelf){
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
   /* เปิดบัตรใหม่ทุกครั้ง = คืนการควบคุมการพลิกให้ hover ตามปกติ แต่ตัวเลือก
      "หลังบัตรมีข้อมูล/กระดาษเปล่า" คงค่าที่บัญชีนี้เลือกไว้ (โหลดมาจาก DB) */
-  empBadgeHoldBack=false;
   syncEmpBadgeBack();
   var inactive=e.status==='inactive';
   var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
@@ -6695,17 +6710,12 @@ function toggleEmpBadgeBack(){
   var next=!empBadgeBackBlank();
   uiPrefSet('empBadgeBackBlank',next);
   syncEmpBadgeBack();
-  /* พลิกไปด้านหลังให้เห็นผลทันที — และตรึงไว้ไม่ให้ hover-out พลิกกลับเอง (ดู
-     empBadgeHoldBack) ไม่งั้นเลื่อนเมาส์ออกจากบัตรแวบเดียวก็ไม่ได้เห็นอะไรเลย */
-  empBadgeHoldBack=true;
-  empBadgeSetFace(true);
+  /* ไม่พลิกบัตรให้ — ผู้ใช้ขอให้กดปุ่มนี้แล้วบัตรอยู่หน้าเดิม (ปกติกำลังดูหน้าตรง
+     อยู่แล้วตอนเอื้อมไปกดปุ่มจัดการ) ใครอยากดูผลด้านหลังก็ hover เอาเองตามปกติ */
   toast(next?'หลังบัตรเป็นกระดาษเปล่า':'หลังบัตรแสดงข้อมูลบัตร',
         next?'เหมาะกับบัตรที่พิมพ์ด้านหลังมาแล้ว':'บาร์โค้ด · Card ID · วันหมดอายุ','ok');
 }
 window.toggleEmpBadgeBack=toggleEmpBadgeBack;
-/* ตรึงด้านหลังไว้หลังกดปุ่ม toggle จนกว่าจะเอาเมาส์เข้าบัตรอีกครั้ง — บัตรใบนี้พลิก
-   ตาม hover เข้า/ออกอยู่แล้ว ถ้าไม่ตรึง ผลของการกดจะหายไปทันทีที่เมาส์ไม่อยู่บนบัตร */
-var empBadgeHoldBack=false;
 
 /* สายคล้องบิดเกลียวตามมุมพลิกบัตรจริง — ริบบิ้นแบนที่ปลายหนึ่งถูกจับหมุน (การ์ด) ส่วนอีก
    ปลาย (จุดแขวน/anchor) อยู่นิ่ง ระยะบิดจะไล่เชิงเส้นจาก 0 ที่ anchor ไปเต็มมุมที่ปลายการ์ด
@@ -6894,13 +6904,8 @@ function empBadgeStep(){
   var card=document.getElementById('empBadgeCard');
   if(!card)return;
   card.addEventListener('pointerdown',empBadgeGrab);
-  card.addEventListener('mouseenter',function(){empBadgeHoldBack=false;empBadgeSetFace(true);});
-  card.addEventListener('mouseleave',function(){
-    /* กดปุ่มสลับหลังบัตรค้างไว้ = ตั้งใจดูด้านหลัง อย่าพลิกกลับใส่เขา จนกว่าเมาส์จะ
-       เข้ามาบนบัตรอีกครั้ง (ซึ่งคืนการควบคุมให้ hover ตามปกติ) */
-    if(empBadgeHoldBack)return;
-    empBadgeSetFace(false);
-  });
+  card.addEventListener('mouseenter',function(){empBadgeSetFace(true);});
+  card.addEventListener('mouseleave',function(){empBadgeSetFace(false);});
 })();
 
 /* ===== ประเภทกล่อง — กล่อง 3D หกด้าน (physics drop + CSS 3D) =====
@@ -7820,9 +7825,11 @@ function printCustCard(id){
   var c=S.customers[id];if(!c)return;
   openModal(
     '<div class="mhead"><h3>บัตรคู่ค้า '+esc(c.name||c.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
-      +ccCardFrontHtml(c)
-      +ccCardBackHtml(c)
+    +'<div class="mbody" style="padding:24px 16px;">'
+      +printPreviewLightWrapOpen()
+        +ccCardFrontHtml(c)
+        +ccCardBackHtml(c)
+      +printPreviewLightWrapClose()
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printCustCardWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
   );
