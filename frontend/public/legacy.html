@@ -3538,16 +3538,23 @@ a{color:var(--accentInk);}
 #custCardOverlay .cc-act-sm.danger{background:#ff453a;color:#fff;}
 #custCardOverlay .cc-act-sm[disabled]{opacity:.35;cursor:not-allowed;}
 /* บาร์โค้ดท้ายบัตร — เต็มความกว้างบัตรจริง (ไม่มี padding ซ้าย/ขวา) ชิดขอบล่างสุด —
-   hover แล้วบาร์โค้ด fade ลง พร้อมโผล่ปุ่มพิมพ์ตรงกลางให้กดพิมพ์ได้ทันที */
+   hover แล้วบาร์โค้ด fade ลง พร้อมโผล่ปุ่มพิมพ์ตรงกลางให้กดพิมพ์ได้ทันที
+   หน่วง .18s ก่อนเริ่ม (เฉพาะขาเข้า — ขาออกคืนค่าทันที) กันปุ่มกระพริบตอนเมาส์แค่ลาก
+   ผ่านบาร์โค้ดไปเฉย ๆ และปุ่มลอยขึ้นมาพร้อม fade แทนที่จะโผล่นิ่ง ๆ ให้ดูลื่นขึ้น */
 #custCardOverlay .cc-bc-wrap{position:relative;background:#fff;}
-#custCardOverlay .cc-bc-wrap .cc-bc-content{transition:opacity .2s;padding:10px 0 8px;}
-#custCardOverlay .cc-bc-wrap:hover .cc-bc-content{opacity:.12;}
+#custCardOverlay .cc-bc-wrap .cc-bc-content{transition:opacity .28s cubic-bezier(.22,.61,.36,1);padding:10px 0 8px;}
+#custCardOverlay .cc-bc-wrap:hover .cc-bc-content{opacity:.12;transition-delay:.18s;}
 #custCardOverlay .cc-bc-print{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  opacity:0;transition:opacity .2s;pointer-events:none;}
-#custCardOverlay .cc-bc-wrap:hover .cc-bc-print{opacity:1;pointer-events:auto;}
+  opacity:0;transition:opacity .28s cubic-bezier(.22,.61,.36,1);pointer-events:none;}
+#custCardOverlay .cc-bc-wrap:hover .cc-bc-print{opacity:1;pointer-events:auto;transition-delay:.18s;}
 #custCardOverlay .cc-bc-print button{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
   border-radius:999px;background:var(--ink);color:var(--surface);font-size:13px;font-weight:700;
-  box-shadow:0 8px 22px rgba(0,0,0,.35);}
+  box-shadow:0 8px 22px rgba(0,0,0,.35);
+  transform:translateY(7px) scale(.96);transition:transform .34s cubic-bezier(.22,1.1,.36,1);}
+#custCardOverlay .cc-bc-wrap:hover .cc-bc-print button{transform:none;transition-delay:.18s;}
+@media (prefers-reduced-motion:reduce){
+  #custCardOverlay .cc-bc-print button{transform:none;}
+}
 /* แถบข้อความทะแยงตอนสถานะปิดใช้งานชั่วคราว/ระงับการใช้งาน — เดิม render ซ้ำในทั้ง
    ccFrontHtml/ccBackHtml (คนละ element ในสองหน้าของ #ccFlip ที่หมุน rotateY สลับกัน)
    ทำให้ตอนหมุนเปลี่ยนหน้า backface-visibility ไม่ตัดภาพสะอาดในบางเบราว์เซอร์ ข้อความ
