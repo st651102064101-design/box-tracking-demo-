@@ -8,7 +8,7 @@
  * ROLE_TTL_MS is the worst-case lag between an admin saving a role and it
  * biting, which is a couple of seconds, not hours.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { roles, rolePermissions, users, employees } from '../db/schema.js';
 import { roleKeyForLegacy } from './permissions.js';
@@ -32,7 +32,11 @@ let cache: { at: number; byId: Map<number, CachedRole>; byKey: Map<string, Cache
 async function loadRoles() {
   if (cache && Date.now() - cache.at < ROLE_TTL_MS) return cache;
   const db = getDb();
-  const roleRows = await db.select().from(roles);
+  /* A soft-deleted role must grant nothing, ever again — same invariant as
+     roles.ts's own list/lookup endpoints. Excluding it here (not just from the
+     admin UI) is what actually enforces that for any account still pointing
+     at it. */
+  const roleRows = await db.select().from(roles).where(isNull(roles.deletedAt));
   const permRows = roleRows.length
     ? await db
         .select()

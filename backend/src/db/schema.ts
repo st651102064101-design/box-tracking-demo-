@@ -65,6 +65,12 @@ export const roles = pgTable('roles', {
   system: boolean('system').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Soft delete. `active` is a separate switch an admin flips deliberately
+   *  (see routes/roles.ts) — this is what DELETE actually does. A deleted role
+   *  can never again be assigned (queries filter it out) but the row survives
+   *  for the audit trail: "who had what permissions on such-and-such date"
+   *  shouldn't become unanswerable just because the role was later removed. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
 export const rolePermissions = pgTable(
@@ -101,6 +107,11 @@ export const customers = pgTable('customers', {
   returnDays: integer('return_days'),
   data: jsonb('data').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Soft delete. Customers are referenced from box/DO/inventory history, so a
+   *  hard DELETE would either orphan that history or cascade-destroy it — this
+   *  keeps the row (and everything that points at it) while taking the
+   *  customer out of every list/lookup a normal user sees. Null = active. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
 export const boxTypes = pgTable('box_types', {
@@ -111,6 +122,10 @@ export const boxTypes = pgTable('box_types', {
   dim: text('dim'),
   data: jsonb('data').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Soft delete — see customers.deletedAt. Every box carries `type` as a plain
+   *  text reference (not an FK), so deleting the type row out from under boxes
+   *  that still hold it would turn "ลังพลาสติก" into a dangling id on screen. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
 export const warehouses = pgTable('warehouses', {

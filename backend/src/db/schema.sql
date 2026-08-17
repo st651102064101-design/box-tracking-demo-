@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 -- Additive migration for databases created before RBAC existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
+-- Soft delete: DELETE /api/roles/:id sets this instead of removing the row
+-- (see the comment on roles.deletedAt in schema.ts).
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS config (
   id          INTEGER PRIMARY KEY DEFAULT 1,
@@ -64,8 +67,10 @@ CREATE TABLE IF NOT EXISTS customers (
   contact     TEXT,
   return_days INTEGER,
   data        JSONB NOT NULL DEFAULT '{}'::jsonb,
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ
 );
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS box_types (
   id         TEXT PRIMARY KEY,
@@ -74,8 +79,10 @@ CREATE TABLE IF NOT EXISTS box_types (
   value      NUMERIC,
   dim        TEXT,
   data       JSONB NOT NULL DEFAULT '{}'::jsonb,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ
 );
+ALTER TABLE box_types ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS warehouses (
   id         TEXT PRIMARY KEY,

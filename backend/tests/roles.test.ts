@@ -149,6 +149,255 @@ describe('Super Admin is locked', () => {
        in routes/roles.ts. */
     expect(res.status).toBe(409);
     expect(res.body.message).toContain('Super Admin คนสุดท้าย');
+
+    const [after] = await db.select().from(users).where(eq(users.id, admin.id));
+    expect(after.roleId).toBe(sa.id); // rejected — the account is untouched
+  });
+});
+
+describe('missing vs null vs a real value on assign-employee', () => {
+  /* undefined = "don't touch it" is meaningless for THIS endpoint — its only
+     job is setting the role, so unlike PUT /api/state (a whole-record replace
+     where an absent field really does mean unchanged), a request with no
+     roleId key is malformed input, not "leave the role alone". This is what
+     stops the bug that shipped before this fix: the employee form's role
+     <select> renders disabled (and empty) whenever /api/roles fails to load,
+     and the old handler read that empty value as "roleId: null" — clearing a
+     role nobody asked to touch, from a save meant only to update a phone
+     number. Requiring the key forces a 400 instead of a silent wipe. */
+  it('rejects a request with no roleId key at all', async () => {
+    const db = getDb();
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-001', name: 'ทดสอบ RBAC หนึ่ง' })
+      .onConflictDoNothing({ target: employees.id });
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-001')
+      .set(auth(ctx.token))
+      .send({ roleId: staff.id });
+
+    const res = await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-001')
+      .set(auth(ctx.token))
+      .send({}); // no roleId key — e.g. a general-info save that never touched the role field
+    expect(res.status).toBe(400);
+
+    const [emp] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-001'));
+    expect(emp.roleId).toBe(staff.id); // untouched
+
+    await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-001'));
+  });
+
+  it('treats an explicit roleId: null as "remove the role", not an error', async () => {
+    const db = getDb();
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-002', name: 'ทดสอบ RBAC สอง' })
+      .onConflictDoNothing({ target: employees.id });
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-002')
+      .set(auth(ctx.token))
+      .send({ roleId: staff.id });
+
+    const res = await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-002')
+      .set(auth(ctx.token))
+      .send({ roleId: null });
+    expect(res.status).toBe(200);
+    const [emp] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-002'));
+    expect(emp.roleId).toBeNull();
+
+    await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-002'));
+  });
+});
+
+describe('role changes are audited, general saves are not', () => {
+  it('logs role_changed with before/after names when the role actually changes, and skips duplicates', async () => {
+    const db = getDb();
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-003', name: 'ทดสอบ RBAC สาม' })
+      .onConflictDoNothing({ target: employees.id });
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    const viewer = list.body.roles.find((r: { key: string }) => r.key === 'viewer');
+
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-003')
+      .set(auth(ctx.token))
+      .send({ roleId: staff.id });
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-003')
+      .set(auth(ctx.token))
+      .send({ roleId: viewer.id });
+
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    const entries = (state.body.auditLog as Array<Record<string, unknown>>).filter(
+      (a) => a.itemId === 'TEST-RBAC-003',
+    );
+    expect(entries.length).toBe(2); // one per real change — not per request
+    expect(entries.some((e) => (e.after as string).includes(staff.name))).toBe(true);
+    expect(entries.some((e) => (e.after as string).includes(viewer.name))).toBe(true);
+
+    /* Re-sending the same role must not audit again — a duplicate save is not
+       a role change. */
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-003')
+      .set(auth(ctx.token))
+      .send({ roleId: viewer.id });
+    const state2 = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    const entries2 = (state2.body.auditLog as Array<Record<string, unknown>>).filter(
+      (a) => a.itemId === 'TEST-RBAC-003',
+    );
+    expect(entries2.length).toBe(2);
+
+    await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-003'));
+  });
+
+  it('editing general fields through PUT /api/state never touches the role or its audit trail', async () => {
+    const db = getDb();
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-004', name: 'ทดสอบ RBAC สี่' })
+      .onConflictDoNothing({ target: employees.id });
+    const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+    const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+    await request(ctx.app)
+      .put('/api/roles/assign-employee/TEST-RBAC-004')
+      .set(auth(ctx.token))
+      .send({ roleId: staff.id });
+
+    /* Editing only a phone number — including the shape the disabled <select>
+       used to produce, roleId simply absent from the JSON body — must leave
+       the stored role exactly as it was, and must not add a NEW role-change
+       audit entry on top of the one from assigning it above. */
+    const before = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    const beforeCount = (before.body.auditLog as Array<Record<string, unknown>>).filter(
+      (a) => a.itemId === 'TEST-RBAC-004' && (a.action === 'role_changed' || a.action === 'role_removed'),
+    ).length;
+    expect(beforeCount).toBe(1); // the assign-employee call above did audit — that's correct
+
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({ employees: { 'TEST-RBAC-004': { id: 'TEST-RBAC-004', name: 'ทดสอบ RBAC สี่', phone: '0812223333' } } });
+
+    const [emp] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-004'));
+    expect(emp.roleId).toBe(staff.id);
+
+    const after = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    const afterCount = (after.body.auditLog as Array<Record<string, unknown>>).filter(
+      (a) => a.itemId === 'TEST-RBAC-004' && (a.action === 'role_changed' || a.action === 'role_removed'),
+    ).length;
+    expect(afterCount).toBe(beforeCount); // unchanged — the phone edit added no role audit
+
+    await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-004'));
+  });
+});
+
+describe('Super Admin cannot be lost through PUT /api/state either', () => {
+  /* roleId itself can never arrive through this endpoint (see state.test.ts's
+     "blob claiming Super Admin must not move the column" case) — what CAN
+     happen here is the row disappearing (absent from the payload → pruned) or
+     its employment status flipping away from 'active'. Both are covered.
+
+     Each test moves the seed admin off Super Admin onto the built-in 'admin'
+     role (all permissions, not the system role) rather than 'viewer' — the
+     caller still needs employee.delete/employee.update to even reach the
+     guard being tested; demoting to a role that can't make the request at all
+     would only prove guardStatePayload's permission revert, not this guard.
+     Wrapped in try/finally: an assertion failure must not leave the seed
+     admin stuck off Super Admin for every test that runs after this one. */
+  it('refuses to delete the last active Super Admin employee', async () => {
+    const db = getDb();
+    const [sa] = await db.select().from(roles).where(eq(roles.key, 'super_admin'));
+    const [adminUser] = await db.select().from(users).where(eq(users.username, 'admin'));
+    const [adminRole] = await db.select().from(roles).where(eq(roles.key, 'admin'));
+    await db.update(users).set({ roleId: adminRole.id }).where(eq(users.id, adminUser.id));
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-005', name: 'ทดสอบ RBAC ห้า', roleId: sa.id })
+      .onConflictDoUpdate({ target: employees.id, set: { roleId: sa.id } });
+    invalidateRoleCache();
+
+    try {
+      const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+      const employeesPayload = { ...state.body.employees };
+      delete employeesPayload['TEST-RBAC-005'];
+
+      const res = await request(ctx.app)
+        .put('/api/state')
+        .set(auth(ctx.token))
+        .send({ employees: employeesPayload });
+      expect(res.status).toBe(409);
+
+      const [still] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-005'));
+      expect(still).toBeTruthy();
+    } finally {
+      await db.update(users).set({ roleId: sa.id }).where(eq(users.id, adminUser.id));
+      await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-005'));
+      invalidateRoleCache();
+    }
+  });
+
+  it('refuses to disable (พ้นสภาพ) the last active Super Admin employee', async () => {
+    const db = getDb();
+    const [sa] = await db.select().from(roles).where(eq(roles.key, 'super_admin'));
+    const [adminUser] = await db.select().from(users).where(eq(users.username, 'admin'));
+    const [adminRole] = await db.select().from(roles).where(eq(roles.key, 'admin'));
+    await db.update(users).set({ roleId: adminRole.id }).where(eq(users.id, adminUser.id));
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-006', name: 'ทดสอบ RBAC หก', roleId: sa.id, data: { status: 'active' } })
+      .onConflictDoUpdate({ target: employees.id, set: { roleId: sa.id, data: { status: 'active' } } });
+    invalidateRoleCache();
+
+    try {
+      const res = await request(ctx.app)
+        .put('/api/state')
+        .set(auth(ctx.token))
+        .send({ employees: { 'TEST-RBAC-006': { id: 'TEST-RBAC-006', name: 'ทดสอบ RBAC หก', status: 'inactive' } } });
+      expect(res.status).toBe(409);
+
+      const [still] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-006'));
+      expect((still.data as Record<string, unknown>)?.status).toBe('active');
+    } finally {
+      await db.update(users).set({ roleId: sa.id }).where(eq(users.id, adminUser.id));
+      await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-006'));
+      invalidateRoleCache();
+    }
+  });
+
+  it('allows demoting one of two Super Admins, leaving the system with one', async () => {
+    const db = getDb();
+    const [sa] = await db.select().from(roles).where(eq(roles.key, 'super_admin'));
+    await db
+      .insert(employees)
+      .values({ id: 'TEST-RBAC-007', name: 'ทดสอบ RBAC เจ็ด', roleId: sa.id })
+      .onConflictDoUpdate({ target: employees.id, set: { roleId: sa.id } });
+    invalidateRoleCache(); // seed admin (users) still holds Super Admin too — two holders now
+
+    try {
+      const list = await request(ctx.app).get('/api/roles').set(auth(ctx.token));
+      const staff = list.body.roles.find((r: { key: string }) => r.key === 'warehouse_staff');
+      const res = await request(ctx.app)
+        .put('/api/roles/assign-employee/TEST-RBAC-007')
+        .set(auth(ctx.token))
+        .send({ roleId: staff.id });
+      expect(res.status).toBe(200);
+
+      const [emp] = await db.select().from(employees).where(eq(employees.id, 'TEST-RBAC-007'));
+      expect(emp.roleId).toBe(staff.id);
+      const [adminUser] = await db.select().from(users).where(eq(users.username, 'admin'));
+      expect(adminUser.roleId).toBe(sa.id); // the one remaining Super Admin, untouched
+    } finally {
+      await db.delete(employees).where(eq(employees.id, 'TEST-RBAC-007'));
+      invalidateRoleCache();
+    }
   });
 });
 

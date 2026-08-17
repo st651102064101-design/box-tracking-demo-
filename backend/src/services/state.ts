@@ -10,7 +10,7 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc, getTableColumns, inArray, sql } from 'drizzle-orm';
+import { asc, desc, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import {
   boxes,
@@ -68,8 +68,11 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     seqRows,
   ] = await Promise.all([
     db.select().from(boxes),
-    db.select().from(customers),
-    db.select().from(boxTypes),
+    /* Soft-deleted rows never round-trip through the legacy S blob — a
+       deleted customer/box type must vanish from the SPA's own lists too, not
+       just the REST endpoints (see routes/masters.ts DELETE handlers). */
+    db.select().from(customers).where(isNull(customers.deletedAt)),
+    db.select().from(boxTypes).where(isNull(boxTypes.deletedAt)),
     db.select().from(warehouses),
     db.select().from(gates),
     db.select().from(gateWebhookStatus),
@@ -171,20 +174,48 @@ const STATE_WRITE_LOCK = 4711_0001;
  * Existing rows are now UPDATEd in place and only genuinely absent ones are
  * deleted, so re-sending the same snapshot is idempotent.
  */
+interface SyncKeyedOpts {
+  size?: number;
+  /** Columns to leave alone on conflict — the row proposed by a client save
+   *  never carries these, so writing `excluded.<col>` for them would reset
+   *  every existing row to that column's blank default on every ordinary
+   *  save. `deletedAt` is exactly that case: composeState excludes
+   *  soft-deleted rows from what any client ever sees, so a save from a
+   *  client that hasn't refreshed since a delete has no way to *know* to
+   *  preserve deletedAt — the sync layer has to do it for them. */
+  preserveCols?: string[];
+  /** Scopes the prune step's "what's already stored" query. A soft-deleted
+   *  row must never appear there — it is not "missing from this snapshot", it
+   *  was excluded from what any client can ever see (composeState), so it is
+   *  outside this function's job entirely. Without this, the very next save
+   *  from any client that hasn't refreshed since the delete would prune it as
+   *  gone and hard-delete it for real.
+   *
+   *  Note: this does not stop `preserveCols` deletedAt from surviving an
+   *  ON CONFLICT collision with a soft-deleted row's id — that upsert still
+   *  runs (and can overwrite that row's other columns with a stale client's
+   *  values), but the delete flag itself is preserved either way. Reviving a
+   *  deleted master row is only ever done deliberately, through masters.ts's
+   *  own POST handler. */
+  liveOnly?: any;
+}
 async function syncKeyed<T extends Record<string, unknown>>(
   tx: any,
   table: any,
   keyProp: string,
   rows: T[],
-  size = 400,
+  opts: SyncKeyedOpts = {},
 ): Promise<void> {
+  const size = opts.size ?? 400;
+  const preserve = new Set(opts.preserveCols ?? []);
   const cols = getTableColumns(table);
   const keyCol = (cols as Record<string, any>)[keyProp];
-  /* ON CONFLICT DO UPDATE, writing every non-key column from the row that was
-     just proposed (`excluded`) — i.e. "if it exists, update it". */
+  /* ON CONFLICT DO UPDATE, writing every non-key, non-preserved column from
+     the row that was just proposed (`excluded`) — i.e. "if it exists, update
+     it". */
   const set: Record<string, unknown> = {};
   for (const [prop, col] of Object.entries(cols as Record<string, any>)) {
-    if (prop === keyProp) continue;
+    if (prop === keyProp || preserve.has(prop)) continue;
     set[prop] = sql`excluded.${sql.identifier(col.name)}`;
   }
   for (let i = 0; i < rows.length; i += size) {
@@ -196,9 +227,14 @@ async function syncKeyed<T extends Record<string, unknown>>(
   /* Prune: whatever the snapshot no longer contains is gone. Done by reading
      the stored keys and deleting the difference in bounded chunks rather than
      one huge NOT IN (...), so the statement can never blow past Postgres'
-     bind-parameter limit on a large table. */
+     bind-parameter limit on a large table. Scoped to liveOnly when given, so
+     an already soft-deleted row is never in `stored` at all — it is not "no
+     longer in the snapshot", it was never eligible to be compared in the
+     first place, and must not be hard-deleted by this prune. */
   const keep = new Set(rows.map((r) => r[keyProp] as unknown));
-  const stored: Array<Record<string, unknown>> = await tx.select({ k: keyCol }).from(table);
+  let storedQuery = tx.select({ k: keyCol }).from(table);
+  if (opts.liveOnly) storedQuery = storedQuery.where(opts.liveOnly);
+  const stored: Array<Record<string, unknown>> = await storedQuery;
   const drop = stored.map((r) => r.k).filter((k) => !keep.has(k));
   for (let i = 0; i < drop.length; i += size) {
     const slice = drop.slice(i, i + size);
@@ -332,6 +368,7 @@ export async function replaceState(
           updatedAt: new Date(),
         };
       }),
+      { preserveCols: ['deletedAt'], liveOnly: isNull(customers.deletedAt) },
     );
 
     await syncKeyed(
@@ -350,6 +387,7 @@ export async function replaceState(
           updatedAt: new Date(),
         };
       }),
+      { preserveCols: ['deletedAt'], liveOnly: isNull(boxTypes.deletedAt) },
     );
 
     await syncKeyed(
