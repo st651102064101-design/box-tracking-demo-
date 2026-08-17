@@ -516,6 +516,17 @@ class RfidReaderController(private val context: Context) :
                 val idx = rd.Config.Antennas.getAntennaRfConfig(1).getTransmitPowerIndex()
                 values[idx]
             }
+            /* The link profile in force, and the fastest the reader says it
+               has. Surfaced because read rate lives or dies on it and the
+               app's own logs aren't readable on a locked-down device — this
+               panel is the only way to see, on the floor, whether the radio
+               is actually on its quickest setting. */
+            m["rfModeIndex"] = num {
+                rd.Config.Antennas.getAntennaRfConfig(1).getrfModeTableIndex().toInt()
+            }
+            m["rfModeBdr"] = num { bdrForModeIndex(rd, rd.Config.Antennas.getAntennaRfConfig(1).getrfModeTableIndex().toInt()) }
+            m["rfModeBest"] = num { fastestRfModeIndex(rd) }
+            m["rfModeCount"] = num { rfModeEntryCount(rd) }
         }
         return m
     }
@@ -663,8 +674,19 @@ class RfidReaderController(private val context: Context) :
             maxPower = rd.ReaderCapabilities.getTransmitPowerLevelValues().size - 1
             val cfg = rd.Config.Antennas.getAntennaRfConfig(1)
             cfg.setTransmitPowerIndex(maxPower)
-            cfg.setrfModeTableIndex(0)
-            cfg.setTari(0)
+            // The link profile: was hardcoded to index 0, which is simply
+            // "whatever the SDK lists first" and carries no promise of being
+            // the fast one. Each entry in the reader's own RF mode table
+            // reports its backscatter data rate (bdrValue, bits/sec) — the
+            // rate tag replies come back at, and the single biggest lever on
+            // how many reads/sec this radio can do. So ask the reader what it
+            // supports and take the fastest, instead of assuming.
+            //
+            // Every entry is logged: the table is firmware- and region-
+            // dependent, so this is also how we can see on a real device what
+            // was actually available and what got picked.
+            cfg.setrfModeTableIndex(fastestRfModeIndex(rd).toLong())
+            cfg.setTari(0L) // 0 = let the reader use the chosen mode's own default
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
             // Singulation. The comment here used to claim "state A — read tags
@@ -714,6 +736,74 @@ class RfidReaderController(private val context: Context) :
             applyReadProfile(rd)
         } catch (e: Exception) {
             Log.e(TAG, "configure failed", e)
+        }
+    }
+
+    /**
+     * The reader's fastest Gen2 link profile, as an RF-mode-table index.
+     *
+     * `bdrValue` is the entry's backscatter data rate in bits/sec — how fast a
+     * tag's reply comes back over the air. Everything else being equal, the
+     * highest one gives the most reads/sec, which is the whole reason this
+     * function exists instead of the old hardcoded 0.
+     *
+     * Falls back to 0 (the previous behaviour) if the table can't be read or
+     * comes back empty, so a firmware that doesn't expose it is no worse off
+     * than before.
+     */
+    /** Backscatter data rate of one mode index, or -1 if the table has no
+     *  such entry — see [fastestRfModeIndex] for what bdr means here. */
+    private fun bdrForModeIndex(rd: RFIDReader, index: Int): Int {
+        val modes = rd.ReaderCapabilities.RFModes
+        for (t in 0 until modes.Length()) {
+            val table = modes.getRFModeTableInfo(t) ?: continue
+            for (i in 0 until table.length()) {
+                val e = table.getRFModeTableEntryInfo(i) ?: continue
+                if (e.getModeIdentifer() == index) return e.getBdrValue()
+            }
+        }
+        return -1
+    }
+
+    private fun rfModeEntryCount(rd: RFIDReader): Int {
+        val modes = rd.ReaderCapabilities.RFModes
+        var n = 0
+        for (t in 0 until modes.Length()) n += (modes.getRFModeTableInfo(t)?.length() ?: 0)
+        return n
+    }
+
+    private fun fastestRfModeIndex(rd: RFIDReader): Int {
+        try {
+            val modes = rd.ReaderCapabilities.RFModes
+            var bestIndex = 0
+            var bestBdr = -1
+            var found = 0
+            for (t in 0 until modes.Length()) {
+                val table = modes.getRFModeTableInfo(t) ?: continue
+                for (i in 0 until table.length()) {
+                    val e = table.getRFModeTableEntryInfo(i) ?: continue
+                    found++
+                    Log.i(
+                        TAG,
+                        "rf mode[$t/$i] id=${e.getModeIdentifer()} bdr=${e.getBdrValue()}" +
+                            " mod=${e.getModulation()} dr=${e.getDivideRatio()}" +
+                            " tari=${e.getMinTariValue()}..${e.getMaxTariValue()}"
+                    )
+                    if (e.getBdrValue() > bestBdr) {
+                        bestBdr = e.getBdrValue()
+                        bestIndex = e.getModeIdentifer()
+                    }
+                }
+            }
+            if (found == 0) {
+                Log.w(TAG, "rf mode table empty — keeping index 0")
+                return 0
+            }
+            Log.i(TAG, "rf mode: picked index=$bestIndex (bdr=$bestBdr bps) out of $found entries")
+            return bestIndex
+        } catch (e: Exception) {
+            Log.w(TAG, "rf mode table unavailable — keeping index 0", e)
+            return 0
         }
     }
 

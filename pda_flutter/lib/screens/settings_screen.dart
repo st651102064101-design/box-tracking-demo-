@@ -836,6 +836,16 @@ class _RfidPanelState extends State<_RfidPanel> {
             _row(loc.t('ภูมิภาค (Region)'), _d['region']),
             _row(loc.t('ช่องทางเชื่อมต่อ'), _d['transport']),
             _row(loc.t('กำลังส่ง (index)'), power),
+            // Link profile — the knob that decides how fast tag replies come
+            // back. Shows what's in force and the fastest the reader offers,
+            // so "is the radio actually flat out?" is answerable on the floor
+            // instead of only from a log nobody can read on this device.
+            _row(loc.t('โปรไฟล์สัญญาณ (RF mode)'), _d['rfModeIndex'] == null
+                ? null
+                : 'index ${_d['rfModeIndex']}'
+                    '${_d['rfModeBdr'] != null && _d['rfModeBdr'] != -1 ? ' · ${_d['rfModeBdr']} bps' : ''}'
+                    '${_d['rfModeBest'] != null && _d['rfModeBest'] != _d['rfModeIndex'] ? '  (เร็วสุด: ${_d['rfModeBest']})' : '  (เร็วสุดแล้ว)'}'
+                    '${_d['rfModeCount'] != null ? ' · มี ${_d['rfModeCount']} โปรไฟล์' : ''}'),
             const SizedBox(height: 10),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
