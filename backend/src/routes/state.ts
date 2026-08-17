@@ -5,6 +5,8 @@ import { composeState, replaceState } from '../services/state.js';
 import { stateSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { effectivePermissions } from '../lib/effectivePermissions.js';
+import { guardStatePayload } from '../services/stateGuard.js';
 import { bump } from '../lib/bus.js';
 
 /**
@@ -58,11 +60,29 @@ stateRouter.put(
       throw httpError(403, 'ไม่สามารถลบบัญชีของตัวเองได้', 'forbidden');
     }
 
-    await replaceState(db, payload, req.user);
+    /* RBAC, applied as a diff. This endpoint takes the entire `S` object, so
+       the only way to ask "what is this request actually changing?" is to
+       compare it with what is stored. Groups the caller may not change are
+       reverted to the stored version rather than 403-ing the whole upload —
+       every snapshot carries every table, so an outright rejection would stop
+       an operator from saving the one box they are allowed to edit.
+       See services/stateGuard.ts for the group→permission map. */
+    const { permissions } = await effectivePermissions(req.user);
+    const stored = await composeState(db);
+    const { payload: allowed, rejected } = guardStatePayload(
+      payload,
+      stored as unknown as Record<string, unknown>,
+      permissions,
+    );
+
+    await replaceState(db, allowed, req.user);
     /* Tell every open stream. The writer's own id rides along so its browser
        can skip re-fetching the snapshot it just uploaded. */
     const version = bump(req.get('X-Client-Id'));
-    res.json({ ok: true, version });
+    /* 200 with a report, not an error: the allowed part of the save did happen.
+       The UI tells the user which parts didn't and reloads so the screen stops
+       showing edits the server refused. */
+    res.json({ ok: true, version, rejected });
   }),
 );
 
