@@ -669,6 +669,9 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
    (อ่านออกทั้งคนตาบอดสีและตอนพิมพ์ขาวดำ) ใช้ .pill เดิมของระบบเป็นฐาน */
 .acc-ic{font-weight:800;font-size:11px;line-height:1;}
 .acc-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+/* คอลัมน์ "จัดการ" ของตารางพนักงาน — ปุ่ม "กำหนดบทบาท" (เมื่อมี) วางคู่กับลูกศร ›
+   ทุกแถวจึงสูงเท่ากันไม่ว่าจะมีบทบาทหรือไม่ (เดิมปุ่มนี้อยู่ในคอลัมน์การเข้าถึงและดันแถวสูงขึ้น) */
+#empBody td:last-child{display:flex;align-items:center;justify-content:flex-end;gap:8px;}
 /* ลำดับความสำคัญบนจอแคบ: ชื่อ → บทบาท → การเข้าถึง → ปุ่ม
    คอลัมน์รอง (แผนก/คลัง/เบอร์/ตำแหน่ง) ซ่อนก่อน แต่คำเตือนเรื่องสิทธิ์ต้องไม่หาย */
 @media(max-width:900px){
@@ -3291,6 +3294,12 @@ a{color:var(--accentInk);}
   <button id="empBadgePrintBtn" onclick="event.stopPropagation();empBadgeAction('print')" title="พิมพ์บัตรพนักงาน" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="5"/><path d="M6 14 H4 A2 2 0 0 1 2 12 V10 A2 2 0 0 1 4 8 H20 A2 2 0 0 1 22 10 V12 A2 2 0 0 1 20 14 H18"/><rect x="6" y="13" width="12" height="8"/></svg>
   </button>
+  <!-- สลับ "หลังบัตรมีข้อมูล / หลังบัตรเป็นกระดาษเปล่า" — กดแล้วพลิกไปโชว์ด้านหลังทันที
+       ให้เห็นผลของสิ่งที่เพิ่งเลือก ไม่ต้องเดา ค่าที่เลือกจำไว้ต่อบัญชีใน DB
+       (uiPrefSet -> PUT /api/ui-prefs) ไม่ใช่แค่ต่อ session -->
+  <button id="empBadgeBackBtn" onclick="event.stopPropagation();empBadgeAction('back')" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+    <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="12" height="14" rx="2.2"/><path d="M8 5V3.6A1.6 1.6 0 0 1 9.6 2H19a2 2 0 0 1 2 2v11.5"/><path d="M6.5 9.5h5M6.5 13h5"/></svg></span>
+  </button>
   <button id="empBadgeDelBtn" onclick="event.stopPropagation();empBadgeAction('del')" title="ลบพนักงานออกจากระบบ" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg>
   </button>
@@ -3368,6 +3377,10 @@ a{color:var(--accentInk);}
           </div>
         </div>
 
+        <!-- ทุกอย่างที่เป็น "ข้อมูล" อยู่ในกล่องนี้ก้อนเดียว เพื่อให้โหมดกระดาษเปล่า
+             ปิดได้ด้วยการซ่อนกล่องเดียว ไม่ต้องไล่ซ่อนทีละชิ้น (ซึ่งจะลืมชิ้นใหม่
+             ที่เพิ่มเข้ามาภายหลังเสมอ) — ตัวบัตร ร่องคลิป และเงายังอยู่ครบ -->
+        <div id="empBadgeBackContent" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;">
         <div style="flex:0 0 auto;padding:22px 30px 0;text-align:center;">
           <div style="display:inline-flex;align-items:center;gap:10px;">
             <span style="width:26px;height:26px;border-radius:8px;background:var(--accent);"></span>
@@ -3405,6 +3418,7 @@ a{color:var(--accentInk);}
           <!-- margin-top:auto ดันข้อความส่งคืนบริษัทลงไปชิดขอบล่างสุดของบัตรเสมอเมื่อเนื้อหา
                ด้านบนสั้นกว่าพื้นที่ที่มี — ถ้าล้น กล่อง overflow-y:auto ด้านนอกจะเลื่อนตามปกติ -->
           <div id="empBadgeReturnNote" style="margin-top:auto;padding-top:22px;border-top:.5px solid var(--line);font-size:12.5px;line-height:1.7;color:var(--muted);"></div>
+        </div>
         </div>
 
         <div id="empBadgeInactiveBack" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;">
@@ -6193,7 +6207,7 @@ function editEmp(id){
   eIdAuto.edit(e.id);setEmpIdLocked(true);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
   setv('eScan',e.scanCode||'');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
-  renderEmpRoleOptions(e.roleId!=null?String(e.roleId):'');
+  renderEmpRoleOptions(e.roleId!=null?String(e.roleId):'',e.id);
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';
   renderSetup();}
@@ -6522,7 +6536,7 @@ function empBadgeBoot(){
     card:$('#empBadgeCard'),flip:$('#empBadgeFlip'),clip:$('#empBadgeClip'),
     strap:$('#empBadgeStrap'),shade:$('#empBadgeStrapShade'),close:$('#empBadgeClose'),
     logout:$('#empBadgeLogout'),
-    actionBtns:[$('#empBadgeEditBtn'),$('#empBadgeCredBtn'),$('#empBadgePrintBtn'),$('#empBadgeDelBtn')],
+    actionBtns:[$('#empBadgeEditBtn'),$('#empBadgeCredBtn'),$('#empBadgePrintBtn'),$('#empBadgeBackBtn'),$('#empBadgeDelBtn')],
     backdrop:$('#empBadgeBackdrop')
   };
   empBadge.raf=requestAnimationFrame(empBadgeTick);
@@ -6586,6 +6600,10 @@ function openEmpBadge(id,isSelf){
   var rn=$('#empBadgeReturnNote');
   if(rn)rn.innerHTML='บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(EMP_CARD_ORG.name)+'<br>หากพบกรุณาส่งคืนบริษัท / ฝ่ายทรัพยากรบุคคล<br><span style="font-family:var(--mono);color:var(--ink2);">Tel. '+esc(EMP_CARD_ORG.tel)+'</span>';
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
+  /* เปิดบัตรใหม่ทุกครั้ง = คืนการควบคุมการพลิกให้ hover ตามปกติ แต่ตัวเลือก
+     "หลังบัตรมีข้อมูล/กระดาษเปล่า" คงค่าที่บัญชีนี้เลือกไว้ (โหลดมาจาก DB) */
+  empBadgeHoldBack=false;
+  syncEmpBadgeBack();
   var inactive=e.status==='inactive';
   var fi=$('#empBadgeInactiveFront'),bi=$('#empBadgeInactiveBack');
   if(fi)fi.style.display=inactive?'grid':'none';
@@ -6620,6 +6638,9 @@ function closeEmpBadge(){
 window.closeEmpBadge=closeEmpBadge;
 function empBadgeAction(kind){
   var id=empBadge.id;var e=S.employees[id];if(!e)return;
+  /* ต่างจากปุ่มอื่นทุกปุ่มในสแต็กนี้: 'back' ไม่ปิดบัตร มันแก้สิ่งที่อยู่บนบัตรใบที่
+     กำลังดูอยู่ ปิดทิ้งแล้วผู้ใช้จะไม่เห็นผลของสิ่งที่เพิ่งกดเลย */
+  if(kind==='back'){toggleEmpBadgeBack();return;}
   closeEmpBadge();
   if(kind==='edit')editEmp(id);
   else if(kind==='cred')setEmpCredentials(id,e.name||id,e.loginUsername||'');
@@ -6627,6 +6648,48 @@ function empBadgeAction(kind){
   else if(kind==='del')delEmp(id);
 }
 window.empBadgeAction=empBadgeAction;
+
+/* ── หลังบัตร: มีข้อมูล / เป็นกระดาษเปล่า ──────────────────────────────────────
+   เก็บใน uiPrefs ซึ่ง persist ลง DB ต่อบัญชี (PUT /api/ui-prefs) ไม่ใช่ตัวแปรใน
+   หน่วยความจำหรือ localStorage — เปิดคนละเครื่อง คนละเบราว์เซอร์ ก็ยังได้ค่าที่
+   ตัวเองเลือกไว้ และของคนอื่นไม่ปนกัน
+
+   ทำไมต้องมีโหมดกระดาษเปล่า: บัตรพลาสติกที่พิมพ์ด้านหลังมาแล้วจากโรงพิมพ์ (ข้อความ
+   ส่งคืนบริษัท/เบอร์ติดต่อ) ไม่ต้องมีอะไรบนจอมาซ้อน — คนที่ใช้บัตรแบบนั้นอยากเห็น
+   หลังบัตรว่าง ๆ ตรงกับของจริงในมือ */
+function empBadgeBackBlank(){
+  return uiPrefGet('empBadgeBackBlank',false)===true;
+}
+function syncEmpBadgeBack(){
+  var wrap=$('#empBadgeBackContent');
+  var blank=empBadgeBackBlank();
+  if(wrap)wrap.style.display=blank?'none':'flex';
+  var btn=$('#empBadgeBackBtn');
+  if(btn){
+    /* ป้ายบอกสิ่งที่ "จะได้ถ้ากด" ไม่ใช่สถานะปัจจุบัน — ปุ่มที่บอกสถานะทำให้คนอ่าน
+       ต้องเดาว่ากดแล้วจะเป็นอะไร */
+    btn.title=blank?'หลังบัตรว่างอยู่ — กดเพื่อแสดงข้อมูลบัตร'
+                   :'หลังบัตรมีข้อมูล — กดเพื่อทำให้เป็นกระดาษเปล่า';
+    btn.style.background=blank?'var(--accent)':'var(--ink)';
+    btn.style.color=blank?'var(--accentContrast)':'var(--surface)';
+  }
+}
+window.syncEmpBadgeBack=syncEmpBadgeBack;
+function toggleEmpBadgeBack(){
+  var next=!empBadgeBackBlank();
+  uiPrefSet('empBadgeBackBlank',next);
+  syncEmpBadgeBack();
+  /* พลิกไปด้านหลังให้เห็นผลทันที — และตรึงไว้ไม่ให้ hover-out พลิกกลับเอง (ดู
+     empBadgeHoldBack) ไม่งั้นเลื่อนเมาส์ออกจากบัตรแวบเดียวก็ไม่ได้เห็นอะไรเลย */
+  empBadgeHoldBack=true;
+  empBadgeSetFace(true);
+  toast(next?'หลังบัตรเป็นกระดาษเปล่า':'หลังบัตรแสดงข้อมูลบัตร',
+        next?'เหมาะกับบัตรที่พิมพ์ด้านหลังมาแล้ว':'บาร์โค้ด · Card ID · วันหมดอายุ','ok');
+}
+window.toggleEmpBadgeBack=toggleEmpBadgeBack;
+/* ตรึงด้านหลังไว้หลังกดปุ่ม toggle จนกว่าจะเอาเมาส์เข้าบัตรอีกครั้ง — บัตรใบนี้พลิก
+   ตาม hover เข้า/ออกอยู่แล้ว ถ้าไม่ตรึง ผลของการกดจะหายไปทันทีที่เมาส์ไม่อยู่บนบัตร */
+var empBadgeHoldBack=false;
 
 /* สายคล้องบิดเกลียวตามมุมพลิกบัตรจริง — ริบบิ้นแบนที่ปลายหนึ่งถูกจับหมุน (การ์ด) ส่วนอีก
    ปลาย (จุดแขวน/anchor) อยู่นิ่ง ระยะบิดจะไล่เชิงเส้นจาก 0 ที่ anchor ไปเต็มมุมที่ปลายการ์ด
@@ -6815,8 +6878,13 @@ function empBadgeStep(){
   var card=document.getElementById('empBadgeCard');
   if(!card)return;
   card.addEventListener('pointerdown',empBadgeGrab);
-  card.addEventListener('mouseenter',function(){empBadgeSetFace(true);});
-  card.addEventListener('mouseleave',function(){empBadgeSetFace(false);});
+  card.addEventListener('mouseenter',function(){empBadgeHoldBack=false;empBadgeSetFace(true);});
+  card.addEventListener('mouseleave',function(){
+    /* กดปุ่มสลับหลังบัตรค้างไว้ = ตั้งใจดูด้านหลัง อย่าพลิกกลับใส่เขา จนกว่าเมาส์จะ
+       เข้ามาบนบัตรอีกครั้ง (ซึ่งคืนการควบคุมให้ hover ตามปกติ) */
+    if(empBadgeHoldBack)return;
+    empBadgeSetFace(false);
+  });
 })();
 
 /* ===== ประเภทกล่อง — กล่อง 3D หกด้าน (physics drop + CSS 3D) =====
@@ -11263,7 +11331,7 @@ function refreshStabBadges(){
 
    หน้าจอนี้ซ่อน/แสดงปุ่มตามสิทธิ์เพื่อความสะดวกเท่านั้น ตัวกันจริงอยู่ที่ backend
    (requirePermission) ทุก endpoint — ยิง API ตรง ๆ ก็ยังโดน 403 */
-var RBAC={perms:[],role:null,modules:[],total:0,roles:[],loaded:false};
+var RBAC={perms:[],role:null,modules:[],total:0,roles:[],loaded:false,rolesLoadError:false};
 window.RBAC=RBAC;
 
 /** สิทธิ์ของบัญชีที่ล็อกอินอยู่ — ใช้คุมเมนู/ปุ่ม ไม่ใช่ใช้กันจริง */
@@ -11419,13 +11487,19 @@ window.openRoleMembers=openRoleMembers;
 function loadRoles(){
   if(!hasAnyPerm('role.manage','permission.manage')){renderRoles();return Promise.resolve();}
   return rbacGet('/api/roles').then(function(d){
-    RBAC.roles=d.roles||[];RBAC.total=d.total||RBAC.total;
+    RBAC.roles=d.roles||[];RBAC.total=d.total||RBAC.total;RBAC.rolesLoadError=false;
     renderRoles();
     /* ฟอร์มพนักงานอาจเปิดค้างอยู่ — เติมตัวเลือกบทบาทให้ตรงกับที่เพิ่งโหลดมา */
-    var eSel=$('#eRoleId');if(eSel)renderEmpRoleOptions(eSel.value||'');
+    var eSel=$('#eRoleId');if(eSel)renderEmpRoleOptions(eSel.value||'',eSel._empId||null);
     refreshStabBadges();
   }).catch(function(e){
-    toast('โหลดบทบาทไม่ได้',e.message||'',(e.status===403?'err':'err'));
+    /* แยกจากบัญชีที่ "ไม่มีสิทธิ์เห็นบทบาท" (กรณีนั้น hasAnyPerm ด้านบนกันไว้ตั้งแต่
+       ก่อนยิง fetch เลย ไม่มาเข้า catch นี้) — ตรงนี้คือบัญชีที่มีสิทธิ์ปกติ แต่เน็ต/เซิร์ฟเวอร์
+       มีปัญหา ต้องบอกตรง ๆ ว่า "โหลดไม่สำเร็จ" ไม่ใช่ปล่อยให้ฟอร์มพนักงานเงียบ ๆ
+       ทึกทักว่า "ยังไม่ได้กำหนดบทบาท" ทั้งที่จริงแค่ยังไม่รู้ */
+    RBAC.rolesLoadError=true;
+    toast('โหลดบทบาทไม่ได้',e.message||'','err');
+    var eSel=$('#eRoleId');if(eSel)renderEmpRoleOptions(eSel.value||'',eSel._empId||null);
   });
 }
 window.loadRoles=loadRoles;
@@ -11635,18 +11709,34 @@ function empAccessForRole(id){
   if(p.indexOf('employee.view')>=0)return 'supervisor';
   return 'operator';
 }
-function renderEmpRoleOptions(selected){
+function renderEmpRoleOptions(selected,empId){
   var sel=$('#eRoleId');if(!sel)return;
+  sel._empId=empId||null;   /* ให้ loadRoles() วาดใหม่ได้ถูกคนเมื่อโหลดสำเร็จ/พลาดทีหลัง */
   var roles=(RBAC.roles||[]);
   if(!roles.length){
-    /* บัญชีที่ไม่มีสิทธิ์ role.manage อ่าน /api/roles ไม่ได้ — แสดงบทบาทปัจจุบัน
-       ของพนักงานคนนั้นไว้เฉย ๆ ดีกว่าโชว์ช่องว่างที่ดูเหมือนข้อมูลหาย */
-    var cur=empRoleById(selected);
-    sel.innerHTML=cur?'<option value="'+cur.id+'">'+esc(cur.name)+'</option>'
-      :'<option value="">— ยังไม่ได้กำหนดบทบาท —</option>';
+    /* สองสาเหตุที่มาถึงตรงนี้ต้องแยกให้คนละข้อความ:
+       1) โหลดพลาดจริง (RBAC.rolesLoadError) — บัญชีนี้มีสิทธิ์ดูบทบาทตามปกติ แต่เน็ต/
+          เซิร์ฟเวอร์มีปัญหา ต้องบอกตรง ๆ ว่า "โหลดไม่สำเร็จ" ไม่ใช่ปล่อยให้ดูเหมือนไม่มีบทบาท
+       2) ไม่มีสิทธิ์เห็น /api/roles เลย (บัญชีทั่วไป) — ข้อความเดิม
+       ทั้งสองกรณีต้องแสดง "บทบาทปัจจุบัน" ของพนักงานคนนี้จากชื่อที่บันทึกไว้ตอนกำหนด
+       (e.roleName) ไม่ใช่ค้นใน RBAC.roles ที่ว่างเปล่าอยู่แล้ว — ค้นแบบเดิมจะเจอ null
+       เสมอในเคสนี้ และหน้าจอจะโกหกว่า "ยังไม่ได้กำหนดบทบาท" ทั้งที่จริงมีบทบาทอยู่ */
+    var emp=empId?(S.employees||{})[empId]:null;
+    var hasRole=!!(emp&&selected&&emp.roleId!=null&&String(emp.roleId)===String(selected));
+    /* roleName ที่แคชไว้ฝั่ง client ไม่น่าเชื่อถือพอจะพึ่งเป็นหลัก — มันถูกเขียนเฉพาะตอน
+       บันทึกผ่านฟอร์มนี้ตอน RBAC.roles มีข้อมูลอยู่แล้ว บทบาทที่ตั้งผ่านช่องทางอื่น (เช่น
+       quickAssignRole ตอน RBAC.roles ยังไม่โหลด) จะไม่มีชื่อนี้ค้างอยู่เลย ต้องมีข้อความ
+       สำรองที่ยังบอกความจริงได้แม้ไม่รู้ชื่อ: "มีบทบาทอยู่" ไม่ใช่ "ยังไม่ได้กำหนด" */
+    var curName=hasRole?(emp.roleName||null):null;
+    var optLabel=hasRole?(curName||'(บทบาทเดิมคงอยู่ — โหลดชื่อไม่สำเร็จ)')
+      :(RBAC.rolesLoadError?'โหลดบทบาทไม่สำเร็จ — ลองอีกครั้ง':'— ยังไม่ได้กำหนดบทบาท —');
+    sel.innerHTML='<option value="'+esc(selected||'')+'">'+esc(optLabel)+'</option>';
     sel.value=selected||'';
     sel.disabled=true;
-    syncEmpRoleDesc();
+    if(RBAC.rolesLoadError){
+      var d=$('#eRoleDesc');
+      if(d){d.textContent='โหลดรายชื่อบทบาทไม่สำเร็จ — บทบาทเดิมของพนักงานคนนี้ยังไม่เปลี่ยน แก้ข้อมูลอื่นได้ตามปกติ';d.title=d.textContent;}
+    }else syncEmpRoleDesc();
     return;
   }
   sel.disabled=false;
@@ -11803,6 +11893,13 @@ function empAccessState(e){
   return {key:'ready',role:r};
 }
 function empAccessNeedsSetup(e){return !!EMP_ACC[empAccessState(e).key].warn;}
+/* ปุ่ม "+ กำหนดบทบาท" เคยอยู่ในคอลัมน์การเข้าถึง ทำให้แถวที่ไม่มีบทบาทสูงกว่าแถวอื่น —
+   ย้ายมาเป็นฟังก์ชันแยก ใช้ในคอลัมน์ "จัดการ" แทน (empManageCellHtml) ทุกแถวจึงสูงเท่ากัน
+   ไม่ว่าจะมีบทบาทหรือไม่ */
+function empAccessNeedsAssignAction(e){
+  var k=empAccessState(e).key;
+  return (k==='norole'||k==='noweb')&&hasPerm('permission.manage');
+}
 function empAccessCellHtml(e){
   var st=empAccessState(e),d=EMP_ACC[st.key];
   var cnt=st.role&&!st.role.system?(st.role.permissions||[]).length:null;
@@ -11811,12 +11908,18 @@ function empAccessCellHtml(e){
   if(st.key==='ready')sub='<span class="acc-sub">'+nf(cnt)+' สิทธิ์</span>';
   else if(st.key==='roleoff')sub='<span class="acc-sub">'+esc(st.role.name)+'</span>';
   /* ไม่มีบัญชีเว็บ = ไม่ผิดอะไร (ป้ายจึงเป็นสีกลาง ไม่นับรวมในตัวเลข "ต้องตั้งค่า")
-     แต่ยังต้องเห็นว่ายังไม่มีบทบาท และกำหนดได้จากตรงนี้เลย ถ้าวันหนึ่งจะเปิดบัญชีให้ */
+     แต่ยังต้องเห็นว่ายังไม่มีบทบาท — ปุ่มกำหนดอยู่ในคอลัมน์จัดการแล้ว ไม่ต้องซ้ำที่นี่ */
   else if(st.key==='noweb')sub='<span class="acc-sub">ยังไม่ได้กำหนดบทบาท</span>';
-  var act=((st.key==='norole'||st.key==='noweb')&&hasPerm('permission.manage'))
-    ? '<button class="btn ghost sm" style="margin-top:6px;" onclick="event.stopPropagation();quickAssignRole(\''+esc(e.id)+'\')">+ กำหนดบทบาท</button>'
+  return '<span class="pill '+d.cls+'" title="'+esc(tip)+'"><span class="acc-ic">'+d.ic+'</span>'+esc(d.label)+'</span>'+sub;
+}
+/* คอลัมน์ "จัดการ" ปกติมีแค่ลูกศร ›  เปิดไปที่รายละเอียด/บัตรพนักงาน — แถวที่ยังไม่มี
+   บทบาทเพิ่มปุ่ม "กำหนดบทบาท" กะทัดรัดไว้ก่อนลูกศร กดแล้วไม่ต้องพึ่ง event bubbling ของ
+   แถว (stopPropagation) เหมือนเดิม */
+function empManageCellHtml(e){
+  var assign=empAccessNeedsAssignAction(e)
+    ? '<button class="btn ghost sm" onclick="event.stopPropagation();quickAssignRole(\''+esc(e.id)+'\')">กำหนดบทบาท</button>'
     : '';
-  return '<span class="pill '+d.cls+'" title="'+esc(tip)+'"><span class="acc-ic">'+d.ic+'</span>'+esc(d.label)+'</span>'+sub+act;
+  return assign+'<span class="muted">›</span>';
 }
 function empRoleCellHtml(e){
   var r=empRoleById(e.roleId);
@@ -11994,13 +12097,23 @@ function renderSetup(){
   var empSelfEditing=!!(editingEmp&&currentEmp()&&currentEmp().id===editingEmp);
   var empFormCard=$('#empFormCard');
   if(empFormCard)empFormCard.style.display=(empAdmin||empSelfEditing)?'':'none';
-  var empFormIds=['eName','eRole','eDept','eWh','ePhone','eEmail','eScan','eRoleId','eStatus'];
+  /* eRoleId ไม่อยู่ในลิสต์นี้ — renderEmpRoleOptions() เป็นเจ้าของสถานะ disabled ของ
+     ช่องนี้เอง (ล็อกเมื่อ /api/roles โหลดไม่สำเร็จ หรือบัญชีนี้ไม่มีสิทธิ์เห็นบทบาท) ถ้า
+     ปล่อยให้ลูปนี้ตั้ง disabled=false ทับทุกครั้งที่ renderSetup() รัน (ซึ่งเกิดถี่มาก) จะ
+     เปิดช่องที่ตั้งใจล็อกไว้กลับมาแก้ได้ทั้งที่ตัวเลือกในนั้นยังไม่น่าเชื่อถือ */
+  var empFormIds=['eName','eRole','eDept','eWh','ePhone','eEmail','eScan','eStatus'];
   empFormIds.forEach(function(i){
     var el=document.getElementById(i);if(!el)return;
     if(empAdmin)el.disabled=false;
     else if(empSelfEditing)el.disabled=EMP_SELF_EDITABLE.indexOf(i)<0;
     else el.disabled=true;
   });
+  var eRoleSel=$('#eRoleId');
+  if(eRoleSel){
+    if(!empAdmin&&!empSelfEditing)eRoleSel.disabled=true;
+    else if(!empAdmin&&empSelfEditing)eRoleSel.disabled=true;   /* บทบาทไม่อยู่ใน EMP_SELF_EDITABLE */
+    else renderEmpRoleOptions(eRoleSel.value||'',eRoleSel._empId||null);   /* แอดมิน — ให้เจ้าของ state ตัดสินเอง */
+  }
   var empAddBtn=$('#btnAddEmp');
   if(empAddBtn)empAddBtn.disabled=!(empAdmin||empSelfEditing);
   /* ปุ่ม "+ เพิ่มพนักงาน" เหนือตาราง — เพิ่มพนักงานใหม่เป็นสิทธิ์แอดมินล้วน (ต่างจาก
@@ -12051,7 +12164,7 @@ function renderSetup(){
       +'<td class="col-sec">'+esc(e.dept||'-')+'</td><td class="col-sec">'+whTxt+'</td><td class="col-sec mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+empRoleCellHtml(e)+'</td><td>'+empAccessCellHtml(e)+'</td>'
       +'<td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
-      +'<td class="c muted">›</td></tr>';
+      +'<td class="c">'+empManageCellHtml(e)+'</td></tr>';
   }).join(''):emptyRow(12,(sbe||accFilt)?'ไม่พบพนักงานที่ตรงกับเงื่อนไข':'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
