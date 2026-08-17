@@ -1169,7 +1169,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
        ขั้นตอน — ซ่อนไว้เป็นค่าเริ่มต้น (ยาวมาก) กดปุ่มด้านล่างเพื่อกาง/ซ่อน — เดิม
        เป็นปุ่ม ghost เล็กๆ ไม่บอกด้วยว่าข้างในมีอะไร ทำให้คนไม่รู้ว่าคุ้มจะกดไหม
        ตอนนี้เต็มความกว้าง เห็นชัด พร้อมบรรทัดสรุปหัวข้อข้างในไว้ตัดสินใจก่อนกด
-       และจำสถานะกาง/ซ่อนไว้ข้ามการโหลดหน้าถัดไป (ดู REPORTS_OPEN_KEY) ====== -->
+       และจำสถานะกาง/ซ่อนไว้ข้ามการโหลดหน้าถัดไป (จำผูกบัญชีผ่าน uiPref "reportsOpen") ====== -->
   <div class="row no-print reveal" style="margin-top:22px;">
     <button class="btn ghost" id="btnToggleReports" onclick="toggleReportsPanel()" style="width:100%;justify-content:space-between;padding:14px 16px;">
       <span style="display:flex;align-items:center;gap:10px;text-align:left;">
@@ -2675,15 +2675,25 @@ var KEY='smarttrace_p1';
 /** @type {AppState} */
 var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
 var USER='demo';try{var savedUser=localStorage.getItem('smarttrace_user');if(savedUser)USER=savedUser;}catch(e){}
+/* ===== ที่เก็บค่าตั้งค่าหน้าจอรายบัญชี (ui_prefs) — ตัวแปรสถานะ =====
+   ประกาศไว้ต้นไฟล์ทั้งที่ตัวฟังก์ชัน uiPrefGet/uiPrefSet อยู่ไกลลงไปข้างล่าง เพราะ
+   `function` ถูก hoist แต่ `var x={}` ไม่ถูก — โค้ดระดับบนสุดที่รันก่อนถึงบรรทัดประกาศ
+   (เช่น setTrackSearchMode() ที่ sync ปุ่มตอนโหลด) จะเจอ UIP เป็น undefined แล้ว
+   โยน TypeError ซึ่งทำให้ <script> ทั้งก้อนหยุดกลางคัน — ทุกอย่างที่ประกาศหลังจุดนั้น
+   เลยไม่ถูกสร้างเลย และหน้าจอพังเป็นลูกโซ่ */
+var UIP={};            /* ค่าที่โหลดมาแล้ว — แหล่งความจริงระหว่างรันหน้า */
+var UIP_LOADED=false;  /* กัน uiPrefSet() ที่เกิดจากการ render ตอนบูตเขียนทับของจริงก่อนโหลดเสร็จ */
+var UIP_DIRTY={},UIP_TIMER=null;
+
 var pendingOut=[];var pendingIn=[];var trackTags=[];
 /* เดี่ยว = ผลค้นหาล่าสุดแทนที่ของเดิมเสมอ, หลายรายการ (ค่าเดิม) = สะสมไปเรื่อยๆ
    จนกว่าจะกดล้างข้อมูล — ดู trackBox() */
-var TRACK_MODE_KEY='smarttrace_track_mode';
+/* จำแบบผูกบัญชี (ui_prefs) ไม่ใช่ localStorage ของเครื่อง — ค่าเริ่มต้นตั้งไว้ก่อน
+   แล้ว restoreUiPrefs() จะทับด้วยค่าที่จำไว้ตอนบูต (uiPrefsLoad() เสร็จก่อนเสมอ) */
 var trackSearchMode='multi';
-try{var _tm=localStorage.getItem(TRACK_MODE_KEY);if(_tm==='single'||_tm==='multi')trackSearchMode=_tm;}catch(e){}
 function setTrackSearchMode(m){
   trackSearchMode=(m==='single')?'single':'multi';
-  try{localStorage.setItem(TRACK_MODE_KEY,trackSearchMode);}catch(e){}
+  if(typeof uiPrefSet==='function')uiPrefSet('trackMode',trackSearchMode);
   var seg=document.getElementById('trackSearchModeSeg');
   if(seg)Array.prototype.forEach.call(seg.querySelectorAll('.sf-btn'),function(b){b.classList.toggle('active',b.dataset.mode===trackSearchMode);});
 }
@@ -2939,8 +2949,9 @@ function normalizeState(d){
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
   d.gatePrefs=d.gatePrefs||{};
-  d.dfPrefs=d.dfPrefs||{};
-  d.uiPrefs=d.uiPrefs||{};
+  /* dfPrefs/uiPrefs ไม่อยู่ใน S อีกแล้ว — ย้ายไปตาราง ui_prefs + /api/ui-prefs
+     (ดูคอมเมนต์เหนือ uiPrefGet()) เหตุผลเดียวกับ gatePrefs ด้านบน คือ stateSchema
+     ฝั่ง backend ไม่ประกาศคีย์พวกนี้ zod จึงตัดทิ้งทุกครั้งที่ PUT /api/state */
   d.vehicleTypes=d.vehicleTypes||[];
   Object.values(d.boxes).forEach(function(b){b.history=b.history||[];if(b.labeled===undefined)b.labeled=true;});
   /* status:'pending' ("รอเข้าคลัง (Gate In)") ถูกตัดออกทั้งหมดตามที่ผู้ใช้ขอ — ทุกจุดที่
@@ -3428,8 +3439,25 @@ function switchTab(name){
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
   if(name==='overview'){restoreReportsPanelState();}
+  /* จำแท็บที่เปิดค้างไว้แบบผูกบัญชี (ตาราง ui_prefs) ไม่ใช่ localStorage ของเครื่อง —
+     รีเฟรช/ปิดแล้วเปิดใหม่/ย้ายเครื่อง แล้วกลับมาที่หน้าเดิมที่ทำงานค้างอยู่ ไม่ใช่เด้ง
+     กลับหน้าภาพรวมทุกครั้ง คนละบัญชีบนเครื่องเดียวกันก็จำแยกกัน */
+  uiPrefSet('tab',name);
 }
 window.switchTab=switchTab;
+/* รายชื่อแท็บที่อนุญาตให้กู้คืนได้ อ่านจาก DOM จริงตอนเรียก ไม่ใช่ลิสต์ที่ hardcode ไว้ —
+   ค่าที่จำไว้อาจเป็นแท็บที่ถูกลบ/เปลี่ยนชื่อไปแล้ว หรือแท็บที่บัญชีนี้ไม่มีสิทธิ์เห็น
+   (ปุ่มถูกซ่อนตามสิทธิ์) ถ้ากู้คืนแบบไม่ตรวจสอบจะได้หน้าว่างที่ไม่มีทางกดกลับ */
+function restoreLastTab(){
+  var want=uiPrefGet('tab',null);
+  if(!want)return;
+  var btn=document.querySelector('#nav button[data-tab="'+String(want).replace(/"/g,'')+'"]');
+  if(!btn||btn.offsetParent===null&&btn.hidden)return;
+  if(!$('#tab-'+want))return;
+  var cur=$('#nav button.active');
+  if(cur&&cur.dataset.tab===want)return;   /* อยู่ถูกแท็บแล้ว ไม่ต้อง render ซ้ำ */
+  switchTab(want);
+}
 function goSetup(stab){
   switchTab('setup');
   setTimeout(function(){
@@ -3446,10 +3474,20 @@ window.addEventListener('resize',function(){
   syncNavTop();
   var a=$('#nav button.active');if(a&&eff==='top')movePill(a);
 });
+function showSetupSub(stab){
+  var btn=document.querySelector('.stab[data-stab="'+String(stab).replace(/"/g,'')+'"]');
+  var sec=$('#ssec-'+stab);
+  if(!btn||!sec)return false;
+  $all('.stab').forEach(function(x){x.classList.remove('active');});btn.classList.add('active');
+  $all('.ssec').forEach(function(s){s.style.display='none';});sec.style.display='block';
+  if(stab==='btype'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  return true;
+}
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
-  $all('.stab').forEach(function(x){x.classList.remove('active');});b.classList.add('active');
-  $all('.ssec').forEach(function(s){s.style.display='none';});$('#ssec-'+b.dataset.stab).style.display='block';
-  if(b.dataset.stab==='btype'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  showSetupSub(b.dataset.stab);
+  /* ในหน้าตั้งค่า "อยู่หน้าไหน" ยังไม่พอ — ต้องจำด้วยว่ากำลังดูข้อมูลชุดไหนอยู่
+     (ประเภทกล่อง/ลูกค้า/คลัง/พนักงาน/กล่อง) ไม่งั้นกลับมาก็ต้องไล่กดหาใหม่ทุกครั้ง */
+  uiPrefSet('setupTab',b.dataset.stab);
 });});
 
 /* ===== ตั้งค่าระบบ → เชื่อมต่อ PDA: QR ตั้งค่าที่อยู่เซิร์ฟเวอร์ของเครื่องพกพา =====
@@ -8432,7 +8470,6 @@ var REPORT_DIRS=['missing'];
    สลับกันไปมาได้ตามต้องการ — renderReports() เรียกทุกครั้งที่กางออก เผื่อข้อมูล
    เปลี่ยนไปหลังจากซ่อนไว้นาน (renderAll() ก็ยังเรียกมันตลอดอยู่แล้วเช่นกัน ไม่ได้
    render ซ้ำซ้อนเพิ่มต้นทุนอะไร แค่กัน UI ค้างข้อมูลเก่าไว้ตอนกางออกครั้งแรก) */
-var REPORTS_OPEN_KEY='smarttrace_reports_open';
 function toggleReportsPanel(){
   var el=$('#tab-reports');if(!el)return;
   var opening=el.style.display==='none';
@@ -8449,7 +8486,7 @@ function _setReportsPanelOpen(open,scroll){
   el.style.display=open?'':'none';
   var lbl=$('#btnToggleReportsLbl');if(lbl)lbl.textContent=open?'ซ่อนรายงานเพิ่มเติม':'รายงานเพิ่มเติม';
   var chev=$('#btnToggleReportsChevron');if(chev)chev.style.transform=open?'rotate(180deg)':'';
-  try{localStorage.setItem(REPORTS_OPEN_KEY,open?'1':'0');}catch(e){}
+  uiPrefSet('reportsOpen',open?'1':'0');
   if(open){
     renderReports();
     $all('.reveal',el).forEach(function(x){x.classList.add('in');});
@@ -8461,8 +8498,7 @@ function _setReportsPanelOpen(open,scroll){
    switch, so anyone who actually uses these reports regularly had to
    re-click "รายงานเพิ่มเติม" every single time they came back to this page. */
 function restoreReportsPanelState(){
-  var wasOpen=false;try{wasOpen=localStorage.getItem(REPORTS_OPEN_KEY)==='1';}catch(e){}
-  if(wasOpen)_setReportsPanelOpen(true,false);
+  if(uiPrefGet('reportsOpen','0')==='1')_setReportsPanelOpen(true,false);
 }
 window.restoreReportsPanelState=restoreReportsPanelState;
 
@@ -8483,47 +8519,76 @@ window.restoreReportsPanelState=restoreReportsPanelState;
    re-deriving date math itself, and registers DF_APPLY[id] so dfSetMode/
    dfOnCustomChange know what to re-render after the filter changes.
 
-   State lives on S.dfPrefs[USER][id] — same reasoning as fixedGatesRef()
-   for the gate assignment: it round-trips through the same /api/state
-   save()/loadFromServer() the rest of app state already uses, so "7 วัน on
-   ความเคลื่อนไหว" follows the logged-in account across devices instead of
-   resetting every time someone opens the dashboard fresh, or leaking into
-   another account's session on a shared terminal. dfGet() always re-resolves
-   S.dfPrefs[USER][id] fresh (never a cached reference) since loadFromServer()
-   reassigns S wholesale on reload/SSE sync. */
+   State lives in the per-account UI-pref store below under 'df:'+id, so
+   "7 วัน on ความเคลื่อนไหว" follows the logged-in account across devices
+   instead of resetting every time someone opens the dashboard fresh, or
+   leaking into another account's session on a shared terminal. */
 /* ============================================================================
-   GENERIC UI-PREF STORE — same round-trip-through-/api/state reasoning as
-   S.dfPrefs above (see the comment on it), generalized to any single-value
-   toggle/segmented-filter the user clicks (view mode, registration mode,
-   gate mode, etc.) instead of just date-range filters. Deliberately only
-   covers self-contained "remember what I picked" preferences, NOT record
-   being-edited fields (whStatus/eStatus/cStatus toggles reflect the record
-   currently open, not a standing preference) and not navigation-driven
-   state (e.g. invStatusFilter set by clicking an Overview KPI card) — those
-   would make a stale filter silently reappear in a context that didn't ask
-   for it. Callers persist explicitly from their own click handler via
-   uiPrefSet(), not from passive re-render/resync passes, so a render that
-   merely repaints existing state never issues a redundant save(). */
+   GENERIC UI-PREF STORE — per-account, server-backed via GET/PUT /api/ui-prefs.
+
+   เคยเก็บไว้ที่ S.uiPrefs[USER] / S.dfPrefs[USER] แล้วอาศัย save() ส่งไปกับ
+   /api/state ก้อนใหญ่ — ซึ่ง "ไม่เคยถูกบันทึกจริงเลยสักครั้ง" เพราะ stateSchema
+   ฝั่ง backend ไม่ได้ประกาศคีย์ uiPrefs/dfPrefs ไว้ แล้ว zod ก็ตัดคีย์แปลกปลอม
+   ทิ้งเงียบๆ ทุกครั้งที่ PUT (บั๊กชนิดเดียวกันกับที่ทำให้ต้องแยกตาราง gate_prefs
+   ออกมา — ดูคอมเมนต์เหนือ fixedGatesRef()) ค่าที่ตั้งไว้เลยอยู่แค่ในหน่วยความจำ
+   ของแท็บนั้น แล้วหายทุกครั้งที่รีโหลด
+
+   ตอนนี้มีตาราง ui_prefs + endpoint ของตัวเองแล้ว ผูกกับ username ใน JWT
+   ไม่ใช่ localStorage ของเครื่อง — เปลี่ยนเครื่อง/เปลี่ยนเบราว์เซอร์ก็ตามไปด้วย
+   และคนละบัญชีบนเครื่องเดียวกันก็ไม่ปนกัน PUT ฝั่ง server เป็น merge ราย key
+   สองแท็บที่เปิดบัญชีเดียวกันจึงไม่ลบค่าที่อีกแท็บเพิ่งเขียน
+
+   ครอบคลุมเฉพาะ "จำสิ่งที่ผู้ใช้เลือกเอง" เท่านั้น ไม่รวมฟิลด์ของเรคอร์ดที่กำลังแก้อยู่
+   (whStatus/eStatus/cStatus สะท้อนเรคอร์ดที่เปิดอยู่ ไม่ใช่ค่าตั้งค่าถาวร) และไม่รวม
+   สถานะที่เกิดจากการนำทาง (เช่น invStatusFilter ที่ตั้งจากการกดการ์ด KPI หน้าภาพรวม)
+   ไม่งั้นตัวกรองเก่าจะโผล่กลับมาเองในบริบทที่ไม่ได้ขอ */
+/* ตัวแปรสถานะของ store อยู่ต้นไฟล์ ไม่ใช่ตรงนี้ — ดูคอมเมนต์ที่ประกาศ UIP */
+function uiPrefsLoad(){
+  return apiFetch('/api/ui-prefs',{headers:authHeaders()})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){if(d&&typeof d==='object'&&!Array.isArray(d))UIP=d;})
+    .catch(function(){})
+    .then(function(){UIP_LOADED=true;});
+}
+/* รวบการเขียนหลายคีย์ที่เกิดติดๆ กัน (เช่นสลับแท็บแล้วมีตัวกรองถูกตั้งตามไปด้วย)
+   ให้ยิงเป็น request เดียว — ส่งเฉพาะคีย์ที่เปลี่ยนจริง ไม่ใช่ทั้งก้อน เพื่อให้ merge
+   ฝั่ง server ทำงานได้ตามที่ตั้งใจ */
+function uiPrefsFlush(){
+  UIP_TIMER=null;
+  var patch=UIP_DIRTY;UIP_DIRTY={};
+  if(!Object.keys(patch).length)return;
+  apiFetch('/api/ui-prefs',{method:'PUT',
+    headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:JSON.stringify(patch)}).catch(function(){});
+}
 function uiPrefGet(key,dflt){
-  if(!S.uiPrefs)S.uiPrefs={};
-  if(!S.uiPrefs[USER])S.uiPrefs[USER]={};
-  if(S.uiPrefs[USER][key]===undefined)S.uiPrefs[USER][key]=dflt;
-  return S.uiPrefs[USER][key];
+  return UIP[key]===undefined?dflt:UIP[key];
 }
 function uiPrefSet(key,val){
-  if(!S.uiPrefs)S.uiPrefs={};
-  if(!S.uiPrefs[USER])S.uiPrefs[USER]={};
-  S.uiPrefs[USER][key]=val;
-  save();
+  if(UIP[key]===val)return;   /* ไม่มีอะไรเปลี่ยน ไม่ต้องยิง request */
+  UIP[key]=val;
+  if(!UIP_LOADED)return;      /* ยังโหลดไม่เสร็จ = ค่านี้มาจาก default ตอน render ไม่ใช่เจตนาผู้ใช้ */
+  UIP_DIRTY[key]=val;
+  if(UIP_TIMER)clearTimeout(UIP_TIMER);
+  UIP_TIMER=setTimeout(uiPrefsFlush,400);
 }
+/* ค่าที่เป็น object (เช่นตัวกรองวันที่) ถูกแก้ในที่ (mutate) โดยผู้เรียก — เทียบค่าเก่า
+   แบบ === ไม่ได้ จึงต้องมีทางสั่งบันทึกตรงๆ */
+function uiPrefTouch(key){
+  if(!UIP_LOADED)return;
+  UIP_DIRTY[key]=UIP[key];
+  if(UIP_TIMER)clearTimeout(UIP_TIMER);
+  UIP_TIMER=setTimeout(uiPrefsFlush,400);
+}
+window.uiPrefGet=uiPrefGet;window.uiPrefSet=uiPrefSet;
 
 var DF_APPLY={};
 function dfGet(id){
-  if(!S.dfPrefs)S.dfPrefs={};
-  if(!S.dfPrefs[USER])S.dfPrefs[USER]={};
-  if(!S.dfPrefs[USER][id])S.dfPrefs[USER][id]={mode:'all',day:1,month:1,year:1,from:'',to:''};
-  return S.dfPrefs[USER][id];
+  var k='df:'+id;
+  if(!UIP[k]||typeof UIP[k]!=='object')UIP[k]={mode:'all',day:1,month:1,year:1,from:'',to:''};
+  return UIP[k];
 }
+function dfSave(id){uiPrefTouch('df:'+id);}
 /* Builds one filter bar's HTML — call once per report at boot and drop the
    result into a placeholder <div>, e.g. $('#df-ovMove-mount').innerHTML=
    dfBarHtml('ovMove'); keeps the markup (and any future report that wants
@@ -8653,7 +8718,7 @@ function dfSetMode(id,mode){
   }
   st.mode=mode;
   dfSyncUI(id);
-  save();
+  dfSave(id);
   if(DF_APPLY[id])DF_APPLY[id]();
 }
 window.dfSetMode=dfSetMode;
@@ -8663,7 +8728,7 @@ function dfOnCustomChange(id){
   st.from=f?f.value:'';st.to=t?t.value:'';
   st.mode='custom';
   dfSyncUI(id);
-  save();
+  dfSave(id);
   if(DF_APPLY[id])DF_APPLY[id]();
 }
 window.dfOnCustomChange=dfOnCustomChange;
@@ -9855,6 +9920,13 @@ function restoreUiPrefs(){
   if(typeof setBoxRegMode==='function')setBoxRegMode(uiPrefGet('boxRegMode','single'));
   if(typeof setInGateMode==='function')setInGateMode(uiPrefGet('inGateMode','return'),false);
 
+  if(typeof setTrackSearchMode==='function')setTrackSearchMode(uiPrefGet('trackMode','multi'));
+  /* หน้าตั้งค่า: กลับมาที่ชุดข้อมูลเดิมที่กำลังดูอยู่ (ประเภทกล่อง/ลูกค้า/คลัง/พนักงาน/กล่อง)
+     ถ้าค่าที่จำไว้ชี้ไปยัง sub-tab ที่ไม่มีแล้ว showSetupSub() จะคืน false แล้วปล่อยให้
+     sub-tab แรกใน HTML ทำหน้าที่ค่าเริ่มต้นตามเดิม */
+  var st=uiPrefGet('setupTab',null);
+  if(st&&typeof showSetupSub==='function')showSetupSub(st);
+
   var fbs=$('#filtBoxStatus');if(fbs)fbs.value=uiPrefGet('filtBoxStatus','');
   var fam=$('#filtAuditModule');if(fam)fam.value=uiPrefGet('filtAuditModule','');
   var faa=$('#filtAuditAction');if(faa)faa.value=uiPrefGet('filtAuditAction','');
@@ -9876,7 +9948,12 @@ function restoreUiPrefs(){
 }
 
 loadFromServer().then(function(){
+  /* ต้องมาก่อน restoreUiPrefs()/renderAll() เสมอ — ทั้งสองอ่านผ่าน uiPrefGet()
+     ซึ่งตอนนี้อ่านจาก UIP ที่โหลดมาจาก /api/ui-prefs ไม่ใช่จาก S อีกแล้ว */
+  return uiPrefsLoad();
+}).then(function(){
   restoreUiPrefs();
+  restoreLastTab();
   renderAll();
   hydrateIcons(document);
   /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
@@ -11162,11 +11239,15 @@ function custSelectField(selectId) {
   return '<select id="' + selectId + '"><option value="">— เลือกลูกค้า —</option>' + custOptions() + '</select>';
 }
 
+/* ตำแหน่งรับเข้าที่ใช้ล่าสุด — ผูกบัญชี ไม่ใช่ผูกเครื่อง เดิมอยู่ใน localStorage
+   ซึ่งแปลว่าพนักงานที่ย้ายไปใช้อีกเครื่องต้องเลือกคลัง/ตำแหน่งใหม่ทุกครั้ง และสองคน
+   ที่ผลัดกันใช้เครื่องเดียวกันจะเห็นตำแหน่งล่าสุดของอีกคนเป็นค่าตั้งต้นของตัวเอง */
 function lastInvLoc() {
-  try { return JSON.parse(localStorage.getItem('invLastLoc') || 'null'); } catch (e) { return null; }
+  var v = uiPrefGet('invLastLoc', null);
+  return (v && typeof v === 'object' && v.wh) ? v : null;
 }
 function saveLastInvLoc(wh, loc) {
-  try { localStorage.setItem('invLastLoc', JSON.stringify({ wh: wh, loc: loc })); } catch (e) {}
+  uiPrefSet('invLastLoc', { wh: wh, loc: loc });
 }
 function defaultRecvLoc() {
   // ลำดับความสำคัญ: ตำแหน่งที่ใช้ล่าสุด > คลังของประตูขาเข้าที่ตั้งค่าไว้ประจำเครื่อง
