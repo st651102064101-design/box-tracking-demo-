@@ -7325,40 +7325,45 @@ function ccStatusBanner(c){
     +'</div></div>';
 }
 
+/* สีประจำประเภทคู่ค้า — ลูกค้าเขียวตาม accent ของ BoxTrace, ซัพพลายเออร์น้ำเงิน เพื่อให้
+   แยกประเภทได้ตั้งแต่ระยะไกลโดยไม่ต้องอ่านตัวหนังสือ แต่ยังเป็น Design Language เดียวกัน
+   (ทรง/ระยะ/ตัวอักษรเหมือนกันหมด ต่างแค่สี) — dark คือชุดสีบนบัตรฟิสิกส์บนจอที่พื้นเข้ม
+   light คือชุดสีบนบัตรที่พิมพ์ลงกระดาษขาว */
+function ccKindTone(kindMeta,dark){
+  var sup=kindMeta.icon==='in';
+  if(dark)return sup?{ink:'#a9c8ff',soft:'rgba(90,140,255,.22)'}:{ink:'var(--accentContrast)',soft:'var(--accent2)'};
+  return sup?{ink:'#1b4fa8',soft:'#e4edff'}:{ink:'var(--accentInk)',soft:'var(--accentSoft)'};
+}
+/* บัตรนี้เป็น "บัตรประจำตัวคู่ค้า" ไว้ระบุว่าเป็นใครและสแกนทำรายการ — ไม่ใช่แดชบอร์ด
+   ยอดยืม ข้อมูลที่เปลี่ยนตามการยืม (กำหนดคืน/ยืมอยู่กี่ใบ/เกินกำหนด/ค่าปรับ/รับเข้าสะสม)
+   ถอดออกจากทั้งสองด้านแล้ว เพราะบัตรจริงพิมพ์ครั้งเดียวแต่ตัวเลขพวกนี้เปลี่ยนทุกวัน —
+   ให้ไปดูในระบบหลังสแกนแทน เหลือบนบัตรเฉพาะข้อมูลคงที่: ชื่อ → รหัส → ประเภท → สาขา */
 function ccFrontHtml(c,stats,kindMeta){
   var st=CC_STATUS_DARK[c.status]||CC_STATUS_DARK.active;
-  var rightBlock;
-  if(stats.isCustK){
-    rightBlock=''
-      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">กำหนดคืน</div>'
-      +'<div style="font-family:var(--mono);font-size:17px;margin-top:3px;">'+esc(c.returnDate||'—')+'</div>'
-      +'<div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:600;'
-        +(stats.overdue?'background:color-mix(in srgb,var(--neg) 26%,transparent);color:#ff8a83;':'background:var(--accent2);color:var(--accentContrast);')+'">'
-        +'ยืมอยู่ '+nf(stats.held)+' ใบ'+(stats.overdue?' · เกินกำหนด '+nf(stats.overdue):'')+'</div>'
-      +(stats.overdueFine>0?'<div style="font-size:11px;color:#ff8a83;margin-top:6px;">ค่าปรับสะสม ~'+money(stats.overdueFine)+' ฿</div>':'');
-  }else{
-    rightBlock=''
-      +'<div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--panelInkSoft);">รับเข้าแล้ว (สะสม)</div>'
-      +'<div style="font-family:var(--mono);font-size:22px;margin-top:3px;">'+nf(stats.supplied)+' ใบ</div>';
-  }
+  var tone=ccKindTone(kindMeta,true);
+  var code=String(c.id).toUpperCase();
   return ''
-    +'<div style="position:relative;padding:26px 30px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">'
-      +'<div>'
+    +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
+      +'<div style="flex:0 0 auto;padding:26px 30px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;">'
         +'<div style="display:flex;align-items:center;gap:9px;">'
           +'<div style="width:24px;height:24px;border-radius:7px;background:var(--accent2);color:var(--accentContrast);display:grid;place-items:center;font-size:14px;font-weight:700;">B</div>'
           +'<div style="font-size:17px;font-weight:600;letter-spacing:-.02em;">BoxTrace</div>'
         +'</div>'
-        +'<div class="cc-tag" style="margin-top:12px;background:rgba(255,255,255,.12);">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</div>'
+        +'<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;background:'+st.bg+';color:'+st.fg+';white-space:nowrap;">'+esc(st.t)+'</div>'
       +'</div>'
-      +'<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;background:'+st.bg+';color:'+st.fg+';white-space:nowrap;">'+esc(st.t)+'</div>'
-    +'</div>'
-    +'<div style="position:relative;padding:18px 30px 0;font-family:var(--mono);font-size:25px;font-weight:500;letter-spacing:.04em;">'+esc(c.id)+'</div>'
-    +'<div style="position:absolute;left:30px;right:30px;bottom:24px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">'
-      +'<div style="min-width:0;">'
-        +'<div style="font-size:20px;font-weight:600;letter-spacing:-.02em;">'+esc(c.name)+'</div>'
-        +'<div style="font-size:13px;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.contactPerson||'—')+(c.addr?' · '+esc(c.addr):'')+'</div>'
+      +'<div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:18px 30px;">'
+        +'<div style="font-size:29px;font-weight:700;letter-spacing:-.03em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:var(--mono);font-size:21px;font-weight:500;letter-spacing:.06em;color:var(--panelInk);opacity:.88;margin-top:9px;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:16px;">'
+          +'<span class="cc-tag" style="background:'+tone.soft+';color:'+tone.ink+';">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:500;background:rgba(255,255,255,.12);color:var(--panelInk);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
       +'</div>'
-      +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
+      /* บาร์โค้ดสแกนอยู่ด้านหน้าด้วย — คนถือบัตรยื่นให้สแกนได้โดยไม่ต้องพลิกบัตร */
+      +'<div style="flex:0 0 auto;background:#fff;padding:9px 0 7px;text-align:center;">'
+        +code128SVG(code,34)
+        +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#666;margin-top:3px;">'+esc(code)+'</div>'
+      +'</div>'
     +'</div>';
 }
 
@@ -7381,60 +7386,37 @@ function ccActRowHtml(stats){
     +ccActSm('print',CC_ACT_ICONS.print,'พิมพ์บัตร')
     +ccActSm('del',CC_ACT_ICONS.del,stats.held?'มีกล่องยืมอยู่ '+stats.held+' ใบ ลบไม่ได้':'ลบออกจากระบบ',stats.held?' disabled':'');
 }
-/* รายละเอียดคู่ค้าแบบเต็ม — เดิมหลังบัตรมีแค่ชื่อ/รหัส/เบอร์-อีเมลรวมบรรทัดเดียว ไม่พอ
-   ให้เห็นข้อมูลทั้งหมดโดยไม่ต้องกด "แก้ไขข้อมูล" ออกไปดู เพิ่มเป็นตารางฟิลด์ละบรรทัด
-   ข้ามฟิลด์ที่ไม่มีค่าไปเลย ไม่โชว์ "—" ให้รกบัตร */
-function ccDetailRows(c){
-  var items=[
-    ['ที่อยู่/สาขา',c.addr],
-    ['เบอร์โทร',c.phone||c.contact],
-    ['อีเมล',c.email],
-    ['เลขผู้เสียภาษี',c.taxId],
-    ['ผู้ติดต่อ',c.contactPerson],
-    ['วงเงินเครดิต',c.creditLimit?money(Number(c.creditLimit))+' ฿':''],
-    ['อัตราค่าปรับเกินกำหนด',c.fineRate?money(Number(c.fineRate))+' ฿/วัน':''],
-    ['ค่าปรับกล่องหาย',c.lostFine?money(Number(c.lostFine))+' ฿/ใบ':''],
-    ['ยืมได้กี่วัน',(c.returnDays!=null&&c.returnDays!=='')?nf(c.returnDays)+' วัน':'']
-  ].filter(function(r){return r[1];});
-  if(!items.length)return '<div style="font-size:12.5px;color:var(--panelInkSoft);">ยังไม่มีข้อมูลเพิ่มเติม — กด "แก้ไขข้อมูล" เพื่อกรอก</div>';
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">'
-    +items.map(function(r){
-      return '<div><div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--panelInkSoft);text-transform:uppercase;">'+esc(r[0])+'</div>'
-        +'<div style="font-size:13px;color:var(--panelInk);margin-top:2px;word-break:break-word;">'+esc(r[1])+'</div></div>';
-    }).join('')
-    +'</div>';
-}
+/* ด้านหลังเน้นการสแกนอย่างเดียว — ชื่อ/รหัส/ประเภท/สาขา แล้วบาร์โค้ดใหญ่เต็มความกว้าง
+   ตารางรายละเอียด (เบอร์/อีเมล/เครดิต/ค่าปรับ) และยอดค่าปรับสะสมถอดออกจากบัตรแล้ว —
+   เป็นข้อมูลติดต่อ/ตัวเลขที่เปลี่ยนตลอด ให้ดูในระบบหลังสแกนหรือหน้า "แก้ไขข้อมูล" แทน */
 function ccBackHtml(c,stats){
   var code=String(c.id).toUpperCase();
-  var fineBits=[];
-  if(stats.overdue)fineBits.push('เกินกำหนด '+nf(stats.overdue)+' ใบ × '+money(Number(c.fineRate)||0)+' ฿/วัน = ~'+money(stats.overdueFine)+' ฿');
-  if(stats.lostCount)fineBits.push('สูญหาย '+nf(stats.lostCount)+' ใบ × '+money(Number(c.lostFine)||0)+' ฿ = '+money(stats.lostFineTotal)+' ฿');
-  var fineHtml=fineBits.length
-    ?'<div style="margin-top:12px;"><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--panelInkSoft);text-transform:uppercase;">ค่าปรับปัจจุบัน (ประมาณ)</div>'
-      +fineBits.map(function(t){return '<div style="font-size:12.5px;color:var(--panelInk);margin-top:3px;">'+esc(t)+'</div>';}).join('')
-      +'<div style="font-size:14px;font-weight:700;margin-top:4px;color:#ff8a83;">รวม '+money(stats.overdueFine+stats.lostFineTotal)+' ฿</div></div>'
-    :'';
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,true);
   return ''
     +'<div style="position:absolute;inset:0;display:flex;flex-direction:column;">'
-      +'<div style="flex:0 0 auto;padding:20px 30px 0;">'
-        +'<div style="min-width:0;">'
-          +'<div style="font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent2);">จัดการคู่ค้า</div>'
-          +'<div style="font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:4px;">'+esc(c.name)+'</div>'
-          +'<div style="font-family:var(--mono);font-size:12.5px;color:var(--panelInkSoft);margin-top:2px;">'+esc(c.id)+'</div>'
-        +'</div>'
+      +'<div style="flex:0 0 auto;padding:22px 30px 0;display:flex;align-items:center;gap:9px;">'
+        +'<div style="width:22px;height:22px;border-radius:7px;background:var(--accent2);color:var(--accentContrast);display:grid;place-items:center;font-size:13px;font-weight:700;">B</div>'
+        +'<div style="font-size:15px;font-weight:600;letter-spacing:-.02em;">BoxTrace</div>'
       +'</div>'
-      +'<div style="flex:1;min-height:0;overflow-y:auto;padding:14px 30px 6px;">'
-        +ccDetailRows(c)
-        +fineHtml
+      +'<div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 30px 8px;">'
+        +'<div style="font-size:21px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:var(--mono);font-size:14px;letter-spacing:.06em;color:var(--panelInkSoft);margin-top:3px;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:14px;">'
+          +'<span class="cc-tag" style="background:'+tone.soft+';color:'+tone.ink+';">'+CC_ICONS[kindMeta.icon]+kindMeta.text+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:500;background:rgba(255,255,255,.12);color:var(--panelInk);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
+        +'<div style="font-size:11.5px;line-height:1.6;color:var(--panelInkSoft);margin-top:16px;">'
+          +'ใช้สำหรับระบบยืม–คืนกล่อง BoxTrace<br>หากบัตรสูญหาย กรุณาติดต่อเจ้าหน้าที่'
+        +'</div>'
       +'</div>'
       /* บาร์โค้ดชิดขอบล่างสุด กว้างเท่าตัวบัตรจริง (ไม่มี padding ซ้าย/ขวา) —
          hover แล้ว fade บาร์โค้ดลง โผล่ปุ่มพิมพ์ตรงกลางแทน กดพิมพ์ได้ทันที */
       +'<div class="cc-bc-wrap" style="flex:0 0 auto;" onclick="ccAction(\'print\')">'
         +'<div class="cc-bc-content" style="text-align:center;">'
-          +code128SVG(code,42)
-          +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:#666;margin-top:4px;">'+esc(code)+' · CODE 128</div>'
+          +code128SVG(code,54)
+          +'<div style="font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:#666;margin-top:5px;">'+esc(code)+'</div>'
         +'</div>'
-        +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บาร์โค้ด</button></div>'
+        +'<div class="cc-bc-print"><button type="button" onclick="event.stopPropagation();ccAction(\'print\')">'+CC_ACT_ICONS.print+' พิมพ์บัตร</button></div>'
       +'</div>'
     +'</div>';
 }
@@ -7492,7 +7474,7 @@ function ccAction(kind){
   var id=ccState.id,c=S.customers[id];if(!c)return;
   if(kind==='edit'){closeCustCard();editCust(id);}
   else if(kind==='boxes'){closeCustCard();goInventory({cust:id,status:'out',label:'กล่องของ '+(c.name||id)+' (ยืมอยู่)'});}
-  else if(kind==='print'){printCustCardWindow(id);}
+  else if(kind==='print'){closeCustCard();printCustCard(id);}
   else if(kind==='del'){closeCustCard();delCust(id);}
 }
 window.ccAction=ccAction;
@@ -7511,82 +7493,84 @@ function ccCardStatusBannerPrint(c){
     +'<div style="font-size:6.5pt;font-weight:700;letter-spacing:.16em;color:'+b.enColor+';margin-top:2mm;">'+b.en+'</div>'
     +'</div></div>';
 }
+var CC_PRINT_SHELL='position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;border-radius:4mm;'
+  +'background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);color:var(--panelInk);'
+  +'font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);';
 function ccCardFrontHtml(c){
-  var stats=custCardStats(c),kindMeta=ccKindMeta(c);
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,false);
   var st=CC_STATUS_DARK[c.status]||CC_STATUS_DARK.active;
-  var rightBlock;
-  if(stats.isCustK){
-    rightBlock=''
-      +'<div style="font-size:5.6pt;font-weight:600;letter-spacing:.06em;color:var(--panelInkSoft);">กำหนดคืน</div>'
-      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5pt;margin-top:.6mm;">'+esc(c.returnDate||'—')+'</div>'
-      +'<div style="display:inline-flex;align-items:center;margin-top:1.4mm;padding:.6mm 2.2mm;border-radius:999px;font-size:6.4pt;font-weight:600;'
-        +(stats.overdue?'background:var(--negSoft);color:var(--neg);':'background:var(--accentSoft);color:var(--accentInk);')+'">'
-        +'ยืมอยู่ '+nf(stats.held)+' ใบ'+(stats.overdue?' · เกิน '+nf(stats.overdue):'')+'</div>';
-  }else{
-    rightBlock=''
-      +'<div style="font-size:5.6pt;font-weight:600;letter-spacing:.06em;color:var(--panelInkSoft);">รับเข้าแล้ว</div>'
-      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5pt;margin-top:.6mm;">'+nf(stats.supplied)+' ใบ</div>';
-  }
-  return '<div style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;border-radius:3mm;'
-    +'background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);color:var(--panelInk);'
-    +'font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
-    +'<div style="position:absolute;inset:0;background:radial-gradient(60% 90% at 15% 115%,color-mix(in srgb,var(--accent) 26%,transparent),transparent 60%);opacity:.55;"></div>'
-    +'<div style="position:relative;z-index:1;padding:4.4mm 5mm 0;display:flex;align-items:flex-start;justify-content:space-between;gap:3mm;">'
-      +'<div style="min-width:0;">'
+  var code=String(c.id).toUpperCase();
+  return '<div style="'+CC_PRINT_SHELL+'">'
+    +'<div style="position:absolute;inset:0;background:radial-gradient(60% 90% at 15% 115%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 60%);opacity:.5;"></div>'
+    +'<div style="position:relative;z-index:1;height:100%;display:flex;flex-direction:column;">'
+      +'<div style="flex:0 0 auto;padding:4.4mm 5mm 0;display:flex;align-items:center;justify-content:space-between;gap:3mm;">'
         +'<div style="display:flex;align-items:center;gap:1.6mm;">'
           +'<div style="width:4.4mm;height:4.4mm;flex:0 0 auto;border-radius:1.2mm;background:var(--accent2);color:var(--accentContrast);display:flex;align-items:center;justify-content:center;font-size:7.5pt;font-weight:700;">B</div>'
           +'<div style="font-size:8.5pt;font-weight:600;letter-spacing:-.01em;">BoxTrace</div>'
         +'</div>'
-        +'<div style="display:inline-flex;align-items:center;margin-top:2mm;padding:.7mm 2.4mm;border-radius:999px;font-size:6.6pt;font-weight:600;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);">'+esc(kindMeta.text)+'</div>'
+        +'<div style="display:inline-flex;align-items:center;flex:0 0 auto;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:600;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);white-space:nowrap;">'+esc(st.t)+'</div>'
       +'</div>'
-      +'<div style="display:inline-flex;align-items:center;flex:0 0 auto;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:600;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);white-space:nowrap;">'+esc(st.t)+'</div>'
-    +'</div>'
-    +'<div style="position:relative;z-index:1;padding:2.6mm 5mm 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11pt;font-weight:500;letter-spacing:.02em;">'+esc(c.id)+'</div>'
-    +'<div style="position:absolute;z-index:1;left:5mm;right:5mm;bottom:4mm;display:flex;align-items:flex-end;justify-content:space-between;gap:3mm;">'
-      +'<div style="min-width:0;">'
-        +'<div style="font-size:9.5pt;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
-        +'<div style="font-size:6.4pt;color:var(--panelInkSoft);margin-top:.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.contactPerson||'—')+(c.addr?' · '+esc(c.addr):'')+'</div>'
+      +'<div style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:2.6mm 5mm;">'
+        +'<div style="font-size:13pt;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10pt;font-weight:500;letter-spacing:.04em;margin-top:1.2mm;">'+esc(c.id)+'</div>'
+        +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:1.6mm;margin-top:2.4mm;">'
+          +'<span style="display:inline-flex;align-items:center;padding:.7mm 2.4mm;border-radius:999px;font-size:6.6pt;font-weight:600;background:'+tone.soft+';color:'+tone.ink+';">'+esc(kindMeta.text)+'</span>'
+          +(c.addr?'<span style="display:inline-flex;align-items:center;padding:.7mm 2.4mm;border-radius:999px;font-size:6.6pt;font-weight:500;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);">'+esc(c.addr)+'</span>':'')
+        +'</div>'
       +'</div>'
-      +'<div style="text-align:right;flex:0 0 auto;">'+rightBlock+'</div>'
+      +'<div style="flex:0 0 auto;background:#fff;padding:1.4mm 0 1mm;text-align:center;">'
+        +'<div style="height:6.5mm;">'+code128SVG(code,30)+'</div>'
+        +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:6pt;letter-spacing:.08em;color:#666;margin-top:.6mm;">'+esc(code)+'</div>'
+      +'</div>'
     +'</div>'
     +ccCardStatusBannerPrint(c)
     +'</div>';
 }
 function ccCardBackHtml(c){
   var scanCode=String(c.id).toUpperCase();
-  var items=[
-    ['ที่อยู่/สาขา',c.addr],['เบอร์โทร',c.phone||c.contact],['อีเมล',c.email],
-    ['ผู้ติดต่อ',c.contactPerson],['เลขผู้เสียภาษี',c.taxId],
-    ['วงเงินเครดิต',c.creditLimit?money(Number(c.creditLimit))+' ฿':'']
-  ].filter(function(r){return r[1];}).slice(0,6); /* จำกัด 6 รายการ — บัตรสูง 54mm ใส่ได้แค่นี้พอดี ไม่ล้น */
-  var rowsHtml=items.length
-    ?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.8mm 3mm;">'
-      +items.map(function(r){
-        return '<div><div style="font-size:5.2pt;font-weight:600;letter-spacing:.04em;color:var(--panelInkSoft);text-transform:uppercase;">'+esc(r[0])+'</div>'
-          +'<div style="font-size:6.8pt;color:var(--panelInk);margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r[1])+'</div></div>';
-      }).join('')
-      +'</div>'
-    :'<div style="font-size:6.8pt;color:var(--panelInkSoft);">ยังไม่มีข้อมูลเพิ่มเติม</div>';
-  return '<div style="position:relative;width:86mm;height:54mm;box-sizing:border-box;overflow:hidden;border-radius:3mm;'
-    +'background:radial-gradient(120% 140% at 80% 0%,var(--panelGrad1) 0%,var(--panelGrad2) 70%);color:var(--panelInk);'
-    +'padding:4.4mm 5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.18);">'
-    +'<div style="position:relative;z-index:1;">'
-      +'<div style="font-size:6.6pt;font-weight:700;letter-spacing:.08em;color:var(--accentInk);">จัดการคู่ค้า</div>'
-      +'<div style="font-size:10.5pt;font-weight:700;letter-spacing:-.01em;margin-top:.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
-      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7pt;color:var(--panelInkSoft);margin-top:.4mm;">'+esc(c.id)+'</div>'
+  var kindMeta=ccKindMeta(c),tone=ccKindTone(kindMeta,false);
+  return '<div style="'+CC_PRINT_SHELL+'padding:4.4mm 5mm;display:flex;flex-direction:column;">'
+    +'<div style="position:relative;z-index:1;display:flex;align-items:center;gap:1.6mm;">'
+      +'<div style="width:4mm;height:4mm;flex:0 0 auto;border-radius:1.2mm;background:var(--accent2);color:var(--accentContrast);display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:700;">B</div>'
+      +'<div style="font-size:8pt;font-weight:600;letter-spacing:-.01em;">BoxTrace</div>'
     +'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:2.6mm;flex:1;min-height:0;overflow:hidden;">'+rowsHtml+'</div>'
-    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:2.4mm;border-top:.18mm solid var(--panelBorder);text-align:center;">'
-      +'<div style="height:9mm;">'+code128SVG(scanCode,42)+'</div>'
-      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7pt;letter-spacing:.06em;color:var(--panelInkSoft);margin-top:1mm;">'+esc(scanCode)+' · CODE 128</div>'
+    +'<div style="position:relative;z-index:1;margin-top:2.4mm;">'
+      +'<div style="font-size:10.5pt;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.4pt;letter-spacing:.05em;color:var(--panelInkSoft);margin-top:.5mm;">'+esc(c.id)+'</div>'
+      +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:1.6mm;margin-top:1.8mm;">'
+        +'<span style="display:inline-flex;align-items:center;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:600;background:'+tone.soft+';color:'+tone.ink+';">'+esc(kindMeta.text)+'</span>'
+        +(c.addr?'<span style="display:inline-flex;align-items:center;padding:.6mm 2.2mm;border-radius:999px;font-size:6.2pt;font-weight:500;background:var(--panelChipBg);border:.15mm solid var(--panelChipBorder);">'+esc(c.addr)+'</span>':'')
+      +'</div>'
+    +'</div>'
+    +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:2mm;text-align:center;">'
+      +'<div style="height:11mm;">'+code128SVG(scanCode,50)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7pt;letter-spacing:.08em;color:var(--panelInk);margin-top:.8mm;">'+esc(scanCode)+'</div>'
+      +'<div style="font-size:5.2pt;line-height:1.5;color:var(--panelInkSoft);margin-top:1.4mm;">ใช้สำหรับระบบยืม–คืนกล่อง BoxTrace<br>หากบัตรสูญหาย กรุณาติดต่อเจ้าหน้าที่</div>'
     +'</div>'
     +ccCardStatusBannerPrint(c)
     +'</div>';
 }
+/* กดพิมพ์แล้วต้องเห็นตัวอย่างในโมดัลก่อน ไม่พุ่งไปเปิดหน้าต่างพิมพ์ทันที — แบบเดียวกับ
+   บัตรพนักงาน (printEmpBadge) พรีวิวใช้เทมเพลตตัวเดียวกับที่หน้าต่างพิมพ์จริงใช้
+   (ccCardFrontHtml/BackHtml ผ่านหน่วย mm) สิ่งที่เห็นกับสิ่งที่พิมพ์ออกมาจึงตรงกัน */
+function printCustCard(id){
+  var c=S.customers[id];if(!c)return;
+  openModal(
+    '<div class="mhead"><h3>บัตรคู่ค้า '+esc(c.name||c.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;padding:24px 16px;color:#111;">'
+      +ccCardFrontHtml(c)
+      +ccCardBackHtml(c)
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button><button class="btn accent" onclick="printCustCardWindow(\''+esc(id)+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์</button></div>'
+  );
+}
+window.printCustCard=printCustCard;
 /* ไม่พึ่ง @page{size} เพื่อบังคับขนาดกระดาษ — เครื่องพิมพ์จริงที่ตั้งกระดาษ A4/Letter
    ไว้ในถาดจะเมินค่านี้แล้วขยายเนื้อหาให้เต็มหน้าแทน (เหตุผลเดียวกับที่แก้ไปแล้วใน
    printEmpBadgeWindow) — ปล่อยให้ใช้กระดาษปกติ ตัวการ์ดเองคงขนาดจริง 86×54mm ตามหน่วย mm
-   พร้อมคำเตือนให้เลือก "ขนาดจริง / 100%" ในกล่องพิมพ์ */
+   พร้อมคำเตือนให้เลือก "ขนาดจริง / 100%" ในกล่องพิมพ์
+   บัตรคู่ค้าเป็นแนวนอน 86×54mm สองใบวางซ้อนกันยังสูงแค่ ~114mm — พิมพ์ลงกระดาษ A4/Letter
+   แผ่นเดียวได้สบาย จึงไม่ตัดหน้า (ต่างจากบัตรพนักงานแนวตั้ง 86mm×2 ที่ต้องแยกหน้า) */
 function printCustCardWindow(id){
   var c=S.customers[id];if(!c)return;
   var w=window.open('','_blank','width=560,height=780');
@@ -7598,14 +7582,13 @@ function printCustCardWindow(id){
     +'*{box-sizing:border-box;}'
     +'body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;'
     +'background:#ececed;display:flex;flex-direction:column;align-items:center;gap:6mm;padding:6mm 0 18mm;}'
-    +'.pg{page-break-after:always;display:flex;justify-content:center;}'
-    +'.pg:last-child{page-break-after:auto;}'
-    +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
+    +'.pg{display:flex;justify-content:center;break-inside:avoid;page-break-inside:avoid;}'
+    +'@media print{body{background:none;padding:0;gap:8mm;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
     +'</style></head><body>'
     +'<div class="pg">'+ccCardFrontHtml(c)+'</div>'
     +'<div class="pg">'+ccCardBackHtml(c)+'</div>'
-    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 86 × 54 มม. ต่อหน้า ตัดตามขอบได้เลย</div>'
+    +'<div class="hint">กำลังเปิดหน้าต่างพิมพ์… ถ้าไม่เปิดเอง กด Ctrl/Cmd + P — ในกล่องพิมพ์ ตั้ง "ขนาด" เป็น <b>ขนาดจริง / 100%</b> (ไม่ใช่ "พอดีหน้ากระดาษ") เพื่อให้บัตรออกมาขนาดจริง 86 × 54 มม. หน้า-หลังอยู่ในกระดาษแผ่นเดียว ตัดตามขอบได้เลย</div>'
     +'</body></html>');
   w.document.close();
   w.focus();
