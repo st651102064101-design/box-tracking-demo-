@@ -7428,6 +7428,25 @@ function fixedGatesRef(){
   return S.gatePrefs[USER];
 }
 function saveFixedGates(){save();}
+/* Most recent gate used for this direction in the saved movement history —
+   optionally narrowed to one account (recorder). Returns '' when nothing on
+   record still points at a gate that exists. Feeds refreshGateDisplays()'s
+   "resolve from the database instead of asking" chain. */
+function lastUsedGateFor(dir,user){
+  var evs=S.events||[];
+  for(var i=evs.length-1;i>=0;i--){
+    var e=evs[i];
+    if(!e||e.dir!==dir||e.gate==null||e.gate==='')continue;
+    if(user&&e.recorder&&e.recorder!==user)continue;
+    if(user&&!e.recorder)continue;
+    var g=String(e.gate);
+    if(!gateWh(g))continue;                       /* gate was deleted/renumbered since */
+    var gt=gateDirOf(g);
+    if(gt!=='both'&&gt!==dir)continue;            /* gate no longer serves this direction */
+    return g;
+  }
+  return '';
+}
 function refreshGateDisplays(){
   var gs=allGateNums();
   ['out','in'].forEach(function(dir){
@@ -7435,8 +7454,18 @@ function refreshGateDisplays(){
     var g=fixedGates[dir];
     if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
     if(!g){
-      var dirGates=gateNumsForDir(dir);
-      if(dirGates.length===1){g=String(dirGates[0]);fixedGates[dir]=g;saveFixedGates();} /* only one valid gate for this direction — auto-select instead of forcing a manual pick */
+      /* Never leave the gate blank with a "ยังไม่ได้ตั้งค่า — กด เปลี่ยนประตู"
+         prompt: resolve it from what's already in the database instead of
+         asking. In order — the gate this account actually used last for this
+         direction (S.events, which round-trips through /api/state like
+         gatePrefs does), then the gate ANY account used last, then the only /
+         first gate configured for this direction. Whatever wins is written
+         back to S.gatePrefs[USER] so it sticks as this account's fixed gate
+         and the same answer comes back after a reload or on another
+         terminal. "เปลี่ยนประตู" still overrides it by hand at any time. */
+      g=lastUsedGateFor(dir,USER)||lastUsedGateFor(dir,null)||'';
+      if(!g){var dirGates=gateNumsForDir(dir);if(dirGates.length)g=String(dirGates[0]);}
+      if(g){fixedGates[dir]=g;saveFixedGates();}
     }
     var inp=$('#'+(dir==='out'?'outGate':'inGate'));
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
