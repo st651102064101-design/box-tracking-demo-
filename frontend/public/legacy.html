@@ -1279,6 +1279,45 @@ html[data-theme="dark"]{
    Right-hand slide-over for creating/editing master data. The list stays
    visible behind it, so you keep the context you were working in — a centred
    modal covers exactly the table you are adding a row to. */
+/* ── Role & Permission — ตัวเลือกสิทธิ์ในบทบาท (side drawer) ─────────────────
+   จัดกลุ่มตาม module แต่ละกลุ่มพับเก็บได้ ตัวติ๊กที่หัวกลุ่มเป็น tri-state
+   (เลือกบางส่วน = indeterminate) เจตนาไม่ใส่กรอบให้ทุกแถว — ใช้ระยะห่างกับ
+   พื้นอ่อนแบ่งกลุ่มแทน ตามสไตล์ส่วนอื่นของระบบ */
+.perm-head{margin-top:20px;padding-top:16px;border-top:.5px solid var(--line);}
+.perm-head-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.perm-title{font-size:14px;font-weight:600;color:var(--ink);}
+.perm-head-row .spacer{flex:1;}
+#rlPermSearch{margin-top:11px;}
+.perm-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+.perm-mod{border-radius:14px;background:color-mix(in srgb,var(--ink) 3.5%,var(--surface));overflow:hidden;}
+html[data-theme="dark"] .perm-mod{background:color-mix(in srgb,var(--ink) 6%,var(--surface));}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme="light"]):not([data-theme="dark"]) .perm-mod{
+    background:color-mix(in srgb,var(--ink) 6%,var(--surface));}
+}
+.perm-mod-hd{display:flex;align-items:center;gap:11px;padding:12px 14px;cursor:pointer;user-select:none;}
+.perm-mod-hd:hover{background:color-mix(in srgb,var(--ink) 3%,transparent);}
+.perm-mod-name{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--ink);}
+.perm-mod-count{font-family:var(--mono);font-size:12px;color:var(--muted);flex:0 0 auto;}
+.perm-caret{flex:0 0 auto;width:16px;height:16px;color:var(--faint);transition:transform .18s var(--ease);}
+.perm-mod.open .perm-caret{transform:rotate(90deg);}
+.perm-mod-body{display:none;padding:0 14px 12px 43px;flex-direction:column;gap:2px;}
+.perm-mod.open .perm-mod-body{display:flex;}
+.perm-item{display:flex;align-items:center;gap:11px;padding:8px 4px;border-radius:9px;cursor:pointer;}
+.perm-item:hover{background:color-mix(in srgb,var(--ink) 4%,transparent);}
+.perm-item-lbl{flex:1;min-width:0;font-size:13.5px;color:var(--ink2);}
+.perm-key{font-family:var(--mono);font-size:11px;color:var(--faint);flex:0 0 auto;}
+/* กดง่ายบนมือถือตามที่ขอ — ช่องติ๊กใหญ่ขึ้นและระยะห่างมากขึ้น ไม่ใช่แค่ย่อทุกอย่างลง */
+.perm-list input[type=checkbox]{width:18px;height:18px;flex:0 0 auto;accent-color:var(--accent);cursor:pointer;}
+@media(max-width:600px){
+  .perm-mod-body{padding-left:14px;}
+  .perm-item{padding:11px 4px;}
+  .perm-list input[type=checkbox]{width:21px;height:21px;}
+}
+.perm-empty{padding:18px 4px;font-size:13px;color:var(--muted);text-align:center;}
+/* บทบาทของระบบ (Super Admin) — อ่านอย่างเดียว จางลงและกดไม่ได้ทั้งบล็อก */
+.perm-list.locked{opacity:.72;pointer-events:none;}
+.role-lock{display:inline-flex;align-items:center;gap:5px;}
 .drawer{position:fixed;inset:0;z-index:120;pointer-events:none;}
 .drawer.show{pointer-events:auto;}
 .drawer-scrim{position:absolute;inset:0;background:rgba(0,0,0,.34);
@@ -2470,6 +2509,7 @@ a{color:var(--accentInk);}
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
+    <button class="btn ghost sm stab" data-stab="role" id="stabRole"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 8.5-4.1-.9-7-4.3-7-8.5V6Z"/><path d="m9.2 12.2 2 2 3.6-3.9"/></svg></span> บทบาทและสิทธิ์<span class="sf-badge" data-stab-badge="role"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
   </div>
@@ -2919,13 +2959,12 @@ a{color:var(--accentInk);}
       <div class="field" style="margin-top:14px;"><label for="eEmail">อีเมล</label><input id="eEmail" type="email" inputmode="email" placeholder="name@company.com" maxlength="254" autocomplete="email"></div>
       <div class="field" style="margin-top:14px;"><label for="eScan">รหัสบัตรพนักงาน (ใช้ยิงเข้าระบบที่ PDA)</label><input id="eScan" placeholder="เว้นว่าง = ใช้รหัสพนักงาน" autocomplete="off"></div>
       <div class="grid dw2" style="margin-top:14px;">
-        <div class="field"><label for="eAccess">สิทธิ์การใช้งาน</label>
-          <select id="eAccess">
-            <option value="operator" title="ยิง Gate เข้า/ออก และแก้ไขข้อมูลหลัก (ลูกค้า/ประเภทกล่อง) ได้ — จัดการพนักงานคนอื่นไม่ได้">พนักงานปฏิบัติการ (ยิง Gate)</option>
-            <option value="supervisor" title="สิทธิ์เท่าพนักงานปฏิบัติการ — เป็นแค่ตำแหน่งงาน ไม่ได้เพิ่มสิทธิ์พิเศษในระบบ">หัวหน้างาน</option>
-            <option value="admin" title="สิทธิ์เต็ม: ยิง Gate, แก้ไขข้อมูลหลัก, เพิ่ม/แก้ไข/ลบพนักงาน, และเปลี่ยนสิทธิ์บัญชีผู้ใช้คนอื่นได้">ผู้ดูแลระบบ (Master)</option>
-            <option value="viewer" title="ดูข้อมูลได้อย่างเดียว — ยิง Gate, แก้ไขข้อมูลหลัก, หรือบันทึกอะไรไม่ได้เลย">ผู้ชมอย่างเดียว</option>
-          </select>
+        <!-- บทบาท ไม่ใช่ permission รายตัว — หน้าพนักงานเลือกบทบาท ส่วนสิทธิ์ของบทบาท
+             ไปตั้งที่แท็บ "บทบาทและสิทธิ์" ที่เดียว (ดู #ssec-role) -->
+        <div class="field"><label for="eRoleId">บทบาท</label>
+          <select id="eRoleId"></select>
+          <p class="desc" id="eRoleDesc" style="margin-top:6px;"></p>
+          <button type="button" class="btn ghost sm" id="btnViewRolePerms" style="margin-top:8px;">ดูสิทธิ์ทั้งหมด</button>
         </div>
         <div class="field"><label>สถานะ</label>
           <div class="inv-view-sw" data-target="eStatus">
@@ -2939,10 +2978,8 @@ a{color:var(--accentInk);}
         </div>
       </div>
       <p class="desc" style="margin-top:10px;">
-        <b>สิทธิ์การใช้งานทำอะไรได้บ้าง:</b>
-        <b>ผู้ดูแลระบบ</b> — ยิง Gate, แก้ไขข้อมูลหลัก, และเพิ่ม/แก้ไข/ลบพนักงานได้ทั้งหมด ·
-        <b>พนักงานปฏิบัติการ / หัวหน้างาน</b> — ยิง Gate และแก้ไขข้อมูลหลักได้ แต่จัดการพนักงานคนอื่นไม่ได้ (หัวหน้างานเป็นแค่ตำแหน่ง ไม่ได้เพิ่มสิทธิ์) ·
-        <b>ผู้ชมอย่างเดียว</b> — ดูข้อมูลได้อย่างเดียว บันทึก/แก้ไขอะไรไม่ได้เลย
+        สิทธิ์ของพนักงานมาจาก <b>บทบาท</b> ที่เลือกไว้ข้างบน ไม่ได้ตั้งทีละรายการที่นี่ —
+        ถ้าต้องการเพิ่ม/ลดสิทธิ์ ให้ไปแก้ที่แท็บ <b>บทบาทและสิทธิ์</b> ซึ่งจะมีผลกับทุกคนที่อยู่ในบทบาทนั้น
       </p>
       </div>
       <!-- ปุ่มพวกนี้ถูกย้ายไปอยู่ท้าย drawer โดย openCardDrawer() — ยกเลิกซ้าย บันทึกขวา
@@ -2964,6 +3001,69 @@ a{color:var(--accentInk);}
         <button class="btn sm red" id="bulkEmpDel">ลบที่เลือก</button>
         <button class="btn sm gray" id="bulkEmpClear">ยกเลิก</button>
       </div>
+    </div>
+    </div>
+  </div>
+
+  <!-- ===== บทบาทและสิทธิ์ (RBAC) =====
+       Employee → Role → Permissions: ไม่ติ๊กสิทธิ์รายคน แต่ให้สิทธิ์กับบทบาท แล้วเอา
+       บทบาทไปแปะพนักงาน — permission keys ทั้งหมดถูกกำหนดไว้ฝั่ง backend
+       (backend/src/lib/permissions.ts) แอดมินเลือกได้ แต่สร้าง key ใหม่เองไม่ได้
+       ตัวเลือกที่เห็นในหน้านี้จึงโหลดมาจาก GET /api/roles/permissions ไม่ได้ hardcode ไว้
+       ที่นี่ ไม่งั้นสองฝั่งจะเพี้ยนกันเมื่อมี permission ใหม่ -->
+  <div class="ssec" id="ssec-role" style="display:none;">
+    <!-- การ์ดฟอร์ม: ซ่อนไว้ในหน้า แล้ว openCardDrawer() ยืมไปแสดงใน side drawer
+         ตอนกด "เพิ่มบทบาท"/"แก้ไข" เหมือนฟอร์มพนักงาน (ห้ามลบ/ห้ามใส่ display:none
+         ที่ตัวการ์ดเอง — ดูคอมเมนต์ที่ #empFormCard) -->
+    <div class="wg-board" style="display:none;">
+    <div class="wg xl wg-form" id="roleFormCard">
+      <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 8.5-4.1-.9-7-4.3-7-8.5V6Z"/><path d="m9.2 12.2 2 2 3.6-3.9"/></svg></span></span><span class="wg-lbl">บทบาท</span></div>
+      <p class="wg-cap">ตั้งชื่อบทบาท แล้วเลือกสิทธิ์ที่บทบาทนี้ใช้งานได้</p>
+      <div class="wg-body">
+        <div class="field"><label for="rlName">ชื่อบทบาท <span class="req">*</span></label><input id="rlName" placeholder="เช่น เจ้าหน้าที่คลัง" autocomplete="off" maxlength="60"></div>
+        <div class="field" style="margin-top:14px;"><label for="rlDesc">คำอธิบาย</label><input id="rlDesc" placeholder="เช่น สำหรับเจ้าหน้าที่รับเข้า เบิก ยืม และคืนกล่อง" autocomplete="off" maxlength="200"></div>
+        <div class="field" style="margin-top:14px;"><label>สถานะ</label>
+          <div class="inv-view-sw" data-target="rlActive">
+            <button type="button" class="ivs-btn active" data-val="active" onclick="setStatusToggle('rlActive','active')">ใช้งาน</button>
+            <button type="button" class="ivs-btn" data-val="inactive" onclick="setStatusToggle('rlActive','inactive')">ปิดใช้งาน</button>
+          </div>
+          <select id="rlActive" style="display:none;">
+            <option value="active">ใช้งาน</option>
+            <option value="inactive">ปิดใช้งาน</option>
+          </select>
+          <p class="desc" style="margin-top:6px;">บทบาทที่ปิดใช้งานจะไม่ให้สิทธิ์อะไรเลยกับพนักงานที่อยู่ในบทบาทนั้น</p>
+        </div>
+
+        <div class="perm-head">
+          <div class="perm-head-row">
+            <span class="perm-title">สิทธิ์การใช้งาน</span>
+            <span class="tag" id="rlPermCount">0</span>
+            <div class="spacer"></div>
+            <button type="button" class="btn ghost sm" id="btnPermAll">เลือกทั้งหมด</button>
+            <button type="button" class="btn ghost sm" id="btnPermNone">ยกเลิกทั้งหมด</button>
+          </div>
+          <input id="rlPermSearch" placeholder="ค้นหาสิทธิ์..." autocomplete="off">
+          <p class="desc" id="rlLockNote" style="display:none;">
+            <b>🔒 Super Admin</b> — เป็นบทบาทของระบบ มีสิทธิ์ทั้งหมดเสมอ แก้ไข ปิดใช้งาน หรือลบไม่ได้
+          </p>
+        </div>
+        <div id="rlPermList" class="perm-list"></div>
+      </div>
+      <div class="wg-foot"><button class="btn gray" id="btnCancelRole">ยกเลิก</button>
+        <div class="spacer"></div>
+        <button class="btn accent" id="btnSaveRole">สร้างบทบาท</button></div>
+    </div>
+    </div>
+
+    <div class="wg-board">
+    <div class="wg xl wg-table">
+      <div class="wg-top" style="flex-direction:column;align-items:stretch;">
+        <div class="wg-hd-row"><span class="wg-lbl">บทบาทและสิทธิ์</span><span class="tag" id="cntRole"></span><div class="spacer"></div>
+          <button type="button" class="btn accent sm addbtn" id="btnAddRoleTop" onclick="addRole()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มบทบาท</button></div>
+        <div class="wg-hd-row"><input id="schRole" placeholder="ค้นหาบทบาท · คำอธิบาย" autocomplete="off"></div>
+      </div>
+      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th>บทบาท</th><th class="c">พนักงาน</th><th class="c">สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+        <tbody id="roleBody"></tbody></table></div></div>
     </div>
     </div>
   </div>
@@ -4691,6 +4791,9 @@ function showSetupSub(stab){
   $all('.stab').forEach(function(x){x.classList.remove('active');});btn.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});sec.style.display='block';
   if(stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
+  /* บทบาทไม่ได้อยู่ใน S จึงไม่ถูก renderAll() วาดใหม่ตามข้อมูลที่ sync มา —
+     ดึงสดทุกครั้งที่เปิดแท็บแทน เผื่ออีก session แก้ไว้ */
+  if(stab==='role'&&typeof loadRoles==='function')loadRoles();
   return true;
 }
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
@@ -5560,7 +5663,12 @@ function empFields(){
     email:val('eEmail'),
     startDate:val('eStart'),
     scanCode:val('eScan'),
-    access:val('eAccess')||'operator',
+    /* roleId คือสิทธิ์จริง (ผูกกับตาราง roles ฝั่งเซิร์ฟเวอร์) ส่วน access เก็บไว้
+       เพื่อความเข้ากันได้กับข้อมูลเดิม/PDA ที่ยังอ่านค่านี้อยู่ — ค่าที่บันทึกลง S
+       ไม่ใช่สิ่งที่ backend ใช้ตัดสินสิทธิ์ ไม่ว่าใครจะแก้มันเป็นอะไรก็ตาม */
+    roleId:(function(){var v=val('eRoleId');return v?Number(v):null;})(),
+    roleName:(function(){var v=val('eRoleId'),r=empRoleById(v);return r?r.name:'';})(),
+    access:empAccessForRole(val('eRoleId')),
     status:val('eStatus')||'active',
     photo:empFormPhoto||null
   };
@@ -5641,16 +5749,23 @@ $('#btnAddEmp').onclick=function(){
   var actor=selfLogin?nm:USER;
   auditEntry(isNew?'CREATE':'UPDATE',actor,id,nm,before,S.employees[id]);
   save();
+  /* บทบาทที่บันทึกลง S เป็นแค่ข้อมูลไว้แสดงผล — ตัวที่ทำให้สิทธิ์เปลี่ยนจริงคือ
+     users.role_id ฝั่งเซิร์ฟเวอร์ ซึ่งต้องผ่าน endpoint ที่ตรวจสิทธิ์ (permission.manage)
+     เท่านั้น จะให้ PUT /api/state ตั้ง role_id ตามที่ไคลเอนต์ส่งมาไม่ได้เด็ดขาด —
+     ใครก็ตามที่บันทึก state ได้ก็จะเลื่อนขั้นตัวเองเป็นแอดมินได้ทันที */
+  assignEmpRoleOnServer(rec);
   var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  renderEmpRoleOptions('');
   toast(before?'อัปเดตพนักงานแล้ว':'บันทึกพนักงานแล้ว',id+' · '+nm);
   closeCardDrawerIfActive('empFormCard');
   if(selfLogin||wasEditingSelf)setCurrentUser(nm);else renderAll();};
 $('#btnCancelEmp').onclick=function(){editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
   ['eName','eRole','eDept','ePhone','eEmail','eStart','eScan'].forEach(function(i){setv(i,'');});
-  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eAccess','operator');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  eIdAuto.reset();setv('eWh','');setv('eShift','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
+  renderEmpRoleOptions('');
   closeCardDrawerIfActive('empFormCard');
   renderSetup();};
 /* non-admins may open their own record and change contact info (see EMP_SELF_EDITABLE /
@@ -5677,7 +5792,8 @@ function editEmp(id){
   openCardDrawer('empFormCard','แก้ไขพนักงาน '+esc(id),'แก้ไขข้อมูลพนักงานและสิทธิ์การใช้งาน');
   eIdAuto.edit(e.id);setv('eName',e.name||'');setv('eRole',e.role||'');setv('eDept',e.dept||'');
   setv('eWh',e.wh||'');setv('eShift',e.shift||'');setv('ePhone',e.phone||'');setv('eEmail',e.email||'');
-  setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eAccess',e.access||'operator');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
+  setv('eStart',e.startDate||'');setv('eScan',e.scanCode||'');setv('eStatus',e.status||'active');syncStatusToggle('eStatus');
+  renderEmpRoleOptions(e.roleId!=null?String(e.roleId):'');
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';
   renderSetup();}
@@ -10671,6 +10787,8 @@ function refreshStabBadges(){
   var counts={btype:Object.keys(S.boxtypes||{}).length,wh:Object.keys(S.warehouses||{}).length,
     box:Object.keys(S.boxes||{}).length,cust:Object.keys(S.customers||{}).length,
     emp:Object.keys(S.employees||{}).length,
+    /* บทบาทอยู่ฝั่งเซิร์ฟเวอร์ ไม่ได้อยู่ใน S — นับจากสิ่งที่โหลดมาแล้ว */
+    role:(window.RBAC&&RBAC.roles?RBAC.roles.length:0),
     audit:(S.auditLog||[]).length};
   var suffix={btype:' ประเภท',box:' กล่อง'};
   Object.keys(counts).forEach(function(k){
@@ -10719,6 +10837,406 @@ function renderInPartnerField(){
   else if(partners.length===1)inPartnerSel.value=partners[0].id;
 }
 window.renderInPartnerField=renderInPartnerField;
+
+/* ══ บทบาทและสิทธิ์ (RBAC) ═══════════════════════════════════════════════════
+   Employee → Role → Permissions. บทบาทกับสิทธิ์อยู่ฝั่งเซิร์ฟเวอร์ (/api/roles)
+   ไม่ได้อยู่ใน S เหมือนข้อมูลอื่นในหน้านี้ — สิทธิ์ที่เก็บใน S จะถูกไคลเอนต์คนไหน
+   ก็เขียนทับได้ผ่าน PUT /api/state ซึ่งทำให้มันไม่ใช่ระบบสิทธิ์จริง
+
+   หน้าจอนี้ซ่อน/แสดงปุ่มตามสิทธิ์เพื่อความสะดวกเท่านั้น ตัวกันจริงอยู่ที่ backend
+   (requirePermission) ทุก endpoint — ยิง API ตรง ๆ ก็ยังโดน 403 */
+var RBAC={perms:[],role:null,modules:[],total:0,roles:[],loaded:false};
+window.RBAC=RBAC;
+
+/** สิทธิ์ของบัญชีที่ล็อกอินอยู่ — ใช้คุมเมนู/ปุ่ม ไม่ใช่ใช้กันจริง */
+function hasPerm(k){return RBAC.perms.indexOf(k)>=0;}
+function hasAnyPerm(){for(var i=0;i<arguments.length;i++)if(hasPerm(arguments[i]))return true;return false;}
+window.hasPerm=hasPerm;window.hasAnyPerm=hasAnyPerm;
+
+function rbacGet(path){
+  return apiFetch(path,{headers:authHeaders()}).then(function(r){
+    if(!r.ok)return r.json().catch(function(){return {};}).then(function(j){
+      var e=new Error(j.message||('HTTP '+r.status));e.status=r.status;e.body=j;throw e;});
+    return r.json();
+  });
+}
+function rbacSend(method,path,body){
+  return apiFetch(path,{method:method,headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+    body:body?JSON.stringify(body):undefined}).then(function(r){
+    return r.json().catch(function(){return {};}).then(function(j){
+      if(!r.ok){var e=new Error(j.message||('HTTP '+r.status));e.status=r.status;e.body=j;throw e;}
+      return j;});
+  });
+}
+
+/** โหลดสิทธิ์ของตัวเอง + แคตตาล็อก permission ครั้งเดียวตอนบูต */
+function rbacBoot(){
+  return rbacGet('/api/auth/me').then(function(me){
+    RBAC.perms=me.permissions||[];RBAC.role=me.role||null;
+  }).catch(function(){/* เซิร์ฟเวอร์รุ่นเก่ายังไม่มี RBAC — ปล่อยให้ UI ทำงานตามเดิม */})
+  .then(function(){return rbacGet('/api/roles/permissions').catch(function(){return null;});})
+  .then(function(cat){
+    if(cat){RBAC.modules=cat.modules||[];RBAC.total=cat.total||0;}
+    RBAC.loaded=true;
+    applyPermVisibility();
+  });
+}
+window.rbacBoot=rbacBoot;
+
+/* ── ซ่อนเมนู/แท็บที่บัญชีนี้ไม่มีสิทธิ์เข้า ────────────────────────────────────
+   ย้ำอีกครั้ง: นี่คือการจัดหน้าจอให้สะอาด ไม่ใช่ security — endpoint ทุกตัวเช็คเอง */
+function applyPermVisibility(){
+  if(!RBAC.loaded)return;
+  var navRules={emp:'employee.view',report:'report.view',setup:'setting.view'};
+  Object.keys(navRules).forEach(function(tab){
+    var perm=navRules[tab];
+    $all('#nav button[data-tab="'+tab+'"]').forEach(function(b){
+      b.style.display=hasPerm(perm)?'':'none';
+    });
+  });
+  var stabRole=$('#stabRole');
+  if(stabRole)stabRole.style.display=hasAnyPerm('role.manage','permission.manage')?'':'none';
+}
+window.applyPermVisibility=applyPermVisibility;
+
+/* ── ตารางบทบาท ─────────────────────────────────────────────────────────────*/
+function renderRoles(){
+  var body=$('#roleBody');if(!body)return;
+  if(!hasAnyPerm('role.manage','permission.manage')){
+    body.innerHTML=emptyRow(5,'บัญชีนี้ไม่มีสิทธิ์จัดการบทบาท');
+    var cEl0=$('#cntRole');if(cEl0)cEl0.textContent='';
+    return;
+  }
+  var q=(val('schRole')||'').trim().toLowerCase();
+  var list=RBAC.roles.filter(function(r){
+    if(!q)return true;
+    return (r.name+' '+(r.description||'')).toLowerCase().indexOf(q)>=0;
+  });
+  var cEl=$('#cntRole');if(cEl)cEl.textContent=nf(RBAC.roles.length)+' บทบาท';
+  body.innerHTML=list.length?list.map(function(r){
+    var permTxt=r.system?'ทั้งหมด':nf(r.permissions.length);
+    var lock=r.system?'<span class="role-lock" title="บทบาทของระบบ แก้ไขหรือลบไม่ได้">🔒</span> ':'';
+    return '<tr>'
+      +'<td><div style="font-weight:600;">'+lock+esc(r.name)+'</div>'
+        +(r.description?'<div class="small muted" style="margin-top:2px;">'+esc(r.description)+'</div>':'')+'</td>'
+      +'<td class="c mono">'+nf(r.members)+'</td>'
+      +'<td class="c mono">'+permTxt+'</td>'
+      +'<td>'+(r.active?'<span class="pill">ใช้งาน</span>':'<span class="pill bad">ปิดใช้งาน</span>')+'</td>'
+      +'<td class="c"><div class="rowbtns">'
+        +'<button class="btn ghost sm" onclick="editRole('+r.id+')">'+(r.system?'ดู':'แก้ไข')+'</button>'
+        +(r.system?'':'<button class="btn ghost sm red" onclick="delRole('+r.id+')">ลบ</button>')
+      +'</div></td>'
+    +'</tr>';
+  }).join(''):emptyRow(5,q?'ไม่พบบทบาทที่ค้นหา':'ยังไม่มีบทบาทในระบบ');
+}
+window.renderRoles=renderRoles;
+
+function loadRoles(){
+  if(!hasAnyPerm('role.manage','permission.manage')){renderRoles();return Promise.resolve();}
+  return rbacGet('/api/roles').then(function(d){
+    RBAC.roles=d.roles||[];RBAC.total=d.total||RBAC.total;
+    renderRoles();
+    /* ฟอร์มพนักงานอาจเปิดค้างอยู่ — เติมตัวเลือกบทบาทให้ตรงกับที่เพิ่งโหลดมา */
+    var eSel=$('#eRoleId');if(eSel)renderEmpRoleOptions(eSel.value||'');
+    refreshStabBadges();
+  }).catch(function(e){
+    toast('โหลดบทบาทไม่ได้',e.message||'',(e.status===403?'err':'err'));
+  });
+}
+window.loadRoles=loadRoles;
+
+/* ── ตัวเลือกสิทธิ์ในฟอร์ม ───────────────────────────────────────────────────*/
+var rlEditing=null;              /* id ของบทบาทที่กำลังแก้ (null = สร้างใหม่) */
+var rlSel={};                    /* permission key → true */
+var rlOpen={};                   /* module key → เปิดอยู่ไหม */
+var rlLocked=false;              /* บทบาทของระบบ = อ่านอย่างเดียว */
+
+function rlModPerms(m){return m.permissions.map(function(p){return p.key;});}
+function rlModState(m){
+  var keys=rlModPerms(m),on=keys.filter(function(k){return rlSel[k];}).length;
+  return {on:on,total:keys.length,all:on===keys.length&&keys.length>0,some:on>0&&on<keys.length};
+}
+function renderPermPicker(){
+  var wrap=$('#rlPermList');if(!wrap)return;
+  wrap.classList.toggle('locked',rlLocked);
+  var q=(val('rlPermSearch')||'').trim().toLowerCase();
+  var html=RBAC.modules.map(function(m){
+    var items=m.permissions.filter(function(p){
+      if(!q)return true;
+      return (p.label+' '+p.key+' '+m.label).toLowerCase().indexOf(q)>=0;
+    });
+    if(!items.length)return '';
+    var st=rlModState(m);
+    /* ค้นหาอยู่ = กางทุกกลุ่มที่มีผลลัพธ์ ไม่งั้นต้องไล่กดเปิดเองทีละกลุ่ม */
+    var open=q?true:(rlOpen[m.key]!==false);
+    return '<div class="perm-mod'+(open?' open':'')+'" data-mod="'+esc(m.key)+'">'
+      +'<div class="perm-mod-hd" onclick="togglePermMod(\''+esc(m.key)+'\')">'
+        +'<input type="checkbox" class="perm-mod-cb" data-mod="'+esc(m.key)+'"'
+          +(st.all?' checked':'')+(rlLocked?' disabled':'')
+          +' onclick="event.stopPropagation();togglePermModAll(\''+esc(m.key)+'\',this.checked)">'
+        +'<span class="perm-mod-name">'+esc(m.label)+'</span>'
+        +'<span class="perm-mod-count">'+st.on+'/'+st.total+'</span>'
+        +'<span class="perm-caret svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span>'
+      +'</div>'
+      +'<div class="perm-mod-body">'
+        +items.map(function(p){
+          return '<label class="perm-item">'
+            +'<input type="checkbox" data-perm="'+esc(p.key)+'"'+(rlSel[p.key]?' checked':'')+(rlLocked?' disabled':'')+'>'
+            +'<span class="perm-item-lbl">'+esc(p.label)+'</span>'
+            +'<span class="perm-key">'+esc(p.key)+'</span>'
+          +'</label>';
+        }).join('')
+      +'</div>'
+    +'</div>';
+  }).join('');
+  wrap.innerHTML=html||'<div class="perm-empty">ไม่พบสิทธิ์ที่ค้นหา</div>';
+  /* indeterminate ตั้งผ่าน property เท่านั้น ไม่มี attribute ให้ใส่ใน HTML */
+  $all('.perm-mod-cb',wrap).forEach(function(cb){
+    var m=RBAC.modules.filter(function(x){return x.key===cb.dataset.mod;})[0];
+    if(!m)return;
+    var st=rlModState(m);
+    cb.indeterminate=st.some;
+  });
+  $all('input[data-perm]',wrap).forEach(function(cb){
+    cb.addEventListener('change',function(){
+      if(cb.checked)rlSel[cb.dataset.perm]=true;else delete rlSel[cb.dataset.perm];
+      renderPermPicker();
+    });
+  });
+  var cnt=$('#rlPermCount');
+  if(cnt)cnt.textContent=nf(Object.keys(rlSel).length)+'/'+nf(RBAC.total)+' สิทธิ์';
+}
+function togglePermMod(key){
+  rlOpen[key]=(rlOpen[key]===false);
+  renderPermPicker();
+}
+function togglePermModAll(key,on){
+  var m=RBAC.modules.filter(function(x){return x.key===key;})[0];if(!m)return;
+  rlModPerms(m).forEach(function(k){if(on)rlSel[k]=true;else delete rlSel[k];});
+  renderPermPicker();
+}
+window.togglePermMod=togglePermMod;window.togglePermModAll=togglePermModAll;
+
+/* ── เปิด drawer: สร้าง / แก้ไข ─────────────────────────────────────────────*/
+function rlResetForm(){
+  rlEditing=null;rlSel={};rlOpen={};rlLocked=false;
+  setv('rlName','');setv('rlDesc','');setStatusToggle('rlActive','active');
+  setv('rlPermSearch','');
+  var note=$('#rlLockNote');if(note)note.style.display='none';
+  var save=$('#btnSaveRole');if(save){save.textContent='สร้างบทบาท';save.style.display='';}
+  $all('#roleFormCard input,#roleFormCard select').forEach(function(el){el.disabled=false;});
+  $all('#roleFormCard .ivs-btn').forEach(function(b){b.disabled=false;});
+  renderPermPicker();
+}
+function addRole(){
+  if(!hasPerm('role.manage'))return toast('ไม่มีสิทธิ์','ต้องมีสิทธิ์ "จัดการ Role" จึงจะสร้างบทบาทใหม่ได้','err');
+  rlResetForm();
+  openCardDrawer('roleFormCard','สร้างบทบาทใหม่','ตั้งชื่อบทบาท แล้วเลือกสิทธิ์ที่บทบาทนี้ใช้งานได้');
+}
+function editRole(id){
+  var r=RBAC.roles.filter(function(x){return x.id===id;})[0];if(!r)return;
+  rlResetForm();
+  rlEditing=r.id;
+  setv('rlName',r.name);setv('rlDesc',r.description||'');
+  setStatusToggle('rlActive',r.active?'active':'inactive');
+  r.permissions.forEach(function(k){rlSel[k]=true;});
+  rlLocked=!!r.system;
+  if(rlLocked){
+    /* Super Admin: อ่านอย่างเดียวทั้งใบ ปิดปุ่มบันทึกไปเลยแทนที่จะให้กดแล้วเด้ง 403 */
+    $all('#roleFormCard input,#roleFormCard select').forEach(function(el){el.disabled=true;});
+    $all('#roleFormCard .ivs-btn').forEach(function(b){b.disabled=true;});
+    var srch=$('#rlPermSearch');if(srch)srch.disabled=false;   /* ยังค้นหาดูได้ */
+    var note=$('#rlLockNote');if(note)note.style.display='';
+    var save=$('#btnSaveRole');if(save)save.style.display='none';
+  }else{
+    var save2=$('#btnSaveRole');if(save2)save2.textContent='บันทึกการเปลี่ยนแปลง';
+  }
+  renderPermPicker();
+  openCardDrawer('roleFormCard',(rlLocked?'บทบาทของระบบ · ':'แก้ไขบทบาท · ')+r.name,
+    rlLocked?'บทบาทนี้มีสิทธิ์ทั้งหมดเสมอ และแก้ไขไม่ได้':'แก้ชื่อ คำอธิบาย สถานะ หรือสิทธิ์ของบทบาทนี้');
+}
+window.addRole=addRole;window.editRole=editRole;
+
+function saveRole(){
+  var name=(val('rlName')||'').trim();
+  if(!name){toast('กรอกไม่ครบ','กรุณากรอกชื่อบทบาท','err');var n=$('#rlName');if(n)n.focus();return;}
+  var payload={name:name,description:(val('rlDesc')||'').trim(),
+    active:val('rlActive')!=='inactive',permissions:Object.keys(rlSel)};
+  var req=rlEditing?rbacSend('PUT','/api/roles/'+rlEditing,payload):rbacSend('POST','/api/roles',payload);
+  req.then(function(){
+    toast(rlEditing?'บันทึกแล้ว':'สร้างบทบาทแล้ว',name);
+    /* force — บันทึกสำเร็จแล้ว ฟอร์มยัง "dirty" เทียบกับตอนเปิด drawer อยู่ดี
+       ถ้าปิดแบบธรรมดาจะไปโดนกล่อง "มีข้อมูลที่ยังไม่ได้บันทึก" ถามซ้ำทั้งที่เพิ่งบันทึกไป */
+    closeCardDrawerIfActive('roleFormCard');
+    return loadRoles();
+  }).then(function(){
+    /* สิทธิ์ของตัวเองอาจเปลี่ยนไปด้วยถ้าแก้บทบาทที่ตัวเองอยู่ */
+    return rbacBoot();
+  }).catch(function(e){
+    toast('บันทึกไม่สำเร็จ',e.message||'',(e.status===403?'err':'err'));
+  });
+}
+
+function delRole(id){
+  var r=RBAC.roles.filter(function(x){return x.id===id;})[0];if(!r)return;
+  if(r.system)return toast('ลบไม่ได้','Super Admin เป็นบทบาทของระบบ','err');
+  confirmA('ลบบทบาท '+r.name+'?','พนักงานที่เคยอยู่ในบทบาทนี้จะต้องถูกย้ายไปบทบาทอื่นก่อน','ลบ',true)
+    .then(function(ok){
+      if(!ok)return;
+      return rbacSend('DELETE','/api/roles/'+id).then(function(){
+        toast('ลบแล้ว',r.name);return loadRoles();
+      }).catch(function(e){
+        /* บทบาทยังมีคนใช้อยู่ — บอกจำนวนคน พร้อมทางไปดูว่าใครบ้าง */
+        if(e.status===409&&e.body&&e.body.error==='role_in_use')return roleInUseModal(r,e.body);
+        toast('ลบไม่สำเร็จ',e.message||'','err');
+      });
+    });
+}
+window.delRole=delRole;
+
+function roleInUseModal(role,info){
+  openModal(
+    '<div class="mhead"><h3>ลบบทบาทนี้ไม่ได้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody"><p>'+esc(info.message||('มีพนักงานใช้บทบาทนี้อยู่ '+info.members+' คน'))+'</p>'
+      +'<p class="desc" style="margin-top:8px;">ย้ายพนักงานทั้งหมดออกจากบทบาทนี้ก่อน แล้วจึงจะลบได้</p>'
+      +'<div id="roleMembers" class="small muted" style="margin-top:12px;">กำลังโหลดรายชื่อ…</div></div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
+      +'<button class="btn accent" onclick="closeModal();goSetup(\'emp\')">ดูพนักงานที่ใช้งาน</button></div>'
+  );
+  rbacGet('/api/roles/'+role.id+'/members').then(function(d){
+    var el=$('#roleMembers');if(!el)return;
+    var names=(d.members||[]).map(function(m){return esc(m.name||m.username);});
+    el.innerHTML=names.length?('พนักงานที่ใช้บทบาทนี้: '+names.join(' · ')):'ไม่พบรายชื่อ';
+  }).catch(function(){var el=$('#roleMembers');if(el)el.textContent='';});
+}
+
+/* ── bind ────────────────────────────────────────────────────────────────*/
+(function bindRoleUI(){
+  function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn);}
+  ready(function(){
+    var save=$('#btnSaveRole');if(save)save.addEventListener('click',saveRole);
+    var cancel=$('#btnCancelRole');if(cancel)cancel.addEventListener('click',function(){rlResetForm();closeCardDrawerIfActive('roleFormCard');});
+    var all=$('#btnPermAll');if(all)all.addEventListener('click',function(){
+      if(rlLocked)return;
+      RBAC.modules.forEach(function(m){rlModPerms(m).forEach(function(k){rlSel[k]=true;});});
+      renderPermPicker();
+    });
+    var none=$('#btnPermNone');if(none)none.addEventListener('click',function(){
+      if(rlLocked)return;rlSel={};renderPermPicker();
+    });
+    var srch=$('#rlPermSearch');if(srch)srch.addEventListener('input',renderPermPicker);
+    var schRole=$('#schRole');if(schRole)schRole.addEventListener('input',renderRoles);
+  });
+})();
+
+/* ── บทบาทของพนักงาน (ฟอร์มพนักงาน) ────────────────────────────────────────
+   หน้าพนักงานเลือกได้แค่ "บทบาท" ตัวเดียว ไม่ได้ติ๊ก permission รายตัว — สิทธิ์
+   ทั้งหมดของบทบาทไปดู/แก้ที่แท็บบทบาทและสิทธิ์ที่เดียว ไม่งั้นจะมีสองที่ที่ตั้งสิทธิ์
+   ได้แล้วเพี้ยนกันเอง */
+function empRoleById(id){
+  if(id===''||id==null)return null;
+  var n=Number(id);
+  return (RBAC.roles||[]).filter(function(r){return r.id===n;})[0]||null;
+}
+/* ค่า access เดิม (operator/supervisor/admin/viewer) ยังถูกเขียนต่อไปเพื่อให้ PDA
+   และข้อมูลเก่าที่อ่านฟิลด์นี้ไม่พัง — เดาจากสิทธิ์ของบทบาทที่เลือก ไม่ใช่ให้คนกรอก
+   สองที่ ตัวตัดสินสิทธิ์จริงคือ roleId ฝั่งเซิร์ฟเวอร์เท่านั้น */
+function empAccessForRole(id){
+  var r=empRoleById(id);
+  if(!r)return 'operator';
+  var p=r.permissions||[];
+  if(r.system||p.indexOf('role.manage')>=0)return 'admin';
+  if(p.indexOf('box.create')<0&&p.indexOf('borrow.create')<0)return 'viewer';
+  if(p.indexOf('employee.view')>=0)return 'supervisor';
+  return 'operator';
+}
+function renderEmpRoleOptions(selected){
+  var sel=$('#eRoleId');if(!sel)return;
+  var roles=(RBAC.roles||[]);
+  if(!roles.length){
+    /* บัญชีที่ไม่มีสิทธิ์ role.manage อ่าน /api/roles ไม่ได้ — แสดงบทบาทปัจจุบัน
+       ของพนักงานคนนั้นไว้เฉย ๆ ดีกว่าโชว์ช่องว่างที่ดูเหมือนข้อมูลหาย */
+    var cur=empRoleById(selected);
+    sel.innerHTML=cur?'<option value="'+cur.id+'">'+esc(cur.name)+'</option>'
+      :'<option value="">— ยังไม่ได้กำหนดบทบาท —</option>';
+    sel.value=selected||'';
+    sel.disabled=true;
+    syncEmpRoleDesc();
+    return;
+  }
+  sel.disabled=false;
+  /* บทบาทที่ปิดใช้งานไม่ให้เลือกใหม่ แต่ถ้าพนักงานคนนี้อยู่ในนั้นอยู่แล้วต้องยังเห็น */
+  var opts=roles.filter(function(r){return r.active||String(r.id)===String(selected);});
+  sel.innerHTML='<option value="">— ยังไม่ได้กำหนดบทบาท —</option>'
+    +opts.map(function(r){
+      return '<option value="'+r.id+'">'+esc(r.name)+(r.active?'':' (ปิดใช้งาน)')+'</option>';
+    }).join('');
+  sel.value=selected||'';
+  syncEmpRoleDesc();
+}
+window.renderEmpRoleOptions=renderEmpRoleOptions;
+function syncEmpRoleDesc(){
+  var r=empRoleById(val('eRoleId'));
+  var d=$('#eRoleDesc');
+  if(d)d.textContent=r?(r.description||('มี '+nf((r.permissions||[]).length)+' สิทธิ์')):'เลือกบทบาทเพื่อกำหนดสิทธิ์ของพนักงานคนนี้';
+  var btn=$('#btnViewRolePerms');
+  if(btn)btn.style.display=r?'':'none';
+}
+/* ดูสิทธิ์ทั้งหมดของบทบาทที่เลือก — อ่านอย่างเดียว แก้ที่นี่ไม่ได้ */
+function viewRolePerms(){
+  var r=empRoleById(val('eRoleId'));if(!r)return;
+  var granted={};(r.permissions||[]).forEach(function(k){granted[k]=true;});
+  var body=(RBAC.modules||[]).map(function(m){
+    var on=m.permissions.filter(function(p){return granted[p.key];});
+    if(!on.length)return '';
+    return '<div style="margin-top:14px;">'
+      +'<div style="font-size:13px;font-weight:600;color:var(--ink);">'+esc(m.label)
+        +' <span class="mono small muted">'+on.length+'/'+m.permissions.length+'</span></div>'
+      +'<div class="small" style="color:var(--ink2);margin-top:4px;line-height:1.7;">'
+        +on.map(function(p){return esc(p.label);}).join(' · ')+'</div>'
+    +'</div>';
+  }).join('');
+  openModal(
+    '<div class="mhead"><h3>สิทธิ์ของบทบาท '+esc(r.name)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+      +(r.description?'<p class="desc">'+esc(r.description)+'</p>':'')
+      +'<p class="small muted" style="margin-top:6px;">รวม '+nf((r.permissions||[]).length)+' สิทธิ์ — แก้ไขได้ที่แท็บ "บทบาทและสิทธิ์"</p>'
+      +(body||'<p class="desc" style="margin-top:14px;">บทบาทนี้ยังไม่มีสิทธิ์ใด ๆ</p>')
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+  );
+}
+window.viewRolePerms=viewRolePerms;
+(function bindEmpRole(){
+  function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn);}
+  ready(function(){
+    var sel=$('#eRoleId');if(sel)sel.addEventListener('change',syncEmpRoleDesc);
+    var btn=$('#btnViewRolePerms');if(btn)btn.addEventListener('click',viewRolePerms);
+  });
+})();
+
+/* ส่งบทบาทที่เลือกไปผูกกับบัญชีล็อกอินของพนักงานคนนั้นฝั่งเซิร์ฟเวอร์
+   เงียบ ๆ ถ้าพนักงานยังไม่มีบัญชีล็อกอิน (userId ว่าง) — บทบาทจะไปมีผลจริงตอนที่
+   แอดมินตั้งรหัสผ่าน/สร้างบัญชีให้เขาแล้วเท่านั้น */
+function assignEmpRoleOnServer(rec){
+  if(!rec||rec.roleId==null||!rec.userId)return;
+  if(!hasPerm('permission.manage'))return;
+  rbacSend('PUT','/api/roles/assign/'+rec.userId,{roleId:rec.roleId})
+    .then(function(){return loadRoles();})
+    .catch(function(e){toast('ตั้งบทบาทไม่สำเร็จ',e.message||'','err');});
+}
+window.assignEmpRoleOnServer=assignEmpRoleOnServer;
+
+/* ชื่อบทบาทที่จะโชว์ในตาราง/Export — ชื่อสดจาก RBAC ถ้าโหลดมาแล้ว ไม่งั้นใช้ชื่อที่
+   บันทึกไว้ตอนกดบันทึก แล้วค่อยถอยไปที่ป้าย access เดิมสำหรับข้อมูลก่อนมี RBAC */
+function empRoleLabel(e){
+  if(!e)return '-';
+  var r=empRoleById(e.roleId);
+  if(r)return r.name;
+  if(e.roleName)return e.roleName;
+  return EMP_ACCESS[e.access]||'-';
+}
+window.empRoleLabel=empRoleLabel;
 
 function renderSetup(){
   refreshStabBadges();
@@ -10880,7 +11398,7 @@ function renderSetup(){
   var empSelfEditing=!!(editingEmp&&currentEmp()&&currentEmp().id===editingEmp);
   var empFormCard=$('#empFormCard');
   if(empFormCard)empFormCard.style.display=(empAdmin||empSelfEditing)?'':'none';
-  var empFormIds=['eName','eRole','eDept','eWh','eShift','ePhone','eEmail','eStart','eScan','eAccess','eStatus'];
+  var empFormIds=['eName','eRole','eDept','eWh','eShift','ePhone','eEmail','eStart','eScan','eRoleId','eStatus'];
   empFormIds.forEach(function(i){
     var el=document.getElementById(i);if(!el)return;
     if(empAdmin)el.disabled=false;
@@ -10923,7 +11441,7 @@ function renderSetup(){
     var isMe=meId&&e.id===meId;
     return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td>'+esc(e.role||'-')+'</td>'
       +'<td>'+esc(e.dept||'-')+'</td><td>'+whTxt+'</td><td>'+esc(EMP_SHIFT[e.shift]||'-')+'</td><td class="mono">'+esc(e.phone||'-')+'</td>'
-      +'<td>'+esc(EMP_ACCESS[e.access]||'-')+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
+      +'<td>'+esc(empRoleLabel(e))+'</td><td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c muted">›</td></tr>';
   }).join(''):emptyRow(12,'ยังไม่มีพนักงาน');
   $('#cntEmp').textContent=eps.length+' คน';
@@ -11514,12 +12032,17 @@ loadFromServer().then(function(){
      ซึ่งตอนนี้อ่านจาก UIP ที่โหลดมาจาก /api/ui-prefs ไม่ใช่จาก S อีกแล้ว */
   return uiPrefsLoad();
 }).then(function(){
+  /* สิทธิ์ของบัญชีนี้ต้องรู้ก่อนวาดหน้าแรก ไม่งั้นเมนูที่ไม่มีสิทธิ์จะโผล่มาแวบหนึ่ง
+     แล้วค่อยหายไป — และ restoreLastTab() อาจพาไปแท็บที่บัญชีนี้เข้าไม่ได้ */
+  return rbacBoot();
+}).then(function(){
   restoreUiPrefs();
   restoreLastTab();
   renderAll();
   hydrateIcons(document);
   /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
   if(!Object.keys(S.employees||{}).length)openFirstRegisterModal();
+  if(hasAnyPerm('role.manage','permission.manage'))loadRoles();
   setTimeout(function(){var a=$('#nav button.active');if(a)movePill(a);},120);
 });
 
@@ -13574,7 +14097,7 @@ function exportEmpExcel() {
     return [e.id, e.name || '', e.role || '', e.dept || '',
       e.wh && S.warehouses[e.wh] ? S.warehouses[e.wh].name : '',
       EMP_SHIFT[e.shift] || '', e.phone || '',
-      EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
+      empRoleLabel(e), (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
   downloadXLS('employees-' + dstr() + '.xlsx', headers, rows);
 }
@@ -13689,7 +14212,7 @@ function exportAllMastersExcel(mode) {
     return [e.id, e.name || '', e.role || '', e.dept || '',
       e.wh && S.warehouses[e.wh] ? S.warehouses[e.wh].name : '',
       EMP_SHIFT[e.shift] || '', e.phone || '',
-      EMP_ACCESS[e.access] || '', (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
+      empRoleLabel(e), (EMP_STATUS[e.status || 'active'] || EMP_STATUS.active).t];
   });
 
   var sections = [
