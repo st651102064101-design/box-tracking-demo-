@@ -11222,13 +11222,14 @@ window.viewRolePerms=viewRolePerms;
   });
 })();
 
-/* ส่งบทบาทที่เลือกไปผูกกับบัญชีล็อกอินของพนักงานคนนั้นฝั่งเซิร์ฟเวอร์
-   เงียบ ๆ ถ้าพนักงานยังไม่มีบัญชีล็อกอิน (userId ว่าง) — บทบาทจะไปมีผลจริงตอนที่
-   แอดมินตั้งรหัสผ่าน/สร้างบัญชีให้เขาแล้วเท่านั้น */
+/* ส่งบทบาทที่เลือกไปผูกกับ "ตัวพนักงาน" ฝั่งเซิร์ฟเวอร์ (employees.role_id)
+   ไม่ใช่ผูกกับบัญชีล็อกอิน — พนักงานส่วนใหญ่ไม่มีแถวในตาราง users เลย ถ้าผูกกับ
+   บัญชีอย่างเดียวบทบาทจะไม่มีผลกับใครจนกว่าแอดมินจะตั้งรหัสผ่านให้ก่อน
+   ส่ง null ได้ = ล้างบทบาทออก (พนักงานที่ยังไม่ได้กำหนดบทบาท) */
 function assignEmpRoleOnServer(rec){
-  if(!rec||rec.roleId==null||!rec.userId)return;
+  if(!rec||!rec.id)return;
   if(!hasPerm('permission.manage'))return;
-  rbacSend('PUT','/api/roles/assign/'+rec.userId,{roleId:rec.roleId})
+  rbacSend('PUT','/api/roles/assign-employee/'+encodeURIComponent(rec.id),{roleId:rec.roleId})
     .then(function(){return loadRoles();})
     .catch(function(e){toast('ตั้งบทบาทไม่สำเร็จ',e.message||'','err');});
 }
