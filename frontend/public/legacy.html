@@ -3489,6 +3489,33 @@ a{color:var(--accentInk);}
   #btypeCubeOverlay .btc-dock{bottom:56px;}
   #btypeCubeOverlay .btc-hint{display:none;}
 }
+
+/* ===== APP TOOLTIP — desktop hover/focus + mobile tap =====
+   ใช้ element กลางเพียงตัวเดียวและ delegated events จึงครอบคลุมทั้ง markup
+   ตั้งต้นและปุ่ม/แถวที่ render เพิ่มภายหลัง ขอแค่มี title ตาม semantic เดิม
+   สีทั้งหมดอิง design tokens ทำให้สลับ light/dark พร้อม shell โดยอัตโนมัติ */
+.app-tooltip{
+  position:fixed;left:0;top:0;z-index:10000;max-width:min(320px,calc(100vw - 24px));
+  padding:8px 11px;border-radius:9px;border:.5px solid var(--line);
+  background:color-mix(in srgb,var(--ink) 94%,transparent);color:var(--surface);
+  box-shadow:0 8px 28px rgba(0,0,0,.22);font-size:12px;font-weight:500;
+  line-height:1.42;letter-spacing:0;text-align:left;white-space:normal;overflow-wrap:anywhere;
+  pointer-events:none;opacity:0;visibility:hidden;transform:translateY(3px) scale(.98);
+  transition:opacity .12s ease,transform .12s ease,visibility 0s linear .12s;
+}
+.app-tooltip.show{opacity:1;visibility:visible;transform:none;transition-delay:0s;}
+.app-tooltip::after{
+  content:"";position:absolute;left:var(--tip-arrow-x,50%);width:8px;height:8px;
+  background:inherit;border:inherit;transform:translateX(-50%) rotate(45deg);
+}
+.app-tooltip[data-side="top"]::after{bottom:-5px;border-left:0;border-top:0;}
+.app-tooltip[data-side="bottom"]::after{top:-5px;border-right:0;border-bottom:0;}
+html[data-theme="dark"] .app-tooltip{
+  background:color-mix(in srgb,var(--surface) 96%,white 4%);color:var(--ink);
+  box-shadow:0 10px 30px rgba(0,0,0,.48);
+}
+@media(pointer:coarse){.app-tooltip{font-size:13px;padding:10px 12px;max-width:min(300px,calc(100vw - 20px));}}
+@media(prefers-reduced-motion:reduce){.app-tooltip{transition:none;}}
 </style>
 <div id="btypeCubeOverlay">
   <div class="btc-backdrop" onclick="closeBtypeCube()"></div>
@@ -17232,6 +17259,9 @@ function openColumnMapModal(opts){
     }
     /* ป้ายในฉาก 3D เป็นภาพ ต้องวาดใหม่ถึงจะเปลี่ยนภาษาตาม */
     if(typeof window.btLangChanged==='function')window.btLangChanged(lang);
+    /* tooltip เก็บข้อความไทยต้นฉบับไว้นอก title เพื่อไม่ให้ browser แสดง native
+       tooltip ซ้อนกัน จึงแจ้งให้ render ข้อความใหม่ด้วยพจนานุกรมชุดเดียวกัน */
+    if(typeof window.appTooltipLanguageChanged==='function')window.appTooltipLanguageChanged();
   }
 
   /* ฉาก 3D เขียนตัวหนังสือลงบน canvas texture ไม่ใช่ DOM — MutationObserver ข้างบน
@@ -17250,6 +17280,131 @@ function openColumnMapModal(opts){
   document.documentElement.setAttribute("data-lang", lang);
   mo.observe(document.body, {childList:true, subtree:true, characterData:true});
   if(lang === "en"){ busy = true; translateTree(document.body); busy = false; }
+})();
+</script>
+
+<script>
+/* ============================================================================
+   GLOBAL RESPONSIVE TOOLTIP
+   ----------------------------------------------------------------------------
+   - Desktop: hover และ keyboard focus
+   - Mobile/tablet: แตะแล้วแสดงชั่วคราว โดยไม่กิน click ของปุ่ม
+   - Dynamic DOM: delegated events จับ title ที่ render เข้ามาทีหลังอัตโนมัติ
+   - i18n: เก็บข้อความไทยต้นฉบับจาก __i18n_title แล้วแปลผ่าน btI18n.t()
+   - Native tooltip: ย้าย title ออกตอนใช้งานครั้งแรก กัน popup ซ้อนสองชั้น */
+(function(){
+  var tip=document.createElement('div');
+  tip.id='appTooltip';tip.className='app-tooltip';tip.setAttribute('role','tooltip');
+  tip.setAttribute('aria-hidden','true');document.body.appendChild(tip);
+  var active=null,hideTimer=0,touchTimer=0;
+
+  /* title บางชุดเป็นคำอธิบายยาวและไม่ได้อยู่ในพจนานุกรม UI หลัก (ข้อความนั้น
+     ไม่เคยแสดงบนจอมาก่อน) จึงมี dictionary เฉพาะ tooltip เพิ่มอีกชั้น */
+  var TIP_EN={
+    'สลับเป็นโหมดมืด':'Switch to dark mode','สลับเป็นโหมดสว่าง':'Switch to light mode',
+    'ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน':'Signed-in user / current recorder — tap to view employee badge',
+    'ยังมีตัวเลือกช่วงเวลาอื่นซ่อนอยู่ — เอาเมาส์ชี้เพื่อดู':'More time-range options are hidden — hover or tap to view',
+    'ดูกล่องในคลัง':'View boxes in warehouse','ดูกล่องที่ออกอยู่':'View boxes currently out',
+    'ดูกล่องที่พักใช้งาน':'View boxes on hold','ดูกล่องชำรุด':'View damaged boxes',
+    'ดูกล่องที่ผ่าน Gate เข้า':'View boxes that passed Gate In','ดูกล่องที่ผ่าน Gate ออก':'View boxes that passed Gate Out',
+    'ดูกล่องที่รับคืนสะสม':'View all returned boxes','หน้าแรก':'First page','ก่อนหน้า':'Previous page',
+    'ถัดไป':'Next page','หน้าสุดท้าย':'Last page',
+    'เลือกไฟล์ .xlsx / .xlsm / .xls / .xlsb / .csv เพื่อนำเข้า':'Select an .xlsx / .xlsm / .xls / .xlsb / .csv file to import',
+    'ส่งออกประวัติกล่องที่ผ่าน Gate ขาออกทั้งหมด (.xlsx)':'Export all Gate Out box history (.xlsx)',
+    'ส่งออกประวัติกล่องที่ผ่าน Gate ขาเข้าทั้งหมด (.xlsx)':'Export all Gate In box history (.xlsx)',
+    'ผ่าน Gate เข้ามาแล้ว อยู่ในคลัง':'Passed Gate In and is now in the warehouse',
+    'เลือกไฟล์ Excel/CSV เพื่อนำเข้ารายการสต็อก — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ชื่อหัวคอลัมน์ตายตัว':'Select an Excel/CSV inventory file — map columns after selection; fixed column names are not required',
+    'Export ทุก master ในระบบ (กล่อง/ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน) รวมเป็นไฟล์เดียว sheet เดียว':'Export all master data (boxes, box types, warehouses & gates, customers, employees) to one file and one sheet',
+    'พิมพ์ป้ายบาร์โค้ด/QR ของกล่องที่เลือก แล้วบันทึกว่าติดป้ายแล้ว':'Print barcode/QR labels for selected boxes and mark them as labeled',
+    'จำนวนวันที่ลูกค้ารายนี้ยืมกล่องได้ นับจากวันที่บันทึก — ใช้กับกล่องทุกใบที่ส่งให้ลูกค้ารายนี้':'Loan period in days from the recorded date — applies to every box sent to this customer',
+    'คูณด้วยจำนวนวันที่Overdueของแต่ละกล่อง แล้วรวมทุกใบที่overdueอยู่ตอนนี้ — ดูยอดรวมได้ที่บัตรลูกค้า (แตะแถวลูกค้า)':'Multiplied by each box’s overdue days and totaled across current overdue boxes — view the total on the customer card',
+    'คิดครั้งเดียวต่อกล่อง 1 ใบที่มีสถานะ "สูญหาย" (ไม่ผูกกับจำนวนวัน) — รวมกับค่าปรับOverdueแยกกันคนละก้อน':'Charged once per lost box, independent of days — calculated separately from overdue fees',
+    'เลือกบทบาทเพื่อกำหนดสิทธิ์ของพนักงานคนนี้':'Select a role to assign this employee’s permissions',
+    'กดเพื่อกรองเฉพาะคนที่ตั้งค่าสิทธิ์ยังไม่ครบ':'Filter employees whose access setup is incomplete',
+    'กรองตามสถานะการเข้าถึงระบบ':'Filter by system-access status','ดูสิทธิ์ไม่ได้':'Permissions unavailable',
+    'ไม่เปิดบัญชี Web':'No web account','บทบาทของระบบ แก้ไขหรือลบไม่ได้':'System role — cannot be edited or deleted',
+    'ดูรายชื่อผู้ถือบทบาทนี้':'View employees assigned to this role','ปิด (Esc)':'Close (Esc)',
+    'พิมพ์บัตรพนักงาน':'Print employee badge','ลบพนักงานออกจากระบบ':'Remove employee from the system',
+    'หลังบัตรว่างอยู่ — กดเพื่อแสดงข้อมูลบัตร':'Badge back is empty — tap to show badge details'
+  };
+  function tooltipTranslate(th){
+    if(!th||!window.btI18n||window.btI18n.lang()!=='en')return th;
+    if(TIP_EN[th])return TIP_EN[th];
+    var m;
+    if((m=th.match(/^มีกล่องใช้ประเภทนี้อยู่\s*(\d+)\s*ใบ/)))return 'This box type is used by '+m[1]+' boxes';
+    if((m=th.match(/^ดูกล่องในคลัง\s+(.+)$/)))return 'View boxes in warehouse '+m[1];
+    if((m=th.match(/^ดูกล่องทั้งหมดใน\s+(.+)$/)))return 'View all boxes in '+m[1];
+    if(th.indexOf('คูณด้วยจำนวนวันที่เกินกำหนดคืนของแต่ละกล่อง')===0||th.indexOf('คูณด้วยจำนวนวันที่Overdueของแต่ละกล่อง')===0)return 'Multiplied by each box’s overdue days and totaled across current overdue boxes — view the total on the customer card';
+    if(th.indexOf('คิดครั้งเดียวต่อกล่อง 1 ใบที่มีสถานะ')===0)return 'Charged once per lost box, independent of days — calculated separately from overdue fees';
+    var out=window.btI18n.t(th);
+    if(out!==th)return out;
+    if((m=th.match(/^เปลี่ยนรหัสผ่าน$/)))return 'Change password';
+    if((m=th.match(/^ตั้งรหัสผ่าน$/)))return 'Set password';
+    return th;
+  }
+
+  function source(el){
+    if(!el)return '';
+    var title=el.getAttribute('title');
+    if(title!=null){
+      /* translateAttrs() เก็บไทยต้นฉบับไว้ใน property นี้เมื่อหน้าอยู่ภาษา EN */
+      var th=(el.__i18n_title!=null)?el.__i18n_title:title;
+      el.dataset.appTooltipTh=th;
+      el.removeAttribute('title');
+    }
+    return el.dataset.appTooltipTh||'';
+  }
+  function textFor(el){
+    var th=source(el);if(!th)return '';
+    return tooltipTranslate(th);
+  }
+  function targetFrom(node){
+    return node&&node.closest?node.closest('[title],[data-app-tooltip-th]'):null;
+  }
+  function position(el){
+    var r=el.getBoundingClientRect(),tr=tip.getBoundingClientRect(),gap=9,pad=8;
+    var side=(r.top>=tr.height+gap+pad)?'top':'bottom';
+    var top=side==='top'?r.top-tr.height-gap:r.bottom+gap;
+    top=Math.max(pad,Math.min(top,innerHeight-tr.height-pad));
+    var center=r.left+r.width/2;
+    var left=Math.max(pad,Math.min(center-tr.width/2,innerWidth-tr.width-pad));
+    tip.dataset.side=side;tip.style.left=Math.round(left)+'px';tip.style.top=Math.round(top)+'px';
+    tip.style.setProperty('--tip-arrow-x',Math.max(12,Math.min(center-left,tr.width-12))+'px');
+  }
+  function show(el,isTouch){
+    var txt=textFor(el);if(!txt)return;
+    clearTimeout(hideTimer);clearTimeout(touchTimer);
+    active=el;tip.textContent=txt;tip.classList.add('show');tip.setAttribute('aria-hidden','false');
+    el.setAttribute('aria-describedby','appTooltip');
+    requestAnimationFrame(function(){if(active===el)position(el);});
+    if(isTouch)touchTimer=setTimeout(hide,3000);
+  }
+  function hide(){
+    clearTimeout(hideTimer);clearTimeout(touchTimer);
+    if(active&&active.getAttribute('aria-describedby')==='appTooltip')active.removeAttribute('aria-describedby');
+    active=null;tip.classList.remove('show');tip.setAttribute('aria-hidden','true');
+  }
+  function delayedHide(){clearTimeout(hideTimer);hideTimer=setTimeout(hide,70);}
+
+  document.addEventListener('pointerover',function(e){
+    if(e.pointerType==='touch')return;var el=targetFrom(e.target);if(el)show(el,false);
+  },true);
+  document.addEventListener('pointerout',function(e){
+    if(e.pointerType==='touch')return;
+    if(active&&(!e.relatedTarget||!active.contains(e.relatedTarget)))delayedHide();
+  },true);
+  document.addEventListener('focusin',function(e){var el=targetFrom(e.target);if(el)show(el,false);},true);
+  document.addEventListener('focusout',function(e){if(active&&active.contains(e.target))delayedHide();},true);
+  document.addEventListener('pointerdown',function(e){
+    if(e.pointerType!=='touch')return;var el=targetFrom(e.target);
+    if(el){show(el,true);}else hide();
+  },true);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')hide();},true);
+  document.addEventListener('scroll',hide,true);
+  window.addEventListener('resize',function(){if(active)position(active);});
+  window.appTooltipLanguageChanged=function(){
+    if(active){var txt=textFor(active);if(txt){tip.textContent=txt;requestAnimationFrame(function(){if(active)position(active);});}else hide();}
+  };
 })();
 </script>
 
