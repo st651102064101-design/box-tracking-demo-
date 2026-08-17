@@ -3362,7 +3362,12 @@ a{color:var(--accentInk);}
 
         <div style="flex:0 0 auto;margin:0 26px;padding:20px 0 26px;border-top:.5px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:11px;">
           <div id="empBadgeId" style="font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:.08em;color:var(--ink);"></div>
-          <div style="display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>
+          <div id="empBadgeEmployeePill" style="display:inline-flex;align-items:center;padding:6px 18px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>
+          <!-- โผล่แทนป้าย EMPLOYEE เฉพาะตอนตั้ง "หลังบัตรเป็นกระดาษเปล่า" ไว้ — เมื่อหลัง
+               บัตรไม่มีอะไรให้สแกน บาร์โค้ดต้องมาอยู่หน้าบัตรแทน ไม่งั้นบัตรใบนี้ยิงเข้า
+               ระบบไม่ได้เลย (ดู syncEmpBadgeBack) -->
+          <div id="empBadgeFrontBarcode" style="display:none;width:100%;max-width:230px;height:64px;border-radius:6px;background:#fff;align-items:center;justify-content:center;"></div>
+          <div id="empBadgeFrontScanCode" style="display:none;font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--ink2);"></div>
         </div>
 
         <div id="empBadgeInactiveFront" style="position:absolute;inset:0;background:rgba(12,12,14,.62);display:none;place-items:center;pointer-events:none;z-index:3;">
@@ -6389,9 +6394,19 @@ function empCardInactiveHtml(e){
 /* เปลือกบัตรใช้ร่วมกันหน้า/หลัง — Design Language เดียวกันตามที่ผู้ใช้ขอ ขนาดยังเป็น
    54×86mm เท่าเดิม (บัตรห้อยคอมาตรฐาน) */
 var EMP_CARD_SHELL='position:relative;width:54mm;height:86mm;box-sizing:border-box;overflow:hidden;background:var(--surface);border-radius:4mm;padding:5mm 4.5mm;display:flex;flex-direction:column;font-family:-apple-system,\'Segoe UI\',Roboto,\'Noto Sans Thai\',sans-serif;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.18);';
-function empCardFrontHtml(e){
+function empCardFrontHtml(e,opts){
+  opts=opts||{};
   var initials=(e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
   var avatarInner=e.photo?'<img src="'+esc(e.photo)+'" style="width:100%;height:100%;object-fit:cover;">':'<span>'+esc(initials)+'</span>';
+  /* opts.frontBarcode: หลังบัตรถูกตั้งเป็นกระดาษเปล่า (empBadgeBackBlank) จึงไม่มี
+     บาร์โค้ดให้สแกนเลยทั้งใบ ต้องย้ายมาไว้หน้าบัตรแทนที่ป้าย EMPLOYEE เดิม —
+     เหตุผลเดียวกับที่บัตรบนจอทำ (ดู syncEmpBadgeBack) บัตรที่พิมพ์ออกมาต้องยิง
+     เข้าระบบได้เสมอไม่ว่าจะตั้งโหมดไหน */
+  var footer=opts.frontBarcode
+    ? '<div style="height:14mm;display:flex;align-items:center;justify-content:center;">'+code128SVG(empCardScanValue(e),44)+'</div>'
+      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7pt;letter-spacing:.1em;color:var(--ink2);">'+esc(empCardScanValue(e))+'</div>'
+    : '<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5pt;font-weight:700;letter-spacing:.08em;color:var(--ink);">'+esc(e.id)+'</div>'
+      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>';
   return '<div class="ecard" style="'+EMP_CARD_SHELL+'">'
     +'<div style="position:absolute;left:50%;top:-26mm;transform:translateX(-50%);width:50mm;height:50mm;border-radius:50%;background:var(--accent2);opacity:.36;"></div>'
     +empCardNotchHtml()
@@ -6403,8 +6418,7 @@ function empCardFrontHtml(e){
       +(e.dept?'<div style="font-size:7.4pt;color:var(--muted);margin-top:1.2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(e.dept)+'</div>':'')
     +'</div>'
     +'<div style="position:relative;z-index:1;margin-top:auto;padding-top:4mm;border-top:.18mm solid var(--line);display:flex;flex-direction:column;align-items:center;gap:2.4mm;">'
-      +'<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5pt;font-weight:700;letter-spacing:.08em;color:var(--ink);">'+esc(e.id)+'</div>'
-      +'<div style="display:inline-flex;align-items:center;padding:1mm 3.4mm;border-radius:999px;font-size:6.4pt;font-weight:700;letter-spacing:.14em;background:var(--accentSoft);color:var(--accentInk);">EMPLOYEE</div>'
+      +footer
     +'</div>'
     +empCardInactiveHtml(e)
     +'</div>';
@@ -6479,7 +6493,7 @@ function printEmpBadge(id){
     '<div class="mhead"><h3>บัตรพนักงาน '+esc(e.name||e.id)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody" style="padding:24px 16px;">'
       +printPreviewLightWrapOpen()
-        +empCardFrontHtml(e)
+        +empCardFrontHtml(e,{frontBarcode:backBlank})
         +(backBlank?'':empCardBackHtml(e))
       +printPreviewLightWrapClose()
       +'<p class="desc" style="text-align:center;margin-top:16px;">'
@@ -6521,7 +6535,7 @@ function printEmpBadgeWindow(id){
     +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
     +'</style></head><body>'
-    +'<div class="pg">'+empCardFrontHtml(e)+'</div>'
+    +'<div class="pg">'+empCardFrontHtml(e,{frontBarcode:empBadgeBackBlank()})+'</div>'
     /* หน้าหลังไม่ถูกส่งไปที่เครื่องพิมพ์เลยเมื่อตั้งเป็นกระดาษเปล่า — ไม่ใช่ส่งไป
        แล้วซ่อน ซึ่งยังกินกระดาษ/บัตรไปหนึ่งแผ่นอยู่ดี */
     +(empBadgeBackBlank()?'':'<div class="pg">'+empCardBackHtml(e)+'</div>')
@@ -6707,6 +6721,21 @@ function syncEmpBadgeBack(){
                    :'หลังบัตรมีข้อมูล — กดเพื่อทำให้เป็นกระดาษเปล่า';
     btn.style.background=blank?'var(--accent)':'var(--ink)';
     btn.style.color=blank?'var(--accentContrast)':'var(--surface)';
+  }
+  /* หลังบัตรว่างเปล่า = ไม่มีบาร์โค้ดให้สแกนเลยทั้งใบ ต้องย้ายมาไว้หน้าบัตรแทน
+     ไม่งั้นบัตรที่ตั้งโหมดนี้ยิงเข้าระบบไม่ได้เลย — สลับกับป้าย EMPLOYEE เดิม
+     (ไม่โชว์พร้อมกันสองอย่าง พื้นที่ท้ายบัตรมีจำกัด) */
+  var pill=$('#empBadgeEmployeePill'),bcWrap=$('#empBadgeFrontBarcode'),bcTxt=$('#empBadgeFrontScanCode');
+  if(pill)pill.style.display=blank?'none':'inline-flex';
+  if(bcWrap)bcWrap.style.display=blank?'flex':'none';
+  if(bcTxt)bcTxt.style.display=blank?'block':'none';
+  if(blank&&bcWrap){
+    var e=S.employees[empBadge.id];
+    if(e){
+      var code=empCardScanValue(e);
+      bcWrap.innerHTML=code128SVG(code,52);
+      if(bcTxt)bcTxt.textContent=code;
+    }
   }
 }
 window.syncEmpBadgeBack=syncEmpBadgeBack;
