@@ -3138,7 +3138,11 @@ a{color:var(--accentInk);}
         </div>
         <div id="rlPermList" class="perm-list"></div>
       </div>
-      <div class="wg-foot"><button class="btn gray" id="btnCancelRole">ยกเลิก</button>
+      <div class="wg-foot">
+        <!-- ปุ่มลบ — โผล่เฉพาะตอนแก้ไขบทบาทที่มีอยู่แล้วและไม่ใช่บทบาทของระบบ
+             (ดู editRole/rlResetForm) ย้ายมาจากตารางเดิมที่เคยมีปุ่มลบลอยอยู่ทุกแถว *-->
+        <button class="btn red" id="btnDeleteRole" style="display:none;">ลบบทบาท</button>
+        <button class="btn gray" id="btnCancelRole">ยกเลิก</button>
         <div class="spacer"></div>
         <button class="btn accent" id="btnSaveRole">สร้างบทบาท</button></div>
     </div>
@@ -3151,7 +3155,7 @@ a{color:var(--accentInk);}
           <button type="button" class="btn accent sm addbtn" id="btnAddRoleTop" onclick="addRole()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มบทบาท</button></div>
         <div class="wg-hd-row"><input id="schRole" placeholder="ค้นหาบทบาท · คำอธิบาย" autocomplete="off"></div>
       </div>
-      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th>บทบาท</th><th class="c">พนักงาน</th><th class="c">สิทธิ์</th><th>สถานะ</th><th class="c">จัดการ</th></tr></thead>
+      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th>บทบาท</th><th class="c">พนักงาน</th><th class="c">สิทธิ์</th><th>สถานะ</th></tr></thead>
         <tbody id="roleBody"></tbody></table></div></div>
     </div>
     </div>
@@ -11422,21 +11426,20 @@ function renderRoles(){
     return (r.name+' '+(r.description||'')).toLowerCase().indexOf(q)>=0;
   });
   var cEl=$('#cntRole');if(cEl)cEl.textContent=nf(RBAC.roles.length)+' บทบาท';
+  /* ทั้งแถวคลิกได้ เปิด drawer แก้ไข (editRole เดิมจัดการเคสบทบาทระบบ = อ่าน
+     อย่างเดียวให้อยู่แล้ว) — ปุ่มแก้ไข/ลบแยกต่างหากถอดออก ปุ่มลบย้ายไปอยู่ใน
+     drawer เอง (ดู btnDeleteRole) ไม่ใช่ลอยอยู่กลางตารางอีกต่อไป */
   body.innerHTML=list.length?list.map(function(r){
     var permTxt=r.system?'ทั้งหมด':nf(r.permissions.length);
     var lock=r.system?'<span class="role-lock" title="บทบาทของระบบ แก้ไขหรือลบไม่ได้">🔒</span> ':'';
-    return '<tr>'
+    return '<tr class="row-click" onclick="editRole('+r.id+')">'
       +'<td><div style="font-weight:600;">'+lock+esc(r.name)+'</div>'
         +(r.description?'<div class="small muted" style="margin-top:2px;">'+esc(r.description)+'</div>':'')+'</td>'
       +'<td class="c mono">'+roleMembersCellHtml(r)+'</td>'
       +'<td class="c mono">'+permTxt+'</td>'
       +'<td>'+(r.active?'<span class="pill">ใช้งาน</span>':'<span class="pill bad">ปิดใช้งาน</span>')+'</td>'
-      +'<td class="c"><div class="rowbtns">'
-        +'<button class="btn ghost sm" onclick="editRole('+r.id+')">'+(r.system?'ดู':'แก้ไข')+'</button>'
-        +(r.system?'':'<button class="btn ghost sm red" onclick="delRole('+r.id+')">ลบ</button>')
-      +'</div></td>'
     +'</tr>';
-  }).join(''):emptyRow(5,q?'ไม่พบบทบาทที่ค้นหา':'ยังไม่มีบทบาทในระบบ');
+  }).join(''):emptyRow(4,q?'ไม่พบบทบาทที่ค้นหา':'ยังไม่มีบทบาทในระบบ');
 }
 window.renderRoles=renderRoles;
 
@@ -11448,8 +11451,10 @@ window.renderRoles=renderRoles;
    ไม่ใช่กรอง S.employees เองฝั่งนี้ ซึ่งจะได้ยอดไม่ตรงกับตัวเลขในตาราง */
 function roleMembersCellHtml(r){
   if(!r.members)return '<span class="muted">0</span>';
+  /* stopPropagation กันไม่ให้การคลิกปุ่มนี้ไหลขึ้นไปโดน onclick ของ <tr> (เปิด drawer
+     แก้ไข) ทั้งที่ตั้งใจแค่จะดูรายชื่อ */
   return '<button class="btn ghost sm" style="min-width:44px;" title="ดูรายชื่อผู้ถือบทบาทนี้"'
-    +' onclick="openRoleMembers('+r.id+')">'+nf(r.members)+'</button>';
+    +' onclick="event.stopPropagation();openRoleMembers('+r.id+')">'+nf(r.members)+'</button>';
 }
 function roleMemberRowHtml(m){
   var emp=m.employeeId?(S.employees||{})[m.employeeId]:null;
@@ -11606,6 +11611,8 @@ function rlResetForm(){
   setv('rlPermSearch','');
   var note=$('#rlLockNote');if(note)note.style.display='none';
   var save=$('#btnSaveRole');if(save){save.textContent='สร้างบทบาท';save.style.display='';}
+  /* สร้างใหม่ — ยังไม่มีอะไรให้ลบ */
+  var del=$('#btnDeleteRole');if(del)del.style.display='none';
   $all('#roleFormCard input,#roleFormCard select').forEach(function(el){el.disabled=false;});
   $all('#roleFormCard .ivs-btn').forEach(function(b){b.disabled=false;});
   renderPermPicker();
@@ -11623,15 +11630,20 @@ function editRole(id){
   setStatusToggle('rlActive',r.active?'active':'inactive');
   r.permissions.forEach(function(k){rlSel[k]=true;});
   rlLocked=!!r.system;
+  var del=$('#btnDeleteRole');
   if(rlLocked){
-    /* Super Admin: อ่านอย่างเดียวทั้งใบ ปิดปุ่มบันทึกไปเลยแทนที่จะให้กดแล้วเด้ง 403 */
+    /* Super Admin: อ่านอย่างเดียวทั้งใบ ปิดปุ่มบันทึกไปเลยแทนที่จะให้กดแล้วเด้ง 403 —
+       และไม่มีปุ่มลบด้วยเหตุผลเดียวกัน (ลบบทบาทระบบไม่ได้) */
     $all('#roleFormCard input,#roleFormCard select').forEach(function(el){el.disabled=true;});
     $all('#roleFormCard .ivs-btn').forEach(function(b){b.disabled=true;});
     var srch=$('#rlPermSearch');if(srch)srch.disabled=false;   /* ยังค้นหาดูได้ */
     var note=$('#rlLockNote');if(note)note.style.display='';
     var save=$('#btnSaveRole');if(save)save.style.display='none';
+    if(del)del.style.display='none';
   }else{
     var save2=$('#btnSaveRole');if(save2)save2.textContent='บันทึกการเปลี่ยนแปลง';
+    /* onclick ผูกใหม่ทุกครั้งที่เปิดแก้ไขบทบาท เพราะ id ของบทบาทเปลี่ยนไปตามที่กำลังดู */
+    if(del){del.style.display='';del.onclick=function(){delRole(r.id);};}
   }
   renderPermPicker();
   openCardDrawer('roleFormCard',(rlLocked?'บทบาทของระบบ · ':'แก้ไขบทบาท · ')+r.name,
@@ -11666,7 +11678,11 @@ function delRole(id){
     .then(function(ok){
       if(!ok)return;
       return rbacSend('DELETE','/api/roles/'+id).then(function(){
-        toast('ลบแล้ว',r.name);return loadRoles();
+        toast('ลบแล้ว',r.name);
+        /* ปุ่มลบตอนนี้อยู่ใน drawer เอง (แก้ไขบทบาทที่เพิ่งลบไปค้างอยู่) — ปิดด้วย
+           force เพราะฟอร์มยัง "dirty" เทียบกับตอนเปิด ทั้งที่เพิ่งลบสำเร็จไปแล้ว */
+        closeCardDrawerIfActive('roleFormCard');
+        return loadRoles();
       }).catch(function(e){
         /* บทบาทยังมีคนใช้อยู่ — บอกจำนวนคน พร้อมทางไปดูว่าใครบ้าง */
         if(e.status===409&&e.body&&e.body.error==='role_in_use')return roleInUseModal(r,e.body);
