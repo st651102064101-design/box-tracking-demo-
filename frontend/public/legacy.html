@@ -3204,10 +3204,9 @@ a{color:var(--accentInk);}
   <button id="empBadgeClose" onclick="closeEmpBadge()" title="ปิดบัตร" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
   </button>
-  <!-- ล็อกเอาท์ — เกาะข้าง #empBadgeClose ทั้งตำแหน่งและฟิสิกส์ (ดู empBadgeStep()),
-       แค่เลื่อนออกไปอีกขั้นให้ไม่ทับปุ่มปิด ไม่ผูกกับ isSelf เพราะเป็นทางลัดออกจาก
-       แอปทั้งระบบ ไม่ใช่ action ที่ผูกกับบัตรใบไหนใบหนึ่งโดยเฉพาะ -->
-  <button id="empBadgeLogout" onclick="smarttraceLogout()" title="ล็อกเอาท์" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+  <!-- ล็อกเอาท์ — เกาะข้าง #empBadgeClose ทั้งตำแหน่งและฟิสิกส์ (ดู empBadgeStep())
+       แต่ซ่อนเป็นค่าเริ่มต้น และเปิดเฉพาะ openEmpBadge(id,true) จาก who-chip บน navbar -->
+  <button id="empBadgeLogout" onclick="smarttraceLogout()" title="ล็อกเอาท์" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:none;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
   </button>
   <!-- เมนูจัดการ (แก้ไข/ตั้งรหัสผ่าน/พิมพ์บัตร/ลบ) — ย้ายออกมาจากด้านหลังบัตร (เคยต้อง hover
@@ -4058,20 +4057,24 @@ function authHeaders(){
    as opposed to the legacy S.employees[x].access field below, which used to
    be the only thing gating admin UI even though it's just client-side state
    anyone with API access could rewrite. */
-function decodeJwtRole(t){
+function decodeJwtClaims(t){
   try{
     var b64=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
     while(b64.length%4)b64+='=';
     var json=decodeURIComponent(atob(b64).split('').map(function(c){
       return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    return JSON.parse(json).role||null;
-  }catch(e){return null;}
+    return JSON.parse(json)||{};
+  }catch(e){return {};}
 }
-var MY_ROLE=(function(){
+var JWT_CLAIMS=(function(){
   var t=null;try{t=localStorage.getItem('smarttrace_jwt');}catch(e){}
-  return t?decodeJwtRole(t):null;
+  return t?decodeJwtClaims(t):{};
 })();
+var MY_ROLE=JWT_CLAIMS.role||null;
+/* employeeId เป็น claim ที่ backend เซ็นมาให้เฉพาะบัญชีพนักงาน จึงเป็นตัวชี้
+   "นี่คือเรคอร์ดของฉัน" ที่เชื่อถือได้กว่าการเทียบชื่อ (ชื่อซ้ำ/ถูกแก้ได้) */
+var MY_EMPLOYEE_ID=JWT_CLAIMS.employeeId||null;
 /* ===== API root — backend จริงรันที่พอร์ต 4000 =====
    ปกติหน้านี้ถูกเสิร์ฟจาก Next (พอร์ต 3000) แล้วเรียก /api/state บน origin เดียวกัน
    แต่ถ้าเปิดจากพอร์ตอื่น (เช่น 5100) หรือเปิดไฟล์ตรงๆ origin นั้นไม่มี /api/state
@@ -5732,9 +5735,19 @@ var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัว�
    themselves admin. MY_ROLE comes from the server-signed JWT, so it can't be self-granted;
    the backend also independently enforces this on every write (see /api/state, /api/masters,
    /api/auth/users/:id/role), so this client-side check is UX-only, not the real gate. ===== */
-function currentEmp(){var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}return null;}
-function isAdmin(){return MY_ROLE==='admin';}
-window.isAdmin=isAdmin;window.currentEmp=currentEmp;
+function currentEmp(){
+  if(MY_EMPLOYEE_ID&&(S.employees||{})[MY_EMPLOYEE_ID])return S.employees[MY_EMPLOYEE_ID];
+  var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}
+  return null;
+}
+/* RBAC รุ่นใหม่เก็บ Super Admin ใน role_id และส่งสิทธิ์จริงผ่าน /api/auth/me;
+   JWT.role ของ employee login ยังคงเป็น legacy staff/admin จึงห้ามใช้ claim เก่า
+   ตัวเดียวตัดสิน ไม่งั้นผู้ถือ role super_admin จะถูกล็อกเป็นผู้ใช้ทั่วไปใน UI */
+function isAdmin(){
+  return MY_ROLE==='admin'||!!(window.RBAC&&RBAC.role&&RBAC.role.key==='super_admin');
+}
+function isSelfEmp(id){return MY_EMPLOYEE_ID?MY_EMPLOYEE_ID===id:!!(currentEmp()&&currentEmp().id===id);}
+window.isAdmin=isAdmin;window.currentEmp=currentEmp;window.isSelfEmp=isSelfEmp;
 var EMP_STATUS={active:{t:'ปฏิบัติงาน',c:'ok'},leave:{t:'ลา/พักงาน',c:'warn'},inactive:{t:'พ้นสภาพ',c:'bad'}};
 /* รหัสพนักงานของคนที่มีอยู่แล้วห้ามแก้ในหน้านี้ — มันคือคีย์ที่ประวัติ Gate, บัตร PDA
    (scanCode) และเรคอร์ดฝั่งเซิร์ฟเวอร์ผูกไว้ทั้งหมด การพิมพ์ทับเลยเป็นการสร้างคนใหม่
@@ -5824,7 +5837,7 @@ var EMP_SELF_EDITABLE=['ePhone','eEmail'];
 $('#btnAddEmp').onclick=function(){
   var isNew0=!editingEmp;
   var firstEver0=isNew0&&Object.keys(S.employees).length===0;
-  var selfEditing0=!isNew0&&currentEmp()&&currentEmp().id===editingEmp;
+  var selfEditing0=!isNew0&&isSelfEmp(editingEmp);
   if(!firstEver0&&!isAdmin()&&!selfEditing0)return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะเพิ่ม/แก้ไขพนักงานได้','err');
   /* ข้อผิดพลาดระดับฟิลด์แสดงใต้ช่องที่ผิดและโฟกัสไปช่องนั้น — ล้างของรอบก่อนก่อนตรวจ
      ใหม่เสมอ ไม่งั้นข้อความเก่าจะค้างอยู่ใต้ช่องที่แก้ถูกแล้ว */
@@ -5868,7 +5881,7 @@ $('#btnAddEmp').onclick=function(){
      เท่านั้น จะให้ PUT /api/state ตั้ง role_id ตามที่ไคลเอนต์ส่งมาไม่ได้เด็ดขาด —
      ใครก็ตามที่บันทึก state ได้ก็จะเลื่อนขั้นตัวเองเป็นแอดมินได้ทันที */
   assignEmpRoleOnServer(rec);
-  var wasEditingSelf=editingEmp&&S.employees[editingEmp]&&S.employees[editingEmp].name===USER;
+  var wasEditingSelf=editingEmp&&isSelfEmp(editingEmp);
   editingEmp=null;$('#btnAddEmp').textContent='บันทึกพนักงาน';
   ['eName','eRole','eDept','ePhone','eEmail','eScan'].forEach(function(i){setv(i,'');});
   eIdAuto.reset();setEmpIdLocked(false);setv('eWh','');setv('eStatus','active');syncStatusToggle('eStatus');resetEPhoto();
@@ -5896,7 +5909,7 @@ function openEmpActions(id){
 window.openEmpActions=openEmpActions;
 function editEmp(id){
   var e=S.employees[id];if(!e)return;
-  var self=currentEmp()&&currentEmp().id===id;
+  var self=isSelfEmp(id);
   if(!isAdmin()&&!self)return toast('ไม่มีสิทธิ์','แก้ไขได้เฉพาะข้อมูลของตัวเอง (เบอร์โทร/อีเมล) — ติดต่อผู้ดูแลระบบเพื่อแก้ไขข้อมูลอื่น','err');
   editingEmp=id;
   /* การ์ดนี้ซ่อนเป็น display:none อยู่ปกติสำหรับผู้ใช้ที่ไม่ใช่แอดมิน (renderSetup()
@@ -5916,7 +5929,7 @@ function delEmp(id){
   /* Design decision: even an admin may not delete their own logged-in employee
      record — self-deletion has no sane recovery path (locked out, no one left
      to undo it). Force them to have another admin delete the account instead. */
-  if(currentEmp()&&currentEmp().id===id)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
+  if(isSelfEmp(id))return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบพนักงาน '+id+'?','ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานนี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.employees[id]);delete S.employees[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editEmp=editEmp;window.delEmp=delEmp;
 /* ── "+ เพิ่ม…" — เปิด drawer ในโหมดสร้างใหม่ ────────────────────────────────
@@ -6374,14 +6387,17 @@ function openEmpBadge(id,isSelf){
 
   /* Same permission rules the old action modal enforced: edit is admin-or-self,
      credentials/delete are admin-only, and no one may delete their own account.
-     isSelf (passed by pickUser() for the who-chip's own-badge view) is honored
-     as-is on top of the name-match check — see pickUser()'s comment for why
-     the match alone isn't reliable enough on its own for that call path. */
-  var empAdmin=isAdmin(),self=isSelf===true||(currentEmp()&&currentEmp().id===id);
+     isSelfEmp() resolves the JWT employeeId first; the explicit isSelf flag is
+     reserved for the navbar call path and controls Logout separately below. */
+  var empAdmin=isAdmin(),self=isSelf===true||isSelfEmp(id);
   var credBtn0=$('#empBadgeCredBtn');if(credBtn0)credBtn0.title=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
   var editBtn=$('#empBadgeEditBtn');if(editBtn)editBtn.style.display=(empAdmin||self)?'grid':'none';
   var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'grid':'none';
   var delBtn=$('#empBadgeDelBtn');if(delBtn)delBtn.style.display=(empAdmin&&!self)?'grid':'none';
+  /* Logout เป็น action ของ session ไม่ใช่ action จัดการ employee: แสดงเฉพาะ
+     call path จาก who-chip ซึ่งส่ง isSelf=true มาเท่านั้น เปิดบัตรจากตาราง—even
+     แถวของตัวเอง—ต้องไม่เห็นปุ่มนี้ และยิ่งห้ามเห็นบนบัตรของคนอื่น */
+  var logoutBtn=$('#empBadgeLogout');if(logoutBtn)logoutBtn.style.display=(isSelf===true&&isSelfEmp(id))?'grid':'none';
 
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='block';
   empBadgeBoot();
@@ -8009,16 +8025,14 @@ function pickUser(){
   var emp=currentEmp();
   // isSelf=true unconditionally here — this is always "my own badge" from
   // the operator's point of view (they clicked the who-chip in the header),
-  // even in the no-match fallback branch below where currentEmp() can't
-  // actually resolve a matching employee record. Without the explicit flag,
-  // openEmpBadge's own self-check (name===USER) fails in that fallback case
-  // and the delete-employee button on the flip side showed up over what the
-  // operator sees as *their own* account — see openEmpBadge's isSelf param.
+  // The explicit flag is reserved for this navbar call path. openEmpBadge()
+  // still verifies that the resolved id is really this account's own before
+  // showing Logout, so no caller can label another employee as "self".
   if(emp){openEmpBadge(emp.id,true);return;}
-  var emps=activeEmployees();
-  if(!emps.length){toast('ยังไม่มีพนักงานในระบบ','เพิ่มรายชื่อก่อน จึงจะเลือกเป็นผู้บันทึกได้','err');goSetup('emp');return;}
-  /* USER ไม่ตรงกับพนักงานคนไหนเลย (เช่น ยังไม่เคยตั้งค่า) — เปิดบัตรของคนแรกให้เลือกจากตรงนั้นแทน */
-  openEmpBadge(emps[0].id,true);
+  /* ห้าม fallback ไปเปิด "พนักงานคนแรก" แล้วทำเหมือนเป็นบัญชีตัวเอง — นอกจากข้อมูล
+     ผิดคนแล้ว ยังเคยทำให้ปุ่ม Logout โผล่บนบัตรคนอื่นด้วย บัญชี system ที่ไม่ได้ผูก
+     employee จึงแจ้งตรง ๆ แทน ส่วนการดูคนอื่นให้เข้าผ่านตารางจัดการพนักงาน */
+  toast('บัญชีนี้ไม่ได้ผูกกับพนักงาน','เปิดบัตรของตัวเองไม่ได้ — ผู้ดูแลระบบสามารถดูพนักงานคนอื่นได้จากหน้าจัดการพนักงาน','err');
 }
 window.pickUser=pickUser;
 
@@ -11831,7 +11845,7 @@ function renderSetup(){
   // own row (editEmp() already gates that to self-only), in which case it shows with just
   // EMP_SELF_EDITABLE (contact info) enabled and everything else locked.
   var empAdmin=isAdmin();
-  var empSelfEditing=!!(editingEmp&&currentEmp()&&currentEmp().id===editingEmp);
+  var empSelfEditing=!!(editingEmp&&isSelfEmp(editingEmp));
   var empFormCard=$('#empFormCard');
   if(empFormCard)empFormCard.style.display=(empAdmin||empSelfEditing)?'':'none';
   /* eRoleId ไม่อยู่ในลิสต์นี้ — renderEmpRoleOptions() เป็นเจ้าของสถานะ disabled ของ
@@ -11892,12 +11906,11 @@ function renderSetup(){
     needEl.innerHTML='<span class="acc-ic">⚠</span>'+nf(needFix)+' คนต้องตั้งค่าสิทธิ์';
   }
   var eps=sortTable(epsAll,uiSort.emp,'name');
-  var meId=currentEmp()&&currentEmp().id;
   var pgEmp=pagerSlice('emp',eps);
   $('#empBody').innerHTML=pgEmp.rows.length?pgEmp.rows.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-    var isMe=meId&&e.id===meId;
+    var isMe=isSelfEmp(e.id);
     return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td class="col-sec">'+esc(e.role||'-')+'</td>'
       +'<td class="col-sec">'+esc(e.dept||'-')+'</td><td class="col-sec">'+whTxt+'</td><td class="col-sec mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+empRoleCellHtml(e)+'</td><td>'+empAccessCellHtml(e)+'</td>'
@@ -12025,8 +12038,7 @@ $('#bulkEmpDel').addEventListener('click',function(){
   /* same self-deletion guard as the single-row delEmp() — silently drop the
      current user's own id from the batch rather than blocking the whole action,
      since it may have slipped in via "select all" */
-  var selfId=currentEmp()&&currentEmp().id;
-  var ids=checked.filter(function(id){return id!==selfId;});
+  var ids=checked.filter(function(id){return !isSelfEmp(id);});
   var skippedSelf=checked.length!==ids.length;
   if(!ids.length)return toast('ลบไม่ได้','ไม่สามารถลบบัญชีของตัวเองได้ — ให้ผู้ดูแลระบบคนอื่นเป็นผู้ลบ','err');
   confirmA('ลบ '+ids.length+' พนักงานที่เลือก?',(skippedSelf?'ข้ามบัญชีของตัวเอง 1 ราย · ':'')+'ประวัติ Gate เข้า/ออกเดิมที่เคยบันทึกโดยพนักงานเหล่านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){
