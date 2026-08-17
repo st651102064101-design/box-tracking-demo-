@@ -11311,7 +11311,7 @@ function renderRoles(){
     return '<tr>'
       +'<td><div style="font-weight:600;">'+lock+esc(r.name)+'</div>'
         +(r.description?'<div class="small muted" style="margin-top:2px;">'+esc(r.description)+'</div>':'')+'</td>'
-      +'<td class="c mono">'+nf(r.members)+'</td>'
+      +'<td class="c mono">'+roleMembersCellHtml(r)+'</td>'
       +'<td class="c mono">'+permTxt+'</td>'
       +'<td>'+(r.active?'<span class="pill">ใช้งาน</span>':'<span class="pill bad">ปิดใช้งาน</span>')+'</td>'
       +'<td class="c"><div class="rowbtns">'
@@ -11322,6 +11322,68 @@ function renderRoles(){
   }).join(''):emptyRow(5,q?'ไม่พบบทบาทที่ค้นหา':'ยังไม่มีบทบาทในระบบ');
 }
 window.renderRoles=renderRoles;
+
+/* ── ใครถือบทบาทนี้บ้าง ─────────────────────────────────────────────────────
+   ช่อง "พนักงาน" เดิมเป็นแค่ตัวเลขลอย ๆ — เห็นว่ามี 1 คนแต่ไม่มีทางรู้ว่าใคร ต้อง
+   ไปไล่เปิดทีละคนในหน้าพนักงาน กดที่ตัวเลขแล้วเปิดรายชื่อจริงเลย
+   จำนวนนี้นับทั้งพนักงาน (employees.role_id) และบัญชีระบบ (users.role_id) —
+   /api/roles/:id/members คืนมาทั้งสองแบบและตัดตัวซ้ำให้แล้ว จึงอ่านจากที่นั่น
+   ไม่ใช่กรอง S.employees เองฝั่งนี้ ซึ่งจะได้ยอดไม่ตรงกับตัวเลขในตาราง */
+function roleMembersCellHtml(r){
+  if(!r.members)return '<span class="muted">0</span>';
+  return '<button class="btn ghost sm" style="min-width:44px;" title="ดูรายชื่อผู้ถือบทบาทนี้"'
+    +' onclick="openRoleMembers('+r.id+')">'+nf(r.members)+'</button>';
+}
+function roleMemberRowHtml(m){
+  var emp=m.employeeId?(S.employees||{})[m.employeeId]:null;
+  var name=m.name||m.username||m.employeeId||'—';
+  var bits=[];
+  if(m.employeeId)bits.push('<span class="tag mono">'+esc(m.employeeId)+'</span>');
+  if(m.username)bits.push('<span class="tag">บัญชี '+esc(m.username)+'</span>');
+  if(!m.employeeId)bits.push('<span class="tag">บัญชีระบบ</span>');
+  if(emp&&emp.dept)bits.push('<span class="tag">'+esc(emp.dept)+'</span>');
+  /* ปุ่มเปิดข้อมูลพนักงานมีให้เฉพาะคนที่มีเรคอร์ดพนักงานจริงและบัญชีนี้แก้ได้ —
+     บัญชีระบบล้วน ๆ ไม่มีหน้าให้เปิด */
+  var act=(emp&&hasPerm('employee.update'))
+    ? '<button class="btn ghost sm" onclick="openRoleMemberEmp(\''+esc(m.employeeId)+'\')">เปิดข้อมูล</button>'
+    : '';
+  return '<div class="row" style="justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);">'
+    +'<div><div style="font-weight:600;">'+esc(name)+'</div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px;">'+bits.join('')+'</div></div>'
+    +'<div>'+act+'</div>'
+  +'</div>';
+}
+function openRoleMembers(id){
+  var r=(RBAC.roles||[]).filter(function(x){return x.id===id;})[0];
+  var title=r?r.name:'บทบาท';
+  var shell=function(inner){
+    return '<div class="mhead"><h3>ผู้ถือบทบาท · '+esc(title)+'</h3>'
+      +'<button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+      +'<div class="mbody" id="roleMembersBody">'+inner+'</div>'
+      +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
+  };
+  openModal(shell('<div class="muted">กำลังโหลด…</div>'));
+  rbacGet('/api/roles/'+id+'/members').then(function(d){
+    var list=(d&&d.members)||[];
+    var body=$('#roleMembersBody');if(!body)return;   /* ปิดโมดัลไปก่อนโหลดเสร็จ */
+    body.innerHTML=list.length
+      ? '<p class="desc" style="margin-top:0;">'+nf(list.length)+' คนถือบทบาทนี้อยู่</p>'+list.map(roleMemberRowHtml).join('')
+      : '<div class="empty"><div class="e-ic">∅</div>ยังไม่มีใครถือบทบาทนี้</div>';
+  }).catch(function(e){
+    var body=$('#roleMembersBody');if(!body)return;
+    body.innerHTML='<div class="empty"><div class="e-ic">!</div>'+esc(e.message||'โหลดรายชื่อไม่ได้')+'</div>';
+  });
+}
+/* goSetup() คลิกปุ่มแท็บย่อยแบบหน่วงเวลา (setTimeout 60ms) แล้วการคลิกนั้นวาด
+   หน้าพนักงานใหม่ทั้งหน้า — เรียก editEmp() ทันทีจะโดนล้างฟอร์มทิ้ง จึงต้องรอให้
+   แท็บย่อยเปลี่ยนเสร็จก่อน */
+function openRoleMemberEmp(id){
+  closeModal();
+  goSetup('emp');
+  setTimeout(function(){editEmp(id);},140);
+}
+window.openRoleMemberEmp=openRoleMemberEmp;
+window.openRoleMembers=openRoleMembers;
 
 function loadRoles(){
   if(!hasAnyPerm('role.manage','permission.manage')){renderRoles();return Promise.resolve();}
