@@ -10,7 +10,7 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc } from 'drizzle-orm';
+import { asc, desc, getTableColumns, inArray, sql } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import {
   boxes,
@@ -151,12 +151,75 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 }
 
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
+/**
+ * One advisory lock id for "somebody is writing the whole state snapshot".
+ * Arbitrary constant; it only has to be stable and not collide with another
+ * advisory lock in this database.
+ */
+const STATE_WRITE_LOCK = 4711_0001;
+
+/**
+ * Upsert `rows` into a table keyed by a single primary-key column, then delete
+ * the rows that key is no longer present in the payload.
+ *
+ * This replaces the delete-everything-then-insert-everything pass this function
+ * used to do, which was the source of the duplicate-primary-key 500s: two
+ * overlapping PUT /api/state transactions each deleted the rows visible in
+ * their own READ COMMITTED snapshot, so the second one's DELETE could not see
+ * the rows the first had just inserted, left them in place, and then collided
+ * with them on INSERT ("duplicate key value violates constraint boxes_pkey").
+ * Existing rows are now UPDATEd in place and only genuinely absent ones are
+ * deleted, so re-sending the same snapshot is idempotent.
+ */
+async function syncKeyed<T extends Record<string, unknown>>(
+  tx: any,
+  table: any,
+  keyProp: string,
+  rows: T[],
+  size = 400,
+): Promise<void> {
+  const cols = getTableColumns(table);
+  const keyCol = (cols as Record<string, any>)[keyProp];
+  /* ON CONFLICT DO UPDATE, writing every non-key column from the row that was
+     just proposed (`excluded`) — i.e. "if it exists, update it". */
+  const set: Record<string, unknown> = {};
+  for (const [prop, col] of Object.entries(cols as Record<string, any>)) {
+    if (prop === keyProp) continue;
+    set[prop] = sql`excluded.${sql.identifier(col.name)}`;
+  }
+  for (let i = 0; i < rows.length; i += size) {
+    const slice = rows.slice(i, i + size);
+    if (slice.length) {
+      await tx.insert(table).values(slice).onConflictDoUpdate({ target: keyCol, set });
+    }
+  }
+  /* Prune: whatever the snapshot no longer contains is gone. Done by reading
+     the stored keys and deleting the difference in bounded chunks rather than
+     one huge NOT IN (...), so the statement can never blow past Postgres'
+     bind-parameter limit on a large table. */
+  const keep = new Set(rows.map((r) => r[keyProp] as unknown));
+  const stored: Array<Record<string, unknown>> = await tx.select({ k: keyCol }).from(table);
+  const drop = stored.map((r) => r.k).filter((k) => !keep.has(k));
+  for (let i = 0; i < drop.length; i += size) {
+    const slice = drop.slice(i, i + size);
+    if (slice.length) await tx.delete(table).where(inArray(keyCol, slice as never[]));
+  }
+}
 export async function replaceState(
   db: DB,
   s: StatePayload,
   actor?: JwtPayload,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    /* Serialize whole-snapshot writes against each other. Two clients saving at
+       the same moment (two browser tabs, or the page and its sync module) used
+       to interleave their delete/insert passes and one of them died on a
+       duplicate primary key — see syncKeyed() above. Taken as an *xact* lock,
+       so it is released on COMMIT or ROLLBACK without any unlock bookkeeping.
+       Concurrent savers queue for a moment instead of racing; reads
+       (GET /api/state) never take this lock and are unaffected. */
+    await tx.execute(sql`select pg_advisory_xact_lock(${STATE_WRITE_LOCK})`);
+
     // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
     // own web-app login (username/passwordHash) never round-trip through the
     // legacy `S.employees` payload — the frontend that calls PUT /api/state
@@ -181,24 +244,14 @@ export async function replaceState(
         .from(employees)).map((r) => [r.id, r]),
     );
 
-    // 1) wipe all domain tables (users are untouched)
-    // audit_log is deliberately NOT wiped here — see the audit log section
-    // below for why (backend routes now write into it directly too).
-    await Promise.all([
-      tx.delete(boxes),
-      tx.delete(customers),
-      tx.delete(boxTypes),
-      tx.delete(warehouses),
-      tx.delete(gates),
-      tx.delete(locations),
-      tx.delete(employees),
-      tx.delete(vehicles),
-      tx.delete(doRecords),
-      tx.delete(putaway),
-      tx.delete(inventory),
-      tx.delete(events),
-      tx.delete(sequences),
-    ]);
+    /* 1) `events` is the one table still replaced wholesale: its rows carry no
+       client-side key (the id is a serial, and the legacy UI treats S.events as
+       an ordered array), so there is nothing to match an incoming row against.
+       Everything else below goes through syncKeyed() — update what exists,
+       insert what doesn't, delete what the snapshot dropped. audit_log is
+       neither wiped nor synced; it is append-only (see section 9).
+       `users` are untouched here, as before. */
+    await tx.delete(events);
 
     // 2) config singleton (upsert id=1)
     const cfg = s.cfg ?? {};
@@ -226,7 +279,7 @@ export async function replaceState(
       name,
       value: toInt(value) ?? 0,
     }));
-    if (seqRows.length) await tx.insert(sequences).values(seqRows);
+    await syncKeyed(tx, sequences, 'name', seqRows);
 
     // 4) boxes
     const boxRows = Object.entries(s.boxes ?? {}).map(([tag, raw]) => {
@@ -260,12 +313,13 @@ export async function replaceState(
         updatedAt: new Date(),
       };
     });
-    await chunkInsert(tx, boxes, boxRows);
+    await syncKeyed(tx, boxes, 'tag', boxRows);
 
     // 5) master data
-    await chunkInsert(
+    await syncKeyed(
       tx,
       customers,
+      'id',
       Object.entries(s.customers ?? {}).map(([id, raw]) => {
         const c = raw as Record<string, unknown>;
         return {
@@ -280,9 +334,10 @@ export async function replaceState(
       }),
     );
 
-    await chunkInsert(
+    await syncKeyed(
       tx,
       boxTypes,
+      'id',
       Object.entries(s.boxtypes ?? {}).map(([id, raw]) => {
         const t = raw as Record<string, unknown>;
         return {
@@ -297,9 +352,10 @@ export async function replaceState(
       }),
     );
 
-    await chunkInsert(
+    await syncKeyed(
       tx,
       warehouses,
+      'id',
       Object.entries(s.warehouses ?? {}).map(([id, raw]) => {
         const w = raw as Record<string, unknown>;
         return {
@@ -314,9 +370,10 @@ export async function replaceState(
       }),
     );
 
-    await chunkInsert(
+    await syncKeyed(
       tx,
       locations,
+      'code',
       Object.entries(s.locations ?? {}).map(([code, raw]) => {
         const l = raw as Record<string, unknown>;
         return {
@@ -363,9 +420,10 @@ export async function replaceState(
         ? toInt(actor.sub)
         : null;
 
-    await chunkInsert(
+    await syncKeyed(
       tx,
       employees,
+      'id',
       Object.entries(s.employees ?? {}).map(([id, raw]) => {
         const e = raw as Record<string, unknown>;
         const pin = pinById.get(id);
@@ -401,17 +459,19 @@ export async function replaceState(
       [putaway, s.putaway],
       [inventory, s.inventory],
     ] as const) {
-      await chunkInsert(
+      await syncKeyed(
         tx,
         tbl,
+        'id',
         Object.entries(map ?? {}).map(([id, raw]) => ({ id, data: raw, updatedAt: new Date() })),
       );
     }
 
     // 7) gates lookup (gate# → warehouseId)
-    await chunkInsert(
+    await syncKeyed(
       tx,
       gates,
+      'gateNo',
       Object.entries(s.gates ?? {})
         .map(([g, wh]) => ({ gateNo: toInt(g)!, warehouseId: (wh as string) ?? null }))
         .filter((r) => r.gateNo !== null),

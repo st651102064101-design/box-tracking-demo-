@@ -145,4 +145,63 @@ describe('state bridge (S ↔ Postgres)', () => {
       expect(get.body.employees['EMP-002'].userId).toBeNull();
     });
   });
+  /* Regression: PUT /api/state used to wipe every table and re-insert the whole
+     snapshot, so two saves overlapping in time raced — the second transaction's
+     DELETE could not see the rows the first had just inserted, and its INSERT
+     died on the primary key ("duplicate key value violates unique constraint
+     boxes_pkey"), answering 500. Rows are upserted now, and whole-snapshot
+     writes take an advisory lock so they queue instead of interleaving. */
+  describe('repeated and concurrent saves', () => {
+    const boxState = (tags: string[]) => ({
+      boxes: Object.fromEntries(tags.map((t) => [t, { tag: t, type: 'BT-001', status: 'pending' }])),
+    });
+
+    it('creates a box that did not exist yet', async () => {
+      const fresh = await bootstrap();
+      const put = await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(boxState(['BOX-006']));
+      expect(put.status).toBe(200);
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(get.body.boxes['BOX-006']).toBeTruthy();
+    });
+
+    it('updates an existing box instead of inserting it twice', async () => {
+      const fresh = await bootstrap();
+      await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(boxState(['BOX-005']));
+      const put = await request(fresh.app)
+        .put('/api/state')
+        .set(auth(fresh.token))
+        .send({ boxes: { 'BOX-005': { tag: 'BOX-005', type: 'BT-001', status: 'warehouse', cycles: 4 } } });
+      expect(put.status).toBe(200);
+
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(Object.keys(get.body.boxes)).toEqual(['BOX-005']);
+      expect(get.body.boxes['BOX-005'].status).toBe('warehouse');
+      expect(get.body.boxes['BOX-005'].cycles).toBe(4);
+    });
+
+    it('survives the same snapshot being sent over and over', async () => {
+      const fresh = await bootstrap();
+      const body = boxState(['BOX-005', 'BOX-006']);
+      for (let i = 0; i < 5; i++) {
+        const put = await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(body);
+        expect(put.status).toBe(200);
+      }
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(Object.keys(get.body.boxes).sort()).toEqual(['BOX-005', 'BOX-006']);
+    });
+
+    it('does not 500 or duplicate when several saves land at once', async () => {
+      const fresh = await bootstrap();
+      const body = boxState(['BOX-001', 'BOX-005', 'BOX-006']);
+      const results = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          request(fresh.app).put('/api/state').set(auth(fresh.token)).send(body),
+        ),
+      );
+      expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+
+      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
+      expect(Object.keys(get.body.boxes).sort()).toEqual(['BOX-001', 'BOX-005', 'BOX-006']);
+    });
+  });
 });
