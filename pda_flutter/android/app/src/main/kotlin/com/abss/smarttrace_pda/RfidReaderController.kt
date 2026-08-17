@@ -667,10 +667,27 @@ class RfidReaderController(private val context: Context) :
             cfg.setTari(0)
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
-            // singulation S0 / state A — read tags continuously while triggered
+            // Singulation. The comment here used to claim "state A — read tags
+            // continuously while triggered", which is precisely what target A
+            // does NOT do.
+            //
+            // Gen2: a tag that answers an inventory round flips its inventoried
+            // flag A->B, and in S0 that flag holds for as long as the tag stays
+            // energised. The reader's field is continuous while the trigger is
+            // held, so a tag read once sits in B and simply stops answering the
+            // A queries the reader keeps sending. One read per tag, then
+            // silence — the "เจอแล้วไม่รัวต่อ" symptom, and the reason reads
+            // trickled in at roughly one a second instead of streaming: what
+            // arrived was tags briefly dropping out of the field and resetting,
+            // not the reader working.
+            //
+            // AB_FLIP alternates the target between rounds, so the tags now
+            // sitting in B answer the next round (flipping back to A), and so
+            // on. That is what makes a held trigger re-read the same tags over
+            // and over at the reader's real rate.
             val s = rd.Config.Antennas.getSingulationControl(1)
             s.setSession(SESSION.SESSION_S0)
-            s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_A)
+            s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_AB_FLIP)
             s.Action.setSLFlag(SL_FLAG.SL_ALL)
             // Gen2 sizes its slot count as 2^Q, and this estimate is what
             // picks the STARTING Q. 300 was set here to help a dense pallet
