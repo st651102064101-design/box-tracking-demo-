@@ -1294,7 +1294,7 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
     <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
       <div style="flex:1;min-width:230px;">
         <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span>นำเข้ารายการจากไฟล์ Excel</h3>
-        <p class="desc" style="margin:0;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อเติมคิวส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา</p>
+        <p class="desc" style="margin:0;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วส่งออกให้ทันที (ไม่ทิ้งคิวสแกนค้างไว้) แล้วสรุปผลว่าใบไหนสำเร็จ ใบไหนติดปัญหา</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx / .xlsm / .xls / .xlsb / .csv เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ Excel</button>
@@ -13116,35 +13116,96 @@ function openColumnMapModal(opts){
     }
 
     if(autoRegistered.length)save();
-    renderOutResult();
-    var so=$('#scanOut');if(so)so.focus();
 
     var meta=applyShipmentDetails(destVals,plateVals,driverVals,tsVals,custAddrVals,custPhoneVals,custEmailVals,custResolveCache,custCreatedNames);
 
-    /* Confirming the column-mapping modal is the operator's confirmation —
-       don't make them find and click "ยืนยันส่งออก" again afterward. Ship
-       immediately if the form already has everything saveOutbound() needs
-       (gate is bound to the device, customer/DO/PO/etc. just got auto-filled
-       above); if some required field is still missing, saveOutbound() shows
-       its own toast explaining what and leaves the queue intact so the
-       operator can fill it in and confirm manually, same as before.
+    /* Confirming the column-mapping modal IS the shipment confirmation — an
+       import must never leave rows sitting in the Gate ขาออก scan queue, no
+       matter what (explicit rule). shipImportedRows() fills in whatever
+       saveOutbound() still needs (ประตู / ผู้บันทึก / ลูกค้าปลายทาง), ships
+       only this file's rows, and drops any row saveOutbound() still refuses
+       out of the queue entirely — reported as a failed row in the summary
+       instead of lingering as "คิวสแกน" the operator has to deal with. */
+    var notShipped=added.length?shipImportedRows(added):[];
+    var shipped=added.filter(function(t){return notShipped.indexOf(t)<0;});
+    notShipped.forEach(function(t){
+      failed.push({tag:t,reason:'ส่งออกอัตโนมัติไม่สำเร็จ — เอาออกจากคิวแล้ว (ตรวจคลัง/ประตู/ลูกค้า แล้วนำเข้าไฟล์ใหม่)'});
+    });
+    var so=$('#scanOut');if(so)so.focus();
+    showOutImportSummary(fname,shipped,dupInFile,alreadyQueued,failed,meta,
+      autoRegistered.filter(function(t){return notShipped.indexOf(t)<0;}),
+      shipped.length>0,
+      overwritten.filter(function(t){return notShipped.indexOf(t)<0;}));
+  }
 
-       refreshGateDisplays() runs first because a completely fresh account
-       (nothing set up in Master ▸ คลัง & ประตู yet) may have JUST gotten its
-       first-ever gate from autoCreateWarehouseIfNeeded() above, mid-loop —
-       #outGate's hidden input only picks that up once this re-fires (it's
-       the same "only one valid gate for this direction — auto-select"
-       logic pickGate()'s UI already relies on), otherwise val('outGate')
-       would still read empty and block auto-ship on a gate that, by now,
-       actually exists. */
+  /* ---- Make sure a gate is bound before auto-shipping an import.
+     A fresh account (nothing in Master ▸ คลัง & ประตู) may have JUST gotten
+     its first gate from autoCreateWarehouseIfNeeded() mid-import, and
+     #outGate only picks that up once refreshGateDisplays() re-fires. With
+     several gates on file and none fixed for this account, the first
+     out-capable gate is bound automatically rather than blocking the ship —
+     the operator can still change it later with "เปลี่ยนประตู". ---- */
+  function ensureOutGate(){
     refreshGateDisplays();
-    var autoShipped=false;
-    if(added.length){
-      var queuedBefore=pendingOut.length;
-      saveOutbound();
-      autoShipped=queuedBefore>0&&pendingOut.length===0;
-    }
-    showOutImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered,autoShipped,overwritten);
+    if(val('outGate'))return true;
+    var dirGates=gateNumsForDir('out');
+    if(!dirGates.length){autoCreateWarehouseIfNeeded('คลังหลัก');dirGates=gateNumsForDir('out');}
+    if(!dirGates.length)return false;
+    fixedGatesRef().out=String(dirGates[0]);
+    save();
+    refreshGateDisplays();
+    return !!val('outGate');
+  }
+
+  /* Every imported row must ship, so a row whose file gave no ปลายทาง (and
+     with the form's ลูกค้าปลายทาง still empty) gets a placeholder customer
+     record instead of blocking the whole batch behind saveOutbound()'s
+     "เลือกลูกค้าปลายทาง" toast. Reassign the box to the real customer later
+     from หน้าคลังกล่อง / รายงาน. */
+  function ensureOutCustomers(tags){
+    if(val('doCustomer'))return true;
+    var missing=tags.filter(function(t){return !pendingOutCustMap[t];});
+    if(!missing.length)return true;
+    var id=findCustomerMatch(NO_DEST_NAME)||autoCreateCustomerIfNeeded(NO_DEST_NAME,'','','');
+    if(!id)return false;
+    missing.forEach(function(t){pendingOutCustMap[t]=id;});
+    if(typeof renderSetup==='function')renderSetup();
+    return true;
+  }
+  var NO_DEST_NAME='ไม่ระบุปลายทาง (จากไฟล์นำเข้า)';
+
+  /* ---- Ship this import's rows and guarantee an empty import queue after.
+     The operator's hand-scanned queue (if any) is set aside first so the
+     import ships ONLY its own rows, then restored untouched — saveOutbound()
+     otherwise ships/clears whatever happens to be in pendingOut. Returns the
+     tags that could not be shipped; they are removed from the queue and all
+     per-tag override maps, never left pending. ---- */
+  function shipImportedRows(tags){
+    var manualQueue=pendingOut.filter(function(t){return tags.indexOf(t)<0;});
+    var manualCond={};
+    manualQueue.forEach(function(t){if(outConditionMap[t])manualCond[t]=outConditionMap[t];});
+    pendingOut=tags.slice();
+
+    ensureOutGate();
+    if(!val('outRecorder'))setv('outRecorder',USER);
+    ensureOutCustomers(tags);
+    /* a bad เบอร์โทรคนขับ typed in the form above would abort saveOutbound()
+       for the whole batch — drop it rather than let it block the import */
+    var telEl=$('#outDriverTel');
+    if(telEl&&telEl.value&&typeof isValidThaiPhone==='function'&&!isValidThaiPhone(telEl.value))telEl.value='';
+
+    try{saveOutbound();}catch(err){}
+
+    var left=pendingOut.slice();     // whatever saveOutbound() still refused
+    left.forEach(function(t){
+      delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];
+      delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];
+      delete pendingOutReturnDaysMap[t];
+    });
+    pendingOut=manualQueue;
+    Object.keys(manualCond).forEach(function(t){outConditionMap[t]=manualCond[t];});
+    renderOutResult();
+    return left;
   }
 
   /* ---- Auto-fill the DO form fields above, only when the whole file agrees
@@ -13205,13 +13266,14 @@ function openColumnMapModal(opts){
     h+='<p class="muted small" style="margin-top:0;">ไฟล์: <b>'+esc(fname||'-')+'</b></p>';
     if(okN&&autoShipped){
       h+='<div class="small" style="margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--posSoft);border:1px solid var(--pos);color:var(--pos);font-weight:600;">✓ ส่งออกสำเร็จอัตโนมัติแล้ว '+okN+' ใบ — ไม่ต้องกด "ยืนยันส่งออก" อีก</div>';
-    }else if(okN&&!autoShipped){
-      h+='<div class="small" style="margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);">เติมเข้าคิวแล้ว แต่ยังส่งออกอัตโนมัติไม่ได้เพราะข้อมูลบางช่องในฟอร์มด้านบนยังไม่ครบ (ดู toast ที่เพิ่งแจ้ง) — กรอกให้ครบแล้วกด "ยืนยันส่งออก" อีกครั้ง</div>';
+    }
+    if(failed.length){
+      h+='<div class="small" style="margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);">รายการที่ส่งออกไม่สำเร็จถูกเอาออกจากคิวสแกนแล้วทั้งหมด — การนำเข้าไฟล์จะไม่ทิ้งคิวค้างไว้ให้กด "ยืนยันส่งออก" เอง</div>';
     }
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);line-height:1;">'+okN+'</div>'
-      +'<div class="small" style="color:var(--pos);margin-top:4px;">'+(autoShipped?'ส่งออกแล้ว':'เติมเข้าคิวส่งออก')+'</div></div>'
+      +'<div class="small" style="color:var(--pos);margin-top:4px;">ส่งออกแล้ว</div></div>'
       +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;line-height:1;">'+skipN+'</div>'
       +'<div class="small muted" style="margin-top:4px;">ข้าม</div></div>'
@@ -13252,11 +13314,11 @@ function openColumnMapModal(opts){
       if(rows.length)h+='<div class="c2-label">ข้อมูลใบส่งของจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
 
-    if(okN){h+='<div class="c2-label">'+(autoShipped?'ส่งออกแล้ว':'เพิ่มเข้าคิว')+' · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
+    if(okN){h+='<div class="c2-label">ส่งออกแล้ว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
 
     if(autoRegistered&&autoRegistered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
-        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งออกทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
     }
 
@@ -13622,7 +13684,7 @@ function openColumnMapModal(opts){
     /* ---- รอบเก็บตก: ประโยคอธิบายยาว ๆ ที่ FRAG เคยแปลครึ่งเดียวจนอ่านไม่รู้เรื่อง ----
        พวกนี้ต้องเป็น EXACT เพราะ FRAG แทนที่คำเดี่ยวกลางประโยค (เช่น "คิวส่งออก",
        "บาร์โค้ด", "แร็ค") แล้วเหลือไทยรอบ ๆ ปนอังกฤษ ซึ่งอ่านยากกว่าไม่แปลเลย */
-    "เพื่อเติมคิวส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา":"Fill the ship queue with many boxes at once instead of scanning them one at a time - pick a file and map the columns yourself, no fixed template required. Every row is checked by the same rules as a scan, then summarised into which boxes can be queued and which have problems",
+    "เพื่อส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วส่งออกให้ทันที (ไม่ทิ้งคิวสแกนค้างไว้) แล้วสรุปผลว่าใบไหนสำเร็จ ใบไหนติดปัญหา":"Fill the ship queue with many boxes at once instead of scanning them one at a time - pick a file and map the columns yourself, no fixed template required. Every row is checked by the same rules as a scan, then summarised into which boxes can be queued and which have problems",
     "เพื่อเติมคิวรับคืนทีเดียวหลายใบ แทนการยิงทีละกล่องที่ประตู — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา":"Fill the return queue with many boxes at once instead of scanning them one at a time at the gate - pick a file and map the columns yourself, no fixed template required. Every row is checked by the same rules as a scan, then summarised into which boxes can be queued and which have problems",
     "ยิงหรือพิมพ์เลขกล่อง/แร็ค เพื่อดูกล่องเดียว — หรือใส่ PO (ใบสั่งซื้อลูกค้า), DO หรือทะเบียนรถ เพื่อดึงทุกกล่องในชุดนั้นขึ้นมาพร้อมกัน รู้ทันทีว่าตอนนี้อยู่ไหน พร้อมประวัติทั้งหมดเรียงใหม่ไปเก่า":"Scan or type a box number or rack to look up one box - or enter a PO (customer purchase order), DO or vehicle plate to pull up every box in that set at once, see where each one is right now, with the full history newest first",
     "คุณไม่ใช่ผู้ดูแลระบบ — แก้ไขได้เฉพาะเบอร์โทรศัพท์และอีเมลของตัวเอง ฟิลด์อื่นต้องให้ผู้ดูแลระบบแก้ไข":"You are not an administrator - you can only edit your own phone number and email. Other fields must be changed by an administrator",
