@@ -1974,9 +1974,14 @@ a{color:var(--accentInk);}
     <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วยิงบาร์โค้ด — ระบบผูกประตู·คลังต้นทาง·DO·PO·รถ·คนขับ ให้ทุกกล่องในรอบเดียว</p>
   </div>
 
-  <div class="card hover reveal">
-    <h3>ใบส่งของ · ข้อมูลรถ</h3>
-    <p class="desc">ตั้งค่าก่อนยิง — ข้อมูลชุดนี้จะผูกกับทุกกล่องที่ออกในรอบนี้ ใช้ย้อนรอยภายหลังได้</p>
+  <div class="wg-board">
+  <div class="wg xl wg-form reveal">
+    <div class="wg-top">
+      <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></span>
+      <span class="wg-lbl">ใบส่งของ · ข้อมูลรถ</span>
+    </div>
+    <p class="wg-cap">ตั้งค่าก่อนยิง — ข้อมูลชุดนี้จะผูกกับทุกกล่องที่ออกในรอบนี้ ใช้ย้อนรอยภายหลังได้</p>
+    <div class="wg-body">
     <div id="outGateBar" style="display:flex;align-items:center;gap:10px;background:var(--accentSoft);border:.5px solid var(--accent);border-radius:14px;padding:12px 16px;margin-bottom:18px;">
       <span style="font-size:18px;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></span>
       <div style="flex:1;">
@@ -2010,33 +2015,45 @@ a{color:var(--accentInk);}
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
     <div id="outVehicleQuick"></div>
+    </div>
+  </div>
   </div>
 
-  <!-- ===== Bulk import (.xlsx) — alternative to one-by-one RFID scanning ===== -->
-  <div class="card hover reveal d1" id="outImportCard" style="border-style:dashed;">
-    <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
-      <div style="flex:1;min-width:230px;">
-        <h3 style="margin-bottom:4px;"><span class="svgi" style="vertical-align:-3px;margin-right:6px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span>นำเข้ารายการจากไฟล์ Excel</h3>
-        <p class="desc" style="margin:0;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วส่งออกให้ทันที (ไม่ทิ้งคิวสแกนค้างไว้) แล้วสรุปผลว่าใบไหนสำเร็จ ใบไหนติดปัญหา</p>
-      </div>
+  <!-- Bulk import (.xlsx) — ทางเลือกแทนการยิงทีละใบ (สาขา thai_submit ตัดทิ้งไปแล้ว
+       พร้อมกับทั้งหน้า Gate Out จึงไม่มีเวอร์ชันวิดเจ็ตจากต้นทางให้พอร์ต — แปลง
+       markup เองให้พูดภาษาเดียวกับหน้าอื่น โดยคง id outImportCard/outImportFile
+       ไว้ครบ เพราะ handleOutImportFile ผูก event กับ #outImportFile โดยตรง) -->
+  <div class="wg-board">
+  <div class="wg xl wg-form reveal d1" id="outImportCard">
+    <div class="wg-top">
+      <span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span></span>
+      <span class="wg-lbl">นำเข้ารายการจากไฟล์ Excel</span>
+    </div>
+    <div class="wg-body">
+      <p class="desc" style="margin:0 0 10px;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ Template ตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วส่งออกให้ทันที (ไม่ทิ้งคิวสแกนค้างไว้) แล้วสรุปผลว่าใบไหนสำเร็จ ใบไหนติดปัญหา</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx / .xlsm / .xls / .xlsb / .csv เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ Excel</button>
         <input type="file" id="outImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
       </div>
     </div>
   </div>
+  </div>
 
-  <div class="gatebox reveal d1" id="gateOutBox">
-    <div class="scanline"></div>
-    <div class="geyebrow">GATE · OUTBOUND</div>
-    <h3>ประตูสแกนขาออก</h3>
-    <div class="gsub">ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ</div>
-    <div class="pad">
-      <input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off">
-      <button class="scanbtn" id="btnScanOut">สแกน</button>
+  <div class="wg-board">
+    <div class="wg xl wg-scan reveal d1" data-tint="accent" id="gateOutBox">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
+        <span class="wg-lbl">GATE · OUTBOUND</span>
+      </div>
+      <h3 class="wg-scan-t">ประตูสแกนขาออก</h3>
+      <p class="wg-scan-s">ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ</p>
+      <div class="pad">
+        <input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off">
+        <button class="scanbtn" id="btnScanOut">สแกน</button>
+      </div>
+      <div class="quick" id="quickOut"></div>
+      <div class="scanresult" id="resultOut"></div>
     </div>
-    <div class="quick" id="quickOut"></div>
-    <div class="scanresult" id="resultOut"></div>
   </div>
 
   <div class="row" style="margin-top:22px;">
