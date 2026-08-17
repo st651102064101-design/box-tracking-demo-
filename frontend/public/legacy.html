@@ -4082,9 +4082,30 @@ function save(){
     headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),
     body:JSON.stringify(S)
   }).then(function(r){
-    if(r.status===401){window.location.href='/login';}
+    if(r.status===401){window.location.href='/login';return null;}
+    return r.json().catch(function(){return null;});
+  }).then(function(j){
+    /* เซิร์ฟเวอร์รับเฉพาะส่วนที่บัญชีนี้มีสิทธิ์แก้ ส่วนที่ไม่มีสิทธิ์จะถูกคืนค่าเดิม
+       แล้วบอกกลับมาใน rejected — ต้องบอกผู้ใช้และโหลดของจริงมาทับ ไม่งั้นหน้าจอจะ
+       ยังโชว์สิ่งที่ถูกปฏิเสธไปแล้วเหมือนบันทึกสำเร็จ */
+    if(j&&j.rejected&&j.rejected.length)onStateRejected(j.rejected);
   }).catch(function(e){console.warn('[Smart Tracking] save to server failed',e);});
 }
+/* กันเตือนรัวตอนหน้าเดียวยิง save() ติด ๆ กันหลายครั้ง */
+var _rejectToastAt=0;
+function onStateRejected(rejected){
+  var names=rejected.map(function(g){return g.label||g.key;}).join(' · ');
+  var now=Date.now();
+  if(now-_rejectToastAt>4000){
+    _rejectToastAt=now;
+    toast('บันทึกบางส่วนไม่สำเร็จ','ไม่มีสิทธิ์แก้: '+names+' — ระบบดึงข้อมูลเดิมกลับมาแสดงแล้ว','err');
+  }
+  /* ดึง state จริงจากเซิร์ฟเวอร์มาทับ เพื่อให้สิ่งที่เห็นตรงกับสิ่งที่ถูกบันทึกจริง */
+  if(typeof loadFromServer==='function'){
+    loadFromServer().then(function(){if(typeof renderAll==='function')btSuppressSave(renderAll);});
+  }
+}
+window.onStateRejected=onStateRejected;
 /* fills in any keys missing from an older/partial state blob (e.g. a backup
    exported before a feature like locations existed) so restoring it never
    silently wipes data that loadFromServer() would otherwise default in. */
