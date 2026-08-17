@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { bootstrap, auth, type TestCtx } from './helpers.js';
+import { getDb } from '../src/db/client.js';
+import { boxes } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
 
 let ctx: TestCtx;
 beforeAll(async () => {
@@ -158,8 +161,43 @@ describe('DELETE /api/boxes/:tag/rfid', () => {
     const res = await request(ctx.app).delete('/api/boxes/BOX-B/rfid').set(auth(ctx.token));
     expect(res.status).toBe(200);
 
+    const [box] = await getDb().select().from(boxes).where(eq(boxes.tag, 'BOX-B'));
+    expect(box.rfidEpc).toBeNull();
+    expect(box.rfidTid).toBeNull();
+
+    /* This EPC is not an opaque identifier — 000000000000424F582D42 is the
+       ASCII text "BOX-B", which is how tags are commissioned here. So a lookup
+       still finds the box after detaching, and that is correct: the hex spells
+       the barcode, and refusing to read it would mean a tag written in bulk but
+       never bound through this endpoint is invisible to every scan (see
+       lib/epcCodec.ts). Detaching removes the *binding*; it cannot un-write
+       what is printed on the tag.
+
+       The assertion this replaces expected 404 here, from back when resolution
+       was binding-only. */
     const lookup = await request(ctx.app).get('/api/boxes/000000000000424F582D42').set(auth(ctx.token));
-    expect(lookup.status).toBe(404);
+    expect(lookup.status).toBe(200);
+    expect(lookup.body.tag).toBe('BOX-B');
+  });
+
+  it('leaves a numeric EPC unresolvable once detached — nothing spells the box', async () => {
+    /* The other half of the rule above: a factory-numeric EPC carries no text,
+       so the binding was the only thing connecting it to a box. Detached, it
+       must go back to being unknown. */
+    await request(ctx.app)
+      .post('/api/boxes/BOX-A/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidEpc: 'E28011606000020000000009', replace: true });
+    const bound = await request(ctx.app)
+      .get('/api/boxes/E28011606000020000000009')
+      .set(auth(ctx.token));
+    expect(bound.status).toBe(200);
+
+    await request(ctx.app).delete('/api/boxes/BOX-A/rfid').set(auth(ctx.token));
+    const after = await request(ctx.app)
+      .get('/api/boxes/E28011606000020000000009')
+      .set(auth(ctx.token));
+    expect(after.status).toBe(404);
   });
 
   it('409s when the box has no tag to detach', async () => {

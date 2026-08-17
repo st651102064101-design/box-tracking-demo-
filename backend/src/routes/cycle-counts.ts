@@ -32,17 +32,34 @@ cycleCountsRouter.use(requireAuth);
 const canWrite = requirePermission('box.update');
 
 /** Tags currently believed to be sitting in this warehouse/zone. */
+/**
+ * The boxes a count of `wh`/`zone` should find on the shelves.
+ *
+ * `status === 'warehouse'` is the fact that matters: the box is physically in
+ * the building. Its recorded `location` is a *refinement* of that, and it is
+ * routinely empty — a box that came in through the gate but was never put away
+ * to a rack has no wh/zone written on it at all. The old rule demanded
+ * `loc.wh === wh` outright, so every one of those was excluded: point a count
+ * at a warehouse full of received-but-unshelved boxes and it expected almost
+ * nothing, every scan landed in `unexpected`, and the screen looked like the
+ * reader wasn't finding tags.
+ *
+ * So an empty wh/zone is treated as "not recorded", which cannot contradict
+ * the session, rather than as "belongs to warehouse ''". A location is only
+ * ever used to *rule a box out* when it actually names a different place.
+ */
 async function expectedTags(wh: string, zone: string): Promise<string[]> {
   const db = getDb();
   const rows = await db.select().from(boxes).where(eq(boxes.status, 'warehouse'));
   return rows
     .filter((r) => {
       const loc = (r.location ?? {}) as Record<string, unknown>;
-      if (String(loc.wh ?? '') !== wh) return false;
-      // An empty zone on the session means "whole warehouse", so it matches
-      // every box in it — including ones with no zone recorded yet.
+      const boxWh = String(loc.wh ?? '');
+      const boxZone = String(loc.zone ?? '');
+      if (boxWh !== '' && boxWh !== wh) return false;
+      // An empty zone on the session means "whole warehouse".
       if (zone === '') return true;
-      return String(loc.zone ?? '') === zone;
+      return boxZone === '' || boxZone === zone;
     })
     .map((r) => r.tag);
 }

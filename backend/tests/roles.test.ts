@@ -143,7 +143,11 @@ describe('Super Admin is locked', () => {
       .put(`/api/roles/assign/${admin.id}`)
       .set(auth(ctx.token))
       .send({ roleId: viewer.id });
-    expect(res.status).toBe(403);
+    /* 409, not 403: the caller does hold permission.manage — what stops them is
+       the state they would leave the system in (zero Super Admins), which is a
+       conflict rather than a permissions failure. See the `conflict()` helper
+       in routes/roles.ts. */
+    expect(res.status).toBe(409);
     expect(res.body.message).toContain('Super Admin คนสุดท้าย');
   });
 });
