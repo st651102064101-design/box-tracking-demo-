@@ -37,7 +37,7 @@ export default function Home() {
   return (
     <iframe
       src="/legacy.html"
-      title="Smart Tracking"
+      title="Smart Tracking Thai Summit"
       allow="fullscreen"
       allowFullScreen
       style={{ display: 'block', width: '100vw', height: '100vh', border: 'none' }}

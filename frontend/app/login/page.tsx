@@ -110,7 +110,7 @@ export default function LoginPage() {
         <div className="mb-6 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-xl font-black text-white">S</div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-ink">Smart Tracking</h1>
+            <h1 className="text-lg font-bold tracking-tight text-ink">Smart Tracking Thai Summit</h1>
             <p className="-mt-0.5 text-xs text-ink-2/70">Returnable Asset Tracking</p>
           </div>
         </div>
