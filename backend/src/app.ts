@@ -18,6 +18,8 @@ import { streamRouter } from './routes/stream.js';
 import { gatePrefsRouter } from './routes/gatePrefs.js';
 import { uiPrefsRouter } from './routes/uiPrefs.js';
 import { rolesRouter } from './routes/roles.js';
+import { brandingRouter } from './routes/branding.js';
+import { systemRouter } from './routes/system.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -102,6 +104,7 @@ export function createApp() {
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth', authRouter);
+  app.use('/api/branding', brandingRouter);
   app.use('/api/state', stateRouter);
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
@@ -114,6 +117,7 @@ export function createApp() {
   app.use('/api/gate-prefs', gatePrefsRouter);
   app.use('/api/ui-prefs', uiPrefsRouter);
   app.use('/api/roles', rolesRouter);
+  app.use('/api/system', systemRouter);
 
   app.use(notFound);
   app.use(errorHandler);
