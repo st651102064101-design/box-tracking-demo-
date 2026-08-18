@@ -2265,11 +2265,13 @@ a{color:var(--accentInk);}
       <div class="gi-strip-k">ประตูประจำเครื่องนี้</div>
       <div id="inGateDisplay" class="gi-strip-v">— ยังไม่ได้ตั้งค่า —</div>
     </div>
-    <!-- โหมดรับของประจำเครื่องนี้ (RFID อัตโนมัติ / ยิงมือด้วยบาร์โค้ด) — เขียนโดย
-         refreshGateDisplays() ต้องเห็นตลอดเวลาที่ยืนทำงาน ไม่ใช่เห็นแค่ตอนเปิด
-         หน้าต่างเลือกประตู เพราะ "ทำไมยิงเข้าคิวเองไม่ได้" กับ "ทำไมกล่องโผล่มาเอง"
-         คือคำถามเดียวกันที่ตอบด้วยการรู้ว่าตอนนี้อยู่โหมดไหน -->
-    <div id="inGateModeChip" style="flex:0 0 auto;"></div>
+    <!-- สถานะเครื่องอ่าน FX9600 ของประตูนี้ — เขียนโดย renderFx9600Status()
+         (เรียกจาก refreshGateDisplays() ทุกครั้งที่ประตู/state เปลี่ยน บวก timer
+         5 วิ ให้พลิกเป็น "ขาดการเชื่อมต่อ" ได้เองแม้ไม่มีเหตุการณ์อื่นมากระตุ้น)
+         ต้องเห็นตลอดเวลาที่ยืนทำงานอยู่หน้านี้ เพราะนี่คือคำถามที่คนหน้างานถามบ่อย
+         ที่สุด: "ตอนนี้เครื่องอ่านตัวนี้ยังใช้ได้อยู่ไหม" เดิมมีคำตอบอยู่แต่ซ่อนอยู่ใน
+         หน้าตั้งค่าเท่านั้น (#fx9600Status) -->
+    <div id="inGateFxStatus" style="flex:0 0 auto;"></div>
     <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')" style="flex:0 0 auto;">เปลี่ยนประตู</button>
   </div>
   <!-- สรุปข้อมูลรถที่กรอกไว้ (ถ้ามี) — เขียนโดย renderGateInStep() -->
@@ -2818,6 +2820,7 @@ a{color:var(--accentInk);}
       </div>
       <div class="wg-body">
       <p class="desc" style="margin:0 0 10px;">ตั้งค่า IoT Connector บนเครื่อง FX9600 ให้ส่ง HTTP POST ทุกครั้งที่อ่านแท็กเจอ ไปที่ URL นี้ (Authentication Type: <b>Basic</b> — รหัสผ่านคือ secret ที่ผู้ดูแลระบบตั้งไว้) — กล่องที่เครื่องอ่านเจอจะ<b>เข้าคิวสแกนในหน้า Gate ขาเข้าให้อัตโนมัติ</b> รอคนหน้างานกด "ยืนยันรับเข้าคลัง" อีกที ไม่รับเข้าเองทันที เพราะเครื่องอ่านเห็นทุกกล่องที่อยู่ในระยะ รวมกล่องที่ยังอยู่บนรถหรือแค่เดินผ่าน</p>
+      <p class="desc" style="margin:0 0 10px;color:var(--muted);"><b>สำคัญสำหรับสถานะออนไลน์/ออฟไลน์ด้านล่าง:</b> ถ้าตั้งให้ส่งเฉพาะตอนเจอแท็ก ช่วงที่ไม่มีกล่องผ่านเครื่องอ่านนานๆ ระบบจะแยกไม่ออกว่า "ไม่มีกล่อง" กับ "เครื่องอ่านหลุด" — ควรเปิดให้เครื่องส่ง HTTP POST เป็นระยะด้วยแม้ไม่เจอแท็ก (heartbeat/no-read report ใน IoT Connector) จะยิงมาที่ URL เดียวกันนี้ได้เลย ระบบฝั่งนี้รองรับ payload ว่างอยู่แล้ว</p>
       <div id="fx9600WebhookUrl" class="tag mono" style="word-break:break-all;"></div>
       <div id="fx9600Status" style="margin-top:10px;"></div>
       </div>
@@ -9575,9 +9578,15 @@ function saveFixedGates(){
 /* สถานะเครื่องอ่าน FX9600 ต่อประตู — อ่านจาก S.gateWebhookLastSeen (backend
    เขียนให้ทุกครั้งที่ webhook ถูกยิงเข้ามาแบบ secret ถูกต้อง ไม่ว่าจะมีแท็กหรือ
    heartbeat เปล่าก็ตาม ดู composeState()/routes/rfid.ts ฝั่ง backend) เขียว =
-   เห็นล่าสุดไม่เกิน 5 นาที, เหลือง = เคยเชื่อมต่อแต่เงียบไปนานแล้ว, เทา = ไม่เคย
-   เห็นเลย — ผู้ใช้ขอให้มีไฟสถานะแทนการเดาว่าตั้งค่าเครื่องอ่านถูกหรือยัง */
-var FX9600_STALE_MS=5*60*1000;
+   เห็นล่าสุดไม่เกิน 1 นาที, เหลือง = เคยเชื่อมต่อแต่เงียบไปนานแล้ว, เทา = ไม่เคย
+   เห็นเลย — ผู้ใช้ขอให้มีไฟสถานะแทนการเดาว่าตั้งค่าเครื่องอ่านถูกหรือยัง
+   เดิมตั้งไว้ 5 นาที ซึ่งช้าเกินไปสำหรับ "realtime" ตามที่ขอ (ปิดเครื่องอ่านทดสอบ
+   แล้วจอค้างเขียวได้นานถึง 5 นาที) ลดเหลือ 1 นาที — ยังหลวมพอสำหรับเครื่องอ่านที่
+   ตั้งให้ยิง webhook เฉพาะตอนเจอแท็ก (ไม่มีกล่องผ่านชั่วครู่ = ปกติ ไม่ใช่เครื่องเสีย)
+   แต่ถ้าตั้ง IoT Connector ให้ส่ง heartbeat เป็นช่วงๆ ด้วย (แนะนำในการ์ดตั้งค่า
+   ด้านล่าง) จะเห็นสถานะจริงไวกว่านี้มาก เพราะตัวเลขนี้เป็นแค่เพดานบนตอนไม่มี
+   heartbeat เข้ามาเลย */
+var FX9600_STALE_MS=60*1000;
 /* ประตูพร้อมใช้งานก็ต่อเมื่อเครื่องอ่าน FX9600 ของประตูนั้นเคยยิง webhook เข้ามา
    ภายใน FX9600_STALE_MS ล่าสุด — ใช้ค่าเดียวกับ renderFx9600Status() ด้านล่างเพื่อให้
    badge "ไม่พร้อมใช้งาน" ในตัวเลือกประตู sync กับไฟสถานะที่โชว์อยู่แล้วเสมอ */
@@ -9601,14 +9610,17 @@ function fx9600Ready(g){
    ของ *เครื่องที่ยืนอยู่* ไม่ใช่ของคน ถ้าเก็บผูกบัญชี คนที่สลับไปยิงมือเพราะประตู 1
    เสีย แล้วเดินไปล็อกอินที่ประตู 2 ซึ่งเครื่องอ่านปกติดี จะยังติดโหมดยิงมือค้างมา
    ด้วยโดยไม่รู้ตัว = ปิด RFID ทิ้งเงียบๆ ทั้งที่มันใช้ได้ */
-var GATE_INPUT_MODE_KEY='smarttrace_gate_input_mode';
 var gateInputMode='rfid';
-try{var _gim=localStorage.getItem(GATE_INPUT_MODE_KEY);if(_gim==='barcode')gateInputMode='barcode';}catch(e){}
-function gateManual(){return gateInputMode==='barcode';}
-/* ประตูเลือกได้เมื่อเครื่องอ่านตอบสนอง — หรือเมื่อคนบอกว่าจะยิงมือ ซึ่งไม่ต้องพึ่ง
-   เครื่องอ่านเลย เงื่อนไขนี้คือจุดเดียวที่ตัดสินว่าเลือกประตูได้ไหม */
-function gateSelectable(g){return gateManual()||fx9600Ready(g);}
+/* Thai Summit uses the fixed FX9600 path continuously. A webhook is the
+   connection heartbeat; operators never need to opt in to RFID or wait for a
+   tag before selecting the configured gate. */
+function gateManual(){return false;}
+function gateSelectable(g){return !!gateWh(g);}
 function setGateInputMode(mode,reopenDir){
+  gateInputMode='rfid';
+  refreshGateDisplays();
+  if(reopenDir&&!pickGate(reopenDir))closeModal();
+  return;
   var wantRfid=(mode!=='barcode');
   /* ── กันไม่ให้ "เลือก RFID อัตโนมัติ" ถูกบันทึกทั้งที่ใช้จริงไม่ได้ ──────────────
      โหมด RFID มีความหมายก็ต่อเมื่อมีเครื่องอ่านที่ตอบสนองให้ยิงกล่องเข้าคิวจริง ถ้า
@@ -9660,24 +9672,19 @@ function setGateInputMode(mode,reopenDir){
   var si=$('#scanIn');if(si&&gateManual())si.focus();
 }
 window.setGateInputMode=setGateInputMode;window.gateManual=gateManual;
-function renderFx9600Status(g){
-  var el=$('#fx9600Status');if(!el)return;
-  if(!g){el.innerHTML='';return;}
-  /* โหมดยิงมือ: เครื่องอ่านเงียบเป็นเรื่องที่ "รู้อยู่แล้ว" ไม่ใช่ความผิดพลาดที่ยัง
-     ไม่มีใครจัดการ — ขึ้นเป็นสถานะโหมดพร้อมทางกลับ ไม่ใช่ไฟเตือนสีส้มลอยๆ */
-  if(gateManual()){
-    el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--warn);font-weight:600;">'
-      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span>'
-      +'เครื่องนี้ตั้งเป็นยิงมือด้วยบาร์โค้ด <span style="color:var(--muted);font-weight:400;">· ไม่ได้ใช้เครื่องอ่าน RFID รับกล่องเข้าคิว</span></span>'
-      +' <button type="button" class="btn ghost sm" style="margin-left:8px;" onclick="setGateInputMode(\'rfid\')">กลับไปใช้ RFID อัตโนมัติ</button>';
-    return;
-  }
+/* เดิมมีบัตรนี้แสดงอยู่จุดเดียวคือหน้า ตั้งค่า > คลัง (#fx9600Status) — คนยืนอยู่หน้า
+   ประตูรับของจริง (หน้า Gate ขาเข้า) ไม่มีทางรู้เลยว่าเครื่องอ่านของประตูตัวเองยัง
+   เชื่อมต่ออยู่ไหม ต้องสลับไปหน้าตั้งค่าเพื่อดูเท่านั้น — เพิ่ม #inGateFxStatus ในแถบ
+   สรุปบนสุดของ Gate ขาเข้า (เดิมเป็น #inGateModeChip ที่ไม่ใช้แล้วตั้งแต่ Thai Summit
+   บังคับ RFID เสมอ) แล้วเขียนสถานะเดียวกันเข้าไปทั้งสองที่พร้อมกัน — ผู้ใช้เห็นได้
+   ทันทีที่ยืนอยู่หน้าสแกน ไม่ต้องเดา/สลับหน้าไปเช็คอีกต่อไป */
+function fx9600StatusHtml(g,compact){
+  if(!g)return '';
   var seenIso=(S.gateWebhookLastSeen||{})[g];
   if(!seenIso){
-    el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);">'
+    return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);">'
       +'<span style="width:9px;height:9px;border-radius:50%;background:var(--faint);flex:0 0 auto;"></span>'
-      +'ยังไม่เคยมีข้อมูลจากเครื่องอ่านเข้ามาที่ประตูนี้เลย</span>';
-    return;
+      +(compact?'ยังไม่เชื่อมต่อเครื่องอ่าน':'ยังไม่เคยมีข้อมูลจากเครื่องอ่านเข้ามาที่ประตูนี้เลย')+'</span>';
   }
   var ms=Date.now()-new Date(seenIso).getTime();
   var fresh=ms<FX9600_STALE_MS;
@@ -9686,14 +9693,30 @@ function renderFx9600Status(g){
   var label=fresh?'เครื่องอ่านเชื่อมต่ออยู่':'ขาดการเชื่อมต่อ';
   /* IP ของเครื่องอ่านที่เห็นจาก request ล่าสุด (backend บันทึกไว้ตอนรับ webhook —
      ดู gateWebhookLastIp/composeState()) — ห้าม hardcode URL ผู้ดูแลระบบของ FX9600
-     เอง ต้องดึงจากค่านี้เท่านั้น เพราะ IP เปลี่ยนได้ตาม DHCP/เครือข่ายหน้างาน */
+     เอง ต้องดึงจากค่านี้เท่านั้น เพราะ IP เปลี่ยนได้ตาม DHCP/เครือข่ายหน้างาน
+     บนแถบสรุปย่อ (compact) ไม่ต้องมีปุ่มนี้ — ที่นั่นคือหน้างานรับของ ไม่ใช่หน้า
+     ดูแลระบบ ปุ่มจัดการเครื่องอ่านยังอยู่ในหน้าตั้งค่าที่เดิม */
   var ip=(S.gateWebhookLastIp||{})[g];
-  var manageBtn=ip?(' <a class="btn ghost sm" href="https://'+esc(ip)+'" target="_blank" rel="noopener" style="margin-left:8px;">'
+  var manageBtn=(!compact&&ip)?(' <a class="btn ghost sm" href="https://'+esc(ip)+'" target="_blank" rel="noopener" style="margin-left:8px;">'
     +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> จัดการเครื่องอ่าน ('+esc(ip)+')</a>'):'';
-  el.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--warn)')+';font-weight:600;">'
+  return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--warn)')+';font-weight:600;">'
     +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px color-mix(in srgb,var(--pos) 22%,transparent);':'')+'"></span>'
     +esc(label)+' <span style="color:var(--muted);font-weight:400;">· เห็นล่าสุด '+ago+'</span></span>'+manageBtn;
 }
+function renderFx9600Status(g){
+  var full=$('#fx9600Status');if(full)full.innerHTML=g?fx9600StatusHtml(g,false):'';
+  var strip=$('#inGateFxStatus');if(strip)strip.innerHTML=g?fx9600StatusHtml(g,true):'';
+}
+/* fresh/stale พลิกสถานะแค่เพราะ "เวลาผ่านไป" ไม่ใช่เพราะมีอะไรเปลี่ยนใน state —
+   ถ้าไม่มี timer นี้ badge จะค้างสีเขียว "เชื่อมต่ออยู่" ต่อไปเรื่อยๆ จนกว่าจะมีการ
+   เปลี่ยนแปลงอื่นมาสั่ง renderAll()/refreshGateDisplays() ซ้ำ (เช่น สแกนกล่องใบถัดไป)
+   ซึ่งอาจไม่เกิดขึ้นอีกเลยหลังเครื่องอ่านหลุด — ผู้ใช้ปิดการส่ง webhook ทดสอบแล้วจอ
+   ยังโชว์เขียวค้างอยู่คือบั๊กนี้เป๊ะๆ ติ๊กทุก 5 วิ พอให้เห็นว่าออฟไลน์ได้โดยไม่ต้องรอ
+   ให้มีเหตุการณ์อื่นมากระตุ้น */
+setInterval(function(){
+  var g=Number(($('#inGate')||{}).value)||0;
+  if(g)renderFx9600Status(g);
+},5000);
 /* Log ดิบของ FX9600 webhook — poll GET /api/rfid/fx9600/debug-log (in-memory
    ring buffer ฝั่ง backend เก็บ 200 รายการล่าสุด รวม heartbeat) ตอน panel เปิดอยู่
    เท่านั้น ผู้ใช้ขอให้ดู request จริงที่เข้ามาได้เองจากหน้าเว็บ ไม่ต้องพึ่งใคร tail
@@ -9836,17 +9859,6 @@ function refreshGateDisplays(){
       var pad=$('#gateInManualPad'),autoHint=$('#gateInAutoHint');
       if(pad)pad.style.display=manualNow?'':'none';
       if(autoHint)autoHint.style.display=manualNow?'none':'';
-      /* ป้ายปุ่มต้องบอก "กดแล้วจะเกิดอะไร" ไม่ใช่ "ตอนนี้อยู่โหมดไหน" — ก่อนหน้านี้
-         ปุ่มเขียนว่า "ยิงมือ · บาร์โค้ด" (บอกโหมดปัจจุบัน) แต่ onclick กลับสลับไป
-         RFID ป้ายกับการกระทำสวนทางกัน คนอ่านแล้วเข้าใจผิดว่ากดแล้วจะได้ยิงมือ
-         ทั้งที่กดแล้วจะปิดยิงมือ ตอนนี้ให้ป้ายบอกปลายทางตรงๆ: กดปุ่มนี้ = เปิด RFID */
-      var chip=$('#inGateModeChip');
-      if(chip){
-        chip.innerHTML=gateManual()
-          ?'<button type="button" class="btn ghost sm" onclick="setGateInputMode(\'rfid\')" title="ตอนนี้: ยิงมือด้วยบาร์โค้ด — กดเพื่อสลับกลับไปใช้เครื่องอ่าน RFID" style="color:var(--warn);">'
-            +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span> ใช้เครื่องอ่าน RFID (FX9600)</button>'
-          :'';
-      }
       warnIfFixedGateWentDead(g);
     }
   });
@@ -9861,6 +9873,7 @@ function refreshGateDisplays(){
    กด "ยกเลิก" = คงโหมด RFID ไว้ รอเครื่องอ่านกลับมาเอง */
 var gateDeadWarnedFor='';
 function warnIfFixedGateWentDead(g){
+  return; /* FX9600 is always automatic; never interrupt the operator with a mode fallback dialog. */
   /* โหมดยิงมืออยู่แล้ว = คนรู้แล้วและเลือกทางนี้เอง ไม่ต้องมาถามซ้ำ */
   if(gateManual()||!g||!gateWh(g)||fx9600Ready(g)){
     /* เครื่องอ่านกลับมา (หรือเปลี่ยนประตู/เปลี่ยนโหมด) — ล้าง flag ไว้ ถ้ารอบหน้าตายอีก
@@ -9892,7 +9905,7 @@ function pickGate(dir){
   var manual=gateManual();
   var opts=gs.map(function(g){
     var ready=fx9600Ready(g);
-    var selectable=manual||ready;
+    var selectable=true;
     /* ป้ายบอกสถานะเครื่องอ่านยังขึ้นเหมือนเดิมแม้อยู่โหมดยิงมือ — คนต้องรู้ว่า RFID
        ยังเสียอยู่ (จะได้ตามช่างมาซ่อม) แค่ไม่ใช่เหตุผลที่จะห้ามเลือกประตูอีกต่อไป */
     var badge=ready?''
@@ -9918,13 +9931,12 @@ function pickGate(dir){
       +(manual?'ยิงทีละใบเข้าช่อง "ประตูสแกนขาเข้า" ได้เลย ไม่ต้องรอเครื่องอ่าน RFID — จำไว้เฉพาะเครื่องนี้ เครื่องอื่นยังเป็น RFID ตามเดิม'
              :'เครื่องอ่าน RFID ยิงกล่องเข้าคิวให้เอง — เลือกได้เฉพาะประตูที่เครื่องอ่านยังตอบสนองอยู่')
     +'</p>';
+  modeSw=''; /* Thai Summit has no manual/RFID mode selector. */
   /* ทางตันที่ต้องบอกทางออกให้ตรงๆ: อยู่โหมด RFID แล้วไม่มีประตูไหนพร้อมสักบานเดียว
      แปลว่าคนกดปิด modal ไปก็ทำอะไรต่อไม่ได้ ถ้าไม่บอกว่าให้สลับโหมด */
   /* ข้อความทั้งประโยคต้องอยู่ใน element เดียว — .banner เป็น display:flex ถ้าปล่อย
      <b> ไว้เป็นลูกตรงๆ มันจะกลายเป็น flex item แยกคอลัมน์ ประโยคจะถูกหั่นเป็นสามท่อน */
-  var deadEnd=(!manual&&!gs.some(fx9600Ready))
-    ?'<div class="banner warn" style="margin-bottom:12px;"><div>ตอนนี้ไม่มีประตูไหนที่เครื่องอ่าน RFID ตอบสนองเลย — ถ้าของมาส่งอยู่และต้องรับเข้าตอนนี้ ให้สลับไป <b>"ยิงมือ · บาร์โค้ด"</b> ด้านบน แล้วเลือกประตูได้ตามปกติ</div></div>'
-    :'';
+  var deadEnd='';
   openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำบัญชีนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'
     +modeSw+deadEnd+excludedNote+opts
