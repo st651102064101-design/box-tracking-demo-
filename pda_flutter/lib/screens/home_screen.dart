@@ -22,11 +22,12 @@ class HomeScreen extends StatelessWidget {
   /// number does nothing rather than silently jumping somewhere the
   /// operator can't see.
   ///
-  /// thai_submit build: Gate Out + Gate In only — still no MoreHub
-  /// (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง are unreachable in this variant).
+  /// thai_submit build: Gate Out + Gate In + MoreHub (ตรวจนับ / ค้นหา/เรดาร์ /
+  /// ติดตามกล่อง — see more_hub_screen.dart for what that hub exposes).
   static const _keyActions = <int, String>{
     1: 'out',
     2: 'in',
+    3: 'moreHub',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -46,6 +47,9 @@ class HomeScreen extends StatelessWidget {
         // Mirror of the Gate Out guard: a gate an admin configured as
         // ship-only stays ship-only no matter which app is scanning it.
         if (c.canScan && c.currentGateType != 'out') c.goScanIn();
+        break;
+      case 'moreHub':
+        c.goMoreHub();
         break;
     }
     return KeyEventResult.handled;
@@ -327,12 +331,14 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
     ),
     const SizedBox(height: 12),
-    // Numbered [1]-[2] — matches the physical number-key bindings
+    // Numbered [1]-[3] — matches the physical number-key bindings
     // (HomeScreen's _keyActions) so the badge an operator sees is the same
     // digit that jumps here from the keyboard. Colour groups follow one
-    // convention throughout: green = inbound, blue = outbound/transfer.
-    // thai_submit build: Gate Out + Gate In only — no MoreHub tile
-    // (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง are unreachable in this variant).
+    // convention throughout: green = inbound, blue = outbound/transfer,
+    // red = everything-else. thai_submit build: Gate Out + Gate In + one hub
+    // for the rest (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง — see
+    // more_hub_screen.dart, which leaves out anything Putaway/rack/
+    // RFID-binding).
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'in') ...[
@@ -359,6 +365,15 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
       const SizedBox(height: 10),
     ],
+    _MenuTile(
+      number: 3,
+      icon: Icons.apps_outlined,
+      color: C.red,
+      bg: C.redBg,
+      title: loc.t('เมนูอื่นๆ'),
+      sub: 'Track / Count / Report',
+      onTap: c.goMoreHub,
+    ),
     if (c.outbox.isNotEmpty) ...[
       const SizedBox(height: 14),
       _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
