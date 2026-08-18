@@ -775,6 +775,17 @@ tr.row-self:hover{background:color-mix(in srgb,var(--accent,#22c55e) 18%,transpa
 .banner.info{background:var(--accentSoft);color:var(--accentInk);}
 .banner.warn{background:var(--warnSoft);color:var(--warn);}
 .banner.bad{background:var(--negSoft);color:var(--neg);} .banner .bi{font-size:20px;flex:0 0 auto;}
+/* เขียว/บวก — สถานะ "พร้อมใช้งาน" ของ RFID Gate/MC3390R (การ์ดสถานะเครื่องอ่านที่
+   Gate ขาเข้า) ใช้ --pos/--posSoft ชุดเดียวกับ .toast.ok และ .pill.ok ทั้งระบบ ไม่ใช้
+   เขียวสดแยกชุดใหม่ เพื่อให้อยู่ในโทน Dark/Industrial เดิมของแอป */
+.banner.ok{background:var(--posSoft);color:var(--pos);}
+.banner.ok .btn.accent{background:var(--pos);color:var(--posInk);box-shadow:none;}
+.banner.ok .btn.accent:hover{filter:brightness(1.08);}
+.banner-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:currentColor;}
+.banner-body{flex:1;min-width:0;}
+.banner-title{font-weight:700;font-size:15px;}
+.banner-sub{margin-top:3px;font-size:12.5px;opacity:.85;font-weight:400;}
+.banner .btn.big{width:100%;margin-top:12px;}
 
 .journey{display:flex;align-items:center;gap:6px;}
 .jd{width:9px;height:9px;border-radius:50%;background:var(--line2);transition:background .2s,transform .2s,box-shadow .2s;flex:0 0 auto;}
@@ -2362,10 +2373,14 @@ a{color:var(--accentInk);}
       </div>
       <h3 class="wg-scan-t" id="gateInBoxTitle">ประตูสแกนขาเข้า</h3>
       <p class="wg-scan-s" id="gateInBoxSub">ยิงหรือพิมพ์รหัส บาร์โค้ด กล่องที่คืนกลับ — ระบบเช็คอินเข้าคลังตามประตูทันที</p>
-      <!-- ช่อง .pad มีไว้สำหรับโหมด "ยิงมือ · บาร์โค้ด" เท่านั้น — โหมด RFID
-           (ค่าเริ่มต้น) ให้เครื่องอ่าน MC3390R/FX9600 ยิงกล่องเข้าคิวเองอัตโนมัติ
-           มีช่องให้พิมพ์/ยิงเองอยู่ข้างๆ จะชวนงงว่าต้องทำเองไหม — ซ่อนไว้ในโหมด
-           RFID, refreshGateDisplays() เป็นคนสลับ (ดู gateManual())
+      <!-- สถานะ+การตัดสินใจของเครื่องอ่าน — เขียนโดย renderGateInReaderState()
+           เป็นจุดเดียวที่บอกผู้ใช้ว่า "ตอนนี้ต้องทำอะไร" ไม่ต้องเดาว่า FX9600/MC3390R
+           ตัวไหนกำลังทำงานอยู่ ระบบเลือกให้เอง (ดู gateManual()/fx9600FallbackActive) -->
+      <div id="gateInReaderState" style="margin-bottom:14px;"></div>
+      <!-- ช่อง .pad มีไว้สำหรับโหมด MC3390R (ยิงมือ/สแกนมือถือ) เท่านั้น — โหมด RFID
+           อัตโนมัติ (ปกติ) ให้เครื่องอ่าน FX9600 ยิงกล่องเข้าคิวเองอัตโนมัติ มีช่องให้
+           พิมพ์/ยิงเองอยู่ข้างๆ จะชวนงงว่าต้องทำเองไหม — ซ่อนไว้เสมอนอกโหมด MC3390R
+           fallback, renderGateInReaderState() เป็นคนสลับ (ดู gateManual())
 
            ปุ่มเดโมยิงเร็ว (.quick) ถูกลบออก — สุ่มกล่องที่ status='out' มาให้กด
            แทนการยิงจริง มีประโยชน์เฉพาะตอนสาธิต ไม่ใช่การใช้งานจริงหน้างาน -->
@@ -9595,83 +9610,86 @@ function fx9600Ready(g){
   if(!seenIso)return false;
   return (Date.now()-new Date(seenIso).getTime())<FX9600_STALE_MS;
 }
-/* ── โหมดรับกล่องเข้าประจำ "เครื่องนี้" ────────────────────────────────────────
-   'rfid' (ค่าเริ่มต้น เสมอ) = ปล่อยให้เครื่องอ่าน RFID (MC3390R / FX9600) ยิงกล่อง
-   เข้าคิวเอง — เป็นวิธีทำงานปกติของหน้างาน
-   'barcode'                = คนยืนยิงเองทีละใบด้วยเครื่องอ่านบาร์โค้ดมือถือ
+/* ── การตัดสินใจ FX9600 vs MC3390R เป็นของระบบ ไม่ใช่ของคน ─────────────────────
+   ทั้งสองเครื่องอ่าน RFID ได้เหมือนกัน (FX9600 = fixed reader ยิง webhook เอง,
+   MC3390R = handheld ที่คนถือยิงทีละใบ ผ่านช่อง #scanIn เดียวกับบาร์โค้ด) ต่างกัน
+   แค่ว่าใครเป็นคนกดสั่งให้อ่าน — สลับใช้อันไหนเป็นเรื่องของ "เครื่องอ่านตัวไหน
+   ตอบสนองอยู่ตอนนี้" ไม่ใช่ preference ที่ต้องให้คนเลือก/จำ
 
-   มีไว้เพราะ fx9600Ready() ปิดปุ่มเลือกประตูทุกบานเมื่อเครื่องอ่านเงียบ ซึ่งถูกแล้ว
-   ตอนที่ตั้งใจจะใช้ RFID (กันเลือกประตูที่รับของไม่ได้จริง) แต่กลายเป็นทางตัน
-   สนิทเมื่อเครื่องอ่านเสีย/เน็ตหลุด — ของยังมาส่งอยู่ แต่ทั้งจอทำอะไรไม่ได้เลย
-   โหมดนี้คือทางออกฉุกเฉินนั้น
-
-   เก็บใน localStorage ไม่ใช่ uiPrefSet() ทั้งที่ประตูเก็บแบบผูกบัญชี เพราะ "มี
-   เครื่องอ่านบาร์โค้ดเสียบอยู่ไหม / เครื่องอ่าน RFID ตัวนี้เสียไหม" เป็นคุณสมบัติ
-   ของ *เครื่องที่ยืนอยู่* ไม่ใช่ของคน ถ้าเก็บผูกบัญชี คนที่สลับไปยิงมือเพราะประตู 1
-   เสีย แล้วเดินไปล็อกอินที่ประตู 2 ซึ่งเครื่องอ่านปกติดี จะยังติดโหมดยิงมือค้างมา
-   ด้วยโดยไม่รู้ตัว = ปิด RFID ทิ้งเงียบๆ ทั้งที่มันใช้ได้ */
-var gateInputMode='rfid';
-/* Thai Summit uses the fixed FX9600 path continuously. A webhook is the
-   connection heartbeat; operators never need to opt in to RFID or wait for a
-   tag before selecting the configured gate. */
-function gateManual(){return false;}
-function gateSelectable(g){return !!gateWh(g);}
-function setGateInputMode(mode,reopenDir){
-  gateInputMode='rfid';
+   fx9600FallbackActive = session เท่านั้น (ไม่ persist ไม่ผูกบัญชี ไม่ผูกเครื่อง):
+   true ระหว่างที่ผู้ใช้กด "ใช้ MC3390R แทน" เพราะ FX9600 ของประตูนี้ offline —
+   รีโหลดหน้าใหม่ = ประเมินสถานะเครื่องอ่านใหม่จากศูนย์เสมอ ไม่ใช่ค้างโหมดเดิมข้าม
+   session แบบที่ localStorage เคยทำ (เคยเป็นบั๊ก: คนสลับเพราะประตู 1 เสีย แล้ว
+   เดินไปล็อกอินที่ประตู 2 ที่เครื่องอ่านปกติดี จะยังติดโหมดมือค้างมาด้วย) */
+var fx9600FallbackActive=false;
+function gateManual(){return fx9600FallbackActive;}
+/* ประตูเลือกได้ก็ต่อเมื่อเครื่องอ่านของประตูนั้น online จริง — ผู้ใช้ไม่ควรมีทาง
+   กดเลือกประตูที่รับกล่องอัตโนมัติไม่ได้ (ดู pickGate) เว้นแต่ *ทุกประตู* ในระบบ
+   offline พร้อมกันหมด ซึ่งตอนนั้นห้ามเลือกไม่ได้เลยจะกลายเป็นทางตันสนิท — ปล่อย
+   ให้เลือกได้ตามปกติ แล้วให้การ์ดสถานะที่หน้าสแกนเสนอ MC3390R ให้แทน */
+function gateSelectable(g,allDown){return allDown||fx9600Ready(g);}
+/* ผู้ใช้กด "ใช้ MC3390R แทน" บนการ์ดสถานะ offline — เข้าสู่โหมด manual ทันที
+   ไม่มี alert/confirm มาขวาง เพราะสถานการณ์ (FX9600 ไม่ตอบสนอง) ชัดเจนอยู่แล้วบน
+   หน้าจอ การกดปุ่มนี้คือคำตอบ ไม่ใช่คำถามที่ต้องยืนยันซ้ำ */
+function useMc3390rFallback(){
+  fx9600FallbackActive=true;
   refreshGateDisplays();
-  if(reopenDir&&!pickGate(reopenDir))closeModal();
-  return;
-  var wantRfid=(mode!=='barcode');
-  /* ── กันไม่ให้ "เลือก RFID อัตโนมัติ" ถูกบันทึกทั้งที่ใช้จริงไม่ได้ ──────────────
-     โหมด RFID มีความหมายก็ต่อเมื่อมีเครื่องอ่านที่ตอบสนองให้ยิงกล่องเข้าคิวจริง ถ้า
-     ไม่มีเลย การกดปุ่มนั้นไม่ใช่ "การตัดสินใจ" ที่ควรจำไว้ — มันคือทางตัน: เลือก
-     ประตูไม่ได้สักบาน แล้วค่าที่บันทึกไว้จะพากลับมาที่ทางตันเดิมทุกครั้งที่เปิดใหม่
-     ทั้งที่ไม่เคยมีจังหวะไหนที่มันใช้งานได้เลย จึงไม่เขียนลง localStorage และไม่แตะ
-     gateInputMode ด้วยซ้ำ — เด้งกลับไปโหมดเดิมพร้อมบอกเหตุผล
-
-     เกณฑ์ว่า "ใช้ได้ไหม" ต่างกันตามที่มา:
-       ไม่มี reopenDir (ป้าย/แถบสถานะในหน้า Gate) = ยืนยันประตูที่ตั้งไว้อยู่แล้ว
-         → ดูเครื่องอ่านของ *ประตูบานนั้น*
-       มี reopenDir (แท็บในหน้าต่างเลือกประตู) = กำลังจะไปเลือกประตูบานไหนก็ได้
-         → ดูว่ามี *สักบาน* ในทิศทางนั้นที่เครื่องอ่านตอบสนองไหม */
-  if(wantRfid===!gateManual()){
-    /* กดโหมดที่เป็นอยู่แล้วซ้ำ — ไม่ใช่การเปลี่ยนอะไร จึงต้องไม่เขียนอะไรลงที่เก็บ
-       ค่าเลย สำคัญเป็นพิเศษกับ 'rfid' เพราะมันเป็นค่าเริ่มต้นที่ "ยังไม่เคยถูกบันทึก"
-       ถ้าปล่อยให้ไหลลงไปข้างล่าง การกดแท็บที่ active อยู่แล้วจะกลายเป็นการบันทึกว่า
-       ผู้ใช้เลือกโหมดนี้ไว้ ทั้งที่เขาแค่กดโดนแท็บเดิม และทั้งที่ตอนนั้นอาจไม่มีประตู
-       ให้ใช้สักบาน (เคสในภาพที่รายงานมา) */
-    if(reopenDir&&!pickGate(reopenDir))closeModal();
+  var si=$('#scanIn');if(si)si.focus();
+}
+window.useMc3390rFallback=useMc3390rFallback;
+/* สลับกลับไป FX9600 อัตโนมัติเมื่อมันกลับมา online — เรียกจาก timer เดียวกับที่
+   ติ๊ก fx9600 status (ดูด้านล่าง) ไม่ใช่ปุ่มให้คนกดเอง ตามหลัก "ระบบจัดการสถานการณ์
+   ให้ user" ไม่ใช่ให้ user จัดการเครื่องอ่านเอง
+   เงื่อนไข !pendingIn.length กันไม่ให้สลับ reader กลางคันขณะมีกล่องค้างอยู่ในคิวที่
+   ยังไม่กดยืนยัน — ป้องกันย้ำ/หายระหว่าง transaction ตามที่ขอ (สลับได้ก็ต่อเมื่อ
+   คิวว่างจริงๆ เท่านั้น) */
+function maybeAutoRevertToFx9600(g){
+  if(!fx9600FallbackActive||!g||!fx9600Ready(g)||pendingIn.length)return;
+  fx9600FallbackActive=false;
+  refreshGateDisplays();
+  toast('RFID Gate กลับมาพร้อมใช้งาน','สลับกลับไปใช้เครื่องอ่าน FX9600 อัตโนมัติแล้ว — ประตู '+g,'ok');
+}
+window.gateManual=gateManual;
+/* หัวใจของ flow ใหม่: การ์ดเดียวในกล่องสแกนที่บอกตรงๆ ว่า "ตอนนี้ต้องทำอะไร" แทน
+   การสลับ pad/autoHint 2 ทางแบบเดิม — 3 สถานะ:
+     1) RFID พร้อม        → banner เขียว + ซ่อนช่องกรอก (เครื่องอ่านยิงเข้าคิวเอง)
+     2) RFID offline       → banner แดง + ปุ่ม "ใช้ MC3390R แทน" ปุ่มเดียว ไม่มีตัวเลือกอื่น
+     3) MC3390R fallback   → banner เขียว (โทนเดียวกับพร้อม RFID) + โชว์ช่องกรอกให้ยิงเอง
+   ไม่มีสถานะไหนให้เลือก "FX9600 หรือ MC3390R" ตรงๆ เลย — ระบบตัดสินจาก fx9600Ready()/
+   fx9600FallbackActive ให้ทั้งหมด ตรงตามหลักข้อ 6 ที่ขอ */
+function renderGateInReaderState(g){
+  var el=$('#gateInReaderState'),pad=$('#gateInManualPad'),autoHint=$('#gateInAutoHint');
+  if(!el)return;
+  if(!g){el.innerHTML='';if(pad)pad.style.display='none';if(autoHint)autoHint.style.display='none';return;}
+  var ready=fx9600Ready(g);
+  var waitIcon='<span class="svgi" style="vertical-align:-3px;margin-right:4px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span>';
+  if(fx9600FallbackActive){
+    el.innerHTML='<div class="banner ok"><span class="banner-dot"></span><div class="banner-body">'
+      +'<div class="banner-title">MC3390R · พร้อมสแกน RFID</div>'
+      +'<div class="banner-sub">กรุณาใช้เครื่อง MC3390R สแกน RFID ที่กล่อง'
+        +(ready?' — เครื่องอ่าน RFID Gate กลับมาแล้ว ระบบจะสลับกลับให้อัตโนมัติทันทีที่คิวสแกนว่าง':'')
+      +'</div></div></div>';
+    if(pad)pad.style.display='';
+    if(autoHint)autoHint.style.display='none';
     return;
   }
-  if(wantRfid){
-    var okToRfid,why;
-    if(!reopenDir){
-      okToRfid=fx9600Ready(fixedGatesRef().in);
-      why='เครื่องอ่าน RFID ของประตูขาเข้าที่ตั้งไว้ตอนนี้ยังไม่ตอบสนอง — สลับกลับไปโหมด RFID อัตโนมัติไม่ได้ในตอนนี้ ใช้ "ยิงมือ · บาร์โค้ด" ต่อไปก่อน จนกว่าเครื่องอ่านจะกลับมา';
-    }else{
-      okToRfid=gateNumsForDir(reopenDir).some(fx9600Ready);
-      why='ตอนนี้ไม่มีประตูไหนที่เครื่องอ่าน RFID ตอบสนองเลย — เลือกโหมด "RFID อัตโนมัติ" ไปก็ยังเลือกประตูไม่ได้อยู่ดี ระบบจึงไม่บันทึกโหมดนี้ไว้ ใช้ "ยิงมือ · บาร์โค้ด" ต่อไปก่อน จนกว่าเครื่องอ่านจะกลับมา';
-    }
-    if(!okToRfid){
-      alert(why);
-      /* วาดใหม่ ให้แท็บเด้งกลับไปตรงกับโหมดจริง — เช็คค่าที่คืนมาแบบเดียวกับ
-         ทางปกติด้านล่าง เผื่อ pickGate เลือกให้เองโดยไม่วาดอะไร (คืน false) แล้ว
-         แผ่นเก่าจะค้างอยู่บนจอ */
-      if(reopenDir&&!pickGate(reopenDir))closeModal();
-      return;
-    }
+  if(ready){
+    el.innerHTML='<div class="banner ok"><span class="banner-dot"></span><div class="banner-body">'
+      +'<div class="banner-title">RFID Gate พร้อมใช้งาน</div>'
+      +'<div class="banner-sub">'+waitIcon+'กำลังรออ่าน RFID — นำกล่องผ่าน Gate ได้เลย</div>'
+      +'</div></div>';
+    if(pad)pad.style.display='none';
+    if(autoHint)autoHint.style.display='none'; /* ข้อความ "กำลังรออ่าน" ย้ายเข้า banner-sub ด้านบนแล้ว ไม่ต้องมีซ้ำ 2 จุด */
+    return;
   }
-  gateInputMode=(mode==='barcode')?'barcode':'rfid';
-  try{localStorage.setItem(GATE_INPUT_MODE_KEY,gateInputMode);}catch(e){}
-  refreshGateDisplays();
-  /* วาด modal ใหม่ทั้งใบ ปุ่มประตูที่เคย disabled ต้องกดได้ทันทีในจังหวะเดียวกับที่
-     สลับโหมด ไม่ใช่ต้องปิดแล้วเปิดใหม่เอง (openModal เขียนทับ innerHTML อยู่แล้ว)
-     — แต่ถ้าเหลือประตูเดียวและมันเพิ่งใช้ได้เพราะสลับมาโหมดยิงมือ pickGate จะเลือก
-     ให้เลยโดยไม่วาดอะไร (คืน false) แผ่นที่ค้างอยู่บนจอตอนนั้นคือของเก่า ต้องปิดเอง */
-  if(reopenDir&&!pickGate(reopenDir))closeModal();
-  var si=$('#scanIn');if(si&&gateManual())si.focus();
+  el.innerHTML='<div class="banner bad"><span class="banner-dot"></span><div class="banner-body">'
+    +'<div class="banner-title">RFID Gate ไม่พร้อมใช้งาน</div>'
+    +'<div class="banner-sub">ไม่สามารถเชื่อมต่อกับเครื่องอ่าน RFID ได้</div>'
+    +'<button type="button" class="btn accent big" onclick="useMc3390rFallback()">ใช้ MC3390R แทน</button>'
+    +'</div></div>';
+  if(pad)pad.style.display='none';
+  if(autoHint)autoHint.style.display='none';
 }
-window.setGateInputMode=setGateInputMode;window.gateManual=gateManual;
 /* เดิมมีบัตรนี้แสดงอยู่จุดเดียวคือหน้า ตั้งค่า > คลัง (#fx9600Status) — คนยืนอยู่หน้า
    ประตูรับของจริง (หน้า Gate ขาเข้า) ไม่มีทางรู้เลยว่าเครื่องอ่านของประตูตัวเองยัง
    เชื่อมต่ออยู่ไหม ต้องสลับไปหน้าตั้งค่าเพื่อดูเท่านั้น — เพิ่ม #inGateFxStatus ในแถบ
@@ -9689,8 +9707,11 @@ function fx9600StatusHtml(g,compact){
   var ms=Date.now()-new Date(seenIso).getTime();
   var fresh=ms<FX9600_STALE_MS;
   var ago=ms<60000?'เมื่อครู่นี้':ms<3600000?Math.floor(ms/60000)+' นาทีที่แล้ว':ms<86400000?Math.floor(ms/3600000)+' ชม.ที่แล้ว':Math.floor(ms/86400000)+' วันที่แล้ว';
-  var dotColor=fresh?'var(--pos)':'var(--warn)';
-  var label=fresh?'เครื่องอ่านเชื่อมต่ออยู่':'ขาดการเชื่อมต่อ';
+  /* แดง ไม่ใช่เหลือง สำหรับออฟไลน์ — ให้เข้าชุดสีเดียวกับ banner แดง/badge แดงที่
+     การ์ดสถานะ Gate ขาเข้าและ modal เลือกประตู ผู้ใช้ไม่ควรเห็นสีไม่ตรงกันของ
+     "สถานะเดียวกัน" ในหน้าต่างกัน */
+  var dotColor=fresh?'var(--pos)':'var(--neg)';
+  var label=compact?(fresh?'RFID Gate พร้อมใช้งาน':'RFID Gate ไม่พร้อมใช้งาน'):(fresh?'เครื่องอ่านเชื่อมต่ออยู่':'ขาดการเชื่อมต่อ');
   /* IP ของเครื่องอ่านที่เห็นจาก request ล่าสุด (backend บันทึกไว้ตอนรับ webhook —
      ดู gateWebhookLastIp/composeState()) — ห้าม hardcode URL ผู้ดูแลระบบของ FX9600
      เอง ต้องดึงจากค่านี้เท่านั้น เพราะ IP เปลี่ยนได้ตาม DHCP/เครือข่ายหน้างาน
@@ -9699,7 +9720,7 @@ function fx9600StatusHtml(g,compact){
   var ip=(S.gateWebhookLastIp||{})[g];
   var manageBtn=(!compact&&ip)?(' <a class="btn ghost sm" href="https://'+esc(ip)+'" target="_blank" rel="noopener" style="margin-left:8px;">'
     +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> จัดการเครื่องอ่าน ('+esc(ip)+')</a>'):'';
-  return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--warn)')+';font-weight:600;">'
+  return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--neg)')+';font-weight:600;">'
     +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px color-mix(in srgb,var(--pos) 22%,transparent);':'')+'"></span>'
     +esc(label)+' <span style="color:var(--muted);font-weight:400;">· เห็นล่าสุด '+ago+'</span></span>'+manageBtn;
 }
@@ -9708,14 +9729,23 @@ function renderFx9600Status(g){
   var strip=$('#inGateFxStatus');if(strip)strip.innerHTML=g?fx9600StatusHtml(g,true):'';
 }
 /* fresh/stale พลิกสถานะแค่เพราะ "เวลาผ่านไป" ไม่ใช่เพราะมีอะไรเปลี่ยนใน state —
-   ถ้าไม่มี timer นี้ badge จะค้างสีเขียว "เชื่อมต่ออยู่" ต่อไปเรื่อยๆ จนกว่าจะมีการ
+   ถ้าไม่มี timer นี้ badge/การ์ดสถานะจะค้างว่า "พร้อมใช้งาน" ต่อไปเรื่อยๆ จนกว่าจะมีการ
    เปลี่ยนแปลงอื่นมาสั่ง renderAll()/refreshGateDisplays() ซ้ำ (เช่น สแกนกล่องใบถัดไป)
    ซึ่งอาจไม่เกิดขึ้นอีกเลยหลังเครื่องอ่านหลุด — ผู้ใช้ปิดการส่ง webhook ทดสอบแล้วจอ
    ยังโชว์เขียวค้างอยู่คือบั๊กนี้เป๊ะๆ ติ๊กทุก 5 วิ พอให้เห็นว่าออฟไลน์ได้โดยไม่ต้องรอ
-   ให้มีเหตุการณ์อื่นมากระตุ้น */
+   ให้มีเหตุการณ์อื่นมากระตุ้น เดินคนละหน้าที่กัน 3 อย่างต่อติ๊ก:
+     1) วาด badge สถานะใหม่ตามนาฬิกาจริง (renderFx9600Status)
+     2) เช็คว่าควรสลับกลับ FX9600 อัตโนมัติหรือยัง (maybeAutoRevertToFx9600 — เงื่อนไข
+        คิวว่างอยู่ในนั้นแล้ว กันสลับ reader กลาง transaction)
+     3) วาดการ์ดสถานะ/ปุ่มที่กล่องสแกนใหม่ (renderGateInReaderState) — เผื่อ #2
+        ไม่ได้สลับอะไร (ยัง fallback อยู่) แต่ ready เปลี่ยนไป ต้องอัปเดตข้อความ
+        "เครื่องอ่านกลับมาแล้ว" ในการ์ด แม้ยังสลับจริงไม่ได้เพราะคิวไม่ว่าง */
 setInterval(function(){
   var g=Number(($('#inGate')||{}).value)||0;
-  if(g)renderFx9600Status(g);
+  if(!g)return;
+  renderFx9600Status(g);
+  maybeAutoRevertToFx9600(g);
+  renderGateInReaderState(g);
 },5000);
 /* Log ดิบของ FX9600 webhook — poll GET /api/rfid/fx9600/debug-log (in-memory
    ring buffer ฝั่ง backend เก็บ 200 รายการล่าสุด รวม heartbeat) ตอน panel เปิดอยู่
@@ -9847,99 +9877,56 @@ function refreshGateDisplays(){
       var fxEl=$('#fx9600WebhookUrl');
       if(fxEl)fxEl.textContent=g?apiUrl('/api/rfid/fx9600/'+g+'/webhook'):'เลือกประตูขาเข้าก่อน จึงจะเห็น URL';
       renderFx9600Status(g);
-      /* โหมดยิงมือ = ไม่มีเครื่องอ่านมาเกี่ยว การ์ดนี้ทั้งใบสอนวิธีตั้งค่า IoT
-         Connector บน FX9600 ให้ยิง webhook เข้ามา ซึ่งไม่มีความหมายอะไรเลยตอนนี้
+      /* โหมด MC3390R fallback = ไม่มี FX9600 มาเกี่ยว การ์ดนี้ทั้งใบสอนวิธีตั้งค่า
+         IoT Connector บน FX9600 ให้ยิง webhook เข้ามา ซึ่งไม่มีความหมายอะไรเลยตอนนี้
          และ URL/secret ที่โชว์อยู่จะยิ่งชวนสับสนว่ายังต้องตั้งเครื่องอ่านอยู่ไหม
          — ซ่อนทั้งการ์ด ไม่ใช่แค่เนื้อหาข้างใน */
       var fxCard=$('#fx9600InfoCard');
       if(fxCard)fxCard.closest('.wg-board').style.display=gateManual()?'none':'';
-      /* โหมด RFID: ช่องยิงมือไม่ต้องใช้ เครื่องอ่านกรอกคิวให้เองอยู่แล้ว — สลับเป็น
-         ข้อความบอกสถานะรอกล่องแทน โหมดยิงมือ: กลับไปเป็นช่องกรอกตามเดิม */
-      var manualNow=gateManual();
-      var pad=$('#gateInManualPad'),autoHint=$('#gateInAutoHint');
-      if(pad)pad.style.display=manualNow?'':'none';
-      if(autoHint)autoHint.style.display=manualNow?'none':'';
-      warnIfFixedGateWentDead(g);
+      renderGateInReaderState(g);
     }
   });
 }
-/* ประตูที่ "เลือกไว้แล้ว" ตายทีหลัง — เคสที่เงียบที่สุดในระบบนี้
-   ตอนเลือก ประตูนั้นผ่าน fx9600Ready() จริง แล้วเครื่องอ่านค่อยตายทีหลัง (ไฟดับ /
-   สายหลุด / เน็ตหน้างานล่ม) สถานะที่เหลืออยู่คือ "โหมด RFID + ประตูที่รับของไม่ได้"
-   ซึ่งหน้าจอยังดูปกติทุกอย่าง คิวก็แค่ไม่ขึ้นเฉยๆ คนหน้างานไม่มีทางรู้ว่ากำลังยืนรอ
-   สิ่งที่จะไม่มีวันมา — ต้องบอกด้วยกล่องที่ขวางหน้าจอ ไม่ใช่ไฟสถานะเล็กๆ
-
-   กด "ตกลง" = เปลี่ยน "ประตูเดิมบานนั้นแหละ" ไปเป็นโหมดยิงมือบาร์โค้ด รับของต่อได้ทันที
-   กด "ยกเลิก" = คงโหมด RFID ไว้ รอเครื่องอ่านกลับมาเอง */
-var gateDeadWarnedFor='';
-function warnIfFixedGateWentDead(g){
-  return; /* FX9600 is always automatic; never interrupt the operator with a mode fallback dialog. */
-  /* โหมดยิงมืออยู่แล้ว = คนรู้แล้วและเลือกทางนี้เอง ไม่ต้องมาถามซ้ำ */
-  if(gateManual()||!g||!gateWh(g)||fx9600Ready(g)){
-    /* เครื่องอ่านกลับมา (หรือเปลี่ยนประตู/เปลี่ยนโหมด) — ล้าง flag ไว้ ถ้ารอบหน้าตายอีก
-       จะได้เตือนใหม่ ไม่ใช่เตือนครั้งเดียวตลอดอายุแท็บ */
-    if(gateDeadWarnedFor&&(!g||fx9600Ready(g)))gateDeadWarnedFor='';
-    return;
-  }
-  if(gateDeadWarnedFor===String(g))return;   /* เตือนไปแล้วสำหรับประตูบานนี้ในรอบนี้ */
-  gateDeadWarnedFor=String(g);
-  /* ถามนอก call stack ของการ render — confirm() บล็อกเธรด ถ้าเรียกกลางคัน หน้าจอจะ
-     ค้างครึ่งๆ อยู่ข้างหลังกล่อง และ refreshGateDisplays() รอบนี้จะยังวาดไม่จบ */
-  setTimeout(function(){
-    if(gateManual()||fx9600Ready(g))return;  /* เครื่องอ่านฟื้นระหว่างรอ — ไม่ต้องถามแล้ว */
-    var ok=confirm('เครื่องอ่าน RFID ของประตู '+g+' ไม่ตอบสนอง\n\n'
-      +'ประตูนี้ถูกตั้งไว้ตอนที่เครื่องอ่านยังใช้งานได้ ตอนนี้กล่องจะไม่ถูกยิงเข้าคิวให้อัตโนมัติอีกแล้ว\n\n'
-      +'กด "ตกลง" เพื่อใช้ประตู '+g+' ต่อในโหมดยิงมือด้วยบาร์โค้ด (รับของต่อได้ทันที)\n'
-      +'กด "ยกเลิก" เพื่อคงโหมด RFID ไว้ และรอเครื่องอ่านกลับมา');
-    if(ok)setGateInputMode('barcode');
-  },0);
-}
+window.renderGateInReaderState=renderGateInReaderState;
 function pickGate(dir){
   var allGs=allGateNums();
   if(!allGs.length){openModal('<div class="mhead"><h3>ยังไม่มีประตูในระบบ</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ต้องเพิ่มคลังและประตูก่อนใช้งาน Gate</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> ไปเพิ่มคลัง &amp; ประตู</button></div>');return true;}
   var gs=gateNumsForDir(dir);
-  if(gs.length===1&&gateSelectable(gs[0])){setFixedGate(dir,gs[0]);return false;} /* returns false = resolved without drawing a sheet; skip straight to picking only when that one gate is actually usable — otherwise fall through and show it disabled with the reason AND the barcode-mode way out, instead of silently assigning a dead gate */
+  /* Readiness (FX9600 online/offline) มีความหมายเฉพาะประตูขาเข้า — ขาออกเป็น
+     flow หยิบ/ส่งของด้วยมือ ไม่มีเครื่องอ่านคอยยิงกล่องเข้าคิวให้ จึงเลือกได้
+     ตามปกติเหมือนเดิม ไม่เกี่ยวกับ fx9600Ready เลย */
+  var isIn=dir==='in';
+  /* ทุกประตูในทิศทางนี้ offline พร้อมกันหมด = ถ้ายัง disable ต่อจะกลายเป็นทางตัน
+     สนิท (เลือกประตูไม่ได้สักบาน ไม่มีทางไปหน้าสแกนได้เลย) ปล่อยให้เลือกได้ตามปกติ
+     ในเคสนี้เท่านั้น แล้วให้การ์ดสถานะที่หน้าสแกนเสนอ "ใช้ MC3390R แทน" ให้ */
+  var allDown=isIn&&gs.length>0&&!gs.some(fx9600Ready);
+  if(gs.length===1&&(!isIn||gateSelectable(gs[0],allDown))){setFixedGate(dir,gs[0]);return false;} /* returns false = resolved without drawing a sheet */
   var excluded=allGs.length-gs.length;
   var excludedNote=excluded>0?('<div class="tag" style="margin-bottom:10px;color:var(--warn);"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ซ่อน '+excluded+' ประตูที่ไม่รองรับทิศทางนี้</div>'):'';
   if(!gs.length){openModal('<div class="mhead"><h3>ไม่มีประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" style="text-align:center;padding:24px 16px;"><p class="muted">ไม่มีประตูที่ตั้งค่าเป็น"'+(dir==='out'?'ขาออก':'ขาเข้า')+'"หรือ"เข้า-ออกร่วม"</p><button class="btn accent" onclick="closeModal();goSetup(\'wh\')"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg></span> ไปแก้ไขประเภทประตู</button></div>');return true;}
-  var manual=gateManual();
+  /* รายการประตู — ไม่มี toggle FX9600/MC3390R ให้เลือกอีกต่อไป (ระบบตัดสินใจเอง
+     จากสถานะ ดู gateManual()) เหลือแค่ประตู Online เลือกได้ vs Offline ที่ปิดไว้ —
+     ข้อความก็เรียบง่ายแบบเดียวกับที่ผู้ใช้เห็น ไม่ใช่ศัพท์เทคนิค (รายละเอียด
+     last-seen/IP อยู่ใน #fx9600Status หน้าตั้งค่าสำหรับแอดมินแทน) */
   var opts=gs.map(function(g){
-    var ready=fx9600Ready(g);
-    var selectable=true;
-    /* ป้ายบอกสถานะเครื่องอ่านยังขึ้นเหมือนเดิมแม้อยู่โหมดยิงมือ — คนต้องรู้ว่า RFID
-       ยังเสียอยู่ (จะได้ตามช่างมาซ่อม) แค่ไม่ใช่เหตุผลที่จะห้ามเลือกประตูอีกต่อไป */
-    var badge=ready?''
-      :manual?' <span style="font-size:10px;font-weight:700;color:var(--warn);background:var(--warnSoft);padding:2px 7px;border-radius:6px;">RFID ไม่ตอบสนอง · ใช้ยิงมือแทนได้</span>'
-             :' <span style="font-size:10px;font-weight:700;color:var(--neg);background:var(--negSoft);padding:2px 7px;border-radius:6px;">ไม่พร้อมใช้งาน · RFID ไม่ตอบสนอง</span>';
-    return '<button class="btn ghost sm" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:6px;'+(selectable?'':'opacity:.55;cursor:not-allowed;')+'" '
-      +(selectable?'onclick="setFixedGate(\''+dir+'\','+g+');closeModal();"':'disabled title="RFID ของประตูนี้ไม่ตอบสนอง — สลับไปโหมด \'ยิงมือ · บาร์โค้ด\' ด้านบนถ้าต้องการรับของต่อโดยไม่ใช้เครื่องอ่าน"')+'>'
-      +'<b>ประตู '+g+'</b>'
+    var ready=!isIn||fx9600Ready(g);
+    var selectable=!isIn||gateSelectable(g,allDown);
+    var dot=isIn?('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;flex:0 0 auto;background:'+(ready?'var(--pos)':'var(--neg)')+';"></span>'):'';
+    var statusLine=isIn?(' <span style="font-size:11px;font-weight:600;color:'+(ready?'var(--pos)':'var(--neg)')+';">'+(ready?'RFID Gate พร้อมใช้งาน':'FX9600 Offline')+'</span>'):'';
+    return '<button class="btn ghost sm" style="width:100%;align-items:center;justify-content:flex-start;gap:10px;margin-bottom:6px;'+(selectable?'':'opacity:.5;cursor:not-allowed;')+'" '
+      +(selectable?'onclick="setFixedGate(\''+dir+'\','+g+');closeModal();"':'disabled title="เครื่องอ่าน FX9600 ของประตูนี้ยัง Offline อยู่ — เลือกประตูอื่นที่พร้อมใช้งาน"')+'>'
+      +dot+'<b>ประตู '+g+'</b>'
       +'<span class="muted">'+esc(whName(gateWh(g)))+'</span>'
       +'<span style="font-size:11px;font-weight:600;color:'+(dir==='out'?'var(--neg)':'var(--pos)')+';">'+gateTypeLabel(g)+'</span>'
-      +badge
+      +statusLine
       +(fixedGatesRef()[dir]==g?' <span class="pill ok" style="margin-left:auto;"><span class="svgi tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6"/></svg></span> ปัจจุบัน</span>':'')+'</button>';
   }).join('');
-  /* สวิตช์โหมดรับของประจำเครื่องนี้ — RFID เป็นค่าเริ่มต้นและอยู่ซ้ายเสมอ ยิงมือคือ
-     ทางเลือกสำรอง ไม่ใช่ทางเลือกที่เท่ากัน */
-  var modeSw='<div class="seg-filter" style="display:flex;width:100%;margin-bottom:8px;">'
-    +'<button type="button" class="sf-btn'+(manual?'':' active')+'" style="flex:1;justify-content:center;" onclick="setGateInputMode(\'rfid\',\''+dir+'\')" title="ให้เครื่องอ่าน RFID ยิงกล่องเข้าคิวเองอัตโนมัติ — วิธีปกติ">'
-      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a9 9 0 0 1 16 0M7.5 12.5a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="17" r="1.4"/></svg></span> RFID อัตโนมัติ</button>'
-    +'<button type="button" class="sf-btn'+(manual?' active':'')+'" style="flex:1;justify-content:center;" onclick="setGateInputMode(\'barcode\',\''+dir+'\')" title="ยิงเองทีละใบด้วยเครื่องอ่านบาร์โค้ดมือถือ — ใช้เมื่อเครื่องอ่าน RFID เสียหรือไม่มี">'
-      +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ยิงมือ · บาร์โค้ด</button>'
-    +'</div>'
-    +'<p class="muted small" style="margin:0 0 12px;">'
-      +(manual?'ยิงทีละใบเข้าช่อง "ประตูสแกนขาเข้า" ได้เลย ไม่ต้องรอเครื่องอ่าน RFID — จำไว้เฉพาะเครื่องนี้ เครื่องอื่นยังเป็น RFID ตามเดิม'
-             :'เครื่องอ่าน RFID ยิงกล่องเข้าคิวให้เอง — เลือกได้เฉพาะประตูที่เครื่องอ่านยังตอบสนองอยู่')
-    +'</p>';
-  modeSw=''; /* Thai Summit has no manual/RFID mode selector. */
-  /* ทางตันที่ต้องบอกทางออกให้ตรงๆ: อยู่โหมด RFID แล้วไม่มีประตูไหนพร้อมสักบานเดียว
-     แปลว่าคนกดปิด modal ไปก็ทำอะไรต่อไม่ได้ ถ้าไม่บอกว่าให้สลับโหมด */
   /* ข้อความทั้งประโยคต้องอยู่ใน element เดียว — .banner เป็น display:flex ถ้าปล่อย
      <b> ไว้เป็นลูกตรงๆ มันจะกลายเป็น flex item แยกคอลัมน์ ประโยคจะถูกหั่นเป็นสามท่อน */
-  var deadEnd='';
+  var deadEnd=allDown?'<div class="banner warn" style="margin-bottom:12px;"><div>ตอนนี้ไม่มีประตูไหนที่เครื่องอ่าน RFID ตอบสนองเลย — เลือกประตูได้ตามปกติ แล้วกด "ใช้ MC3390R แทน" ที่หน้าสแกนเพื่อรับของต่อได้ทันที</div></div>':'';
   openModal('<div class="mhead"><h3>เลือกประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'ประจำบัญชีนี้</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody"><p class="muted small" style="margin:0 0 12px;">ตั้งครั้งเดียว — ระบบจะจำไว้กับบัญชีนี้ ไม่ว่าจะล็อกอินจากเครื่องไหน ไม่ต้องเลือกทุกครั้ง</p>'
-    +modeSw+deadEnd+excludedNote+opts
+    +deadEnd+excludedNote+opts
     +'<div style="border-top:.5px solid var(--line);margin-top:12px;padding-top:12px;">'
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
