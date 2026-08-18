@@ -3359,7 +3359,7 @@ a{color:var(--accentInk);}
           <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;">
             <div style="display:inline-flex;align-items:center;gap:10px;">
               <span style="width:26px;height:26px;border-radius:8px;background:var(--accent);"></span>
-              <span style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
+              <span id="empBadgeOrgFront" style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
             </div>
             <div style="font-size:12px;font-weight:600;letter-spacing:.16em;color:var(--accentInk);">EMPLOYEE ID CARD</div>
           </div>
@@ -3409,7 +3409,7 @@ a{color:var(--accentInk);}
         <div style="flex:0 0 auto;padding:22px 30px 0;text-align:center;">
           <div style="display:inline-flex;align-items:center;gap:10px;">
             <span style="width:26px;height:26px;border-radius:8px;background:var(--accent);"></span>
-            <span style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
+            <span id="empBadgeOrgBack" style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
           </div>
           <div style="font-size:12px;font-weight:600;letter-spacing:.16em;color:var(--faint);margin-top:6px;">CARD INFORMATION</div>
         </div>
@@ -6451,8 +6451,39 @@ function empCardNotchHtml(){
     +'</div>';
 }
 /* ข้อมูลบริษัทที่พิมพ์ลงบัตรจริง — รวมไว้จุดเดียวให้หน้า/หลังใช้ค่าเดียวกัน และแก้ที่เดียว
-   เมื่อบริษัทเปลี่ยนเบอร์ติดต่อ/อายุบัตร */
-var EMP_CARD_ORG={name:'ABSS',tel:'0xx-xxx-xxxx',validUntil:'31/12/2027'};
+   เมื่อบริษัทเปลี่ยนเบอร์ติดต่อ/อายุบัตร เดิม hardcode ตรงนี้ 3 ค่า ('ABSS' /
+   '0xx-xxx-xxxx' / '31/12/2027') ผู้ใช้แก้เองไม่ได้ต้องแก้โค้ด — ย้ายไปเก็บใน
+   localStorage แทน (ตั้งค่าระบบ → ทั่วไป → ข้อมูลบัตรพนักงาน) ค่าเริ่มต้นยังเป็น
+   ชุดเดิมทุกตัวถ้ายังไม่เคยตั้ง ไม่กระทบบัตรที่เคยพิมพ์ไปแล้ว */
+var EMP_CARD_ORG_DEFAULT={name:'ABSS',tel:'0xx-xxx-xxxx',validUntil:'31/12/2027'};
+function cardOrgPrefsGet(){
+  try{
+    var raw=localStorage.getItem('smarttrace_card_org');
+    if(!raw)return Object.assign({},EMP_CARD_ORG_DEFAULT);
+    var p=JSON.parse(raw);
+    return{
+      name:p.name||EMP_CARD_ORG_DEFAULT.name,
+      tel:p.tel||EMP_CARD_ORG_DEFAULT.tel,
+      validUntil:p.validUntil||EMP_CARD_ORG_DEFAULT.validUntil
+    };
+  }catch(e){return Object.assign({},EMP_CARD_ORG_DEFAULT);}
+}
+function cardOrgPrefsSave(p){
+  try{localStorage.setItem('smarttrace_card_org',JSON.stringify(p));}
+  catch(e){toast('บันทึกไม่สำเร็จ','พื้นที่จัดเก็บในเบราว์เซอร์เต็ม','err');}
+}
+var EMP_CARD_ORG=cardOrgPrefsGet();
+function saveCardOrg(){
+  var name=val('cardOrgName')||EMP_CARD_ORG_DEFAULT.name;
+  var tel=val('cardOrgTel')||EMP_CARD_ORG_DEFAULT.tel;
+  var rawDate=val('cardOrgValidUntil');
+  var validUntil=rawDate?ddmmyyyy(new Date(rawDate+'T00:00:00')):EMP_CARD_ORG_DEFAULT.validUntil;
+  var p={name:name,tel:tel,validUntil:validUntil};
+  cardOrgPrefsSave(p);
+  EMP_CARD_ORG=p;
+  toast('บันทึกข้อมูลบัตรพนักงานแล้ว');
+}
+window.saveCardOrg=saveCardOrg;
 /* Card ID ของบัตรฟิสิกส์ — ตั้งใจ "ไม่ใช่" รหัสพนักงาน เพื่อไม่ให้คนที่เห็นบัตรเดารหัส
    ในระบบได้ตรง ๆ เป็น hash คงที่จากรหัสพนักงาน → 8 หลักฐานสิบหก รูปแบบ XXXX-XXXX
    ค่าเดิมทุกครั้งที่พิมพ์ใบเดิม (ไม่ random) */
@@ -6741,6 +6772,8 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeScanCode',scanCode);
   setText('empBadgeCardId',empCardId(e));
   setText('empBadgeValidUntil',EMP_CARD_ORG.validUntil);
+  setText('empBadgeOrgFront',EMP_CARD_ORG.name);
+  setText('empBadgeOrgBack',EMP_CARD_ORG.name);
   var rn=$('#empBadgeReturnNote');
   if(rn)rn.innerHTML='บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(EMP_CARD_ORG.name)+'<br>หากพบกรุณาส่งคืนบริษัท / ฝ่ายทรัพยากรบุคคล<br><span style="font-family:var(--mono);color:var(--ink2);">Tel. '+esc(EMP_CARD_ORG.tel)+'</span>';
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
@@ -12781,8 +12814,17 @@ function saveBrandName(){
 }
 window.saveBrandName=saveBrandName;
 
+/* dd/mm/yyyy (รูปแบบเดียวกับ ddmmyyyy()) → yyyy-mm-dd สำหรับ prefill <input
+   type=date> — แปลงย้อนกลับตอนเปิดหน้าเท่านั้น ค่าที่บันทึกจริงยังเป็น
+   dd/mm/yyyy เหมือนเดิมทุกที่ (ผ่าน ddmmyyyy(new Date(...)) ตอน saveCardOrg) */
+function ddmmyyyyToInputDate(s){
+  var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||''));
+  if(!m)return '';
+  return m[3]+'-'+pad(+m[2],2)+'-'+pad(+m[1],2);
+}
 function settingsGoGeneral(){
   var p=brandPrefsGet();
+  var co=cardOrgPrefsGet();
   var h='<div class="mhead">'+settingsBackBtn('settingsGoHome')+'<h3>ทั่วไป</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody">'
     +'<div class="c2-label">ชื่อระบบและแบรนด์</div>'
@@ -12798,8 +12840,16 @@ function settingsGoGeneral(){
     +'</div>'
     +'<div class="field"><label>ชื่อระบบ</label><input id="brandName" value="'+esc(p.name||BRAND_DEFAULT_NAME)+'" placeholder="'+esc(BRAND_DEFAULT_NAME)+'"></div>'
     +'<div class="field" style="margin-top:12px;"><label>ข้อความใต้ชื่อระบบ</label><input id="brandTagline" value="'+esc(p.tagline||BRAND_DEFAULT_TAGLINE)+'" placeholder="'+esc(BRAND_DEFAULT_TAGLINE)+'"></div>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn accent sm" onclick="saveBrandName()">บันทึกชื่อระบบ</button></div>'
+    +'<div style="height:1px;background:var(--line);margin:22px 0 18px;"></div>'
+    +'<div class="c2-label">ข้อมูลบัตรพนักงาน</div>'
+    +'<p class="muted small" style="margin:4px 0 12px;">ข้อมูลที่พิมพ์ลงบัตรพนักงานทุกใบ (ดูตัวอย่างได้ที่ Master → พนักงาน → เปิดบัตร)</p>'
+    +'<div class="field"><label>ชื่อบริษัท (แสดงบนบัตร)</label><input id="cardOrgName" value="'+esc(co.name)+'" placeholder="'+esc(EMP_CARD_ORG_DEFAULT.name)+'"></div>'
+    +'<div class="field" style="margin-top:12px;"><label>เบอร์โทรติดต่อ</label><input id="cardOrgTel" value="'+esc(co.tel)+'" placeholder="'+esc(EMP_CARD_ORG_DEFAULT.tel)+'"></div>'
+    +'<div class="field" style="margin-top:12px;"><label>วันหมดอายุบัตร</label><input type="date" id="cardOrgValidUntil" value="'+esc(ddmmyyyyToInputDate(co.validUntil))+'"></div>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn accent sm" onclick="saveCardOrg()">บันทึกข้อมูลบัตร</button></div>'
     +'</div>'
-    +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button><div class="spacer"></div><button class="btn accent" onclick="saveBrandName()">บันทึกการเปลี่ยนแปลง</button></div>';
+    +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button></div>';
   openModal(h);
 }
 window.settingsGoGeneral=settingsGoGeneral;
