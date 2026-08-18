@@ -11,19 +11,22 @@ import '../widgets/common.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  /// Physical number-key shortcut for the MC3390R's side keypad, matching
-  /// the [1] badge the Gate Out _MenuTile shows — "press 1, land on Gate
-  /// Out" without touching the screen at all, for an operator whose hands
-  /// are already full of a box. Both the top-row digit and the
-  /// numeric-keypad variant are handled since which one a given handheld's
-  /// keymap actually sends isn't something this app controls. Only fires on
-  /// key-down (not up/repeat).
+  /// Physical number-key shortcuts for the MC3390R's side keypad, matching
+  /// the [1]-[2] badges each _MenuTile shows — "press 1, land on Gate Out"
+  /// without touching the screen at all, for an operator whose hands are
+  /// already full of a box. Both the top-row digit and the numeric-keypad
+  /// variant are handled since which one a given handheld's keymap actually
+  /// sends isn't something this app controls. Only fires on key-down (not
+  /// up/repeat), and only where the tile is visible at all — a gate posted
+  /// IN-only or OUT-only hides the tile that wouldn't work anyway, so its
+  /// number does nothing rather than silently jumping somewhere the
+  /// operator can't see.
   ///
-  /// thai_submit build: this variant is Gate Out only — no Gate In, no
-  /// MoreHub (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง), so there is exactly one
-  /// menu tile and exactly one shortcut key to match it.
+  /// thai_submit build: Gate Out + Gate In only — still no MoreHub
+  /// (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง are unreachable in this variant).
   static const _keyActions = <int, String>{
     1: 'out',
+    2: 'in',
   };
 
   KeyEventResult _onKey(AppController c, KeyEvent event) {
@@ -38,6 +41,11 @@ class HomeScreen extends StatelessWidget {
         // a gate an admin configured as receive-only (via the web app)
         // must stay receive-only regardless of which app is scanning it.
         if (c.canScan && c.currentGateType != 'in') c.goScanOut();
+        break;
+      case 'in':
+        // Mirror of the Gate Out guard: a gate an admin configured as
+        // ship-only stays ship-only no matter which app is scanning it.
+        if (c.canScan && c.currentGateType != 'out') c.goScanIn();
         break;
     }
     return KeyEventResult.handled;
@@ -319,11 +327,14 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
       ),
     ),
     const SizedBox(height: 12),
-    // thai_submit build: Gate Out only — no Gate In tile, no MoreHub tile
+    // Numbered [1]-[2] — matches the physical number-key bindings
+    // (HomeScreen's _keyActions) so the badge an operator sees is the same
+    // digit that jumps here from the keyboard. Colour groups follow one
+    // convention throughout: green = inbound, blue = outbound/transfer.
+    // thai_submit build: Gate Out + Gate In only — no MoreHub tile
     // (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง are unreachable in this variant).
-    // Still respects currentGateType: a gate an admin configured as
-    // receive-only (via the web app) must stay receive-only regardless of
-    // which app is scanning it.
+    // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
+    // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'in') ...[
       _MenuTile(
         number: 1,
@@ -333,6 +344,18 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         title: loc.t('จ่ายออก'),
         sub: 'Gate Out',
         onTap: c.goScanOut,
+      ),
+      const SizedBox(height: 10),
+    ],
+    if (c.canScan && c.currentGateType != 'out') ...[
+      _MenuTile(
+        number: 2,
+        icon: Icons.inventory_2_outlined,
+        color: C.menuGreen,
+        bg: C.menuGreenBg,
+        title: loc.t('รับคืน'),
+        sub: 'Gate In',
+        onTap: c.goScanIn,
       ),
       const SizedBox(height: 10),
     ],

@@ -1168,7 +1168,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _connectReader();
   }
 
-  void goScanIn() => setMode('in');
+  // thai_submit build: both gate screens are barcode-only — there is no
+  // RFID toggle in ScanScreen's tree, so scanInputMode is forced back to
+  // barcode on entry rather than trusting whatever another screen last
+  // left it as (same reasoning as goScanOut below).
+  void goScanIn() {
+    scanInputMode = ScanInputMode.barcode;
+    setMode('in');
+  }
   // thai_submit build: Gate Out is barcode-only — no RFID toggle on this
   // screen at all (see scan_screen.dart, ScanModeToggle removed from its
   // tree), so scanInputMode is forced back to barcode on entry rather than
