@@ -273,6 +273,21 @@ export const events = pgTable('events', {
   data: jsonb('data').notNull().default({}),
 });
 
+/**
+ * FX9600 fixed readers. One row per physical reader, identified by the
+ * `reader` id it's configured to send on its HTTP POST Notification URL
+ * (?reader=<id>). `lastWebhookAt` is stamped on every inbound call —
+ * including empty "no read" heartbeats — so online/offline is derived
+ * purely from recency, never from tag activity (see services/fx9600.ts).
+ */
+export const fx9600Readers = pgTable('fx9600_readers', {
+  id: text('id').primaryKey(),
+  gateNo: integer('gate_no'),
+  lastWebhookAt: timestamp('last_webhook_at', { withTimezone: true }),
+  lastPayload: jsonb('last_payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const auditLog = pgTable('audit_log', {
   id: serial('id').primaryKey(),
   action: text('action'),
@@ -303,6 +318,7 @@ export type Schema = {
   cycleCounts: typeof cycleCounts;
   events: typeof events;
   auditLog: typeof auditLog;
+  fx9600Readers: typeof fx9600Readers;
 };
 
 // re-export bundle for drizzle(client, { schema })
@@ -324,4 +340,5 @@ export const schema = {
   cycleCounts,
   events,
   auditLog,
+  fx9600Readers,
 };

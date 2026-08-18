@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { applySchema, getDb, closeDb } from './db/client.js';
 import { config, sequences } from './db/schema.js';
+import { startFx9600Watchdog } from './services/fx9600.js';
 
 async function main() {
   // Ensure schema + singletons exist before serving (safe/idempotent).
@@ -18,8 +19,10 @@ async function main() {
     console.log(`[boxtrace-api] listening on http://localhost:${env.port}`);
     console.log(`[boxtrace-api] driver: ${env.usePglite ? 'PGlite (in-process)' : 'PostgreSQL'}`);
   });
+  const stopFx9600Watchdog = startFx9600Watchdog(db);
 
   const shutdown = async () => {
+    stopFx9600Watchdog();
     server.close();
     await closeDb();
     process.exit(0);

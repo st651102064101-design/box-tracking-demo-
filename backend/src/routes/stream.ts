@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../lib/jwt.js';
 import { subscribe, currentVersion } from '../lib/bus.js';
+import { subscribeReaderStatuses } from '../lib/readerBus.js';
 
 /**
  * `GET /api/stream` — server-sent events telling clients that state changed.
@@ -67,6 +68,12 @@ streamRouter.get('/', (req, res) => {
     res.write(`event: state\ndata: ${JSON.stringify({ v: version, origin })}\n\n`);
   });
 
+  /* FX9600 online/offline flips — same connection, separate event name so
+     clients that only care about state changes can ignore it. */
+  const unsubscribeReaders = subscribeReaderStatuses((statuses) => {
+    res.write(`event: readers\ndata: ${JSON.stringify({ readers: statuses })}\n\n`);
+  });
+
   const heartbeat = setInterval(() => {
     res.write(': hb\n\n'); // an SSE comment — ignored by the client, keeps the socket warm
   }, HEARTBEAT_MS);
@@ -74,6 +81,7 @@ streamRouter.get('/', (req, res) => {
   const close = () => {
     clearInterval(heartbeat);
     unsubscribe();
+    unsubscribeReaders();
   };
   req.on('close', close);
   res.on('close', close);

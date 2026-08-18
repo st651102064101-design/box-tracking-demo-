@@ -16,6 +16,7 @@ import { employeePinRouter } from './routes/pin.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
 import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
+import { fx9600Router } from './routes/fx9600.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -54,6 +55,18 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'too_many_requests', message: 'มีการเรียก API ถี่เกินไป กรุณาลองใหม่ภายหลัง' },
+});
+
+/** FX9600 readers heartbeat far more often than any human-driven endpoint —
+ *  every read cycle, potentially every 1-2s, from potentially several units
+ *  sharing one gateway IP. 600/min per IP covers that comfortably while
+ *  still bounding a runaway/misconfigured device. */
+const fx9600Limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', message: 'FX9600 ส่ง webhook ถี่เกินไป' },
 });
 
 /** Build the Express app (kept separate from listen() so Supertest can import it). */
@@ -114,6 +127,9 @@ export function createApp() {
   app.use('/api/cycle-counts', apiLimiter, requireApiKey, cycleCountsRouter);
   app.use('/api/reports', apiLimiter, requireApiKey, reportsRouter);
   app.use('/api/stream', streamRouter);
+  // requireAuth on GET /status only (see routes/fx9600.ts); POST /webhook is
+  // the reader itself, gated by requireApiKey instead of a JWT it can't hold.
+  app.use('/api/fx9600', fx9600Limiter, requireApiKey, fx9600Router);
 
   app.use(notFound);
   app.use(errorHandler);
