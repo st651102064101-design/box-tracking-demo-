@@ -549,16 +549,30 @@ th.cb-th,td.cb-td{width:40px;padding-left:18px;padding-right:6px;}
 .auto-tag-row .iconbtn{border:1px solid var(--line2);}
 .inv-code-grid{grid-template-columns:3fr 2fr 1fr !important;}
 
-.seg-filter{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;}
-.sf-btn{padding:6px 14px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);}
+.seg-filter{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;position:relative;}
+.sf-btn{padding:6px 14px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);position:relative;z-index:1;}
 .sf-btn:hover{color:var(--ink);} .sf-btn.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);}
+/* ปุ่ม toggle ทรงแคปซูลทั่วระบบ (.inv-view-sw/.ivs-btn, .seg-filter/.sf-btn) ลากสลับได้
+   เหมือน navbar (#pillBg ด้านบน) — ported จาก WEB_APP_DEMO_THAI_SUBMIT ดู
+   segPillEnsure/segPillMove ท้ายไฟล์ .seg-pill เป็น element ที่ JS แทรกเข้ามาเอง ซ้อน
+   อยู่หลังปุ่มพอดีตำแหน่งเดียวกับปุ่ม .active (z-index ต่ำกว่า) ตอนไม่ลากจะมองไม่ออกว่า
+   มีสองชั้นซ้อนกัน เพราะปุ่ม .active ยังมีพื้นหลังของตัวเองอยู่เหมือนเดิม (safety net —
+   JS ส่วนลากพังก็ไม่กระทบหน้าตา/การทำงานปกติของปุ่มเลย) */
+.seg-pill{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;z-index:0;pointer-events:none;
+  transition:transform .25s var(--ease),width .25s var(--ease);}
+.seg-pill.dragging{transition:none;}
+.seg-filter .seg-pill{background:var(--surface);box-shadow:var(--shadow);}
+.ivs-btn.active,.sf-btn.active{cursor:grab;}
+.ivs-btn.active:active,.sf-btn.active:active{cursor:grabbing;}
+.ivs-btn.drag-hide-bg,.sf-btn.drag-hide-bg{background:transparent!important;box-shadow:none!important;}
 .sf-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;
   font-family:var(--mono);background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink2);}
 .sf-badge:empty,.sf-badge[data-zero="1"]{display:none;}
 .sf-badge.urgent{background:var(--negSoft);color:var(--neg);}
 tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 /* view switcher */
-.inv-view-sw{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;}
+.inv-view-sw{display:inline-flex;background:var(--surface2);border:.5px solid var(--line2);border-radius:12px;padding:3px;gap:2px;position:relative;}
+.inv-view-sw .seg-pill{background:var(--ink);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
 /* status toggles (whStatus/eStatus/cStatus) sit inside .field, a flex column —
    flex items default to align-items:stretch on the cross axis, so without this
    the toggle stretched to the field's full width instead of hugging its text. */
@@ -567,7 +581,7 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
    .ivs-btn padding (7px 16px, tuned for longer view-switcher labels like
    "สรุปสต็อก") left visible dead space around "ปฏิบัติงาน"/"พ้นสภาพ" etc. */
 .inv-view-sw[data-target] .ivs-btn{padding:6px 10px;}
-.ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;}
+.ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;position:relative;z-index:1;}
 .ivs-btn:hover{color:var(--ink);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
 /* compact numeric input embedded inside a "{n} วัน/เดือน/ปี" ivs-btn — reusable
@@ -4323,6 +4337,16 @@ function normalizeState(d){
   d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
   d.employees=d.employees||{};if(d.seq.emp===undefined)d.seq.emp=0;
+  /* Employee state is a map keyed by employee id. Older/partial API payloads can
+     contain the employee fields without repeating that id inside the value. Most
+     employee actions historically used e.id after Object.values(), so those rows
+     rendered but clicking one called openEmpBadge('') and silently did nothing.
+     Restore the invariant at the state boundary while keeping the map key (the
+     authoritative lookup id) unchanged. */
+  Object.keys(d.employees).forEach(function(employeeKey){
+    var employee=d.employees[employeeKey];
+    if(employee&&typeof employee==='object'&&!Array.isArray(employee)&&!String(employee.id||'').trim())employee.id=employeeKey;
+  });
   d.gatePrefs=d.gatePrefs||{};
   /* dfPrefs/uiPrefs ไม่อยู่ใน S อีกแล้ว — ย้ายไปตาราง ui_prefs + /api/ui-prefs
      (ดูคอมเมนต์เหนือ uiPrefGet()) เหตุผลเดียวกับ gatePrefs ด้านบน คือ stateSchema
@@ -5024,6 +5048,188 @@ function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.st
   nav.addEventListener('click',function(e){
     if(didDrag){didDrag=false;e.stopPropagation();e.preventDefault();}
   },true);
+})();
+
+/* ===== ปุ่ม toggle ทรงแคปซูลทั่วระบบ (.inv-view-sw/.ivs-btn, .seg-filter/.sf-btn)
+   ============================================================================
+   ported จาก WEB_APP_DEMO_THAI_SUBMIT — กด "ลาก" ปุ่มที่ active อยู่เพื่อสลับได้เหมือน
+   navbar (#pillBg ด้านบน) คนละกลไกกับ nav เพราะปุ่มพวกนี้กระจายอยู่ทั่วระบบ เกิดขึ้นสด
+   จากหลายจุด (drawer/modal/ตารางที่ render ใหม่ทุกครั้ง) จึงผูก listener เดียวที่
+   document (delegated) ครอบคลุมทั้งกลุ่มที่มีอยู่แล้วและที่จะถูกสร้างเพิ่มทีหลัง แทนที่จะ
+   ผูกทีละกลุ่มตอนโหลดหน้าแบบ nav
+
+   ไม่แตะ logic การสลับสถานะเดิมของแต่ละกลุ่มเลยสักบรรทัด (setStatusToggle/boxRegMode/
+   whAreaSetMode/dfSetMode/setSortDir ฯลฯ) — อ่านคลาส .active ที่ setter เดิมสั่งเป็นตัว
+   บอกตำแหน่ง pill ผ่าน MutationObserver แทน และตอนลากปล่อยแล้วลงเป้าใหม่ ก็แค่สั่ง
+   .click() ปุ่มเป้าหมายจริง ๆ ให้ handler เดิมของมันทำงานตามปกติ — เหตุผลเดียวกับที่
+   drawer ยืม DOM การ์ดจริงแทนก็อปฟิลด์: มี logic สลับสถานะชุดเดียว ไม่มีชุดที่สองให้เพี้ยน
+
+   ปุ่ม .active ทั้งสองกลุ่มยังมีพื้นหลังของตัวเองอยู่เหมือนเดิม ไม่ได้ถอดออก (safety net)
+   — .seg-pill ที่เพิ่มมาใหม่วางซ้อนอยู่หลังปุ่มตรงตำแหน่งเดียวกันเป๊ะ ตอนไม่ได้ลากจึงมอง
+   ไม่ออกว่ามีสองชั้นซ้อนกัน ถ้าโค้ดส่วนนี้พังหรือไม่รันเลย ปุ่ม toggle ทุกจุดในระบบยัง
+   ทำงาน/หน้าตาถูกต้องเหมือนเดิมทุกประการ */
+function segPillEnsure(wrap){
+  var pill=wrap.querySelector(':scope > .seg-pill');
+  if(!pill){pill=document.createElement('span');pill.className='seg-pill';wrap.insertBefore(pill,wrap.firstChild);}
+  return pill;
+}
+function segPillMove(wrap){
+  /* descendant เท่านั้น ไม่ใช่ :scope > โดยตรง — บาง wrap (เช่น .df-sw ตัวกรองวันที่)
+     ห่อปุ่ม 4 ใน 5 ปุ่มไว้ใน <span class="df-collapsible"> อีกชั้น (ยุบซ่อนได้เวลาเลือก
+     "ระบุวัน") .ivs-btn จึงไม่ใช่ลูกตรงของ wrap เสมอไป — ยังคำนวณ offsetLeft ถูกอยู่ดี
+     เพราะ .df-collapsible ไม่มี position เป็นของตัวเอง (ไม่กลายเป็น offsetParent ใหม่) */
+  var active=wrap.querySelector('.ivs-btn.active,.sf-btn.active');
+  var pill=segPillEnsure(wrap);
+  var w=active?active.offsetWidth+'px':'0';
+  var x=active?active.offsetLeft:0;
+  /* กันเขียนซ้ำค่าเดิม — ตัวกันหลักของอาการ "วิ่งไปมา": ถ้าอะไรก็ตามเรียก segPillMove()
+     ถี่ๆ ซ้ำๆ (transitionend/MutationObserver ที่อาจหลุดรอดมาได้จากจุดอื่นที่คาดไม่ถึง)
+     แต่ตำแหน่งจริงไม่ได้เปลี่ยนเลย ก็จะไม่แตะ style เลย — ไม่มีการเขียนซ้ำ = ไม่มี
+     transition ใหม่เกิดขึ้นให้วนต่อ ปลอดภัยไว้ก่อนโดยไม่ต้องรู้สาเหตุที่แท้จริงทุกจุด */
+  if(pill.dataset.w===w&&pill.dataset.x===String(x))return;
+  pill.dataset.w=w;pill.dataset.x=String(x);
+  pill.style.width=w;
+  pill.style.transform='translateX('+x+'px)';
+}
+function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).forEach(segPillMove);}
+(function(){
+  var SLOP=4, drag=null;
+  /* descendant เท่านั้น — เหตุผลเดียวกับ segPillMove ด้านบน (.df-collapsible ห่อปุ่มไว้
+     อีกชั้นในบาง wrap) $all() คืนตามลำดับเอกสาร ซึ่งตรงกับลำดับที่เห็นบนจอเสมอ (flex
+     ไม่ reorder DOM) list[0]/list[last] จึงยังเป็นปุ่มซ้ายสุด/ขวาสุดจริงแม้ปุ่มบางตัวจะ
+     อยู่ลึกกว่าตัวอื่นในโครงสร้าง DOM */
+  function btnsOf(wrap){return $all('.ivs-btn,.sf-btn',wrap);}
+  function nearest(wrap,x){
+    var best=null,bd=Infinity;
+    btnsOf(wrap).forEach(function(b){if(b.disabled)return;var d=Math.abs((b.offsetLeft+b.offsetWidth/2)-x);if(d<bd){bd=d;best=b;}});
+    return best;
+  }
+  function onDown(e){
+    if(e.button!==undefined&&e.button!==0)return;
+    var b=e.target.closest?e.target.closest('.ivs-btn,.sf-btn'):null;
+    if(!b||!b.classList.contains('active')||b.disabled)return;
+    var wrap=b.closest('.inv-view-sw,.seg-filter');if(!wrap)return;
+    var pill=segPillEnsure(wrap);
+    drag={wrap:wrap,pill:pill,startX:e.clientX,base:b.offsetLeft,w:b.offsetWidth,moved:false,origin:b,target:b,id:e.pointerId};
+    try{wrap.setPointerCapture(e.pointerId);}catch(_){}
+  }
+  function onMove(e){
+    if(!drag)return;
+    var dx=e.clientX-drag.startX;
+    if(!drag.moved){
+      if(Math.abs(dx)<SLOP)return;
+      drag.moved=true;drag.pill.classList.add('dragging');drag.origin.classList.add('drag-hide-bg');
+    }
+    var list=btnsOf(drag.wrap),first=list[0],last=list[list.length-1];
+    if(!first||!last)return;
+    var min=first.offsetLeft,max=last.offsetLeft+last.offsetWidth-drag.w;
+    var x=Math.max(min,Math.min(max,drag.base+dx));
+    drag.pill.style.transform='translateX('+x+'px)';
+    var hit=nearest(drag.wrap,x+drag.w/2);
+    if(hit&&hit!==drag.target){
+      drag.target=hit;
+      drag.w=hit.offsetWidth;drag.pill.style.width=drag.w+'px';
+    }
+    e.preventDefault();
+  }
+  /* ปล่อยแล้วสั่ง .click() ตรง ๆ บนปุ่มเป้าหมาย — กลุ่มพวกนี้ไม่มี setter กลางตัวเดียว
+     ให้เรียกเหมือน nav (switchTab) เพราะแต่ละกลุ่มมี handler ของตัวเอง (setStatusToggle/
+     boxRegMode/dfSetMode/setSortDir ฯลฯ) เคยลองพึ่ง click ธรรมชาติที่เบราว์เซอร์ยิงเอง
+     หลังปล่อยนิ้ว/เมาส์แทน (ไม่ยิงเอง) แต่พบว่าไม่เสถียร — บาง engine/ทางการทดสอบไม่ยิง
+     click ตามมาให้เลยหลัง pointer capture ปล่อย (pill เลื่อนไปกองที่ปุ่มใหม่ แต่ค่าจริง
+     ไม่เปลี่ยน) จึงต้องยิง .click() เองให้ชัวร์ — ถ้าบางเบราว์เซอร์ยิง click ธรรมชาติตามมา
+     ซ้ำอีกที ก็แค่เรียก handler เดิมด้วยค่าเดิมซ้ำ (idempotent) ไม่มีผลเสีย */
+  function onUp(){
+    if(!drag)return;
+    var d=drag;drag=null;
+    try{d.wrap.releasePointerCapture(d.id);}catch(_){}
+    d.pill.classList.remove('dragging');
+    d.origin.classList.remove('drag-hide-bg');
+    if(!d.moved)return;                              /* never left the slop radius — let the click through */
+    if(d.target&&d.target!==d.origin)d.target.click();
+    else segPillMove(d.wrap);                         /* snapped back to where it started */
+  }
+  document.addEventListener('pointerdown',onDown);
+  document.addEventListener('pointermove',onMove,{passive:false});
+  document.addEventListener('pointerup',onUp);
+  document.addEventListener('pointercancel',onUp);
+})();
+(function(){
+  /* จับได้สามทาง: (1) ปุ่มในกลุ่มเดิมสลับ .active — เช่น setStatusToggle/dfSetMode สั่ง
+     classList.toggle (2) กลุ่ม .inv-view-sw/.seg-filter ใหม่โผล่มาทั้งดุ้น — เช่น drawer
+     เปิดฟอร์ม หรือ initSortToggles() แทรก HTML สด (3) wrap เองสลับ data-collapsed — ตัว
+     กรองวันที่ (.df-sw) ยุบปุ่มที่เหลือเข้า .df-collapsible ตอนเลือก "ระบุวัน" (dfSyncUI)
+     ไม่ต้องแก้ setter เดิมสักตัวเดียว */
+  new MutationObserver(function(muts){
+    var wraps=new Set();
+    muts.forEach(function(m){
+      if(m.type==='attributes'){
+        var t=m.target;
+        if(t.nodeType!==1)return;
+        if(t.classList.contains('ivs-btn')||t.classList.contains('sf-btn')){
+          var w=t.closest('.inv-view-sw,.seg-filter');if(w)wraps.add(w);
+        }else if(t.classList.contains('inv-view-sw')||t.classList.contains('seg-filter')){
+          wraps.add(t);
+        }
+      }else if(m.type==='childList'){
+        m.addedNodes.forEach(function(n){
+          if(n.nodeType!==1)return;
+          if(n.matches&&n.matches('.inv-view-sw,.seg-filter'))wraps.add(n);
+          if(n.querySelectorAll)$all('.inv-view-sw,.seg-filter',n).forEach(function(w){wraps.add(w);});
+        });
+      }
+    });
+    wraps.forEach(segPillMove);
+  }).observe(document.body,{attributes:true,attributeFilter:['class','data-collapsed'],subtree:true,childList:true});
+  /* เคยลองจับ transitionend เพื่อ sync ตำแหน่งอีกทีหลัง .df-collapsible ยุบ/กางเสร็จ
+     (เช่นตอนเลือก "ระบุวัน") แต่พบว่าพังได้ในอีกเคสที่คาดไม่ถึงกว่านั้น: การกางแถบกลับตอน
+     เมาส์ชี้ (:hover) มาจาก CSS pseudo-class ล้วนๆ ไม่ผ่าน class/attribute ใดๆ เลย —
+     บางจังหวะทรานซิชันค้างกลางทาง (ไม่ไปถึงค่าสุดท้ายเลย ยืนยันด้วย computed max-width
+     ที่ค้างเป็นเลขทศนิยมกลางๆ ไม่ใช่ 0 หรือค่าสุดท้าย) ทำให้ transitionend ไม่ยิงเลย —
+     pill เลยค้างตำแหน่งเดิมทั้งที่ปุ่ม active ("ระบุวัน") ขยับไปไกลลิบแล้ว หน้าตาที่เห็น
+     คือปุ่มดูพัง/เลขชิดกันผิดที่ (ปัญหาที่ผู้ใช้รายงานมา)
+
+     เปลี่ยนมาใช้ ResizeObserver แทนทั้งยวง — จับ "ขนาดที่ render จริง" ของแต่ละ wrap
+     โดยตรง ไม่สนใจว่าอะไรเป็นต้นเหตุ (class เปลี่ยน/attribute เปลี่ยน/:hover ล้วนๆ/
+     transition ทำงานหรือค้างกลางทาง) ยิงต่อเนื่องทุกเฟรมที่ขนาดขยับจริงตลอดทรานซิชัน
+     ไม่ใช่รอ "จบ" ครั้งเดียวแบบ transitionend เกาะปุ่ม pill จึงตามการขยาย/ยุบของ
+     .df-collapsible ได้แบบเรียลไทม์แม้ทรานซิชันจะค้าง/ถูกขัดจังหวะกลางทางก็ตาม */
+  if(typeof ResizeObserver!=='function'){window.addEventListener('resize',function(){segPillMoveAll();});setTimeout(segPillMoveAll,0);return;}
+  var segRO=new ResizeObserver(function(entries){
+    entries.forEach(function(en){
+      var wrap=en.target.closest?en.target.closest('.inv-view-sw,.seg-filter'):null;
+      if(wrap)segPillMove(wrap);
+    });
+  });
+  function segObserve(wrap){segRO.observe(wrap);}
+  $all('.inv-view-sw,.seg-filter').forEach(segObserve);
+  /* wrap ใหม่ที่โผล่มาทีหลัง (drawer/modal ที่เพิ่งเปิด) ต้องลงทะเบียนกับ ResizeObserver
+     ด้วย ไม่งั้นจะไม่มีใครคอยจับขนาดของมันเลย — ใช้ MutationObserver ตัวเดิมข้างบนต่อยอด
+     แทนที่จะสร้างอีกตัว เพิ่ม branch นี้เข้าไปในตัวเดียวกัน */
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes&&m.addedNodes.forEach(function(n){
+        if(n.nodeType!==1)return;
+        if(n.matches&&n.matches('.inv-view-sw,.seg-filter'))segObserve(n);
+        if(n.querySelectorAll)$all('.inv-view-sw,.seg-filter',n).forEach(segObserve);
+      });
+    });
+  }).observe(document.body,{childList:true,subtree:true});
+  /* ResizeObserver ตามติดระหว่างทรานซิชันได้ดีอยู่แล้ว แต่เฟรมสุดท้ายที่ขนาดนิ่งพอดี
+     บางทีก็ไม่ยิง callback อีกรอบ (เหลือคลาดเคลื่อนไม่กี่ px) — ตั้งเวลาเช็คซ้ำอีกทีหลัง
+     พ้นระยะทรานซิชันที่ยาวที่สุดที่ใช้จริง (.df-collapsible ยาว .32s) ตอน mouse เข้า/ออก
+     wrap พอดี (จุดที่ :hover เริ่ม/เลิกสั่งกาง-ยุบ) เก็บตกความคลาดเคลื่อนเล็กน้อยที่เหลือ
+     mouseenter/mouseleave ไม่ bubble แต่ดักจากช่วง capture ได้ */
+  document.addEventListener('mouseenter',function(e){
+    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
+    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
+  },true);
+  document.addEventListener('mouseleave',function(e){
+    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
+    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
+  },true);
+  window.addEventListener('resize',function(){segPillMoveAll();});
+  setTimeout(segPillMoveAll,0);
 })();
 function switchTab(name){
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
@@ -6600,7 +6806,16 @@ function empBadgeRelease(){
   if(el.backdrop)el.backdrop.classList.remove('no-blur');
 }
 function openEmpBadge(id,isSelf){
-  var e=S.employees[id];if(!e)return;
+  var e=(S.employees||{})[id];
+  if(!e){
+    toast('เปิดบัตรพนักงานไม่ได้','ไม่พบข้อมูลพนักงานที่เลือก กรุณารีเฟรชหน้าแล้วลองใหม่','err');
+    return;
+  }
+  /* Records composed from older employee/account rows may omit the duplicated
+     id field even though their map key is valid. The badge and print helpers all
+     read e.id, so repair it here too in case the record arrived after the initial
+     normalizeState() pass. */
+  if(!String(e.id||'').trim())e.id=id;
   var vw=window.innerWidth,vh=window.innerHeight;
   var CW=408,CH=627;
   empBadge.s=Math.max(.5,Math.min(1,(vh*0.78)/CH));
@@ -12337,7 +12552,15 @@ function renderSetup(){
 
   // employee table
   var sbe=val('schEmp').toLowerCase();
-  var allEmployees=Object.values(S.employees);
+  /* Preserve each employee's map key through filter/sort/pagination. The key is
+     what S.employees[...] must be opened with; e.id can be absent in legacy data
+     (or supplied later by the RBAC merge) even though the row itself is valid. */
+  var allEmployees=Object.keys(S.employees||{}).map(function(employeeKey){
+    var source=S.employees[employeeKey];
+    if(!source||typeof source!=='object')source={};
+    if(!String(source.id||'').trim())source.id=employeeKey;
+    return Object.assign({},source,{_employeeKey:employeeKey});
+  });
   renderEmpAccessFilters();
   var epsAll=sbe?allEmployees.filter(function(e){
     return (e.id+' '+(e.name||'')+' '+(e.role||'')+' '+(e.dept||'')+' '+(e.phone||'')+' '+(e.email||'')+' '+(e.scanCode||'')).toLowerCase().indexOf(sbe)>=0;
@@ -12350,13 +12573,23 @@ function renderSetup(){
   $('#empBody').innerHTML=pgEmp.rows.length?pgEmp.rows.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
     var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
-    var isMe=isSelfEmp(e.id);
-    return '<tr data-tag="'+esc(e.id)+'" class="row-click'+(isMe?' row-self':'')+'" onclick="openEmpActions(\''+esc(e.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(e.id)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id)+'</b></td><td>'+esc(e.name)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td class="col-sec">'+esc(e.role||'-')+'</td>'
+    var employeeKey=e._employeeKey||e.id;
+    var isMe=isSelfEmp(employeeKey);
+    return '<tr data-tag="'+esc(employeeKey)+'" data-employee-key="'+esc(employeeKey)+'" class="row-click'+(isMe?' row-self':'')+'"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(employeeKey)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id||employeeKey)+'</b></td><td>'+esc(e.name||e.id||employeeKey)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td class="col-sec">'+esc(e.role||'-')+'</td>'
       +'<td class="col-sec">'+esc(e.dept||'-')+'</td><td class="col-sec">'+whTxt+'</td><td class="col-sec mono">'+esc(e.phone||'-')+'</td>'
       +'<td>'+empRoleCellHtml(e)+'</td><td>'+empAccessCellHtml(e)+'</td>'
       +'<td><span class="pill '+st.c+'" style="font-size:11px;">'+st.t+'</span></td>'
       +'<td class="c">'+empManageCellHtml(e)+'</td></tr>';
   }).join(''):emptyRow(12,(sbe||accFilt)?'ไม่พบพนักงานที่ตรงกับเงื่อนไข':'ยังไม่มีพนักงาน');
+  /* Bind against the decoded data attribute instead of interpolating the id into
+     inline JavaScript. Besides retaining the authoritative map key, this also
+     keeps ids containing quotes from breaking the click handler. */
+  $all('#empBody tr[data-employee-key]').forEach(function(row){
+    row.onclick=function(ev){
+      if(ev.target.closest('button,input,a'))return;
+      openEmpActions(row.getAttribute('data-employee-key'));
+    };
+  });
   $('#cntEmp').textContent=(sbe||accFilt)?eps.length+' จาก '+allEmployees.length+' คน':eps.length+' คน';
   setupBulkTable('empBody','emp-cb','cbAllEmp','bulkEmp','bulkEmpCnt');
   if(!empAdmin)clearBulk('emp-cb','bulkEmp','cbAllEmp');
