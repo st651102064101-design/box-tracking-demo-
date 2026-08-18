@@ -2400,7 +2400,7 @@ a{color:var(--accentInk);}
   </div>
 
   <div class="row" style="margin-top:22px;margin-bottom:22px;">
-    <button class="btn pos big" id="btnCheckIn">ยืนยันรับเข้าคลัง</button>
+    <button class="btn pos big" id="btnCheckIn" disabled>ยืนยันรับเข้าคลัง</button>
     <button class="btn ghost" onclick="clearGateIn()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <button class="btn ghost" onclick="exportGateInExcel()" title="ส่งออกประวัติกล่องที่ผ่าน Gate ขาเข้าทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
     <span class="muted small" id="inCount"></span>
@@ -10258,6 +10258,11 @@ function renderGateInStep(){
         +'<button class="btn ghost sm" onclick="gateInGo(\'vehicle\')" style="flex:0 0 auto;">เพิ่มข้อมูลรถ</button>';
     }else vs.style.display='none';
   }
+  /* ให้ #btnCheckIn (และคิวสแกน/#inCount) sync กับ pendingIn จริงทุกครั้งที่ step
+     เปลี่ยน ไม่ใช่แค่ตอน scanIn()/fx9600QueuePoll() เรียก — กันเคสปุ่มค้าง enabled
+     ผิดๆ ตอนเพิ่งเข้าขั้นสแกนพร้อมคิวที่ดึงมาจาก server ตั้งแต่ตอน boot ก่อน renderInResult()
+     ตัวแรกจะถูกเรียก */
+  if(typeof renderInResult==='function')renderInResult();
 }
 function gateInGo(step){
   gateInStep=step;
@@ -10290,6 +10295,13 @@ function scanIn(tag){
 window.scanIn=scanIn;
 function renderInResult(){
   $('#inCount').textContent=pendingIn.length?('เตรียมรับคืน '+pendingIn.length+' ใบ'):'';
+  /* "ยืนยันรับเข้าคลัง" ยืนยันคิวสแกนที่มีอยู่ ณ ตอนนี้ — คิวว่างก็ไม่มีอะไรให้ยืนยัน
+     (ปุ่มกดได้อยู่แล้วก็แค่ toast 'ยังไม่ได้ยิงกล่อง' กลับมา เดิม disabled ไม่เคยตาม
+     สถานะจริงเลย) ทำให้ปุ่มเทาไปตรงๆ ทันทีตอนคิวว่าง — รวมถึงตอน RFID Gate offline
+     ที่ยังไม่เคยมีอะไรเข้าคิวเลยด้วย (ดู renderGateInReaderState) เช็คแค่ pendingIn
+     ไม่ใช่สถานะเครื่องอ่านตรงๆ เพราะถ้ามีกล่องค้างคิวจากตอนเครื่องอ่านยังทำงานอยู่
+     ต้องกดยืนยันได้เสมอไม่ว่าเครื่องอ่านจะหลุดไปหลังจากนั้นหรือไม่ก็ตาม */
+  var btnCheck=$('#btnCheckIn');if(btnCheck)btnCheck.disabled=!pendingIn.length;
   if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();return;}
   $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · '+pendingIn.length+' ใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
     var isNew=(!b.cycles||b.cycles===0)&&!(b.history||[]).some(function(h){return h.dir==='out';});
