@@ -560,11 +560,34 @@ th.cb-th,td.cb-td{width:40px;padding-left:18px;padding-right:6px;}
    JS ส่วนลากพังก็ไม่กระทบหน้าตา/การทำงานปกติของปุ่มเลย) */
 .seg-pill{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;z-index:0;pointer-events:none;
   transition:transform .25s var(--ease),width .25s var(--ease);}
-.seg-pill.dragging{transition:none;}
+/* .dragging = นิ้ว/เมาส์กำลังลาก, .no-anim = layout ใต้ pill กำลังขยับเอง (แถบ
+   .df-collapsible กาง/ยุบตอน hover, resize, re-render) ทั้งสองกรณีต้องเกาะตำแหน่งแบบ
+   ทันทีไม่มี easing — ถ้าปล่อยให้ pill มี transition ของตัวเองไล่ตาม layout ที่กำลังวิ่ง
+   อยู่ (.df-collapsible ยาว .32s ส่วน pill .25s) pill จะตามไม่ทันตลอดทาง เกิดอาการ
+   "pill ค้างอยู่ปุ่ม 1 ปี ขณะที่ ระบุวัน เป็นปุ่มที่เลือกจริง" ที่ผู้ใช้รายงานมา (วัดได้จริง:
+   กลางทางเลื่อน pill อยู่ x=268 แต่ปุ่ม active อยู่ x=351) */
+.seg-pill.dragging,.seg-pill.no-anim{transition:none;}
+/* ปุ่ม active ถูกซ่อน/ยุบจนกว้าง 0 (อยู่ใน .df-collapsible ที่ยุบอยู่) — ซ่อน pill ไปเลย
+   ห้ามเด้งไปเกาะปุ่มอื่นแทน เพราะนั่นคือการโกหกว่าเลือกปุ่มนั้นอยู่ */
+.seg-pill.seg-pill-hidden{opacity:0;}
 .seg-filter .seg-pill{background:var(--surface);box-shadow:var(--shadow);}
+/* ── ตัวชี้ "ปุ่มที่เลือก" ต้องมีชั้นเดียวเท่านั้น ────────────────────────────────
+   เดิมมีสองชั้นพร้อมกัน: พื้นหลัง+เงาของ .active เอง กับ .seg-pill ที่เลื่อนตาม พอ
+   layout ขยับ (hover กาง .df-collapsible) แล้ว pill ตามไม่ทัน จะเห็น "ปุ่มขาวสองปุ่ม"
+   พร้อมกันชั่วขณะ — .seg-enhanced ถูกเติมโดย JS เฉพาะตอนที่สร้าง pill สำเร็จจริงเท่านั้น
+   (ดู segPillEnsure) ถ้า JS ส่วนนี้ไม่รัน/พัง คลาสนี้จะไม่มี ปุ่มก็ยังมีพื้นหลังของตัวเอง
+   เหมือนเดิมทุกประการ (fallback) — เก็บเฉพาะ color ไว้ เพราะ pill เป็นแค่พื้นหลัง
+   ตัวอักษรยังต้องอ่านออกบนพื้น pill */
+.inv-view-sw.seg-enhanced .ivs-btn.active,
+.seg-filter.seg-enhanced .sf-btn.active{background:transparent;box-shadow:none;}
 .ivs-btn.active,.sf-btn.active{cursor:grab;}
 .ivs-btn.active:active,.sf-btn.active:active{cursor:grabbing;}
+/* กลุ่มที่ปิดการลาก (ตัวกรองวันที่ — layout ยุบ/กางเองได้ และมีช่อง input ตัวเลขซ้อนใน
+   ปุ่ม การลากจึงมีแต่สร้างปัญหา) ต้องไม่ทำท่าว่าลากได้ */
+.inv-view-sw[data-no-drag] .ivs-btn.active,
+.seg-filter[data-no-drag] .sf-btn.active{cursor:default;}
 .ivs-btn.drag-hide-bg,.sf-btn.drag-hide-bg{background:transparent!important;box-shadow:none!important;}
+@media(prefers-reduced-motion:reduce){.seg-pill{transition:none;}}
 .sf-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;
   font-family:var(--mono);background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink2);}
 .sf-badge:empty,.sf-badge[data-zero="1"]{display:none;}
@@ -5070,47 +5093,110 @@ function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.st
    ทำงาน/หน้าตาถูกต้องเหมือนเดิมทุกประการ */
 function segPillEnsure(wrap){
   var pill=wrap.querySelector(':scope > .seg-pill');
-  if(!pill){pill=document.createElement('span');pill.className='seg-pill';wrap.insertBefore(pill,wrap.firstChild);}
+  if(!pill){
+    pill=document.createElement('span');pill.className='seg-pill';wrap.insertBefore(pill,wrap.firstChild);
+    /* ติดคลาสตอนสร้าง pill สำเร็จเท่านั้น — CSS ใช้คลาสนี้เป็นตัวตัดสินว่าจะถอดพื้นหลัง
+       ของปุ่ม .active ออก (เหลือ pill เป็นตัวชี้ชั้นเดียว) ถ้าโค้ดนี้ไม่เคยรัน คลาสก็ไม่มี
+       ปุ่มยังมีพื้นหลังเดิมครบ = fallback ที่ปลอดภัย */
+    wrap.classList.add('seg-enhanced');
+  }
   return pill;
 }
-function segPillMove(wrap){
-  /* descendant เท่านั้น ไม่ใช่ :scope > โดยตรง — บาง wrap (เช่น .df-sw ตัวกรองวันที่)
-     ห่อปุ่ม 4 ใน 5 ปุ่มไว้ใน <span class="df-collapsible"> อีกชั้น (ยุบซ่อนได้เวลาเลือก
-     "ระบุวัน") .ivs-btn จึงไม่ใช่ลูกตรงของ wrap เสมอไป — ยังคำนวณ offsetLeft ถูกอยู่ดี
-     เพราะ .df-collapsible ไม่มี position เป็นของตัวเอง (ไม่กลายเป็น offsetParent ใหม่) */
+/* ── ตำแหน่ง pill: แหล่งความจริงเดียวคือปุ่มที่มีคลาส .active ─────────────────────
+   วัดด้วย getBoundingClientRect() เทียบกับ wrap (ไม่ใช่ offsetLeft) — ระหว่างที่
+   .df-collapsible กำลัง transition ความกว้าง offsetLeft เป็นเลขจำนวนเต็มที่ปัดแล้วและ
+   อ้างอิง offsetParent ซึ่งไม่จำเป็นต้องเป็น wrap ตัวนี้ ส่วน rect เป็นตำแหน่งที่ render
+   จริงบนจอ ณ เฟรมนั้นเป๊ะ ๆ บวก scrollLeft เพราะ pill วางด้วย translateX ใน
+   coordinate ของ wrap ที่เลื่อนสกอร์ลแนวนอนได้ */
+function segPillApply(wrap,instant){
   var active=wrap.querySelector('.ivs-btn.active,.sf-btn.active');
   var pill=segPillEnsure(wrap);
-  var w=active?active.offsetWidth+'px':'0';
-  var x=active?active.offsetLeft:0;
-  /* กันเขียนซ้ำค่าเดิม — ตัวกันหลักของอาการ "วิ่งไปมา": ถ้าอะไรก็ตามเรียก segPillMove()
-     ถี่ๆ ซ้ำๆ (transitionend/MutationObserver ที่อาจหลุดรอดมาได้จากจุดอื่นที่คาดไม่ถึง)
-     แต่ตำแหน่งจริงไม่ได้เปลี่ยนเลย ก็จะไม่แตะ style เลย — ไม่มีการเขียนซ้ำ = ไม่มี
-     transition ใหม่เกิดขึ้นให้วนต่อ ปลอดภัยไว้ก่อนโดยไม่ต้องรู้สาเหตุที่แท้จริงทุกจุด */
-  if(pill.dataset.w===w&&pill.dataset.x===String(x))return;
-  pill.dataset.w=w;pill.dataset.x=String(x);
-  pill.style.width=w;
-  pill.style.transform='translateX('+x+'px)';
+  var aw=active?active.getBoundingClientRect().width:0;
+  /* ปุ่ม active ถูกยุบ/ซ่อนอยู่ (กว้าง 0) — ซ่อน pill ไว้เฉย ๆ ห้ามย้ายไปปุ่มอื่น
+     ไม่งั้นจะกลายเป็นชี้ผิดปุ่มซึ่งแย่กว่าไม่ชี้เลย */
+  if(!active||aw<=0){pill.classList.add('seg-pill-hidden');return;}
+  pill.classList.remove('seg-pill-hidden');
+  var wr=wrap.getBoundingClientRect(),ar=active.getBoundingClientRect();
+  var x=Math.round((ar.left-wr.left+wrap.scrollLeft)*10)/10;
+  var w=Math.round(ar.width*10)/10+'px';
+  if(instant)pill.classList.add('no-anim');
+  /* กันเขียนซ้ำค่าเดิม — ถ้าตำแหน่งจริงไม่เปลี่ยน ไม่แตะ style เลย ไม่มีการเขียนซ้ำ =
+     ไม่มี transition ใหม่เกิดขึ้นให้วนต่อ (กัน ResizeObserver loop ไปในตัว) */
+  if(pill.dataset.w!==w||pill.dataset.x!==String(x)){
+    pill.dataset.w=w;pill.dataset.x=String(x);
+    pill.style.width=w;
+    pill.style.transform='translateX('+x+'px)';
+  }
+  if(instant){
+    /* ปลด no-anim หลังเบราว์เซอร์ commit style รอบนี้ไปแล้ว — ถ้าปลดในเฟรมเดียวกัน
+       transition จะกลับมาทำงานทันทีกับค่าที่เพิ่งเขียน กลายเป็นเลื่อนแบบมี easing อีก */
+    if(pill._animT)cancelAnimationFrame(pill._animT);
+    pill._animT=requestAnimationFrame(function(){
+      pill._animT=null;pill.classList.remove('no-anim');
+    });
+  }
 }
-function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).forEach(segPillMove);}
+/* ── scheduler เดียวสำหรับทุก observer ────────────────────────────────────────
+   MutationObserver / ResizeObserver / hover timeout / resize ต่างก็อยากสั่งขยับ pill
+   ตัวเดียวกันในเฟรมเดียวกัน ถ้าปล่อยให้ต่างคนต่างเขียน style จะเกิดทั้ง layout thrash และ
+   "ค่าสุดท้ายที่เขียนชนะ" แบบสุ่มลำดับ — รวมทุกทางเข้ามาที่นี่ ต่อ wrap เก็บ RAF id ไว้ใน
+   WeakMap (ยกเลิกอันเก่าก่อนจองอันใหม่เสมอ) จึงเหลือการเขียนจริงแค่ครั้งเดียวต่อเฟรม
+   ต่อ wrap และเป็นค่าที่อ่านสด ณ เฟรมนั้นเสมอ
+   instant=true (layout ขยับเอง) ชนะ false เสมอภายในเฟรมเดียวกัน — ระหว่างที่ layout
+   กำลังวิ่ง ต้องเกาะแบบทันที ไม่ใช่ค่อย ๆ ไถตามให้เห็นสองปุ่มสว่างพร้อมกัน */
+var _segRaf=new WeakMap(),_segInstant=new WeakMap();
+function scheduleSegPillMove(wrap,instant){
+  if(!wrap)return;
+  if(instant)_segInstant.set(wrap,true);
+  if(_segRaf.has(wrap))return;
+  _segRaf.set(wrap,requestAnimationFrame(function(){
+    _segRaf.delete(wrap);
+    var inst=_segInstant.get(wrap)||false;_segInstant.delete(wrap);
+    segPillApply(wrap,inst);
+  }));
+}
+/* เรียกแบบซิงก์ทันที (ไม่รอเฟรม) — ใช้เฉพาะตอนจบ drag ที่ต้องสแนปกลับเดี๋ยวนั้น */
+function segPillMove(wrap,instant){scheduleSegPillMove(wrap,instant);}
+function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||document).forEach(function(w){scheduleSegPillMove(w,instant);});}
 (function(){
-  var SLOP=4, drag=null;
+  var SLOP=4, drag=null, swallowClick=false;
   /* descendant เท่านั้น — เหตุผลเดียวกับ segPillMove ด้านบน (.df-collapsible ห่อปุ่มไว้
      อีกชั้นในบาง wrap) $all() คืนตามลำดับเอกสาร ซึ่งตรงกับลำดับที่เห็นบนจอเสมอ (flex
      ไม่ reorder DOM) list[0]/list[last] จึงยังเป็นปุ่มซ้ายสุด/ขวาสุดจริงแม้ปุ่มบางตัวจะ
      อยู่ลึกกว่าตัวอื่นในโครงสร้าง DOM */
   function btnsOf(wrap){return $all('.ivs-btn,.sf-btn',wrap);}
+  /* พิกัดปุ่มเทียบ wrap — ใช้ rect ชุดเดียวกับ segPillApply เพื่อให้ "ตำแหน่งที่ pill ไป
+     ยืน" กับ "ปุ่มที่ระบบคิดว่าโดน" คำนวณจากฐานเดียวกันเสมอ */
+  function rectIn(wrap,el){
+    var wr=wrap.getBoundingClientRect(),r=el.getBoundingClientRect();
+    return {x:r.left-wr.left+wrap.scrollLeft,w:r.width};
+  }
   function nearest(wrap,x){
     var best=null,bd=Infinity;
-    btnsOf(wrap).forEach(function(b){if(b.disabled)return;var d=Math.abs((b.offsetLeft+b.offsetWidth/2)-x);if(d<bd){bd=d;best=b;}});
+    btnsOf(wrap).forEach(function(b){
+      if(b.disabled)return;
+      var r=rectIn(wrap,b);
+      if(r.w<=0)return;                     /* ปุ่มที่ยุบอยู่ไม่ใช่เป้าที่เลือกได้ */
+      var d=Math.abs((r.x+r.w/2)-x);if(d<bd){bd=d;best=b;}
+    });
     return best;
   }
   function onDown(e){
     if(e.button!==undefined&&e.button!==0)return;
+    /* ช่องกรอกตัวเลขที่ฝังอยู่ในปุ่ม (จำนวน วัน/เดือน/ปี ของตัวกรองวันที่) ต้องพิมพ์/ลาก
+       เลือกข้อความได้ตามปกติ — จับ pointer ตรงนี้เมื่อไหร่ก็แย่งโฟกัสไปทันที */
+    if(e.target.closest&&e.target.closest('input,select,textarea'))return;
     var b=e.target.closest?e.target.closest('.ivs-btn,.sf-btn'):null;
     if(!b||!b.classList.contains('active')||b.disabled)return;
     var wrap=b.closest('.inv-view-sw,.seg-filter');if(!wrap)return;
+    /* กลุ่มที่ประกาศ data-no-drag ไม่รองรับการลาก — ตัวกรองวันที่ (.df-sw) เป็นกลุ่มเดียว
+       ที่ layout ยุบ/กางเองได้ระหว่างใช้งาน ตำแหน่งปุ่มระหว่างลากจึงไม่นิ่ง และยังมีช่อง
+       input ซ้อนอยู่ในปุ่มอีก การลากที่นี่มีแต่สร้างความกำกวมโดยไม่ได้อะไรเพิ่ม — คลิก
+       เลือกยังทำงานปกติทุกประการ */
+    if(wrap.hasAttribute('data-no-drag'))return;
     var pill=segPillEnsure(wrap);
-    drag={wrap:wrap,pill:pill,startX:e.clientX,base:b.offsetLeft,w:b.offsetWidth,moved:false,origin:b,target:b,id:e.pointerId};
+    var wr=wrap.getBoundingClientRect(),br=b.getBoundingClientRect();
+    drag={wrap:wrap,pill:pill,startX:e.clientX,base:br.left-wr.left+wrap.scrollLeft,w:br.width,moved:false,origin:b,target:b,id:e.pointerId};
     try{wrap.setPointerCapture(e.pointerId);}catch(_){}
   }
   function onMove(e){
@@ -5120,15 +5206,17 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
       if(Math.abs(dx)<SLOP)return;
       drag.moved=true;drag.pill.classList.add('dragging');drag.origin.classList.add('drag-hide-bg');
     }
-    var list=btnsOf(drag.wrap),first=list[0],last=list[list.length-1];
+    var list=btnsOf(drag.wrap).filter(function(b){return rectIn(drag.wrap,b).w>0;});
+    var first=list[0],last=list[list.length-1];
     if(!first||!last)return;
-    var min=first.offsetLeft,max=last.offsetLeft+last.offsetWidth-drag.w;
+    var fr=rectIn(drag.wrap,first),lr=rectIn(drag.wrap,last);
+    var min=fr.x,max=lr.x+lr.w-drag.w;
     var x=Math.max(min,Math.min(max,drag.base+dx));
     drag.pill.style.transform='translateX('+x+'px)';
     var hit=nearest(drag.wrap,x+drag.w/2);
     if(hit&&hit!==drag.target){
       drag.target=hit;
-      drag.w=hit.offsetWidth;drag.pill.style.width=drag.w+'px';
+      drag.w=rectIn(drag.wrap,hit).w;drag.pill.style.width=drag.w+'px';
     }
     e.preventDefault();
   }
@@ -5146,13 +5234,31 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
     d.pill.classList.remove('dragging');
     d.origin.classList.remove('drag-hide-bg');
     if(!d.moved)return;                              /* never left the slop radius — let the click through */
-    if(d.target&&d.target!==d.origin)d.target.click();
-    else segPillMove(d.wrap);                         /* snapped back to where it started */
+    if(d.target&&d.target!==d.origin){
+      /* ยิง .click() เองเพื่อให้ handler เดิมของปุ่มทำงาน (setStatusToggle/dfSetMode/…)
+         แต่เบราว์เซอร์อาจยิง native click ตามมาอีกทีหลังปล่อย pointer — ตั้งธงกันไว้ให้
+         ตัวดักด้านล่างกลืน click ถัดไปทิ้ง ไม่งั้น setter จะถูกเรียกสองรอบต่อการลากหนึ่งครั้ง
+         (ตัวกรองวันที่จะยิง DF_APPLY ซ้ำ = re-render รายงานฟรี ๆ สองรอบ) */
+      /* ลำดับสำคัญมาก: ยิง .click() ให้เสร็จก่อน แล้วค่อยตั้งธง — ถ้าตั้งธงก่อน ตัวดัก
+         capture ด้านล่างจะกลืน "คลิกสังเคราะห์ที่เราเพิ่งยิงเอง" ทิ้งเสียเอง setter จึงไม่
+         ถูกเรียกเลย (pill เลื่อนไปปุ่มใหม่แต่ค่าจริงไม่เปลี่ยน) */
+      d.target.click();
+      swallowClick=true;
+      /* ถ้า native click ไม่ตามมาเลยภายในเฟรมถัดไป ต้องล้างธงทิ้ง ไม่งั้นค้างไปกลืน
+         คลิกจริงครั้งถัดไปของผู้ใช้ */
+      requestAnimationFrame(function(){swallowClick=false;});
+    }
+    else scheduleSegPillMove(d.wrap);                 /* snapped back to where it started */
   }
   document.addEventListener('pointerdown',onDown);
   document.addEventListener('pointermove',onMove,{passive:false});
   document.addEventListener('pointerup',onUp);
   document.addEventListener('pointercancel',onUp);
+  document.addEventListener('click',function(e){
+    if(!swallowClick)return;
+    if(!e.target.closest||!e.target.closest('.ivs-btn,.sf-btn'))return;
+    swallowClick=false;e.stopPropagation();e.preventDefault();
+  },true);
 })();
 (function(){
   /* จับได้สามทาง: (1) ปุ่มในกลุ่มเดิมสลับ .active — เช่น setStatusToggle/dfSetMode สั่ง
@@ -5179,7 +5285,9 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
         });
       }
     });
-    wraps.forEach(segPillMove);
+    /* state เปลี่ยน (ผู้ใช้เลือกปุ่มอื่นจริง ๆ) — ให้ pill เลื่อนแบบมี animation ตามปกติ
+       ต่างจากกรณี layout ขยับเองด้านล่างที่ต้องเกาะแบบทันที */
+    wraps.forEach(function(w){scheduleSegPillMove(w,false);});
   }).observe(document.body,{attributes:true,attributeFilter:['class','data-collapsed'],subtree:true,childList:true});
   /* เคยลองจับ transitionend เพื่อ sync ตำแหน่งอีกทีหลัง .df-collapsible ยุบ/กางเสร็จ
      (เช่นตอนเลือก "ระบุวัน") แต่พบว่าพังได้ในอีกเคสที่คาดไม่ถึงกว่านั้น: การกางแถบกลับตอน
@@ -5194,11 +5302,14 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
      transition ทำงานหรือค้างกลางทาง) ยิงต่อเนื่องทุกเฟรมที่ขนาดขยับจริงตลอดทรานซิชัน
      ไม่ใช่รอ "จบ" ครั้งเดียวแบบ transitionend เกาะปุ่ม pill จึงตามการขยาย/ยุบของ
      .df-collapsible ได้แบบเรียลไทม์แม้ทรานซิชันจะค้าง/ถูกขัดจังหวะกลางทางก็ตาม */
-  if(typeof ResizeObserver!=='function'){window.addEventListener('resize',function(){segPillMoveAll();});setTimeout(segPillMoveAll,0);return;}
+  if(typeof ResizeObserver!=='function'){window.addEventListener('resize',function(){segPillMoveAll(null,true);});setTimeout(segPillMoveAll,0);return;}
   var segRO=new ResizeObserver(function(entries){
+    /* layout ใต้ pill กำลังขยับเอง (แถบกาง/ยุบตอน hover, resize, re-render) —
+       instant=true: เกาะตำแหน่งทันทีไม่มี easing ถ้าปล่อยให้ pill ไถตามด้วย transition
+       ของตัวเอง มันจะตามหลัง layout ที่กำลังวิ่งอยู่ตลอดทาง = เห็นปุ่มสว่างสองปุ่มพร้อมกัน */
     entries.forEach(function(en){
       var wrap=en.target.closest?en.target.closest('.inv-view-sw,.seg-filter'):null;
-      if(wrap)segPillMove(wrap);
+      if(wrap)scheduleSegPillMove(wrap,true);
     });
   });
   function segObserve(wrap){segRO.observe(wrap);}
@@ -5220,17 +5331,58 @@ function segPillMoveAll(root){$all('.inv-view-sw,.seg-filter',root||document).fo
      พ้นระยะทรานซิชันที่ยาวที่สุดที่ใช้จริง (.df-collapsible ยาว .32s) ตอน mouse เข้า/ออก
      wrap พอดี (จุดที่ :hover เริ่ม/เลิกสั่งกาง-ยุบ) เก็บตกความคลาดเคลื่อนเล็กน้อยที่เหลือ
      mouseenter/mouseleave ไม่ bubble แต่ดักจากช่วง capture ได้ */
+  /* timeout เก็บตกท้ายทรานซิชัน — ต้องเก็บต่อ wrap แล้วยกเลิกอันเก่าก่อนตั้งอันใหม่เสมอ
+     เดิมไม่ยกเลิก พอเมาส์เข้า-ออกรัว ๆ 20 ครั้งจะมี timeout ค้างคิว 20 ตัวทยอยยิงตามกันมา
+     สั่งขยับ pill ทับกันเองไปเรื่อย ๆ (อาการ pill วิ่งไปมา/กระตุกที่ผู้ใช้รายงาน) */
+  var hoverT=new WeakMap();
+  function hoverSettle(wrap){
+    if(!wrap)return;
+    if(hoverT.has(wrap))clearTimeout(hoverT.get(wrap));
+    hoverT.set(wrap,setTimeout(function(){
+      hoverT.delete(wrap);scheduleSegPillMove(wrap,true);
+    },360));
+  }
   document.addEventListener('mouseenter',function(e){
-    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
-    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
+    hoverSettle(e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter'));
   },true);
   document.addEventListener('mouseleave',function(e){
-    var wrap=e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter');
-    if(wrap)setTimeout(function(){segPillMove(wrap);},360);
+    hoverSettle(e.target&&e.target.closest&&e.target.closest('.inv-view-sw,.seg-filter'));
   },true);
-  window.addEventListener('resize',function(){segPillMoveAll();});
+  window.addEventListener('resize',function(){segPillMoveAll(null,true);});
   setTimeout(segPillMoveAll,0);
 })();
+/* Gate Out starts by asking the operator which workflow they need.  Keep the
+   shared DO/vehicle fields visible, but never show the Excel importer and the
+   manual scanner at the same time; this avoids operators using the wrong path
+   when working quickly at the gate. */
+var gateOutEntryMode=null;
+function applyGateOutEntryMode(mode,openPicker){
+  gateOutEntryMode=(mode==='excel'||mode==='manual')?mode:null;
+  var bar=$('#gateOutModeBar'),imp=$('#gateOutImportBoard'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions'),lbl=$('#gateOutModeLabel');
+  if(bar)bar.style.display=gateOutEntryMode?'':'none';
+  if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
+  if(man)man.style.display=gateOutEntryMode==='manual'?'':'none';
+  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
+  if(lbl)lbl.textContent=gateOutEntryMode==='excel'?'นำเข้ารายการจาก Excel':'กรอก / ยิงบาร์โค้ดด้วยมือ';
+  if(!gateOutEntryMode)return;
+  closeModal();
+  setTimeout(function(){
+    if(gateOutEntryMode==='excel'&&openPicker){var f=$('#outImportFile');if(f)f.click();}
+    if(gateOutEntryMode==='manual'){var s=$('#scanOut');if(s)s.focus();}
+  },100);
+}
+function chooseGateOutEntryMode(mode){applyGateOutEntryMode(mode,true);}
+function openGateOutModeChooser(){
+  var h='<div class="mhead gateout-choice-head"><div class="gateout-choice-kicker">Gate Out</div><h3>เริ่มทำรายการด้วยวิธีไหน?</h3></div>'
+    +'<div class="mbody gateout-choice"><p class="gateout-choice-copy">เลือกวิธีที่เหมาะกับงานรอบนี้ เปลี่ยนภายหลังได้ทุกเมื่อ</p>'
+    +'<div class="gateout-choice-grid">'
+      +'<button type="button" class="gateout-choice-card" onclick="chooseGateOutEntryMode(\'excel\')"><span class="gateout-choice-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><span class="gateout-choice-title">นำเข้า Excel</span><span class="gateout-choice-desc">เลือกไฟล์ Excel หรือ CSV เพื่อทำหลายรายการพร้อมกัน</span><span class="gateout-choice-chevron">›</span></button>'
+      +'<button type="button" class="gateout-choice-card manual" onclick="chooseGateOutEntryMode(\'manual\')"><span class="gateout-choice-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 12h10M8 9v6M11 9v6M14 9v6M17 9v6"/></svg></span><span class="gateout-choice-title">กรอก / ยิงบาร์โค้ด</span><span class="gateout-choice-desc">สแกนหรือพิมพ์รหัสกล่องทีละรายการ</span><span class="gateout-choice-chevron">›</span></button>'
+    +'</div></div>';
+  openModal(h);
+}
+window.openGateOutModeChooser=openGateOutModeChooser;
+window.chooseGateOutEntryMode=chooseGateOutEntryMode;
 function switchTab(name){
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
@@ -10947,7 +11099,11 @@ function dfSave(id){uiPrefTouch('df:'+id);}
    the same filter) in one place instead of copy-pasted per report. */
 function dfBarHtml(id){
   return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
-    +'<span class="inv-view-sw df-sw" id="df-'+id+'-sw" style="flex-shrink:0;">'
+    /* data-no-drag: ตัวกรองวันที่เป็นกลุ่ม toggle เดียวในระบบที่ layout ยุบ/กางเองได้
+       ระหว่างใช้งาน (.df-collapsible ตอน hover) และมีช่อง input ตัวเลขซ้อนอยู่ในปุ่ม —
+       การลาก pill ที่นี่จึงกำกวมโดยไม่ได้ประโยชน์ ปิดไปเลย คลิกเลือกยังทำงานปกติ
+       กลุ่มอื่นที่ layout นิ่ง (สลับมุมมองสต็อก/ตัวกรองสถานะ ฯลฯ) ยังลากได้เหมือนเดิม */
+    +'<span class="inv-view-sw df-sw" data-no-drag="1" id="df-'+id+'-sw" style="flex-shrink:0;">'
     +'<span class="df-hidden-hint" title="ยังมีตัวเลือกช่วงเวลาอื่นซ่อนอยู่ — เอาเมาส์ชี้เพื่อดู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span>'
     +'<span class="df-collapsible">'
     +'<button type="button" class="ivs-btn active" data-mode="all" title="ไม่จำกัดช่วงเวลา" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
@@ -11048,7 +11204,24 @@ function dfSyncUI(id){
      clobber a number they're mid-typing. */
   ['day','month','year'].forEach(function(u){var el=$('#df-'+id+'-'+u+'-n');if(el&&document.activeElement!==el)el.value=st[u];});
   dfClampCustomInputs(id);
+  dfAssertSingleActive(id);
 }
+/* invariant: ในหนึ่ง .df-sw ต้องมีปุ่ม .active หนึ่งปุ่มเท่านั้น — st.mode คือแหล่งความจริง
+   เดียว hover/ตำแหน่ง pill/pointer ห้ามมีสิทธิ์กำหนด active เด็ดขาด ถ้าหลุดมาไม่เท่ากับ 1
+   (โค้ดอื่นในอนาคตเผลอเติม .active เอง) ให้ซ่อมจาก st.mode ทันทีแทนที่จะปล่อยให้จอ
+   แสดงผลว่าเลือกสองปุ่มพร้อมกัน */
+function dfAssertSingleActive(id){
+  var sw=$('#df-'+id+'-sw');if(!sw)return;
+  var st=dfGet(id);
+  var actives=$all('.ivs-btn.active',sw);
+  if(actives.length===1&&actives[0].dataset.mode===st.mode)return;
+  if(window.console&&console.warn){
+    console.warn('[df] active button invariant broken on #df-'+id+'-sw — expected 1 ("'+st.mode+'"), got '+actives.length+
+      ' ['+actives.map(function(b){return b.dataset.mode;}).join(',')+'] — repairing from state');
+  }
+  $all('.ivs-btn',sw).forEach(function(b){b.classList.toggle('active',b.dataset.mode===st.mode);});
+}
+window.dfAssertSingleActive=dfAssertSingleActive;
 /* A filter over zero rows has nothing to filter — hides the bar (and its
    caption) instead of showing a live control that can never change what's
    on screen. Each report's render function passes whether it currently has
