@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Smart Tracking — ประตูสแกน · Returnable Asset Tracking',
-  description: 'RFID Gate / Returnable Asset Tracking (WMS)',
+  title: 'Smart Tracking — ระบบติดตามสินทรัพย์หมุนเวียน',
+  description: 'ระบบประตู RFID และติดตามสินทรัพย์หมุนเวียน',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,121 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# boxtracking — the whole system as ONE Docker Compose project.
+#
+# Before this file the five containers were split across three compose projects
+# (thai-submit, box-tracking-demo-, wt-main) whose compose files had all since
+# been deleted along with their worktrees, so nothing could bring them back up
+# together. Docker Desktop showed them as four unrelated groups.
+#
+# Every service here points at an ALREADY-BUILT image on purpose — there are no
+# `build:` sections. This branch (WEB_APP_DEMO_THAI_SUBMIT) carries only the
+# frontend; backend/ and pda_flutter/ have no source or Dockerfile here, and
+# adding a build for the frontend would quietly overwrite main's :3000 image
+# with this branch's. Grouping should not rebuild anything.
+#
+# To rebuild one image, build it by hand and then `docker compose up -d <svc>`:
+#   docker build -t thai-submit-frontend:latest ./frontend
+#   docker compose up -d frontend-thai
+# ══════════════════════════════════════════════════════════════════════════════
+name: boxtracking
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: boxtrace-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: boxtrace
+      POSTGRES_PASSWORD: boxtrace
+      POSTGRES_DB: boxtrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxtrace -d boxtrace"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: boxtrace-backend:latest
+    container_name: boxtrace-backend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "node dist/db/migrate.js && node dist/seed.js && node dist/index.js"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      USE_PGLITE: "false"
+      DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
+      # :3001 is deliberately absent — frontend-thai talks to the backend
+      # server-side over BACKEND_URL, so no browser origin of its own is needed
+      CORS_ORIGIN: http://localhost:3000,http://localhost:5100
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 2h
+      SEED_ADMIN_USERNAME: admin
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET}
+      # mail stays off, exactly as the running container had it: the real
+      # credentials in .env are NOT wired in here on purpose, so grouping the
+      # containers doesn't also switch outbound email on
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: ""
+    ports:
+      - "4000:4000"
+
+  # main's build
+  frontend:
+    image: box-tracking-demo--frontend
+    container_name: boxtrace-frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: ["npm", "run", "start"]
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:4000
+    ports:
+      - "3000:3000"
+
+  # this branch's build (WEB_APP_DEMO_THAI_SUBMIT)
+  frontend-thai:
+    image: thai-submit-frontend:latest
+    container_name: thai-submit-frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: ["npm", "run", "start"]
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:4000
+      FX9600_URL: https://host.docker.internal:9443
+      FX9600_TLS_VERIFY: "false"
+    ports:
+      - "3001:3000"
+
+  pda:
+    image: wt-main-pda
+    container_name: boxtrace-pda
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5100:80"
+
+volumes:
+  # external + explicit name: renaming the project would otherwise make compose
+  # reach for a fresh `boxtracking_db-data` and silently start on an empty
+  # database. This is the volume the data has always been in.
+  db-data:
+    external: true
+    name: box-tracking-demo-_db-data

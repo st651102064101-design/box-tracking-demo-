@@ -1026,6 +1026,14 @@ html[data-layout="sidebar"][data-sidebar-collapsed="1"] #btnSidebarCollapse .svg
   .iconbtn{width:30px;height:30px;font-size:13px;}
 }
 
+/* Compact the two long branding actions without shrinking their tap targets. */
+@media(max-width:560px){
+  .branding-settings-actions{gap:8px;flex-wrap:nowrap;padding:12px 14px;}
+  .branding-settings-actions .btn{min-height:38px;padding:8px 11px;font-size:12px;line-height:1.15;}
+  .branding-settings-actions .spacer{min-width:0;}
+  .branding-settings-actions #btnSaveBranding{max-width:calc(100vw - 178px);white-space:normal;text-align:center;}
+}
+
 /* seg-filter / .row wrap safety net — never overflow even if a page
    ever renders more segmented buttons than fit on one line */
 .seg-filter{flex-wrap:wrap;row-gap:2px;}
@@ -1626,6 +1634,47 @@ html[data-theme="dark"] .modal .mfoot{background:color-mix(in srgb,var(--ink) 4%
 .modal .c2-label{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:0;
   line-height:var(--wgLead);margin:0 0 9px;}
 
+/* Gate-out workflow picker — an Apple-style choice sheet: quiet materials,
+   equal visual weight, one blue affordance instead of a large neon CTA. */
+.modal .sheet:has(.gateout-choice){width:620px;background:color-mix(in srgb,var(--surface) 94%,transparent);}
+.modal .gateout-choice-head{padding:28px 28px 8px;border-bottom:0;display:block;}
+.modal .gateout-choice-kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accentInk);margin-bottom:8px;}
+.modal .gateout-choice-head h3{font-size:25px;font-weight:750;letter-spacing:-.035em;line-height:1.2;}
+.modal .gateout-choice{padding:8px 28px 28px;}
+.gateout-choice-copy{font-size:14px;line-height:1.55;color:var(--muted);margin:0 0 20px;}
+.gateout-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.gateout-choice-card{appearance:none;width:100%;min-height:168px;padding:18px;border-radius:22px;
+  border:.5px solid color-mix(in srgb,var(--ink) 16%,transparent);
+  background:color-mix(in srgb,var(--ink) 3.5%,var(--surface));color:var(--ink);
+  text-align:left;cursor:pointer;display:flex;flex-direction:column;position:relative;
+  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 55%,transparent);
+  transition:transform .22s var(--ease),background .22s,border-color .22s,box-shadow .22s;}
+.gateout-choice-card:hover{transform:translateY(-2px);background:color-mix(in srgb,var(--ink) 6%,var(--surface));
+  border-color:color-mix(in srgb,var(--ink) 24%,transparent);box-shadow:0 14px 34px -20px rgba(0,0,0,.45),inset 0 1px 0 color-mix(in srgb,#fff 55%,transparent);}
+.gateout-choice-card:active{transform:scale(.985);}
+.gateout-choice-card:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 38%,transparent);outline-offset:2px;}
+.gateout-choice-icon{width:42px;height:42px;border-radius:12px;background:color-mix(in srgb,var(--ink) 8%,transparent);display:grid;place-items:center;margin-bottom:20px;}
+.gateout-choice-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.gateout-choice-card.manual .gateout-choice-icon{background:var(--accent);color:var(--accentContrast);box-shadow:0 7px 18px -8px color-mix(in srgb,var(--accent) 75%,transparent);}
+.gateout-choice-title{font-size:17px;font-weight:700;letter-spacing:-.018em;margin-bottom:5px;}
+.gateout-choice-desc{font-size:12.5px;line-height:1.45;color:var(--muted);padding-right:18px;}
+.gateout-choice-chevron{position:absolute;right:17px;bottom:18px;font-size:21px;line-height:1;color:color-mix(in srgb,var(--ink) 35%,transparent);}
+.gateout-choice-card.manual .gateout-choice-chevron{color:var(--accentInk);}
+
+/* Gate Out — the everyday workflow lives on the page, not behind a choice
+   dialog.  A single visible path prevents a rushed operator from mixing an
+   Excel batch with a hand-entered shipment. */
+.gateout-mode-panel{width:100%;max-width:none;margin:0 0 22px;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);}
+.gateout-mode-label{font-size:13px;font-weight:650;color:var(--muted);margin-bottom:10px;}
+.gateout-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.gateout-mode-btn{min-height:82px;padding:14px 16px;border:1px solid var(--line2);border-radius:16px;background:var(--surface2);color:var(--ink);text-align:left;display:flex;align-items:center;gap:12px;transition:.18s var(--ease);}
+.gateout-mode-btn:hover{border-color:var(--accent);transform:translateY(-1px);}.gateout-mode-btn.active{background:var(--accentSoft);border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent);}
+.gateout-mode-icon{width:42px;height:42px;flex:0 0 auto;display:grid;place-items:center;border-radius:12px;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink2);}.gateout-mode-icon .svgi{width:22px;height:22px;}.gateout-mode-btn.active .gateout-mode-icon{background:var(--accent);color:var(--accentContrast);}.gateout-mode-btn b{display:block;font-size:16px;}.gateout-mode-btn small{display:block;color:var(--muted);margin-top:2px;}
+.gateout-remember{display:flex;align-items:center;gap:9px;margin:14px 2px 0;font-size:14px;color:var(--ink2);cursor:pointer;}.gateout-remember input{width:18px;height:18px;accent-color:var(--accent);}
+.gateout-upload{min-height:220px;border:1.5px dashed var(--line2);border-radius:18px;background:var(--surface2);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;transition:.18s var(--ease);}.gateout-upload:hover,.gateout-upload.drag{border-color:var(--accent);background:var(--accentSoft);}.gateout-upload-icon{width:48px;height:48px;margin-bottom:10px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accentInk);}.gateout-upload-icon .svgi{width:25px;height:25px;}.gateout-upload b{font-size:17px;}.gateout-upload p{color:var(--muted);margin:5px 0 14px;font-size:13px;}.gateout-required{margin-top:22px;padding-top:18px;border-top:1px solid var(--line);}.gateout-required h4{margin:0 0 10px;font-size:14px;}.gateout-required ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;color:var(--ink2);font-size:13px;}.gateout-required li::before{content:'✓';color:var(--accentInk);font-weight:800;margin-right:8px;}
+.gateout-import-file{display:none;margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--accentSoft);color:var(--accentInk);font-size:13px;}.gateout-preview{display:none;margin-top:18px;}.gateout-preview table{width:100%;border-collapse:collapse;font-size:13px;}.gateout-preview th,.gateout-preview td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);}.gateout-preview th{color:var(--muted);font-weight:600;}.gateout-preview .ok{color:var(--accentInk);font-weight:650;}
+@media(max-width:600px){.gateout-mode-panel{padding:14px;}.gateout-mode-switch{grid-template-columns:1fr;}.gateout-required ul{grid-template-columns:1fr;}.gateout-upload{min-height:190px;}}
+
 /* iOS sheets come up from the bottom edge on a phone, and so do these. Below
    560px the sheet stops floating and docks, which also buys back the 22px of
    .modal padding on each side that a 390px screen cannot spare. */
@@ -1640,6 +1689,13 @@ html[data-theme="dark"] .modal .mfoot{background:color-mix(in srgb,var(--ink) 4%
   .modal .mbody{padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));}
   .modal .mfoot{padding:14px 18px calc(14px + env(safe-area-inset-bottom));}
   .modal .mfoot .btn{flex:1;min-width:130px;}
+  .modal .gateout-choice-head{padding:24px 20px 7px;}
+  .modal .gateout-choice-head h3{font-size:23px;}
+  .modal .gateout-choice{padding:8px 20px calc(22px + env(safe-area-inset-bottom));}
+  .gateout-choice-grid{grid-template-columns:1fr;gap:10px;}
+  .gateout-choice-card{min-height:116px;padding:15px 48px 15px 76px;justify-content:center;}
+  .gateout-choice-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);margin:0;}
+  .gateout-choice-chevron{bottom:auto;top:50%;transform:translateY(-50%);}
 }
 @keyframes sheetUp{from{opacity:0;transform:translateY(100%);}to{opacity:1;transform:none;}}
 
@@ -1701,11 +1757,16 @@ a{color:var(--accentInk);}
   html[data-layout] body{padding-left:0!important;}
   html[data-layout] main{max-width:100%;margin:0;padding-left:14px;padding-right:14px;}
   html[data-layout] .chrome{position:sticky;inset:auto;top:0;width:auto;height:auto;border-right:0;transform:none!important;}
-  html[data-layout] .chrome-inner{height:auto;max-width:none;flex-direction:row;align-items:center;padding:10px 12px;gap:9px;}
+  html[data-layout] .chrome-inner{height:auto;max-width:none;flex-direction:row;align-items:center;padding:14px 16px;gap:11px;}
   .brand{min-width:0;gap:9px;}
-  .brand .nm{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw;}
+  .brand .mark{width:38px;height:38px;border-radius:11px;}
+  .brand .nm{font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw;}
   .brand .sub{display:none;}
   .who{padding:5px;}.who #whoTxt{display:none;}
+  .who .who-ic{width:24px!important;height:24px!important;}
+  .langbtn{min-height:42px;font-size:14px;}
+  .chrome .iconbtn{width:42px;height:42px;}
+  .chrome .iconbtn .svgi{width:21px;height:21px;}
   #btnLayout,#btnSidebarCollapse{display:none!important;}
   #btnMobileNav{display:grid;flex:0 0 auto;}
   html[data-layout] .navwrap{position:fixed;inset:0 auto 0 0;top:0;width:min(84vw,330px);height:100dvh;z-index:260;
@@ -1717,9 +1778,10 @@ a{color:var(--accentInk);}
     padding:calc(18px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom));gap:6px;overflow-y:auto;}
   #nav::before{content:'เมนู';font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;padding:2px 12px 12px;}
   #nav .pill-bg{display:none;}
-  #nav button{display:flex;width:100%;min-height:48px;padding:11px 14px;border-radius:14px;justify-content:flex-start;font-size:15px;}
+  #nav button{display:flex;width:100%;min-height:54px;padding:13px 16px;border-radius:15px;justify-content:flex-start;font-size:17px;}
   #nav button.active{background:var(--ink);color:var(--bg);}
-  #nav button .ico{width:24px;display:grid;place-items:center;}
+  #nav button .ico{width:28px;display:grid;place-items:center;}
+  #nav button .ico .svgi{width:21px;height:21px;}
   .mobile-nav-backdrop{position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.38);opacity:0;pointer-events:none;
     display:block;transition:opacity .25s;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
   .mobile-nav-backdrop.show{opacity:1;pointer-events:auto;}
@@ -1959,7 +2021,7 @@ a{color:var(--accentInk);}
 
     <!-- systemMedium · graphite: "out" is neither good nor bad -->
     <button type="button" class="wg m" data-act
-            title="ดูกล่องที่ออกอยู่" onclick="goInventory({status:'out',label:'ออกอยู่'});">
+            title="ดูกล่องที่ออกอยู่" onclick="goInventory({status:'out',dateSource:'ovStatusNow',dateField:'lastSeenAt',label:'ออกอยู่'});">
       <span class="wg-top">
         <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
         <span class="wg-lbl">ออกอยู่</span>
@@ -2282,14 +2344,22 @@ a{color:var(--accentInk);}
   <div class="hero">
     <div class="eyebrow reveal">ขาออก</div>
     <h1 class="h-title reveal d1">ผ่านประตู<br>ออกได้เลย</h1>
-    <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วยิงบาร์โค้ด — ระบบผูกประตู·คลังต้นทาง·DO·PO·รถ·คนขับ ให้ทุกกล่องในรอบเดียว</p>
+    <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วจบการยิงข้อมูลในรอบเดียว</p>
   </div>
 
-  <div class="wg-board">
+  <div class="gateout-mode-panel reveal" id="gateOutModeBar">
+    <div class="gateout-mode-label">เลือกวิธีทำรายการ</div>
+    <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาออก">
+      <button type="button" class="gateout-mode-btn" data-gateout-mode="manual" onclick="chooseGateOutEntryMode('manual')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2M7 9v6M10 9v6M14 9v6M17 9v6"/></svg></span></span><span><b>ยิงมือ</b><small>กรอกข้อมูลด้วยตัวเอง</small></span></button>
+      <button type="button" class="gateout-mode-btn" data-gateout-mode="excel" onclick="chooseGateOutEntryMode('excel')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><span><b>Import Excel</b><small>นำเข้าข้อมูลจาก Excel</small></span></button>
+    </div>
+  </div>
+
+  <div class="wg-board" id="gateOutManualConfig" style="display:none;">
   <div class="wg xl wg-form reveal">
     <div class="wg-top">
       <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></span>
-      <span class="wg-lbl">ใบส่งของ · ข้อมูลรถ</span>
+      <span class="wg-lbl">สร้างรายการส่งของ</span>
     </div>
     <p class="wg-cap">ตั้งค่าก่อนยิง — ข้อมูลชุดนี้จะผูกกับทุกกล่องที่ออกในรอบนี้ ใช้ย้อนรอยภายหลังได้</p>
     <div class="wg-body">
@@ -2334,23 +2404,20 @@ a{color:var(--accentInk);}
        พร้อมกับทั้งหน้า Gate Out จึงไม่มีเวอร์ชันวิดเจ็ตจากต้นทางให้พอร์ต — แปลง
        markup เองให้พูดภาษาเดียวกับหน้าอื่น โดยคง id outImportCard/outImportFile
        ไว้ครบ เพราะ handleOutImportFile ผูก event กับ #outImportFile โดยตรง) -->
-  <div class="wg-board">
+  <div class="wg-board" id="gateOutImportBoard" style="display:none;">
   <div class="wg xl wg-form reveal d1" id="outImportCard">
     <div class="wg-top">
       <span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span></span>
-      <span class="wg-lbl">นำเข้ารายการจากไฟล์ Excel</span>
+      <span class="wg-lbl">นำเข้าข้อมูลจาก Excel</span>
     </div>
     <div class="wg-body">
-      <p class="desc" style="margin:0 0 10px;">มีรายการกล่องเป็นไฟล์อยู่แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อส่งออกทีเดียวหลายใบ แทนการยิงทีละกล่อง — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้แม่แบบตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วส่งออกให้ทันที (ไม่ทิ้งคิวสแกนค้างไว้) แล้วสรุปผลว่าใบไหนสำเร็จ ใบไหนติดปัญหา</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button class="btn accent sm" onclick="document.getElementById('outImportFile').click()" title="เลือกไฟล์ .xlsx / .xlsm / .xls / .xlsb / .csv เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ Excel</button>
-        <input type="file" id="outImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
-      </div>
+      <div class="gateout-upload" id="outImportDropzone"><div class="gateout-upload-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></div><b>ลากไฟล์ Excel มาวางที่นี่</b><p>หรือเลือกไฟล์ Excel · รองรับ .xlsx และ .xls</p><button type="button" class="btn accent" onclick="document.getElementById('outImportFile').click()">เลือกไฟล์ Excel</button><input type="file" id="outImportFile" accept=".xlsx,.xls,application/vnd.ms-excel" style="display:none;"></div>
+      <div class="gateout-required"><h4>ข้อมูลที่ต้องมีในไฟล์</h4><ul><li>ลูกค้า / ปลายทาง</li><li>ทะเบียนรถ</li><li>ชื่อคนขับ</li><li>เบอร์โทรคนขับ</li><li>กำหนดคืน</li><li>ประเภทรถ</li></ul></div>
     </div>
   </div>
   </div>
 
-  <div class="wg-board">
+  <div class="wg-board" id="gateOutManualBoard" style="display:none;">
     <div class="wg xl wg-scan reveal d1" data-tint="accent" id="gateOutBox">
       <div class="wg-top">
         <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 16h-6a4 4 0 0 1 0-8h8M15 8l3 3M15 8l3-3"/></svg></span></span>
@@ -2367,8 +2434,8 @@ a{color:var(--accentInk);}
     </div>
   </div>
 
-  <div class="row" style="margin-top:22px;">
-    <button class="btn accent big" id="btnShipOut">ยืนยันส่งออก</button>
+  <div class="row" id="gateOutManualActions" style="margin-top:22px;display:none;">
+    <button class="btn accent big" id="btnShipOut">+ สร้างรายการ</button>
     <button class="btn ghost" id="btnAllocateSuggest" onclick="openAllocateModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span> แนะนำหยิบ (FIFO / FEFO)</button>
     
     <button class="btn ghost" onclick="clearGateOut()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
@@ -2383,6 +2450,14 @@ a{color:var(--accentInk);}
     <div class="eyebrow reveal">ขาเข้า</div>
     <h1 class="h-title reveal d1">กลับเข้าคลัง<br>เก็บเข้าชั้น</h1>
     <p class="h-sub reveal d2">รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบรับกล่องเข้าคลังนั้นทันทีให้อัตโนมัติ แล้วตัดยอดว่า "คืนแล้ว"</p>
+  </div>
+
+  <div class="gateout-mode-panel reveal" id="gateInModeBar">
+    <div class="gateout-mode-label">เลือกวิธีทำรายการ</div>
+    <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาเข้า">
+      <button type="button" class="gateout-mode-btn" data-gatein-mode="manual" onclick="chooseGateInEntryMode('manual')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2M7 9v6M10 9v6M14 9v6M17 9v6"/></svg></span></span><span><b>ยิงมือ</b><small>สแกนหรือกรอกข้อมูลด้วยตัวเอง</small></span></button>
+      <button type="button" class="gateout-mode-btn" data-gatein-mode="excel" onclick="chooseGateInEntryMode('excel')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><span><b>Import Excel</b><small>นำเข้ารายการรับคืนจาก Excel</small></span></button>
+    </div>
   </div>
 
   <div class="gi-strip reveal" id="giStrip" style="display:none;">
@@ -2442,27 +2517,25 @@ a{color:var(--accentInk);}
 
   <div id="giStepScan" style="display:none;">
   <!-- Bulk import (.xlsx) — รับข้อมูลรายการกล่องคืนจาก PDA/เครื่องอ่านพกพา
-       WEB_APP_DEMO เก็บการนำเข้าไฟล์ไว้ (สาขา thai_submit ตัดทิ้งแล้วใช้เครื่องอ่าน
-       FX9600 แทน) — ที่แปลงตรงนี้คือ "ภาษา" ของ markup ให้เป็นวิดเจ็ตเหมือนหน้าอื่น
+       WEB_APP_DEMO เก็บการนำเข้าไฟล์ไว้ — ที่แปลงตรงนี้คือ "ภาษา" ของ markup ให้เป็นวิดเจ็ตเหมือนหน้าอื่น
        ไม่ใช่ตัวฟีเจอร์ id ทั้งสอง (inImportCard/inImportFile) ต้องคงไว้ เพราะ
        handleInImportFile ผูก event ไว้กับ #inImportFile โดยตรง -->
-  <div class="wg-board">
+  <div class="wg-board" id="gateInImportBoard">
   <div class="wg xl wg-form reveal d1" id="inImportCard">
     <div class="wg-top">
       <span class="wg-ic dashed"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 13h8M8 17h5"/></svg></span></span>
-      <span class="wg-lbl">นำเข้ารายการรับคืนจากไฟล์ (PDA / Excel)</span>
+      <span class="wg-lbl">นำเข้าข้อมูลจาก Excel</span>
     </div>
     <div class="wg-body">
-    <p class="desc" style="margin:0 0 10px;">ยิงกล่องที่คืนด้วย <b>PDA/เครื่องอ่านพกพา</b> แล้วส่งออกเป็นไฟล์ไว้แล้ว? นำเข้า <b>.xlsx / .xlsm / .xls / .xlsb / .csv</b> เพื่อเติมคิวรับคืนทีเดียวหลายใบ แทนการยิงทีละกล่องที่ประตู — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้แม่แบบตายตัว ระบบตรวจทุกแถวด้วยกติกาเดียวกับการสแกน แล้วสรุปผลว่าใบไหนเข้าคิวได้ ใบไหนติดปัญหา</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <button class="btn accent sm" onclick="document.getElementById('inImportFile').click()" title="เลือกไฟล์ .xlsx / .xlsm / .xls / .xlsb / .csv เพื่อนำเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้าไฟล์ Excel</button>
+    <div class="gateout-upload"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><b style="margin-top:12px;">ลากไฟล์ Excel มาวางที่นี่</b><p>หรือเลือกไฟล์ Excel · รองรับ .xlsx และ .xls</p>
+      <button class="btn accent" onclick="document.getElementById('inImportFile').click()">เลือกไฟล์ Excel</button>
       <input type="file" id="inImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
     </div>
     </div>
   </div>
   </div>
 
-  <div class="wg-board">
+  <div class="wg-board" id="gateInManualBoard">
     <div class="wg xl wg-scan reveal d1" data-tint="accent" id="gateInBox">
       <div class="wg-top">
         <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span>
@@ -2479,7 +2552,7 @@ a{color:var(--accentInk);}
     </div>
   </div>
 
-  <div class="row" style="margin-top:22px;margin-bottom:22px;">
+  <div class="row" id="gateInManualActions" style="margin-top:22px;margin-bottom:22px;">
     <button class="btn pos big" id="btnCheckIn">ยืนยันรับเข้าคลัง</button>
     <button class="btn ghost" onclick="clearGateIn()" title="ล้างคิวสแกนและข้อมูลรถที่กรอกไว้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span> ล้างข้อมูล</button>
     <button class="btn ghost" onclick="exportGateInExcel()" title="ส่งออกประวัติกล่องที่ผ่านประตูขาเข้าทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel</button>
@@ -2538,6 +2611,10 @@ a{color:var(--accentInk);}
   <div class="inv-cust-row" id="invCustRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
+  </div>
+  <div class="inv-cust-row" id="invDateRow">
+    <span class="icr-label">ช่วงเวลาจากภาพรวม</span>
+    <div id="df-invDate-mount"></div>
   </div>
   <div class="invtoolbar" style="margin-bottom:14px;">
     <div class="spacer"></div>
@@ -4874,7 +4951,11 @@ var VALIDATION_SCHEMAS={
   outbound:{outDriverTel:{type:'thai-phone'}},
   inventory:{invCategory:{required:true,requiredMessage:'กรุณาเลือกหรือพิมพ์ประเภท'},invCode:{required:true,maxLength:80,requiredMessage:'กรุณากรอกรหัสกล่อง'},invName:{required:true,maxLength:160,requiredMessage:'กรุณากรอกชื่อกล่อง'},invQty:{required:true,type:'integer',min:0},invValue:{type:'number',min:0},invExpiry:{type:'date'}},
   branding:{brandingSystemName:{required:true,maxLength:80,requiredMessage:'กรุณากรอกชื่อระบบ'},brandingSubtitle:{maxLength:180}},
-  credentials:{ecUsername:{required:true,maxLength:100,requiredMessage:'กรุณากรอกชื่อผู้ใช้'},ecPassword:{required:true,minLength:6,requiredMessage:'กรุณากรอกรหัสผ่าน'}}
+  credentials:{
+    ecUsername:{required:true,maxLength:64,requiredMessage:'กรุณากรอกชื่อผู้ใช้'},
+    ecEmail:{required:true,maxLength:254,type:'email',requiredMessage:'กรุณากรอกอีเมล'},
+    ecPassword:{maxLength:128}
+  }
 };
 var VALIDATION_RULE_BY_ID={};
 Object.keys(VALIDATION_SCHEMAS).forEach(function(k){Object.keys(VALIDATION_SCHEMAS[k]).forEach(function(id){VALIDATION_RULE_BY_ID[id]=VALIDATION_SCHEMAS[k][id];});});
@@ -5357,22 +5438,21 @@ function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||docu
    when working quickly at the gate. */
 var gateOutEntryMode=null;
 function applyGateOutEntryMode(mode,openPicker){
-  gateOutEntryMode=(mode==='excel'||mode==='manual')?mode:null;
-  var bar=$('#gateOutModeBar'),imp=$('#gateOutImportBoard'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions'),lbl=$('#gateOutModeLabel');
-  if(bar)bar.style.display=gateOutEntryMode?'':'none';
+  gateOutEntryMode=(mode==='excel'||mode==='manual')?mode:'manual';
+  var imp=$('#gateOutImportBoard'),config=$('#gateOutManualConfig'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions');
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
+  if(config)config.style.display=gateOutEntryMode==='manual'?'':'none';
   if(man)man.style.display=gateOutEntryMode==='manual'?'':'none';
   if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
-  if(lbl)lbl.textContent=gateOutEntryMode==='excel'?'นำเข้ารายการจาก Excel':'กรอก / ยิงบาร์โค้ดด้วยมือ';
-  if(!gateOutEntryMode)return;
-  closeModal();
+  $all('[data-gateout-mode]').forEach(function(btn){var active=btn.dataset.gateoutMode===gateOutEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
+  uiPrefSet('gateOutMode',gateOutEntryMode);
   setTimeout(function(){
-    if(gateOutEntryMode==='excel'&&openPicker){var f=$('#outImportFile');if(f)f.click();}
     if(gateOutEntryMode==='manual'){var s=$('#scanOut');if(s)s.focus();}
   },100);
 }
-function chooseGateOutEntryMode(mode){applyGateOutEntryMode(mode,true);}
+function chooseGateOutEntryMode(mode){applyGateOutEntryMode(mode,false);}
 function openGateOutModeChooser(){
+  var panel=$('#gateOutModeBar');if(panel)panel.scrollIntoView({behavior:'smooth',block:'center'});return;
   var h='<div class="mhead gateout-choice-head"><div class="gateout-choice-kicker">Gate Out</div><h3>เริ่มทำรายการด้วยวิธีไหน?</h3></div>'
     +'<div class="mbody gateout-choice"><p class="gateout-choice-copy">เลือกวิธีที่เหมาะกับงานรอบนี้ เปลี่ยนภายหลังได้ทุกเมื่อ</p>'
     +'<div class="gateout-choice-grid">'
@@ -5397,6 +5477,7 @@ function switchTab(name){
      display:none → block can't itself transition, hence the opacity:0 write
      + forced reflow + rAF-deferred opacity:1 below. */
   window.scrollTo(0,0);
+  var enteringGateOut=name==='gateout'&&!$('#tab-gateout').classList.contains('active');
   $all('.tab').forEach(function(t){t.classList.remove('active');t.style.opacity='';t.style.transition='';});
   var tab=$('#tab-'+name);
   if(tab){
@@ -5412,8 +5493,8 @@ function switchTab(name){
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
-  if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;$('#scanOut').focus();var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
-  if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;$('#scanIn').focus();var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
+  if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();if(enteringGateOut){applyGateOutEntryMode(uiPrefGet('gateOutMode','manual'),false);}},300);}
+  if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;applyGateInEntryMode(uiPrefGet('gateInEntryMode','manual'),false);var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
   if(name==='inventory'){setTimeout(function(){var s=$('#schInv');if(s)s.focus();},300);}
   if(name==='track'){setTimeout(function(){$('#scanTrack').focus();},300);}
   if(name==='overview'){restoreReportsPanelState();}
@@ -5486,22 +5567,14 @@ var PDA_QR_MAX_BYTES=106;
 function pdaServerUrl(){return window.location.origin.replace(/\/+$/,'');}
 function pdaQrPayload(){
   var url=pdaServerUrl();
-  var inc=$('#pdaQrIncPass')&&$('#pdaQrIncPass').checked;
-  var pass=inc?(($('#pdaQrPass')||{}).value||''):'';
   if(!/^https?:\/\/[^\/\s]+/.test(url))return{err:'อ่านที่อยู่หน้านี้ไม่ได้ (window.location.origin ผิดปกติ)'};
-  var o={url:url};
-  if(pass)o.pass=pass;
-  var text=PDA_QR_PREFIX+JSON.stringify(o);
+  var text=PDA_QR_PREFIX+JSON.stringify({url:url});
   if(qrBytesFor(text).length>PDA_QR_MAX_BYTES)return{err:'ข้อมูลยาวเกินไปสำหรับ QR หนึ่งใบ'};
   return{text:text,url:url};
 }
 function renderPdaQr(){
   var box=$('#pdaQrBox');if(!box)return;
   var err=$('#pdaQrErr'),txt=$('#pdaQrText');
-  var inc=$('#pdaQrIncPass')&&$('#pdaQrIncPass').checked;
-  var passIn=$('#pdaQrPass'),passWarn=$('#pdaQrPassWarn');
-  if(passIn)passIn.style.display=inc?'':'none';
-  if(passWarn)passWarn.style.display=inc?'':'none';
   var p=pdaQrPayload();
   if(p.err){
     box.innerHTML='';txt.textContent='';
@@ -5511,7 +5584,7 @@ function renderPdaQr(){
   }
   err.style.display='none';
   box.innerHTML=qrCodeSVG(p.text,260);
-  /* แสดงเฉพาะที่อยู่ ไม่แสดง payload เต็ม — payload อาจมีรหัสผ่านอยู่ข้างใน */
+  /* Payload has only the server URL; no device credentials are embedded. */
   txt.textContent=p.url;
   window.pdaQrCurrent=p;
 }
@@ -5554,13 +5627,6 @@ function openPdaConnectModal(){
           +'<input id="pdaQrUrlDisplay" readonly value="'+esc(pdaServerUrl())+'">'
           +'<div class="tag" style="margin-top:5px;">อ่านอัตโนมัติจากที่อยู่ที่เปิดหน้านี้อยู่ — ไม่ต้องพิมพ์เอง</div>'
         +'</div>'
-        +'<div class="field" style="margin-top:14px;">'
-          +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'
-            +'<input type="checkbox" id="pdaQrIncPass" style="width:auto;margin:0;"> ใส่รหัสผ่านบัญชีเครื่องลงใน QR ด้วย'
-          +'</label>'
-          +'<input id="pdaQrPass" type="password" placeholder="รหัสผ่านบัญชีเครื่อง" autocomplete="new-password" style="display:none;margin-top:8px;">'
-          +'<div class="tag" id="pdaQrPassWarn" style="margin-top:5px;display:none;color:var(--warn);">QR นี้จะมีรหัสผ่านอยู่ข้างใน — อย่าพิมพ์แปะผนัง ใช้แล้วปิดหน้าจอ</div>'
-        +'</div>'
       +'</div>'
       +'<div style="flex:0 0 auto;text-align:center;">'
         +'<div id="pdaQrBox" style="background:#fff;padding:16px;border-radius:16px;border:1px solid var(--line);display:inline-block;min-width:260px;min-height:260px;"></div>'
@@ -5575,8 +5641,6 @@ function openPdaConnectModal(){
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
   openModal(h);
-  var cb=$('#pdaQrIncPass');if(cb)cb.addEventListener('change',renderPdaQr);
-  var pw=$('#pdaQrPass');if(pw)pw.addEventListener('input',renderPdaQr);
   renderPdaQr();
 }
 window.openPdaConnectModal=openPdaConnectModal;
@@ -6559,41 +6623,42 @@ window.addBtype=addBtype;window.addWh=addWh;window.addCust=addCust;window.addEmp
 });
 
 
-/* ===== per-employee web login (admin only) =====
-   One account per employee — set here, checked at /login via the backend's
-   employees fallback (see backend/src/routes/auth.ts). Deliberately not part
-   of save()/S — credentials live only in the employees table's own
-   username/passwordHash columns, never in the jsonb `data` blob that PUT
-   /api/state round-trips wholesale (that would print the hash straight into
-   every state snapshot and audit log entry). */
-function setEmpCredentials(id,name,currentUsername){
+/* ===== one employee = one users account (admin only) ===== */
+function setEmpCredentials(id,name,currentUsername,currentEmail){
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะตั้งรหัสผ่านให้พนักงานได้','err');
+  var existing=!!currentUsername,e=(S.employees||{})[id]||{};
   openModal('<div class="mbody"><h3>บัญชีเข้าสู่ระบบของ '+esc(name)+'</h3>'
-    +'<p class="desc">ตั้งชื่อผู้ใช้และรหัสผ่านให้ '+esc(name)+' ใช้เข้าสู่ระบบเว็บด้วยตัวเอง (คนละบัญชีกับที่คุณใช้อยู่)</p>'
+    +'<p class="desc">บัญชีนี้เชื่อมกับ <b>'+esc(id)+'</b> แบบหนึ่งต่อหนึ่ง — username, email และรหัสผ่านเก็บที่บัญชีเดียวเท่านั้น</p>'
     +'<div class="field"><label>ชื่อผู้ใช้</label><input id="ecUsername" value="'+esc(currentUsername||'')+'" placeholder="เช่น emp004" autocomplete="off"></div>'
-    +'<div class="field"><label>รหัสผ่าน</label><input id="ecPassword" type="password" placeholder="อย่างน้อย 6 ตัวอักษร" autocomplete="new-password"></div>'
+    +'<div class="field"><label>อีเมลที่ใช้เข้าสู่ระบบ</label><input id="ecEmail" type="email" value="'+esc(currentEmail||e.email||'')+'" placeholder="name@company.com" autocomplete="off"></div>'
+    +'<div class="field"><label>'+(existing?'รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)':'รหัสผ่าน')+'</label><input id="ecPassword" type="password" placeholder="10+ ตัว พร้อม A–Z, a–z, ตัวเลข และสัญลักษณ์" autocomplete="new-password"></div>'
+    +'<p class="desc">การเปลี่ยน username หรือ password จะบังคับออกจากระบบทุกอุปกรณ์ทันที</p>'
     +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="ecSaveBtn">บันทึก</button></div>');
+    +'<div class="mfoot">'
+      +(existing?'<button class="btn gray" onclick="revokeEmpSessions(\''+esc(id)+'\')">บังคับออกจากระบบ</button><button class="btn gray" onclick="setEmpAccountStatus(\''+esc(id)+'\','+(e.accountActive?'false':'true')+')">'+(e.accountActive?'ระงับบัญชี':'เปิดใช้บัญชี')+'</button>':'')
+      +'<div class="spacer"></div><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="ecSaveBtn">บันทึก</button></div>');
   $('#ecSaveBtn').onclick=function(){
     if(!validateForm(VALIDATION_SCHEMAS.credentials,$('#modalSheet')))return;
     var credentialBtn=$('#ecSaveBtn'),restoreCredentialBtn=btnBusy(credentialBtn,'กำลังบันทึก...');
     var u=(val('ecUsername')||'').trim();
+    var email=(val('ecEmail')||'').trim();
     var p=val('ecPassword')||'';
     if(!u)return toast('กรอกชื่อผู้ใช้',null,'err');
-    if(p.length<6)return toast('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',null,'err');
+    if(!existing&&!p)return toast('กรุณากำหนดรหัสผ่านสำหรับบัญชีใหม่',null,'err');
+    if(p&&(p.length<10||!/[a-z]/.test(p)||!/[A-Z]/.test(p)||!/\d/.test(p)||!/[^A-Za-z0-9]/.test(p)))return toast('รหัสผ่านไม่ผ่านนโยบาย','ต้องมีอย่างน้อย 10 ตัว พร้อมตัวพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ','err');
     apiFetch('/api/employees/'+encodeURIComponent(id)+'/credentials',{
       method:'PUT',
       headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-      body:JSON.stringify({username:u,password:p})
+      body:JSON.stringify({username:u,email:email,password:p||undefined})
     })
       .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok){var e=new Error(b.message||'ตั้งรหัสผ่านไม่สำเร็จ');e.body=b;throw e;}return b;});})
       .then(function(b){
         // Optimistic — this endpoint doesn't go through save()/the realtime
         // bus, so without this the row would still say "ตั้งรหัสผ่าน" until
         // the next full state refresh.
-        if(S.employees[id]){S.employees[id].hasLogin=true;S.employees[id].loginUsername=b.username;}
+        if(S.employees[id]){S.employees[id].hasLogin=true;S.employees[id].loginUsername=b.account.username;S.employees[id].loginEmail=b.account.email;S.employees[id].accountActive=b.account.active;}
         closeModal();renderSetup();
-        toast('ตั้งรหัสผ่านแล้ว',u,'ok');
+        toast(existing?'อัปเดตบัญชีแล้ว':'สร้างบัญชีแล้ว',u,'ok');
       })
       .catch(function(e){
         restoreCredentialBtn();
@@ -6603,6 +6668,19 @@ function setEmpCredentials(id,name,currentUsername){
   };
 }
 window.setEmpCredentials=setEmpCredentials;
+function setEmpAccountStatus(id,active){
+  apiFetch('/api/employees/'+encodeURIComponent(id)+'/account-status',{method:'PATCH',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({active:active})})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'เปลี่ยนสถานะบัญชีไม่สำเร็จ');return b;});})
+    .then(function(){if(S.employees[id])S.employees[id].accountActive=active;closeModal();renderSetup();toast(active?'เปิดใช้บัญชีแล้ว':'ระงับบัญชีแล้ว',id,'ok');})
+    .catch(function(e){toast('เปลี่ยนสถานะบัญชีไม่สำเร็จ',e.message||'','err');});
+}
+function revokeEmpSessions(id){
+  apiFetch('/api/employees/'+encodeURIComponent(id)+'/revoke-sessions',{method:'POST',headers:authHeaders()})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'ยกเลิก session ไม่สำเร็จ');return b;});})
+    .then(function(){closeModal();toast('บังคับออกจากระบบแล้ว',id,'ok');})
+    .catch(function(e){toast('ยกเลิก session ไม่สำเร็จ',e.message||'','err');});
+}
+window.setEmpAccountStatus=setEmpAccountStatus;window.revokeEmpSessions=revokeEmpSessions;
 
 /* ===== EMPLOYEE BADGE =====
    The PDA signs an operator in by reading their badge, so the badge has to be
@@ -6970,7 +7048,11 @@ function openEmpBadge(id,isSelf){
   if(!String(e.id||'').trim())e.id=id;
   var vw=window.innerWidth,vh=window.innerHeight;
   var CW=408,CH=627;
-  empBadge.s=Math.max(.5,Math.min(1,(vh*0.78)/CH));
+  /* Tall phones used the desktop-scale card because scale was limited only by
+     height. Include width so the right-hand action rail stays on screen. */
+  var widthScale=(vw-104)/CW;
+  var mobileMax=vw<600?.54:1;
+  empBadge.s=Math.max(.40,Math.min(mobileMax,(vh*0.72)/CH,widthScale));
   var half=(CH*empBadge.s)/2+12*empBadge.s;   /* 12 = ระยะจากขอบบนบัตรถึงกึ่งกลางห่วงคลิปในซีเอสเอส (top:-22px ลบครึ่งความสูงห่วง 21px) */
   var anchorY=-Math.max(70,vh*0.16);
   empBadge.anchor={x:vw/2,y:anchorY};
@@ -7014,7 +7096,7 @@ function openEmpBadge(id,isSelf){
      isSelfEmp() resolves the JWT employeeId first; the explicit isSelf flag is
      reserved for the navbar call path and controls Logout separately below. */
   var empAdmin=isAdmin(),self=isSelf===true||isSelfEmp(id);
-  var credBtn0=$('#empBadgeCredBtn');if(credBtn0)credBtn0.title=e.hasLogin?'เปลี่ยนรหัสผ่าน':'ตั้งรหัสผ่าน';
+  var credBtn0=$('#empBadgeCredBtn');if(credBtn0)credBtn0.title=e.hasLogin?'จัดการบัญชีเว็บ':'ตั้งบัญชีเว็บ';
   var editBtn=$('#empBadgeEditBtn');if(editBtn)editBtn.style.display=(empAdmin||self)?'grid':'none';
   var credBtn=$('#empBadgeCredBtn');if(credBtn)credBtn.style.display=empAdmin?'grid':'none';
   var delBtn=$('#empBadgeDelBtn');if(delBtn)delBtn.style.display=(empAdmin&&!self)?'grid':'none';
@@ -7022,6 +7104,14 @@ function openEmpBadge(id,isSelf){
      call path จาก who-chip ซึ่งส่ง isSelf=true มาเท่านั้น เปิดบัตรจากตาราง—even
      แถวของตัวเอง—ต้องไม่เห็นปุ่มนี้ และยิ่งห้ามเห็นบนบัตรของคนอื่น */
   var logoutBtn=$('#empBadgeLogout');if(logoutBtn)logoutBtn.style.display=(isSelf===true&&isSelfEmp(id))?'grid':'none';
+  /* The navbar is a quick identity card, not the employee-management screen.
+     On a phone the admin action rail overlaps the badge, so keep that rail
+     out of this compact self-view; close and logout remain available. */
+  if(isSelf===true&&vw<600){
+    ['empBadgeEditBtn','empBadgeCredBtn','empBadgePrintBtn','empBadgeBackBtn','empBadgeDelBtn'].forEach(function(btnId){
+      var btn=$('#'+btnId);if(btn)btn.style.display='none';
+    });
+  }
 
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='block';
   empBadgeBoot();
@@ -7041,7 +7131,7 @@ function empBadgeAction(kind){
   if(kind==='back'){toggleEmpBadgeBack();return;}
   closeEmpBadge();
   if(kind==='edit')editEmp(id);
-  else if(kind==='cred')setEmpCredentials(id,e.name||id,e.loginUsername||'');
+  else if(kind==='cred')setEmpCredentials(id,e.name||id,e.loginUsername||'',e.loginEmail||e.email||'');
   else if(kind==='print')printEmpBadge(id);
   else if(kind==='del')delEmp(id);
 }
@@ -10526,8 +10616,21 @@ function clearGateOut(){
 window.clearGateOut=clearGateOut;
 
 /* ===== GATE IN ===== */
-var gateInStep='ask',gateInVehicleSkipped=false;
+var gateInEntryMode='manual',gateInStep='ask',gateInVehicleSkipped=false;
+function applyGateInEntryMode(mode,persist){
+  gateInEntryMode=mode==='excel'?'excel':'manual';
+  $all('[data-gatein-mode]').forEach(function(btn){var active=btn.dataset.gateinMode===gateInEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
+  if(persist!==false)uiPrefSet('gateInEntryMode',gateInEntryMode);
+  renderGateInStep();
+}
+function chooseGateInEntryMode(mode){applyGateInEntryMode(mode,true);}
+window.applyGateInEntryMode=applyGateInEntryMode;window.chooseGateInEntryMode=chooseGateInEntryMode;
 function renderGateInStep(){
+  if(gateInEntryMode==='excel'){
+    ['giStrip','giStripVehicle','giStepGate','giStepAsk','giStepVehicle','gateInManualBoard','gateInManualActions'].forEach(function(id){var el=$('#'+id);if(el)el.style.display='none';});
+    var scan=$('#giStepScan'),imp=$('#gateInImportBoard');if(scan)scan.style.display='';if(imp)imp.style.display='';
+    return;
+  }
   var gate=fixedGatesRef().in;
   if(!gate||!gateWh(gate))gateInStep='gate';
   else if(gateInStep==='gate')gateInStep='ask';
@@ -10544,6 +10647,10 @@ function renderGateInStep(){
     }else vs.style.display='none';
   }
   if(gateInStep==='scan')setTimeout(function(){var s=$('#scanIn');if(s)s.focus();},60);
+  var imp=$('#gateInImportBoard'),manual=$('#gateInManualBoard'),actions=$('#gateInManualActions');
+  if(imp)imp.style.display='none';
+  if(manual)manual.style.display=gateInStep==='scan'?'':'none';
+  if(actions)actions.style.display=gateInStep==='scan'?'':'none';
 }
 function gateInGo(step){gateInStep=step;if(step==='scan')gateInVehicleSkipped=!([val('inPlate'),val('inDriver'),val('inVehicle'),val('inDriverTel'),val('inNote')].some(Boolean));renderGateInStep();}
 function gateInSkipVehicle(){['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(id){setv(id,'');});gateInVehicleSkipped=true;gateInGo('scan');}
@@ -10606,7 +10713,18 @@ function formatThaiPhoneInput(el){
   var el=document.getElementById(id);
   if(el)el.addEventListener('input',function(){formatThaiPhoneInput(el);});
 });
-$('#btnCheckIn').onclick=function(){
+function ensureInGate(){
+  refreshGateDisplays();
+  if(val('inGate'))return true;
+  var dirGates=gateNumsForDir('in');
+  if(!dirGates.length){autoCreateWarehouseIfNeeded('คลังหลัก');dirGates=gateNumsForDir('in');}
+  if(!dirGates.length)return false;
+  fixedGatesRef().in=String(dirGates[0]);
+  save();
+  refreshGateDisplays();
+  return !!val('inGate');
+}
+function saveInbound(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
   var partner=val('inPartner');
@@ -10648,17 +10766,13 @@ $('#btnCheckIn').onclick=function(){
   rememberVehicle(plate,driver,vehicle,tel);
   save();
   patchAuditGateIn(auditTagsIn,gate,wh,recorder);
-  ['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
+  ['inPartner','inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
   renderVehicleQuick();
-  if(newCount&&!returnCount){
-    toast('ต้อนรับกล่องใหม่เข้าคลังสำเร็จ',newCount+' ใบ → '+whName(wh)+' (สถานะ: ในคลัง)','ok');
-  }else if(returnCount&&!newCount){
-    toast('รับคืนกล่องจากลูกค้าสำเร็จ',returnCount+' ใบ → '+whName(wh)+' (สถานะ: คืนแล้ว)','ok');
-  }else{
-    toast('บันทึกสำเร็จ',newCount+' ใบใหม่ · '+returnCount+' ใบคืน → '+whName(wh),'ok');
-  }
+  toast('รับเข้าคลังสำเร็จ',n+' ใบ → '+whName(wh)+' (สถานะ: อยู่ในคลัง)','ok');
   renderAll();gateInResetBatch();if(typeof schedule==='function')schedule();
-};
+  return true;
+}
+$('#btnCheckIn').onclick=saveInbound;
 
 /* ล้างข้อมูลหน้าประตูขาเข้า — เคลียร์คิวสแกนที่ยังไม่ยืนยัน + ข้อมูลรถ/คนขับ/หมายเหตุ
    (ยังคงประตูประจำเครื่องไว้) ถามยืนยันถ้ามีคิวค้าง */
@@ -11260,7 +11374,7 @@ window.dfOnCustomChange=dfOnCustomChange;
 /* Mount the four report-level date filters into their placeholder <div>s —
    one dfBarHtml() call per report id instead of copy-pasting the same
    markup per section in the HTML. */
-['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovOverdue','ovStatusNow','ovRates','ovEvents'].forEach(function(id){
+['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovOverdue','ovStatusNow','ovRates','ovEvents','invDate'].forEach(function(id){
   var mount=$('#df-'+id+'-mount');
   if(mount)mount.innerHTML=dfBarHtml(id);
 });
@@ -11746,7 +11860,7 @@ window.renderInPartnerField=renderInPartnerField;
 
    หน้าจอนี้ซ่อน/แสดงปุ่มตามสิทธิ์เพื่อความสะดวกเท่านั้น ตัวกันจริงอยู่ที่ backend
    (requirePermission) ทุก endpoint — ยิง API ตรง ๆ ก็ยังโดน 403 */
-var RBAC={perms:[],role:null,modules:[],total:0,roles:[],loaded:false,
+var RBAC={perms:[],role:null,modules:[],total:0,roles:[],identityConflicts:[],loaded:false,
   roleSummariesLoaded:false,fullRolesLoaded:false,rolesLoadError:false};
 window.RBAC=RBAC;
 
@@ -11797,7 +11911,11 @@ function rbacSend(method,path,body){
 /** โหลดสิทธิ์ของตัวเอง + แคตตาล็อก + ข้อมูลบทบาทที่พอคำนวณสถานะพนักงานก่อนวาดหน้า */
 function rbacBoot(){
   return rbacGet('/api/auth/me').then(function(me){
-    RBAC.perms=me.permissions||[];RBAC.role=me.role||null;
+    RBAC.perms=me.permissions||[];RBAC.role=me.role||null;RBAC.identityConflicts=me.identityConflicts||[];
+    if(RBAC.identityConflicts.length&&!sessionStorage.getItem('identity_conflicts_seen')){
+      sessionStorage.setItem('identity_conflicts_seen','1');
+      toast('พบบัญชีเดิมที่ต้องตรวจสอบ',RBAC.identityConflicts.length+' รายการไม่ได้ถูกรวมอัตโนมัติ กรุณาตรวจสอบข้อมูลบัญชีพนักงาน','warn');
+    }
   }).catch(function(){/* เซิร์ฟเวอร์รุ่นเก่ายังไม่มี RBAC — ปล่อยให้ UI ทำงานตามเดิม */})
   .then(function(){
     var canReadFull=hasAnyPerm('role.manage','permission.manage');
@@ -11832,18 +11950,24 @@ function rbacBoot(){
 window.rbacBoot=rbacBoot;
 
 /* ── ซ่อนเมนู/แท็บที่บัญชีนี้ไม่มีสิทธิ์เข้า ────────────────────────────────────
-   ย้ำอีกครั้ง: นี่คือการจัดหน้าจอให้สะอาด ไม่ใช่ security — endpoint ทุกตัวเช็คเอง */
+   ย้ำอีกครั้ง: นี่คือการจัดหน้าจอให้สะอาด ไม่ใช่ security — endpoint ทุกตัวเช็คเอง.
+   แท็บตั้งค่าต้องแสดงเสมอ: เป็นทางเข้าการตั้งค่าอุปกรณ์/PDA และแต่ละส่วนในแท็บ
+   รวมถึง API ยังตรวจสิทธิ์ของตัวเอง จึงไม่ควรทำให้ปุ่มหลักหายจากแถบเมนู. */
 function applyPermVisibility(){
   if(!RBAC.loaded)return;
-  var navRules={emp:'employee.view',report:'report.view',setup:'setting.view'};
+  var navRules={emp:'employee.view',report:'report.view'};
   Object.keys(navRules).forEach(function(tab){
     var perm=navRules[tab];
     $all('#nav button[data-tab="'+tab+'"]').forEach(function(b){
       b.style.display=hasPerm(perm)?'':'none';
     });
   });
+  // Keep the Roles & Permissions tab discoverable in Master.  Hiding the
+  // entire entry made the management screen disappear even for a session
+  // whose role data had not finished loading.  The table/actions and the API
+  // still enforce role.manage / permission.manage independently.
   var stabRole=$('#stabRole');
-  if(stabRole)stabRole.style.display=hasAnyPerm('role.manage','permission.manage')?'':'none';
+  if(stabRole)stabRole.style.display='';
 }
 window.applyPermVisibility=applyPermVisibility;
 
@@ -11965,7 +12089,7 @@ function roleMemberRowHtml(m){
   var bits=[];
   if(m.employeeId)bits.push('<span class="tag mono">'+esc(m.employeeId)+'</span>');
   if(m.username)bits.push('<span class="tag">บัญชี '+esc(m.username)+'</span>');
-  if(!m.employeeId)bits.push('<span class="tag">บัญชีระบบ</span>');
+  if(m.firstSetupRequired)bits.push('<span class="pill warn" style="font-size:11px;">รอตั้งค่าครั้งแรก</span>');
   if(emp&&emp.wh&&S.warehouses[emp.wh])bits.push('<span class="tag">'+esc(S.warehouses[emp.wh].name)+'</span>');
   else if(emp&&emp.dept)bits.push('<span class="tag">'+esc(emp.dept)+'</span>');
   if(emp){
@@ -11977,8 +12101,9 @@ function roleMemberRowHtml(m){
   var act=(emp&&hasPerm('employee.update'))
     ? '<button class="btn ghost sm" onclick="openRoleMemberEmp(\''+esc(m.employeeId)+'\')">เปิดข้อมูล</button>'
     : '';
+  var nameHtml=emp?'<button style="font-weight:600;text-align:left;" onclick="openRoleMemberEmp(\''+esc(m.employeeId)+'\')">'+esc(name)+'</button>':'<div style="font-weight:600;">'+esc(name)+'</div>';
   return '<div class="row" style="justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);">'
-    +'<div><div style="font-weight:600;">'+esc(name)+'</div>'
+    +'<div>'+nameHtml
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px;">'+bits.join('')+'</div></div>'
     +'<div>'+act+'</div>'
   +'</div>';
@@ -12010,7 +12135,7 @@ function openRoleMembers(id){
 function openRoleMemberEmp(id){
   closeModal();
   goSetup('emp');
-  setTimeout(function(){editEmp(id);},140);
+  setTimeout(function(){openEmpBadge(id);},140);
 }
 window.openRoleMemberEmp=openRoleMemberEmp;
 window.openRoleMembers=openRoleMembers;
@@ -12417,6 +12542,7 @@ function empAccessState(e){
   if(!e)return {key:'unknown',role:null};
   if((e.status||'active')!=='active')return {key:'disabled',role:empRoleById(e.roleId)};
   if(!e.hasLogin)return {key:'noweb',role:empRoleById(e.roleId)};
+  if(e.accountActive===false)return {key:'disabled',role:empRoleById(e.roleId)};
   if(e.roleId==null||e.roleId==='')return {key:'norole',role:null};
   var rolesKnown=!!RBAC.roleSummariesLoaded;
   var r=empRoleById(e.roleId);
@@ -12441,9 +12567,14 @@ function empAccessCellHtml(e){
   var cnt=st.role&&!st.role.system?rolePermissionCount(st.role):null;
   var tip=d.label+(cnt!=null?' · '+nf(cnt)+' สิทธิ์':'');
   var sub='';
+  if(e.identityConflict){
+    return '<span class="pill warn" title="Migration ไม่รวมบัญชีที่ข้อมูลขัดแย้งโดยอัตโนมัติ"><span class="acc-ic">!</span>ต้องตรวจสอบบัญชีซ้ำ</span>'
+      +'<span class="acc-sub">ติดต่อ Super Admin ก่อนตั้งบัญชีเว็บ</span>';
+  }
   if(st.key==='ready')sub='<span class="acc-sub">'+nf(cnt)+' สิทธิ์</span>';
   else if(st.key==='roleoff')sub='<span class="acc-sub">'+esc(roleDisplayName(st.role))+'</span>';
   else if(st.key==='noweb')sub='<span class="acc-sub">ยังไม่มีชื่อผู้ใช้และรหัสผ่าน</span>';
+  if(e.hasLogin)sub+='<span class="acc-sub mono">'+esc(e.loginUsername||'-')+(e.loginEmail?' · '+esc(e.loginEmail):'')+'</span>';
   /* ผู้ดูแลกดสถานะ "ยังไม่มีบัญชีเว็บ" เพื่อสร้าง username/password ให้พนักงาน
      ได้ตรงจุดที่เห็นปัญหาเลย ไม่ต้องเปิดบัตรแล้วหาเมนูรูปกุญแจอีกชั้น ส่วนผู้ใช้
      ที่ไม่มีสิทธิ์ยังเห็นเป็นป้ายสถานะธรรมดาเหมือนเดิม */
@@ -12457,7 +12588,7 @@ function empAccessCredentialAction(ev,el){
   var id=el&&el.getAttribute('data-emp-id');
   var e=id&&S.employees[id];
   if(!e)return;
-  setEmpCredentials(id,e.name||id,e.loginUsername||'');
+  setEmpCredentials(id,e.name||id,e.loginUsername||'',e.loginEmail||e.email||'');
 }
 window.empAccessCredentialAction=empAccessCredentialAction;
 /* คอลัมน์ "จัดการ" ปกติมีแค่ลูกศร ›  เปิดไปที่รายละเอียด/บัตรพนักงาน — แถวที่ยังไม่มี
@@ -12745,7 +12876,10 @@ function renderSetup(){
   var pgEmp=pagerSlice('emp',eps);
   $('#empBody').innerHTML=pgEmp.rows.length?pgEmp.rows.map(function(e){
     var st=EMP_STATUS[e.status||'active']||EMP_STATUS.active;
-    var whTxt=e.wh&&S.warehouses[e.wh]?esc(S.warehouses[e.wh].name):'-';
+    /* First setup may capture a warehouse code/name before the warehouse
+       master is created. Keep that identity detail visible instead of
+       replacing a valid value with "-". */
+    var whTxt=e.wh?esc(whName(e.wh)):'-';
     var employeeKey=e._employeeKey||e.id;
     var isMe=isSelfEmp(employeeKey);
     return '<tr data-tag="'+esc(employeeKey)+'" data-employee-key="'+esc(employeeKey)+'" class="row-click'+(isMe?' row-self':'')+'"><td class="cb-td" onclick="event.stopPropagation()">'+(empAdmin&&!isMe?'<input type="checkbox" class="row-cb emp-cb" data-tag="'+esc(employeeKey)+'">':'')+'</td><td>'+avatarHTML(e.name,e.photo,28)+'</td><td class="mono"><b>'+esc(e.id||employeeKey)+'</b></td><td>'+esc(e.name||e.id||employeeKey)+(isMe?' <span class="pill ok" style="font-size:11px;">คุณ</span>':'')+'</td><td class="col-sec">'+esc(e.role||'-')+'</td>'
@@ -13222,7 +13356,7 @@ function settingsGoGeneral(focusBranding){
     : '<p class="muted" style="padding:20px 2px;">เฉพาะผู้ดูแลระบบสูงสุด (Super Admin) เท่านั้นที่แก้ไขชื่อระบบและโลโก้ได้</p>';
   var h='<div class="mhead">'+settingsBackBtn('settingsGoHome')+'<h3>ระบบและแบรนด์</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody" id="brandingSettingsBlock">'+body+'</div>'
-    +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button>'
+    +'<div class="mfoot branding-settings-actions"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button>'
     +(canBrand?'<div class="spacer"></div><button class="btn accent" id="btnSaveBranding" onclick="saveBrandingSettings()">บันทึกชื่อระบบและโลโก้</button>':'')
     +'</div>';
   openModal(h);
@@ -13293,7 +13427,7 @@ function settingsWipeStep1(){
   var h='<div class="mhead"><h3 style="color:var(--neg);">ล้างข้อมูลระบบทั้งหมด?</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody">'
     +'<p class="desc" style="margin-top:0;">การดำเนินการนี้จะลบข้อมูลการรับเข้า ส่งออก กล่อง ประวัติการทำงาน Log และพนักงานทั้งหมด</p>'
-    +'<p class="desc">ระบบจะเก็บไว้เฉพาะบัญชีที่มีสิทธิ์ผู้ดูแลระบบสูงสุด (Super Admin) และรีเซ็ตข้อมูลโปรไฟล์ของบัญชีนั้นกลับเป็นค่าเริ่มต้น (ชื่อ/อีเมล/เบอร์โทร/รูปภาพ) — ชื่อผู้ใช้และรหัสผ่านสำหรับเข้าระบบไม่เปลี่ยน</p>'
+    +'<p class="desc">ระบบจะลบบัญชีเดิมทั้งหมด รวมบัญชี Admin ด้วย แล้วสร้างพนักงาน Super Admin เพียงคนเดียวแบบไม่ผูกบัญชีเดิม — หลังล้างให้เข้าสู่ระบบด้วย <b>emp-001</b> / <b>123456</b></p>'
     +'<p class="desc" style="font-weight:600;color:var(--neg);">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>'
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" onclick="settingsGoAdvanced()">ยกเลิก</button><div class="spacer"></div><button class="btn red" onclick="settingsWipeStep2()">ดำเนินการต่อ</button></div>';
@@ -13331,7 +13465,7 @@ function settingsCommitWipe(){
     .then(function(r){return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error(j.message||'ล้างข้อมูลไม่สำเร็จ');return j;});})
     .then(function(){
       closeModal();
-      toast('ล้างข้อมูลระบบเรียบร้อยแล้ว','ระบบถูกรีเซ็ตกลับสู่สถานะเริ่มต้น และคงไว้เฉพาะบัญชี Super Admin — กำลังพาไปเข้าสู่ระบบใหม่','ok');
+      toast('ล้างข้อมูลระบบเรียบร้อยแล้ว','เข้าสู่ระบบใหม่ด้วย emp-001 / 123456','ok');
       setTimeout(function(){if(typeof smarttraceLogout==='function')smarttraceLogout();},1400);
     })
     .catch(function(e){
@@ -13711,9 +13845,11 @@ function invLastRecorder(b) {
 /* ---- extra filter state (set by goInventory) ---- */
 var invWhFilter  = '';   /* warehouse id — show only boxes in that WH */
 var invDoFilter  = '';   /* DO number  — show all boxes that ever belonged to this DO */
+var invDateFilterActive = false;
+var invDateField = 'lastSeenAt';
 
 /* ---- navigation helper called from overview cards ---- */
-/* opts: { status, cust, wh, doNo, label } */
+/* opts: { status, cust, wh, doNo, dateSource, dateField, label } */
 function goInventory(opts) {
   opts = opts || {};
   /* reset all filters first */
@@ -13721,6 +13857,14 @@ function goInventory(opts) {
   invCustFilter   = opts.cust   || '';
   invWhFilter     = opts.wh     || '';
   invDoFilter     = opts.doNo   || '';
+  invDateFilterActive = !!opts.dateSource;
+  invDateField = opts.dateField || 'lastSeenAt';
+  if (opts.dateSource) {
+    /* Copy the dashboard range at click time. Inventory owns it afterwards. */
+    var sourceRange = dfGet(opts.dateSource), inventoryRange = dfGet('invDate');
+    ['mode','day','month','year','from','to'].forEach(function(k){ inventoryRange[k] = sourceRange[k]; });
+    dfSyncUI('invDate');
+  }
   pagerReset('inv');
   /* sync status seg UI */
   $all('#invStatusSeg .sf-btn').forEach(function(b) {
@@ -14056,6 +14200,10 @@ function filteredInvBoxes() {
         return false;
       }
     }
+    /* The overview status card counts only boxes whose latest movement lies
+       within its chosen period. Apply the same predicate here after clicking
+       the card, so the destination cannot show rows outside that total. */
+    if (invDateFilterActive && !dfInRange('invDate', b[invDateField])) return false;
     /* ── standard status filter ── */
     /* SOW: no Putaway/staging/RFID-pending workflow — 'unlocated',
        'putaway', 'pendingPutaway' and 'noRfid' filters were removed along
@@ -14189,6 +14337,11 @@ function refreshInvStatusBadges() {
 }
 
 function renderInventory() {
+  var dateRow = $('#invDateRow');
+  if (dateRow) {
+    dateRow.classList.toggle('show', invDateFilterActive);
+    if (invDateFilterActive) dfSyncUI('invDate');
+  }
   buildInvWhPills();
   buildInvCustPills();
   refreshInvStatusBadges();
@@ -14230,6 +14383,9 @@ function renderInventory() {
   setupBulkTable('invBody', 'inv-cb', 'cbAllInv', 'bulkInv', 'bulkInvCnt');
   if ($('#pagerInv')) $('#pagerInv').innerHTML = pagerBarHtml('inv', pg);
 }
+
+/* Editing the carried-over range changes only this Inventory result. */
+DF_APPLY.invDate=function(){ if(invDateFilterActive){pagerReset('inv');renderInventory();} };
 
 /* ---- Summary (Group-by) view ---- */
 function renderInvSummary() {
@@ -16950,6 +17106,13 @@ function openColumnMapModal(opts){
       autoRegistered.filter(function(t){return notShipped.indexOf(t)<0;}),
       shipped.length>0,
       overwritten.filter(function(t){return notShipped.indexOf(t)<0;}));
+    if(shipped.length){
+      /* Keep the selected gate, but remove this file's shipment details so
+         the next import starts from a blank surface. */
+      ['doCustomer','outPlate','outVehicle','outDriver','outDriverTel'].forEach(function(id){setv(id,'');});
+      if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
+      renderVehicleTypeField('out');
+    }
   }
 
   /* ---- Make sure a gate is bound before auto-shipping an import.
@@ -17164,7 +17327,17 @@ function openColumnMapModal(opts){
 
   // wire the hidden file input
   var fe=document.getElementById('outImportFile');
-  if(fe)fe.addEventListener('change',window.handleOutImportFile);
+  /* The visible Import workflow below deliberately waits for the operator to
+     review and validate before handing the file to the legacy importer. */
+})();
+
+(function(){
+  var fe=document.getElementById('outImportFile'),drop=document.getElementById('outImportDropzone');
+  if(!fe)return;
+  /* Selecting a file is the start of the import: after column mapping, the
+     importer creates its DO/PO and ships the rows automatically. */
+  fe.addEventListener('change',window.handleOutImportFile);
+  if(drop){['dragenter','dragover'].forEach(function(n){drop.addEventListener(n,function(e){e.preventDefault();drop.classList.add('drag');});});['dragleave','drop'].forEach(function(n){drop.addEventListener(n,function(e){e.preventDefault();drop.classList.remove('drag');});});drop.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]){fe.files=e.dataTransfer.files;window.handleOutImportFile({target:fe});}});}
 })();
 
 /* ============================================================================
@@ -17320,11 +17493,16 @@ function openColumnMapModal(opts){
     }
 
     if(autoRegistered.length)save();
-    renderInResult();
-    var si=$('#scanIn');if(si)si.focus();
-
     var meta=applyInDetails(plateVals,driverVals,vtypeVals,telVals,noteVals);
-    showInImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered);
+    /* Importing at Gate In commits the accepted rows immediately.  The
+       transaction always assigns status 'warehouse'; no imported row remains
+       in a scan queue or retains an outbound/return status. */
+    var notReceived=added.length?receiveImportedRows(added):[];
+    var received=added.filter(function(t){return notReceived.indexOf(t)<0;});
+    notReceived.forEach(function(t){failed.push({tag:t,reason:'รับเข้าคลังอัตโนมัติไม่สำเร็จ — กรุณาตรวจสอบประตูขาเข้า แล้วนำเข้าไฟล์ใหม่'});});
+    renderInResult();
+    showInImportSummary(fname,received,dupInFile,alreadyQueued,failed,meta,
+      autoRegistered.filter(function(t){return notReceived.indexOf(t)<0;}));
   }
 
   /* ---- Auto-fill the inbound form fields, only when the whole file agrees on
@@ -17355,6 +17533,21 @@ function openColumnMapModal(opts){
     return meta;
   }
 
+  /* Receive only rows belonging to this file. Any manual scan queue is put
+     back unchanged, while this import is committed and the import surface
+     returns to its initial file-picker state. */
+  function receiveImportedRows(tags){
+    var manualQueue=pendingIn.filter(function(t){return tags.indexOf(t)<0;});
+    pendingIn=tags.slice();
+    if(!ensureInGate()||saveInbound()!==true){
+      var left=pendingIn.slice();
+      pendingIn=manualQueue;
+      return left;
+    }
+    pendingIn=manualQueue;
+    return [];
+  }
+
   /* ---- Result summary modal ---- */
   function showInImportSummary(fname,added,dupInFile,alreadyQueued,failed,meta,autoRegistered){
     var okN=added.length;
@@ -17370,7 +17563,7 @@ function openColumnMapModal(opts){
     h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="flex:1;min-width:130px;background:var(--posSoft);border:1px solid var(--pos);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;color:var(--pos);line-height:1;">'+okN+'</div>'
-      +'<div class="small" style="color:var(--pos);margin-top:4px;">เติมเข้าคิวรับคืน</div></div>'
+      +'<div class="small" style="color:var(--pos);margin-top:4px;">รับเข้าคลังแล้ว</div></div>'
       +'<div style="flex:1;min-width:130px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">'
       +'<div class="mono" style="font-size:26px;font-weight:800;line-height:1;">'+skipN+'</div>'
       +'<div class="small muted" style="margin-top:4px;">ข้าม</div></div>'
@@ -17398,11 +17591,11 @@ function openColumnMapModal(opts){
       if(rows.length)h+='<div class="c2-label">ข้อมูลจากไฟล์</div><div style="margin-bottom:14px;">'+rows.join('')+'</div>';
     }
 
-    if(okN){h+='<div class="c2-label">เพิ่มเข้าคิว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
+    if(okN){h+='<div class="c2-label">รับเข้าคลังแล้ว · '+okN+' ใบ</div><div class="chiplist" style="margin-bottom:14px;">'+chips(added)+'</div>';}
 
     if(autoRegistered&&autoRegistered.length){
       h+='<div class="c2-label">ลงทะเบียนกล่องใหม่อัตโนมัติ (ไม่พบในระบบมาก่อน) · '+autoRegistered.length+' ใบ</div>'
-        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องให้อัตโนมัติแล้วส่งเข้าคิวรับเข้าคลังทันที — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
+        +'<div class="small muted" style="margin:0 0 6px;">ระบบสร้างข้อมูลกล่องและรับเข้าคลังให้อัตโนมัติแล้ว — ตรวจสอบ/แก้ไขประเภทกล่องภายหลังได้ที่หน้าคลังกล่อง</div>'
         +'<div class="chiplist" style="margin-bottom:14px;">'+chips(autoRegistered)+'</div>';
     }
 
@@ -17421,9 +17614,9 @@ function openColumnMapModal(opts){
     h+='</div>';
     h+='<div class="mfoot"><button class="btn pos" data-close>เข้าใจแล้ว</button></div>';
     openModal(h);
-    toast(okN?'นำเข้าสำเร็จ':'ไม่มีรายการที่เพิ่มได้',
-          okN?('เติมเข้าคิวรับคืน '+okN+' ใบ'+(skipN?' · ข้าม '+skipN:'')):'ดูรายละเอียดในหน้าต่างสรุป',
-          okN?'info':'err');
+    toast(okN?'รับเข้าคลังสำเร็จ':'ไม่มีรายการที่เพิ่มได้',
+          okN?('สถานะอยู่ในคลังแล้ว '+okN+' ใบ'+(skipN?' · ข้าม '+skipN:'')):'ดูรายละเอียดในหน้าต่างสรุป',
+          okN?'ok':'err');
   }
 
   // wire the hidden file input

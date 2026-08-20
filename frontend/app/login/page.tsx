@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { login, forgotPassword, resetPassword, setToken } from '@/lib/api';
+import { ApiError, login, forgotPassword, resetPassword, setToken, getBranding, type SystemBranding } from '@/lib/api';
 
 type Mode = 'login' | 'forgot-request' | 'forgot-reset';
+type FieldName = 'username' | 'password' | 'otp' | 'newPassword';
 
 // Key for remembering who last signed in on this device, so the login screen
 // can skip straight to "just type your password" instead of making them
@@ -13,6 +14,11 @@ type Mode = 'login' | 'forgot-request' | 'forgot-reset';
 const LAST_USER_KEY = 'st_last_login_user';
 
 export default function LoginPage() {
+  const [branding, setBranding] = useState<SystemBranding>({
+    systemName: 'Smart Tracking',
+    subtitle: 'WMS · เฟส 1 · Returnable Asset Tracking',
+    logoData: null,
+  });
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +27,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
+  const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
   // The account offered for one-click quick login (last account that signed
   // in on this device, or ?u=<username> from the app's "switch account"
   // flow — both are "you already told us who you are, just confirm with
@@ -41,10 +49,64 @@ export default function LoginPage() {
     }
   }, []);
 
+  useEffect(() => {
+    getBranding().then(setBranding).catch(() => undefined);
+  }, []);
+
   function switchMode(next: Mode) {
     setMode(next);
     setError('');
     setNotice('');
+    setFieldErrors({});
+    setTouched({});
+  }
+
+  function fieldMessage(name: FieldName, value: string) {
+    const clean = value.trim();
+    if (name === 'username' && !clean) return 'กรุณากรอกชื่อผู้ใช้หรืออีเมล';
+    if (name === 'password' && !value) return 'กรุณากรอกรหัสผ่าน';
+    if (name === 'otp' && !/^\d{6}$/.test(clean)) return 'กรุณากรอกรหัส OTP ให้ครบ 6 หลัก';
+    if (name === 'newPassword' && value.length < 10) return 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร';
+    if (name === 'newPassword' && !/[a-z]/.test(value)) return 'ต้องมีตัวพิมพ์เล็ก';
+    if (name === 'newPassword' && !/[A-Z]/.test(value)) return 'ต้องมีตัวพิมพ์ใหญ่';
+    if (name === 'newPassword' && !/\d/.test(value)) return 'ต้องมีตัวเลข';
+    if (name === 'newPassword' && !/[^A-Za-z0-9]/.test(value)) return 'ต้องมีอักขระพิเศษ';
+    return '';
+  }
+
+  function updateField(name: FieldName, value: string, setter: (value: string) => void) {
+    setter(value);
+    if (touched[name] || fieldErrors[name]) {
+      const message = fieldMessage(name, value);
+      setFieldErrors((current) => ({ ...current, [name]: message || undefined }));
+    }
+  }
+
+  function blurField(name: FieldName, value: string) {
+    setTouched((current) => ({ ...current, [name]: true }));
+    const message = fieldMessage(name, value);
+    setFieldErrors((current) => ({ ...current, [name]: message || undefined }));
+  }
+
+  function validateCurrentMode() {
+    const active: Array<[FieldName, string]> =
+      mode === 'login'
+        ? [['username', username], ['password', password]]
+        : mode === 'forgot-request'
+          ? [['username', username]]
+          : [['otp', otp], ['newPassword', newPassword]];
+    const next: Partial<Record<FieldName, string>> = {};
+    active.forEach(([name, value]) => {
+      const message = fieldMessage(name, value);
+      if (message) next[name] = message;
+    });
+    setTouched(Object.fromEntries(active.map(([name]) => [name, true])));
+    setFieldErrors(next);
+    if (Object.keys(next).length) {
+      window.setTimeout(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 0);
+      return false;
+    }
+    return true;
   }
 
   // "ไม่ใช่ฉัน" — drop back to a blank, editable username field without
@@ -65,6 +127,7 @@ export default function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!validateCurrentMode()) return;
     setError('');
     setNotice('');
     setBusy(true);
@@ -74,7 +137,7 @@ export default function LoginPage() {
         const res = await login(trimmed, password);
         setToken(res.token);
         window.localStorage.setItem(LAST_USER_KEY, trimmed);
-        window.location.replace('/');
+        window.location.replace(res.user.firstSetupRequired ? '/onboarding' : '/');
         return;
       }
       if (mode === 'forgot-request') {
@@ -95,6 +158,10 @@ export default function LoginPage() {
         return;
       }
     } catch (err) {
+      if (err instanceof ApiError && Object.keys(err.errors).length) {
+        setFieldErrors((current) => ({ ...current, ...err.errors }));
+        window.setTimeout(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 0);
+      }
       setError(err instanceof Error ? err.message : 'ดำเนินการไม่สำเร็จ');
       setBusy(false);
     }
@@ -108,10 +175,17 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_24px_70px_rgba(0,0,0,.10)]">
         <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-xl font-black text-white">S</div>
+          <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl bg-ink text-xl font-black text-white">
+            {branding.logoData ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logoData} alt={branding.systemName} className="h-full w-full object-cover" />
+            ) : (
+              branding.systemName.charAt(0).toUpperCase()
+            )}
+          </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-ink">Smart Tracking</h1>
-            <p className="-mt-0.5 text-xs text-ink-2/70">Returnable Asset Tracking</p>
+            <h1 className="text-lg font-bold tracking-tight text-ink">{branding.systemName}</h1>
+            <p className="-mt-0.5 text-xs text-ink-2/70">{branding.subtitle}</p>
           </div>
         </div>
 
@@ -146,8 +220,10 @@ export default function LoginPage() {
             <Field
               label="ชื่อผู้ใช้ หรือ อีเมล"
               value={username}
-              onChange={setUsername}
-              placeholder="username หรือ name@company.com"
+              onChange={(value) => updateField('username', value, setUsername)}
+              onBlur={() => blurField('username', username)}
+              error={fieldErrors.username}
+              placeholder="ชื่อผู้ใช้ หรือ อีเมลองค์กร"
               autoFocus
               autoComplete="username"
             />
@@ -171,7 +247,9 @@ export default function LoginPage() {
               <Field
                 label="รหัส OTP (6 หลัก)"
                 value={otp}
-                onChange={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+                onChange={(v) => updateField('otp', v.replace(/\D/g, '').slice(0, 6), setOtp)}
+                onBlur={() => blurField('otp', otp)}
+                error={fieldErrors.otp}
                 placeholder="000000"
                 maxLength={6}
                 autoFocus
@@ -179,9 +257,11 @@ export default function LoginPage() {
               <Field
                 label="รหัสผ่านใหม่"
                 value={newPassword}
-                onChange={setNewPassword}
+                onChange={(value) => updateField('newPassword', value, setNewPassword)}
+                onBlur={() => blurField('newPassword', newPassword)}
+                error={fieldErrors.newPassword}
                 type="password"
-                placeholder="อย่างน้อย 6 ตัวอักษร"
+                placeholder="10+ ตัว: พิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และสัญลักษณ์"
                 autoComplete="new-password"
               />
             </>
@@ -191,7 +271,9 @@ export default function LoginPage() {
             <Field
               label="รหัสผ่าน"
               value={password}
-              onChange={setPassword}
+              onChange={(value) => updateField('password', value, setPassword)}
+              onBlur={() => blurField('password', password)}
+              error={fieldErrors.password}
               type="password"
               placeholder="••••••"
               autoFocus={showQuickLogin}
@@ -233,7 +315,8 @@ export default function LoginPage() {
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">
-            Dev only — บัญชีเริ่มต้นตั้งจาก <code>SEED_ADMIN_*</code> env vars (ดู <code>npm run db:seed</code>)
+            สำหรับการพัฒนาเท่านั้น — บัญชีเริ่มต้นตั้งจาก <code>SEED_ADMIN_*</code> ในตัวแปรสภาพแวดล้อม
+            (ดู <code>npm run db:seed</code>)
           </p>
         )}
       </div>
@@ -250,6 +333,8 @@ function Field({
   autoFocus,
   autoComplete,
   maxLength,
+  error,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -259,11 +344,16 @@ function Field({
   autoFocus?: boolean;
   autoComplete?: string;
   maxLength?: number;
+  error?: string;
+  onBlur?: () => void;
 }) {
+  const inputId = `login-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const errorId = `${inputId}-error`;
   return (
-    <label className="block">
+    <label className="block" htmlFor={inputId}>
       <span className="mb-1 block text-xs font-medium text-ink-2/70">{label}</span>
       <input
+        id={inputId}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -271,8 +361,12 @@ function Field({
         autoFocus={autoFocus}
         autoComplete={autoComplete}
         maxLength={maxLength}
-        className="w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2.5 text-sm text-ink outline-none transition focus:border-black/30 focus:bg-white"
+        onBlur={onBlur}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full rounded-xl border bg-black/[0.02] px-3 py-2.5 text-sm text-ink outline-none transition focus:bg-white ${error ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/15' : 'border-black/10 focus:border-black/30'}`}
       />
+      {error && <span id={errorId} role="alert" className="mt-1 block text-xs font-medium text-red-600">{error}</span>}
     </label>
   );
 }

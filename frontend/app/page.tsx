@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getToken } from '@/lib/api';
+import { ApiError, clearToken, getToken, me } from '@/lib/api';
 
 /**
  * Auth gate. When signed in, render the legacy app (served verbatim from
@@ -16,11 +16,19 @@ export default function Home() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (getToken()) {
-      setReady(true);
-    } else {
+    if (!getToken()) {
       router.replace('/login');
+      return;
     }
+    me()
+      .then((session) => {
+        if (session.user.firstSetupRequired) router.replace('/onboarding');
+        else setReady(true);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) clearToken();
+        router.replace('/login');
+      });
   }, [router]);
 
   if (!ready) {
