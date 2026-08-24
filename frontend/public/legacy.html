@@ -2419,7 +2419,7 @@ a{color:var(--accentInk);}
   <div class="gi-strip reveal" id="goStrip" style="display:none;"><span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span><div class="gi-strip-main"><div class="gi-strip-k">ประตูขาออกประจำเครื่องนี้</div><div class="gi-strip-v" id="outGateDisplay">— ยังไม่ได้ตั้งค่า —</div></div><div id="outGateFxStatus" style="flex:0 0 auto;"></div><button class="btn ghost sm" id="outGateChangeBtn" onclick="pickGate('out')">เปลี่ยนประตู</button></div>
   <input type="hidden" id="outGate">
   <div class="wg-board"><div class="wg xl wg-scan reveal" data-tint="neg"><div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="wg-lbl">GATE · OUTBOUND</span></div><h3 class="wg-scan-t">คิวส่งออกจาก RFID</h3><p class="wg-scan-s">เฉพาะกล่องสถานะพร้อมส่งออกจะแสดงในคิว ระบบไม่ตัดสต็อกจนกด “ยืนยันส่งออก”</p><div id="gateOutReaderState" style="margin-bottom:14px;"></div><div class="scanresult" id="resultOut"></div></div></div>
-  <div class="row" style="margin-top:22px;margin-bottom:22px;"><button class="btn accent big" id="btnCheckOut" disabled onclick="openGateOutConfirm()">ยืนยันส่งออก</button><button class="btn ghost" onclick="clearGateOut()">ล้างคิว</button><button class="btn ghost" onclick="exportGateOutExcel()">Export Excel</button><span class="muted small" id="outCount"></span></div>
+  <div class="row" style="margin-top:22px;margin-bottom:22px;"><button class="btn accent big" id="btnGateOutStart" onclick="openGateOutShipment()">กรอกข้อมูลจัดส่ง</button><button class="btn accent big" id="btnCheckOut" disabled onclick="openGateOutConfirm()">ยืนยันส่งออก</button><button class="btn ghost" onclick="clearGateOut()">ล้างคิว</button><button class="btn ghost" onclick="exportGateOutExcel()">Export Excel</button><span class="muted small" id="outCount"></span></div>
 </section>
 
 <!-- ===================== INVENTORY ===================== -->
@@ -10525,13 +10525,17 @@ window.clearGateIn=clearGateIn;
 /* ===== GATE OUT — the same physical RFID pending queue as inbound, with
    outbound-only eligibility and an explicit confirmation transaction. ===== */
 var pendingOut=[];
+/* A shipment is deliberately started before the reader queue is opened. A
+   fixed antenna can see many tags at once; requiring destination + vehicle
+   first makes the operator's intent explicit before any box is considered. */
+var gateOutShipment=null;
 function gateOutReady(){return !!fixedGatesRef().out;}
 function renderGateOut(){
   var g=fixedGatesRef().out,strip=$('#goStrip'),state=$('#gateOutReaderState'),btn=$('#btnCheckOut'),count=$('#outCount'),result=$('#resultOut');
   if(strip)strip.style.display=g?'':'none';
-  if(state)state.innerHTML=g?fx9600StatusHtml(g,false):'<div class="banner warn">เลือกประตูขาออกก่อนเริ่มงาน <button class="btn ghost sm" onclick="pickGate(\'out\')">เลือกประตู</button></div>';
+  if(state)state.innerHTML=!g?'<div class="banner warn">เลือกประตูขาออกก่อนเริ่มงาน <button class="btn ghost sm" onclick="pickGate(\'out\')">เลือกประตู</button></div>':!gateOutShipment?'<div class="banner warn"><b>รอข้อมูลจัดส่ง</b><div class="muted small" style="margin-top:4px;">กรอกลูกค้าปลายทางและทะเบียนรถก่อนเปิดรับ RFID</div></div>':fx9600StatusHtml(g,false);
   if(btn)btn.disabled=!pendingOut.length;
-  if(count)count.textContent=pendingOut.length?'เตรียมส่งออก '+pendingOut.length+' ใบ':'';
+  if(count)count.textContent=gateOutShipment?(pendingOut.length?'เตรียมส่งออก '+pendingOut.length+' ใบ · '+gateOutShipment.plate:'กำลังรอ RFID · '+gateOutShipment.plate):'';
   if(!result)return;
   result.innerHTML=pendingOut.length?'<div class="c2-label">คิวส่งออก · '+pendingOut.length+' ใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span><span class="c2-new" style="background:var(--accentSoft);color:var(--accentInk);">พร้อมส่ง</span></span><b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>':'<div class="muted small">รอแท็กจาก FX9600 ที่ประตูขาออก</div>';
 }
@@ -10542,28 +10546,41 @@ function unqueueOut(tag){
 }
 window.unqueueOut=unqueueOut;
 function fx9600OutQueuePoll(){
-  var g=fixedGatesRef().out;if(!g)return;
+  var g=fixedGatesRef().out;if(!g||!gateOutShipment)return;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!d.tags)return;var added=0;
     d.tags.forEach(function(tag){var b=S.boxes[tag];if(!b||b.status!=='warehouse'||pendingOut.indexOf(tag)>=0)return;pendingOut.push(tag);added++;});
     if(added){renderGateOut();if(typeof playToastSound==='function')playToastSound('ok');}
   }).catch(function(){});
 }
-function openGateOutConfirm(){
-  if(!pendingOut.length)return toast('ยังไม่มีคิวส่งออก',null,'err');
+function openGateOutShipment(){
   if(!gateOutReady())return toast('ยังไม่ได้เลือกประตูขาออก',null,'err');
   if(!Object.keys(S.customers||{}).length)return toast('ยังไม่มีลูกค้า','เพิ่มข้อมูลลูกค้าก่อนยืนยันส่งออก','err');
-  openModal('<div class="mhead"><h3>ยืนยันส่งออก · '+pendingOut.length+' ใบ</h3>'+settingsCloseX()+'</div><div class="mbody"><div class="grid g2"><div class="field"><label>ลูกค้าปลายทาง <span class="req">*</span></label>'+custSelectField('goCust')+'</div><div class="field"><label>เลขที่ DO</label><input id="goDo" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div><div class="field"><label>เลขที่ PO</label><input id="goPo" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div><div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="goPlate" placeholder="82-1234 กทม" required></div><div class="field"><label>ชื่อคนขับ</label><input id="goDriver"></div><div class="field"><label>หมายเหตุ</label><input id="goNote"></div></div><div class="banner" style="margin-top:14px;">หลังยืนยัน กล่อง '+pendingOut.length+' ใบจะเปลี่ยนเป็น “ออกไปแล้ว” พร้อมบันทึก Gate, ลูกค้า, รถ และเวลาในประวัติ</div></div><div class="mfoot"><button class="btn ghost" data-close>ยกเลิก</button><div class="spacer"></div><button class="btn accent" onclick="commitGateOut()">ยืนยันส่งออก</button></div>');
+  var sh=gateOutShipment||{};
+  openModal('<div class="mhead"><h3>ข้อมูลจัดส่งก่อนผ่าน Gate</h3>'+settingsCloseX()+'</div><div class="mbody"><p class="muted small" style="margin-top:0;">บันทึกข้อมูลนี้ก่อนเปิดรับ RFID เพื่อระบุรถและปลายทางของกล่องทุกใบในรอบนี้</p><div class="grid g2"><div class="field"><label>ลูกค้าปลายทาง <span class="req">*</span></label>'+custSelectField('goCust')+'</div><div class="field"><label>เลขที่ DO</label><input id="goDo" value="'+esc(sh.doNo||'')+'" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div><div class="field"><label>เลขที่ PO</label><input id="goPo" value="'+esc(sh.po||'')+'" placeholder="ปล่อยว่าง = สร้างอัตโนมัติ"></div><div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="goPlate" value="'+esc(sh.plate||'')+'" placeholder="82-1234 กทม" required></div><div class="field"><label>ชื่อคนขับ</label><input id="goDriver" value="'+esc(sh.driver||'')+'"></div><div class="field"><label>หมายเหตุ</label><input id="goNote" value="'+esc(sh.note||'')+'"></div></div></div><div class="mfoot"><button class="btn ghost" data-close>ยกเลิก</button><div class="spacer"></div><button class="btn accent" onclick="startGateOutShipment()">เริ่มรับ RFID</button></div>');
+  if(sh.cust)setTimeout(function(){setv('goCust',sh.cust);},0);
+}
+window.openGateOutShipment=openGateOutShipment;
+function startGateOutShipment(){
+  var cust=val('goCust'),plate=val('goPlate').trim();if(!cust)return toast('เลือกลูกค้า',null,'err');if(!plate)return fieldError('goPlate','ต้องกรอกทะเบียนรถก่อนเริ่มรับ RFID');
+  gateOutShipment={cust:cust,plate:plate,doNo:val('goDo').trim()||genDocNo('DO'),po:val('goPo').trim()||genDocNo('PO'),driver:val('goDriver').trim(),note:val('goNote').trim()};
+  closeModal();renderGateOut();fx9600OutQueuePoll();toast('พร้อมรับ RFID','รถ '+plate+' · '+custName(cust),'ok');
+}
+window.startGateOutShipment=startGateOutShipment;
+function openGateOutConfirm(){
+  if(!gateOutShipment)return openGateOutShipment();
+  if(!pendingOut.length)return toast('ยังไม่มีคิวส่งออก',null,'err');
+  openModal('<div class="mhead"><h3>ยืนยันส่งออก · '+pendingOut.length+' ใบ</h3>'+settingsCloseX()+'</div><div class="mbody"><div class="banner"><b>'+esc(gateOutShipment.plate)+'</b> · '+esc(custName(gateOutShipment.cust))+' · '+esc(gateOutShipment.doNo)+'</div><p class="muted small">เมื่อยืนยัน กล่องในคิวจะเปลี่ยนเป็น “ออกไปแล้ว” ตามข้อมูลจัดส่งนี้</p></div><div class="mfoot"><button class="btn ghost" data-close>ย้อนกลับ</button><div class="spacer"></div><button class="btn accent" onclick="commitGateOut()">ยืนยันส่งออก</button></div>');
 }
 window.openGateOutConfirm=openGateOutConfirm;
 function commitGateOut(){
-  var cust=val('goCust');if(!cust)return toast('เลือกลูกค้า',null,'err');
-  if(!val('goPlate').trim())return fieldError('goPlate','ต้องกรอกทะเบียนรถก่อนยืนยันส่งออก');
+  if(!gateOutShipment)return openGateOutShipment();
+  var cust=gateOutShipment.cust;
   var gate=Number(fixedGatesRef().out);if(!gate)return toast('ยังไม่ได้เลือกประตูขาออก',null,'err');
-  var doNo=val('goDo')||genDocNo('DO'),po=val('goPo')||genDocNo('PO'),plate=val('goPlate'),driver=val('goDriver'),note=val('goNote'),outTs=iso(),dueTs=custDueTs(cust,outTs),dueDate=ddmmyyyy(new Date(dueTs)),wh=gateWh(gate),tags=pendingOut.slice();
+  var doNo=gateOutShipment.doNo,po=gateOutShipment.po,plate=gateOutShipment.plate,driver=gateOutShipment.driver,note=gateOutShipment.note,outTs=iso(),dueTs=custDueTs(cust,outTs),dueDate=ddmmyyyy(new Date(dueTs)),wh=gateWh(gate),tags=pendingOut.slice();
   tags.forEach(function(t){var b=S.boxes[t];if(!b||b.status!=='warehouse')return;b.status='out';b.customer=cust;b.do=doNo;b.po=po;b.outGate=gate;b.outWh=wh;b.outAt=outTs;b.dueAt=dueTs;b.dueDate=dueDate;b.lastSeenAt=outTs;b.history.push({dir:'out',ts:outTs,do:doNo,po:po,customer:cust,gate:gate,wh:wh,plate:plate,driver:driver,recorder:USER,note:note,platform:'web-rfid',dueAt:dueTs,dueDate:dueDate});S.events.push({ts:outTs,dir:'out',tag:t,type:b.type,do:doNo,po:po,customer:cust,customerName:custName(cust),gate:gate,wh:wh,plate:plate,driver:driver,recorder:USER,platform:'web-rfid'});auditEntry('GATE_OUT',USER,t,typeName(b.type),null,{do:doNo,customer:custName(cust),gate:gate,wh:whName(wh)});});
   S.doRecords[doNo]={customer:cust,po:po,plate:plate,driver:driver};
-  pendingOut=[];save();closeModal();apiFetch('/api/rfid/pending/'+encodeURIComponent(gate),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({tags:tags})}).catch(function(){});toast('ส่งออกสำเร็จ',tags.length+' ใบ → '+custName(cust)+' · '+doNo,'ok');renderAll();renderGateOut();
+  pendingOut=[];gateOutShipment=null;save();closeModal();apiFetch('/api/rfid/pending/'+encodeURIComponent(gate),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({tags:tags})}).catch(function(){});toast('ส่งออกสำเร็จ',tags.length+' ใบ → '+custName(cust)+' · '+doNo,'ok');renderAll();renderGateOut();
 }
 window.commitGateOut=commitGateOut;
 function clearGateOut(){
