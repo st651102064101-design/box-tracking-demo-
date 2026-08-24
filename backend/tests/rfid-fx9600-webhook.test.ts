@@ -3,6 +3,7 @@ import request from 'supertest';
 import { bootstrap, auth, type TestCtx } from './helpers.js';
 import { env } from '../src/env.js';
 import { encodeBarcodeToEpcHex } from '../src/lib/rfid.js';
+import { subscribeReaderStatus, type ReaderStatusEvent } from '../src/lib/bus.js';
 
 let ctx: TestCtx;
 beforeAll(async () => {
@@ -236,6 +237,21 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
     expect(state.body.gateWebhookLastSeen['5']).toBeTruthy();
     expect(new Date(state.body.gateWebhookLastSeen['5']).getTime()).toBeGreaterThan(Date.now() - 10_000);
+  });
+
+  it('broadcasts an immediate online reader-status event for every accepted heartbeat', async () => {
+    let event: ReaderStatusEvent | null = null;
+    const unsubscribe = subscribeReaderStatus((next) => { event = next; });
+    try {
+      const res = await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send({ status: 'ok' });
+      expect(res.status).toBe(200);
+    } finally {
+      unsubscribe();
+    }
+    expect(event).not.toBeNull();
+    expect(event?.gate).toBe(5);
+    expect(event?.online).toBe(true);
+    expect(new Date(event?.lastActiveAt ?? 0).getTime()).toBeGreaterThan(Date.now() - 10_000);
   });
 
   it('does not record a gate on a rejected (bad-secret) request', async () => {

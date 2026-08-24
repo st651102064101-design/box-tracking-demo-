@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../lib/jwt.js';
-import { subscribe, subscribeRfidRead, currentVersion } from '../lib/bus.js';
+import { subscribe, subscribeReaderStatus, subscribeRfidRead, currentVersion } from '../lib/bus.js';
 
 /**
  * `GET /api/stream` — server-sent events telling clients that state changed.
@@ -69,6 +69,9 @@ streamRouter.get('/', (req, res) => {
   const unsubscribeRfid = subscribeRfidRead((event) => {
     res.write(`event: rfid-read\ndata: ${JSON.stringify(event)}\n\n`);
   });
+  const unsubscribeReaderStatus = subscribeReaderStatus((event) => {
+    res.write(`event: reader-status\ndata: ${JSON.stringify(event)}\n\n`);
+  });
 
   const heartbeat = setInterval(() => {
     res.write(': hb\n\n'); // an SSE comment — ignored by the client, keeps the socket warm
@@ -78,6 +81,7 @@ streamRouter.get('/', (req, res) => {
     clearInterval(heartbeat);
     unsubscribe();
     unsubscribeRfid();
+    unsubscribeReaderStatus();
   };
   req.on('close', close);
   res.on('close', close);

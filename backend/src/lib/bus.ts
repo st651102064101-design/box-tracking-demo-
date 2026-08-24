@@ -18,10 +18,21 @@
 export type ChangeListener = (version: number, origin: string | null) => void;
 export type RfidReadEvent = { id: string; gate: number; tags: string[]; ts: string };
 export type RfidReadListener = (event: RfidReadEvent) => void;
+export type ReaderStatusEvent = {
+  id: string;
+  readerId: string | null;
+  host: string | null;
+  sourceIp: string | null;
+  gate: number;
+  online: true;
+  lastActiveAt: string;
+};
+export type ReaderStatusListener = (event: ReaderStatusEvent) => void;
 
 let version = 0;
 const listeners = new Set<ChangeListener>();
 const rfidReadListeners = new Set<RfidReadListener>();
+const readerStatusListeners = new Set<ReaderStatusListener>();
 
 /** Record that state changed and notify every open stream. */
 export function bump(origin?: string | null): number {
@@ -63,6 +74,24 @@ export function publishRfidRead(gate: number, tags: string[]): RfidReadEvent {
 export function subscribeRfidRead(listener: RfidReadListener): () => void {
   rfidReadListeners.add(listener);
   return () => rfidReadListeners.delete(listener);
+}
+
+/** Publish the lightweight liveness delta produced by every accepted reader webhook. */
+export function publishReaderStatus(input: Omit<ReaderStatusEvent, 'id' | 'online'>): ReaderStatusEvent {
+  const event: ReaderStatusEvent = {
+    ...input,
+    id: `${input.readerId ?? `gate-${input.gate}`}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    online: true,
+  };
+  for (const listener of readerStatusListeners) {
+    try { listener(event); } catch { /* dead stream removes itself on close */ }
+  }
+  return event;
+}
+
+export function subscribeReaderStatus(listener: ReaderStatusListener): () => void {
+  readerStatusListeners.add(listener);
+  return () => readerStatusListeners.delete(listener);
 }
 
 export const currentVersion = () => version;

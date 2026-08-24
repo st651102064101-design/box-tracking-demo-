@@ -8,7 +8,7 @@ import { resolveBoxesByCodes } from '../services/rfid.js';
 import { gateWebhookStatus, gatePendingReads, rfidReaders } from '../db/schema.js';
 import { and, eq, gte } from 'drizzle-orm';
 import { writeAuditLog } from '../services/audit.js';
-import { publishRfidRead } from '../lib/bus.js';
+import { publishReaderStatus, publishRfidRead } from '../lib/bus.js';
 
 export const rfidRouter = Router();
 
@@ -427,10 +427,23 @@ rfidRouter.post(
     const rawIp = req.ip ?? req.socket.remoteAddress ?? null;
     const lastIp = rawIp ? rawIp.replace(/^::ffff:/, '') : null;
     const db = getDb();
+    const lastActiveAt = new Date();
     await db
       .insert(gateWebhookStatus)
-      .values({ gateNo: gate, lastSeenAt: new Date(), lastIp })
-      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: new Date(), lastIp } });
+      .values({ gateNo: gate, lastSeenAt: lastActiveAt, lastIp })
+      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: lastActiveAt, lastIp } });
+
+    /* Gate in the authenticated webhook URL is the authoritative binding.
+       Resolve it through reader master data before broadcasting so clients
+       receive the exact reader id/host that belongs to this physical gate. */
+    const activeReader = (await db.select().from(rfidReaders).where(eq(rfidReaders.gateNo, gate)).limit(1))[0] ?? null;
+    publishReaderStatus({
+      readerId: activeReader?.id ?? null,
+      host: activeReader?.host ?? null,
+      sourceIp: lastIp,
+      gate,
+      lastActiveAt: lastActiveAt.toISOString(),
+    });
 
     const body = readWebhookBody(req);
     const contentType = req.get('Content-Type') ?? '';
