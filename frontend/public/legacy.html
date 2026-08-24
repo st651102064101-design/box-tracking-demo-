@@ -12901,26 +12901,19 @@ function readerCard(r){
   var state={idle:'Idle',scanning:'Scanning',error:'Error'}[r.operationalState]||'Unknown';
   var stateColor=r.operationalState==='scanning'?'var(--pos)':r.operationalState==='error'&&!live.online?'var(--neg)':'var(--muted)';
   var active=(r.activeAntennas||[]).map(Number);
-  var ants='';for(var i=1;i<=r.antennaCount;i++){
-    var healthy=active.indexOf(i)>=0;
-    ants+='<span class="tag" title="'+(healthy?'พบข้อมูลจากเสานี้ล่าสุด':'ยังไม่พบข้อมูลจากเสานี้')+'" style="color:'+(healthy?'var(--pos)':'var(--muted)')+';">A'+i+' · '+(healthy?'Active':'Unknown')+'</span> ';
-  }
+  var ants=active.length?active.map(function(a){return 'A'+a;}).join(', '):'ยังไม่มีข้อมูลเสาอากาศ';
   return '<div class="wg xl" style="margin-bottom:14px;">'
     +'<div class="wg-top"><span class="wg-ic dashed">'+SICON_RFID+'</span><div style="flex:1;"><div class="wg-lbl">'+esc(r.name)+'</div><div class="muted small mono">'+esc(r.host)+' · Gate '+esc(String(r.gateNo))+'</div></div>'+readerStatusPill(r,live)+'</div>'
     +'<div class="wg-body">'
-    +'<div class="grid g4" style="gap:9px;margin-bottom:14px;">'
+    +'<div class="grid g3" style="gap:9px;margin-bottom:14px;">'
     +readerMetric('Network',live.online?'Heartbeat OK':'No heartbeat',live.online?'var(--pos)':'var(--neg)')
-    +readerMetric('Power',live.online?'On':'Unknown',live.online?'var(--pos)':'var(--muted)')
     +readerMetric('Operation',r.readingEnabled?(live.online?state:'Error'):'Paused',r.readingEnabled?stateColor:'var(--warn)')
-    +readerMetric('Transmit Power',Number(r.transmitPower).toFixed(2)+' / 3.00')+'</div>'
-    +'<div class="muted small" style="margin:-5px 0 13px;">Heartbeat ที่คาดหวัง: ทุก '+esc(String(r.heartbeatIntervalSeconds||1))+' วินาที · Offline หลังขาดสัญญาณ '+esc(String(Math.max(5,(r.heartbeatIntervalSeconds||1)*3)))+' วินาที</div>'
-    +'<div class="c2-label">Antenna health</div><div style="margin:7px 0 14px;line-height:2;">'+ants+'</div>'
-    +'<div class="field"><label>Webhook URL</label><div class="tag mono" style="display:block;word-break:break-all;padding:9px;">'+esc(r.webhookUrl)+'</div></div>'
+    +readerMetric('Detected antennas',ants,active.length?'var(--pos)':'var(--muted)')+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">'
     +'<button class="btn '+(r.readingEnabled?'red':'accent')+' sm" onclick="readerToggle(\''+esc(r.id)+'\','+(!r.readingEnabled)+')">'+(r.readingEnabled?'Stop accepting reads':'Start accepting reads')+'</button>'
-    +'<button class="btn ghost sm" onclick="readerOpenForm(\''+esc(r.id)+'\')">ตั้งค่า</button>'
+    +'<button class="btn ghost sm" onclick="readerOpenForm(\''+esc(r.id)+'\')">แก้ไขการผูก Gate</button>'
     +'<a class="btn ghost sm" href="'+esc(r.adminUrl)+'" target="_blank" rel="noopener">เปิด Zebra Console</a>'
-    +'</div><p class="muted small" style="margin:10px 0 0;">Start/Stop ควบคุมการรับ tag ที่ WMS; การเปิด/ปิดคลื่น RF จริงทำผ่าน Zebra Console เพื่อไม่ชนกับ IoT Connector session</p>'
+    +'</div><p class="muted small" style="margin:10px 0 0;">WMS ควบคุมเฉพาะการรับข้อมูลและการผูก Gate; กำลังส่ง, เสาอากาศ, heartbeat และ webhook ของเครื่องจริงตั้งผ่าน Zebra Console</p>'
     +'</div></div>';
 }
 function renderReaderPage(){
@@ -12933,7 +12926,7 @@ function loadReaders(silent){
 function settingsGoReaders(){
   if(readerPageTimer){clearInterval(readerPageTimer);readerPageTimer=null;}
   var h='<div class="mhead">'+settingsBackBtn('settingsGoDevices')+'<h3>Reader Configuration &amp; Status</h3>'+settingsCloseX()+'</div>'
-    +'<div class="mbody"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div><b>Zebra FX9600 Fleet</b><div class="muted small">สถานะอัปเดตทันทีเมื่อได้รับ heartbeat</div></div><div class="spacer"></div><button class="btn accent sm" onclick="readerOpenForm()">+ เพิ่มเครื่องอ่าน</button></div><div id="readerPageBody"><div class="muted">กำลังโหลด...</div></div></div>'
+    +'<div class="mbody"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div><b>Zebra FX9600 Fleet</b><div class="muted small">สถานะอัปเดตทันทีเมื่อได้รับ heartbeat</div></div><div class="spacer"></div><button class="btn accent sm" onclick="readerOpenForm()">+ เพิ่มทะเบียนเครื่องอ่าน</button></div><div id="readerPageBody"><div class="muted">กำลังโหลด...</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoDevices()">ย้อนกลับ</button><div class="spacer"></div><button class="btn gray" onclick="loadReaders(false)">รีเฟรช</button></div>';
   openModal(h);loadReaders(false);
   readerPageTimer=setInterval(function(){if(!$('#readerPageBody')){clearInterval(readerPageTimer);readerPageTimer=null;return;}loadReaders(true);},10000);
@@ -12943,30 +12936,25 @@ function readerGateOptions(selected){
   var gates=Object.keys(S.gates||{}).sort(function(a,b){return Number(a)-Number(b);});
   return gates.map(function(g){var wh=(S.warehouses||{})[S.gates[g]];return '<option value="'+esc(g)+'" '+(String(selected)===String(g)?'selected':'')+'>Gate '+esc(g)+(wh?' · '+esc(wh.name||S.gates[g]):'')+'</option>';}).join('');
 }
-function readerDefaultWebhook(g){return apiUrl('/api/rfid/fx9600/'+encodeURIComponent(g||1)+'/webhook');}
-function readerSyncWebhook(){var g=val('rdGate');var el=$('#rdWebhook');if(el&&!el.dataset.edited)el.value=readerDefaultWebhook(g);}
 function readerOpenForm(id){
   var r=readerPageData.filter(function(x){return x.id===id;})[0]||null;
   var gate=r?r.gateNo:(Object.keys(S.gates||{})[0]||1);var rid=r?r.id:'fx9600-gate-'+gate;
-  var h='<div class="mhead">'+settingsBackBtn('settingsGoReaders')+'<h3>'+(r?'ตั้งค่าเครื่องอ่าน':'เพิ่มเครื่องอ่าน')+'</h3>'+settingsCloseX()+'</div><div class="mbody">'
+  var h='<div class="mhead">'+settingsBackBtn('settingsGoReaders')+'<h3>'+(r?'ข้อมูลเครื่องอ่าน':'เพิ่มทะเบียนเครื่องอ่าน')+'</h3>'+settingsCloseX()+'</div><div class="mbody">'
     +'<div class="grid g2"><div class="field"><label>Reader ID</label><input id="rdId" value="'+esc(rid)+'" '+(r?'readonly':'')+'></div><div class="field"><label>ชื่อเครื่องอ่าน</label><input id="rdName" value="'+esc(r?r.name:'FX9600 Gate '+gate)+'"></div>'
-    +'<div class="field"><label>IP / Host</label><input id="rdHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ประตู / Gate</label><select id="rdGate" onchange="readerSyncWebhook()">'+readerGateOptions(gate)+'</select></div>'
-    +'<div class="field"><label>Transmit Power (0.00–3.00)</label><input id="rdPower" type="number" min="0" max="3" step="0.01" value="'+esc(String(r?r.transmitPower:3))+'"></div><div class="field"><label>จำนวนเสาอากาศ</label><input id="rdAntennas" type="number" min="1" max="8" value="'+esc(String(r?r.antennaCount:4))+'"></div>'
-    +'<div class="field"><label>Heartbeat ทุกกี่วินาที</label><input id="rdHeartbeat" type="number" min="1" max="60" step="1" value="'+esc(String(r?r.heartbeatIntervalSeconds:1))+'"><div class="muted small" style="margin-top:5px;">ตั้ง Reporting Interval ใน Zebra IoT Connector ให้เท่ากับค่านี้</div></div></div>'
-    +'<div class="field" style="margin-top:12px;"><label>Target Webhook URL</label><input id="rdWebhook" value="'+esc(r?r.webhookUrl:readerDefaultWebhook(gate))+'" oninput="this.dataset.edited=\'1\'"></div>'
-    +'<div class="banner" style="margin-top:14px;"><div><b>Power scale:</b> profile ปัจจุบันของ FX9600 รับค่า 0.00–3.00 เท่านั้น ระบบตรวจซ้ำทั้งหน้าเว็บและ backend</div></div></div>'
+    +'<div class="field"><label>IP / Host</label><input id="rdHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ประตู / Gate</label><select id="rdGate">'+readerGateOptions(gate)+'</select></div></div>'
+    +'<div class="banner" style="margin-top:14px;"><div><b>การตั้งค่าทางกายภาพ:</b> กำลังส่ง, เสาอากาศ, heartbeat และ webhook ต้องตั้งใน Zebra Console เท่านั้น จึงไม่แสดงช่องกรอกที่ WMS เพื่อป้องกันค่าหลอก</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoReaders()">ยกเลิก</button><div class="spacer"></div><button class="btn accent" id="rdSave" onclick="readerSave()">บันทึก</button></div>';
   openModal(h);
 }
-window.readerOpenForm=readerOpenForm;window.readerSyncWebhook=readerSyncWebhook;
+window.readerOpenForm=readerOpenForm;
 function readerSave(){
-  var p=Number(val('rdPower')),a=Number(val('rdAntennas')),hb=Number(val('rdHeartbeat'));
-  if(!isFinite(p)||p<0||p>3)return toast('ค่าไม่ถูกต้อง','Transmit Power ต้องอยู่ระหว่าง 0.00–3.00','err');
-  if(!Number.isInteger(a)||a<1||a>8)return toast('ค่าไม่ถูกต้อง','จำนวนเสาอากาศต้องอยู่ระหว่าง 1–8','err');
-  if(!Number.isInteger(hb)||hb<1||hb>60)return toast('ค่าไม่ถูกต้อง','Heartbeat ต้องอยู่ระหว่าง 1–60 วินาที','err');
-  var id=val('rdId').trim(),body={name:val('rdName').trim(),host:val('rdHost').trim(),gateNo:Number(val('rdGate')),webhookUrl:val('rdWebhook').trim(),transmitPower:p,antennaCount:a,heartbeatIntervalSeconds:hb};
+  var id=val('rdId').trim(),existing=readerPageData.filter(function(x){return x.id===id;})[0]||{};
+  /* Compatibility fields are preserved for existing records only. They are
+     deliberately not configurable here because this API does not apply them
+     to the FX9600 hardware. */
+  var body={name:val('rdName').trim(),host:val('rdHost').trim(),gateNo:Number(val('rdGate')),webhookUrl:existing.webhookUrl||apiUrl('/api/rfid/fx9600/'+encodeURIComponent(val('rdGate'))+'/webhook'),transmitPower:Number(existing.transmitPower)||3,antennaCount:Number(existing.antennaCount)||1,heartbeatIntervalSeconds:Number(existing.heartbeatIntervalSeconds)||1};
   var btn=$('#rdSave');if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
-  readerApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(body)}).then(function(){toast('บันทึกแล้ว','ตั้งค่าเครื่องอ่านเรียบร้อย','ok');settingsGoReaders();}).catch(function(e){toast('บันทึกไม่สำเร็จ',e.message,'err');if(btn){btn.disabled=false;btn.textContent='บันทึก';}});
+  readerApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(body)}).then(function(){toast('บันทึกแล้ว','อัปเดตทะเบียนและการผูก Gate เรียบร้อย','ok');settingsGoReaders();}).catch(function(e){toast('บันทึกไม่สำเร็จ',e.message,'err');if(btn){btn.disabled=false;btn.textContent='บันทึก';}});
 }
 window.readerSave=readerSave;
 function readerToggle(id,enabled){
