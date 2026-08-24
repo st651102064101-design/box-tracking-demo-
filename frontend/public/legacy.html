@@ -289,7 +289,10 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .btn.gray:hover{background:color-mix(in srgb,var(--ink) 10%,transparent);}
 .btn.sm{padding:8px 16px;font-size:14px;}
 .btn.big{padding:17px 34px;font-size:17px;}
-.btn[disabled]{opacity:.35;pointer-events:none;}
+/* Keep disabled controls hit-testable so the shared explanation handler can
+   tell an operator why the next action is unavailable. */
+button[disabled],input[type="button"][disabled],input[type="submit"][disabled]{pointer-events:auto!important;cursor:not-allowed;}
+.btn[disabled]{opacity:.35;}
 
 /* ============================================================ KPIs ============================================================ */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:16px;}
@@ -4833,6 +4836,30 @@ function toast(title,sub,kind){kind=kind||'ok';var z=$('#toastZone');var t=docum
   t.className='toast '+kind;var ic=kind==='err'?IC('close','tick'):kind==='info'?IC('info','tick'):kind==='warn'?IC('warn','tick'):IC('check','tick');
   t.innerHTML='<div class="ti">'+ic+'</div><div><div>'+esc(title)+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
   z.appendChild(t);playToastSound(kind);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},420);},2600);}
+/* Native disabled buttons suppress their own click handler. Catch the pointer
+   at document level instead so every screen explains a disabled action rather
+   than silently ignoring the operator. Feature-specific code can set
+   data-disabled-reason; title/tooltip remain useful fallbacks for old views. */
+var disabledNoticeAt=0,disabledNoticeEl=null;
+function disabledControlReason(el){
+  var explicit=el.getAttribute('data-disabled-reason')||el.getAttribute('data-app-tooltip-th')||el.getAttribute('title');
+  if(explicit)return explicit;
+  if(el.id&&/confirm|commit|save|submit/i.test(el.id))return 'กรอกหรือยืนยันข้อมูลที่จำเป็นให้ครบก่อน';
+  if(el.closest&&el.closest('.pagerbar,.pager'))return 'ไม่มีข้อมูลหน้าถัดไปหรือหน้าก่อนหน้า';
+  if(el.type==='checkbox'||el.type==='radio')return 'ตัวเลือกนี้ถูกปิดตามสิทธิ์หรือสถานะข้อมูลปัจจุบัน';
+  return 'ปุ่มนี้ยังใช้งานไม่ได้ เพราะข้อมูลหรือขั้นตอนก่อนหน้ายังไม่ครบ';
+}
+function explainDisabledControl(event){
+  var target=event.target&&event.target.nodeType===1?event.target:null;
+  var el=target&&target.closest?target.closest('button[disabled],input[disabled],[aria-disabled="true"]'):null;
+  if(!el)return;
+  var now=Date.now();if(disabledNoticeEl===el&&now-disabledNoticeAt<700)return;
+  disabledNoticeEl=el;disabledNoticeAt=now;
+  event.preventDefault();event.stopPropagation();
+  toast('ปุ่มนี้ยังใช้งานไม่ได้',disabledControlReason(el),'warn');
+}
+document.addEventListener('pointerdown',explainDisabledControl,true);
+document.addEventListener('keydown',function(event){if(event.key==='Enter'||event.key===' '){explainDisabledControl(event);}},true);
 function confirmA(title,body,okLabel,danger){return new Promise(function(res){var m=$('#alertM');
   $('#alertSheet').innerHTML='<div class="abody"><h3>'+esc(title)+'</h3><p>'+esc(body||'')+'</p></div>'+
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
@@ -10162,7 +10189,7 @@ function rfidGateIsBound(g){return rfidBoundGateMap===null||!!(g&&rfidBoundGateM
 function updateRfidGateAvailability(){
   [['out',fixedGatesRef().out,'data-gateout-mode'],['in',fixedGatesRef().in,'data-gatein-mode']].forEach(function(row){
     var dir=row[0],gate=row[1],attr=row[2],available=rfidGateIsBound(gate);
-    $all('['+attr+'="rfid"]').forEach(function(btn){btn.disabled=!available;btn.setAttribute('aria-disabled',available?'false':'true');btn.title=available?'':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID';});
+    $all('['+attr+'="rfid"]').forEach(function(btn){var reason='ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID';btn.disabled=!available;btn.setAttribute('aria-disabled',available?'false':'true');if(available){btn.removeAttribute('data-disabled-reason');btn.title='';}else{btn.setAttribute('data-disabled-reason',reason);btn.title=reason;}});
     if(!available){if(dir==='out'&&gateOutEntryMode==='rfid')applyGateOutEntryMode('manual');if(dir==='in'&&gateInEntryMode==='rfid')applyGateInEntryMode('manual',true);}
   });
 }
