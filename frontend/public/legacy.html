@@ -17290,6 +17290,39 @@ function handleRfidReadEvent(d){
   if(typeof renderInResult==='function')renderInResult();
   if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();
 }
+function handleReaderStatusEvent(d){
+  if(!d||d.online!==true||!Number.isInteger(Number(d.gate))||!d.lastActiveAt)return;
+  const gate=String(d.gate);
+  const selectedGate=String(Number(($('#inGate')||{}).value)||'');
+  const configuredHost=String(d.host||'').trim();
+  const sourceIp=String(d.sourceIp||'').trim();
+
+  /* If Reader Management has loaded the master row, use both stable Reader ID
+     and configured host as a second guard against a misrouted event. Source IP
+     is diagnostic only because Docker/NAT can replace it with a bridge IP. */
+  const known=(typeof readerPageData!=='undefined'?readerPageData:[]).filter(function(r){return String(r.gateNo)===gate;})[0]||null;
+  if(known&&((d.readerId&&String(known.id)!==String(d.readerId))||(configuredHost&&String(known.host)!==configuredHost)))return;
+
+  /* The backend already resolves Reader ID/Host from the master record bound
+     to this gate. Only repaint the active Gate-In panel when that same gate
+     is selected; an event from another door must never turn Gate 1 green. */
+  if(!Wn.S)Wn.S={};
+  if(!Wn.S.gateWebhookLastSeen)Wn.S.gateWebhookLastSeen={};
+  if(!Wn.S.gateWebhookLastIp)Wn.S.gateWebhookLastIp={};
+  Wn.S.gateWebhookLastSeen[gate]=d.lastActiveAt;
+  if(sourceIp)Wn.S.gateWebhookLastIp[gate]=sourceIp;
+  if(selectedGate===gate){
+    if(typeof renderFx9600Status==='function')renderFx9600Status(Number(gate));
+    if(typeof renderGateInReaderState==='function')renderGateInReaderState(Number(gate));
+  }
+  /* Keep an open Reader Management card in sync without issuing one full API
+     request per heartbeat. Its normal 10-second poll remains the fallback. */
+  if(known){
+    known.online=true;known.powerState='on';known.lastSeenAt=d.lastActiveAt;
+    if(known.readingEnabled&&known.operationalState==='error')known.operationalState='idle';
+    if(typeof renderReaderPage==='function')renderReaderPage();
+  }
+}
 function connectStream(){
   if(!window.EventSource||es)return;
   const t=token();
@@ -17308,6 +17341,11 @@ function connectStream(){
     liveStream=true;
     let d=null;try{d=JSON.parse(ev.data);}catch(_){}
     handleRfidReadEvent(d);
+  });
+  es.addEventListener('reader-status',ev=>{
+    liveStream=true;
+    let d=null;try{d=JSON.parse(ev.data);}catch(_){}
+    handleReaderStatusEvent(d);
   });
   es.onerror=()=>{
     liveStream=false;
