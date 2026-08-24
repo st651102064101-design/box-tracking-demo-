@@ -5458,7 +5458,8 @@ function applyGateOutEntryMode(mode,openPicker){
   uiPrefSet('gateOutMode',gateOutEntryMode);
   setTimeout(function(){
     if(gateOutEntryMode==='manual'){var s=$('#scanOut');if(s)s.focus();}
-    if(gateOutEntryMode==='rfid'){renderRfidGateStatus();fx9600OutQueuePoll();}
+    if(gateOutEntryMode==='rfid'){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();}
+    else clearRfidAutoSession(fixedGatesRef().out);
   },100);
 }
 function chooseGateOutEntryMode(mode){applyGateOutEntryMode(mode,false);}
@@ -10109,7 +10110,8 @@ function refreshGateDisplays(){
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
     var hint=$('#'+(dir==='out'?'outGateHint':'inGateHint'));
     var changeBtn=$('#'+(dir==='out'?'outGateChangeBtn':'inGateChangeBtn'));
-    if(changeBtn)changeBtn.style.display=gs.length?'':'none'; /* no คลัง/ประตู at all — disp already shows its own "เพิ่มคลัง & ประตู" CTA */
+    var selectableGates=gateNumsForDir(dir);
+    if(changeBtn)changeBtn.style.display=selectableGates.length>1?'':'none';
     if(inp)inp.value=g||'';
     if(disp){
       if(g&&gateWh(g)){
@@ -10144,7 +10146,7 @@ function pickGate(dir){
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
 }
-function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();if(dir==='out')syncRfidOutboundSession();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== Zebra FX9600 RFID Gate =====
@@ -10170,6 +10172,26 @@ function renderRfidGateStatus(){
   if(out&&gateOutEntryMode==='rfid')out.innerHTML=rfidStatusHtml(fixedGatesRef().out,'out');
   if(inn&&gateInEntryMode==='rfid')inn.innerHTML=rfidStatusHtml(fixedGatesRef().in,'in');
 }
+
+var rfidAutoSessionTimer=null;
+function clearRfidAutoSession(gate){
+  if(!gate)return Promise.resolve();
+  return apiFetch('/api/rfid/gates/'+encodeURIComponent(gate)+'/auto-session',{method:'DELETE',headers:authHeaders()}).catch(function(){});
+}
+function syncRfidOutboundSession(){
+  clearTimeout(rfidAutoSessionTimer);
+  rfidAutoSessionTimer=setTimeout(function(){
+    var gate=fixedGatesRef().out;
+    if(!gate||gateOutEntryMode!=='rfid')return;
+    var customer=val('doCustomer'),plate=val('outPlate').trim();
+    if(!customer||!plate){clearRfidAutoSession(gate);return;}
+    apiFetch('/api/rfid/gates/'+encodeURIComponent(gate)+'/auto-session',{
+      method:'PUT',headers:authHeaders(),body:JSON.stringify({direction:'out',customer:customer,plate:plate,
+        doNo:val('doNo'),po:val('poNo'),driver:val('outDriver'),vehicleType:val('outVehicle'),recorder:val('outRecorder')||USER,ttlSeconds:1800})
+    }).catch(function(){});
+  },300);
+}
+window.syncRfidOutboundSession=syncRfidOutboundSession;
 function rfidClearPending(g,tags){
   if(!g||!tags||!tags.length)return Promise.resolve();
   return apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({tags:tags})}).catch(function(){return null;});
@@ -10686,6 +10708,7 @@ function saveOutbound(){
   save();
   patchAuditGateOut(auditTags,doNo,po,cust,plate,driver,recorder);
   if(gateOutEntryMode==='rfid')rfidClearPending(gate,auditTags);
+  clearRfidAutoSession(gate);
   ['outPlate','outDriver','outDriverTel'].forEach(function(i){setv(i,'');});
   if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
   doNoInput._override=false;doNoInput.readOnly=true;doNoInput.style.opacity='';
@@ -10711,6 +10734,7 @@ function clearGateOut(){
     var clearedTags=pendingOut.slice();
     pendingOut=[];outConditionMap={};
     if(gateOutEntryMode==='rfid')rfidClearPending(fixedGatesRef().out,clearedTags);
+    clearRfidAutoSession(fixedGatesRef().out);
     ['outPlate','outDriver','outVehicle','outDriverTel'].forEach(function(i){setv(i,'');});
     var dh=$('#doLookupHint');if(dh)dh.innerHTML='';
     renderOutResult();renderVehicleQuick();
@@ -10816,8 +10840,9 @@ function autoFillVehicle(plateId,vTypeId,driverId,telId){
 }
 $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','inVehicle','inDriver','inDriverTel');});
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
-$('#outPlate').addEventListener('input',function(){renderRfidGateStatus();fx9600OutQueuePoll();});
-$('#doCustomer').addEventListener('change',function(){renderRfidGateStatus();fx9600OutQueuePoll();});
+$('#outPlate').addEventListener('input',function(){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();});
+$('#doCustomer').addEventListener('change',function(){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();});
+['doNo','poNo','outDriver','outVehicle','outRecorder'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('change',syncRfidOutboundSession);});
 
 /* Auto-dash a Thai mobile number as it's typed — 095-000-0000 (3-3-4) —
    instead of making the operator type the dashes themselves. Reformats on
