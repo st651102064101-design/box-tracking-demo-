@@ -9608,13 +9608,17 @@ function saveFixedGates(){
    ด้านล่าง) จะเห็นสถานะจริงไวกว่านี้มาก เพราะตัวเลขนี้เป็นแค่เพดานบนตอนไม่มี
    heartbeat เข้ามาเลย */
 var FX9600_STALE_MS=60*1000;
+function fx9600StaleMs(g){
+  var seconds=Number((S.gateHeartbeatIntervalSeconds||{})[g]);
+  return Number.isFinite(seconds)&&seconds>=1?Math.max(5,seconds*3)*1000:FX9600_STALE_MS;
+}
 /* ประตูพร้อมใช้งานก็ต่อเมื่อเครื่องอ่าน FX9600 ของประตูนั้นเคยยิง webhook เข้ามา
    ภายใน FX9600_STALE_MS ล่าสุด — ใช้ค่าเดียวกับ renderFx9600Status() ด้านล่างเพื่อให้
    badge "ไม่พร้อมใช้งาน" ในตัวเลือกประตู sync กับไฟสถานะที่โชว์อยู่แล้วเสมอ */
 function fx9600Ready(g){
   var seenIso=(S.gateWebhookLastSeen||{})[g];
   if(!seenIso)return false;
-  return (Date.now()-new Date(seenIso).getTime())<FX9600_STALE_MS;
+  return (Date.now()-new Date(seenIso).getTime())<fx9600StaleMs(g);
 }
 /* ── MC3390R ไม่ได้ทำงานผ่านหน้าเว็บนี้เลย ─────────────────────────────────────
    MC3390R คือมือถือ handheld ที่รันแอปแยกต่างหาก (pda_flutter) ยิง RFID แล้ว
@@ -9691,7 +9695,7 @@ function fx9600StatusHtml(g,compact){
       +(compact?'ยังไม่เชื่อมต่อเครื่องอ่าน':'ยังไม่เคยมีข้อมูลจากเครื่องอ่านเข้ามาที่ประตูนี้เลย')+'</span>';
   }
   var ms=Date.now()-new Date(seenIso).getTime();
-  var fresh=ms<FX9600_STALE_MS;
+  var fresh=ms<fx9600StaleMs(g);
   var ago=ms<60000?'เมื่อครู่นี้':ms<3600000?Math.floor(ms/60000)+' นาทีที่แล้ว':ms<86400000?Math.floor(ms/3600000)+' ชม.ที่แล้ว':Math.floor(ms/86400000)+' วันที่แล้ว';
   /* แดง ไม่ใช่เหลือง สำหรับออฟไลน์ — ให้เข้าชุดสีเดียวกับ banner แดง/badge แดงที่
      การ์ดสถานะ Gate ขาเข้าและ modal เลือกประตู ผู้ใช้ไม่ควรเห็นสีไม่ตรงกันของ
@@ -12897,6 +12901,7 @@ function readerCard(r){
     +readerMetric('Power',r.powerState==='on'?'On':'Unknown',r.powerState==='on'?'var(--pos)':'var(--muted)')
     +readerMetric('Operation',r.readingEnabled?state:'Paused',r.readingEnabled?stateColor:'var(--warn)')
     +readerMetric('Transmit Power',Number(r.transmitPower).toFixed(2)+' / 3.00')+'</div>'
+    +'<div class="muted small" style="margin:-5px 0 13px;">Heartbeat ที่คาดหวัง: ทุก '+esc(String(r.heartbeatIntervalSeconds||1))+' วินาที · Offline หลังขาดสัญญาณ '+esc(String(Math.max(5,(r.heartbeatIntervalSeconds||1)*3)))+' วินาที</div>'
     +'<div class="c2-label">Antenna health</div><div style="margin:7px 0 14px;line-height:2;">'+ants+'</div>'
     +'<div class="field"><label>Webhook URL</label><div class="tag mono" style="display:block;word-break:break-all;padding:9px;">'+esc(r.webhookUrl)+'</div></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">'
@@ -12934,7 +12939,8 @@ function readerOpenForm(id){
   var h='<div class="mhead">'+settingsBackBtn('settingsGoReaders')+'<h3>'+(r?'ตั้งค่าเครื่องอ่าน':'เพิ่มเครื่องอ่าน')+'</h3>'+settingsCloseX()+'</div><div class="mbody">'
     +'<div class="grid g2"><div class="field"><label>Reader ID</label><input id="rdId" value="'+esc(rid)+'" '+(r?'readonly':'')+'></div><div class="field"><label>ชื่อเครื่องอ่าน</label><input id="rdName" value="'+esc(r?r.name:'FX9600 Gate '+gate)+'"></div>'
     +'<div class="field"><label>IP / Host</label><input id="rdHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ประตู / Gate</label><select id="rdGate" onchange="readerSyncWebhook()">'+readerGateOptions(gate)+'</select></div>'
-    +'<div class="field"><label>Transmit Power (0.00–3.00)</label><input id="rdPower" type="number" min="0" max="3" step="0.01" value="'+esc(String(r?r.transmitPower:3))+'"></div><div class="field"><label>จำนวนเสาอากาศ</label><input id="rdAntennas" type="number" min="1" max="8" value="'+esc(String(r?r.antennaCount:4))+'"></div></div>'
+    +'<div class="field"><label>Transmit Power (0.00–3.00)</label><input id="rdPower" type="number" min="0" max="3" step="0.01" value="'+esc(String(r?r.transmitPower:3))+'"></div><div class="field"><label>จำนวนเสาอากาศ</label><input id="rdAntennas" type="number" min="1" max="8" value="'+esc(String(r?r.antennaCount:4))+'"></div>'
+    +'<div class="field"><label>Heartbeat ทุกกี่วินาที</label><input id="rdHeartbeat" type="number" min="1" max="60" step="1" value="'+esc(String(r?r.heartbeatIntervalSeconds:1))+'"><div class="muted small" style="margin-top:5px;">ตั้ง Reporting Interval ใน Zebra IoT Connector ให้เท่ากับค่านี้</div></div></div>'
     +'<div class="field" style="margin-top:12px;"><label>Target Webhook URL</label><input id="rdWebhook" value="'+esc(r?r.webhookUrl:readerDefaultWebhook(gate))+'" oninput="this.dataset.edited=\'1\'"></div>'
     +'<div class="banner" style="margin-top:14px;"><div><b>Power scale:</b> profile ปัจจุบันของ FX9600 รับค่า 0.00–3.00 เท่านั้น ระบบตรวจซ้ำทั้งหน้าเว็บและ backend</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoReaders()">ยกเลิก</button><div class="spacer"></div><button class="btn accent" id="rdSave" onclick="readerSave()">บันทึก</button></div>';
@@ -12942,10 +12948,11 @@ function readerOpenForm(id){
 }
 window.readerOpenForm=readerOpenForm;window.readerSyncWebhook=readerSyncWebhook;
 function readerSave(){
-  var p=Number(val('rdPower')),a=Number(val('rdAntennas'));
+  var p=Number(val('rdPower')),a=Number(val('rdAntennas')),hb=Number(val('rdHeartbeat'));
   if(!isFinite(p)||p<0||p>3)return toast('ค่าไม่ถูกต้อง','Transmit Power ต้องอยู่ระหว่าง 0.00–3.00','err');
   if(!Number.isInteger(a)||a<1||a>8)return toast('ค่าไม่ถูกต้อง','จำนวนเสาอากาศต้องอยู่ระหว่าง 1–8','err');
-  var id=val('rdId').trim(),body={name:val('rdName').trim(),host:val('rdHost').trim(),gateNo:Number(val('rdGate')),webhookUrl:val('rdWebhook').trim(),transmitPower:p,antennaCount:a};
+  if(!Number.isInteger(hb)||hb<1||hb>60)return toast('ค่าไม่ถูกต้อง','Heartbeat ต้องอยู่ระหว่าง 1–60 วินาที','err');
+  var id=val('rdId').trim(),body={name:val('rdName').trim(),host:val('rdHost').trim(),gateNo:Number(val('rdGate')),webhookUrl:val('rdWebhook').trim(),transmitPower:p,antennaCount:a,heartbeatIntervalSeconds:hb};
   var btn=$('#rdSave');if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
   readerApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(body)}).then(function(){toast('บันทึกแล้ว','ตั้งค่าเครื่องอ่านเรียบร้อย','ok');settingsGoReaders();}).catch(function(e){toast('บันทึกไม่สำเร็จ',e.message,'err');if(btn){btn.disabled=false;btn.textContent='บันทึก';}});
 }
@@ -17243,6 +17250,46 @@ Wn.btSyncNow=syncNow;   /* so anything else can force a refresh */
    token would 401-loop forever. Rebuilding the connection from scratch picks
    up whatever token localStorage holds now. */
 let liveStream=false, es=null;
+const handledRfidEvents=new Set();
+function handleRfidReadEvent(d){
+  if(!d||!d.id||!Number.isInteger(Number(d.gate))||!Array.isArray(d.tags)||!d.tags.length)return;
+  if(handledRfidEvents.has(d.id))return;
+  handledRfidEvents.add(d.id);
+  if(handledRfidEvents.size>200)handledRfidEvents.delete(handledRfidEvents.values().next().value);
+
+  const gate=String(d.gate);
+  const gateTab=$('#tab-gatein');
+  const modal=$('#modal');
+  const alreadyMonitoring=!!(gateTab&&gateTab.classList.contains('active')&&!(modal&&modal.classList.contains('show')));
+
+  /* The physical read is authoritative for which gate owns this queue. Keep
+     the user's server-side gate preference aligned without uploading all S. */
+  if(typeof fixedGatesRef==='function'){
+    const ref=fixedGatesRef();
+    if(String(ref.in||'')!==gate){
+      ref.in=gate;
+      apiFetch('/api/gate-prefs',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({out:ref.out||'',in:gate})}).catch(function(){});
+    }
+  }
+
+  /* A real fixed-reader event skips the optional vehicle question. It does
+     not auto-confirm inventory: tags still land in the review queue. */
+  if(typeof gateInAskAnswered!=='undefined')gateInAskAnswered=true;
+  if(typeof gateInStep!=='undefined')gateInStep='scan';
+  if(!alreadyMonitoring){
+    toast('พบการสแกนกล่องที่ประตู '+gate,'กำลังพากลับไปหน้า Gate ขาเข้า','info');
+    if(typeof closeModal==='function')closeModal();
+    if(typeof switchTab==='function')switchTab('gatein');
+  }else if(typeof gateInGo==='function')gateInGo('scan');
+
+  d.tags.forEach(function(tag){
+    const b=(Wn.S&&Wn.S.boxes||{})[tag];
+    if(!b||b.status==='warehouse'||pendingIn.indexOf(tag)>=0)return;
+    pendingIn.push(tag);
+  });
+  if(typeof renderInResult==='function')renderInResult();
+  if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();
+}
 function connectStream(){
   if(!window.EventSource||es)return;
   const t=token();
@@ -17256,6 +17303,11 @@ function connectStream(){
     /* our own write coming back — already on screen */
     if(d&&d.origin&&d.origin===Wn.BT_CLIENT_ID)return;
     syncNow();
+  });
+  es.addEventListener('rfid-read',ev=>{
+    liveStream=true;
+    let d=null;try{d=JSON.parse(ev.data);}catch(_){}
+    handleRfidReadEvent(d);
   });
   es.onerror=()=>{
     liveStream=false;
