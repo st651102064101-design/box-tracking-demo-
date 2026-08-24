@@ -19,6 +19,7 @@ import {
   warehouses,
   gates,
   gateWebhookStatus,
+  rfidReaders,
   locations,
   employees,
   vehicles,
@@ -57,6 +58,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     whRows,
     gateRows,
     gateStatusRows,
+    readerRows,
     locRows,
     empRows,
     vehRows,
@@ -77,6 +79,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     db.select().from(warehouses),
     db.select().from(gates),
     db.select().from(gateWebhookStatus),
+    db.select().from(rfidReaders),
     db.select().from(locations),
     db.select().from(employees),
     db.select().from(vehicles),
@@ -117,6 +120,9 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
        so this value must never be used as the reader administration URL. */
     gateWebhookLastIp: Object.fromEntries(
       gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp as string]),
+    ),
+    gateHeartbeatIntervalSeconds: Object.fromEntries(
+      readerRows.map((r) => [String(r.gateNo), r.heartbeatIntervalSeconds]),
     ),
     // Read-only site configuration for the FX9600 administration UI.
     fx9600AdminUrl: env.fx9600AdminUrl,

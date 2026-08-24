@@ -8,6 +8,7 @@ import { resolveBoxesByCodes } from '../services/rfid.js';
 import { gateWebhookStatus, gatePendingReads, rfidReaders } from '../db/schema.js';
 import { and, eq, gte } from 'drizzle-orm';
 import { writeAuditLog } from '../services/audit.js';
+import { publishRfidRead } from '../lib/bus.js';
 
 export const rfidRouter = Router();
 
@@ -216,7 +217,9 @@ rfidRouter.get(
 
 const readerView = (row: typeof rfidReaders.$inferSelect, status?: typeof gateWebhookStatus.$inferSelect) => {
   const lastSeenAt = status?.lastSeenAt ?? null;
-  const online = !!lastSeenAt && Date.now() - lastSeenAt.getTime() < 60_000;
+  const heartbeatIntervalSeconds = row.heartbeatIntervalSeconds;
+  const staleMs = Math.max(5, heartbeatIntervalSeconds * 3) * 1000;
+  const online = !!lastSeenAt && Date.now() - lastSeenAt.getTime() < staleMs;
   const scanning = online && !!status?.lastTagSeenAt && Date.now() - status.lastTagSeenAt.getTime() < 15_000;
   return {
     id: row.id,
@@ -226,6 +229,7 @@ const readerView = (row: typeof rfidReaders.$inferSelect, status?: typeof gateWe
     webhookUrl: row.webhookUrl,
     transmitPower: Number(row.transmitPower),
     antennaCount: row.antennaCount,
+    heartbeatIntervalSeconds,
     readingEnabled: row.readingEnabled,
     online,
     powerState: online ? 'on' : 'unknown',
@@ -260,6 +264,7 @@ function parseReaderInput(body: unknown) {
   const webhookUrl = String(src.webhookUrl ?? '').trim();
   const transmitPower = Number(src.transmitPower);
   const antennaCount = Number(src.antennaCount);
+  const heartbeatIntervalSeconds = Number(src.heartbeatIntervalSeconds ?? 1);
   if (!name || name.length > 100) throw httpError(400, 'ชื่อเครื่องอ่านไม่ถูกต้อง', 'invalid_reader_name');
   if (!/^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|(?:\d{1,3}\.){3}\d{1,3})$/i.test(host)) {
     throw httpError(400, 'Host/IP ของเครื่องอ่านไม่ถูกต้อง', 'invalid_reader_host');
@@ -277,7 +282,10 @@ function parseReaderInput(body: unknown) {
   if (!Number.isInteger(antennaCount) || antennaCount < 1 || antennaCount > 8) {
     throw httpError(400, 'จำนวนเสาอากาศต้องอยู่ระหว่าง 1 ถึง 8', 'invalid_antenna_count');
   }
-  return { name, host, gateNo, webhookUrl, transmitPower: transmitPower.toFixed(2), antennaCount };
+  if (!Number.isInteger(heartbeatIntervalSeconds) || heartbeatIntervalSeconds < 1 || heartbeatIntervalSeconds > 60) {
+    throw httpError(400, 'Heartbeat interval ต้องอยู่ระหว่าง 1 ถึง 60 วินาที', 'invalid_heartbeat_interval');
+  }
+  return { name, host, gateNo, webhookUrl, transmitPower: transmitPower.toFixed(2), antennaCount, heartbeatIntervalSeconds };
 }
 
 rfidRouter.put(
@@ -556,6 +564,9 @@ rfidRouter.post(
       unknown: result.unknown,
       repeats,
     });
+    // A dedicated SSE delta wakes every signed-in browser immediately without
+    // turning a one-second reader report into a full-state reload storm.
+    if (fresh.length) publishRfidRead(gate, fresh);
     /* Deliberately no bump() here any more. It made sense while this route
        received boxes directly (box state changed, so every browser needed to
        refetch), but queuing touches nothing in the /api/state snapshot — the

@@ -16,9 +16,12 @@
  * interface below is the seam where that swap happens.
  */
 export type ChangeListener = (version: number, origin: string | null) => void;
+export type RfidReadEvent = { id: string; gate: number; tags: string[]; ts: string };
+export type RfidReadListener = (event: RfidReadEvent) => void;
 
 let version = 0;
 const listeners = new Set<ChangeListener>();
+const rfidReadListeners = new Set<RfidReadListener>();
 
 /** Record that state changed and notify every open stream. */
 export function bump(origin?: string | null): number {
@@ -41,6 +44,25 @@ export function subscribe(listener: ChangeListener): () => void {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/** Publish a tag-read delta without forcing every browser to reload /api/state. */
+export function publishRfidRead(gate: number, tags: string[]): RfidReadEvent {
+  const event = {
+    id: `${gate}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    gate,
+    tags: Array.from(new Set(tags)),
+    ts: new Date().toISOString(),
+  };
+  for (const listener of rfidReadListeners) {
+    try { listener(event); } catch { /* dead stream removes itself on close */ }
+  }
+  return event;
+}
+
+export function subscribeRfidRead(listener: RfidReadListener): () => void {
+  rfidReadListeners.add(listener);
+  return () => rfidReadListeners.delete(listener);
 }
 
 export const currentVersion = () => version;

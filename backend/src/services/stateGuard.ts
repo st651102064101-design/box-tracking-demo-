@@ -98,6 +98,7 @@ export const UNGUARDED_STATE_KEYS = [
   /* Read-only from the client: only the FX9600 webhook writes these. */
   'gateWebhookLastSeen',
   'gateWebhookLastIp',
+  'gateHeartbeatIntervalSeconds',
   'fx9600AdminUrl',
 ];
 

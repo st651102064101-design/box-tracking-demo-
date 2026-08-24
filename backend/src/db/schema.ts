@@ -165,6 +165,7 @@ export const rfidReaders = pgTable('rfid_readers', {
   webhookUrl: text('webhook_url').notNull(),
   transmitPower: numeric('transmit_power').notNull().default('3'),
   antennaCount: integer('antenna_count').notNull().default(4),
+  heartbeatIntervalSeconds: integer('heartbeat_interval_seconds').notNull().default(1),
   readingEnabled: boolean('reading_enabled').notNull().default(true),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),

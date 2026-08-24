@@ -128,10 +128,12 @@ CREATE TABLE IF NOT EXISTS rfid_readers (
   webhook_url       TEXT NOT NULL,
   transmit_power    NUMERIC NOT NULL DEFAULT 3,
   antenna_count     INTEGER NOT NULL DEFAULT 4,
+  heartbeat_interval_seconds INTEGER NOT NULL DEFAULT 1,
   reading_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_by        TEXT
 );
+ALTER TABLE rfid_readers ADD COLUMN IF NOT EXISTS heartbeat_interval_seconds INTEGER NOT NULL DEFAULT 1;
 
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
