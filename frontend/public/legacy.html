@@ -2864,7 +2864,7 @@ a{color:var(--accentInk);}
           <!-- ไม่ตั้งเอง (location.wh ว่าง) กล่องนี้จะไม่มีทางรู้ว่าอยู่คลังไหนเลยจนกว่าจะ
                ผ่านประตูเข้า/ย้ายพิกัดจริง — คอลัมน์ "ตำแหน่ง" ในตารางคลังกล่อง จะซ้ำคำ
                กับคอลัมน์ "สถานะ" เปล่าประโยชน์ (locShort() เดายังไม่ได้ถ้ามีหลายคลัง) -->
-          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bWh"></select></div>
+          <div class="field" id="bWhField"><label>คลัง <span class="req">*</span></label><select id="bWh" style="color:#000;"></select></div>
         </div>
       </div>
 
@@ -2872,7 +2872,7 @@ a{color:var(--accentInk);}
       <div id="boxBatchWrap" style="display:none;">
         <div class="grid g3" style="margin-bottom:0;">
           <div class="field"><label>ประเภทกล่อง <span class="req">*</span></label><select id="bTypeBatch"></select></div>
-          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bWhBatch"></select></div>
+          <div class="field" id="bWhBatchField"><label>คลัง <span class="req">*</span></label><select id="bWhBatch" style="color:#000;"></select></div>
           <div class="field"><label>สร้างเป็นชุด — คำนำหน้ารหัส <span class="req">*</span></label>
             <input id="bPrefix" list="dl-prefix" placeholder="CRT-" autocomplete="off">
             <datalist id="dl-prefix"></datalist>
@@ -5754,6 +5754,24 @@ function nextTagForType(typeId){
   return prefix+String(max+1);
 }
 function refreshTagId(){var t=$('#bTag');if(t&&!t._override)t.value=nextTagForType(val('bType'));}
+/* State is loaded from Postgres before renderAll(). Use the most recent box as
+   a default source, but always advance its numeric suffix to avoid duplicates. */
+function mostRecentSavedBox(){
+  return Object.values(S.boxes||{}).sort(function(a,b){return new Date(b.regAt||b.lastSeenAt||0).getTime()-new Date(a.regAt||a.lastSeenAt||0).getTime();})[0]||null;
+}
+function tagPrefixFromSavedTag(tag){var m=String(tag||'').match(/^(.*?)(\d+)$/);return m?m[1]:'';}
+function nextTagFromSavedTag(tag){
+  var m=String(tag||'').match(/^(.*?)(\d+)$/);if(!m)return '';
+  var prefix=m[1],width=m[2].length,n=parseInt(m[2],10)+1,candidate;
+  do{candidate=prefix+String(n).padStart(width,'0');n++;}while(S.boxes[candidate]);
+  return candidate;
+}
+function applySavedBoxDefaults(){
+  var latest=mostRecentSavedBox();if(!latest)return;
+  var prefix=tagPrefixFromSavedTag(latest.tag),batchPrefix=$('#bPrefix'),singleTag=$('#bTag');
+  if(batchPrefix&&!batchPrefix.value&&prefix)batchPrefix.value=prefix;
+  if(singleTag&&!singleTag._override&&!val('bType')){var next=nextTagFromSavedTag(latest.tag);if(next)singleTag.value=next;}
+}
 setTimeout(function(){refreshTagId();
   var bTypeSel=$('#bType');if(bTypeSel)bTypeSel.addEventListener('change',refreshTagId);
   var br=$('#btnRegenTag');if(br)br.addEventListener('click',function(){var t=$('#bTag');t._override=false;t.readOnly=true;t.style.opacity='';refreshTagId();toast('สร้างรหัสใหม่แล้ว',val('bTag'),'info');});
@@ -5938,6 +5956,19 @@ function syncPrefixFromBatchType(){
     if(bStart){var nextTag=nextTagForType(typeId);var m=nextTag.slice(bPrefix.value.length).match(/^(\d+)$/);if(m)bStart.value=parseInt(m[1],10);}
   }
   updateBatchPreview();
+}
+
+function renderRegistrationWarehouseField(){
+  [['bWhField','bWh'],['bWhBatchField','bWhBatch']].forEach(function(pair){
+    var field=$('#'+pair[0]),select=$('#'+pair[1]);if(!field)return;
+    var current=select&&select.value;
+    if(!Object.keys(S.warehouses||{}).length){
+      field.innerHTML='<label>คลัง <span class="req">*</span></label><button type="button" class="btn accent" onclick="goSetup(\'wh\')">Warehouse Management</button>';
+      return;
+    }
+    field.innerHTML='<label>คลัง <span class="req">*</span></label><select id="'+pair[1]+'" style="color:#000;"></select>';
+    var replacement=$('#'+pair[1]);if(replacement){replacement.innerHTML=invWhOptions(current);if(current)replacement.value=current;}
+  });
 }
 
 setTimeout(function(){
@@ -6661,10 +6692,10 @@ function setEmpCredentials(id,name,currentUsername,currentEmail){
         toast(existing?'อัปเดตบัญชีแล้ว':'สร้างบัญชีแล้ว',u,'ok');
       })
       .catch(function(e){
-        restoreCredentialBtn();
         if(e.body&&e.body.errors&&applyServerValidationErrors(e.body.errors,$('#modalSheet')))return;
         toast('ตั้งรหัสผ่านไม่สำเร็จ',e.message||'','err');
-      });
+      })
+      .finally(function(){restoreCredentialBtn();});
   };
 }
 window.setEmpCredentials=setEmpCredentials;
@@ -12670,14 +12701,8 @@ function renderSetup(){
   if(bTypeBatchSel){bTypeBatchSel.innerHTML=btOptions;bTypeBatchSel.style.display=bts.length?'':'none';if(bts.length===1&&!bTypeBatchSel.value)bTypeBatchSel.value=bts[0].id;}
   if(bTypeEmpty){bTypeEmpty.style.display=bts.length?'none':'block';bTypeEmpty.innerHTML=bts.length?'':'<button class="btn accent" onclick="goSetup(\'btype\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มประเภทกล่อง</button>';}
   if(noTypeHint)noTypeHint.style.display='none';
-  /* คลังสำหรับลงทะเบียนกล่อง — ใช้ invWhOptions() ตัวเดียวกับ #eWh ด้านล่าง ซึ่งเลือก
-     คลังเดียวที่มีให้อัตโนมัติอยู่แล้วถ้าทั้งระบบมีคลังเดียว (ดู invWhOptions ข้างล่าง)
-     แต่การ "sel.value=curWh" ต่อท้ายทันที เขียนทับ auto-select นั้นทิ้งเสมอเวลา curWh
-     ยังว่างอยู่ (ค่าเดิมก่อน re-render) — <option selected> ที่ invWhOptions ใส่มาให้ก็
-     ไม่มีผลอะไรเพราะโดนสั่ง value='' ทับซ้ำ ผู้ใช้เลยเห็น dropdown มีตัวเลือกเดียวแต่ต้อง
-     กดเลือกเองอยู่ดี — restore ค่าดิม value จริง ๆ ก็ต่อเมื่อเคยมีค่าอยู่ก่อนแล้วเท่านั้น */
-  var bWhSel=$('#bWh');if(bWhSel){var curBWh=bWhSel.value;bWhSel.innerHTML=invWhOptions(curBWh);if(curBWh)bWhSel.value=curBWh;}
-  var bWhBatchSel=$('#bWhBatch');if(bWhBatchSel){var curBWhB=bWhBatchSel.value;bWhBatchSel.innerHTML=invWhOptions(curBWhB);if(curBWhB)bWhBatchSel.value=curBWhB;}
+  renderRegistrationWarehouseField();
+  applySavedBoxDefaults();
 
   // auto-generated ids
   btIdAuto.refresh(); whIdAuto.refresh(); cIdAuto.refresh(); eIdAuto.refresh();
