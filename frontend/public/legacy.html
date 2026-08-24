@@ -12877,29 +12877,41 @@ function readerApi(path,opt){
   opt=opt||{};opt.headers=Object.assign({'Content-Type':'application/json'},authHeaders(),opt.headers||{});
   return apiFetch(path,opt).then(function(r){return r.json().catch(function(){return{};}).then(function(j){if(!r.ok)throw new Error(j.message||('HTTP '+r.status));return j;});});
 }
-function readerStatusPill(r){
-  var color=r.online?'var(--pos)':'var(--neg)';
+/* Reader Management is a separate API view, while the live Gate indicator
+   receives its status through state/SSE. Derive both from the same per-gate
+   last-seen value so a cached /readers response can never keep a healthy
+   reader red after the gate has already received its next heartbeat. */
+function readerLiveStatus(r){
+  var gate=String(r.gateNo||'');
+  var seen=(S.gateWebhookLastSeen||{})[gate]||r.lastSeenAt||null;
+  var heartbeat=Math.max(1,Number(r.heartbeatIntervalSeconds)||1);
+  var online=!!seen&&(Date.now()-new Date(seen).getTime()<Math.max(5,heartbeat*3)*1000);
+  return {online:online,lastSeenAt:seen};
+}
+function readerStatusPill(r,live){
+  var color=live.online?'var(--pos)':'var(--neg)';
   return '<span class="pill" style="color:'+color+';border-color:color-mix(in srgb,'+color+' 30%,var(--line));background:color-mix(in srgb,'+color+' 10%,transparent);">'
-    +'<span style="width:7px;height:7px;border-radius:50%;background:'+color+';display:inline-block;margin-right:5px;"></span>'+(r.online?'Online':'Offline')+'</span>';
+    +'<span style="width:7px;height:7px;border-radius:50%;background:'+color+';display:inline-block;margin-right:5px;"></span>'+(live.online?'Online':'Offline')+'</span>';
 }
 function readerMetric(label,value,tone){
   return '<div style="padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);"><div class="muted small">'+esc(label)+'</div><div style="font-weight:700;margin-top:5px;color:'+(tone||'var(--text)')+';">'+esc(value)+'</div></div>';
 }
 function readerCard(r){
+  var live=readerLiveStatus(r);
   var state={idle:'Idle',scanning:'Scanning',error:'Error'}[r.operationalState]||'Unknown';
-  var stateColor=r.operationalState==='scanning'?'var(--pos)':r.operationalState==='error'?'var(--neg)':'var(--muted)';
+  var stateColor=r.operationalState==='scanning'?'var(--pos)':r.operationalState==='error'&&!live.online?'var(--neg)':'var(--muted)';
   var active=(r.activeAntennas||[]).map(Number);
   var ants='';for(var i=1;i<=r.antennaCount;i++){
     var healthy=active.indexOf(i)>=0;
     ants+='<span class="tag" title="'+(healthy?'พบข้อมูลจากเสานี้ล่าสุด':'ยังไม่พบข้อมูลจากเสานี้')+'" style="color:'+(healthy?'var(--pos)':'var(--muted)')+';">A'+i+' · '+(healthy?'Active':'Unknown')+'</span> ';
   }
   return '<div class="wg xl" style="margin-bottom:14px;">'
-    +'<div class="wg-top"><span class="wg-ic dashed">'+SICON_RFID+'</span><div style="flex:1;"><div class="wg-lbl">'+esc(r.name)+'</div><div class="muted small mono">'+esc(r.host)+' · Gate '+esc(String(r.gateNo))+'</div></div>'+readerStatusPill(r)+'</div>'
+    +'<div class="wg-top"><span class="wg-ic dashed">'+SICON_RFID+'</span><div style="flex:1;"><div class="wg-lbl">'+esc(r.name)+'</div><div class="muted small mono">'+esc(r.host)+' · Gate '+esc(String(r.gateNo))+'</div></div>'+readerStatusPill(r,live)+'</div>'
     +'<div class="wg-body">'
     +'<div class="grid g4" style="gap:9px;margin-bottom:14px;">'
-    +readerMetric('Network',r.online?'Heartbeat OK':'No heartbeat',r.online?'var(--pos)':'var(--neg)')
-    +readerMetric('Power',r.powerState==='on'?'On':'Unknown',r.powerState==='on'?'var(--pos)':'var(--muted)')
-    +readerMetric('Operation',r.readingEnabled?state:'Paused',r.readingEnabled?stateColor:'var(--warn)')
+    +readerMetric('Network',live.online?'Heartbeat OK':'No heartbeat',live.online?'var(--pos)':'var(--neg)')
+    +readerMetric('Power',live.online?'On':'Unknown',live.online?'var(--pos)':'var(--muted)')
+    +readerMetric('Operation',r.readingEnabled?(live.online?state:'Error'):'Paused',r.readingEnabled?stateColor:'var(--warn)')
     +readerMetric('Transmit Power',Number(r.transmitPower).toFixed(2)+' / 3.00')+'</div>'
     +'<div class="muted small" style="margin:-5px 0 13px;">Heartbeat ที่คาดหวัง: ทุก '+esc(String(r.heartbeatIntervalSeconds||1))+' วินาที · Offline หลังขาดสัญญาณ '+esc(String(Math.max(5,(r.heartbeatIntervalSeconds||1)*3)))+' วินาที</div>'
     +'<div class="c2-label">Antenna health</div><div style="margin:7px 0 14px;line-height:2;">'+ants+'</div>'
@@ -12921,7 +12933,7 @@ function loadReaders(silent){
 function settingsGoReaders(){
   if(readerPageTimer){clearInterval(readerPageTimer);readerPageTimer=null;}
   var h='<div class="mhead">'+settingsBackBtn('settingsGoDevices')+'<h3>Reader Configuration &amp; Status</h3>'+settingsCloseX()+'</div>'
-    +'<div class="mbody"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div><b>Zebra FX9600 Fleet</b><div class="muted small">Heartbeat และสถานะอัปเดตทุก 10 วินาที</div></div><div class="spacer"></div><button class="btn accent sm" onclick="readerOpenForm()">+ เพิ่มเครื่องอ่าน</button></div><div id="readerPageBody"><div class="muted">กำลังโหลด...</div></div></div>'
+    +'<div class="mbody"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div><b>Zebra FX9600 Fleet</b><div class="muted small">สถานะอัปเดตทันทีเมื่อได้รับ heartbeat</div></div><div class="spacer"></div><button class="btn accent sm" onclick="readerOpenForm()">+ เพิ่มเครื่องอ่าน</button></div><div id="readerPageBody"><div class="muted">กำลังโหลด...</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoDevices()">ย้อนกลับ</button><div class="spacer"></div><button class="btn gray" onclick="loadReaders(false)">รีเฟรช</button></div>';
   openModal(h);loadReaders(false);
   readerPageTimer=setInterval(function(){if(!$('#readerPageBody')){clearInterval(readerPageTimer);readerPageTimer=null;return;}loadReaders(true);},10000);
