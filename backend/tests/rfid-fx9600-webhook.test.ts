@@ -264,3 +264,34 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(state.body.gateWebhookLastSeen['6']).toBeUndefined();
   });
 });
+
+describe('FX9600 reader-to-gate binding', () => {
+  const payload = (gateNo: number) => ({
+    name: `FX9600 Gate ${gateNo}`,
+    host: `192.168.1.${gateNo}`,
+    gateNo,
+    webhookUrl: `http://192.168.1.2:4000/api/rfid/fx9600/${gateNo}/webhook`,
+    transmitPower: 3,
+    antennaCount: 1,
+    heartbeatIntervalSeconds: 1,
+  });
+
+  it('prevents two reader records from being bound to the same gate', async () => {
+    const first = await request(ctx.app).put('/api/rfid/fx9600/readers/fx-gate-5').set(auth(ctx.token)).send(payload(5));
+    expect(first.status).toBe(200);
+
+    const duplicate = await request(ctx.app).put('/api/rfid/fx9600/readers/fx-gate-5b').set(auth(ctx.token)).send(payload(5));
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.error).toBe('gate_reader_already_bound');
+  });
+
+  it('unbinding removes only the WMS reader mapping', async () => {
+    const deleted = await request(ctx.app).delete('/api/rfid/fx9600/readers/fx-gate-5').set(auth(ctx.token));
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toMatchObject({ ok: true, id: 'fx-gate-5', gateNo: 5 });
+
+    const list = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    expect(list.status).toBe(200);
+    expect(list.body.readers.find((reader: { id: string }) => reader.id === 'fx-gate-5')).toBeUndefined();
+  });
+});

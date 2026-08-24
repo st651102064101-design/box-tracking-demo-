@@ -298,6 +298,14 @@ rfidRouter.put(
     const data = parseReaderInput(req.body);
     const db = getDb();
     const before = (await db.select().from(rfidReaders).where(eq(rfidReaders.id, id)).limit(1))[0] ?? null;
+    /* gate_no is unique in the database.  Check it explicitly before the
+       upsert so the operator gets an actionable WMS message instead of a
+       PostgreSQL constraint error when attempting to bind two readers to the
+       same physical gate. */
+    const gateOwner = (await db.select().from(rfidReaders).where(eq(rfidReaders.gateNo, data.gateNo)).limit(1))[0] ?? null;
+    if (gateOwner && gateOwner.id !== id) {
+      throw httpError(409, `Gate ${data.gateNo} ผูกกับเครื่องอ่าน ${gateOwner.name} อยู่แล้ว`, 'gate_reader_already_bound');
+    }
     const [row] = await db
       .insert(rfidReaders)
       .values({ id, ...data, updatedAt: new Date(), updatedBy: req.user?.name })
@@ -306,6 +314,33 @@ rfidRouter.put(
     await writeAuditLog(db, { action: before ? 'reader_update' : 'reader_create', actor: req.user?.name ?? 'system', itemId: id, itemName: row.name, before, after: row });
     const status = (await db.select().from(gateWebhookStatus).where(eq(gateWebhookStatus.gateNo, row.gateNo)).limit(1))[0];
     res.json(readerView(row, status));
+  }),
+);
+
+/**
+ * Removes only the WMS-to-gate binding.  This never sends a command to the
+ * FX9600: its network / IoT Connector configuration remains untouched, which
+ * is important when a reader is being reassigned or serviced on site.
+ */
+rfidRouter.delete(
+  '/fx9600/readers/:id',
+  requireAuth,
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const id = String(req.params.id).trim();
+    const db = getDb();
+    const before = (await db.select().from(rfidReaders).where(eq(rfidReaders.id, id)).limit(1))[0] ?? null;
+    if (!before) throw httpError(404, 'ไม่พบเครื่องอ่าน', 'reader_not_found');
+    await db.delete(rfidReaders).where(eq(rfidReaders.id, id));
+    await writeAuditLog(db, {
+      action: 'reader_unbind',
+      actor: req.user?.name ?? 'system',
+      itemId: before.id,
+      itemName: before.name,
+      before,
+      after: { unbound: true, gateNo: before.gateNo },
+    });
+    res.json({ ok: true, id: before.id, gateNo: before.gateNo });
   }),
 );
 
