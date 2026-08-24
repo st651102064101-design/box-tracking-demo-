@@ -418,8 +418,9 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .chip2{display:inline-flex;align-items:center;gap:10px;background:var(--panelChipBg);
   border:1px solid var(--panelChipBorder);color:var(--panelInk);border-radius:16px;
   padding:9px 8px 9px 15px;font-size:13.5px;line-height:1.35;animation:chipIn .4s var(--ease) both;
-  transition:background .18s,border-color .18s;}
-.chip2:hover{background:var(--panelInputFocusBg);}
+  transition:background .18s,border-color .18s,transform .18s;cursor:pointer;}
+.chip2:hover{background:var(--panelInputFocusBg);border-color:var(--accent);transform:translateY(-1px);}
+.chip2:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 30%,transparent);outline-offset:2px;border-color:var(--accent);}
 .chip2 .c2-tag{font-family:var(--mono);font-weight:700;letter-spacing:.01em;}
 .chip2 .c2-type{color:var(--panelInkSoft);font-weight:400;margin-left:2px;}
 .chip2 b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 auto;
@@ -430,7 +431,9 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .chip2 b:hover{background:var(--neg);color:#fff;transform:scale(1.08);}
 .chip2 b .svgi{width:.72em;height:.72em;}
 .c2-new{font-size:10px;background:var(--accent2);color:var(--accentContrast);border-radius:6px;padding:2px 6px;margin-left:6px;font-weight:700;letter-spacing:.02em;vertical-align:1px;}
-.c2-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--panelInkSoft);margin-bottom:10px;}
+.c2-label{display:inline-flex;align-items:center;font-size:16px;font-weight:800;letter-spacing:.02em;
+  color:var(--accentInk);background:var(--accentSoft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
+  border-radius:10px;padding:7px 11px;margin-bottom:12px;box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 12%,transparent);}
 
 /* ============================================================ BARCODE LABEL PREVIEW ============================================================ */
 .rfid-fin-card{background:var(--surface2);border:1px solid var(--line);border-radius:16px;padding:14px 14px 18px;
@@ -2432,7 +2435,6 @@ a{color:var(--accentInk);}
         <input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off">
         <button class="scanbtn" id="btnScanOut">สแกน</button>
       </div>
-      <div class="quick" id="quickOut"></div>
       <div class="scanresult" id="resultOut"></div>
     </div>
   </div>
@@ -10195,7 +10197,7 @@ function fx9600InQueuePoll(){
   fx9600InPolling=true;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
-    d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status!=='warehouse'&&pendingIn.indexOf(tag)<0){pendingIn.push(tag);added++;}});
+    d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status!=='warehouse'&&pendingIn.indexOf(tag)<0){pendingIn.push(tag);inConditionMap[tag]=inConditionMap[tag]||'good';added++;}});
     if(added){
       /* Here the operator explicitly chose Gate In, so a real read can skip
          the optional vehicle prompt without guessing direction globally. */
@@ -10522,9 +10524,8 @@ function lookupDO(){
 window.lookupDO=lookupDO;
 /* ===== GATE OUT ===== */
 function buildQuickOut(){
-  var wh=Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&!isStagingLoc(b.location||{});}).slice(0,6);
-  $('#quickOut').innerHTML=wh.length?('<span class="muted small" style="align-self:center;">เดโมยิงเร็ว:</span>'+
-    wh.map(function(b){return '<button onclick="scanOut(\''+esc(b.tag)+'\')">'+esc(b.tag)+'</button>';}).join('')):'';
+  /* Production Gate Out accepts scanner/RFID input only. Demo shortcuts were
+     easy to click accidentally and could enqueue a box that never crossed the gate. */
 }
 function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);if(!tag)return;
   var b=S.boxes[tag];
@@ -10591,7 +10592,7 @@ function renderOutResult(){
   $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
   if(!pendingOut.length){$('#resultOut').innerHTML='';return;}
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · '+pendingOut.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
+    return '<span class="chip2" role="button" tabindex="0" onclick="openBoxActionModal(\''+esc(t)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openBoxActionModal(\''+esc(t)+'\');}"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="event.stopPropagation();unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];if(gateOutEntryMode==='rfid')rfidRemovePending(fixedGatesRef().out,t);renderOutResult();}
 window.unqueueOut=unqueueOut;
@@ -10776,20 +10777,29 @@ function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(
   var b=S.boxes[tag];
   if(!b){$('#resultIn').innerHTML='<div class="banner bad">ไม่พบกล่อง '+esc(tag)+(looksThaiGarbled(raw)?' — คีย์บอร์ดอาจอยู่โหมดภาษาไทย กรุณาเปลี่ยนเป็นภาษาอังกฤษแล้วสแกนใหม่':'')+'</div>';setv('scanIn','');return;}
   if(b.status==='warehouse'){$('#resultIn').innerHTML='<div class="banner warn">'+esc(tag)+' อยู่ในคลังอยู่แล้ว</div>';setv('scanIn','');return;}
-  if(pendingIn.indexOf(tag)<0)pendingIn.push(tag);
+  if(pendingIn.indexOf(tag)<0){pendingIn.push(tag);inConditionMap[tag]=inConditionMap[tag]||'good';}
   setv('scanIn','');renderInResult();$('#scanIn').focus();
 }
 window.scanIn=scanIn;
+var inConditionMap={};
+function setInCondition(t,v){inConditionMap[t]=v;}
+window.setInCondition=setInCondition;
+function inConditionSelectHtml(t){
+  var cur=inConditionMap[t]||'good';
+  return '<select class="chip2-cond" aria-label="สภาพกล่อง" onchange="setInCondition(\''+esc(t)+'\',this.value)" onclick="event.stopPropagation()">'
+    +['good','minor','damaged'].map(function(v){return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+OUT_COND_LABEL[v]+'</option>';}).join('')
+    +'</select>';
+}
 function renderInResult(){
   $('#inCount').textContent=pendingIn.length?('เตรียมรับคืน '+pendingIn.length+' ใบ'):'';
   if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();return;}
-  $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · '+pendingIn.length+' ใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
+  $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · '+pendingIn.length+' ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
     var isNew=(!b.cycles||b.cycles===0)&&!(b.history||[]).some(function(h){return h.dir==='out';});
     var badge=isNew?'<span class="c2-new" title="ระบบตรวจ: กล่องใหม่จากซัพพลายเออร์ (รับเข้าครั้งแรก)">ใหม่</span>':'<span class="c2-new" style="background:var(--accentSoft);color:var(--accent);" title="ระบบตรวจ: กล่องเคยออกไปแล้ว = รับคืนจากลูกค้า (รอบที่ '+((b.cycles||0)+1)+')">คืน · รอบ '+((b.cycles||0)+1)+'</span>';
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span><b onclick="unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
+    return '<span class="chip2" role="button" tabindex="0" onclick="openBoxActionModal(\''+esc(t)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openBoxActionModal(\''+esc(t)+'\');}"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span>'+inConditionSelectHtml(t)+'<b onclick="event.stopPropagation();unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
   if(typeof schedule==='function')schedule();
 }
-function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});if(gateInEntryMode==='rfid')rfidRemovePending(fixedGatesRef().in,t);renderInResult();if(typeof schedule==='function')schedule();}
+function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});delete inConditionMap[t];if(gateInEntryMode==='rfid')rfidRemovePending(fixedGatesRef().in,t);renderInResult();if(typeof schedule==='function')schedule();}
 window.unqueueIn=unqueueIn;
 $('#btnScanIn').onclick=function(){scanIn();};
 $('#scanIn').addEventListener('keydown',function(e){if(e.key==='Enter')scanIn();});
@@ -10849,8 +10859,10 @@ function saveInbound(){
   var vehicle=val('inVehicle'),tel=val('inDriverTel'),note=val('inNote');
   if(tel&&!isValidThaiPhone(tel))return toast('เบอร์โทรคนขับไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 081-234-5678','err');
   var inTs=iso();
-  var newCount=0,returnCount=0;
+  var newCount=0,returnCount=0,damagedCount=0;
   pendingIn.forEach(function(t){var b=S.boxes[t];
+    var condition=inConditionMap[t]||'good';
+    var receivedStatus=condition==='damaged'?'damage':'warehouse';
     // CASE A: box has never been dispatched (no prior 'out' in history) → first-time inbound, not a return
     var isNewBox=!(b.history||[]).some(function(h){return h.dir==='out';});
     // First successful inbound scan confirms the box's barcode label is attached and readable.
@@ -10859,30 +10871,32 @@ function saveInbound(){
     if(!b.labeled){b.labeledAt=inTs;b.labeledBy=recorder;}
     b.labeled=true;
     if(isNewBox){
-      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จากซัพพลายเออร์) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน',platform:'web'});
-      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,platform:'web'});
-      b.status='warehouse';b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
+      b.history.push({dir:'in',ts:inTs,do:'',po:'',customer:'',gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:'รับเข้าครั้งแรก (กล่องใหม่จากซัพพลายเออร์) — ระบบตรวจอัตโนมัติ ไม่นับเป็นยอดคืน',condition:condition,platform:'web'});
+      S.events.push({ts:inTs,dir:'in-new',tag:t,type:b.type,customer:'',partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,condition:condition,platform:'web'});
+      b.status=receivedStatus;b.inCondition=condition;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       newCount++;
     }else{
       // CASE B: box was previously dispatched → this is a genuine return from customer
-      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||''),platform:'web'});
-      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,platform:'web'});
-      b.status='warehouse';b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
+      b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||''),condition:condition,platform:'web'});
+      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,condition:condition,platform:'web'});
+      b.status=receivedStatus;b.inCondition=condition;b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       returnCount++;
     }
+    if(condition==='damaged')damagedCount++;
   });
   var n=pendingIn.length;var auditTagsIn=pendingIn.slice();
   var typesIn={};auditTagsIn.forEach(function(t){var bb=S.boxes[t];if(bb)typesIn[bb.type]=true;});
   pendingIn=[];
+  inConditionMap={};
   rememberVehicle(plate,driver,vehicle,tel);
   save();
   patchAuditGateIn(auditTagsIn,gate,wh,recorder);
   if(gateInEntryMode==='rfid')rfidClearPending(gate,auditTagsIn);
   ['inPartner','inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
   renderVehicleQuick();
-  toast('รับเข้าคลังสำเร็จ',n+' ใบ → '+whName(wh)+' (สถานะ: อยู่ในคลัง)','ok');
+  toast('รับเข้าคลังสำเร็จ',n+' ใบ → '+whName(wh)+(damagedCount?' · ชำรุด '+damagedCount+' ใบ แยกเป็นสถานะชำรุด':' (สถานะ: อยู่ในคลัง)'),'ok');
   renderAll();gateInResetBatch();if(typeof schedule==='function')schedule();
   return true;
 }
@@ -10894,6 +10908,7 @@ function clearGateIn(){
   function doClear(){
     var clearedTags=pendingIn.slice();
     pendingIn=[];
+    inConditionMap={};
     if(gateInEntryMode==='rfid')rfidClearPending(fixedGatesRef().in,clearedTags);
     ['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(i){setv(i,'');});
     renderInResult();renderVehicleQuick();
@@ -15595,8 +15610,9 @@ function patchAuditGateOut(tags, doNo, po, cust, plate, driver, recorder) {
 }
 function patchAuditGateIn(tags, gate, wh, recorder) {
   tags.forEach(function(t) {
-    auditEntry('GATE_IN', recorder, t, typeName((S.boxes[t] || {}).type),
-      null, { gate: gate, wh: whName(wh) });
+    var b=S.boxes[t]||{};
+    auditEntry('GATE_IN', recorder, t, typeName(b.type),
+      null, { gate: gate, wh: whName(wh), condition: OUT_COND_LABEL[b.inCondition||'good'] });
   });
 }
 window.patchAuditGateOut = patchAuditGateOut;
