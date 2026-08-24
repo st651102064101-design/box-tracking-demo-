@@ -171,6 +171,21 @@ export const rfidReaders = pgTable('rfid_readers', {
   updatedBy: text('updated_by'),
 });
 
+/** Per-antenna routing for a physical reader that posts all ports to one
+ * webhook. `rfid_readers.gate_no` remains the safe fallback for reports that
+ * omit an antenna number and for existing installations with no mappings. */
+export const rfidAntennaGateMappings = pgTable(
+  'rfid_antenna_gate_mappings',
+  {
+    readerId: text('reader_id').notNull().references(() => rfidReaders.id, { onDelete: 'cascade' }),
+    antennaPort: integer('antenna_port').notNull(),
+    gateNo: integer('gate_no').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.readerId, t.antennaPort] }) }),
+);
+
 /** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
  *  before they're actually received — see the matching table comment in
  *  schema.sql for why reader reads queue instead of auto-receiving. */
@@ -389,6 +404,7 @@ export type Schema = {
   gates: typeof gates;
   gateWebhookStatus: typeof gateWebhookStatus;
   rfidReaders: typeof rfidReaders;
+  rfidAntennaGateMappings: typeof rfidAntennaGateMappings;
   gatePendingReads: typeof gatePendingReads;
   gatePrefs: typeof gatePrefs;
   locations: typeof locations;
@@ -414,6 +430,7 @@ export const schema = {
   gates,
   gateWebhookStatus,
   rfidReaders,
+  rfidAntennaGateMappings,
   gatePendingReads,
   gatePrefs,
   locations,

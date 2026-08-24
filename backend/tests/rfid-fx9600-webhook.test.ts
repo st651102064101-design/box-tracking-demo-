@@ -26,10 +26,12 @@ beforeAll(async () => {
         'BOX-G': { tag: 'BOX-G', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
         'BOX-H': { tag: 'BOX-H', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: false, history: [], location: {} },
         'BOX-I': { tag: 'BOX-I', type: 'BT-001', value: 450, status: 'warehouse', cycles: 1, labeled: true, history: [], location: {} },
+        'BOX-J': { tag: 'BOX-J', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
+        'BOX-K': { tag: 'BOX-K', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
       },
       customers: {},
-      warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
-      gates: { '5': 'WH-001' },
+      warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5, 6], gateTypes: { '5': 'in', '6': 'out' } } },
+      gates: { '5': 'WH-001', '6': 'WH-001' },
       cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
     });
 });
@@ -283,6 +285,34 @@ describe('FX9600 reader-to-gate binding', () => {
     const duplicate = await request(ctx.app).put('/api/rfid/fx9600/readers/fx-gate-5b').set(auth(ctx.token)).send(payload(5));
     expect(duplicate.status).toBe(409);
     expect(duplicate.body.error).toBe('gate_reader_already_bound');
+  });
+
+  it('routes one webhook payload to gates using the database antenna mapping', async () => {
+    const configured = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fx-gate-5/antenna-mappings')
+      .set(auth(ctx.token))
+      .send({ mappings: [
+        { antennaPort: 1, gateNo: 5 },
+        { antennaPort: 2, gateNo: 5 },
+        { antennaPort: 3, gateNo: 5 },
+        { antennaPort: 4, gateNo: 6 },
+      ] });
+    expect(configured.status).toBe(200);
+
+    const webhook = await request(ctx.app).post(webhookUrl(5)).set(secretHeader).send([
+      { data: { antennaPort: 1, idHex: encodeBarcodeToEpcHex('BOX-J') } },
+      { data: { antenna: 4, idHex: encodeBarcodeToEpcHex('BOX-K') } },
+    ]);
+    expect(webhook.status).toBe(200);
+    expect(webhook.body.routed['5'].received).toContain('BOX-J');
+    expect(webhook.body.routed['6'].received).toContain('BOX-K');
+
+    const gate5 = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
+    const gate6 = await request(ctx.app).get('/api/rfid/pending/6').set(auth(ctx.token));
+    expect(gate5.body.tags).toContain('BOX-J');
+    expect(gate5.body.tags).not.toContain('BOX-K');
+    expect(gate6.body.tags).toContain('BOX-K');
+    expect(gate6.body.tags).not.toContain('BOX-J');
   });
 
   it('unbinding removes only the WMS reader mapping', async () => {

@@ -118,8 +118,8 @@ ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_ip TEXT;
 ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_tag_seen_at TIMESTAMPTZ;
 ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_antennas JSONB NOT NULL DEFAULT '[]'::jsonb;
 
--- Central configuration for fixed RFID readers. One reader is bound to one
--- physical gate; webhook traffic remains gate-addressed and idempotent.
+-- Central configuration for fixed RFID readers. gate_no is the default/fallback
+-- gate when an older payload has no antenna port mapping.
 CREATE TABLE IF NOT EXISTS rfid_readers (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
@@ -134,6 +134,20 @@ CREATE TABLE IF NOT EXISTS rfid_readers (
   updated_by        TEXT
 );
 ALTER TABLE rfid_readers ADD COLUMN IF NOT EXISTS heartbeat_interval_seconds INTEGER NOT NULL DEFAULT 1;
+
+-- A single FX9600 HTTP POST endpoint receives reads from every antenna. Keep
+-- routing in normalized configuration so port assignments can change without
+-- code changes. The reader's gate_no remains the backwards-compatible fallback.
+CREATE TABLE IF NOT EXISTS rfid_antenna_gate_mappings (
+  reader_id    TEXT NOT NULL REFERENCES rfid_readers(id) ON DELETE CASCADE,
+  antenna_port INTEGER NOT NULL CHECK (antenna_port BETWEEN 1 AND 32),
+  gate_no      INTEGER NOT NULL CHECK (gate_no > 0),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by   TEXT,
+  PRIMARY KEY (reader_id, antenna_port)
+);
+CREATE INDEX IF NOT EXISTS rfid_antenna_gate_mappings_gate_idx
+  ON rfid_antenna_gate_mappings (gate_no);
 
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
