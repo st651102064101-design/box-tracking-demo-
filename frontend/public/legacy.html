@@ -10149,18 +10149,19 @@ window.pickGate=pickGate;window.setFixedGate=setFixedGate;
    The reader queue is shared by Gate In and Gate Out. Direction is selected
    by the operator on this page; an RFID event never redirects another page
    or guesses whether a box is entering or leaving. */
+function btT(text){return window.btI18n&&typeof window.btI18n.t==='function'?window.btI18n.t(text):text;}
 function fx9600LastSeen(g){return S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)]||'';}
 function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(5500,sec*3500);}
 function fx9600IsOnline(g){var ts=Date.parse(fx9600LastSeen(g));return !!ts&&(Date.now()-ts)<=fx9600OfflineAfterMs(g);}
-function fx9600SeenText(g){var ts=Date.parse(fx9600LastSeen(g));if(!ts)return 'ยังไม่เคยได้รับ heartbeat';var sec=Math.max(0,Math.floor((Date.now()-ts)/1000));return sec<2?'เห็นล่าสุด เมื่อครู่นี้':'เห็นล่าสุด '+sec+' วินาทีที่แล้ว';}
+function fx9600SeenText(g){var ts=Date.parse(fx9600LastSeen(g));if(!ts)return btT('ยังไม่เคยได้รับ heartbeat');var sec=Math.max(0,Math.floor((Date.now()-ts)/1000));return sec<2?btT('เห็นล่าสุด เมื่อครู่นี้'):btT('เห็นล่าสุด '+sec+' วินาทีที่แล้ว');}
 function rfidStatusHtml(g,dir){
-  if(!g)return '<div class="banner warn">กรุณาเลือกประตูก่อนเริ่มรับ RFID</div>';
-  if(dir==='out'&&(!val('doCustomer')||!val('outPlate').trim()))return '<div class="banner warn"><b>ยังไม่เปิดรับ RFID</b> — กรุณาเลือกลูกค้าและกรอกทะเบียนรถก่อน กล่องจึงจะถูกเพิ่มเข้าคิวส่งออก</div>';
+  if(!g)return '<div class="banner warn">'+btT('กรุณาเลือกประตูก่อนเริ่มรับ RFID')+'</div>';
+  if(dir==='out'&&(!val('doCustomer')||!val('outPlate').trim()))return '<div class="banner warn"><b>'+btT('ยังไม่เปิดรับ RFID')+'</b> '+btT('— กรุณาเลือกลูกค้าและกรอกทะเบียนรถก่อน กล่องจึงจะถูกเพิ่มเข้าคิวส่งออก')+'</div>';
   var online=fx9600IsOnline(g),color=online?'#22c55e':'#ef4444';
   return '<div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border:.5px solid '+color+';border-radius:12px;background:color-mix(in srgb,'+color+' 9%,transparent);color:'+color+';font-size:13px;font-weight:700;">'
     +'<span style="width:10px;height:10px;border-radius:50%;background:'+color+';box-shadow:0 0 0 4px color-mix(in srgb,'+color+' 20%,transparent);"></span>'
-    +(online?'RFID Gate พร้อมใช้งาน':'RFID Gate ไม่พร้อมใช้งาน')
-    +'<span style="color:var(--muted);font-weight:400;">· ประตู '+esc(g)+' · '+esc(fx9600SeenText(g))+'</span></div>';
+    +btT(online?'RFID Gate พร้อมใช้งาน':'RFID Gate ไม่พร้อมใช้งาน')
+    +'<span style="color:var(--muted);font-weight:400;">· '+btT('ประตู')+' '+esc(g)+' · '+esc(fx9600SeenText(g))+'</span></div>';
 }
 function renderRfidGateStatus(){
   var out=$('#gateOutRfidStatus'),inn=$('#gateInRfidStatus');
@@ -10185,7 +10186,7 @@ function fx9600OutQueuePoll(){
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
     d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status==='warehouse'&&pendingOut.indexOf(tag)<0){pendingOut.push(tag);outConditionMap[tag]='good';added++;}});
-    if(added){renderOutResult();toast('พบกล่องจาก RFID Gate',added+' ใบ · ประตู '+g,'ok');}
+    if(added){renderOutResult();toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');}
   }).catch(function(){}).finally(function(){fx9600OutPolling=false;});
 }
 function fx9600InQueuePoll(){
@@ -10200,7 +10201,7 @@ function fx9600InQueuePoll(){
          the optional vehicle prompt without guessing direction globally. */
       if(gateInStep==='ask')gateInSkipVehicle();else{gateInStep='scan';renderGateInStep();}
       renderInResult();
-      toast('พบกล่องจาก RFID Gate',added+' ใบ · ประตู '+g,'ok');
+      toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');
     }
   }).catch(function(){}).finally(function(){fx9600InPolling=false;});
 }
@@ -10619,7 +10620,7 @@ autoScanBind($('#scanOut'),scanOut);
 function saveOutbound(){
   if(!validateForm(VALIDATION_SCHEMAS.outbound,$('#tab-gateout')))return;
   if(requireCustomerSetup())return;
-  if(!val('outPlate').trim())return fieldError('outPlate','ต้องกรอกทะเบียนรถก่อนยืนยันรายการส่งออก');
+  if(!val('outPlate').trim())return fieldError('outPlate',btT('ต้องกรอกทะเบียนรถก่อนยืนยันรายการส่งออก'));
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');
   /* A ประตูขาออก import file that ships to several different customers in
@@ -17770,6 +17771,17 @@ function openColumnMapModal(opts){
     "ระบบติดตามสินทรัพย์หมุนเวียน":"Returnable Asset Tracking",
     "Smart Tracking — ประตูสแกน · ระบบติดตามสินทรัพย์หมุนเวียน":"Smart Tracking - Scan Gate - Returnable Asset Tracking",
     "ระบบบริหารคลัง · เฟส 1 · ระบบติดตามสินทรัพย์หมุนเวียน":"WMS - Phase 1 - Returnable Asset Tracking",
+    "กรอกข้อมูลจัดส่งก่อน แล้วรอ FX9600":"Complete shipment details, then wait for FX9600",
+    "รับแท็กจาก Zebra FX9600":"Receive tags from Zebra FX9600",
+    "กรุณาเลือกประตูก่อนเริ่มรับ RFID":"Select a gate before receiving RFID reads",
+    "ยังไม่เปิดรับ RFID":"RFID receiving is not active",
+    "— กรุณาเลือกลูกค้าและกรอกทะเบียนรถก่อน กล่องจึงจะถูกเพิ่มเข้าคิวส่งออก":"— Select a customer and enter the vehicle plate before boxes can enter the outbound queue",
+    "ยังไม่เคยได้รับ heartbeat":"No heartbeat received yet",
+    "เห็นล่าสุด เมื่อครู่นี้":"last seen just now",
+    "RFID Gate พร้อมใช้งาน":"RFID Gate ready",
+    "RFID Gate ไม่พร้อมใช้งาน":"RFID Gate unavailable",
+    "พบกล่องจาก RFID Gate":"Boxes detected at RFID Gate",
+    "ต้องกรอกทะเบียนรถก่อนยืนยันรายการส่งออก":"Enter the vehicle plate before confirming the outbound shipment",
     "บัญชีสาธิต · ระบบบริการออนไลน์":"Demo - SaaS",
     "อัตราการคืน":"Return Rate",
     "อัตราการสูญหาย":"Loss Rate",
@@ -18532,6 +18544,8 @@ function openColumnMapModal(opts){
     "(↓ ขาเข้า)":"(↓ Inbound)","(↑ ขาออก)":"(↑ Outbound)","(⇄ เข้า/ออก)":"(⇄ In/Out)","เดโมยิงเร็ว:":"Quick demo scan:"
   };
   var FRAG = {
+    "เห็นล่าสุด ":"last seen ",
+    " วินาทีที่แล้ว":" seconds ago",
     "อัตราการคืนนับตามวันที่เกิดรายการประตูเข้า/ออก — รอบหมุนเวียน อัตราการสูญหาย และมูลค่าสูญหาย นับเฉพาะกล่องที่เคลื่อนไหวล่าสุดในช่วงนี้ — ":"Return rate is based on gate in/out event dates; cycles, loss rate and lost value include only boxes last moved in this period - ",
     "แสดงพนักงาน: ":"Show employees: ",
     "ตั้งบัญชีเว็บให้ ":"Set up web account for ",
@@ -18714,6 +18728,7 @@ function openColumnMapModal(opts){
        ที่เกี่ยวข้องใหม่เมื่อสลับภาษา ไม่อย่างนั้นชื่อที่วาดในภาษาก่อนหน้าจะค้างอยู่ */
     if(typeof window.renderSetup==='function')window.renderSetup();
     if(typeof window.renderRoles==='function')window.renderRoles();
+    if(typeof window.renderRfidGateStatus==='function')window.renderRfidGateStatus();
     /* control labels can re-wrap in the sidebar header → re-measure the vertical nav's top offset */
     if(typeof window.syncNavTop==='function')window.syncNavTop();
     /* nav labels change width when translated (e.g. "Gate ขาเข้า" ↔ "Gate In") but

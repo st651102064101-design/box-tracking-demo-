@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ApiError, login, forgotPassword, resetPassword, setToken, getBranding, type SystemBranding } from '@/lib/api';
+import { LanguageToggle, useI18n, type TranslationKey } from '@/lib/i18n';
 
 type Mode = 'login' | 'forgot-request' | 'forgot-reset';
 type FieldName = 'username' | 'password' | 'otp' | 'newPassword';
@@ -14,9 +15,10 @@ type FieldName = 'username' | 'password' | 'otp' | 'newPassword';
 const LAST_USER_KEY = 'st_last_login_user';
 
 export default function LoginPage() {
+  const { locale, t } = useI18n();
   const [branding, setBranding] = useState<SystemBranding>({
     systemName: 'Smart Tracking',
-    subtitle: 'WMS · เฟส 1 · Returnable Asset Tracking',
+    subtitle: '',
     logoData: null,
   });
   const [mode, setMode] = useState<Mode>('login');
@@ -25,7 +27,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{ key: TranslationKey; params?: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
@@ -56,23 +58,33 @@ export default function LoginPage() {
   function switchMode(next: Mode) {
     setMode(next);
     setError('');
-    setNotice('');
+    setNotice(null);
     setFieldErrors({});
     setTouched({});
   }
 
   function fieldMessage(name: FieldName, value: string) {
     const clean = value.trim();
-    if (name === 'username' && !clean) return 'กรุณากรอกชื่อผู้ใช้หรืออีเมล';
-    if (name === 'password' && !value) return 'กรุณากรอกรหัสผ่าน';
-    if (name === 'otp' && !/^\d{6}$/.test(clean)) return 'กรุณากรอกรหัส OTP ให้ครบ 6 หลัก';
-    if (name === 'newPassword' && value.length < 10) return 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร';
-    if (name === 'newPassword' && !/[a-z]/.test(value)) return 'ต้องมีตัวพิมพ์เล็ก';
-    if (name === 'newPassword' && !/[A-Z]/.test(value)) return 'ต้องมีตัวพิมพ์ใหญ่';
-    if (name === 'newPassword' && !/\d/.test(value)) return 'ต้องมีตัวเลข';
-    if (name === 'newPassword' && !/[^A-Za-z0-9]/.test(value)) return 'ต้องมีอักขระพิเศษ';
+    if (name === 'username' && !clean) return t('login.validation.usernameRequired');
+    if (name === 'password' && !value) return t('login.validation.passwordRequired');
+    if (name === 'otp' && !/^\d{6}$/.test(clean)) return t('login.validation.otpLength');
+    if (name === 'newPassword' && value.length < 10) return t('password.validation.minLength');
+    if (name === 'newPassword' && !/[a-z]/.test(value)) return t('password.validation.lowercase');
+    if (name === 'newPassword' && !/[A-Z]/.test(value)) return t('password.validation.uppercase');
+    if (name === 'newPassword' && !/\d/.test(value)) return t('password.validation.number');
+    if (name === 'newPassword' && !/[^A-Za-z0-9]/.test(value)) return t('password.validation.special');
     return '';
   }
+
+  useEffect(() => {
+    const values: Record<FieldName, string> = { username, password, otp, newPassword };
+    setFieldErrors((current) => Object.fromEntries(
+      Object.keys(current).map((name) => {
+        const field = name as FieldName;
+        return [field, fieldMessage(field, values[field]) || undefined];
+      }),
+    ));
+  }, [locale, t, username, password, otp, newPassword]);
 
   function updateField(name: FieldName, value: string, setter: (value: string) => void) {
     setter(value);
@@ -129,7 +141,7 @@ export default function LoginPage() {
     e.preventDefault();
     if (!validateCurrentMode()) return;
     setError('');
-    setNotice('');
+    setNotice(null);
     setBusy(true);
     try {
       if (mode === 'login') {
@@ -144,8 +156,8 @@ export default function LoginPage() {
         const res = await forgotPassword(username.trim());
         setNotice(
           res.sentTo
-            ? `ส่งรหัส OTP ไปที่ ${res.sentTo} แล้ว — กรอกรหัส 6 หลักด้านล่าง (มีอายุ 5 นาที)`
-            : 'หากมีบัญชีนี้อยู่ในระบบ จะมีอีเมลส่งรหัส OTP ไปให้ — กรอกรหัส 6 หลักด้านล่าง',
+            ? { key: 'login.otp.sent', params: { destination: res.sentTo } }
+            : { key: 'login.otp.generic' },
         );
         setMode('forgot-reset');
         setBusy(false);
@@ -162,17 +174,18 @@ export default function LoginPage() {
         setFieldErrors((current) => ({ ...current, ...err.errors }));
         window.setTimeout(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 0);
       }
-      setError(err instanceof Error ? err.message : 'ดำเนินการไม่สำเร็จ');
+      setError(err instanceof Error ? err.message : t('common.actionFailed'));
       setBusy(false);
     }
   }
 
-  const title = mode === 'login' ? 'เข้าสู่ระบบ' : mode === 'forgot-request' ? 'ลืมรหัสผ่าน' : 'ตั้งรหัสผ่านใหม่';
+  const title = mode === 'login' ? t('login.title.signIn') : mode === 'forgot-request' ? t('login.title.forgot') : t('login.title.reset');
   const submitLabel =
-    mode === 'login' ? 'เข้าสู่ระบบ' : mode === 'forgot-request' ? 'ส่งรหัส OTP ทางอีเมล' : 'ตั้งรหัสผ่านใหม่และเข้าสู่ระบบ';
+    mode === 'login' ? t('login.submit.signIn') : mode === 'forgot-request' ? t('login.submit.sendOtp') : t('login.submit.reset');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4">
+    <main className="relative flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4">
+      <div className="absolute right-4 top-4"><LanguageToggle /></div>
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-[0_24px_70px_rgba(0,0,0,.10)]">
         <div className="mb-6 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl bg-ink text-xl font-black text-white">
@@ -185,7 +198,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-ink">{branding.systemName}</h1>
-            <p className="-mt-0.5 text-xs text-ink-2/70">{branding.subtitle}</p>
+            <p className="-mt-0.5 text-xs text-ink-2/70">{branding.subtitle || t('login.subtitleFallback')}</p>
           </div>
         </div>
 
@@ -202,7 +215,7 @@ export default function LoginPage() {
               {quickUser.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] text-ink-2/60">เข้าสู่ระบบล่าสุดในชื่อ</p>
+              <p className="text-[11px] text-ink-2/60">{t('login.lastSignedInAs')}</p>
               <p className="truncate text-sm font-semibold text-ink">{quickUser}</p>
             </div>
             <button
@@ -210,7 +223,7 @@ export default function LoginPage() {
               onClick={useOther}
               className="flex-none text-xs font-medium text-ink-2/60 hover:text-ink"
             >
-              ไม่ใช่ฉัน
+              {t('login.notMe')}
             </button>
           </div>
         )}
@@ -218,12 +231,13 @@ export default function LoginPage() {
         <form onSubmit={submit} className="space-y-3">
           {mode !== 'forgot-reset' && !showQuickLogin && (
             <Field
-              label="ชื่อผู้ใช้ หรือ อีเมล"
+              id="username"
+              label={t('login.username.label')}
               value={username}
               onChange={(value) => updateField('username', value, setUsername)}
               onBlur={() => blurField('username', username)}
               error={fieldErrors.username}
-              placeholder="ชื่อผู้ใช้ หรือ อีเมลองค์กร"
+              placeholder={t('login.username.placeholder')}
               autoFocus
               autoComplete="username"
             />
@@ -235,17 +249,18 @@ export default function LoginPage() {
               onClick={useQuickAgain}
               className="-mt-1 block text-xs font-medium text-ink-2/60 hover:text-ink"
             >
-              กลับไปเข้าสู่ระบบด้วย “{quickUser}”
+              {t('login.quickAgain', { username: quickUser })}
             </button>
           )}
 
           {mode === 'forgot-reset' && (
             <>
               <p className="rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-ink-2/70">
-                บัญชี: <span className="font-semibold text-ink">{username}</span>
+                {t('login.account')} <span className="font-semibold text-ink">{username}</span>
               </p>
               <Field
-                label="รหัส OTP (6 หลัก)"
+                id="otp"
+                label={t('login.otp.label')}
                 value={otp}
                 onChange={(v) => updateField('otp', v.replace(/\D/g, '').slice(0, 6), setOtp)}
                 onBlur={() => blurField('otp', otp)}
@@ -255,13 +270,14 @@ export default function LoginPage() {
                 autoFocus
               />
               <Field
-                label="รหัสผ่านใหม่"
+                id="new-password"
+                label={t('login.password.newLabel')}
                 value={newPassword}
                 onChange={(value) => updateField('newPassword', value, setNewPassword)}
                 onBlur={() => blurField('newPassword', newPassword)}
                 error={fieldErrors.newPassword}
                 type="password"
-                placeholder="10+ ตัว: พิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และสัญลักษณ์"
+                placeholder={t('login.password.newPlaceholder')}
                 autoComplete="new-password"
               />
             </>
@@ -269,7 +285,8 @@ export default function LoginPage() {
 
           {mode === 'login' && (
             <Field
-              label="รหัสผ่าน"
+              id="password"
+              label={t('login.password.label')}
               value={password}
               onChange={(value) => updateField('password', value, setPassword)}
               onBlur={() => blurField('password', password)}
@@ -281,7 +298,7 @@ export default function LoginPage() {
             />
           )}
 
-          {notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
+          {notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{t(notice.key, notice.params)}</p>}
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
           <button
@@ -289,7 +306,7 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? 'กำลังดำเนินการ…' : submitLabel}
+            {busy ? t('common.processing') : submitLabel}
           </button>
         </form>
 
@@ -299,7 +316,7 @@ export default function LoginPage() {
             onClick={() => switchMode('forgot-request')}
             className="mt-3 w-full text-center text-sm text-ink-2/70 hover:text-ink"
           >
-            ลืมรหัสผ่าน?
+            {t('login.forgotQuestion')}
           </button>
         )}
 
@@ -309,14 +326,13 @@ export default function LoginPage() {
             onClick={() => switchMode('login')}
             className="mt-3 w-full text-center text-sm text-ink-2/70 hover:text-ink"
           >
-            กลับไปเข้าสู่ระบบ
+            {t('login.back')}
           </button>
         )}
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">
-            สำหรับการพัฒนาเท่านั้น — บัญชีเริ่มต้นตั้งจาก <code>SEED_ADMIN_*</code> ในตัวแปรสภาพแวดล้อม
-            (ดู <code>npm run db:seed</code>)
+            {t('login.devOnly')}
           </p>
         )}
       </div>
@@ -325,6 +341,7 @@ export default function LoginPage() {
 }
 
 function Field({
+  id,
   label,
   value,
   onChange,
@@ -336,6 +353,7 @@ function Field({
   error,
   onBlur,
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -347,7 +365,7 @@ function Field({
   error?: string;
   onBlur?: () => void;
 }) {
-  const inputId = `login-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const inputId = `login-${id}`;
   const errorId = `${inputId}-error`;
   return (
     <label className="block" htmlFor={inputId}>
