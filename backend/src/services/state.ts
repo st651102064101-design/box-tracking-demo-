@@ -32,6 +32,7 @@ import {
 } from '../db/schema.js';
 import type { StatePayload } from '../validators/schemas.js';
 import type { JwtPayload } from '../lib/jwt.js';
+import { env } from '../env.js';
 
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v: unknown): Date | null => {
@@ -112,13 +113,13 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     gateWebhookLastSeen: Object.fromEntries(
       gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()]),
     ),
-    /* Source IP of the reader's most recent webhook hit — lets the frontend
-       link straight to the FX9600's own admin UI (readers serve one on their
-       IP) without anyone hardcoding an address. Same read-only-from-client
-       reasoning as gateWebhookLastSeen above. */
+    /* Diagnostic source IP only. Docker may report the bridge gateway here,
+       so this value must never be used as the reader administration URL. */
     gateWebhookLastIp: Object.fromEntries(
       gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp as string]),
     ),
+    // Read-only site configuration for the FX9600 administration UI.
+    fx9600AdminUrl: env.fx9600AdminUrl,
     events: eventRows.map((r) => r.data),
     cfg,
     seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),

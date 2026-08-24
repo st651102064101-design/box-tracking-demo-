@@ -32,6 +32,9 @@ export const env = {
   // production guard as JWT_SECRET: refuse to boot on the dev default once
   // this is actually reachable from outside a laptop.
   fx9600WebhookSecret: process.env.FX9600_WEBHOOK_SECRET ?? 'dev-insecure-fx9600-secret-change-me',
+  // Docker's bridge can make `req.ip` look like 172.18.0.1 instead of the
+  // FX9600. Keep the browser-facing reader administration address explicit.
+  fx9600AdminUrl: (process.env.FX9600_ADMIN_URL ?? '').trim(),
   usePglite: String(process.env.USE_PGLITE ?? 'false').toLowerCase() === 'true',
   pgliteDir: process.env.PGLITE_DIR ?? './.pglite',
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://boxtrace:boxtrace@localhost:5432/boxtrace',
