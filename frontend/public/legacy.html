@@ -10533,7 +10533,7 @@ function gateOutReady(){return !!fixedGatesRef().out;}
 function renderGateOut(){
   var g=fixedGatesRef().out,strip=$('#goStrip'),state=$('#gateOutReaderState'),btn=$('#btnCheckOut'),count=$('#outCount'),result=$('#resultOut');
   if(strip)strip.style.display=g?'':'none';
-  if(state)state.innerHTML=!g?'<div class="banner warn">เลือกประตูขาออกก่อนเริ่มงาน <button class="btn ghost sm" onclick="pickGate(\'out\')">เลือกประตู</button></div>':!gateOutShipment?'<div class="banner warn"><b>รอข้อมูลจัดส่ง</b><div class="muted small" style="margin-top:4px;">กรอกลูกค้าปลายทางและทะเบียนรถก่อนเปิดรับ RFID</div></div>':fx9600StatusHtml(g,false);
+  if(state)state.innerHTML=!g?'<div class="banner warn">เลือกประตูขาออกก่อนเริ่มงาน <button class="btn ghost sm" onclick="pickGate(\'out\')">เลือกประตู</button></div>':!gateOutShipment?'<div class="banner warn"><b>รอข้อมูลจัดส่ง</b><div class="muted small" style="margin-top:4px;">กรอกลูกค้าปลายทางและทะเบียนรถก่อนเปิดรับ RFID</div></div>':fx9600StatusHtml(g,true);
   if(btn)btn.disabled=!pendingOut.length;
   if(count)count.textContent=gateOutShipment?(pendingOut.length?'เตรียมส่งออก '+pendingOut.length+' ใบ · '+gateOutShipment.plate:'กำลังรอ RFID · '+gateOutShipment.plate):'';
   if(!result)return;
