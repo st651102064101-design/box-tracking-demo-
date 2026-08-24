@@ -142,12 +142,29 @@ CREATE TABLE IF NOT EXISTS rfid_antenna_gate_mappings (
   reader_id    TEXT NOT NULL REFERENCES rfid_readers(id) ON DELETE CASCADE,
   antenna_port INTEGER NOT NULL CHECK (antenna_port BETWEEN 1 AND 32),
   gate_no      INTEGER NOT NULL CHECK (gate_no > 0),
+  antenna_role TEXT NOT NULL DEFAULT 'direct' CHECK (antenna_role IN ('outer','inner','direct')),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_by   TEXT,
   PRIMARY KEY (reader_id, antenna_port)
 );
 CREATE INDEX IF NOT EXISTS rfid_antenna_gate_mappings_gate_idx
   ON rfid_antenna_gate_mappings (gate_no);
+ALTER TABLE rfid_antenna_gate_mappings ADD COLUMN IF NOT EXISTS antenna_role TEXT NOT NULL DEFAULT 'direct';
+
+CREATE TABLE IF NOT EXISTS rfid_gate_auto_sessions (
+  gate_no      INTEGER PRIMARY KEY,
+  direction    TEXT NOT NULL CHECK (direction IN ('in','out')),
+  customer     TEXT,
+  do_no        TEXT,
+  po           TEXT,
+  plate        TEXT,
+  driver       TEXT,
+  vehicle_type TEXT,
+  recorder     TEXT,
+  expires_at   TIMESTAMPTZ NOT NULL,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by   TEXT
+);
 
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
@@ -168,8 +185,10 @@ CREATE TABLE IF NOT EXISTS gate_pending_reads (
   gate_no  INTEGER NOT NULL,
   tag      TEXT    NOT NULL,
   seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  direction TEXT,
   PRIMARY KEY (gate_no, tag)
 );
+ALTER TABLE gate_pending_reads ADD COLUMN IF NOT EXISTS direction TEXT;
 
 CREATE TABLE IF NOT EXISTS gate_prefs (
   username     TEXT PRIMARY KEY,

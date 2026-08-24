@@ -28,10 +28,14 @@ beforeAll(async () => {
         'BOX-I': { tag: 'BOX-I', type: 'BT-001', value: 450, status: 'warehouse', cycles: 1, labeled: true, history: [], location: {} },
         'BOX-J': { tag: 'BOX-J', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
         'BOX-K': { tag: 'BOX-K', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
+        'BOX-L': { tag: 'BOX-L', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
+        'BOX-M': { tag: 'BOX-M', type: 'BT-001', value: 450, status: 'warehouse', cycles: 1, labeled: true, history: [], location: {} },
+        'BOX-N': { tag: 'BOX-N', type: 'BT-001', value: 450, status: 'out', cycles: 0, labeled: true, history: [], location: {} },
+        'BOX-O': { tag: 'BOX-O', type: 'BT-001', value: 450, status: 'warehouse', cycles: 1, labeled: true, history: [], location: {} },
       },
-      customers: {},
-      warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5, 6], gateTypes: { '5': 'in', '6': 'out' } } },
-      gates: { '5': 'WH-001', '6': 'WH-001' },
+      customers: { 'CUST-AUTO': { id: 'CUST-AUTO', name: 'ลูกค้า Auto', returnDays: 15 } },
+      warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5, 6, 7, 8, 9], gateTypes: { '5': 'both', '6': 'both', '7': 'in', '8': 'out', '9': 'both' } } },
+      gates: { '5': 'WH-001', '6': 'WH-001', '7': 'WH-001', '8': 'WH-001', '9': 'WH-001' },
       cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
     });
 });
@@ -323,5 +327,68 @@ describe('FX9600 reader-to-gate binding', () => {
     const list = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
     expect(list.status).toBe(200);
     expect(list.body.readers.find((reader: { id: string }) => reader.id === 'fx-gate-5')).toBeUndefined();
+  });
+});
+
+describe('FX9600 zero-click gate processing', () => {
+  const reader = (gateNo: number) => ({
+    name: `FX Auto ${gateNo}`, host: `192.168.2.${gateNo}`, gateNo,
+    webhookUrl: `http://backend/api/rfid/fx9600/${gateNo}/webhook`, transmitPower: 3,
+    antennaCount: 2, heartbeatIntervalSeconds: 1,
+  });
+
+  it('auto-receives and clears an inbound-only gate without confirmation', async () => {
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-in').set(auth(ctx.token)).send(reader(7));
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-in/antenna-mappings').set(auth(ctx.token))
+      .send({ mappings: [{ antennaPort: 1, gateNo: 7, antennaRole: 'direct' }] });
+    const hit = await request(ctx.app).post(webhookUrl(7)).set(secretHeader)
+      .send({ antennaPort: 1, idHex: encodeBarcodeToEpcHex('BOX-L') });
+    expect(hit.body.routed['7'].autoProcessed).toContain('BOX-L');
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-L'].status).toBe('warehouse');
+    const pending = await request(ctx.app).get('/api/rfid/pending/7').set(auth(ctx.token));
+    expect(pending.body.tags).not.toContain('BOX-L');
+  });
+
+  it('auto-ships an outbound-only gate only with staged customer and plate', async () => {
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-out').set(auth(ctx.token)).send(reader(8));
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-out/antenna-mappings').set(auth(ctx.token))
+      .send({ mappings: [{ antennaPort: 1, gateNo: 8, antennaRole: 'direct' }] });
+    const staged = await request(ctx.app).put('/api/rfid/gates/8/auto-session').set(auth(ctx.token))
+      .send({ direction: 'out', customer: 'CUST-AUTO', plate: 'TEST-888', recorder: 'Tester' });
+    expect(staged.status).toBe(200);
+    const hit = await request(ctx.app).post(webhookUrl(8)).set(secretHeader)
+      .send({ antenna: 1, idHex: encodeBarcodeToEpcHex('BOX-M') });
+    expect(hit.body.routed['8'].autoProcessed).toContain('BOX-M');
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-M']).toMatchObject({ status: 'out', customer: 'CUST-AUTO', plate: 'TEST-888' });
+  });
+
+  it('detects Outer→Inner as inbound and Inner→Outer as outbound inside the buffer window', async () => {
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-both').set(auth(ctx.token)).send(reader(9));
+    await request(ctx.app).put('/api/rfid/fx9600/readers/fx-auto-both/antenna-mappings').set(auth(ctx.token))
+      .send({ mappings: [
+        { antennaPort: 1, gateNo: 9, antennaRole: 'outer' },
+        { antennaPort: 2, gateNo: 9, antennaRole: 'inner' },
+      ] });
+    await request(ctx.app).put('/api/rfid/gates/9/auto-session').set(auth(ctx.token))
+      .send({ direction: 'out', customer: 'CUST-AUTO', plate: 'TEST-999', recorder: 'Tester' });
+
+    await request(ctx.app).post(webhookUrl(9)).set(secretHeader)
+      .send({ antenna: 1, idHex: encodeBarcodeToEpcHex('BOX-N') });
+    let state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-N'].status).toBe('out');
+    const inbound = await request(ctx.app).post(webhookUrl(9)).set(secretHeader)
+      .send({ antenna: 2, idHex: encodeBarcodeToEpcHex('BOX-N') });
+    expect(inbound.body.routed['9'].autoProcessed).toContain('BOX-N');
+
+    await request(ctx.app).post(webhookUrl(9)).set(secretHeader)
+      .send({ antenna: 2, idHex: encodeBarcodeToEpcHex('BOX-O') });
+    const outbound = await request(ctx.app).post(webhookUrl(9)).set(secretHeader)
+      .send({ antenna: 1, idHex: encodeBarcodeToEpcHex('BOX-O') });
+    expect(outbound.body.routed['9'].autoProcessed).toContain('BOX-O');
+    state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-N'].status).toBe('warehouse');
+    expect(state.body.boxes['BOX-O'].status).toBe('out');
   });
 });

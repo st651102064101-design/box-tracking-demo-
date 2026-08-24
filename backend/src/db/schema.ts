@@ -180,11 +180,28 @@ export const rfidAntennaGateMappings = pgTable(
     readerId: text('reader_id').notNull().references(() => rfidReaders.id, { onDelete: 'cascade' }),
     antennaPort: integer('antenna_port').notNull(),
     gateNo: integer('gate_no').notNull(),
+    antennaRole: text('antenna_role').notNull().default('direct'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: text('updated_by'),
   },
   (t) => ({ pk: primaryKey({ columns: [t.readerId, t.antennaPort] }) }),
 );
+
+/** Required business context staged before unattended outbound processing. */
+export const rfidGateAutoSessions = pgTable('rfid_gate_auto_sessions', {
+  gateNo: integer('gate_no').primaryKey(),
+  direction: text('direction').notNull(),
+  customer: text('customer'),
+  doNo: text('do_no'),
+  po: text('po'),
+  plate: text('plate'),
+  driver: text('driver'),
+  vehicleType: text('vehicle_type'),
+  recorder: text('recorder'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
 
 /** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
  *  before they're actually received — see the matching table comment in
@@ -195,6 +212,7 @@ export const gatePendingReads = pgTable(
     gateNo: integer('gate_no').notNull(),
     tag: text('tag').notNull(),
     seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+    direction: text('direction'),
   },
   (t) => ({ pk: primaryKey({ columns: [t.gateNo, t.tag] }) }),
 );
@@ -405,6 +423,7 @@ export type Schema = {
   gateWebhookStatus: typeof gateWebhookStatus;
   rfidReaders: typeof rfidReaders;
   rfidAntennaGateMappings: typeof rfidAntennaGateMappings;
+  rfidGateAutoSessions: typeof rfidGateAutoSessions;
   gatePendingReads: typeof gatePendingReads;
   gatePrefs: typeof gatePrefs;
   locations: typeof locations;
@@ -431,6 +450,7 @@ export const schema = {
   gateWebhookStatus,
   rfidReaders,
   rfidAntennaGateMappings,
+  rfidGateAutoSessions,
   gatePendingReads,
   gatePrefs,
   locations,

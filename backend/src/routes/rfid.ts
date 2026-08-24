@@ -5,10 +5,11 @@ import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, decodeEpcHexToBarcode,
 import { env } from '../env.js';
 import { getDb } from '../db/client.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
-import { gateWebhookStatus, gatePendingReads, gates, rfidAntennaGateMappings, rfidReaders } from '../db/schema.js';
+import { boxes, gateWebhookStatus, gatePendingReads, gates, rfidAntennaGateMappings, rfidGateAutoSessions, rfidReaders, warehouses } from '../db/schema.js';
 import { and, eq, gte } from 'drizzle-orm';
 import { writeAuditLog } from '../services/audit.js';
-import { publishReaderStatus, publishRfidRead } from '../lib/bus.js';
+import { bump, publishReaderStatus, publishRfidRead } from '../lib/bus.js';
+import { gateIn, gateOut } from '../services/gate.js';
 
 export const rfidRouter = Router();
 
@@ -219,7 +220,7 @@ rfidRouter.get(
 const readerView = (
   row: typeof rfidReaders.$inferSelect,
   status?: typeof gateWebhookStatus.$inferSelect,
-  antennaMappings: Array<{ antennaPort: number; gateNo: number }> = [],
+  antennaMappings: Array<{ antennaPort: number; gateNo: number; antennaRole: string }> = [],
 ) => {
   const lastSeenAt = status?.lastSeenAt ?? null;
   const heartbeatIntervalSeconds = row.heartbeatIntervalSeconds;
@@ -259,7 +260,7 @@ rfidRouter.get(
       db.select().from(rfidAntennaGateMappings),
     ]);
     const statusByGate = new Map(statuses.map((s) => [s.gateNo, s]));
-    res.json({ readers: readers.map((r) => readerView(r, statusByGate.get(r.gateNo), mappings.filter((m) => m.readerId === r.id).map((m) => ({ antennaPort: m.antennaPort, gateNo: m.gateNo })))) });
+    res.json({ readers: readers.map((r) => readerView(r, statusByGate.get(r.gateNo), mappings.filter((m) => m.readerId === r.id).map((m) => ({ antennaPort: m.antennaPort, gateNo: m.gateNo, antennaRole: m.antennaRole })))) });
   }),
 );
 
@@ -381,10 +382,12 @@ rfidRouter.put(
       const src = item && typeof item === 'object' ? item as Record<string, unknown> : {};
       const antennaPort = Number(src.antennaPort);
       const gateNo = Number(src.gateNo);
+      const antennaRole = String(src.antennaRole ?? 'direct');
       if (!Number.isInteger(antennaPort) || antennaPort < 1 || antennaPort > 32 || !Number.isInteger(gateNo) || gateNo <= 0) {
         throw httpError(400, 'Antenna ต้องอยู่ระหว่าง 1-32 และ Gate ต้องเป็นเลขจำนวนเต็มบวก', 'invalid_antenna_mapping');
       }
-      return { antennaPort, gateNo };
+      if (!['outer', 'inner', 'direct'].includes(antennaRole)) throw httpError(400, 'antennaRole ต้องเป็น outer, inner หรือ direct', 'invalid_antenna_role');
+      return { antennaPort, gateNo, antennaRole };
     });
     if (new Set(mappings.map((m) => m.antennaPort)).size !== mappings.length) {
       throw httpError(400, 'ห้ามกำหนด Antenna port ซ้ำ', 'duplicate_antenna_port');
@@ -404,6 +407,35 @@ rfidRouter.put(
   }),
 );
 
+rfidRouter.put(
+  '/gates/:gate/auto-session',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gate = Number(req.params.gate);
+    const direction = String(req.body?.direction ?? '');
+    if (!Number.isInteger(gate) || gate <= 0 || !['in', 'out'].includes(direction)) throw httpError(400, 'Gate/direction ไม่ถูกต้อง', 'invalid_auto_session');
+    const customer = String(req.body?.customer ?? '').trim();
+    const plate = String(req.body?.plate ?? '').trim();
+    if (direction === 'out' && (!customer || !plate)) throw httpError(400, 'Outbound auto session ต้องมีลูกค้าและทะเบียนรถ', 'outbound_context_required');
+    const ttlSeconds = Math.min(28_800, Math.max(30, Number(req.body?.ttlSeconds) || 1800));
+    const row = {
+      gateNo: gate, direction, customer: customer || null, doNo: String(req.body?.doNo ?? '').trim() || null,
+      po: String(req.body?.po ?? '').trim() || null, plate: plate || null, driver: String(req.body?.driver ?? '').trim() || null,
+      vehicleType: String(req.body?.vehicleType ?? '').trim() || null, recorder: String(req.body?.recorder ?? req.user?.name ?? '').trim() || null,
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000), updatedAt: new Date(), updatedBy: req.user?.name,
+    };
+    await getDb().insert(rfidGateAutoSessions).values(row).onConflictDoUpdate({ target: rfidGateAutoSessions.gateNo, set: row });
+    res.json({ ok: true, gate, direction, expiresAt: row.expiresAt.toISOString() });
+  }),
+);
+
+rfidRouter.delete('/gates/:gate/auto-session', requireAuth, asyncHandler(async (req, res) => {
+  const gate = Number(req.params.gate);
+  if (!Number.isInteger(gate) || gate <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
+  await getDb().delete(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate));
+  res.json({ ok: true });
+}));
+
 /* ─── the reader's pending queue for Gate ขาเข้า ───────────────────────────
    Populated by the webhook below, drained by the operator confirming (or
    dismissing) chips in the UI. Reads older than this are ignored rather than
@@ -411,6 +443,70 @@ rfidRouter.put(
    confirmed shouldn't still be sitting in someone's queue, but nothing needs
    to run in the background to make that true. */
 const PENDING_TTL_MS = 10 * 60 * 1000;
+const DIRECTION_WINDOW_MS = 3_000;
+const AUTO_PROCESS_DEBOUNCE_MS = 10_000;
+type MovementDirection = 'in' | 'out';
+type AntennaRole = 'outer' | 'inner' | 'direct';
+const directionWindows = new Map<string, { firstRole: 'outer' | 'inner'; firstAt: number }>();
+const autoProcessedAt = new Map<string, number>();
+const autoProcessing = new Set<string>();
+
+function detectDirection(readerId: string, tag: string, role: AntennaRole, now = Date.now()): MovementDirection | null {
+  if (role === 'direct') return null;
+  const key = `${readerId}:${tag}`;
+  const previous = directionWindows.get(key);
+  if (!previous || now - previous.firstAt > DIRECTION_WINDOW_MS) {
+    directionWindows.set(key, { firstRole: role, firstAt: now });
+    return null;
+  }
+  if (previous.firstRole === role) return null;
+  directionWindows.delete(key);
+  return previous.firstRole === 'outer' && role === 'inner' ? 'in' : 'out';
+}
+
+async function gateDirection(db: ReturnType<typeof getDb>, gate: number): Promise<'in' | 'out' | 'both'> {
+  const gateRow = (await db.select().from(gates).where(eq(gates.gateNo, gate)).limit(1))[0];
+  if (!gateRow?.warehouseId) return 'both';
+  const wh = (await db.select().from(warehouses).where(eq(warehouses.id, gateRow.warehouseId)).limit(1))[0];
+  const perGate = wh?.gateTypes && typeof wh.gateTypes === 'object' ? wh.gateTypes as Record<string, unknown> : {};
+  const value = String(perGate[String(gate)] ?? wh?.gateType ?? 'both');
+  return value === 'in' || value === 'out' ? value : 'both';
+}
+
+async function autoProcessTag(
+  db: ReturnType<typeof getDb>, readerId: string, gate: number, direction: MovementDirection, tag: string,
+): Promise<{ processed: boolean; reason?: string }> {
+  const key = `${readerId}:${gate}:${direction}:${tag}`;
+  const last = autoProcessedAt.get(key);
+  if (last && Date.now() - last < AUTO_PROCESS_DEBOUNCE_MS) return { processed: false, reason: 'debounced' };
+  if (autoProcessing.has(key)) return { processed: false, reason: 'processing' };
+  autoProcessing.add(key);
+  try {
+    const box = (await db.select().from(boxes).where(eq(boxes.tag, tag)).limit(1))[0];
+    if (!box) return { processed: false, reason: 'box_not_found' };
+    if (direction === 'in') {
+      if (box.status === 'warehouse') return { processed: false, reason: 'already_in_warehouse' };
+      await gateIn(db, { tags: [tag], gate, recorder: 'FX9600 Auto', device: readerId });
+    } else {
+      if (box.status !== 'warehouse') return { processed: false, reason: 'not_shippable' };
+      const session = (await db.select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
+      if (!session || session.direction !== 'out' || session.expiresAt.getTime() <= Date.now() || !session.customer || !session.plate) {
+        return { processed: false, reason: 'outbound_context_required' };
+      }
+      await gateOut(db, {
+        tags: [tag], gate, customer: session.customer, doNo: session.doNo ?? undefined, po: session.po ?? undefined,
+        plate: session.plate, driver: session.driver ?? undefined, vehicleType: session.vehicleType ?? undefined,
+        recorder: session.recorder ?? 'FX9600 Auto', device: readerId,
+      });
+    }
+    autoProcessedAt.set(key, Date.now());
+    await db.delete(gatePendingReads).where(and(eq(gatePendingReads.gateNo, gate), eq(gatePendingReads.tag, tag)));
+    bump();
+    return { processed: true };
+  } finally {
+    autoProcessing.delete(key);
+  }
+}
 
 rfidRouter.get(
   '/pending/:gate',
@@ -501,6 +597,7 @@ rfidRouter.post(
       ? await db.select().from(rfidAntennaGateMappings).where(eq(rfidAntennaGateMappings.readerId, activeReader.id))
       : [];
     const gateByAntenna = new Map(configuredMappings.map((m) => [m.antennaPort, m.gateNo]));
+    const roleByAntenna = new Map(configuredMappings.map((m) => [m.antennaPort, m.antennaRole as AntennaRole]));
     const routedReads = reads.map((read) => ({ read, epc: extractEpc(read), antenna: extractAntenna(read) }));
     const epcs = routedReads.map((r) => r.epc).filter((epc): epc is string => epc !== null);
     const statusGates = new Set<number>([fallbackGate, ...configuredMappings.map((m) => m.gateNo)]);
@@ -555,7 +652,7 @@ rfidRouter.post(
 
     const allReceived: string[] = [];
     const allUnknown: string[] = [];
-    const routed: Record<string, { received: string[]; unknown: string[]; antennas: number[] }> = {};
+    const routed: Record<string, { received: string[]; unknown: string[]; antennas: number[]; autoProcessed: string[] }> = {};
     for (const [gate, group] of readsByGate) {
       const antennas = Array.from(new Set(group.map((r) => r.antenna).filter((a): a is number => a !== null))).sort((a, b) => a - b);
       await db.update(gateWebhookStatus).set({ lastTagSeenAt: lastActiveAt, lastAntennas: antennas }).where(eq(gateWebhookStatus.gateNo, gate));
@@ -565,17 +662,53 @@ rfidRouter.post(
       const { fresh, repeats } = splitRepeats(gate, boxTags);
       const now = Date.now();
       for (const tag of fresh) fx9600RecentlySeen.set(repeatKey(gate, tag), now);
-      if (boxTags.length) {
-        await db.insert(gatePendingReads)
-          .values(boxTags.map((tag) => ({ gateNo: gate, tag, seenAt: lastActiveAt })))
-          .onConflictDoUpdate({ target: [gatePendingReads.gateNo, gatePendingReads.tag], set: { seenAt: lastActiveAt } });
+      const configuredDirection = await gateDirection(db, gate);
+      const movementByTag = new Map<string, MovementDirection>();
+      if (configuredDirection === 'in' || configuredDirection === 'out') {
+        for (const tag of boxTags) movementByTag.set(tag, configuredDirection);
+      } else if (activeReader) {
+        /* Preserve reader event order. A direction exists only after the same
+           tag crosses two differently-positioned antennas inside 3 seconds. */
+        for (const read of group) {
+          const code = decodeTag(read.epc);
+          const row = resolved.get(code);
+          const role = read.antenna === null ? 'direct' : (roleByAntenna.get(read.antenna) ?? 'direct');
+          if (!row) continue;
+          const detected = detectDirection(activeReader.id, row.tag, role);
+          if (detected) movementByTag.set(row.tag, detected);
+        }
       }
-      routed[String(gate)] = { received: fresh, unknown: missing, antennas };
-      allReceived.push(...fresh);
+
+      const autoProcessed: string[] = [];
+      const pending: Array<{ tag: string; direction: MovementDirection | null }> = [];
+      for (const [tag, direction] of movementByTag) {
+        try {
+          const auto = await autoProcessTag(db, activeReader?.id ?? `gate-${gate}`, gate, direction, tag);
+          if (auto.processed) autoProcessed.push(tag);
+          else if (!['debounced', 'processing', 'already_in_warehouse', 'not_shippable'].includes(auto.reason ?? '')) pending.push({ tag, direction });
+        } catch (error) {
+          console.error(`[fx9600-auto] gate=${gate} direction=${direction} tag=${tag}`, error);
+          pending.push({ tag, direction });
+        }
+      }
+      const bidirectionalRoles = new Set(configuredMappings.filter((m) => m.gateNo === gate).map((m) => m.antennaRole));
+      if (configuredDirection === 'both' && (!activeReader || !bidirectionalRoles.has('outer') || !bidirectionalRoles.has('inner'))) {
+        for (const tag of boxTags) if (!movementByTag.has(tag)) pending.push({ tag, direction: null });
+      }
+      if (pending.length) {
+        for (const item of pending) {
+          await db.insert(gatePendingReads)
+            .values({ gateNo: gate, tag: item.tag, direction: item.direction, seenAt: lastActiveAt })
+            .onConflictDoUpdate({ target: [gatePendingReads.gateNo, gatePendingReads.tag], set: { seenAt: lastActiveAt, direction: item.direction } });
+        }
+      }
+      const actionable = Array.from(new Set([...autoProcessed, ...pending.map((item) => item.tag).filter((tag) => fresh.includes(tag))]));
+      routed[String(gate)] = { received: actionable, unknown: missing, antennas, autoProcessed };
+      allReceived.push(...actionable);
       allUnknown.push(...missing);
-      console.log(`[fx9600] reader=${activeReader?.id ?? 'unbound'} gate=${gate} antenna=[${antennas.join(',')}] decoded=[${tags.join(', ')}] received=[${fresh.join(', ')}] unknown=[${missing.join(', ')}] repeat=${repeats.length}`);
-      pushFx9600DebugEntry({ ts: new Date().toISOString(), gate, rawBody: body.text.slice(0, RAW_BODY_LOG_MAX), contentType, parseError: body.parseError, epcs: group.map((r) => r.epc), decoded: tags, received: fresh, unknown: missing, repeats });
-      if (fresh.length) publishRfidRead(gate, fresh);
+      console.log(`[fx9600] reader=${activeReader?.id ?? 'unbound'} gate=${gate} antenna=[${antennas.join(',')}] decoded=[${tags.join(', ')}] received=[${actionable.join(', ')}] auto=[${autoProcessed.join(', ')}] unknown=[${missing.join(', ')}] repeat=${repeats.length}`);
+      pushFx9600DebugEntry({ ts: new Date().toISOString(), gate, rawBody: body.text.slice(0, RAW_BODY_LOG_MAX), contentType, parseError: body.parseError, epcs: group.map((r) => r.epc), decoded: tags, received: actionable, unknown: missing, repeats });
+      if (actionable.length) publishRfidRead(gate, actionable);
     }
     res.json({ ok: true, received: Array.from(new Set(allReceived)), unknown: Array.from(new Set(allUnknown)), count: allReceived.length, routed });
   }),
