@@ -158,9 +158,9 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(log.body.entries[0].repeats).toContain('BOX-E');
   });
 
-  it('does not queue a box that is already in the warehouse', async () => {
-    // BOX-I starts in the warehouse — the state a box is in once it's already
-    // been booked in and is merely sitting within the antenna's range.
+  it('queues a box that is already in the warehouse so Gate Out can confirm it', async () => {
+    // BOX-I starts in the warehouse. Inbound ignores it in its UI, but the
+    // shared physical RFID queue must retain it for an outbound gate.
     const res = await request(ctx.app)
       .post(webhookUrl(5))
       .set(secretHeader)
@@ -168,7 +168,7 @@ describe('POST /api/rfid/fx9600/:gate/webhook', () => {
     expect(res.status).toBe(200);
 
     const pending = await request(ctx.app).get('/api/rfid/pending/5').set(auth(ctx.token));
-    expect(pending.body.tags).not.toContain('BOX-I');
+    expect(pending.body.tags).toContain('BOX-I');
   });
 
   it('receives a box even when the reader sends tag data with a non-JSON Content-Type', async () => {

@@ -565,15 +565,15 @@ rfidRouter.post(
        the boxes that matter. */
     const unique = Array.from(new Set(tags));
     const { resolved, missing } = await resolveBoxesByCodes(db, unique);
-    /* Boxes already sitting in the warehouse are skipped, matching what the
-       operator gets from a manual barcode scan ("อยู่ในคลังอยู่แล้ว"). Without
-       this, a reader whose field covers nearby racks would permanently fill
-       the queue with stock that's already booked in and can't be received
-       again. */
+    /* Keep both warehouse stock and returnable boxes in the physical gate
+       queue. The same fixed FX9600 is used at inbound and outbound doors:
+       the active Gate screen applies the direction-specific eligibility
+       check before confirmation. Filtering warehouse stock here made a real
+       outbound RFID read disappear before the Gate Out operator could see
+       it. */
     const boxTags = Array.from(
       new Set(
         Array.from(resolved.values())
-          .filter((r) => r.status !== 'warehouse')
           .map((r) => r.tag),
       ),
     );
