@@ -17403,39 +17403,11 @@ function handleRfidReadEvent(d){
   if(handledRfidEvents.has(d.id))return;
   handledRfidEvents.add(d.id);
   if(handledRfidEvents.size>200)handledRfidEvents.delete(handledRfidEvents.values().next().value);
-
-  const gate=String(d.gate);
-  const gateTab=$('#tab-gatein');
-  const modal=$('#modal');
-  const alreadyMonitoring=!!(gateTab&&gateTab.classList.contains('active')&&!(modal&&modal.classList.contains('show')));
-
-  /* The physical read is authoritative for which gate owns this queue. Keep
-     the user's server-side gate preference aligned without uploading all S. */
-  if(typeof fixedGatesRef==='function'){
-    const ref=fixedGatesRef();
-    if(String(ref.in||'')!==gate){
-      ref.in=gate;
-      apiFetch('/api/gate-prefs',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({out:ref.out||'',in:gate})}).catch(function(){});
-    }
-  }
-
-  /* A real fixed-reader event skips the optional vehicle question. It does
-     not auto-confirm inventory: tags still land in the review queue. */
-  if(typeof gateInAskAnswered!=='undefined')gateInAskAnswered=true;
-  if(typeof gateInStep!=='undefined')gateInStep='scan';
-  if(!alreadyMonitoring){
-    toast('พบการสแกนกล่องที่ประตู '+gate,'กำลังพากลับไปหน้า Gate ขาเข้า','info');
-    if(typeof closeModal==='function')closeModal();
-    if(typeof switchTab==='function')switchTab('gatein');
-  }else if(typeof gateInGo==='function')gateInGo('scan');
-
-  d.tags.forEach(function(tag){
-    const b=(Wn.S&&Wn.S.boxes||{})[tag];
-    if(!b||b.status==='warehouse'||pendingIn.indexOf(tag)>=0)return;
-    pendingIn.push(tag);
-  });
-  if(typeof renderInResult==='function')renderInResult();
-  if(typeof fx9600QueuePoll==='function')fx9600QueuePoll();
+  /* A raw RFID read does not identify whether a truck is arriving or leaving.
+     Never redirect, alter a saved Gate preference, or put data into an
+     inbound queue from this global event. The gate-specific In/Out pages poll
+     the shared backend queue only while an operator has deliberately chosen
+     the correct workflow, then require an explicit confirmation. */
 }
 function handleReaderStatusEvent(d){
   if(!d||d.online!==true||!Number.isInteger(Number(d.gate))||!d.lastActiveAt)return;
