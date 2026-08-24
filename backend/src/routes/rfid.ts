@@ -1,12 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, decodeEpcHexToBarcode, type EpcBits } from '../lib/rfid.js';
 import { env } from '../env.js';
 import { getDb } from '../db/client.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
-import { gateWebhookStatus, gatePendingReads } from '../db/schema.js';
+import { gateWebhookStatus, gatePendingReads, rfidReaders } from '../db/schema.js';
 import { and, eq, gte } from 'drizzle-orm';
+import { writeAuditLog } from '../services/audit.js';
 
 export const rfidRouter = Router();
 
@@ -114,6 +115,15 @@ function extractReads(body: unknown): unknown[] {
   return [];
 }
 
+function extractAntenna(read: unknown): number | null {
+  if (!read || typeof read !== 'object') return null;
+  const obj = read as Record<string, unknown>;
+  if (obj.data && typeof obj.data === 'object') return extractAntenna(obj.data);
+  const raw = obj.antenna ?? obj.antennaId ?? obj.antennaID;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 && value <= 32 ? value : null;
+}
+
 /** Decodes `Authorization: Basic base64(user:pass)`, returning just the
  *  password half — the username is whatever the IoT Connector profile was
  *  given and isn't checked against anything. */
@@ -201,6 +211,109 @@ rfidRouter.get(
   requireAuth,
   asyncHandler(async (_req, res) => {
     res.json({ entries: fx9600DebugLog });
+  }),
+);
+
+const readerView = (row: typeof rfidReaders.$inferSelect, status?: typeof gateWebhookStatus.$inferSelect) => {
+  const lastSeenAt = status?.lastSeenAt ?? null;
+  const online = !!lastSeenAt && Date.now() - lastSeenAt.getTime() < 60_000;
+  const scanning = online && !!status?.lastTagSeenAt && Date.now() - status.lastTagSeenAt.getTime() < 15_000;
+  return {
+    id: row.id,
+    name: row.name,
+    host: row.host,
+    gateNo: row.gateNo,
+    webhookUrl: row.webhookUrl,
+    transmitPower: Number(row.transmitPower),
+    antennaCount: row.antennaCount,
+    readingEnabled: row.readingEnabled,
+    online,
+    powerState: online ? 'on' : 'unknown',
+    operationalState: !row.readingEnabled ? 'idle' : scanning ? 'scanning' : online ? 'idle' : 'error',
+    lastSeenAt: lastSeenAt?.toISOString() ?? null,
+    lastTagSeenAt: status?.lastTagSeenAt?.toISOString() ?? null,
+    activeAntennas: Array.isArray(status?.lastAntennas) ? status.lastAntennas : [],
+    adminUrl: `https://${row.host}`,
+    commandCapability: 'backend-ingest',
+  };
+};
+
+rfidRouter.get(
+  '/fx9600/readers',
+  requireAuth,
+  asyncHandler(async (_req, res) => {
+    const db = getDb();
+    const [readers, statuses] = await Promise.all([
+      db.select().from(rfidReaders),
+      db.select().from(gateWebhookStatus),
+    ]);
+    const statusByGate = new Map(statuses.map((s) => [s.gateNo, s]));
+    res.json({ readers: readers.map((r) => readerView(r, statusByGate.get(r.gateNo))) });
+  }),
+);
+
+function parseReaderInput(body: unknown) {
+  const src = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const name = String(src.name ?? '').trim();
+  const host = String(src.host ?? '').trim();
+  const gateNo = Number(src.gateNo);
+  const webhookUrl = String(src.webhookUrl ?? '').trim();
+  const transmitPower = Number(src.transmitPower);
+  const antennaCount = Number(src.antennaCount);
+  if (!name || name.length > 100) throw httpError(400, 'ชื่อเครื่องอ่านไม่ถูกต้อง', 'invalid_reader_name');
+  if (!/^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|(?:\d{1,3}\.){3}\d{1,3})$/i.test(host)) {
+    throw httpError(400, 'Host/IP ของเครื่องอ่านไม่ถูกต้อง', 'invalid_reader_host');
+  }
+  if (!Number.isInteger(gateNo) || gateNo <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
+  try {
+    const parsed = new URL(webhookUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error();
+  } catch {
+    throw httpError(400, 'Webhook URL ต้องเป็น HTTP/HTTPS และห้ามฝังรหัสผ่าน', 'invalid_webhook_url');
+  }
+  if (!Number.isFinite(transmitPower) || transmitPower < 0 || transmitPower > 3) {
+    throw httpError(400, 'Transmit Power ต้องอยู่ระหว่าง 0.00 ถึง 3.00', 'invalid_transmit_power');
+  }
+  if (!Number.isInteger(antennaCount) || antennaCount < 1 || antennaCount > 8) {
+    throw httpError(400, 'จำนวนเสาอากาศต้องอยู่ระหว่าง 1 ถึง 8', 'invalid_antenna_count');
+  }
+  return { name, host, gateNo, webhookUrl, transmitPower: transmitPower.toFixed(2), antennaCount };
+}
+
+rfidRouter.put(
+  '/fx9600/readers/:id',
+  requireAuth,
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const id = String(req.params.id).trim();
+    if (!/^[a-z0-9][a-z0-9_-]{1,49}$/i.test(id)) throw httpError(400, 'Reader ID ไม่ถูกต้อง', 'invalid_reader_id');
+    const data = parseReaderInput(req.body);
+    const db = getDb();
+    const before = (await db.select().from(rfidReaders).where(eq(rfidReaders.id, id)).limit(1))[0] ?? null;
+    const [row] = await db
+      .insert(rfidReaders)
+      .values({ id, ...data, updatedAt: new Date(), updatedBy: req.user?.name })
+      .onConflictDoUpdate({ target: rfidReaders.id, set: { ...data, updatedAt: new Date(), updatedBy: req.user?.name } })
+      .returning();
+    await writeAuditLog(db, { action: before ? 'reader_update' : 'reader_create', actor: req.user?.name ?? 'system', itemId: id, itemName: row.name, before, after: row });
+    const status = (await db.select().from(gateWebhookStatus).where(eq(gateWebhookStatus.gateNo, row.gateNo)).limit(1))[0];
+    res.json(readerView(row, status));
+  }),
+);
+
+rfidRouter.post(
+  '/fx9600/readers/:id/reading',
+  requireAuth,
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    if (typeof req.body?.enabled !== 'boolean') throw httpError(400, 'enabled ต้องเป็น boolean', 'invalid_enabled');
+    const db = getDb();
+    const before = (await db.select().from(rfidReaders).where(eq(rfidReaders.id, req.params.id)).limit(1))[0];
+    if (!before) throw httpError(404, 'ไม่พบเครื่องอ่าน', 'reader_not_found');
+    const [row] = await db.update(rfidReaders).set({ readingEnabled: req.body.enabled, updatedAt: new Date(), updatedBy: req.user?.name }).where(eq(rfidReaders.id, req.params.id)).returning();
+    await writeAuditLog(db, { action: req.body.enabled ? 'reader_start' : 'reader_stop', actor: req.user?.name ?? 'system', itemId: row.id, itemName: row.name, before: { readingEnabled: before.readingEnabled }, after: { readingEnabled: row.readingEnabled } });
+    const status = (await db.select().from(gateWebhookStatus).where(eq(gateWebhookStatus.gateNo, row.gateNo)).limit(1))[0];
+    res.json(readerView(row, status));
   }),
 );
 
@@ -315,6 +428,16 @@ rfidRouter.post(
     const contentType = req.get('Content-Type') ?? '';
     const reads = extractReads(body.parsed);
     const epcs = reads.map(extractEpc).filter((e): e is string => e !== null);
+    const antennas = Array.from(new Set(reads.map(extractAntenna).filter((a): a is number => a !== null))).sort((a, b) => a - b);
+    if (epcs.length || antennas.length) {
+      await db
+        .update(gateWebhookStatus)
+        .set({
+          ...(epcs.length ? { lastTagSeenAt: new Date() } : {}),
+          ...(antennas.length ? { lastAntennas: antennas } : {}),
+        })
+        .where(eq(gateWebhookStatus.gateNo, gate));
+    }
     if (!epcs.length) {
       // Not an error — IoT Connector can POST a heartbeat/status payload with
       // no tag data in it. Nothing to receive, nothing to fail on.
@@ -333,6 +456,19 @@ rfidRouter.post(
         unknown: [],
       });
       res.json({ ok: true, received: [], unknown: [], count: 0 });
+      return;
+    }
+
+    /* Start/Stop from Device Management controls ingestion atomically at the
+       gate boundary. The reader continues sending heartbeat traffic, so the
+       dashboard can still distinguish a paused reader from a disconnected one. */
+    const readerConfig = (await db.select().from(rfidReaders).where(eq(rfidReaders.gateNo, gate)).limit(1))[0];
+    if (readerConfig && !readerConfig.readingEnabled) {
+      pushFx9600DebugEntry({
+        ts: new Date().toISOString(), gate, rawBody: body.text.slice(0, RAW_BODY_LOG_MAX),
+        contentType, epcs, decoded: [], received: [], unknown: [],
+      });
+      res.json({ ok: true, paused: true, received: [], unknown: [], count: 0 });
       return;
     }
 

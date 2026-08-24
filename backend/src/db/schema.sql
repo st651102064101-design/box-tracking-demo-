@@ -115,6 +115,23 @@ CREATE TABLE IF NOT EXISTS gate_webhook_status (
 -- (readers serve one at their IP over HTTP(S)) without anyone hardcoding
 -- it — the reader tells us where it's calling from every time it posts.
 ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_ip TEXT;
+ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_tag_seen_at TIMESTAMPTZ;
+ALTER TABLE gate_webhook_status ADD COLUMN IF NOT EXISTS last_antennas JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- Central configuration for fixed RFID readers. One reader is bound to one
+-- physical gate; webhook traffic remains gate-addressed and idempotent.
+CREATE TABLE IF NOT EXISTS rfid_readers (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  host              TEXT NOT NULL,
+  gate_no           INTEGER NOT NULL UNIQUE,
+  webhook_url       TEXT NOT NULL,
+  transmit_power    NUMERIC NOT NULL DEFAULT 3,
+  antenna_count     INTEGER NOT NULL DEFAULT 4,
+  reading_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by        TEXT
+);
 
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep

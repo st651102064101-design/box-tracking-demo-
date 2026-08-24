@@ -153,6 +153,21 @@ export const gateWebhookStatus = pgTable('gate_webhook_status', {
   /** Source IP of the most recent webhook hit — lets the frontend link straight
    *  to the reader's own admin UI without anyone hardcoding an address. */
   lastIp: text('last_ip'),
+  lastTagSeenAt: timestamp('last_tag_seen_at', { withTimezone: true }),
+  lastAntennas: jsonb('last_antennas').notNull().default([]),
+});
+
+export const rfidReaders = pgTable('rfid_readers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  host: text('host').notNull(),
+  gateNo: integer('gate_no').notNull().unique(),
+  webhookUrl: text('webhook_url').notNull(),
+  transmitPower: numeric('transmit_power').notNull().default('3'),
+  antennaCount: integer('antenna_count').notNull().default(4),
+  readingEnabled: boolean('reading_enabled').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
 });
 
 /** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
@@ -372,6 +387,7 @@ export type Schema = {
   warehouses: typeof warehouses;
   gates: typeof gates;
   gateWebhookStatus: typeof gateWebhookStatus;
+  rfidReaders: typeof rfidReaders;
   gatePendingReads: typeof gatePendingReads;
   gatePrefs: typeof gatePrefs;
   locations: typeof locations;
@@ -396,6 +412,7 @@ export const schema = {
   warehouses,
   gates,
   gateWebhookStatus,
+  rfidReaders,
   gatePendingReads,
   gatePrefs,
   locations,
