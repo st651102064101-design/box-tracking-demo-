@@ -9715,7 +9715,10 @@ function fx9600StatusHtml(g,compact){
   /* แดง ไม่ใช่เหลือง สำหรับออฟไลน์ — ให้เข้าชุดสีเดียวกับ banner แดง/badge แดงที่
      การ์ดสถานะ Gate ขาเข้าและ modal เลือกประตู ผู้ใช้ไม่ควรเห็นสีไม่ตรงกันของ
      "สถานะเดียวกัน" ในหน้าต่างกัน */
-  var dotColor=fresh?'var(--pos)':'var(--neg)';
+  /* Use an explicit accessible green for a live reader. --pos is themeable
+     and can be too muted on some dark installations, which made Online look
+     indistinguishable from a neutral status badge. */
+  var dotColor=fresh?'#22c55e':'#ef4444';
   var label=compact?(fresh?'RFID Gate พร้อมใช้งาน':'RFID Gate ไม่พร้อมใช้งาน'):(fresh?'เครื่องอ่านเชื่อมต่ออยู่':'ขาดการเชื่อมต่อ');
   /* Docker can expose its gateway (such as 172.18.0.1) as a webhook source.
      Use the backend's read-only site configuration for the reader UI instead. */
@@ -9725,8 +9728,8 @@ function fx9600StatusHtml(g,compact){
   var ip=readerHost;
   var manageBtn=(!compact&&/^https?:\/\/[^\s/]+/i.test(readerUrl))?(' <a class="btn ghost sm" href="'+esc(readerUrl)+'" target="_blank" rel="noopener" style="margin-left:8px;">'
     +'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> จัดการเครื่องอ่าน ('+esc(ip)+')</a>'):'';
-  return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+(fresh?'var(--pos)':'var(--neg)')+';font-weight:600;">'
-    +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px color-mix(in srgb,var(--pos) 22%,transparent);':'')+'"></span>'
+  return '<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:'+dotColor+';font-weight:600;">'
+    +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex:0 0 auto;'+(fresh?'box-shadow:0 0 0 3px rgba(34,197,94,.28);':'')+'"></span>'
     +esc(label)+' <span style="color:var(--muted);font-weight:400;">· เห็นล่าสุด '+ago+'</span></span>'+manageBtn;
 }
 function renderFx9600Status(g){
