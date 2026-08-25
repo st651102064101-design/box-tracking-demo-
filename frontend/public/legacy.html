@@ -5477,7 +5477,9 @@ function applyGateOutEntryMode(mode,openPicker){
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
   if(man)man.style.display=gateOutEntryMode!=='excel'?'':'none';
-  if(acts)acts.style.display=gateOutEntryMode!=='excel'?'':'none';
+  /* RFID commits through the backend automatically; manual confirmation,
+     clear-queue and Excel export controls are intentionally unavailable. */
+  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
   var pad=$('#gateOutManualPad'),status=$('#gateOutRfidStatus');
   if(pad)pad.style.display=gateOutEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateOutEntryMode==='rfid'?'':'none';
@@ -10832,7 +10834,8 @@ function renderGateInStep(){
   var imp=$('#gateInImportBoard'),manual=$('#gateInManualBoard'),actions=$('#gateInManualActions');
   if(imp)imp.style.display='none';
   if(manual)manual.style.display=gateInStep==='scan'?'':'none';
-  if(actions)actions.style.display=gateInStep==='scan'?'':'none';
+  /* RFID Gate is zero-click: no confirm/clear/export action bar. */
+  if(actions)actions.style.display=gateInEntryMode!=='rfid'&&gateInStep==='scan'?'':'none';
   var pad=$('#gateInManualPad'),status=$('#gateInRfidStatus');
   if(pad)pad.style.display=gateInEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateInEntryMode==='rfid'?'':'none';
