@@ -8998,6 +8998,15 @@ function openBoxActionModal(tag){
          การผูก/ถอดแท็กยังทำได้ที่ PDA และยังเก็บ b.rfidTid/b.rfidEpc ไว้เหมือนเดิม
          เพียงแต่ไม่โชว์สถานะการผูกในหน้ารายละเอียดกล่องนี้ */
       +'<div class="ts-line"><span class="k">ส่ง/รับล่าสุด</span><span class="v">'+invShipRecvText(b)+'</span></div>'
+      +'<div class="sectlabel" style="margin:18px 2px 10px;">ประวัติ RFID / LPR</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px;">'+(Array.isArray(b.history)&&b.history.filter(function(h){return h&&h.dir==='lpr';}).slice(-10).reverse().map(function(h){
+        var image=h.imageUrl||((h.imageBase64&&h.imageBase64.indexOf('data:')===0)?h.imageBase64:(h.imageBase64?'data:image/jpeg;base64,'+h.imageBase64:''));
+        return '<div style="padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);">'
+          +'<div style="display:flex;justify-content:space-between;gap:8px;"><b>'+esc(h.plateNumber||'-')+'</b><span class="muted small">'+esc(fmtTs(h.ts||''))+'</span></div>'
+          +'<div class="muted small" style="margin-top:4px;">Gate '+esc(h.gate||'-')+' · '+esc(h.cameraId||'LPR')+' · ความมั่นใจ '+(h.confidence==null?'-':Math.round(Number(h.confidence)*100)+'%')+'</div>'
+          +(h.rfidTags&&h.rfidTags.length?'<div class="muted small" style="margin-top:3px;">RFID: '+esc(h.rfidTags.join(', '))+'</div>':'')
+          +(image?'<a href="'+esc(image)+'" target="_blank" rel="noopener"><img src="'+esc(image)+'" alt="ภาพป้ายทะเบียน" style="display:block;max-width:180px;max-height:90px;object-fit:contain;margin-top:8px;border-radius:8px;background:#111;"></a>':'');
+      }).join('')||'<div class="muted small">ยังไม่มีข้อมูล LPR ของกล่องนี้</div>')+'</div>'
       +'<div class="sectlabel" style="margin:18px 2px 10px;">จัดการ</div>'
       +'<div style="display:flex;flex-direction:column;gap:8px;">'
         +actions.map(function(a){return '<button class="'+a.cls+'" style="width:100%;justify-content:flex-start;" onclick="'+a.fn+'">'+a.label+'</button>';}).join('')
