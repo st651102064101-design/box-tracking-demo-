@@ -3013,6 +3013,10 @@ a{color:var(--accentInk);}
         <div class="field" style="grid-column:1/-1;"><label>ทิศทางรายประตู — แยกตั้งได้ทุกประตู</label>
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
+        <div class="field" style="grid-column:1/-1;"><label>วิธีทำรายการสำหรับประตู “เข้า-ออกร่วมกัน”</label>
+          <div id="whGateBidirectionalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div class="muted small" style="margin-top:6px;">เลือก “หน้าจอ” เมื่อพนักงานระบุขาเข้า/ออกเอง; เลือก “2 เสาอากาศ” เมื่อผูก Outer และ Inner ของ DB Gate เดียวกันแล้ว</div>
+        </div>
         <div class="field" style="grid-column:1/-1;"><label>RFID Gate / Zebra FX9600 — จัดการราย DB Gate</label>
           <div id="whGateRfidCrud" class="muted small" style="padding:12px;border:1px solid var(--line);border-radius:12px;">เปิดแก้ไขคลังก่อน เพื่อจัดการ RFID Reader ของแต่ละ DB Gate</div>
         </div>
@@ -6116,10 +6120,26 @@ function renderWhGateTypeList(preset){
       +opt('both','⇄ เข้า-ออก')+opt('in','↓ ขาเข้า')+opt('out','↑ ขาออก')
       +'</select></div>';
   }).join('');
+  $all('.wh-gt-sel',host).forEach(function(sel){sel.onchange=function(){renderWhGateBidirectionalList();};});
 }
 window.renderWhGateTypeList=renderWhGateTypeList;
+/* Each bidirectional Gate explicitly chooses its source of truth.  Defaulting
+   to the screen is fail-safe: no physical movement is inferred until Outer /
+   Inner antenna mappings have been deliberately configured. */
+function renderWhGateBidirectionalList(preset){
+  var host=$('#whGateBidirectionalList');if(!host)return;
+  preset=preset||null;
+  var cur={};$all('.wh-bidir-sel',host).forEach(function(s){cur[s.dataset.gate]=s.value;});
+  var both=$all('#whGateTypeList .wh-gt-sel').filter(function(s){return s.value==='both';}).map(function(s){return String(s.dataset.gate);});
+  if(!both.length){host.innerHTML='<span class="muted small">ไม่มีประตูที่ตั้งเป็น “เข้า-ออกร่วมกัน”</span>';return;}
+  host.innerHTML=both.map(function(g){
+    var v=preset?(preset[g]!=null?preset[g]:(preset[String(g)]!=null?preset[String(g)]:'screen')):(cur[g]||'screen');
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);"><b class="mono">G'+esc(g)+'</b><select class="wh-bidir-sel" data-gate="'+esc(g)+'" style="min-width:260px;"><option value="screen"'+(v==='screen'?' selected':'')+'>ผู้ใช้เลือกขาเข้า / ออกที่หน้าจอเว็บ</option><option value="antenna"'+(v==='antenna'?' selected':'')+'>ใช้ 2 เสาอากาศระบุทิศทางอัตโนมัติ</option></select><span class="muted small">'+(v==='antenna'?'Outer → Inner = เข้า, Inner → Outer = ออก':'ไม่ใช้ลำดับเสาอากาศ')+'</span></div>';
+  }).join('');
+}
+window.renderWhGateBidirectionalList=renderWhGateBidirectionalList;
 ['whGateFrom','whGateTo'].forEach(function(id){var el=$('#'+id);if(el)el.addEventListener('input',function(){renderWhGateTypeList();});});
-(function(){var s=$('#whGateType');if(s)s.addEventListener('change',function(){var v=s.value;$all('#whGateTypeList .wh-gt-sel').forEach(function(x){x.value=v;});});renderWhGateTypeList();})();
+(function(){var s=$('#whGateType');if(s)s.addEventListener('change',function(){var v=s.value;$all('#whGateTypeList .wh-gt-sel').forEach(function(x){x.value=v;});renderWhGateBidirectionalList();});renderWhGateTypeList();renderWhGateBidirectionalList();})();
 /* จุดพักรอ Putaway ถูกถอดออกจาก Master แล้ว — เป็นแค่ตำแหน่งในฉาก 3D ไม่ใช่ข้อมูลที่เก็บลง DB
    (ดู stagingCodes() ฝั่งโมดูล 3D ซึ่งสร้างจำนวนช่องเองตามของที่ค้างอยู่จริง) */
 
@@ -6241,20 +6261,21 @@ $('#btnAddWh').onclick=function(){
   var gates=[];for(var k=from;k<=to;k++)gates.push(k);
   var gtMap={};$all('#whGateTypeList .wh-gt-sel').forEach(function(s){gtMap[s.dataset.gate]=s.value;});
   gates.forEach(function(k2){if(!gtMap[k2])gtMap[k2]=gt;});
+  var bidirMap={};$all('#whGateBidirectionalList .wh-bidir-sel').forEach(function(s){bidirMap[s.dataset.gate]=s.value==='antenna'?'antenna':'screen';});
   var area=val('whArea'),status=val('whStatus')||'active';
   var lat=parseFloat(val('whLat')),lng=parseFloat(val('whLng'));
-  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,area:area,lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,status:status};rebuildGates();
+  S.warehouses[id]={id:id,name:nm,gates:gates,gateType:gt,gateTypes:gtMap,gateBidirectionalModes:bidirMap,area:area,lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,status:status};rebuildGates();
   auditEntry(editingWh?'UPDATE':'CREATE',USER,id,nm,before,S.warehouses[id]);
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
-  renderWhGateTypeList();
+  renderWhGateTypeList();renderWhGateBidirectionalList();
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();closeCardDrawerIfActive('whFormCard');};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
   whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
-  renderWhGateTypeList();closeCardDrawerIfActive('whFormCard');};
+  renderWhGateTypeList();renderWhGateBidirectionalList();closeCardDrawerIfActive('whFormCard');};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
   /* ย้ายการ์ดเข้า modal ก่อนเซ็ตค่าใดๆ — โดยเฉพาะก่อน whAreaSetMode('map') ด้านล่าง
      ซึ่งวัดขนาด container จริงตอนสร้าง/invalidateSize() แผนที่ Leaflet ถ้าย้าย DOM
@@ -6269,7 +6290,7 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
      ไม่มี → เริ่มที่โหมดพิมพ์เอง (ค่าเริ่มต้น) */
   whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
   setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
-  renderWhGateTypeList(w.gateTypes||{});
+  renderWhGateTypeList(w.gateTypes||{});renderWhGateBidirectionalList(w.gateBidirectionalModes||{});
   loadWhGateRfidCrud(w);
   $('#btnAddWh').textContent='อัปเดตคลัง';}
 
