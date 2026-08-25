@@ -4954,11 +4954,6 @@ var _dwClosing=false;
 /* force=true → ปิดโดยไม่ถามเรื่องข้อมูลที่ยังไม่ได้บันทึก (ใช้ตอนบันทึกสำเร็จแล้ว) */
 function closeDrawer(force){
   if(!_dwCard||_dwClosing)return;
-  if(!force&&drawerIsDirty()){
-    confirmA('มีข้อมูลที่ยังไม่ได้บันทึก','ต้องการออกโดยไม่บันทึกหรือไม่?','ออกโดยไม่บันทึก',true)
-      .then(function(ok){if(ok)closeDrawer(true);});
-    return;
-  }
   _dwClosing=true;
   var cancelId=CARD_CANCEL_BTN[_dwCard.id];
   var cancelBtn=cancelId&&$('#'+cancelId);
