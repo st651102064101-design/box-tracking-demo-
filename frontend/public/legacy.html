@@ -4916,6 +4916,10 @@ function openCardDrawer(cardId,title,sub){
   }
   clearFieldErrors(card);
   _dwBaseline=_dwSnapshot(card);
+  /* editXxx() fills the real form immediately after openCardDrawer() returns.
+     Capture once more after that synchronous setup has finished; otherwise
+     merely opening an existing record looks dirty and shows the discard alert. */
+  Promise.resolve().then(function(){if(_dwCard===card)_dwBaseline=_dwSnapshot(card);});
   $('#drawer').classList.add('show');
   $('#drawer').setAttribute('aria-hidden','false');
   document.body.style.overflow='hidden';

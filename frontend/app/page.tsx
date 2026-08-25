@@ -48,7 +48,6 @@ export default function Home() {
     <iframe
       src="/legacy.html"
       title={t('app.frameTitle')}
-      allow="fullscreen"
       allowFullScreen
       style={{ display: 'block', width: '100vw', height: '100vh', border: 'none' }}
     />
