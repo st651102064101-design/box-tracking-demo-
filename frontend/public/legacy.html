@@ -19143,6 +19143,14 @@ Wn.btSyncNow=syncNow;   /* so anything else can force a refresh */
    token would 401-loop forever. Rebuilding the connection from scratch picks
    up whatever token localStorage holds now. */
 let liveStream=false, es=null;
+let lprUnread=0;
+function showLprLiveAlert(d){
+  lprUnread++;
+  var badge=document.querySelector('[data-stab-badge="audit"]');
+  if(badge){badge.textContent=nf(lprUnread)+' ใหม่';badge.classList.add('urgent');}
+  toast('พบข้อมูล LPR ใหม่','ทะเบียน '+(d.plateNumber||'-')+' · '+(d.gateId||'Gate')+' · RFID '+((d.rfidTags||[]).join(', ')||'-'),'info');
+  syncNow();
+}
 function connectStream(){
   if(!window.EventSource||es)return;
   const t=token();
@@ -19166,6 +19174,10 @@ function connectStream(){
     /* Status is keyed by the selected gate; no navigation and no direction
        inference is performed from a reader heartbeat/read event. */
     renderRfidGateStatus();
+  });
+  es.addEventListener('lpr-detection',ev=>{
+    let d=null;try{d=JSON.parse(ev.data);}catch(_){}
+    if(d)showLprLiveAlert(d);
   });
   es.onerror=()=>{
     liveStream=false;
