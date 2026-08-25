@@ -10483,6 +10483,22 @@ function rfidRemovePending(g,tag){
   if(!g||!tag)return Promise.resolve();
   return apiFetch('/api/rfid/pending/'+encodeURIComponent(g)+'/'+encodeURIComponent(tag),{method:'DELETE',headers:authHeaders()}).catch(function(){return null;});
 }
+/* Inbound never depends on LPR.  The RFID event is the inventory movement;
+   the camera is only an optional later trace record.  Keep one short timer so
+   a single FX9600 batch is committed together, while duplicate reports are
+   absorbed by saveInbound()/the server-side pending clear. */
+var rfidInboundAutoCommitTimer=null,rfidInboundAutoCommitBusy=false;
+function tryAutoCommitRfidInbound(){
+  clearTimeout(rfidInboundAutoCommitTimer);
+  if(rfidInboundAutoCommitBusy||gateInEntryMode!=='rfid'||!pendingIn.length)return;
+  rfidInboundAutoCommitTimer=setTimeout(function(){
+    if(rfidInboundAutoCommitBusy||gateInEntryMode!=='rfid'||!pendingIn.length)return;
+    rfidInboundAutoCommitBusy=true;
+    if(!val('inRecorder'))setv('inRecorder',USER);
+    try{saveInbound();}finally{rfidInboundAutoCommitBusy=false;}
+  },180);
+}
+window.tryAutoCommitRfidInbound=tryAutoCommitRfidInbound;
 var fx9600OutPolling=false,fx9600InPolling=false;
 function fx9600OutQueuePoll(){
   if(gateOutEntryMode!=='rfid'||fx9600OutPolling)return;
@@ -10511,6 +10527,12 @@ function fx9600InQueuePoll(){
       if(gateInStep==='ask')gateInSkipVehicle();else{gateInStep='scan';renderGateInStep();}
       renderInResult();
       toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');
+      /* Gate In RFID is an unattended receiving flow.  LPR is optional
+         traceability: a missing, delayed, or already-active camera must
+         never hold a physically read box in a client-side queue.  Persist
+         immediately; a later LPR webhook is correlated by the backend and
+         appended to the box history without changing this receipt. */
+      tryAutoCommitRfidInbound();
     }
   }).catch(function(){}).finally(function(){fx9600InPolling=false;});
 }
