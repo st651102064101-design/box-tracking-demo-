@@ -5491,7 +5491,7 @@ function applyGateOutEntryMode(mode,openPicker){
     else clearRfidAutoSession(fixedGatesRef().out);
   },100);
 }
-function chooseGateOutEntryMode(mode){if(mode==='rfid'&&!rfidGateIsBound(fixedGatesRef().out))return toast('ใช้ RFID ไม่ได้','ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateOutEntryMode(mode,false);}
+function chooseGateOutEntryMode(mode){if(mode==='rfid'&&!rfidGateIsReady(fixedGatesRef().out))return toast('ใช้ RFID ไม่ได้',rfidGateIsBound(fixedGatesRef().out)?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateOutEntryMode(mode,false);}
 function openGateOutModeChooser(){
   var panel=$('#gateOutModeBar');if(panel)panel.scrollIntoView({behavior:'smooth',block:'center'});return;
   var h='<div class="mhead gateout-choice-head"><div class="gateout-choice-kicker">Gate Out</div><h3>เริ่มทำรายการด้วยวิธีไหน?</h3></div>'
@@ -10197,10 +10197,13 @@ function btT(text){return window.btI18n&&typeof window.btI18n.t==='function'?win
    binding from the master API may enable the RFID mode for a gate. */
 var rfidBoundGateMap=null;
 function rfidGateIsBound(g){return rfidBoundGateMap===null||!!(g&&rfidBoundGateMap[String(g)]);}
+/* Configuration alone does not mean the reader is alive; require a fresh
+   heartbeat for the selected gate before enabling RFID processing. */
+function rfidGateIsReady(g){return rfidGateIsBound(g)&&fx9600IsOnline(g);}
 function updateRfidGateAvailability(){
   [['out',fixedGatesRef().out,'data-gateout-mode'],['in',fixedGatesRef().in,'data-gatein-mode']].forEach(function(row){
-    var dir=row[0],gate=row[1],attr=row[2],available=rfidGateIsBound(gate);
-    $all('['+attr+'="rfid"]').forEach(function(btn){var reason='ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID';btn.disabled=!available;btn.setAttribute('aria-disabled',available?'false':'true');if(available){btn.removeAttribute('data-disabled-reason');btn.title='';}else{btn.setAttribute('data-disabled-reason',reason);btn.title=reason;}});
+    var dir=row[0],gate=row[1],attr=row[2],bound=rfidGateIsBound(gate),online=fx9600IsOnline(gate),available=bound&&online;
+    $all('['+attr+'="rfid"]').forEach(function(btn){var reason=bound?'ประตูนี้ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่';btn.disabled=!available;btn.setAttribute('aria-disabled',available?'false':'true');if(available){btn.removeAttribute('data-disabled-reason');btn.title='';}else{btn.setAttribute('data-disabled-reason',reason);btn.title=reason;}});
     if(!available){if(dir==='out'&&gateOutEntryMode==='rfid')applyGateOutEntryMode('manual');if(dir==='in'&&gateInEntryMode==='rfid')applyGateInEntryMode('manual',true);}
   });
 }
@@ -10211,7 +10214,7 @@ function loadRfidGateBindings(){
     rfidBoundGateMap=bound;updateRfidGateAvailability();renderRfidGateStatus();
   }).catch(function(){});
 }
-function rfidGateUnavailableHtml(g){return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT('ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>';}
+function rfidGateUnavailableHtml(g){var bound=rfidGateIsBound(g);return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT(bound?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>';}
 function fx9600LastSeen(g){return S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)]||'';}
 function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(5500,sec*3500);}
 function fx9600IsOnline(g){var ts=Date.parse(fx9600LastSeen(g));return !!ts&&(Date.now()-ts)<=fx9600OfflineAfterMs(g);}
@@ -10263,7 +10266,7 @@ var fx9600OutPolling=false,fx9600InPolling=false;
 function fx9600OutQueuePoll(){
   if(gateOutEntryMode!=='rfid'||fx9600OutPolling)return;
   var g=fixedGatesRef().out;renderRfidGateStatus();
-  if(!rfidGateIsBound(g))return;
+  if(!rfidGateIsReady(g))return;
   /* Never accept an outbound tag until shipment identity is complete. */
   if(!g||!val('doCustomer')||!val('outPlate').trim())return;
   fx9600OutPolling=true;
@@ -10276,7 +10279,7 @@ function fx9600OutQueuePoll(){
 function fx9600InQueuePoll(){
   if(gateInEntryMode!=='rfid'||fx9600InPolling)return;
   var g=fixedGatesRef().in;renderRfidGateStatus();if(!g)return;
-  if(!rfidGateIsBound(g))return;
+  if(!rfidGateIsReady(g))return;
   fx9600InPolling=true;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
@@ -10817,7 +10820,7 @@ function applyGateInEntryMode(mode,persist){
   if(persist!==false)uiPrefSet('gateInEntryMode',gateInEntryMode);
   renderGateInStep();
 }
-function chooseGateInEntryMode(mode){if(mode==='rfid'&&!rfidGateIsBound(fixedGatesRef().in))return toast('ใช้ RFID ไม่ได้','ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateInEntryMode(mode,true);}
+function chooseGateInEntryMode(mode){if(mode==='rfid'&&!rfidGateIsReady(fixedGatesRef().in))return toast('ใช้ RFID ไม่ได้',rfidGateIsBound(fixedGatesRef().in)?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateInEntryMode(mode,true);}
 window.applyGateInEntryMode=applyGateInEntryMode;window.chooseGateInEntryMode=chooseGateInEntryMode;
 function renderGateInStep(){
   if(gateInEntryMode==='excel'){
@@ -19175,6 +19178,7 @@ function connectStream(){
     S.gateWebhookLastSeen[String(d.gate)]=d.lastActiveAt;
     /* Status is keyed by the selected gate; no navigation and no direction
        inference is performed from a reader heartbeat/read event. */
+    updateRfidGateAvailability();
     renderRfidGateStatus();
   });
   es.addEventListener('lpr-detection',ev=>{
