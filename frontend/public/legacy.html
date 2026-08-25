@@ -5544,8 +5544,9 @@ function refreshGateOutRfidWorkflow(){
      condition and then explicitly confirm the outbound transaction; this is
      the same inventory commit point as barcode mode, not an auto-ship. */
   /* RFID + LPR commits automatically after both device signals arrive. */
-  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
+  if(acts)acts.style.display=(gateOutEntryMode==='manual'||(rfid&&isScreenDirectionGate('out')&&pendingOut.length))?'':'none';
   refreshGateOutConfirmButton();
+  refreshScreenGateDecisionActions();
   if(rfid&&!ready){pendingOut=[];outConditionMap={};}
 }
 function applyGateOutEntryMode(mode,openPicker){
@@ -5554,7 +5555,7 @@ function applyGateOutEntryMode(mode,openPicker){
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
   if(man)man.style.display=gateOutEntryMode!=='excel'?'':'none';
-  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
+  if(acts)acts.style.display=(gateOutEntryMode==='manual'||(gateOutEntryMode==='rfid'&&isScreenDirectionGate('out')&&pendingOut.length))?'':'none';
   var pad=$('#gateOutManualPad'),status=$('#gateOutRfidStatus');
   if(pad)pad.style.display=gateOutEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateOutEntryMode==='rfid'?'':'none';
@@ -10432,6 +10433,24 @@ function hasRfidGateForDirection(dir){
 /* Configuration alone does not mean the reader is alive; require a fresh
    heartbeat for the selected gate before enabling RFID processing. */
 function rfidGateIsReady(g){return rfidGateIsBound(g)&&fx9600IsOnline(g);}
+/* Shared screen-controlled gates never infer direction from RFID. The page
+   the employee opened selects the direction; the visible confirm button
+   remains the mandatory commit point. */
+function isScreenDirectionGate(dir){
+  var gate=fixedGatesRef()[dir];
+  return gateDirOf(gate)==='both'
+    && String((S.warehouses[gateWh(gate)]||{}).gateBidirectionalModes?.[String(gate)]||'screen')==='screen';
+}
+function refreshScreenGateDecisionActions(){
+  var inDecision=gateInEntryMode==='rfid'&&isScreenDirectionGate('in')&&pendingIn.length>0;
+  var inActions=$('#gateInManualActions'),inConfirm=$('#btnCheckIn');
+  if(inActions)inActions.style.display=inDecision?'':'none';
+  if(inConfirm&&inDecision){inConfirm.textContent='✓ ยืนยันรับเข้า '+pendingIn.length+' ใบ';inConfirm.title='เลือกขาเข้าแล้ว · ต้องรอ LPR อ่านทะเบียนก่อนยืนยัน';}
+  var outDecision=gateOutEntryMode==='rfid'&&isScreenDirectionGate('out')&&pendingOut.length>0;
+  var outActions=$('#gateOutManualActions'),outConfirm=$('#btnShipOut');
+  if(outActions)outActions.style.display=(gateOutEntryMode==='manual'||outDecision)?'':'none';
+  if(outConfirm&&outDecision){outConfirm.textContent='✓ ยืนยันส่งออก '+pendingOut.length+' ใบ';outConfirm.title=val('outPlate').trim()?'เลือกขาออกแล้ว · พร้อมยืนยัน':'เลือกขาออกแล้ว · รอ LPR อ่านทะเบียนก่อนยืนยัน';}
+}
 function updateRfidGateAvailability(){
   [['out',fixedGatesRef().out,'data-gateout-mode'],['in',fixedGatesRef().in,'data-gatein-mode']].forEach(function(row){
     var dir=row[0],gate=row[1],attr=row[2],bound=rfidGateIsBound(gate),online=fx9600IsOnline(gate),available=bound&&online,hasReader=hasRfidGateForDirection(dir);
@@ -10976,10 +10995,11 @@ function renderOutResult(){
   var allocBtn=$('#btnAllocateSuggest');
   if(allocBtn)allocBtn.style.display=Object.values(S.boxes).some(function(b){return b.status==='warehouse';})?'':'none';
   $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
-  if(!pendingOut.length){$('#resultOut').innerHTML='';refreshGateOutConfirmButton();return;}
+  if(!pendingOut.length){$('#resultOut').innerHTML='';refreshGateOutConfirmButton();refreshScreenGateDecisionActions();return;}
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · <span class="c2-count">'+pendingOut.length+'</span> ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2" role="button" tabindex="0" onclick="openBoxActionModal(\''+esc(t)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openBoxActionModal(\''+esc(t)+'\');}"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="event.stopPropagation();unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
   refreshGateOutConfirmButton();
+  refreshScreenGateDecisionActions();
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];if(gateOutEntryMode==='rfid')rfidRemovePending(fixedGatesRef().out,t);renderOutResult();}
 window.unqueueOut=unqueueOut;
@@ -11148,11 +11168,12 @@ function renderGateInStep(){
   if(imp)imp.style.display='none';
   if(manual)manual.style.display=gateInStep==='scan'?'':'none';
   /* RFID Gate is zero-click: no confirm/clear/export action bar. */
-  if(actions)actions.style.display=gateInEntryMode!=='rfid'&&gateInStep==='scan'?'':'none';
+  if(actions)actions.style.display=((gateInEntryMode!=='rfid'&&gateInStep==='scan')||(gateInEntryMode==='rfid'&&isScreenDirectionGate('in')&&pendingIn.length))?'':'none';
   var pad=$('#gateInManualPad'),status=$('#gateInRfidStatus');
   if(pad)pad.style.display=gateInEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateInEntryMode==='rfid'?'':'none';
   if(gateInEntryMode==='rfid'){renderRfidGateStatus();fx9600InQueuePoll();}
+  refreshScreenGateDecisionActions();
 }
 function gateInGo(step){gateInStep=step;if(step==='scan')gateInVehicleSkipped=!([val('inPlate'),val('inDriver'),val('inVehicle'),val('inDriverTel'),val('inNote')].some(Boolean));renderGateInStep();}
 function gateInSkipVehicle(){['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(id){setv(id,'');});gateInVehicleSkipped=true;gateInGo('scan');}
@@ -11182,12 +11203,13 @@ function inConditionSelectHtml(t){
 }
 function renderInResult(){
   $('#inCount').textContent=pendingIn.length?('เตรียมรับคืน '+pendingIn.length+' ใบ'):'';
-  if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();return;}
+  if(!pendingIn.length){$('#resultIn').innerHTML='';if(typeof schedule==='function')schedule();refreshScreenGateDecisionActions();return;}
   $('#resultIn').innerHTML='<div class="c2-label">คิวสแกน · <span class="c2-count">'+pendingIn.length+'</span> ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingIn.map(function(t){var b=S.boxes[t]||{};
     var isNew=(!b.cycles||b.cycles===0)&&!(b.history||[]).some(function(h){return h.dir==='out';});
     var badge=isNew?'<span class="c2-new" title="ระบบตรวจ: กล่องใหม่จากซัพพลายเออร์ (รับเข้าครั้งแรก)">ใหม่</span>':'<span class="c2-new" style="background:var(--accentSoft);color:var(--accent);" title="ระบบตรวจ: กล่องเคยออกไปแล้ว = รับคืนจากลูกค้า (รอบที่ '+((b.cycles||0)+1)+')">คืน · รอบ '+((b.cycles||0)+1)+'</span>';
     return '<span class="chip2" role="button" tabindex="0" onclick="openBoxActionModal(\''+esc(t)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openBoxActionModal(\''+esc(t)+'\');}"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span>'+badge+'</span>'+inConditionSelectHtml(t)+'<b onclick="event.stopPropagation();unqueueIn(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
   if(typeof schedule==='function')schedule();
+  refreshScreenGateDecisionActions();
 }
 function unqueueIn(t){pendingIn=pendingIn.filter(function(x){return x!==t;});delete inConditionMap[t];if(gateInEntryMode==='rfid')rfidRemovePending(fixedGatesRef().in,t);renderInResult();if(typeof schedule==='function')schedule();}
 window.unqueueIn=unqueueIn;
@@ -11245,6 +11267,7 @@ function ensureInGate(){
 function saveInbound(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
+  if(gateInEntryMode==='rfid'&&isScreenDirectionGate('in')&&!val('inPlate').trim())return toast('รอ LPR อ่านทะเบียนรถ','ประตูเข้า-ออกร่วมกันต้องมี RFID และ LPR ก่อนยืนยันรับเข้า','warn');
   var partner=val('inPartner');
   if(!val('inRecorder'))setv('inRecorder',USER);
   var recorder=val('inRecorder')||USER;
