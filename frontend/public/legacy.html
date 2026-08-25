@@ -19402,7 +19402,14 @@ async function pullState(){
    the "เข้า/ออกวันนี้" counters. */
 function stateSig(st){
   if(!st)return '';
-  const b=Object.values(st.boxes||{}).map(x=>x.tag+':'+x.status+':'+((x.location||{}).zone||'')+((x.location||{}).rack||'')+((x.location||{}).shelf||'')+((x.location||{}).slot||'')+(x.labeled===false?'!':''));
+  /* LPR writes plate/image history without changing box status or queue
+     length. Include the latest LPR event in the signature so the SSE-triggered
+     /api/state pull redraws the plate immediately instead of waiting for a
+     manual reload. */
+  const b=Object.values(st.boxes||{}).map(x=>{
+    const h=Array.isArray(x.history)?x.history.filter(e=>e&&e.dir==='lpr').slice(-1)[0]:null;
+    return x.tag+':'+x.status+':'+((x.location||{}).zone||'')+((x.location||{}).rack||'')+((x.location||{}).shelf||'')+((x.location||{}).slot||'')+(x.labeled===false?'!':'')+':lpr:'+(h?(h.eventId||'')+':'+(h.ts||'')+':'+(h.plateNumber||''):'');
+  });
   return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')
     +'#'+Object.keys(st.locations||{}).length+'#'+(st.events||[]).length;
 }
