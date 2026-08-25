@@ -5515,7 +5515,8 @@ function refreshGateOutRfidWorkflow(){
   /* RFID/LPR deliberately queues reads first. The operator can inspect box
      condition and then explicitly confirm the outbound transaction; this is
      the same inventory commit point as barcode mode, not an auto-ship. */
-  if(acts)acts.style.display=(gateOutEntryMode==='manual'||(rfid&&ready))?'':'none';
+  /* RFID + LPR commits automatically after both device signals arrive. */
+  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
   refreshGateOutConfirmButton();
   if(rfid&&!ready){pendingOut=[];outConditionMap={};}
 }
@@ -5525,9 +5526,7 @@ function applyGateOutEntryMode(mode,openPicker){
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
   if(man)man.style.display=gateOutEntryMode!=='excel'?'':'none';
-  /* Keep the same explicit confirmation point for RFID/LPR as manual mode;
-     the worker must be able to review the queue and each box condition. */
-  if(acts)acts.style.display=(gateOutEntryMode==='manual'||gateOutEntryMode==='rfid')?'':'none';
+  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
   var pad=$('#gateOutManualPad'),status=$('#gateOutRfidStatus');
   if(pad)pad.style.display=gateOutEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateOutEntryMode==='rfid'?'':'none';
@@ -10255,10 +10254,13 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
    in-memory mirror only, while the dedicated DB table is the source of truth.
 */
 var gatePrefsLoaded=false;
+/* Gate selection is account UI state, not part of the shared inventory
+   snapshot. Realtime RFID/LPR updates replace S, so the selection must stay
+   outside that snapshot and cannot be reset from Gate 1 to Gate 3. */
+var gatePrefsCache={};
 function fixedGatesRef(){
-  if(!S.gatePrefs)S.gatePrefs={};
-  if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
-  return S.gatePrefs[USER];
+  if(!gatePrefsCache[USER])gatePrefsCache[USER]={out:'',in:''};
+  return gatePrefsCache[USER];
 }
 function saveFixedGates(dir){
   var prefs=fixedGatesRef(), body={};
@@ -10423,10 +10425,15 @@ function rfidStatusHtml(g,dir){
   if(!rfidGateIsBound(g))return rfidGateUnavailableHtml(g);
   if(dir==='out'&&!val('doCustomer'))return '<div class="banner warn"><b>'+btT('ยังไม่เปิดรับ RFID')+'</b> '+btT('— กรุณาเลือกลูกค้าปลายทางก่อน แล้วรอ RFID และกล้อง LPR อ่านกล่องกับทะเบียนรถ')+'</div>';
   var online=fx9600IsOnline(g),color=online?'#22c55e':'#ef4444';
+  var flow='';
+  if(dir==='out'&&online){
+    var tagCount=pendingOut.length,plate=val('outPlate').trim();
+    flow=tagCount&&plate?' · ครบ RFID + LPR — กำลังบันทึก':(tagCount?' · พบ RFID '+tagCount+' กล่อง — รอ LPR อ่านทะเบียน':(plate?' · พบ LPR '+esc(plate)+' — รอ RFID อ่านกล่อง':' · รอ RFID และ LPR'));
+  }
   return '<div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border:.5px solid '+color+';border-radius:12px;background:color-mix(in srgb,'+color+' 9%,transparent);color:'+color+';font-size:13px;font-weight:700;">'
     +'<span style="width:10px;height:10px;border-radius:50%;background:'+color+';box-shadow:0 0 0 4px color-mix(in srgb,'+color+' 20%,transparent);"></span>'
     +btT(online?'RFID Gate พร้อมใช้งาน':'RFID Gate ไม่พร้อมใช้งาน')
-    +'<span style="color:var(--muted);font-weight:400;">· '+btT('ประตู')+' '+esc(g)+' · '+esc(fx9600SeenText(g))+'</span></div>';
+    +'<span style="color:var(--muted);font-weight:400;">· '+btT('ประตู')+' '+esc(g)+' · '+esc(fx9600SeenText(g))+flow+'</span></div>';
 }
 function renderRfidGateStatus(){
   var out=$('#gateOutRfidStatus'),inn=$('#gateInRfidStatus');
@@ -10447,12 +10454,27 @@ function syncRfidOutboundSession(){
     var customer=val('doCustomer'),plate=val('outPlate').trim();
     if(!customer){clearRfidAutoSession(gate);return;}
     apiFetch('/api/rfid/gates/'+encodeURIComponent(gate)+'/auto-session',{
-      method:'PUT',headers:authHeaders(),body:JSON.stringify({direction:'out',customer:customer,plate:plate,
+      method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({direction:'out',customer:customer,plate:plate,
         doNo:val('doNo'),po:val('poNo'),driver:val('outDriver'),vehicleType:val('outVehicle'),recorder:val('outRecorder')||USER,ttlSeconds:1800})
     }).catch(function(){});
   },300);
 }
 window.syncRfidOutboundSession=syncRfidOutboundSession;
+var rfidOutboundAutoCommitTimer=null,rfidOutboundAutoCommitBusy=false;
+function tryAutoCommitRfidOutbound(){
+  clearTimeout(rfidOutboundAutoCommitTimer);
+  if(rfidOutboundAutoCommitBusy||gateOutEntryMode!=='rfid')return;
+  var gate=fixedGatesRef().out,plate=val('outPlate').trim();
+  if(!gate||!rfidGateIsReady(gate)||!val('doCustomer')||!plate||!pendingOut.length){renderRfidGateStatus();return;}
+  rfidOutboundAutoCommitTimer=setTimeout(function(){
+    if(rfidOutboundAutoCommitBusy||gateOutEntryMode!=='rfid'||!val('outPlate').trim()||!pendingOut.length)return;
+    rfidOutboundAutoCommitBusy=true;
+    if(!val('outRecorder'))setv('outRecorder',USER);
+    saveOutbound(); /* commits boxes/history/state immediately; pending tags are then cleared server-side */
+    rfidOutboundAutoCommitBusy=false;
+  },180);
+}
+window.tryAutoCommitRfidOutbound=tryAutoCommitRfidOutbound;
 function rfidClearPending(g,tags){
   if(!g||!tags||!tags.length)return Promise.resolve();
   return apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{method:'DELETE',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({tags:tags})}).catch(function(){return null;});
@@ -10472,7 +10494,7 @@ function fx9600OutQueuePoll(){
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
     d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status==='warehouse'&&pendingOut.indexOf(tag)<0){pendingOut.push(tag);outConditionMap[tag]='good';added++;}});
-    if(added){renderOutResult();toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');}
+    if(added){renderOutResult();renderRfidGateStatus();toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');tryAutoCommitRfidOutbound();}
   }).catch(function(){}).finally(function(){fx9600OutPolling=false;});
 }
 function fx9600InQueuePoll(){
@@ -11105,7 +11127,7 @@ function autoFillVehicle(plateId,vTypeId,driverId,telId){
 }
 $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','inVehicle','inDriver','inDriverTel');});
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
-$('#outPlate').addEventListener('input',function(){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();});
+$('#outPlate').addEventListener('input',function(){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();tryAutoCommitRfidOutbound();});
 $('#doCustomer').addEventListener('change',function(){
   refreshGateOutRfidWorkflow();renderRfidGateStatus();syncRfidOutboundSession();
   if(gateOutRfidCustomerReady())fx9600OutQueuePoll();
@@ -19379,6 +19401,8 @@ function showLprLiveAlert(d){
     setv('outPlate',d.plateNumber||'');
     syncRfidOutboundSession();
     refreshGateOutConfirmButton();
+    renderRfidGateStatus();
+    tryAutoCommitRfidOutbound();
     toast('LPR อ่านทะเบียนแล้ว','กำลังจับคู่กับกล่อง RFID ที่ประตู '+outGate,'ok');
   }
   syncNow();
