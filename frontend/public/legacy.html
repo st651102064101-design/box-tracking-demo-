@@ -5490,7 +5490,7 @@ var gateOutEntryMode=null;
 function gateOutRfidCustomerReady(){return gateOutEntryMode==='rfid'&&!!val('doCustomer');}
 function refreshGateOutRfidWorkflow(){
   var rfid=gateOutEntryMode==='rfid',ready=gateOutRfidCustomerReady();
-  var board=$('#gateOutManualBoard'),bar=$('#outGateBar'),label=$('#outGateLabel'),hint=$('#outGateHint'),lookup=$('#doLookupHint'),quick=$('#outVehicleQuick');
+  var board=$('#gateOutManualBoard'),bar=$('#outGateBar'),label=$('#outGateLabel'),hint=$('#outGateHint'),lookup=$('#doLookupHint'),quick=$('#outVehicleQuick'),acts=$('#gateOutManualActions'),confirm=$('#btnShipOut');
   var customerField=$('#doCustomer')&&$('#doCustomer').closest('.field');
   $all('.out-rfid-context-extra').forEach(function(el){el.style.display=rfid?'none':'';});
   if(customerField)customerField.style.gridColumn=rfid?'1 / -1':'';
@@ -5502,6 +5502,11 @@ function refreshGateOutRfidWorkflow(){
   if(lookup)lookup.style.display=rfid?'none':'';
   if(quick)quick.style.display=rfid?'none':'';
   if(board)board.style.display=(gateOutEntryMode==='excel'||(rfid&&!ready))?'none':'';
+  /* RFID/LPR deliberately queues reads first. The operator can inspect box
+     condition and then explicitly confirm the outbound transaction; this is
+     the same inventory commit point as barcode mode, not an auto-ship. */
+  if(acts)acts.style.display=(gateOutEntryMode==='manual'||(rfid&&ready))?'':'none';
+  if(confirm)confirm.textContent=rfid?'✓ ยืนยันส่งออก':' + สร้างรายการ';
   if(rfid&&!ready){pendingOut=[];outConditionMap={};}
 }
 function applyGateOutEntryMode(mode,openPicker){
@@ -5510,9 +5515,9 @@ function applyGateOutEntryMode(mode,openPicker){
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
   if(man)man.style.display=gateOutEntryMode!=='excel'?'':'none';
-  /* RFID commits through the backend automatically; manual confirmation,
-     clear-queue and Excel export controls are intentionally unavailable. */
-  if(acts)acts.style.display=gateOutEntryMode==='manual'?'':'none';
+  /* Keep the same explicit confirmation point for RFID/LPR as manual mode;
+     the worker must be able to review the queue and each box condition. */
+  if(acts)acts.style.display=(gateOutEntryMode==='manual'||gateOutEntryMode==='rfid')?'':'none';
   var pad=$('#gateOutManualPad'),status=$('#gateOutRfidStatus');
   if(pad)pad.style.display=gateOutEntryMode==='manual'?'':'none';
   if(status)status.style.display=gateOutEntryMode==='rfid'?'':'none';
