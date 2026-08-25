@@ -4428,7 +4428,8 @@ function save(){
   }).catch(function(e){
     console.warn('[Smart Tracking] save to server failed',e);
     var mapped=e.body&&e.body.errors&&applyServerValidationErrors(e.body.errors,document);
-    toast('บันทึกข้อมูลไม่สำเร็จ',mapped?'กรุณาแก้ข้อมูลในช่องที่แสดงสีแดง':(e.message||'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'),'err');
+    var detail=e.status===413?'ข้อมูลที่ส่งมีขนาดใหญ่เกินกำหนด ระบบตัดรูปภาพขนาดใหญ่แล้ว กรุณาลองใหม่อีกครั้ง':(mapped?'กรุณาแก้ข้อมูลในช่องที่แสดงสีแดง':(e.message||'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'));
+    toast('บันทึกข้อมูลไม่สำเร็จ',detail,'err');
     /* Roll the optimistic in-memory snapshot back to the server truth after a
        rejected write, so invalid data is never left looking persisted. */
     if(typeof loadFromServer==='function')loadFromServer().then(function(){if(typeof renderAll==='function')btSuppressSave(renderAll);});
