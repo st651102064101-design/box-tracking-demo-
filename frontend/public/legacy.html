@@ -3013,6 +3013,9 @@ a{color:var(--accentInk);}
         <div class="field" style="grid-column:1/-1;"><label>ทิศทางรายประตู — แยกตั้งได้ทุกประตู</label>
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
+        <div class="field" style="grid-column:1/-1;"><label>RFID Gate / Zebra FX9600 — จัดการราย DB Gate</label>
+          <div id="whGateRfidCrud" class="muted small" style="padding:12px;border:1px solid var(--line);border-radius:12px;">เปิดแก้ไขคลังก่อน เพื่อจัดการ RFID Reader ของแต่ละ DB Gate</div>
+        </div>
         <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง</label>
           <!-- โหมด "พิมพ์เอง" กับ "เลือกบนแผนที่" แยกกันชัดเจน — เดิม #whArea พิมพ์ได้อิสระ
                อยู่ตลอดเวลาแม้ตอนแผนที่เปิดอยู่ (ปุ่ม "เลือกบนแผนที่" แค่โชว์/ซ่อนแผนที่ ไม่ได้
@@ -6264,7 +6267,38 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
   whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
   setv('whStatus',w.status||'active');syncStatusToggle('whStatus');
   renderWhGateTypeList(w.gateTypes||{});
+  loadWhGateRfidCrud(w);
   $('#btnAddWh').textContent='อัปเดตคลัง';}
+
+/* Reader bindings belong to the DB Gate, not to a display-only warehouse
+   label. Keep the CRUD view here so an operator can copy the exact webhook
+   URL for each physical FX9600 without leaving the warehouse editor. */
+var whGateRfidReaders=[];
+function whRfidApi(path,opt){
+  opt=opt||{};opt.headers=Object.assign({'Content-Type':'application/json'},authHeaders(),opt.headers||{});
+  return apiFetch(path,opt).then(function(r){return r.json().catch(function(){return{};}).then(function(j){if(!r.ok)throw new Error(j.message||('HTTP '+r.status));return j;});});
+}
+function whGateRfidOnline(g){var seen=S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)];if(!seen)return false;var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Date.now()-Date.parse(seen)<=Math.max(5500,sec*3500);}
+function renderWhGateRfidCrud(w,readers){
+  var host=$('#whGateRfidCrud');if(!host)return;
+  readers=Array.isArray(readers)?readers:[];
+  var gates=(w.gates||[]).slice().sort(function(a,b){return Number(a)-Number(b);});
+  if(!gates.length){host.innerHTML='<span class="muted small">ยังไม่มี DB Gate ในคลังนี้</span>';return;}
+  host.innerHTML='<div class="muted small" style="margin-bottom:10px;">ใช้เลข <b>DB Gate ID</b> ใน URL: <span class="mono">/api/rfid/fx9600/{เลขประตู}/webhook</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:10px;">'
+    +gates.map(function(g){var r=readers.filter(function(x){return Number(x.gateNo)===Number(g);})[0]||null;var online=r&&whGateRfidOnline(g);var color=r?(online?'var(--pos)':'var(--neg)'):'var(--muted)';var status=r?(online?'Online · heartbeat ล่าสุด':'Offline · ไม่มี heartbeat ล่าสุด'):'ยังไม่ผูก FX9600';var url=r&&r.webhookUrl?r.webhookUrl:apiUrl('/api/rfid/fx9600/'+encodeURIComponent(g)+'/webhook');
+      return '<div style="padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);"><div style="display:flex;align-items:center;gap:8px;"><b>DB Gate '+esc(String(g))+'</b><span class="pill" style="margin-left:auto;color:'+color+';">'+esc(status)+'</span></div><div class="muted small" style="margin-top:7px;">'+(r?esc(r.name)+' · '+esc(r.host):'ยังไม่มีเครื่องอ่าน')+'</div><div class="mono muted small" style="margin-top:6px;word-break:break-all;">'+esc(url)+'</div><div style="display:flex;gap:7px;margin-top:10px;">'+(r?'<button type="button" class="btn ghost sm" onclick="whGateRfidForm('+Number(g)+')">แก้ไข</button><button type="button" class="btn ghost sm" style="color:var(--neg);" onclick="whGateRfidDelete(\''+esc(r.id)+'\')">ยกเลิกการผูก</button>':'<button type="button" class="btn accent sm" onclick="whGateRfidForm('+Number(g)+')">+ ผูก FX9600</button>')+'</div></div>';}).join('')+'</div>';
+}
+function loadWhGateRfidCrud(w){
+  var host=$('#whGateRfidCrud');if(host)host.innerHTML='<span class="muted small">กำลังโหลด RFID Reader…</span>';
+  whRfidApi('/api/rfid/fx9600/readers').then(function(d){whGateRfidReaders=d.readers||[];renderWhGateRfidCrud(w,whGateRfidReaders);}).catch(function(e){if(host)host.innerHTML='<span style="color:var(--neg);">โหลด RFID Reader ไม่สำเร็จ: '+esc(e.message||'')+'</span>';});
+}
+function whGateRfidForm(g){
+  var r=whGateRfidReaders.filter(function(x){return Number(x.gateNo)===Number(g);})[0]||null;var id=r?r.id:'fx9600-gate-'+g;var url=r&&r.webhookUrl?r.webhookUrl:apiUrl('/api/rfid/fx9600/'+encodeURIComponent(g)+'/webhook');
+  openModal('<div class="mhead"><h3>'+(r?'แก้ไข':'ผูก')+' FX9600 · DB Gate '+esc(String(g))+'</h3><button class="x" data-close>×</button></div><div class="mbody"><div class="grid g2"><div class="field"><label>Reader ID</label><input id="wrgId" value="'+esc(id)+'" '+(r?'readonly':'')+'></div><div class="field"><label>ชื่อเครื่องอ่าน</label><input id="wrgName" value="'+esc(r?r.name:'Zebra FX9600 · DB Gate '+g)+'"></div><div class="field"><label>IP / Host</label><input id="wrgHost" value="'+esc(r?r.host:'192.168.1.10)+'"></div><div class="field"><label>DB Gate ID</label><input value="'+esc(String(g))+'" readonly></div></div><div class="field" style="margin-top:12px;"><label>Webhook URL สำหรับ Zebra IoT Connector</label><input value="'+esc(url)+'" readonly><div class="muted small" style="margin-top:5px;">URL นี้เป็นของ DB Gate '+esc(String(g))+' โดยตรง</div></div></div><div class="mfoot"><button class="btn ghost" data-close>ยกเลิก</button><div class="spacer"></div><button class="btn accent" id="wrgSave">บันทึกการผูก</button></div>');
+  $('#wrgSave').onclick=function(){var btn=$('#wrgSave');btn.disabled=true;btn.textContent='กำลังบันทึก...';var body={name:val('wrgName').trim(),host:val('wrgHost').trim(),gateNo:Number(g),webhookUrl:url,transmitPower:Number(r&&r.transmitPower)||3,antennaCount:Number(r&&r.antennaCount)||1,heartbeatIntervalSeconds:Number(r&&r.heartbeatIntervalSeconds)||1};whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(val('wrgId').trim()),{method:'PUT',body:JSON.stringify(body)}).then(function(){closeModal();toast('บันทึกการผูกแล้ว','FX9600 ถูกผูกกับ DB Gate '+g,'ok');var w=S.warehouses[editingWh];if(w)loadWhGateRfidCrud(w);}).catch(function(e){btn.disabled=false;btn.textContent='บันทึกการผูก';toast('บันทึกไม่สำเร็จ',e.message,'err');});};
+}
+function whGateRfidDelete(id){confirmA('ยกเลิกการผูก FX9600?','การตั้งค่าใน Zebra Console จะไม่ถูกเปลี่ยน','ยกเลิกการผูก',true).then(function(ok){if(!ok)return;whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){toast('ยกเลิกการผูกแล้ว',id,'ok');var w=S.warehouses[editingWh];if(w)loadWhGateRfidCrud(w);}).catch(function(e){toast('ยกเลิกไม่สำเร็จ',e.message,'err');});});}
+window.whGateRfidForm=whGateRfidForm;window.whGateRfidDelete=whGateRfidDelete;
 function delWh(id){
   var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องผูกกับคลังนี้ '+used+' ใบ','err');
