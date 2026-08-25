@@ -4410,6 +4410,14 @@ window.btSuppressSave=function(fn){
 };
 function save(){
   if(SUPPRESS_SAVE)return;
+  /* Older snapshots may still contain camera base64 copied before the
+     backend hardening. Strip it before every state write so a stale tab cannot
+     repeatedly submit an oversized body. The URL/plate history remains. */
+  (function stripLprImages(v){
+    if(!v||typeof v!=='object')return;
+    if(Array.isArray(v)){v.forEach(stripLprImages);return;}
+    Object.keys(v).forEach(function(k){if(k==='imageBase64')delete v[k];else stripLprImages(v[k]);});
+  })(S);
   apiFetch('/api/state',{
     method:'PUT',
     headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),
@@ -4428,8 +4436,9 @@ function save(){
   }).catch(function(e){
     console.warn('[Smart Tracking] save to server failed',e);
     var mapped=e.body&&e.body.errors&&applyServerValidationErrors(e.body.errors,document);
-    var detail=e.status===413?'ข้อมูลที่ส่งมีขนาดใหญ่เกินกำหนด ระบบตัดรูปภาพขนาดใหญ่แล้ว กรุณาลองใหม่อีกครั้ง':(mapped?'กรุณาแก้ข้อมูลในช่องที่แสดงสีแดง':(e.message||'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'));
-    toast('บันทึกข้อมูลไม่สำเร็จ',detail,'err');
+    var oversize=e.status===413;
+    var detail=oversize?'ข้อมูลที่ส่งมีขนาดใหญ่เกินกำหนด ระบบตัดรูปภาพขนาดใหญ่แล้ว กรุณาลองใหม่อีกครั้ง':(mapped?'กรุณาแก้ข้อมูลในช่องที่แสดงสีแดง':(e.message||'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'));
+    if(!oversize||Date.now()-_oversizeToastAt>10000){toast('บันทึกข้อมูลไม่สำเร็จ',detail,'err');if(oversize)_oversizeToastAt=Date.now();}
     /* Roll the optimistic in-memory snapshot back to the server truth after a
        rejected write, so invalid data is never left looking persisted. */
     if(typeof loadFromServer==='function')loadFromServer().then(function(){if(typeof renderAll==='function')btSuppressSave(renderAll);});
@@ -4437,6 +4446,7 @@ function save(){
 }
 /* กันเตือนรัวตอนหน้าเดียวยิง save() ติด ๆ กันหลายครั้ง */
 var _rejectToastAt=0;
+var _oversizeToastAt=0;
 function onStateRejected(rejected){
   var names=rejected.map(function(g){return g.label||g.key;}).join(' · ');
   var now=Date.now();
