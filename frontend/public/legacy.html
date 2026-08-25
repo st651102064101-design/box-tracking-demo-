@@ -5488,6 +5488,15 @@ function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||docu
    when working quickly at the gate. */
 var gateOutEntryMode=null;
 function gateOutRfidCustomerReady(){return gateOutEntryMode==='rfid'&&!!val('doCustomer');}
+/* Destination is operational context, not a disposable form field. Store it
+   per signed-in user and physical gate in ui_prefs so an LPR/state refresh
+   cannot erase the selection or make an active RFID gate look unready. */
+function gateOutCustomerPrefKey(){return 'gateOutCustomer:'+String(fixedGatesRef().out||'');}
+function restoreGateOutCustomer(){
+  var sel=$('#doCustomer');if(!sel)return;
+  var saved=uiPrefGet(gateOutCustomerPrefKey(),'');
+  if(saved&&Array.prototype.some.call(sel.options,function(o){return o.value===saved;}))sel.value=saved;
+}
 function refreshGateOutConfirmButton(){
   var confirm=$('#btnShipOut');if(!confirm)return;
   var rfid=gateOutEntryMode==='rfid';
@@ -5543,10 +5552,11 @@ function applyGateOutEntryMode(mode,openPicker){
    binding/heartbeat controls whether reads are accepted, not whether the Gate
    can be selected and inspected. */
 function chooseGateOutEntryMode(mode){
-  /* RFID+LPR starts a new shipment context. Reusing a customer selected in a
-     prior manual/Excel round could dispatch a real tag to the wrong customer. */
+  /* Start a fresh camera correlation, but retain the destination selected for
+     this user/gate. The destination is persisted in DB and remains required
+     before any outbound RFID tag can be committed. */
   if(mode==='rfid'&&gateOutEntryMode!=='rfid'){
-    setv('doCustomer','');setv('outPlate','');
+    restoreGateOutCustomer();setv('outPlate','');
     if(typeof window.refreshDueDatePreview==='function')window.refreshDueDatePreview();
   }
   applyGateOutEntryMode(mode,false);
@@ -10370,7 +10380,7 @@ function pickGate(dir){
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
 }
-function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates(dir);refreshGateDisplays();if(dir==='out')syncRfidOutboundSession();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates(dir);refreshGateDisplays();if(dir==='out'){restoreGateOutCustomer();syncRfidOutboundSession();refreshGateOutRfidWorkflow();}toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== Zebra FX9600 RFID Gate =====
@@ -10423,12 +10433,12 @@ function fx9600SeenText(g){var ts=Date.parse(fx9600LastSeen(g));if(!ts)return bt
 function rfidStatusHtml(g,dir){
   if(!g)return '<div class="banner warn">'+btT('กรุณาเลือกประตูก่อนเริ่มรับ RFID')+'</div>';
   if(!rfidGateIsBound(g))return rfidGateUnavailableHtml(g);
-  if(dir==='out'&&!val('doCustomer'))return '<div class="banner warn"><b>'+btT('ยังไม่เปิดรับ RFID')+'</b> '+btT('— กรุณาเลือกลูกค้าปลายทางก่อน แล้วรอ RFID และกล้อง LPR อ่านกล่องกับทะเบียนรถ')+'</div>';
   var online=fx9600IsOnline(g),color=online?'#22c55e':'#ef4444';
   var flow='';
+  var customerRequired=dir==='out'&&!val('doCustomer');
   if(dir==='out'&&online){
     var tagCount=pendingOut.length,plate=val('outPlate').trim();
-    flow=tagCount&&plate?' · ครบ RFID + LPR — กำลังบันทึก':(tagCount?' · พบ RFID '+tagCount+' กล่อง — รอ LPR อ่านทะเบียน':(plate?' · พบ LPR '+esc(plate)+' — รอ RFID อ่านกล่อง':' · รอ RFID และ LPR'));
+    flow=customerRequired?' · เลือกลูกค้าปลายทางก่อนเปิดรับ Tag':(tagCount&&plate?' · ครบ RFID + LPR — กำลังบันทึก':(tagCount?' · พบ RFID '+tagCount+' กล่อง — รอ LPR อ่านทะเบียน':(plate?' · พบ LPR '+esc(plate)+' — รอ RFID อ่านกล่อง':' · รอ RFID และ LPR')));
   }
   return '<div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border:.5px solid '+color+';border-radius:12px;background:color-mix(in srgb,'+color+' 9%,transparent);color:'+color+';font-size:13px;font-weight:700;">'
     +'<span style="width:10px;height:10px;border-radius:50%;background:'+color+';box-shadow:0 0 0 4px color-mix(in srgb,'+color+' 20%,transparent);"></span>'
@@ -11151,6 +11161,7 @@ $('#inPlate').addEventListener('change',function(){autoFillVehicle('inPlate','in
 $('#outPlate').addEventListener('change',function(){autoFillVehicle('outPlate','outVehicle','outDriver','outDriverTel');});
 $('#outPlate').addEventListener('input',function(){renderRfidGateStatus();syncRfidOutboundSession();fx9600OutQueuePoll();tryAutoCommitRfidOutbound();});
 $('#doCustomer').addEventListener('change',function(){
+  uiPrefSet(gateOutCustomerPrefKey(),val('doCustomer'));
   refreshGateOutRfidWorkflow();renderRfidGateStatus();syncRfidOutboundSession();
   if(gateOutRfidCustomerReady())fx9600OutQueuePoll();
 });
@@ -13161,9 +13172,14 @@ function renderSetup(){
   var hasCust=Object.keys(S.customers).length>0;
   var doCustSel=$('#doCustomer'),doCustHint=$('#doCustomerHint');
   if(doCustSel){
+    /* renderAll() runs after SSE/LPR snapshots. Preserve the selected value
+       first, then fall back to the per-user/per-gate DB preference instead
+       of rebuilding the select blank and triggering false validation. */
+    var keepCustomer=doCustSel.value||uiPrefGet(gateOutCustomerPrefKey(),'');
     var custList=Object.values(S.customers).filter(isCustomerKind);
     doCustSel.innerHTML=hasCust?'<option value="">— เลือกลูกค้า —</option>'+custOptions():'';
     doCustSel.style.display=hasCust?'':'none';
+    if(keepCustomer&&Array.prototype.some.call(doCustSel.options,function(o){return o.value===keepCustomer;}))doCustSel.value=keepCustomer;
     /* มีลูกค้าให้เลือกจริงแค่รายเดียว — เลือกให้เลย ไม่ต้องบังคับกดเอง */
     if(custList.length===1&&!doCustSel.value)doCustSel.value=custList[0].id;
   }
