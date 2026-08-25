@@ -10259,7 +10259,9 @@ function btT(text){return window.btI18n&&typeof window.btI18n.t==='function'?win
 /* A heartbeat alone is not a reader assignment. Only an enabled reader
    binding from the master API may enable the RFID mode for a gate. */
 var rfidBoundGateMap=null;
-function rfidGateIsBound(g){return rfidBoundGateMap===null||!!(g&&rfidBoundGateMap[String(g)]);}
+/* Fail closed while the Reader registry is loading. A stale heartbeat must
+   never turn an unbound Gate green before its FX9600 binding is confirmed. */
+function rfidGateIsBound(g){return !!(rfidBoundGateMap&&g&&rfidBoundGateMap[String(g)]);}
 /* Configuration alone does not mean the reader is alive; require a fresh
    heartbeat for the selected gate before enabling RFID processing. */
 function rfidGateIsReady(g){return rfidGateIsBound(g)&&fx9600IsOnline(g);}
