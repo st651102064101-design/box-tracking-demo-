@@ -13034,14 +13034,15 @@ function settingsGoReaders(){
 window.settingsGoReaders=settingsGoReaders;
 function readerGateOptions(selected){
   var gates=Object.keys(S.gates||{}).sort(function(a,b){return Number(a)-Number(b);});
-  return gates.map(function(g){var wh=(S.warehouses||{})[S.gates[g]];return '<option value="'+esc(g)+'" '+(String(selected)===String(g)?'selected':'')+'>Gate '+esc(g)+(wh?' · '+esc(wh.name||S.gates[g]):'')+'</option>';}).join('');
+  return gates.map(function(g){var wh=(S.warehouses||{})[S.gates[g]];return '<option value="'+esc(g)+'" '+(String(selected)===String(g)?'selected':'')+'>DB Gate '+esc(g)+(wh?' · '+esc(wh.name||S.gates[g]):'')+'</option>';}).join('');
 }
 function readerOpenForm(id){
   var r=readerPageData.filter(function(x){return x.id===id;})[0]||null;
   var gate=r?r.gateNo:(Object.keys(S.gates||{})[0]||1);var rid=r?r.id:'fx9600-gate-'+gate;
   var h='<div class="mhead">'+settingsBackBtn('settingsGoReaders')+'<h3>'+(r?'ข้อมูลเครื่องอ่าน':'เพิ่มทะเบียนเครื่องอ่าน')+'</h3>'+settingsCloseX()+'</div><div class="mbody">'
     +'<div class="grid g2"><div class="field"><label>Reader ID</label><input id="rdId" value="'+esc(rid)+'" '+(r?'readonly':'')+'></div><div class="field"><label>ชื่อเครื่องอ่าน</label><input id="rdName" value="'+esc(r?r.name:'FX9600 Gate '+gate)+'"></div>'
-    +'<div class="field"><label>IP / Host</label><input id="rdHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ประตู / Gate</label><select id="rdGate">'+readerGateOptions(gate)+'</select></div></div>'
+    +'<div class="field"><label>IP / Host</label><input id="rdHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ประตู / Gate (เลข DB)</label><select id="rdGate">'+readerGateOptions(gate)+'</select></div></div>'
+    +'<div class="field" style="margin-top:12px;"><label>Webhook URL · DB Gate '+esc(String(gate))+'</label><input readonly value="'+esc(r?r.webhookUrl:apiUrl('/api/rfid/fx9600/'+encodeURIComponent(gate)+'/webhook'))+'"><div class="muted small" style="margin-top:5px;">ใช้ URL นี้กับ Zebra IoT Connector สำหรับ Gate '+esc(String(gate))+' โดยตรง</div></div>'
     +'<div class="banner" style="margin-top:14px;"><div><b>การตั้งค่าทางกายภาพ:</b> กำลังส่ง, เสาอากาศ, heartbeat และ webhook ต้องตั้งใน Zebra Console เท่านั้น จึงไม่แสดงช่องกรอกที่ WMS เพื่อป้องกันค่าหลอก</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoReaders()">ยกเลิก</button><div class="spacer"></div><button class="btn accent" id="rdSave" onclick="readerSave()">บันทึก</button></div>';
   openModal(h);
@@ -13110,7 +13111,7 @@ window.openGateReaderBindings=openGateReaderBindings;
 function gateBindingGateOptions(selected,readerId){
   return gateBindingRows().map(function(x){
     var owner=gateBindingReaders.filter(function(r){return Number(r.gateNo)===x.gateNo&&r.id!==readerId;})[0];
-    return '<option value="'+x.gateNo+'" '+(x.gateNo===Number(selected)?'selected':'')+(owner?' disabled':'')+'>Gate '+x.gateNo+' · '+esc(x.warehouse.name||x.warehouse.id)+(owner?' (ผูกแล้ว)':'')+'</option>';
+    return '<option value="'+x.gateNo+'" '+(x.gateNo===Number(selected)?'selected':'')+(owner?' disabled':'')+'>DB Gate '+x.gateNo+' · '+esc(x.warehouse.name||x.warehouse.id)+(owner?' (ผูกแล้ว)':'')+'</option>';
   }).join('');
 }
 function gateBindingForm(id,gateNo){
@@ -13119,7 +13120,8 @@ function gateBindingForm(id,gateNo){
   if(!gate)return toast('ยังไม่มีประตู','เพิ่มประตูในคลังก่อน','err');
   var h='<div class="mhead">'+settingsBackBtn('openGateReaderBindings')+'<h3>'+(r?'แก้ไขการผูกเครื่องอ่าน':'ผูก FX9600 กับ Gate '+gate)+'</h3>'+settingsCloseX()+'</div><div class="mbody">'
     +'<div class="grid g2"><div class="field"><label>Reader ID</label><input id="gbReaderId" value="'+esc(r?r.id:'fx9600-gate-'+gate)+'" '+(r?'readonly':'')+'></div><div class="field"><label>ชื่อเครื่องอ่าน <span class="req">*</span></label><input id="gbReaderName" value="'+esc(r?r.name:'Zebra FX9600 Gate '+gate)+'"></div>'
-    +'<div class="field"><label>IP / Host <span class="req">*</span></label><input id="gbReaderHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ผูกกับประตู <span class="req">*</span></label><select id="gbReaderGate">'+gateBindingGateOptions(gate,r&&r.id)+'</select></div></div>'
+    +'<div class="field"><label>IP / Host <span class="req">*</span></label><input id="gbReaderHost" value="'+esc(r?r.host:'192.168.1.10')+'" placeholder="192.168.1.10"></div><div class="field"><label>ผูกกับประตู (เลข DB) <span class="req">*</span></label><select id="gbReaderGate">'+gateBindingGateOptions(gate,r&&r.id)+'</select></div></div>'
+    +'<div class="field" style="margin-top:12px;"><label>Webhook URL · DB Gate '+esc(String(gate))+'</label><input readonly value="'+esc(r?r.webhookUrl:apiUrl('/api/rfid/fx9600/'+encodeURIComponent(gate)+'/webhook'))+'"><div class="muted small" style="margin-top:5px;">ตัวอย่าง Gate '+esc(String(gate))+': '+esc(apiUrl('/api/rfid/fx9600/'+encodeURIComponent(gate)+'/webhook'))+'</div></div>'
     +'<div class="banner" style="margin-top:14px;"><div><b>ขอบเขตของการผูก:</b> บันทึกนี้ใช้ให้ WMS รู้ว่า webhook ของ FX9600 อยู่ที่ Gate ใดเท่านั้น การตั้งค่า IoT Connector, webhook, antenna และ transmit power ของเครื่องจริงต้องทำใน Zebra Console</div></div></div>'
     +'<div class="mfoot"><button class="btn ghost" onclick="openGateReaderBindings()">ยกเลิก</button><div class="spacer"></div><button class="btn accent" id="gbReaderSave" onclick="gateBindingSave()">บันทึกการผูก</button></div>';
   openModal(h);
