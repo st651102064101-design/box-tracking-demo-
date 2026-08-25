@@ -1345,6 +1345,16 @@ html[data-theme="dark"]{
 .drawer-body .grid{grid-template-columns:1fr;}
 .drawer-body .grid.dw2{grid-template-columns:1fr 1fr;}
 @media(max-width:560px){.drawer-body .grid.dw2{grid-template-columns:1fr;}}
+/* Warehouse's gate / reader configuration is intentionally a full-width
+   configuration section.  Do not leave it inside the legacy four-column form
+   grid: the drawer is wider than a single grid track and that used to squeeze
+   the URL and reader status into an unreadable narrow card. */
+.drawer-body #whFormCard .wh-form-layout{display:block!important;width:100%!important;min-width:0!important;}
+.drawer-body #whFormCard .wh-form-layout>.field{width:100%!important;min-width:0!important;grid-column:auto!important;}
+.drawer-body #whFormCard #whGateTypeList,
+.drawer-body #whFormCard #whGateBidirectionalList,
+.drawer-body #whFormCard #whGateRfidCrud{width:100%!important;min-width:0!important;box-sizing:border-box!important;}
+.drawer-body #whFormCard #whGateRfidCrud>div{grid-template-columns:1fr!important;width:100%!important;}
 
 /* ══ SIDE DRAWER ═════════════════════════════════════════════════════════════
    Right-hand slide-over for creating/editing master data. The list stays
@@ -2990,7 +3000,7 @@ a{color:var(--accentInk);}
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span></span><span class="wg-lbl">ผังคลังและประตู</span></div>
       <p class="wg-cap">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="wg-body">
-      <div class="grid g4">
+      <div class="grid g4 wh-form-layout">
         <div class="field" style="grid-column:span 2;"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
           <div class="auto-tag-row">
             <input id="whId" readonly style="min-width:220px;">
