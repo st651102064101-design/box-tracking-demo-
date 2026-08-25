@@ -10207,23 +10207,35 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
   var wh=gateWh(g);el.innerHTML='<div class="gate-hint"><span class="gh-chip">ประตู '+g+' → '+esc(whName(wh))+'</span></div>';}
 
 /* ---- fixed gate per LOGGED-IN ACCOUNT (not per browser/device) ----
-   Used to live in localStorage, keyed by device — an employee moving between
-   terminals (or logging in on their phone) had to re-pick their gate every
-   time, and any account logging in on a shared terminal inherited whoever
-   set it last. Stored on S.gatePrefs[USER] instead, so it round-trips
-   through the same /api/state the rest of S already uses (see save() /
-   loadFromServer()) — the assignment now follows the account, and survives
-   a browser switch or a full state reload since it lives in S itself rather
-   than a separate localStorage read. S gets fully reassigned on reload
-   (loadFromServer() does S=normalizeState(d)), so this reads S.gatePrefs
-   fresh on every call instead of caching a reference that reload would
-   silently orphan. */
+   This is intentionally stored through /api/gate-prefs, not the large
+   /api/state snapshot. gatePrefs is a per-user UI preference and stateSchema
+   correctly strips unknown UI keys from that shared WMS state; writing it to
+   S alone therefore made the selection disappear on reload. S remains an
+   in-memory mirror only, while the dedicated DB table is the source of truth.
+*/
 function fixedGatesRef(){
   if(!S.gatePrefs)S.gatePrefs={};
   if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
   return S.gatePrefs[USER];
 }
-function saveFixedGates(){save();}
+function saveFixedGates(dir){
+  var prefs=fixedGatesRef(), body={};
+  if(dir==='out'||dir==='in')body[dir]=String(prefs[dir]||'');
+  else {body.out=String(prefs.out||'');body.in=String(prefs.in||'');}
+  return apiFetch('/api/gate-prefs',{method:'PUT',headers:authHeaders(),body:JSON.stringify(body)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .catch(function(e){console.warn('[Smart Tracking] save gate preference failed',e);});
+}
+function loadFixedGates(){
+  return apiFetch('/api/gate-prefs',{headers:authHeaders()})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(d){
+      var prefs=fixedGatesRef();
+      prefs.out=typeof d.out==='string'?d.out:'';
+      prefs.in=typeof d.in==='string'?d.in:'';
+    })
+    .catch(function(e){console.warn('[Smart Tracking] load gate preference failed',e);});
+}
 /* Most recent gate used for this direction in the saved movement history —
    optionally narrowed to one account (recorder). Returns '' when nothing on
    record still points at a gate that exists. Feeds refreshGateDisplays()'s
@@ -10248,7 +10260,7 @@ function refreshGateDisplays(){
   ['out','in'].forEach(function(dir){
     var fixedGates=fixedGatesRef();
     var g=fixedGates[dir];
-    if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates();g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
+    if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates(dir);g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
     if(!g){
       /* Never leave the gate blank with a "ยังไม่ได้ตั้งค่า — กด เปลี่ยนประตู"
          prompt: resolve it from what's already in the database instead of
@@ -10261,7 +10273,7 @@ function refreshGateDisplays(){
          terminal. "เปลี่ยนประตู" still overrides it by hand at any time. */
       g=lastUsedGateFor(dir,USER)||lastUsedGateFor(dir,null)||'';
       if(!g){var dirGates=gateNumsForDir(dir);if(dirGates.length)g=String(dirGates[0]);}
-      if(g){fixedGates[dir]=g;saveFixedGates();}
+      if(g){fixedGates[dir]=g;saveFixedGates(dir);}
     }
     var inp=$('#'+(dir==='out'?'outGate':'inGate'));
     var disp=$('#'+(dir==='out'?'outGateDisplay':'inGateDisplay'));
@@ -10304,7 +10316,7 @@ function pickGate(dir){
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
 }
-function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates();refreshGateDisplays();if(dir==='out')syncRfidOutboundSession();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates(dir);refreshGateDisplays();if(dir==='out')syncRfidOutboundSession();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== Zebra FX9600 RFID Gate =====
@@ -11058,7 +11070,7 @@ function ensureInGate(){
   if(!dirGates.length){autoCreateWarehouseIfNeeded('คลังหลัก');dirGates=gateNumsForDir('in');}
   if(!dirGates.length)return false;
   fixedGatesRef().in=String(dirGates[0]);
-  save();
+  saveFixedGates('in');
   refreshGateDisplays();
   return !!val('inGate');
 }
@@ -14053,6 +14065,11 @@ loadFromServer().then(function(){
   /* ต้องมาก่อน restoreUiPrefs()/renderAll() เสมอ — ทั้งสองอ่านผ่าน uiPrefGet()
      ซึ่งตอนนี้อ่านจาก UIP ที่โหลดมาจาก /api/ui-prefs ไม่ใช่จาก S อีกแล้ว */
   return uiPrefsLoad();
+}).then(function(){
+  /* Gate In/Out ที่พนักงานเลือกเป็น preference ต่อบัญชีใน DB โดยเฉพาะ
+     ต้องโหลดก่อน renderAll() เพื่อไม่ให้ค่า default ของเครื่องนี้ทับค่า
+     ที่ผู้ใช้เคยเลือกไว้บนเครื่องอื่นหรือหลัง refresh หน้าเว็บ */
+  return loadFixedGates();
 }).then(function(){
   /* สิทธิ์ของบัญชีนี้ต้องรู้ก่อนวาดหน้าแรก ไม่งั้นเมนูที่ไม่มีสิทธิ์จะโผล่มาแวบหนึ่ง
      แล้วค่อยหายไป — และ restoreLastTab() อาจพาไปแท็บที่บัญชีนี้เข้าไม่ได้ */
@@ -17481,7 +17498,7 @@ function openColumnMapModal(opts){
     if(!dirGates.length){autoCreateWarehouseIfNeeded('คลังหลัก');dirGates=gateNumsForDir('out');}
     if(!dirGates.length)return false;
     fixedGatesRef().out=String(dirGates[0]);
-    save();
+    saveFixedGates('out');
     refreshGateDisplays();
     return !!val('outGate');
   }
