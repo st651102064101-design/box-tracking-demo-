@@ -10398,7 +10398,7 @@ function pickGate(dir){
     +'<button class="btn ghost sm" style="width:100%;justify-content:center;gap:8px;color:var(--accent);" onclick="closeModal();goSetup(\'wh\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มคลัง &amp; ประตู</button>'
     +'</div></div>');
 }
-function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates(dir);refreshGateDisplays();if(dir==='out'){restoreGateOutCustomer();syncRfidOutboundSession();refreshGateOutRfidWorkflow();}toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
+function setFixedGate(dir,g){fixedGatesRef()[dir]=String(g);saveFixedGates(dir);refreshGateDisplays();if(dir==='out'){restoreGateOutCustomer();syncRfidOutboundSession();refreshGateOutRfidWorkflow();}else syncRfidInboundSession();toast('ตั้งประตู'+(dir==='out'?'ขาออก':'ขาเข้า')+'แล้ว','ประตู '+g+' → '+whName(gateWh(g))+' '+gateTypeLabel(g));}
 window.pickGate=pickGate;window.setFixedGate=setFixedGate;
 
 /* ===== Zebra FX9600 RFID Gate =====
@@ -10516,6 +10516,17 @@ function rfidRemovePending(g,tag){
    a single FX9600 batch is committed together, while duplicate reports are
    absorbed by saveInbound()/the server-side pending clear. */
 var rfidInboundAutoCommitTimer=null,rfidInboundAutoCommitBusy=false;
+/* For a bi-directional screen-configured gate, record the operator's chosen
+   inbound direction in the backend.  This makes the webhook authoritative:
+   a physical read is received immediately without depending on this tab's
+   polling loop or on LPR being online. */
+function syncRfidInboundSession(){
+  var g=fixedGatesRef().in;
+  if(gateInEntryMode!=='rfid'||!g)return Promise.resolve(null);
+  return apiFetch('/api/rfid/gates/'+encodeURIComponent(g)+'/auto-session',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({direction:'in',recorder:USER,ttlSeconds:1800})})
+    .then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+}
+window.syncRfidInboundSession=syncRfidInboundSession;
 function tryAutoCommitRfidInbound(){
   clearTimeout(rfidInboundAutoCommitTimer);
   if(rfidInboundAutoCommitBusy||gateInEntryMode!=='rfid'||!pendingIn.length)return;
@@ -11093,6 +11104,7 @@ function applyGateInEntryMode(mode,persist){
   if(gateInEntryMode==='rfid'&&fixedGatesRef().in)gateInStep='scan';
   $all('[data-gatein-mode]').forEach(function(btn){var active=btn.dataset.gateinMode===gateInEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
   if(persist!==false)uiPrefSet('gateInEntryMode',gateInEntryMode);
+  if(gateInEntryMode==='rfid')syncRfidInboundSession();
   renderGateInStep();
 }
 function chooseGateInEntryMode(mode){applyGateInEntryMode(mode,true);}
