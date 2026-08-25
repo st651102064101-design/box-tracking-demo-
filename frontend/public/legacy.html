@@ -4821,6 +4821,10 @@ function openCardDrawer(cardId,title,sub){
   }
   clearFieldErrors(card);
   _dwBaseline=_dwSnapshot(card);
+  /* Callers such as editWh()/editCustomer() open the shared drawer first and
+     then populate the form synchronously. Capture again on the next turn so
+     loading existing values is not mistaken for a user edit. */
+  setTimeout(function(){if(_dwCard===card)_dwBaseline=_dwSnapshot(card);},0);
   $('#drawer').classList.add('show');
   $('#drawer').setAttribute('aria-hidden','false');
   document.body.style.overflow='hidden';
