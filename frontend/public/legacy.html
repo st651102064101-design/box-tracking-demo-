@@ -5491,7 +5491,10 @@ function applyGateOutEntryMode(mode,openPicker){
     else clearRfidAutoSession(fixedGatesRef().out);
   },100);
 }
-function chooseGateOutEntryMode(mode){if(mode==='rfid'&&!rfidGateIsReady(fixedGatesRef().out))return toast('ใช้ RFID ไม่ได้',rfidGateIsBound(fixedGatesRef().out)?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateOutEntryMode(mode,false);}
+/* Allow operators to select RFID mode for every configured Gate.  A reader
+   binding/heartbeat controls whether reads are accepted, not whether the Gate
+   can be selected and inspected. */
+function chooseGateOutEntryMode(mode){applyGateOutEntryMode(mode,false);}
 function openGateOutModeChooser(){
   var panel=$('#gateOutModeBar');if(panel)panel.scrollIntoView({behavior:'smooth',block:'center'});return;
   var h='<div class="mhead gateout-choice-head"><div class="gateout-choice-kicker">Gate Out</div><h3>เริ่มทำรายการด้วยวิธีไหน?</h3></div>'
@@ -8593,7 +8596,7 @@ function whpGateTile(g){
     ?g.log.map(function(l){return '<div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-top:.5px solid rgba(255,255,255,.1);"><span style="font-family:var(--mono);font-size:11px;color:rgba(245,245,247,.5);flex:0 0 auto;">'+l.time+'</span><span style="font-size:12.5px;color:#f5f5f7;line-height:1.35;">'+l.text+'</span></div>';}).join('')
       +'<div style="font-size:11px;color:rgba(245,245,247,.4);margin-top:8px;">คลิกที่ประตูเพื่อดูรายละเอียดทั้งหมด</div>'
     :'<div style="font-size:12.5px;color:rgba(245,245,247,.5);">ยังไม่มีการเคลื่อนไหว</div>';
-  return '<div class="whp-gate" onclick="whpPin('+g.n+',this)">'
+  return '<div class="whp-gate" onmouseenter="whpHoverPin('+g.n+',this)" onmouseleave="whpCancelHoverPin()" onclick="whpPin('+g.n+',this)">'
     +'<div class="whp-frame">'
       +'<div class="whp-door">'
         +'<div class="whp-door-cap"></div>'
@@ -8716,7 +8719,17 @@ window.closeWhPanel=closeWhPanel;
 /* คลิกประตูแล้วให้แผงประวัติ "พุ่งเข้าหาเรา" จากจุดที่คลิกจริง ๆ บนจอ — จำตำแหน่ง/ขนาด
    ของประตูใบนั้น (originEl) ไว้ก่อนตั้งค่า แล้วให้ whpAnimatePinIn() เล่นแอนิเมชันจาก
    จุดนั้น ไม่ใช่แค่โผล่ขึ้นมากลางจอเฉย ๆ */
+var whpHoverTimer=null;
+function whpHoverPin(gateNum,originEl){
+  clearTimeout(whpHoverTimer);
+  /* Match the roller-door opening animation before showing the details card. */
+  whpHoverTimer=setTimeout(function(){whpPin(gateNum,originEl);},320);
+}
+function whpCancelHoverPin(){clearTimeout(whpHoverTimer);}
+window.whpHoverPin=whpHoverPin;window.whpCancelHoverPin=whpCancelHoverPin;
 function whpPin(gateNum,originEl){
+  /* A hover followed by a click must not re-create or close an open card. */
+  if(whp.pinnedGate===gateNum&&$('#whpPinCard'))return;
   whp.pinnedGate=gateNum;whp.filter='all';
   var r=(originEl&&originEl.getBoundingClientRect)?originEl.getBoundingClientRect():null;
   whp.originX=r?(r.left+r.width/2):window.innerWidth/2;
@@ -8777,10 +8790,9 @@ function whpRenderPin(){
     +'</div>';
   }).join(''):'<div style="opacity:.6;font-size:13px;text-align:center;padding:20px 0;">ไม่มีข้อมูลในช่วงนี้</div>';
   p.innerHTML=''
-    /* click-outside-to-close: a full-viewport catcher sitting between the panel's own
-       backdrop and .whp-pin (z-index 250) — .whp-backdrop alone would call
-       closeWhPanel() and exit the whole warehouse panel, not just this pinned gate card. */
-    +'<div onclick="whpUnpin()" style="position:fixed;inset:0;z-index:240;"></div>'
+    /* Keep the Gate details card open while the operator moves/clicks elsewhere.
+       This catcher blocks the warehouse backdrop; the explicit X is the close action. */
+    +'<div onclick="event.stopPropagation()" style="position:fixed;inset:0;z-index:240;"></div>'
     +'<div class="whp-pin" id="whpPinCard">'
       +'<div style="padding:22px 24px 14px;flex:0 0 auto;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
@@ -10234,8 +10246,12 @@ function rfidGateIsReady(g){return rfidGateIsBound(g)&&fx9600IsOnline(g);}
 function updateRfidGateAvailability(){
   [['out',fixedGatesRef().out,'data-gateout-mode'],['in',fixedGatesRef().in,'data-gatein-mode']].forEach(function(row){
     var dir=row[0],gate=row[1],attr=row[2],bound=rfidGateIsBound(gate),online=fx9600IsOnline(gate),available=bound&&online;
-    $all('['+attr+'="rfid"]').forEach(function(btn){var reason=bound?'ประตูนี้ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่';btn.disabled=!available;btn.setAttribute('aria-disabled',available?'false':'true');if(available){btn.removeAttribute('data-disabled-reason');btn.title='';}else{btn.setAttribute('data-disabled-reason',reason);btn.title=reason;}});
-    if(!available){if(dir==='out'&&gateOutEntryMode==='rfid')applyGateOutEntryMode('manual');if(dir==='in'&&gateInEntryMode==='rfid')applyGateInEntryMode('manual',true);}
+    $all('['+attr+'="rfid"]').forEach(function(btn){
+      var reason=bound?'ประตูนี้ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่';
+      btn.disabled=false;btn.setAttribute('aria-disabled','false');btn.removeAttribute('data-disabled-reason');
+      btn.dataset.rfidAvailability=available?'ready':'unavailable';
+      btn.title=available?'':reason;
+    });
   });
 }
 function loadRfidGateBindings(){
@@ -10851,7 +10867,7 @@ function applyGateInEntryMode(mode,persist){
   if(persist!==false)uiPrefSet('gateInEntryMode',gateInEntryMode);
   renderGateInStep();
 }
-function chooseGateInEntryMode(mode){if(mode==='rfid'&&!rfidGateIsReady(fixedGatesRef().in))return toast('ใช้ RFID ไม่ได้',rfidGateIsBound(fixedGatesRef().in)?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ประตูนี้ยังไม่ได้ผูกเครื่องอ่าน RFID','warn');applyGateInEntryMode(mode,true);}
+function chooseGateInEntryMode(mode){applyGateInEntryMode(mode,true);}
 window.applyGateInEntryMode=applyGateInEntryMode;window.chooseGateInEntryMode=chooseGateInEntryMode;
 function renderGateInStep(){
   if(gateInEntryMode==='excel'){
