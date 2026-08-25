@@ -4418,6 +4418,9 @@ function save(){
     if(Array.isArray(v)){v.forEach(stripLprImages);return;}
     Object.keys(v).forEach(function(k){if(k==='imageBase64'||k==='imageUrl'||k==='plateImage')delete v[k];else stripLprImages(v[k]);});
   })(S);
+  // Audit is append-only on the server. Do not round-trip an unbounded event
+  // history with every UI save; this keeps handheld/browser state compact.
+  if(Array.isArray(S.auditLog)&&S.auditLog.length>500)S.auditLog=S.auditLog.slice(0,500);
   apiFetch('/api/state',{
     method:'PUT',
     headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),

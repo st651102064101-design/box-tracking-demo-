@@ -91,6 +91,9 @@
           else strip(value[key]);
         });
       })(data);
+      // The audit table is append-only. Keep the browser snapshot bounded;
+      // complete history remains queryable from the backend/database.
+      if (Array.isArray(data.auditLog) && data.auditLog.length > 500) data.auditLog = data.auditLog.slice(0, 500);
       return JSON.stringify(data);
     } catch (e) { return value; }
   }
