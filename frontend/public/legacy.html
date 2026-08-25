@@ -5665,7 +5665,16 @@ var PDA_QR_PREFIX='BTCFG1:';
 /* ความจุจริงของตัวเข้ารหัสในไฟล์นี้: QR version 5 ระดับ L = 108 codewords ลบส่วนหัว 2 = 106 ไบต์
    เกินกว่านี้ qrModules() จะตัดข้อความทิ้งเงียบ ๆ แล้วได้ QR ที่สแกนแล้วได้ค่าผิด — ต้องกันไว้ก่อน */
 var PDA_QR_MAX_BYTES=106;
-function pdaServerUrl(){return window.location.origin.replace(/\/+$/,'');}
+function pdaServerUrl(){
+  /* The handheld client calls the Express API directly.  Giving it the web
+     origin (:3000) makes its health/bootstrap request hit Next.js and return
+     404, even though the web UI's browser proxy itself works. */
+  try{
+    var u=new URL(window.location.origin);
+    if(u.port==='3000')u.port='4000';
+    return u.origin.replace(/\/+$/,'');
+  }catch(e){return window.location.origin.replace(/\/+$/,'');}
+}
 function pdaQrPayload(){
   var url=pdaServerUrl();
   if(!/^https?:\/\/[^\/\s]+/.test(url))return{err:'อ่านที่อยู่หน้านี้ไม่ได้ (window.location.origin ผิดปกติ)'};
@@ -10242,6 +10251,7 @@ function updateGateHint(selId,hintId){var g=val(selId);var el=$('#'+hintId);if(!
    S alone therefore made the selection disappear on reload. S remains an
    in-memory mirror only, while the dedicated DB table is the source of truth.
 */
+var gatePrefsLoaded=false;
 function fixedGatesRef(){
   if(!S.gatePrefs)S.gatePrefs={};
   if(!S.gatePrefs[USER])S.gatePrefs[USER]={out:'',in:''};
@@ -10263,7 +10273,14 @@ function loadFixedGates(){
       prefs.out=typeof d.out==='string'?d.out:'';
       prefs.in=typeof d.in==='string'?d.in:'';
     })
-    .catch(function(e){console.warn('[Smart Tracking] load gate preference failed',e);});
+    .catch(function(e){console.warn('[Smart Tracking] load gate preference failed',e);})
+    .then(function(){
+      /* Do not let refreshGateDisplays() choose and persist a fallback until
+         this request completes.  Otherwise a first render can overwrite the
+         account's saved Gate 1 with a recent/first gate such as Gate 3. */
+      gatePrefsLoaded=true;
+      if(typeof refreshGateDisplays==='function')refreshGateDisplays();
+    });
 }
 /* Most recent gate used for this direction in the saved movement history —
    optionally narrowed to one account (recorder). Returns '' when nothing on
@@ -10290,7 +10307,7 @@ function refreshGateDisplays(){
     var fixedGates=fixedGatesRef();
     var g=fixedGates[dir];
     if(g&&!gateWh(g)){fixedGates[dir]='';saveFixedGates(dir);g='';} /* gate no longer exists (config changed) — drop stale value instead of using it silently */
-    if(!g){
+    if(!g&&gatePrefsLoaded){
       /* Never leave the gate blank with a "ยังไม่ได้ตั้งค่า — กด เปลี่ยนประตู"
          prompt: resolve it from what's already in the database instead of
          asking. In order — the gate this account actually used last for this
