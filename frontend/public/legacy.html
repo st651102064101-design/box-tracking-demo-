@@ -2359,7 +2359,6 @@ a{color:var(--accentInk);}
     <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาออก">
       <button type="button" class="gateout-mode-btn" data-gateout-mode="manual" onclick="chooseGateOutEntryMode('manual')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2M7 9v6M10 9v6M14 9v6M17 9v6"/></svg></span></span><span><b>ยิงมือ</b><small>กรอกข้อมูลด้วยตัวเอง</small></span></button>
       <button type="button" class="gateout-mode-btn" data-gateout-mode="excel" onclick="chooseGateOutEntryMode('excel')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><span><b>Import Excel</b><small>นำเข้าข้อมูลจาก Excel</small></span></button>
-      <button type="button" class="gateout-mode-btn" data-gateout-mode="rfid" onclick="chooseGateOutEntryMode('rfid')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span></span><span><b>RFID Gate</b><small>กรอกข้อมูลจัดส่งก่อน แล้วรอ FX9600</small></span></button>
     </div>
   </div>
 
@@ -5472,7 +5471,9 @@ function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||docu
    when working quickly at the gate. */
 var gateOutEntryMode=null;
 function applyGateOutEntryMode(mode,openPicker){
-  gateOutEntryMode=(mode==='excel'||mode==='manual'||mode==='rfid')?mode:'manual';
+  /* Outbound RFID is disabled: transactions must be staged and confirmed
+     manually or imported before a box can leave the warehouse. */
+  gateOutEntryMode=(mode==='excel'||mode==='manual')?mode:'manual';
   var imp=$('#gateOutImportBoard'),config=$('#gateOutManualConfig'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions');
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
