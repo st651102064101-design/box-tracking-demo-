@@ -2359,6 +2359,7 @@ a{color:var(--accentInk);}
     <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาออก">
       <button type="button" class="gateout-mode-btn" data-gateout-mode="manual" onclick="chooseGateOutEntryMode('manual')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2M7 9v6M10 9v6M14 9v6M17 9v6"/></svg></span></span><span><b>ยิงมือ</b><small>กรอกข้อมูลด้วยตัวเอง</small></span></button>
       <button type="button" class="gateout-mode-btn" data-gateout-mode="excel" onclick="chooseGateOutEntryMode('excel')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><span><b>Import Excel</b><small>นำเข้าข้อมูลจาก Excel</small></span></button>
+      <button type="button" class="gateout-mode-btn" data-gateout-mode="rfid" onclick="chooseGateOutEntryMode('rfid')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span></span><span><b>RFID Gate + LPR</b><small>เลือกลูกค้า แล้วรอกล่องกับทะเบียนรถ</small></span></button>
     </div>
   </div>
 
@@ -2397,9 +2398,7 @@ a{color:var(--accentInk);}
       <div class="field"><label>กำหนดคืนภายใน (วันที่)</label><div id="doReturnDatePreview" class="tag">เลือกลูกค้าก่อน</div></div>
       <div class="field" style="display:none;"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
       <div class="field"><label>ทะเบียนรถ <span class="req">*</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
-      <div class="field"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
-      <div class="field"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
     </div>
     <div id="doLookupHint" style="margin-top:14px;"></div>
     <div id="outVehicleQuick"></div>
@@ -2419,7 +2418,7 @@ a{color:var(--accentInk);}
     </div>
     <div class="wg-body">
       <div class="gateout-upload" id="outImportDropzone"><div class="gateout-upload-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></div><b>ลากไฟล์ Excel มาวางที่นี่</b><p>หรือเลือกไฟล์ Excel · รองรับ .xlsx และ .xls</p><button type="button" class="btn accent" onclick="document.getElementById('outImportFile').click()">เลือกไฟล์ Excel</button><input type="file" id="outImportFile" accept=".xlsx,.xls,application/vnd.ms-excel" style="display:none;"></div>
-      <div class="gateout-required"><h4>ข้อมูลที่ต้องมีในไฟล์</h4><ul><li>ลูกค้า / ปลายทาง</li><li>ทะเบียนรถ</li><li>ชื่อคนขับ</li><li>เบอร์โทรคนขับ</li><li>กำหนดคืน</li><li>ประเภทรถ</li></ul></div>
+      <div class="gateout-required"><h4>ข้อมูลที่ต้องมีในไฟล์</h4><ul><li>ลูกค้า / ปลายทาง</li><li>ทะเบียนรถ</li><li>กำหนดคืน</li><li>ประเภทรถ</li></ul></div>
     </div>
   </div>
   </div>
@@ -5470,9 +5469,7 @@ function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||docu
    when working quickly at the gate. */
 var gateOutEntryMode=null;
 function applyGateOutEntryMode(mode,openPicker){
-  /* Outbound RFID is disabled: transactions must be staged and confirmed
-     manually or imported before a box can leave the warehouse. */
-  gateOutEntryMode=(mode==='excel'||mode==='manual')?mode:'manual';
+  gateOutEntryMode=(mode==='excel'||mode==='manual'||mode==='rfid')?mode:'manual';
   var imp=$('#gateOutImportBoard'),config=$('#gateOutManualConfig'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions');
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
   if(config)config.style.display=gateOutEntryMode!=='excel'?'':'none';
@@ -10222,7 +10219,7 @@ function fx9600SeenText(g){var ts=Date.parse(fx9600LastSeen(g));if(!ts)return bt
 function rfidStatusHtml(g,dir){
   if(!g)return '<div class="banner warn">'+btT('กรุณาเลือกประตูก่อนเริ่มรับ RFID')+'</div>';
   if(!rfidGateIsBound(g))return rfidGateUnavailableHtml(g);
-  if(dir==='out'&&(!val('doCustomer')||!val('outPlate').trim()))return '<div class="banner warn"><b>'+btT('ยังไม่เปิดรับ RFID')+'</b> '+btT('— กรุณาเลือกลูกค้าและกรอกทะเบียนรถก่อน กล่องจึงจะถูกเพิ่มเข้าคิวส่งออก')+'</div>';
+  if(dir==='out'&&!val('doCustomer'))return '<div class="banner warn"><b>'+btT('ยังไม่เปิดรับ RFID')+'</b> '+btT('— กรุณาเลือกลูกค้าปลายทางก่อน แล้วรอ RFID และกล้อง LPR อ่านกล่องกับทะเบียนรถ')+'</div>';
   var online=fx9600IsOnline(g),color=online?'#22c55e':'#ef4444';
   return '<div style="display:flex;align-items:center;gap:9px;padding:12px 14px;border:.5px solid '+color+';border-radius:12px;background:color-mix(in srgb,'+color+' 9%,transparent);color:'+color+';font-size:13px;font-weight:700;">'
     +'<span style="width:10px;height:10px;border-radius:50%;background:'+color+';box-shadow:0 0 0 4px color-mix(in srgb,'+color+' 20%,transparent);"></span>'
@@ -10246,7 +10243,7 @@ function syncRfidOutboundSession(){
     var gate=fixedGatesRef().out;
     if(!gate||gateOutEntryMode!=='rfid')return;
     var customer=val('doCustomer'),plate=val('outPlate').trim();
-    if(!customer||!plate){clearRfidAutoSession(gate);return;}
+    if(!customer){clearRfidAutoSession(gate);return;}
     apiFetch('/api/rfid/gates/'+encodeURIComponent(gate)+'/auto-session',{
       method:'PUT',headers:authHeaders(),body:JSON.stringify({direction:'out',customer:customer,plate:plate,
         doNo:val('doNo'),po:val('poNo'),driver:val('outDriver'),vehicleType:val('outVehicle'),recorder:val('outRecorder')||USER,ttlSeconds:1800})
@@ -10268,7 +10265,7 @@ function fx9600OutQueuePoll(){
   var g=fixedGatesRef().out;renderRfidGateStatus();
   if(!rfidGateIsReady(g))return;
   /* Never accept an outbound tag until shipment identity is complete. */
-  if(!g||!val('doCustomer')||!val('outPlate').trim())return;
+  if(!g||!val('doCustomer'))return;
   fx9600OutPolling=true;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
@@ -19153,6 +19150,12 @@ function showLprLiveAlert(d){
     setv('inPlate',d.plateNumber||'');
     gateInStep='scan';
     renderGateInStep();
+  }
+  var outGate=String(fixedGatesRef().out||'');
+  if(gateOutEntryMode==='rfid'&&String(d.gateId||'').replace(/^GATE-/i,'')===outGate){
+    setv('outPlate',d.plateNumber||'');
+    syncRfidOutboundSession();
+    toast('LPR อ่านทะเบียนแล้ว','กำลังจับคู่กับกล่อง RFID ที่ประตู '+outGate,'ok');
   }
   syncNow();
 }
