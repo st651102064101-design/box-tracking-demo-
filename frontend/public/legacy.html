@@ -10261,7 +10261,10 @@ function saveFixedGates(dir){
   var prefs=fixedGatesRef(), body={};
   if(dir==='out'||dir==='in')body[dir]=String(prefs[dir]||'');
   else {body.out=String(prefs.out||'');body.in=String(prefs.in||'');}
-  return apiFetch('/api/gate-prefs',{method:'PUT',headers:authHeaders(),body:JSON.stringify(body)})
+  /* Express only parses this body when the media type is explicit.  Without
+     Content-Type it received an empty body, acknowledged the request, and
+     left the prior DB gate (for example Gate 3) untouched. */
+  return apiFetch('/api/gate-prefs',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(body)})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .catch(function(e){console.warn('[Smart Tracking] save gate preference failed',e);});
 }
