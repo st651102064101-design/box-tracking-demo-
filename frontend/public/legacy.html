@@ -5488,6 +5488,16 @@ function segPillMoveAll(root,instant){$all('.inv-view-sw,.seg-filter',root||docu
    when working quickly at the gate. */
 var gateOutEntryMode=null;
 function gateOutRfidCustomerReady(){return gateOutEntryMode==='rfid'&&!!val('doCustomer');}
+function refreshGateOutConfirmButton(){
+  var confirm=$('#btnShipOut');if(!confirm)return;
+  var rfid=gateOutEntryMode==='rfid';
+  if(!rfid){confirm.textContent='+ สร้างรายการ';confirm.title='';return;}
+  var tagCount=pendingOut.length,plate=val('outPlate').trim();
+  confirm.textContent='✓ ยืนยันส่งออก'+(tagCount?' '+tagCount+' ใบ':'');
+  /* Keep the action available so the worker receives an explicit reason rather
+     than a silent, apparently broken button.  LPR remains mandatory at commit. */
+  confirm.title=plate?'พร้อมยืนยัน: LPR อ่านทะเบียน '+plate:'รอ LPR อ่านทะเบียนรถก่อนยืนยันส่งออก';
+}
 function refreshGateOutRfidWorkflow(){
   var rfid=gateOutEntryMode==='rfid',ready=gateOutRfidCustomerReady();
   var board=$('#gateOutManualBoard'),bar=$('#outGateBar'),label=$('#outGateLabel'),hint=$('#outGateHint'),lookup=$('#doLookupHint'),quick=$('#outVehicleQuick'),acts=$('#gateOutManualActions'),confirm=$('#btnShipOut');
@@ -5506,7 +5516,7 @@ function refreshGateOutRfidWorkflow(){
      condition and then explicitly confirm the outbound transaction; this is
      the same inventory commit point as barcode mode, not an auto-ship. */
   if(acts)acts.style.display=(gateOutEntryMode==='manual'||(rfid&&ready))?'':'none';
-  if(confirm)confirm.textContent=rfid?'✓ ยืนยันส่งออก':' + สร้างรายการ';
+  refreshGateOutConfirmButton();
   if(rfid&&!ready){pendingOut=[];outConditionMap={};}
 }
 function applyGateOutEntryMode(mode,openPicker){
@@ -10842,9 +10852,10 @@ function renderOutResult(){
   var allocBtn=$('#btnAllocateSuggest');
   if(allocBtn)allocBtn.style.display=Object.values(S.boxes).some(function(b){return b.status==='warehouse';})?'':'none';
   $('#outCount').textContent=pendingOut.length?('เตรียมส่งออก '+pendingOut.length+' ใบ'):'';
-  if(!pendingOut.length){$('#resultOut').innerHTML='';return;}
+  if(!pendingOut.length){$('#resultOut').innerHTML='';refreshGateOutConfirmButton();return;}
   $('#resultOut').innerHTML='<div class="c2-label">คิวสแกน · <span class="c2-count">'+pendingOut.length+'</span> ใบ · เลือกสภาพกล่องได้ทีละใบ</div><div class="chiplist">'+pendingOut.map(function(t){var b=S.boxes[t]||{};
     return '<span class="chip2" role="button" tabindex="0" onclick="openBoxActionModal(\''+esc(t)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openBoxActionModal(\''+esc(t)+'\');}"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span>'+outConditionSelectHtml(t)+'<b onclick="event.stopPropagation();unqueueOut(\''+esc(t)+'\')" title="เอาออกจากคิว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';}).join('')+'</div>';
+  refreshGateOutConfirmButton();
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];if(gateOutEntryMode==='rfid')rfidRemovePending(fixedGatesRef().out,t);renderOutResult();}
 window.unqueueOut=unqueueOut;
@@ -10873,7 +10884,10 @@ autoScanBind($('#scanOut'),scanOut);
 function saveOutbound(){
   if(!validateForm(VALIDATION_SCHEMAS.outbound,$('#tab-gateout')))return;
   if(requireCustomerSetup())return;
-  if(!val('outPlate').trim())return fieldError('outPlate',btT('ต้องกรอกทะเบียนรถก่อนยืนยันรายการส่งออก'));
+  if(!val('outPlate').trim()){
+    if(gateOutEntryMode==='rfid')return toast('รอ LPR อ่านทะเบียนรถ','ต้องให้กล้อง LPR อ่านทะเบียนที่ประตูนี้ก่อนจึงยืนยันส่งออกได้','warn');
+    return fieldError('outPlate',btT('ต้องกรอกทะเบียนรถก่อนยืนยันรายการส่งออก'));
+  }
   if(!pendingOut.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var cust=val('doCustomer');
   /* A ประตูขาออก import file that ships to several different customers in
@@ -19341,6 +19355,7 @@ function showLprLiveAlert(d){
   if(gateOutEntryMode==='rfid'&&String(d.gateId||'').replace(/^GATE-/i,'')===outGate){
     setv('outPlate',d.plateNumber||'');
     syncRfidOutboundSession();
+    refreshGateOutConfirmButton();
     toast('LPR อ่านทะเบียนแล้ว','กำลังจับคู่กับกล่อง RFID ที่ประตู '+outGate,'ok');
   }
   syncNow();
