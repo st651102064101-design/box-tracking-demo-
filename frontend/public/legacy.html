@@ -2473,7 +2473,6 @@ a{color:var(--accentInk);}
     <div class="gi-strip-main"><div class="gi-strip-k">ประตูประจำบัญชีนี้</div><div id="inGateDisplay" class="gi-strip-v">— ยังไม่ได้ตั้งค่า —</div></div>
     <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')">เปลี่ยนประตู</button>
   </div>
-  <div class="gi-strip gi-strip-sub" id="giStripVehicle" style="display:none;"></div>
   <input type="hidden" id="inGate"><div id="inGateHint"></div>
   <div class="field" style="display:none;"><label>ผู้บันทึก</label><input id="inRecorder" readonly></div>
 
@@ -10822,7 +10821,7 @@ function chooseGateInEntryMode(mode){if(mode==='rfid'&&!rfidGateIsBound(fixedGat
 window.applyGateInEntryMode=applyGateInEntryMode;window.chooseGateInEntryMode=chooseGateInEntryMode;
 function renderGateInStep(){
   if(gateInEntryMode==='excel'){
-    ['giStrip','giStripVehicle','giStepGate','giStepAsk','giStepVehicle','gateInManualBoard','gateInManualActions'].forEach(function(id){var el=$('#'+id);if(el)el.style.display='none';});
+    ['giStrip','giStepGate','giStepAsk','giStepVehicle','gateInManualBoard','gateInManualActions'].forEach(function(id){var el=$('#'+id);if(el)el.style.display='none';});
     var scan=$('#giStepScan'),imp=$('#gateInImportBoard');if(scan)scan.style.display='';if(imp)imp.style.display='';
     return;
   }
@@ -10837,14 +10836,6 @@ function renderGateInStep(){
   var ids={gate:'giStepGate',ask:'giStepAsk',vehicle:'giStepVehicle',scan:'giStepScan'};
   Object.keys(ids).forEach(function(k){var el=$('#'+ids[k]);if(el)el.style.display=k===gateInStep?'':'none';});
   var strip=$('#giStrip');if(strip)strip.style.display=gate?'flex':'none';
-  var vs=$('#giStripVehicle');if(vs){
-    var bits=[val('inPlate'),val('inDriver'),val('inVehicle'),val('inDriverTel')].filter(Boolean);
-    if(val('inNote'))bits.push(val('inNote'));
-    if(bits.length){vs.style.display='flex';vs.innerHTML='<span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span><div class="gi-strip-main"><div class="gi-strip-k">ข้อมูลรถ</div><div class="gi-strip-v">'+bits.map(esc).join(' · ')+'</div></div><button class="btn ghost sm" onclick="gateInGo(\'vehicle\')">แก้ไข</button>';
-    }else if(gateInStep==='scan'){
-      vs.style.display='flex';vs.innerHTML='<div class="gi-strip-main"><div class="gi-strip-k">ข้อมูลรถ</div><div class="gi-strip-v" style="color:var(--muted);">ไม่ได้บันทึก</div></div><button class="btn ghost sm" onclick="gateInGo(\'vehicle\')">เพิ่มข้อมูลรถ</button>';
-    }else vs.style.display='none';
-  }
   if(gateInStep==='scan'&&gateInEntryMode==='manual')setTimeout(function(){var s=$('#scanIn');if(s)s.focus();},60);
   var imp=$('#gateInImportBoard'),manual=$('#gateInManualBoard'),actions=$('#gateInManualActions');
   if(imp)imp.style.display='none';
