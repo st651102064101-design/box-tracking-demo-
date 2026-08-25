@@ -10813,6 +10813,7 @@ window.clearGateOut=clearGateOut;
 var gateInEntryMode='manual',gateInStep='ask',gateInVehicleSkipped=false;
 function applyGateInEntryMode(mode,persist){
   gateInEntryMode=(mode==='excel'||mode==='rfid')?mode:'manual';
+  if(gateInEntryMode==='rfid'&&fixedGatesRef().in)gateInStep='scan';
   $all('[data-gatein-mode]').forEach(function(btn){var active=btn.dataset.gateinMode===gateInEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
   if(persist!==false)uiPrefSet('gateInEntryMode',gateInEntryMode);
   renderGateInStep();
@@ -10827,6 +10828,10 @@ function renderGateInStep(){
   }
   var gate=fixedGatesRef().in;
   if(!gate||!gateWh(gate))gateInStep='gate';
+  /* RFID + LPR is the unattended receive flow: do not ask for optional
+     vehicle/driver data before the first tag arrives. LPR fills the plate
+     context when it is available, while the box scan remains immediate. */
+  else if(gateInEntryMode==='rfid')gateInStep='scan';
   else if(gateInStep==='gate')gateInStep='ask';
   if(pendingIn.length)gateInStep='scan';
   var ids={gate:'giStepGate',ask:'giStepAsk',vehicle:'giStepVehicle',scan:'giStepScan'};
@@ -10854,7 +10859,7 @@ function renderGateInStep(){
 function gateInGo(step){gateInStep=step;if(step==='scan')gateInVehicleSkipped=!([val('inPlate'),val('inDriver'),val('inVehicle'),val('inDriverTel'),val('inNote')].some(Boolean));renderGateInStep();}
 function gateInSkipVehicle(){['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(id){setv(id,'');});gateInVehicleSkipped=true;gateInGo('scan');}
 function gateInFillVehicle(){gateInVehicleSkipped=false;gateInGo('vehicle');}
-function gateInResetBatch(){gateInStep=fixedGatesRef().in?'ask':'gate';gateInVehicleSkipped=false;renderGateInStep();}
+function gateInResetBatch(){gateInStep=fixedGatesRef().in?(gateInEntryMode==='rfid'?'scan':'ask'):'gate';gateInVehicleSkipped=false;renderGateInStep();}
 window.renderGateInStep=renderGateInStep;window.gateInGo=gateInGo;window.gateInSkipVehicle=gateInSkipVehicle;window.gateInFillVehicle=gateInFillVehicle;window.gateInResetBatch=gateInResetBatch;
 function buildQuickIn(){
   /* หน้า Gate รับเข้าตาม UX ของ Thai Summit ไม่มีปุ่มข้อมูลเดโมยิงเร็ว */
@@ -19149,6 +19154,12 @@ function showLprLiveAlert(d){
   var badge=document.querySelector('[data-stab-badge="audit"]');
   if(badge){badge.textContent=nf(lprUnread)+' ใหม่';badge.classList.add('urgent');}
   toast('พบข้อมูล LPR ใหม่','ทะเบียน '+(d.plateNumber||'-')+' · '+(d.gateId||'Gate')+' · RFID '+((d.rfidTags||[]).join(', ')||'-'),'info');
+  var inGate=String(fixedGatesRef().in||'');
+  if(gateInEntryMode==='rfid'&&String(d.gateId||'').replace(/^GATE-/i,'')===inGate){
+    setv('inPlate',d.plateNumber||'');
+    gateInStep='scan';
+    renderGateInStep();
+  }
   syncNow();
 }
 function connectStream(){
