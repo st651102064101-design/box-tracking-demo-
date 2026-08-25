@@ -19550,7 +19550,12 @@ function connectStream(){
   });
   es.addEventListener('lpr-detection',ev=>{
     let d=null;try{d=JSON.parse(ev.data);}catch(_){}
-    if(d)showLprLiveAlert(d);
+    if(d){
+      showLprLiveAlert(d);
+      /* The state frame follows this domain event, but refresh immediately so
+         an open box-detail modal receives the plate/history without a reload. */
+      syncNow();
+    }
   });
   es.onerror=()=>{
     liveStream=false;
