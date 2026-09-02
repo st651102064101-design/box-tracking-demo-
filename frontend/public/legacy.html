@@ -39,7 +39,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 24px rgba(0,0,0,.05);
   --shadow-lg:0 24px 70px rgba(0,0,0,.16);
   --ease:cubic-bezier(.22,1,.36,1); --easeIn:cubic-bezier(.5,0,.2,1);
-  --blur:saturate(180%) blur(22px);
+  --blur:saturate(140%) blur(10px);
   /* Latin from SF Pro; Thai falls through to a loopless (ไม่มีหัว) face: Anuphan → IBM Plex Sans Thai → Leelawadee UI */
   --font:"SF Pro Display","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI","Anuphan","IBM Plex Sans Thai","Leelawadee UI",system-ui,sans-serif;
   --mono:"SF Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
@@ -99,7 +99,7 @@ html[data-theme="dark"]{
    ของ body จะถูกคำนวณเป็น auto ตามสเปก (แกนหนึ่งไม่ visible อีกแกนจะกลายเป็น auto)
    ทำให้ body กลายเป็น scroll container เอง แล้ว position:sticky ของ .chrome/.navwrap
    จะไปยึดกับ scrollport ของ body ที่ไม่เคยเลื่อน = แถบบนไม่ sticky */
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;overflow-y:scroll;overflow-x:hidden;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:auto;overflow-y:scroll;overflow-x:hidden;}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);
   font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-.011em;}
 ::selection{background:var(--accentSoft);color:var(--accentInk);}
@@ -493,7 +493,7 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .pagerbar .pg-nav span.pg-dots{color:var(--muted);font-size:12.5px;padding:0 2px;}
 table{border-collapse:collapse;width:100%;font-size:14px;}
 th,td{padding:13px 18px;text-align:left;border-bottom:.5px solid var(--line);white-space:nowrap;letter-spacing:-.01em;}
-th{position:sticky;top:0;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);
+th{position:sticky;top:0;background:var(--surface);
   font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0;z-index:2;}
 thead th{cursor:pointer;user-select:none;}
 thead th:has(input),thead th:has(select),thead th:has(button),thead th:empty{cursor:default;}
@@ -4168,7 +4168,7 @@ setTrackSearchMode(trackSearchMode); /* sync the toggle's active state to whatev
    with a toggle to flip to "เก่าสุด" (ASC). State lives in a plain object (not persisted —
    resets to "latest first" on reload, matching the requested default). ===== */
 var uiSort={box:'desc',btype:'desc',wh:'desc',cust:'desc',emp:'desc',inv:'desc',audit:'desc',events:'desc'};
-function setSortDir(key,dir){uiSort[key]=dir;renderAll();}
+function setSortDir(key,dir){uiSort[key]=dir;paintActiveView();}
 window.setSortDir=setSortDir;
 function refreshSortToggleUI(key){
   var wrap=document.getElementById('sortTgl_'+key);if(!wrap)return;
@@ -5508,31 +5508,18 @@ function switchTab(name){
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
      down) page glide upward for a moment before the new tab even appears.
-     The tab swap itself gets a quick opacity fade instead, applied here via
-     inline style rather than a CSS class keyed off "active" — the very
-     first tab shown on page load is marked active in the static HTML
-     before any JS runs (boot calls renderAll() directly, never
-     switchTab()), so a class-based "start at opacity:0, only switchTab()
-     ever adds the visible class" scheme left that first tab permanently
-     invisible (blank/black screen) since nothing had ever added the class.
-     display:none → block can't itself transition, hence the opacity:0 write
-     + forced reflow + rAF-deferred opacity:1 below. */
+     Do not fade via opacity:0 + forced reflow: that layout flush, plus the
+     old renderAll() that rebuilt every hidden tab (and PUT /api/state), is
+     what made opening ประตู/คลัง/ติดตาม/ตั้งค่า feel like a hitch. Paint only
+     the tab that is actually becoming visible, and never persist on a mere
+     navigation. */
   window.scrollTo(0,0);
   var enteringGateOut=name==='gateout'&&!$('#tab-gateout').classList.contains('active');
   $all('.tab').forEach(function(t){t.classList.remove('active');t.style.opacity='';t.style.transition='';});
   var tab=$('#tab-'+name);
-  if(tab){
-    tab.classList.add('active');
-    var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(!reduceMotion){
-      tab.style.opacity='0';
-      void tab.offsetWidth;
-      tab.style.transition='opacity .12s ease-out';
-      requestAnimationFrame(function(){tab.style.opacity='1';});
-    }
-  }
+  if(tab)tab.classList.add('active');
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
-  renderAll();
+  paintActiveView();
   if(tab)$all('.reveal',tab).forEach(function(el){el.classList.add('in');});
   if(name==='gateout'){setTimeout(function(){if(requireGateSetup('out'))return;if(requireCustomerSetup())return;var r=$('#outRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();if(enteringGateOut){applyGateOutEntryMode(uiPrefGet('gateOutMode','manual'),false);}},300);}
   if(name==='gatein'){setTimeout(function(){if(requireGateSetup('in'))return;applyGateInEntryMode(uiPrefGet('gateInEntryMode','manual'),false);var r=$('#inRecorder');if(r&&!r.value)r.value=USER;refreshGateDisplays();},300);}
@@ -11845,48 +11832,14 @@ function renderReports(){
         +'<div></div>'
       +'</div>';
 
-      // detail rows (hidden)
-      typeFlowHtml+='<table class="rpt-box-rows" id="'+rowId+'">'
+      // detail rows — filled on first expand (tglRpt). Pre-building every
+      // box as a hidden <tr> is what made ภาพรวม / รายงานเพิ่มเติม hitch.
+      typeFlowHtml+='<table class="rpt-box-rows" id="'+rowId+'" data-rpt-tk="'+esc(tk)+'">'
         +'<thead><tr>'
         +'<th>รหัสกล่อง</th><th>สถานะ</th><th>ลูกค้า / ตำแหน่ง</th>'
         +'<th class="r">ออกครั้งล่าสุด</th><th class="r">คืนครั้งล่าสุด</th>'
         +'<th class="r">กำหนดคืน</th><th class="r">รอบหมุน</th><th class="r">มูลค่า (฿)</th><th class="c">จัดการ</th>'
-        +'</tr></thead><tbody>';
-
-      boxes.sort(function(a,b){var o={out:0,lost:1,warehouse:2,pending:3};if(o[a.status]!==o[b.status])return o[a.status]-o[b.status];return a.tag<b.tag?-1:1;})
-      .forEach(function(b){
-        var ev=evByTag[b.tag]||{outs:[],ins:[]};
-        var lastOut=ev.outs.length?ev.outs[ev.outs.length-1]:null;
-        var lastIn=ev.ins.length?ev.ins[ev.ins.length-1]:null;
-        var dueDays=boxDueDays(b);
-        var overdue=isOverdue(b);
-        var dueBadge='';
-        if(b.status==='out'){
-          if(overdue)dueBadge='<span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'เกินกำหนด')+'</span>';
-          else if(dueDays!=null&&dueDays<=3)dueBadge='<span class="days-badge warn">เหลือ '+dueDays+' วัน</span>';
-          else if(dueDays!=null)dueBadge='<span class="days-badge ok">เหลือ '+dueDays+' วัน</span>';
-          else dueBadge='<span class="muted small">—</span>';
-        } else {dueBadge='<span class="muted small">—</span>';}
-
-        var locOrCust=b.status==='out'
-          ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
-          :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
-          :b.status==='pending'?'<span class="muted">รอเข้าคลัง</span>'
-          :locShort(b.location);
-
-        typeFlowHtml+='<tr class="flowrow" style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
-          +'<td class="mono"><b>'+esc(b.tag)+'</b></td>'
-          +'<td>'+statusPill(b.status,b)+'</td>'
-          +'<td>'+locOrCust+'</td>'
-          +'<td class="r mono">'+(lastOut?'<div>'+dstr(new Date(lastOut.ts))+'</div>'+(lastOut.customer?'<div class="tag">'+esc(custName(lastOut.customer))+'</div>':''):'<span class="muted small">—</span>')+'</td>'
-          +'<td class="r mono">'+(lastIn?'<div>'+dstr(new Date(lastIn.ts))+'</div>'+(lastIn.wh?'<div class="tag">'+esc(whName(lastIn.wh))+'</div>':''):'<span class="muted small">—</span>')+'</td>'
-          +'<td class="r">'+dueBadge+'</td>'
-          +'<td class="r mono">'+nf(b.cycles)+'</td>'
-          +'<td class="r mono">'+money(b.value)+'</td>'
-          +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
-        +'</tr>';
-      });
-      typeFlowHtml+='</tbody></table></div>';
+        +'</tr></thead><tbody></tbody></table></div>';
     });
   }
   $('#ovTypeFlow').innerHTML=typeFlowHtml;
@@ -12006,8 +11959,54 @@ DF_APPLY.ovEvents=function(){pagerReset('ovEvents');renderReports();};
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
+function fillRptBoxRows(row){
+  var tb=row.querySelector('tbody');if(!tb||tb.dataset.filled==='1')return;
+  var tk=row.getAttribute('data-rpt-tk')||'';
+  var evByTag={};
+  (S.events||[]).forEach(function(e){
+    if(typeof dfInRange==='function'&&!dfInRange('ovTypeFlow',e.ts))return;
+    if(!evByTag[e.tag])evByTag[e.tag]={outs:[],ins:[]};
+    if(e.dir==='out')evByTag[e.tag].outs.push(e);else if(e.dir==='in')evByTag[e.tag].ins.push(e);
+  });
+  var boxes=Object.values(S.boxes).filter(function(b){
+    var btk=b.type||(S.boxtypes[b.type]||{}).id||'(ไม่ระบุ)';
+    return btk===tk;
+  }).sort(function(a,b){var o={out:0,lost:1,warehouse:2,pending:3};if(o[a.status]!==o[b.status])return o[a.status]-o[b.status];return a.tag<b.tag?-1:1;});
+  tb.innerHTML=boxes.map(function(b){
+    var ev=evByTag[b.tag]||{outs:[],ins:[]};
+    var lastOut=ev.outs.length?ev.outs[ev.outs.length-1]:null;
+    var lastIn=ev.ins.length?ev.ins[ev.ins.length-1]:null;
+    var dueDays=boxDueDays(b);
+    var overdue=isOverdue(b);
+    var dueBadge='';
+    if(b.status==='out'){
+      if(overdue)dueBadge='<span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'เกินกำหนด')+'</span>';
+      else if(dueDays!=null&&dueDays<=3)dueBadge='<span class="days-badge warn">เหลือ '+dueDays+' วัน</span>';
+      else if(dueDays!=null)dueBadge='<span class="days-badge ok">เหลือ '+dueDays+' วัน</span>';
+      else dueBadge='<span class="muted small">—</span>';
+    } else {dueBadge='<span class="muted small">—</span>';}
+    var locOrCust=b.status==='out'
+      ?('<b>'+esc(custName(b.customer))+'</b>'+(b.do?'<div class="tag">'+esc(b.do)+'</div>':''))
+      :b.status==='lost'?('<span class="muted small">'+esc(custName(b.customer))+'</span>')
+      :b.status==='pending'?'<span class="muted">รอเข้าคลัง</span>'
+      :locShort(b.location);
+    return '<tr class="flowrow" style="cursor:pointer;" onclick="openBoxActionModal(\''+esc(b.tag)+'\')">'
+      +'<td class="mono"><b>'+esc(b.tag)+'</b></td>'
+      +'<td>'+statusPill(b.status,b)+'</td>'
+      +'<td>'+locOrCust+'</td>'
+      +'<td class="r mono">'+(lastOut?'<div>'+dstr(new Date(lastOut.ts))+'</div>'+(lastOut.customer?'<div class="tag">'+esc(custName(lastOut.customer))+'</div>':''):'<span class="muted small">—</span>')+'</td>'
+      +'<td class="r mono">'+(lastIn?'<div>'+dstr(new Date(lastIn.ts))+'</div>'+(lastIn.wh?'<div class="tag">'+esc(whName(lastIn.wh))+'</div>':''):'<span class="muted small">—</span>')+'</td>'
+      +'<td class="r">'+dueBadge+'</td>'
+      +'<td class="r mono">'+nf(b.cycles)+'</td>'
+      +'<td class="r mono">'+money(b.value)+'</td>'
+      +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
+    +'</tr>';
+  }).join('');
+  tb.dataset.filled='1';
+}
 function tglRpt(rowId,chevId){var row=$('#'+rowId),ch=$('#'+chevId);if(!row)return;
   var open=row.classList.contains('open');
+  if(!open)fillRptBoxRows(row);
   row.classList.toggle('open',!open);
   if(ch)ch.style.transform=open?'rotate(0deg)':'rotate(90deg)';}
 window.tglRpt=tglRpt;
@@ -13339,18 +13338,63 @@ function commitBulkEditBox(tags){
 window.commitBulkEditBox=commitBulkEditBox;
 $('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-cb');if(!tags.length)return;openBulkEditBoxModal(tags);});
 
-/* ===== RENDER ALL ===== */
-function renderAll(){
-  renderOverview();renderReports();renderSetup();renderTrack();
-  buildQuickOut();buildQuickIn();buildQuickTrack();
-  renderOutResult();renderInResult();renderVehicleQuick();
-  refreshGateDisplays();
-  renderInventory();renderAuditLog();
+/* ===== RENDER ALL =====
+   Opening a nav tab used to rebuild Overview + reports (every box as a hidden
+   table row) + Master + Inventory + Audit + both gates, then PUT the entire
+   S blob. That is why those pages opened with a hitch and then scrolled like
+   molasses: the main thread was still laying out DOM that was not on screen,
+   and sticky headers were blurring every frame on top of it.
+   paintTab() only touches the visible screen. renderAll() still exists for
+   mutations that must persist — it paints the current tab, then save(). */
+function activeTabName(){
+  var b=document.querySelector('#nav button.active[data-tab]');
+  return (b&&b.dataset.tab)||'overview';
+}
+function reportsPanelOpen(){
+  var el=$('#tab-reports');
+  return !!(el&&el.style.display!=='none');
+}
+function paintChrome(){
   initSortToggles();
-  $('#whoTxt').textContent=USER+' · SaaS';
-  var whoEmp=currentEmp();renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
+  var who=$('#whoTxt');
+  if(who)who.textContent=USER+' · SaaS';
+  var whoEmp=typeof currentEmp==='function'?currentEmp():null;
+  if(typeof renderAvatar==='function')renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
+}
+function paintTab(name){
+  name=name||activeTabName();
+  if(name==='overview'){
+    renderOverview();
+    if(reportsPanelOpen())renderReports();
+  } else if(name==='gateout'){
+    buildQuickOut();
+    renderOutResult();
+    renderVehicleQuick();
+    refreshGateDisplays();
+  } else if(name==='gatein'){
+    buildQuickIn();
+    renderInResult();
+    renderVehicleQuick();
+    refreshGateDisplays();
+  } else if(name==='inventory'){
+    renderInventory();
+  } else if(name==='track'){
+    renderTrack();
+    buildQuickTrack();
+  } else if(name==='setup'){
+    renderSetup();
+    renderAuditLog();
+  }
+}
+function paintActiveView(){
+  paintTab(activeTabName());
+  paintChrome();
+}
+function renderAll(){
+  paintActiveView();
   save();
 }
+window.paintActiveView=paintActiveView;
 
 /* ===== THEME TOGGLE (dark / light) ===== */
 function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light';}
@@ -16181,27 +16225,38 @@ window.exportTrackExcel = exportTrackExcel;
      got within range, which read as "glowing before it arrived". Fading it in/out
      proportionally to distance instead means it only ever peaks exactly at distance 0
      (dot dead-center on the node) and ramps smoothly on the way in and out. rAF instead
-     of a timer keeps the fade perfectly smooth frame-to-frame. */
+     of a timer keeps the fade perfectly smooth frame-to-frame.
+     Skip layout reads when Overview is not on screen — getBoundingClientRect on
+     every node, every frame, is a large part of the scroll hitch on other tabs
+     (the comment that hidden rects "just collapse" is true, but the reads
+     still force style recalc). */
   var GLOW_RANGE=64; /* px — distance at which glow starts becoming visible at all */
+  function overviewLive(){
+    if(document.hidden)return false;
+    var tab=document.getElementById('tab-overview');
+    return !!(tab&&tab.classList.contains('active'));
+  }
   function tick(){
-    if(!dot) dot=document.querySelector('.cycle-dotmove');
-    if(!dots) dots=$all('.cycle-node .cycle-dot');
-    if(dot&&dots&&dots.length){
-      var dr=dot.getBoundingClientRect();
-      var dcx=dr.left+dr.width/2, dcy=dr.top+dr.height/2;
-      dots.forEach(function(n){
-        var r=n.getBoundingClientRect();
-        var cx=r.left+r.width/2, cy=r.top+r.height/2;
-        var dist=Math.sqrt((cx-dcx)*(cx-dcx)+(cy-dcy)*(cy-dcy));
-        var t=Math.max(0,Math.min(1,1-dist/GLOW_RANGE));
-        if(t<=0.01){
-          n.style.boxShadow='';n.style.borderColor='';n.style.color='';
-        } else {
-          n.style.boxShadow='0 0 0 '+(t*9).toFixed(1)+'px color-mix(in srgb,var(--accent) '+Math.round(t*30)+'%,transparent),var(--shadow)';
-          n.style.borderColor='color-mix(in srgb,var(--accent) '+Math.round(t*100)+'%,var(--line2))';
-          n.style.color='color-mix(in srgb,var(--accentInk) '+Math.round(t*100)+'%,var(--ink2))';
-        }
-      });
+    if(overviewLive()){
+      if(!dot) dot=document.querySelector('.cycle-dotmove');
+      if(!dots) dots=$all('.cycle-node .cycle-dot');
+      if(dot&&dots&&dots.length){
+        var dr=dot.getBoundingClientRect();
+        var dcx=dr.left+dr.width/2, dcy=dr.top+dr.height/2;
+        dots.forEach(function(n){
+          var r=n.getBoundingClientRect();
+          var cx=r.left+r.width/2, cy=r.top+r.height/2;
+          var dist=Math.sqrt((cx-dcx)*(cx-dcx)+(cy-dcy)*(cy-dcy));
+          var t=Math.max(0,Math.min(1,1-dist/GLOW_RANGE));
+          if(t<=0.01){
+            n.style.boxShadow='';n.style.borderColor='';n.style.color='';
+          } else {
+            n.style.boxShadow='0 0 0 '+(t*9).toFixed(1)+'px color-mix(in srgb,var(--accent) '+Math.round(t*30)+'%,transparent),var(--shadow)';
+            n.style.borderColor='color-mix(in srgb,var(--accent) '+Math.round(t*100)+'%,var(--line2))';
+            n.style.color='color-mix(in srgb,var(--accentInk) '+Math.round(t*100)+'%,var(--ink2))';
+          }
+        });
+      }
     }
     requestAnimationFrame(tick);
   }
@@ -19242,8 +19297,11 @@ document.addEventListener('visibilitychange',()=>{
     if(root&&root.querySelectorAll)root.querySelectorAll('main table,.modal table,.drawer table').forEach(annotateTable);
   }
   annotateAll(document);
-  new MutationObserver(function(muts){muts.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)annotateAll(n);});});})
-    .observe(document.body,{childList:true,subtree:true});
+  var annotT=0;
+  new MutationObserver(function(){
+    if(annotT)return;
+    annotT=setTimeout(function(){annotT=0;annotateAll(document);},80);
+  }).observe(document.body,{childList:true,subtree:true});
   window.initResponsiveTables=function(){annotateAll(document);};
 
   var scrollBtn=document.getElementById('scrollTopBtn'),lastY=window.scrollY,raf=0;
