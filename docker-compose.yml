@@ -16,7 +16,7 @@
 #   docker build -t thai-submit-frontend:latest ./frontend
 #   docker compose up -d frontend-thai
 # ══════════════════════════════════════════════════════════════════════════════
-name: boxtracking
+name: box-tracking-demo-
 
 services:
   db:
