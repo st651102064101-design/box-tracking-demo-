@@ -4503,6 +4503,19 @@ function normalizeState(d){
     (d.events||[]).forEach(function(e){if(e.tag&&boxRenames[e.tag])e.tag=boxRenames[e.tag];});
     (d.auditLog||[]).forEach(function(a){if(a.itemId&&boxRenames[a.itemId])a.itemId=boxRenames[a.itemId];});
   }
+  /* e.customerName คือ snapshot "ชื่อลูกค้า ณ เวลาที่ผ่านประตู" ที่หน้าจอต่าง ๆ อ่านก่อน
+     ทะเบียนลูกค้าปัจจุบัน — event เก่าที่ถูกบันทึกตอนที่ยังหาชื่อไม่เจอจะมีรหัสลูกค้า
+     ("CUST-02") ถูกแช่ไว้ในช่องชื่อ ทำให้ทุกหน้าที่แสดง snapshot นี้ขึ้นเป็นรหัสตลอดไป
+     ล้างค่าเหล่านั้นทิ้งทุกครั้งที่โหลด (เหมือน stripStars ด้านบน คือไม่เชื่อว่าข้อมูลเก่า
+     ที่ persist ไว้สะอาดแล้ว) แล้วให้ custLabel() ไปหาชื่อจริงจากทะเบียนลูกค้าแทน */
+  (d.events||[]).forEach(function(e){
+    var snap=String(e.customerName==null?'':e.customerName).trim();
+    if(!snap)return;
+    var byId=d.customers[snap];
+    var byIdName=byId?String(byId.name||'').trim():'';
+    if(byIdName&&byIdName!==snap){if(!e.customer)e.customer=snap;e.customerName=byIdName;return;}
+    if(snap===String(e.customer||'').trim())e.customerName='';
+  });
   return d;
 }
 /** Loads S from the DB at boot. Returns a promise so init can await it. */
@@ -4756,17 +4769,63 @@ function emptyRow(c,t){return '<tr><td colspan="'+c+'"><div class="empty"><div c
 function chevSvg(id){return '<span class="chev" id="'+id+'"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5L7 5L3 8.5" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';}
 
 function typeName(id){return (S.boxtypes[id]||{}).name||id||'-';}
-/* if the customer master record was later deleted, recover their name from the audit
-   trail (delCust logs the full record before removing it) instead of just showing the
-   bare id — old Gate/DO history referencing a since-deleted customer should still read
-   as a name, not a code, wherever it's displayed */
+/* ชื่อลูกค้าสำหรับแสดงผล — ตกกลับไปเป็นรหัสลูกค้าก็ต่อเมื่อหมดทางหาชื่อจริงแล้วเท่านั้น
+   (ทะเบียนลูกค้า → audit trail ของลูกค้าที่ถูกลบ ซึ่ง delCust เก็บระเบียนเต็มไว้ก่อนลบ →
+   snapshot ชื่อใน event เก่า) ประวัติ Gate/DO ที่อ้างถึงลูกค้าที่ถูกลบไปแล้วจึงยังอ่านเป็นชื่อ
+   ไม่ใช่รหัส ไม่ว่าจะแสดงที่หน้าไหน */
 function custName(id){
   if(!id)return id||'-';
-  var c=S.customers[id];
-  if(c)return c.name||id;
-  var logged=(S.auditLog||[]).find(function(a){return a.itemId===id&&a.itemName;});
-  return logged?logged.itemName:id;
+  return custNameKnown(id)||id;
 }
+/* ชื่อลูกค้าเท่าที่ "ยืนยันได้จริง" — คืนค่าว่างเมื่อยังหาชื่อไม่เจอ ไม่ตกกลับไปเป็นรหัสลูกค้า
+   ที่ไหนที่จะเก็บชื่อลงข้อมูล (snapshot ใน S.events) ต้องใช้ตัวนี้ ไม่ใช่ custName() เพราะ
+   custName() คืนรหัสมาแทนเมื่อหาไม่เจอ — พอเก็บรหัสนั้นลง event ไปแล้ว ทุกหน้าจอที่อ่าน
+   e.customerName ก็จะโชว์ "CUST-02" ค้างอยู่ตลอด แม้ทะเบียนลูกค้าจะมีชื่อจริงแล้วก็ตาม */
+function custNameKnown(id){
+  var key=String(id==null?'':id).trim();
+  if(!key)return '';
+  var c=S.customers[key]||custByLooseId(key);
+  var nm=c?String(c.name||'').trim():'';
+  if(nm&&nm!==key)return nm;
+  var logged=(S.auditLog||[]).find(function(a){return a.itemId===key&&a.itemName&&a.itemName!==key;});
+  if(logged)return logged.itemName;
+  return custNameFromEvents(key);
+}
+/* รหัสลูกค้าที่ไหลมาจากไฟล์นำเข้า/PDA/RFID มักมีช่องว่างหรือตัวพิมพ์ไม่ตรงกับคีย์ใน
+   ทะเบียนลูกค้า พอ S.customers[id] พลาดก็จะโชว์เป็นรหัสแทนชื่อ — เทียบแบบหลวม ๆ ให้อีกชั้น */
+function custByLooseId(key){
+  var kl=key.toLowerCase();
+  var list=Object.values(S.customers||{});
+  for(var i=0;i<list.length;i++){if(String(list[i].id||'').trim().toLowerCase()===kl)return list[i];}
+  return null;
+}
+/* ลูกค้าที่ถูกลบไปแล้วและไม่มีร่องรอยใน audit log ยังอาจมีชื่อจริงติดอยู่กับ event เก่า —
+   ใช้เป็นทางสุดท้ายก่อนจะยอมโชว์รหัสลูกค้าดิบ ๆ (ทำ index ไว้ครั้งเดียว custName ถูกเรียก
+   ทุกแถวของทุกตาราง จะสแกน S.events ใหม่ทุกครั้งไม่ได้) */
+var _custEvtNames={len:-1,map:{}};
+function custNameFromEvents(key){
+  var evs=S.events||[];
+  if(_custEvtNames.len!==evs.length){
+    var m={};
+    for(var i=evs.length-1;i>=0;i--){
+      var e=evs[i],cid=String(e.customer||'').trim(),nm=String(e.customerName==null?'':e.customerName).trim();
+      if(cid&&nm&&nm!==cid&&!m[cid])m[cid]=nm;
+    }
+    _custEvtNames={len:evs.length,map:m};
+  }
+  return _custEvtNames.map[key]||'';
+}
+/* ชื่อลูกค้าสำหรับแถวที่มี snapshot ชื่อแนบมากับข้อมูล (S.events / ประวัติกล่อง):
+   ทะเบียนลูกค้าปัจจุบันมาก่อนเสมอ แล้วค่อยใช้ snapshot และจะยอมใช้ก็ต่อเมื่อมันเป็น "ชื่อ"
+   จริง ๆ ไม่ใช่รหัสลูกค้าที่ถูกแช่ไว้ตั้งแต่ตอนที่ยังหาชื่อไม่เจอ */
+function custLabel(id,snapName){
+  var live=custNameKnown(id);
+  if(live)return live;
+  var snap=String(snapName==null?'':snapName).trim();
+  if(snap&&snap!==String(id||'').trim())return snap;
+  return custName(id);
+}
+window.custName=custName;window.custNameKnown=custNameKnown;window.custLabel=custLabel;
 /* ปลายทางขาออกต้องเป็นลูกค้าเท่านั้น — คู่ค้าที่ตั้งไว้เป็นซัพพลายเออร์ล้วนคือ
    ต้นทางที่ส่งกล่องเข้ามา ไม่ใช่ที่ที่เราจ่ายกล่องออกไป จึงไม่ควรโผล่ให้เลือกผิด
    (kind ว่าง = ระเบียนเก่าก่อนมีฟิลด์นี้ ถือเป็นลูกค้าตามความหมายเดิม) */
@@ -8508,8 +8567,8 @@ function whGateEvents(whId,gate){
 }
 function whEventTimeStr(ts){var d=new Date(ts);return ddmmyyyy(d)+' '+pad(d.getHours(),2)+':'+pad(d.getMinutes(),2);}
 function whEventLabel(e){
-  if(e.dir==='out')return {t:'ส่งออก',who:e.customerName||custName(e.customer)||'-'};
-  if(e.dir==='in')return {t:'รับคืน',who:e.customerName||custName(e.customer)||'-'};
+  if(e.dir==='out')return {t:'ส่งออก',who:custLabel(e.customer,e.customerName)||'-'};
+  if(e.dir==='in')return {t:'รับคืน',who:custLabel(e.customer,e.customerName)||'-'};
   return {t:'รับเข้าใหม่',who:e.partner||'ผู้จัดหา'};
 }
 function whGateStats(w){
@@ -10751,7 +10810,7 @@ function saveOutbound(){
     var dueDateStr=ddmmyyyy(new Date(dueTs));
     b.status='out';b.customer=custForBox;b.do=doForBox;b.po=poForBox;b.outGate=Number(gate);b.outWh=wh;b.outAt=tsForBox;b.dueAt=dueTs;b.dueDate=dueDateStr;b.lastSeenAt=tsForBox;b.outCondition=cond;
     b.history.push({dir:'out',ts:tsForBox,do:doForBox,po:poForBox,customer:custForBox,gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,dueAt:dueTs,dueDate:dueDateStr,platform:'web'});
-    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custName(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,platform:'web'});
+    S.events.push({ts:tsForBox,dir:'out',tag:t,type:b.type,do:doForBox,po:poForBox,customer:custForBox,customerName:custNameKnown(custForBox),gate:Number(gate),wh:wh,plate:plate,driver:driver,tel:tel,condition:cond,recorder:recorderForBox,platform:'web'});
     if(doForBox!==doNo||custForBox!==cust)extraDoRecords[doForBox]={customer:custForBox,po:poForBox,plate:plate,driver:driver,tel:tel};});
   var n=pendingOut.length;var auditTags=pendingOut.slice();pendingOut=[];outConditionMap={};pendingOutTsMap={};pendingOutDoMap={};pendingOutPoMap={};pendingOutRecorderMap={};pendingOutCustMap={};pendingOutReturnDaysMap={};
   rememberVehicle(plate,driver,val('outVehicle'),tel);
@@ -10957,7 +11016,7 @@ function saveInbound(){
     }else{
       // CASE B: box was previously dispatched → this is a genuine return from customer
       b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||''),condition:condition,platform:'web'});
-      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,condition:condition,platform:'web'});
+      S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custNameKnown(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,condition:condition,platform:'web'});
       b.status=receivedStatus;b.inCondition=condition;b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       returnCount++;
@@ -14227,7 +14286,7 @@ function renderGateTodayRows(){
     return dfInRange('ovMove',e.ts) && (isOut ? e.dir==='out' : (e.dir==='in'||e.dir==='in-new'));
   }).sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});
   var rowsWithHay=evs.map(function(e){
-    var custTxt=e.customerName||(e.customer?custName(e.customer):(e.dir==='in-new'?'กล่องใหม่':'-'));
+    var custTxt=e.customer?custLabel(e.customer,e.customerName):(String(e.customerName||'').trim()||(e.dir==='in-new'?'กล่องใหม่':'-'));
     var whTxt=e.wh?whName(e.wh):'-';
     var hay=(e.tag+' '+typeName(e.type)+' '+custTxt+' '+(e.do||'')+' '+(e.plate||'')+' '+whTxt).toLowerCase();
     return {e:e,custTxt:custTxt,whTxt:whTxt,hay:hay};
@@ -14294,7 +14353,7 @@ function exportGateOutExcel(){
   var rows=S.events.filter(function(e){return e.dir==='out';})
     .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
     .map(function(e){
-      return [barcodeCell(e.tag), typeName(e.type), e.customerName||custName(e.customer)||'-',
+      return [barcodeCell(e.tag), typeName(e.type), custLabel(e.customer,e.customerName)||'-',
         e.do||'-', e.po||'-', e.gate!=null?e.gate:'-', e.wh?whName(e.wh):'-',
         e.plate||'-', e.driver||'-', e.tel||'-', e.recorder||'-', fmtTs(e.ts)];
     });
@@ -14310,7 +14369,7 @@ function exportGateInExcel(){
     .sort(function(a,b){return new Date(b.ts)-new Date(a.ts);})
     .map(function(e){
       return [barcodeCell(e.tag), typeName(e.type),
-        e.dir==='in-new'?'กล่องใหม่':(e.customerName||custName(e.customer)||'-'),
+        e.dir==='in-new'?'กล่องใหม่':(custLabel(e.customer,e.customerName)||'-'),
         e.do||'-', e.gate!=null?e.gate:'-', e.wh?whName(e.wh):'-',
         e.plate||'-', e.driver||'-', e.recorder||'-', fmtTs(e.ts)];
     });
@@ -14969,7 +15028,7 @@ function commitInvReceive() {
       // First-time inbound (pending, never shipped) vs. genuine return from customer
       var isNewBox = !(b.history || []).some(function(h) { return h.dir === 'out'; });
       b.history.push({ dir: 'in', ts: inTs, do: isNewBox ? '' : b.do, po: isNewBox ? '' : b.po, customer: isNewBox ? '' : b.customer, wh: wh, loc: loc, recorder: recorder, note: isNewBox ? 'รับเข้าครั้งแรกผ่านหน้าคลังกล่อง — ไม่นับเป็นยอดคืน' : 'รับเข้าผ่านหน้าคลังกล่อง' });
-      S.events.push({ ts: inTs, dir: isNewBox ? 'in-new' : 'in', tag: t, type: b.type, do: isNewBox ? '' : b.do, customer: isNewBox ? '' : b.customer, customerName: isNewBox ? '' : custName(b.customer), wh: wh, recorder: recorder });
+      S.events.push({ ts: inTs, dir: isNewBox ? 'in-new' : 'in', tag: t, type: b.type, do: isNewBox ? '' : b.do, customer: isNewBox ? '' : b.customer, customerName: isNewBox ? '' : custNameKnown(b.customer), wh: wh, recorder: recorder });
       b.status = 'warehouse'; if (!isNewBox) b.cycles = (b.cycles || 0) + 1; b.customer = ''; b.do = ''; b.po = '';
       b.outGate = null; b.outWh = ''; b.outAt = null; b.dueAt = null;
       b.location = { wh: wh, zone: loc.zone, rack: loc.rack, shelf: loc.shelf, slot: loc.slot, gate: null, ts: inTs };
@@ -15093,7 +15152,7 @@ function commitBulkShip(tags) {
     var b = S.boxes[t]; if (!b || b.status !== 'warehouse') return;
     b.status = 'out'; b.customer = cust; b.do = doNo; b.po = po; b.outAt = outTs; b.dueAt = dueTs; b.dueDate = dueDateStr; b.lastSeenAt = outTs;
     b.history.push({ dir: 'out', ts: outTs, do: doNo, po: po, customer: cust, plate: plate, recorder: recorder, dueAt: dueTs, dueDate: dueDateStr });
-    S.events.push({ ts: outTs, dir: 'out', tag: t, type: b.type, do: doNo, po: po, customer: cust, customerName: custName(cust), plate: plate, recorder: recorder });
+    S.events.push({ ts: outTs, dir: 'out', tag: t, type: b.type, do: doNo, po: po, customer: cust, customerName: custNameKnown(cust), plate: plate, recorder: recorder });
     auditEntry('GATE_OUT', recorder, t, typeName(b.type), null, { do: doNo, po: po, customer: custName(cust), plate: plate });
     n++;
   });
