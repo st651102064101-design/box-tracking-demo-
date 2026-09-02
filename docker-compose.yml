@@ -55,11 +55,11 @@ services:
       # :3001 is deliberately absent — frontend-thai talks to the backend
       # server-side over BACKEND_URL, so no browser origin of its own is needed
       CORS_ORIGIN: http://localhost:3000,http://localhost:5100
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_EXPIRES_IN: 2h
       SEED_ADMIN_USERNAME: admin
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
-      FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
+      FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET:-change-me-in-production}
       # mail stays off, exactly as the running container had it: the real
       # credentials in .env are NOT wired in here on purpose, so grouping the
       # containers doesn't also switch outbound email on
