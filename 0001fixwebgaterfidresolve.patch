@@ -1,0 +1,57 @@
+From 6a5e107edfd0c4cbe14f1b55ba156b68c4d2ef98 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 5 Aug 2026 09:37:39 +0000
+Subject: [PATCH] Fix web Gate In/Out not resolving boxes by RFID EPC/TID
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+resolveTag() in legacy.html only matched S.boxes keys (barcode tags),
+so scanOut()/scanIn() showed "ไม่พบกล่อง" for a correctly-read RFID
+EPC/TID even though it was bound to a box — same root cause already
+fixed on the PDA client (app_controller.dart) in the previous commit.
+The backend already resolves scans against tag/rfid_epc/rfid_tid; the
+web UI just never looked past the tag key.
+---
+ frontend/public/legacy.html | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/frontend/public/legacy.html b/frontend/public/legacy.html
+index 37ac1eb..65d42f2 100644
+--- a/frontend/public/legacy.html
++++ b/frontend/public/legacy.html
+@@ -2656,6 +2656,22 @@ function dethaify(text){
+   }
+   return changed?out:text;
+ }
++/* S.boxes is keyed by barcode tag only — an RFID EPC/TID reader is bound to a
++   box via box.rfidTid/box.rfidEpc, so a Gate scan of the physical tag never
++   matches a key directly and needs a lookup by value instead. Mirrors the
++   backend's resolveBoxesByCodes (services/rfid.ts), which resolves scans
++   against tag/rfid_epc/rfid_tid together. */
++function tagForRfidCode(code){
++  var target=String(code).toLowerCase();
++  var found=Object.keys(S.boxes).find(function(k){
++    var b=S.boxes[k];
++    if(!b)return false;
++    var tid=b.rfidTid?String(b.rfidTid).toLowerCase():'';
++    var epc=b.rfidEpc?String(b.rfidEpc).toLowerCase():'';
++    return tid===target||epc===target;
++  });
++  return found||null;
++}
+ /* resolves a scanned/typed tag to its canonical stored key, case-insensitively, and
+    recovers text that got mangled by an OS keyboard left in Thai input mode */
+ function resolveTag(tag){
+@@ -2667,6 +2683,8 @@ function resolveTag(tag){
+   var lower=tag.toLowerCase();
+   var found=Object.keys(S.boxes).find(function(k){return k.toLowerCase()===lower;});
+   if(found)return found;
++  var byRfid=tagForRfidCode(tag);
++  if(byRfid)return byRfid;
+   var fixed=dethaify(tag);
+   if(fixed!==tag){
+     if(S.boxes[fixed])return fixed;
+-- 
+2.43.0
+
