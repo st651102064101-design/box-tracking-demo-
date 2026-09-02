@@ -38,6 +38,7 @@ services:
       retries: 10
 
   backend:
+    build: ./backend
     image: boxtrace-backend:latest
     container_name: boxtrace-backend
     restart: unless-stopped
@@ -122,4 +123,9 @@ volumes:
   # database. This is the volume the data has always been in.
   db-data:
     external: true
-    name: box-tracking-demo-_db-data
+    name: box-tracking-system-data
+
+networks:
+  default:
+    external: true
+    name: boxtracking_default
