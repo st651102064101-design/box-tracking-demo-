@@ -3121,11 +3121,22 @@ function typeName(id){return (S.boxtypes[id]||{}).name||id||'-';}
    trail (delCust logs the full record before removing it) instead of just showing the
    bare id — old Gate/DO history referencing a since-deleted customer should still read
    as a name, not a code, wherever it's displayed */
+function isKnownCustomer(id){
+  var key=String(id==null?'':id).trim();
+  if(!key)return false;
+  if(S.customers&&S.customers[key])return true;
+  var kl=key.toLowerCase();
+  return Object.values(S.customers||{}).some(function(c){return String(c.id||'').trim().toLowerCase()===kl;});
+}
 function custName(id){
   if(!id)return id||'-';
   var c=S.customers[id];
+  if(!c){
+    var kl=String(id).trim().toLowerCase();
+    c=Object.values(S.customers||{}).find(function(x){return String(x.id||'').trim().toLowerCase()===kl;});
+  }
   if(c)return c.name||id;
-  var logged=(S.auditLog||[]).find(function(a){return a.itemId===id&&a.itemName;});
+  var logged=(S.auditLog||[]).find(function(a){return a.itemId===id&&a.itemName&&a.itemName!==id;});
   return logged?logged.itemName:id;
 }
 /* ปลายทางขาออกต้องเป็นลูกค้าเท่านั้น — คู่ค้าที่ตั้งไว้เป็นซัพพลายเออร์ล้วนคือ
@@ -8999,10 +9010,9 @@ function seedDemo(){
   [['WH-1','คลัง 1 — บางปู',1,5],['WH-2','คลัง 2 — ลาดกระบัง',6,10],['WH-3','คลัง 3 — รังสิต',11,15],['WH-4','คลัง 4 — บางนา',16,20]]
     .forEach(function(a){var gates=[];for(var g=a[2];g<=a[3];g++)gates.push(g);S.warehouses[a[0]]={id:a[0],name:a[1],gates:gates};});
   Object.values(S.warehouses).forEach(function(w){(w.gates||[]).forEach(function(g){S.gates[g]=w.id;});});
-  // 3 customers
+  // 2 customers — ตรงกับข้อมูลจริงในระบบ (อย่าใส่รายที่สาม เพราะหน้าจอที่จัดกลุ่มตามลูกค้าจากกล่อง/ประวัติจะโชว์รหัสเกินทะเบียน)
   [['CUST-01','บจก. เอเชีย ฟู้ดส์','นิคมฯ บางปู','02-111-2222',15],
-   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',7],
-   ['CUST-03','ห้างค้าปลีกกรุงเทพ','รามอินทรา','02-555-6666',30]]
+   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',7]]
     .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDays:a[4]};});
   // 3 box types
   var types=[['BT-CRT','ลังพลาสติก 60L',450,'600x400x320','CRT'],
@@ -9069,7 +9079,7 @@ function seedDemo(){
     // --- กล่อง 04: คืนแล้ว อยู่ในคลัง (ผ่านวงจรครบ out→in) ---
     S.seq.do++;var doNo4='DO-'+pad(S.seq.do,4);var po4='PO-2026-'+pad(ti*10+4,3);
     var tag4=pre+pad(4,2);var wh4=whs[(ti+3)%4];
-    var loc4=mkLoc(wh4,0);var cust4='CUST-03';var pl4=plates[(ti+2)%5];var dr4=drivers[(ti+2)%5];
+    var loc4=mkLoc(wh4,0);var cust4='CUST-01';var pl4=plates[(ti+2)%5];var dr4=drivers[(ti+2)%5];
     S.boxes[tag4]={tag:tag4,type:t[0],value:t[2],status:'warehouse',cycles:2,customer:'',do:'',po:'',
       outGate:null,outWh:'',outAt:null,dueAt:null,location:loc4,lastSeenAt:ago(0),labeled:true,
       history:[
@@ -9966,7 +9976,7 @@ function buildInvCustPills() {
   });
   var custIds = [];
   whBoxes.forEach(function(b) {
-    if (b.status === 'out' && b.customer && custIds.indexOf(b.customer) < 0) custIds.push(b.customer);
+    if (b.status === 'out' && b.customer && isKnownCustomer(b.customer) && custIds.indexOf(b.customer) < 0) custIds.push(b.customer);
   });
   custIds.sort(function(a, b) { return custName(a).localeCompare(custName(b), 'th'); });
   var html = '<button class="icr-pill' + (invCustFilter === '' ? ' active' : '') + '" onclick="setInvCust(\'\')">ทุกลูกค้า</button>';
@@ -15388,7 +15398,7 @@ function build(){
 
   /* ══ ลานนอก: ลูกค้า/สูญหาย + ป้อมยาม + ช่องจอดรถ ══ */
   const byCust=new Map();
-  outBoxes.forEach(b=>{const c=b.customer||'—';if(!byCust.has(c))byCust.set(c,[]);byCust.get(c).push(b);});
+  outBoxes.forEach(b=>{const c=b.customer||'—';if(c!=='—'&&typeof isKnownCustomer==='function'&&!isKnownCustomer(c))return;if(!byCust.has(c))byCust.set(c,[]);byCust.get(c).push(b);});
   const custIds=[...byCust.keys()].sort();
   const padW=4.4,padGap=2.4;
   const yardTotalW=custIds.length*(padW+padGap)+(lostBoxes.length?padW+padGap:0);
