@@ -1,4 +1,4 @@
-# ── BoxTrace frontend (Next.js 14) ──────────────────────────────────────────
+# ── SmartTrace frontend (Next.js 14) ──────────────────────────────────────────
 FROM node:22-alpine AS build
 WORKDIR /app
 # Next.js bakes rewrites() into the build, so the backend URL must be present at

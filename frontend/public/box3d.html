@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Warehouse Box 3D Generator</title>
+
+<style>
+  :root {
+    --bg:        #0e1116;
+    --panel:     #171b22;
+    --panel-2:   #1f242d;
+    --line:      #2b323d;
+    --text:      #e6e9ef;
+    --muted:     #8c94a3;
+    --accent:    #4a9eff;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Noto Sans Thai", system-ui, sans-serif;
+  }
+
+  #app {
+    display: flex;
+    height: 100%;
+  }
+
+  /* ---------- Sidebar (Mockup UI) ---------- */
+  #sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  #sidebar h1 {
+    font-size: 17px;
+    margin: 0 0 4px;
+  }
+
+  #sidebar .subtitle {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 22px;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  input[type="text"],
+  input[type="number"] {
+    width: 100%;
+    padding: 9px 10px;
+    margin-bottom: 16px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  button {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  button:hover { background: #3b8ae8; }
+
+  /* ปุ่ม preset สำหรับกดทดสอบเร็ว ๆ */
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 14px 0 22px;
+  }
+
+  .presets button {
+    width: auto;
+    flex: 1 1 calc(50% - 3px);
+    padding: 7px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+
+  .presets button:hover {
+    background: #262c36;
+    color: var(--text);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--line);
+    margin: 22px 0;
+  }
+
+  #info {
+    font-size: 12px;
+    line-height: 1.9;
+    color: var(--muted);
+  }
+
+  #info b { color: var(--text); font-weight: 600; }
+
+  #info .err { color: #ff6b6b; }
+
+  /* ---------- Viewport ---------- */
+  #viewport {
+    flex: 1;
+    position: relative;
+  }
+
+  #viewport canvas { display: block; }
+
+  #hint {
+    position: absolute;
+    left: 16px;
+    bottom: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+
+<!-- โหลด Three.js ผ่าน CDN ด้วย import map (ใช้เวอร์ชันคงที่ กันโค้ดพังตอน CDN อัปเดต) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- ============ Sidebar: ฟอร์มจำลองข้อมูลที่จะมาจาก DB ============ -->
+  <aside id="sidebar">
+    <h1>Warehouse Box 3D</h1>
+    <div class="subtitle">Procedural box generator</div>
+
+    <label for="in-name">boxName (ชื่อกล่อง)</label>
+    <input id="in-name" type="text" value="ลังกระดาษ" />
+
+    <label for="in-size">boxSize (กว้างxยาวxสูง — ซม.)</label>
+    <input id="in-size" type="text" value="40x60x30" />
+
+    <label for="in-count">boxCount (จำนวนใบ)</label>
+    <input id="in-count" type="number" value="10" min="1" max="500" />
+
+    <button id="btn-generate">สร้างโมเดล 3D</button>
+
+    <div class="presets">
+      <button data-name="ลังกระดาษ"   data-size="40x60x30" data-count="12">ลังกระดาษ</button>
+      <button data-name="ลังพลาสติก"  data-size="36x50x28" data-count="18">ลังพลาสติก</button>
+      <button data-name="กล่องโฟม"    data-size="30x45x25" data-count="9">กล่องโฟม</button>
+      <button data-name="กล่องไม้อัด" data-size="50x50x50" data-count="24">อื่น ๆ (เทา)</button>
+    </div>
+
+    <div class="divider"></div>
+    <div id="info"></div>
+  </aside>
+
+  <!-- ============ Viewport 3D ============ -->
+  <main id="viewport">
+    <div id="hint">ลากเมาส์ = หมุน · สกอร์ล = ซูม · คลิกขวาลาก = เลื่อน</div>
+  </main>
+
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================================
+   1) ค่าคงที่ของระบบ
+   ========================================================================= */
+
+const CM_TO_UNIT = 0.01;   // แปลงเซนติเมตร -> หน่วยในฉาก 3D (1 unit = 1 เมตร)
+const GAP_CM     = 2;      // ระยะห่างระหว่างกล่อง (ซม.) กันโมเดลทะลุ/จมกัน
+const COLS       = 4;      // จำนวนกล่องต่อ 1 แถว (แกน X)
+const ROWS       = 3;      // จำนวนแถวต่อ 1 ชั้น (แกน Z) -> 1 ชั้น = COLS * ROWS ใบ
+const MAX_BOXES  = 500;    // เพดานกันเผลอกรอกเลขเยอะจนเบราว์เซอร์ค้าง
+
+/* =========================================================================
+   2) Setup ฉาก 3D พื้นฐาน (สร้างครั้งเดียวตอนเปิดหน้า)
+   ========================================================================= */
+
+const viewport = document.getElementById('viewport');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1116);
+scene.fog = new THREE.Fog(0x0e1116, 12, 40);
+
+const camera = new THREE.PerspectiveCamera(
+  45,
+  viewport.clientWidth / viewport.clientHeight,
+  0.1,
+  200
+);
+camera.position.set(3, 2.5, 4);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+viewport.appendChild(renderer.domElement);
+
+// --- OrbitControls: หมุน / ซูม / เลื่อน ---
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;       // ให้การหมุนมี inertia นุ่ม ๆ
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.6;
+controls.maxDistance = 40;
+controls.maxPolarAngle = Math.PI / 2 - 0.03;  // ห้ามหมุนลอดใต้พื้น
+
+// --- แสง ---
+scene.add(new THREE.HemisphereLight(0xd7e3ff, 0x2a2f38, 1.5));
+
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(4, 8, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 40;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// ไฟเสริมจากด้านหลัง ให้ขอบกล่องอ่านง่ายขึ้น
+const rim = new THREE.DirectionalLight(0x88aaff, 0.6);
+rim.position.set(-5, 3, -4);
+scene.add(rim);
+
+// --- พื้นโรงงาน + กริด ---
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(80, 80),
+  new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.95 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(80, 80, 0x3d4450, 0x353b45);
+grid.position.y = 0.001;   // ยกขึ้นนิดเดียว กัน z-fighting กับพื้น
+scene.add(grid);
+
+/* =========================================================================
+   3) Procedural Texture — วาดพื้นผิวด้วย Canvas 2D แล้วแปลงเป็น Texture
+      (ไม่ต้องโหลดไฟล์ภาพจากภายนอก ทำให้เป็น single-file จริง ๆ)
+   ========================================================================= */
+
+/** สร้าง canvas เปล่าขนาด size x size พร้อม context */
+function createCanvas(size = 256) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  return { canvas, ctx: canvas.getContext('2d') };
+}
+
+/** แปลง canvas -> THREE.Texture (ตั้ง repeat แบบ tile ได้) */
+function toTexture(canvas, repeat = 1) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeat, repeat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+/** ลายกระดาษลูกฟูก: พื้นน้ำตาล + เส้นใยกระดาษ + ร่องลูกฟูกแนวนอน */
+function makeCardboardTexture() {
+  const { canvas, ctx } = createCanvas(256);
+
+  ctx.fillStyle = '#a9743f';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // เส้นใยกระดาษแบบสุ่ม (noise หยาบ ๆ)
+  for (let i = 0; i < 4000; i++) {
+    const shade = 140 + Math.random() * 70;
+    ctx.fillStyle = `rgba(${shade}, ${shade * 0.7}, ${shade * 0.42}, 0.35)`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 1);
+  }
+
+  // ร่องลูกฟูกแนวนอน
+  ctx.strokeStyle = 'rgba(90, 58, 28, 0.18)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < 256; y += 8) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(256, y);
+    ctx.stroke();
+  }
+
+  return canvas;
+}
+
+/** ลังพลาสติก: พื้นเรียบ + ซี่ตะแกรงแนวตั้ง/แนวนอนแบบลังหูเหล็ก */
+function makePlasticTexture() {
+  const { canvas, ctx } = createCanvas(256);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // ช่องตะแกรง (วาดเป็นสีเข้มให้เห็นเป็นรู)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+  for (let y = 26; y < 230; y += 34) {
+    for (let x = 20; x < 236; x += 30) {
+      ctx.fillRect(x, y, 16, 20);
+    }
+  }
+
+  // ไฮไลต์ขอบบน ให้ดูเป็นพลาสติกฉีดขึ้นรูป
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.fillRect(0, 0, 256, 10);
+
+  return canvas;
+}
+
+/** โฟม EPS: ขาวล้วน + เม็ดโฟมเล็ก ๆ กระจายทั่ว */
+function makeFoamTexture() {
+  const { canvas, ctx } = createCanvas(256);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 2600; i++) {
+    const g = 226 + Math.random() * 22;
+    ctx.fillStyle = `rgba(${g}, ${g}, ${g + 4}, 0.9)`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 256, Math.random() * 256, 1.4 + Math.random() * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return canvas;
+}
+
+/** พื้นผิวมาตรฐาน: เทาเรียบ มี noise เบา ๆ กันดูแบนเกินไป */
+function makeGenericTexture() {
+  const { canvas, ctx } = createCanvas(256);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 2200; i++) {
+    const g = 232 + Math.random() * 20;
+    ctx.fillStyle = `rgba(${g}, ${g}, ${g}, 0.5)`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+
+  return canvas;
+}
+
+// สร้าง texture ครั้งเดียวแล้ว cache ไว้ใช้ซ้ำ (สร้างใหม่ทุกครั้งจะเปลืองมาก)
+const TEXTURES = {
+  cardboard: makeCardboardTexture(),
+  plastic:   makePlasticTexture(),
+  foam:      makeFoamTexture(),
+  generic:   makeGenericTexture(),
+};
+
+/* =========================================================================
+   4) Keyword Matching — แปลง boxName เป็นสเปก Material
+   ========================================================================= */
+
+/**
+ * ตรวจคำสำคัญใน boxName แล้วคืนค่าสเปกวัสดุ
+ * รองรับทั้งภาษาไทยและอังกฤษ เผื่อข้อมูลใน DB ปนกัน
+ */
+function resolveMaterialSpec(boxName) {
+  const name = String(boxName || '').toLowerCase();
+
+  // --- กระดาษ: น้ำตาลด้าน ผิวหยาบมาก ---
+  if (name.includes('กระดาษ') || name.includes('ลูกฟูก') ||
+      name.includes('carton')  || name.includes('paper') || name.includes('cardboard')) {
+    return {
+      key: 'cardboard',
+      label: 'กระดาษ / ลูกฟูก',
+      color: 0xb98a5e,
+      roughness: 0.95,
+      metalness: 0.0,
+      textureRepeat: 1,
+      hasTape: true,          // กล่องกระดาษมีเทปกาวปิดฝาบน
+    };
+  }
+
+  // --- พลาสติก: น้ำเงิน-เขียว ผิวลื่น สะท้อนแสงเล็กน้อย ---
+  if (name.includes('พลาสติก') || name.includes('ลังหู') ||
+      name.includes('plastic')  || name.includes('crate')) {
+    return {
+      key: 'plastic',
+      label: 'พลาสติก',
+      color: 0x1f6fd0,
+      roughness: 0.22,
+      metalness: 0.05,
+      textureRepeat: 1,
+      hasTape: false,
+    };
+  }
+
+  // --- โฟม: ขาวล้วน ด้านสนิท ---
+  if (name.includes('โฟม') || name.includes('foam') || name.includes('eps')) {
+    return {
+      key: 'foam',
+      label: 'โฟม',
+      color: 0xffffff,
+      roughness: 1.0,
+      metalness: 0.0,
+      textureRepeat: 2,
+      hasTape: false,
+    };
+  }
+
+  // --- ไม่ตรงอะไรเลย: เทามาตรฐาน ---
+  return {
+    key: 'generic',
+    label: 'มาตรฐาน (ไม่พบคำสำคัญ)',
+    color: 0x9aa2ad,
+    roughness: 0.6,
+    metalness: 0.0,
+    textureRepeat: 1,
+    hasTape: false,
+  };
+}
+
+/** สร้าง MeshStandardMaterial จากสเปกที่ได้จาก resolveMaterialSpec() */
+function buildMaterial(spec) {
+  return new THREE.MeshStandardMaterial({
+    color:     spec.color,
+    map:       toTexture(TEXTURES[spec.key], spec.textureRepeat),
+    roughness: spec.roughness,
+    metalness: spec.metalness,
+  });
+}
+
+/* =========================================================================
+   5) String Parsing — แยก "WxLxH" ออกเป็นตัวเลข
+   ========================================================================= */
+
+/**
+ * แปลง boxSize รูปแบบ "กว้างxยาวxสูง" -> { width, length, height } หน่วยเซนติเมตร
+ * รองรับ x/X/× และช่องว่างเกิน เช่น " 40 X 60 x 30 "
+ * @returns {{width:number,length:number,height:number}|null} คืน null ถ้ารูปแบบผิด
+ */
+function parseBoxSize(boxSize) {
+  if (typeof boxSize !== 'string') return null;
+
+  const parts = boxSize
+    .trim()
+    .split(/[x×*]/i)          // ตัดด้วย x, X, × หรือ *
+    .map(p => parseFloat(p.trim()));
+
+  if (parts.length !== 3) return null;
+  if (parts.some(n => !Number.isFinite(n) || n <= 0)) return null;
+
+  const [width, length, height] = parts;
+  return { width, length, height };
+}
+
+/* =========================================================================
+   6) Stacking Logic — คำนวณตำแหน่งกล่องแต่ละใบ
+   ========================================================================= */
+
+/**
+ * คำนวณตำแหน่ง (x, y, z) ของกล่องใบที่ index
+ * เรียง: เต็มแถว (COLS) -> ขึ้นแถวใหม่ (ROWS) -> เต็มชั้น -> วางซ้อนขึ้นชั้นบน
+ *
+ * @param {number} index ลำดับกล่อง เริ่มที่ 0
+ * @param {{w:number,l:number,h:number}} dim ขนาดกล่องในหน่วยฉาก (รวม gap แล้วภายใน)
+ * @param {number} gap  ระยะห่างระหว่างกล่องในหน่วยฉาก
+ */
+function computeBoxPosition(index, dim, gap) {
+  const perLayer = COLS * ROWS;
+
+  const layer     = Math.floor(index / perLayer);   // ชั้นที่เท่าไร (แกน Y)
+  const inLayer   = index % perLayer;
+  const col       = inLayer % COLS;                 // ตำแหน่งในแถว (แกน X)
+  const row       = Math.floor(inLayer / COLS);     // แถวที่เท่าไรในชั้น (แกน Z)
+
+  const stepX = dim.w + gap;
+  const stepZ = dim.l + gap;
+  const stepY = dim.h + gap * 0.25;                 // ชั้นบนวางชิดกว่าแนวราบเล็กน้อย
+
+  return {
+    // จัดให้กองกล่องอยู่กึ่งกลางฉาก จึงเลื่อนด้วย (COLS-1)/2
+    x: (col - (COLS - 1) / 2) * stepX,
+    y: layer * stepY + dim.h / 2,                   // +h/2 เพราะ origin ของ Box อยู่กลางกล่อง
+    z: (row - (ROWS - 1) / 2) * stepZ,
+  };
+}
+
+/* =========================================================================
+   7) ฟังก์ชันหลัก: generateWarehouseBoxes()
+   ========================================================================= */
+
+let boxGroup = null;   // เก็บ group ปัจจุบันไว้ เพื่อลบทิ้งก่อนสร้างใหม่
+
+/** ลบ group เดิมออกจากฉาก พร้อมคืนหน่วยความจำ GPU */
+function disposeCurrentGroup() {
+  if (!boxGroup) return;
+
+  boxGroup.traverse(obj => {
+    if (!obj.isMesh) return;
+    obj.geometry.dispose();
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach(m => {
+      if (m.map) m.map.dispose();
+      m.dispose();
+    });
+  });
+
+  scene.remove(boxGroup);
+  boxGroup = null;
+}
+
+/**
+ * สร้างกองกล่อง 3D จากข้อมูล DB
+ *
+ * @param {string} boxName  ชื่อกล่อง เช่น "ลังกระดาษ" (ใช้เลือก Material)
+ * @param {string} boxSize  ขนาด "กว้างxยาวxสูง" หน่วย ซม. เช่น "40x60x30"
+ * @param {number} boxCount จำนวนกล่อง เช่น 10
+ * @returns {{ok:boolean, error?:string, ...}} ผลลัพธ์สำหรับเอาไปแสดงบน UI
+ */
+function generateWarehouseBoxes(boxName, boxSize, boxCount) {
+  // ---- 7.1 Validate + Parse ----
+  const dimCm = parseBoxSize(boxSize);
+  if (!dimCm) {
+    return { ok: false, error: 'boxSize ไม่ถูกต้อง — ต้องเป็นรูปแบบ "กว้างxยาวxสูง" เช่น 40x60x30' };
+  }
+
+  const count = Math.floor(Number(boxCount));
+  if (!Number.isFinite(count) || count < 1) {
+    return { ok: false, error: 'boxCount ต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป' };
+  }
+
+  const clampedCount = Math.min(count, MAX_BOXES);
+
+  // ---- 7.2 เลือกวัสดุจากชื่อกล่อง ----
+  const spec = resolveMaterialSpec(boxName);
+
+  // ---- 7.3 แปลงหน่วย ซม. -> หน่วยฉาก ----
+  const dim = {
+    w: dimCm.width  * CM_TO_UNIT,
+    l: dimCm.length * CM_TO_UNIT,
+    h: dimCm.height * CM_TO_UNIT,
+  };
+  const gap = GAP_CM * CM_TO_UNIT;
+
+  // ---- 7.4 เคลียร์ของเก่า แล้วสร้างใหม่ ----
+  disposeCurrentGroup();
+  boxGroup = new THREE.Group();
+
+  // ใช้ geometry + material ตัวเดียวร่วมกันทุกใบ (ประหยัด draw call/memory)
+  const geometry = new THREE.BoxGeometry(dim.w, dim.h, dim.l);
+  const material = buildMaterial(spec);
+
+  // เส้นขอบกล่อง ช่วยให้แยกใบต่อใบออกตอนกล่องสีเดียวกันวางติดกัน
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.25,
+  });
+
+  // เทปกาวปิดฝาบน (เฉพาะกล่องกระดาษ)
+  const tapeGeometry = spec.hasTape
+    ? new THREE.PlaneGeometry(dim.w * 0.16, dim.l * 1.001)
+    : null;
+  const tapeMaterial = spec.hasTape
+    ? new THREE.MeshStandardMaterial({ color: 0xc9b98f, roughness: 0.4 })
+    : null;
+
+  for (let i = 0; i < clampedCount; i++) {
+    const pos = computeBoxPosition(i, dim, gap);
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(pos.x, pos.y, pos.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    // หมุนเล็กน้อยแบบสุ่ม (±1.2°) ให้กองดูเป็นธรรมชาติ ไม่เป๊ะจนดูปลอม
+    mesh.rotation.y = (Math.random() - 0.5) * 0.042;
+
+    mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+
+    if (spec.hasTape) {
+      const tape = new THREE.Mesh(tapeGeometry, tapeMaterial);
+      tape.rotation.x = -Math.PI / 2;
+      tape.position.y = dim.h / 2 + 0.0012;   // วางแปะบนฝากล่อง เยื้องขึ้นนิดกัน z-fighting
+      mesh.add(tape);
+    }
+
+    boxGroup.add(mesh);
+  }
+
+  scene.add(boxGroup);
+
+  // ---- 7.5 ปรับกล้องให้เห็นกองกล่องทั้งกองพอดี ----
+  frameObject(boxGroup);
+
+  // ---- 7.6 คืนสรุปผลให้ UI ----
+  const perLayer = COLS * ROWS;
+  return {
+    ok: true,
+    material: spec.label,
+    dimCm,
+    count: clampedCount,
+    truncated: clampedCount < count ? count : 0,
+    layers: Math.ceil(clampedCount / perLayer),
+    perLayer,
+    totalHeightCm: Math.ceil(clampedCount / perLayer) * dimCm.height,
+  };
+}
+
+/* =========================================================================
+   8) กล้อง: จัดเฟรมให้พอดีกับ object
+   ========================================================================= */
+
+function frameObject(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  // ระยะกล้องจากมุมมองแนวตั้ง เผื่อ margin 1.6 เท่า
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fovRad = camera.fov * (Math.PI / 180);
+  const distance = (maxDim / 2) / Math.tan(fovRad / 2) * 1.6;
+
+  controls.target.copy(center);
+  camera.position.set(
+    center.x + distance * 0.72,
+    center.y + distance * 0.55,
+    center.z + distance * 0.72
+  );
+  camera.near = Math.max(0.05, distance / 100);
+  camera.far  = distance * 20;
+  camera.updateProjectionMatrix();
+  controls.update();
+
+  // ขยายกรอบเงาให้ครอบกองกล่องพอดี เงาจะได้ไม่ขาด
+  const shadowRange = Math.max(maxDim * 1.5, 3);
+  sun.shadow.camera.left   = -shadowRange;
+  sun.shadow.camera.right  =  shadowRange;
+  sun.shadow.camera.top    =  shadowRange;
+  sun.shadow.camera.bottom = -shadowRange;
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.target.position.copy(center);
+  sun.target.updateMatrixWorld();
+  scene.add(sun.target);
+}
+
+/* =========================================================================
+   9) เชื่อม UI เข้ากับฟังก์ชันหลัก
+   ========================================================================= */
+
+const elName  = document.getElementById('in-name');
+const elSize  = document.getElementById('in-size');
+const elCount = document.getElementById('in-count');
+const elInfo  = document.getElementById('info');
+
+/** อ่านค่าจากฟอร์ม -> เรียก generateWarehouseBoxes() -> แสดงผลสรุป */
+function runFromForm() {
+  const result = generateWarehouseBoxes(
+    elName.value,
+    elSize.value,
+    parseInt(elCount.value, 10)
+  );
+
+  if (!result.ok) {
+    elInfo.innerHTML = `<span class="err">⚠ ${result.error}</span>`;
+    return;
+  }
+
+  const { dimCm } = result;
+  elInfo.innerHTML = `
+    <div>วัสดุที่ตรวจพบ: <b>${result.material}</b></div>
+    <div>ขนาดต่อใบ: <b>${dimCm.width} × ${dimCm.length} × ${dimCm.height}</b> ซม.</div>
+    <div>จำนวนที่วาง: <b>${result.count}</b> ใบ</div>
+    <div>การจัดเรียง: <b>${COLS} × ${ROWS}</b> = ${result.perLayer} ใบ/ชั้น</div>
+    <div>จำนวนชั้น: <b>${result.layers}</b> ชั้น</div>
+    <div>ความสูงกอง: <b>${result.totalHeightCm}</b> ซม.</div>
+    ${result.truncated ? `<div class="err">* จำกัดการแสดงผลที่ ${MAX_BOXES} ใบ (ขอมา ${result.truncated})</div>` : ''}
+  `;
+}
+
+document.getElementById('btn-generate').addEventListener('click', runFromForm);
+
+// กด Enter ในช่องไหนก็สร้างใหม่ได้เลย
+[elName, elSize, elCount].forEach(el => {
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') runFromForm();
+  });
+});
+
+// ปุ่ม preset: เติมค่าลงฟอร์มแล้วสร้างทันที
+document.querySelectorAll('.presets button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    elName.value  = btn.dataset.name;
+    elSize.value  = btn.dataset.size;
+    elCount.value = btn.dataset.count;
+    runFromForm();
+  });
+});
+
+/* =========================================================================
+   10) Render loop + resize
+   ========================================================================= */
+
+function onResize() {
+  camera.aspect = viewport.clientWidth / viewport.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+}
+window.addEventListener('resize', onResize);
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();          // จำเป็นเมื่อเปิด enableDamping
+  renderer.render(scene, camera);
+}
+animate();
+
+// เปิดหน้ามาให้มีโมเดลตั้งต้นเลย
+runFromForm();
+
+// เปิดให้เรียกจาก console ได้ เช่น generateWarehouseBoxes("ลังพลาสติก", "36x50x28", 24)
+window.generateWarehouseBoxes = generateWarehouseBoxes;
+</script>
+</body>
+</html>

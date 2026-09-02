@@ -1,24 +1,24 @@
 /* ============================================================================
- * BoxTrace — persistence bridge (the ONLY code added to the original app)
+ * SmartTrace — persistence bridge (the ONLY code added to the original app)
  * ----------------------------------------------------------------------------
  * The legacy single-page app is byte-for-byte identical to rfid-gate_v17-3d.html
  * except for the single <script src="/legacy-sync.js"> tag in <head>.
  *
  * It used to keep its whole state object `S` in localStorage under key
- * 'boxtrace_p1'. This shim transparently mirrors that to PostgreSQL via the
+ * 'smarttrace_p1'. This shim transparently mirrors that to PostgreSQL via the
  * backend API — without touching a single line of the app's own logic:
  *
- *   • it INTERCEPTS localStorage.setItem('boxtrace_p1', …) → debounced PUT /api/state
+ *   • it INTERCEPTS localStorage.setItem('smarttrace_p1', …) → debounced PUT /api/state
  *   • on boot it FETCHES GET /api/state and, if the server has data, loads it
  *     into the running app via the app's own global load()+renderAll().
  *
- * Auth: reads the JWT the login page stored in localStorage 'boxtrace_jwt'.
+ * Auth: reads the JWT the login page stored in localStorage 'smarttrace_jwt'.
  * A 401 bounces the top window to /login.
  * ========================================================================== */
 (function () {
   'use strict';
-  var KEY = 'boxtrace_p1';
-  var TOKEN_KEY = 'boxtrace_jwt';
+  var KEY = 'smarttrace_p1';
+  var TOKEN_KEY = 'smarttrace_jwt';
   var API = '/api/state';
   var DEBOUNCE_MS = 600;
 
@@ -32,13 +32,13 @@
   /* ── identity: derive the app's "current recorder" name from the JWT,
      not from a per-device localStorage default ─────────────────────────────
      The app's own `USER` variable (legacy.html) falls back to whatever
-     'boxtrace_user' happens to be in *this browser's* localStorage, which
+     'smarttrace_user' happens to be in *this browser's* localStorage, which
      defaults to 'demo' on a device that's never called pickUser() before.
      Two devices logged into the exact same account (same username+password →
      same JWT `name` claim) would then show as different recorders — e.g. PC
      stays "demo" while a phone that once picked "ทดสอบ" keeps showing
      "ทดสอบ" forever, even after logging in as the same account elsewhere.
-     Fix: decode the JWT's `name` claim and seed 'boxtrace_user' with it
+     Fix: decode the JWT's `name` claim and seed 'smarttrace_user' with it
      BEFORE the app's own inline script reads that key. This script tag is
      synchronous and sits in <head>, so it always runs first. */
   function decodeJwtPayload(t) {
@@ -62,8 +62,8 @@
     var payload = decodeJwtPayload(t);
     if (!payload || !payload.name) return;
     try {
-      if (localStorage.getItem('boxtrace_user') !== payload.name) {
-        localStorage.setItem('boxtrace_user', payload.name);
+      if (localStorage.getItem('smarttrace_user') !== payload.name) {
+        localStorage.setItem('smarttrace_user', payload.name);
       }
     } catch (e) {}
   })();
@@ -123,7 +123,7 @@
      stale copy silently overwrites a change another tab had just made.
      Writing it raw — and recording it as already-synced — keeps adopting a
      read. */
-  window.boxtraceAdoptServerJson = function (json) {
+  window.smarttraceAdoptServerJson = function (json) {
     try { realSetItem.call(localStorage, KEY, json); } catch (e) {}
     lastSynced = json;
     pendingValue = json;
@@ -153,7 +153,7 @@
           try { lastSynced = null; pendingValue = localStorage.getItem(KEY); } catch (e) {}
         }
       })
-      .catch(function (err) { console.warn('[boxtrace-sync] prime failed, using local state:', err); })
+      .catch(function (err) { console.warn('[smarttrace-sync] prime failed, using local state:', err); })
       .then(finishPriming);
   }
 
@@ -162,7 +162,7 @@
     try {
       if (typeof window.load === 'function') window.load();
       if (typeof window.renderAll === 'function') window.renderAll();
-    } catch (e) { console.warn('[boxtrace-sync] re-render failed:', e); }
+    } catch (e) { console.warn('[smarttrace-sync] re-render failed:', e); }
   }
 
   function finishPriming() {
@@ -181,7 +181,7 @@
   /* No confirm(): reaching here already took a deliberate click on "ออกจากระบบ"
      inside the account menu, so a second native dialog only adds a step to a
      harmless, instantly reversible action — signing back in is one click. */
-  window.boxtraceLogout = function () {
+  window.smarttraceLogout = function () {
     try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
     gotoLogin();
   };
