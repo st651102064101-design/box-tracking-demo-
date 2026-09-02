@@ -1,20 +1,12 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # boxtracking — the whole system as ONE Docker Compose project.
 #
-# Before this file the five containers were split across three compose projects
-# (thai-submit, box-tracking-demo-, wt-main) whose compose files had all since
-# been deleted along with their worktrees, so nothing could bring them back up
-# together. Docker Desktop showed them as four unrelated groups.
+# Frontend builds from ./frontend into box-tracking-demo--frontend:latest so
+# `docker compose up -d --build frontend` always picks up the newest source on
+# this branch. Backend/PDA stay on prebuilt :latest images (no source here).
 #
-# Every service here points at an ALREADY-BUILT image on purpose — there are no
-# `build:` sections. This branch (WEB_APP_DEMO_THAI_SUBMIT) carries only the
-# frontend; backend/ and pda_flutter/ have no source or Dockerfile here, and
-# adding a build for the frontend would quietly overwrite main's :3000 image
-# with this branch's. Grouping should not rebuild anything.
-#
-# To rebuild one image, build it by hand and then `docker compose up -d <svc>`:
-#   docker build -t thai-submit-frontend:latest ./frontend
-#   docker compose up -d frontend-thai
+# Rebuild frontend after pulling:
+#   docker compose build --no-cache frontend && docker compose up -d frontend
 # ══════════════════════════════════════════════════════════════════════════════
 name: boxtracking
 
@@ -39,6 +31,7 @@ services:
 
   backend:
     image: boxtrace-backend:latest
+    pull_policy: always
     container_name: boxtrace-backend
     restart: unless-stopped
     working_dir: /app
@@ -71,9 +64,14 @@ services:
     ports:
       - "4000:4000"
 
-  # main's build
+  # Built from this branch's ./frontend → always :latest after --build
   frontend:
-    image: box-tracking-demo--frontend
+    image: box-tracking-demo--frontend:latest
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:4000
+    pull_policy: build
     container_name: boxtrace-frontend
     restart: unless-stopped
     working_dir: /app
@@ -86,9 +84,14 @@ services:
     ports:
       - "3000:3000"
 
-  # this branch's build (WEB_APP_DEMO_THAI_SUBMIT)
+  # Optional second UI build (same source) on :3001
   frontend-thai:
     image: thai-submit-frontend:latest
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:4000
+    pull_policy: build
     container_name: thai-submit-frontend
     restart: unless-stopped
     working_dir: /app
@@ -104,7 +107,8 @@ services:
       - "3001:3000"
 
   pda:
-    image: wt-main-pda
+    image: wt-main-pda:latest
+    pull_policy: always
     container_name: boxtrace-pda
     restart: unless-stopped
     depends_on:

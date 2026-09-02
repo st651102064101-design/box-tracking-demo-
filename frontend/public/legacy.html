@@ -2354,12 +2354,45 @@ a{color:var(--accentInk);}
     <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วจบการยิงข้อมูลในรอบเดียว</p>
   </div>
 
+  <!-- สรุปทะเบียนรถขาออกตามลูกค้า — นับเฉพาะลูกค้าที่มีในทะเบียน (S.customers)
+       ไม่ดึงรหัสค้างจากประวัติกล่อง/เหตุการณ์ที่ถูกลบออกจาก master แล้ว -->
+  <div class="wg-board reveal" id="gateOutPlateBoard">
+    <div class="wg xl wg-table">
+      <div class="wg-top">
+        <span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></span>
+        <span class="wg-lbl">ทะเบียนรถ — ขาออก</span>
+        <div class="wg-scope" id="df-gateOutPlate-mount"></div>
+      </div>
+      <p class="wg-cap" id="gateOutPlateDesc">พบ/ไม่พบป้ายตามลูกค้าและจำนวนกล่อง — แสดงเฉพาะลูกค้าที่มีในฐานข้อมูล</p>
+      <div class="wg-body">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;">
+          <span class="pill ok" id="gateOutPlateFoundSum">พบป้าย 0 กล่อง</span>
+          <span class="pill bad" id="gateOutPlateMissingSum">ไม่พบป้าย 0 กล่อง</span>
+          <div class="spacer"></div>
+          <input id="gateOutPlateSearch" placeholder="ค้นหาลูกค้า / รหัสกล่อง" autocomplete="off" oninput="renderGateOutPlateTable()" style="min-width:220px;padding:10px 12px;border:.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;">
+        </div>
+        <div class="twrap">
+          <table class="mobile-card-table" id="gateOutPlateTable">
+            <thead><tr>
+              <th data-mobile-label="Customer">ลูกค้า</th>
+              <th class="r" data-mobile-label="พบป้าย">พบป้าย</th>
+              <th class="r" data-mobile-label="ไม่พบป้าย">ไม่พบป้าย</th>
+              <th class="r" data-mobile-label="Total">Total</th>
+            </tr></thead>
+            <tbody id="gateOutPlateBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pagerbar" id="pagerGateOutPlate"></div>
+    </div>
+  </div>
+
   <div class="gateout-mode-panel reveal" id="gateOutModeBar">
     <div class="gateout-mode-label">เลือกวิธีทำรายการ</div>
     <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาออก">
       <button type="button" class="gateout-mode-btn" data-gateout-mode="manual" onclick="chooseGateOutEntryMode('manual')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2M7 9v6M10 9v6M14 9v6M17 9v6"/></svg></span></span><span><b>ยิงมือ</b><small>กรอกข้อมูลด้วยตัวเอง</small></span></button>
       <button type="button" class="gateout-mode-btn" data-gateout-mode="excel" onclick="chooseGateOutEntryMode('excel')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span></span><span><b>Import Excel</b><small>นำเข้าข้อมูลจาก Excel</small></span></button>
-      <button type="button" class="gateout-mode-btn" data-gateout-mode="rfid" onclick="chooseGateOutEntryMode('rfid')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span></span><span><b>RFID Gate</b><small>กรอกข้อมูลจัดส่งก่อน แล้วรอ FX9600</small></span></button>
+      <button type="button" class="gateout-mode-btn" data-gateout-mode="rfid" onclick="chooseGateOutEntryMode('rfid')"><span class="gateout-mode-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span></span><span><b>RFID Gate + LPR</b><small>FX9600 + อ่านทะเบียนรถภายใน 30 วินาที</small></span></button>
     </div>
   </div>
 
@@ -4233,7 +4266,8 @@ var PAGER_RENDER={
   ovRecent:function(){renderOverview();},
   ovUnreturned:function(){renderOverview();},
   ovOverdue:function(){renderOverview();},
-  ovEvents:function(){renderReports();}
+  ovEvents:function(){renderReports();},
+  gateOutPlate:function(){renderGateOutPlateTable();}
 };
 function pagerGo(key,newPage){
   pagerState[key]=Math.max(0,newPage);
@@ -10768,6 +10802,109 @@ function renderOutResult(){
 }
 function unqueueOut(t){pendingOut=pendingOut.filter(function(x){return x!==t;});delete outConditionMap[t];delete pendingOutTsMap[t];delete pendingOutDoMap[t];delete pendingOutPoMap[t];delete pendingOutRecorderMap[t];delete pendingOutCustMap[t];delete pendingOutReturnDaysMap[t];if(gateOutEntryMode==='rfid')rfidRemovePending(fixedGatesRef().out,t);renderOutResult();}
 window.unqueueOut=unqueueOut;
+
+/* ===== Vehicle plates — outbound (per customer found/missing plate) =====
+   รวมเฉพาะ outbound events ที่ลูกค้ายังอยู่ในทะเบียน S.customers — รหัสค้างจาก
+   ประวัติเก่า (เช่น CUST-02 หลังลบออกจาก master) ต้องไม่โผล่เป็นแถวเพิ่ม */
+function gateOutPlateKnownCustomer(id){
+  var key=String(id==null?'':id).trim();
+  if(!key)return null;
+  if(S.customers&&S.customers[key])return S.customers[key];
+  return typeof custByLooseId==='function'?custByLooseId(key):null;
+}
+function collectGateOutPlateItems(){
+  var items=[];
+  (S.events||[]).forEach(function(e){
+    if(!e||e.dir!=='out')return;
+    if(!dfInRange('gateOutPlate',e.ts))return;
+    var cust=gateOutPlateKnownCustomer(e.customer);
+    if(!cust)return;
+    items.push({
+      tag:e.tag||'',
+      plate:String(e.plate||'').trim(),
+      ts:e.ts,
+      direction:'out',
+      customerId:cust.id,
+      customerName:custNameKnown(cust.id)||cust.name||cust.id
+    });
+  });
+  return items;
+}
+function buildGateOutPlateCustomerRows(items){
+  var by={};
+  items.forEach(function(it){
+    var id=it.customerId;
+    if(!by[id])by[id]={customerId:id,customerName:it.customerName||id,withPlate:0,withoutPlate:0,items:[]};
+    by[id].items.push(it);
+    if(it.plate)by[id].withPlate++;else by[id].withoutPlate++;
+  });
+  return Object.keys(by).map(function(k){return by[k];})
+    .sort(function(a,b){return String(a.customerName).localeCompare(String(b.customerName),'th');});
+}
+function renderGateOutPlateTable(){
+  var body=$('#gateOutPlateBody');if(!body)return;
+  dfClampCustomInputs('gateOutPlate');
+  dfSyncUI('gateOutPlate');
+  var desc=$('#gateOutPlateDesc');
+  if(desc)desc.textContent='พบ/ไม่พบป้ายตามลูกค้าและจำนวนกล่อง — '+dfDescribe('gateOutPlate')+' · แสดงเฉพาะลูกค้าที่มีในฐานข้อมูล';
+  var items=collectGateOutPlateItems();
+  var rows=buildGateOutPlateCustomerRows(items);
+  var q=String(val('gateOutPlateSearch')||'').trim().toLowerCase();
+  if(q){
+    rows=rows.filter(function(r){
+      if((r.customerName+' '+r.customerId).toLowerCase().indexOf(q)>=0)return true;
+      return r.items.some(function(it){return String(it.tag||'').toLowerCase().indexOf(q)>=0;});
+    });
+  }
+  var found=0,missing=0;
+  rows.forEach(function(r){found+=r.withPlate;missing+=r.withoutPlate;});
+  var foundEl=$('#gateOutPlateFoundSum'),missEl=$('#gateOutPlateMissingSum');
+  if(foundEl)foundEl.textContent='พบป้าย '+nf(found)+' กล่อง';
+  if(missEl)missEl.textContent='ไม่พบป้าย '+nf(missing)+' กล่อง';
+  var page=pagerSlice('gateOutPlate',rows,10);
+  if(!page.total){
+    body.innerHTML=emptyRow(4,'ยังไม่มีรายการขาออกในช่วงเวลานี้');
+  }else{
+    body.innerHTML=page.rows.map(function(r){
+      var payload={source:'gateOutPlate',customerId:r.customerId,customerName:r.customerName,direction:'out',items:r.items};
+      var enc=encodeURIComponent(JSON.stringify(payload));
+      var missTxt=r.withoutPlate?('<span style="color:var(--neg);font-weight:600;">'+nf(r.withoutPlate)+' กล่อง</span>'):'ไม่พบ';
+      return '<tr class="row-click" style="cursor:pointer" onclick="openPlateCustomerBoxes(\''+enc+'\',decodeURIComponent(\''+encodeURIComponent(r.customerName)+'\'))">'
+        +'<td data-mobile-label="Customer"><b>'+esc(r.customerName)+'</b></td>'
+        +'<td class="r" data-mobile-label="พบป้าย">'+nf(r.withPlate)+' กล่อง</td>'
+        +'<td class="r" data-mobile-label="ไม่พบป้าย">'+missTxt+'</td>'
+        +'<td class="r" data-mobile-label="Total"><b>'+nf(r.withPlate+r.withoutPlate)+' กล่อง</b></td>'
+        +'</tr>';
+    }).join('');
+  }
+  var bar=$('#pagerGateOutPlate');
+  if(bar)bar.innerHTML=pagerBarHtml('gateOutPlate',page);
+}
+window.renderGateOutPlateTable=renderGateOutPlateTable;
+function openPlateCustomerBoxes(encPayload,title){
+  var data;
+  try{data=JSON.parse(decodeURIComponent(encPayload));}catch(e){toast('เปิดรายการไม่สำเร็จ',null,'err');return;}
+  var items=(data&&data.items)||[];
+  var custTitle=title||(data&&data.customerName)||'-';
+  var h='<div class="mhead"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>'
+    +'<h3>'+esc(custTitle)+'</h3><button class="x" onclick="closeModal()" aria-label="ปิด">✕</button></div>';
+  h+='<div class="mbody">';
+  if(!items.length){
+    h+='<p class="muted" style="text-align:center;padding:28px 0;">ไม่มีกล่อง</p>';
+  }else{
+    h+='<p class="muted small" style="margin:0 0 12px;">'+nf(items.length)+' กล่อง</p>';
+    items.sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).forEach(function(it){
+      h+='<div style="display:grid;grid-template-columns:1.2fr 1fr auto;gap:10px;align-items:center;padding:10px 4px;border-top:.5px solid var(--line);font-size:13px;">'
+        +'<div class="mono"><b>'+esc(it.tag||'-')+'</b></div>'
+        +'<div>'+(it.plate?'<span class="mono">'+esc(it.plate)+'</span>':'<span class="muted">ไม่พบป้าย</span>')+'</div>'
+        +'<div class="muted small mono">'+esc(it.ts?fmtTs(it.ts):'-')+'</div>'
+        +'</div>';
+    });
+  }
+  h+='</div><div class="mfoot"><button class="btn ghost" onclick="closeModal()">ปิด</button></div>';
+  openModal(h);
+}
+window.openPlateCustomerBoxes=openPlateCustomerBoxes;
 document.getElementById('doNo').addEventListener('blur',lookupDO);
 document.getElementById('doNo').addEventListener('keydown',function(e){if(e.key==='Enter')lookupDO();});
 /* ===== Due-date preview: the return deadline now lives entirely on the
@@ -11691,7 +11828,7 @@ window.dfOnCustomChange=dfOnCustomChange;
 /* Mount the four report-level date filters into their placeholder <div>s —
    one dfBarHtml() call per report id instead of copy-pasting the same
    markup per section in the HTML. */
-['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovOverdue','ovStatusNow','ovRates','ovEvents','invDate'].forEach(function(id){
+['ovMove','ovByCust','ovRecent','ovTypeFlow','ovUnreturned','ovOverdue','ovStatusNow','ovRates','ovEvents','invDate','gateOutPlate'].forEach(function(id){
   var mount=$('#df-'+id+'-mount');
   if(mount)mount.innerHTML=dfBarHtml(id);
 });
@@ -12101,6 +12238,7 @@ DF_APPLY.ovByCust=function(){renderReports();};
 DF_APPLY.ovTypeFlow=function(){renderReports();};
 DF_APPLY.ovRates=function(){renderReports();};
 DF_APPLY.ovEvents=function(){pagerReset('ovEvents');renderReports();};
+DF_APPLY.gateOutPlate=function(){pagerReset('gateOutPlate');renderGateOutPlateTable();};
 function tgl(prefix,i){var row=$('#'+prefix+i),ch=$('#'+prefix+'chev'+i);if(!row)return;
   var open=row.style.display!=='none';row.style.display=open?'none':'table-row';if(ch)ch.classList.toggle('open',!open);}
 window.tgl=tgl;
@@ -13445,6 +13583,7 @@ function renderAll(){
   renderOutResult();renderInResult();renderVehicleQuick();
   refreshGateDisplays();
   renderInventory();renderAuditLog();
+  renderGateOutPlateTable();
   initSortToggles();
   $('#whoTxt').textContent=USER+' · SaaS';
   var whoEmp=currentEmp();renderAvatar('whoAvatar',USER,whoEmp&&whoEmp.photo);
@@ -13801,10 +13940,9 @@ function seedDemo(){
   [['WH-1','คลัง 1 — บางปู',1,5],['WH-2','คลัง 2 — ลาดกระบัง',6,10],['WH-3','คลัง 3 — รังสิต',11,15],['WH-4','คลัง 4 — บางนา',16,20]]
     .forEach(function(a){var gates=[];for(var g=a[2];g<=a[3];g++)gates.push(g);S.warehouses[a[0]]={id:a[0],name:a[1],gates:gates};});
   Object.values(S.warehouses).forEach(function(w){(w.gates||[]).forEach(function(g){S.gates[g]=w.id;});});
-  // 3 customers
+  // 2 customers — อย่าใส่รายที่สาม เพราะตารางทะเบียนรถ/สรุปตามลูกค้าจะโชว์รหัสเกินทะเบียน
   [['CUST-01','บจก. เอเชีย ฟู้ดส์','นิคมฯ บางปู','02-111-2222',15],
-   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',-5],
-   ['CUST-03','ห้างค้าปลีกกรุงเทพ','รามอินทรา','02-555-6666',30]]
+   ['CUST-02','บจก. ปลายทางโลจิสติกส์','ลาดกระบัง','02-333-4444',-5]]
     .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDate:ddmmyyyy(new Date(Date.now()+a[4]*86400000))};});
   // 3 box types
   var types=[['BT-CRT','ลังพลาสติก 60L',450,'600x400x320','CRT'],
@@ -13871,7 +14009,7 @@ function seedDemo(){
     // --- กล่อง 04: คืนแล้ว อยู่ในคลัง (ผ่านวงจรครบ out→in) ---
     S.seq.do++;var doNo4='DO-'+pad(S.seq.do,4);var po4='PO-2026-'+pad(ti*10+4,3);
     var tag4=pre+pad(4,2);var wh4=whs[(ti+3)%4];
-    var loc4=mkLoc(wh4,0);var cust4='CUST-03';var pl4=plates[(ti+2)%5];var dr4=drivers[(ti+2)%5];
+    var loc4=mkLoc(wh4,0);var cust4='CUST-01';var pl4=plates[(ti+2)%5];var dr4=drivers[(ti+2)%5];
     S.boxes[tag4]={tag:tag4,type:t[0],value:t[2],status:'warehouse',cycles:2,customer:'',do:'',po:'',
       outGate:null,outWh:'',outAt:null,dueAt:null,location:loc4,lastSeenAt:ago(0),labeled:true,
       history:[
@@ -18597,6 +18735,13 @@ function openColumnMapModal(opts){
     "เลขที่ DO (สร้างอัตโนมัติ)":"DO No. (auto-generated)","แก้เอง":"Manual","ใช้ Auto":"Use Auto","เลขที่ PO":"PO No.",
     "ลูกค้า / ปลายทาง":"Customer / Destination","กำหนดคืนภายใน (วันที่)":"Return due date","ผู้บันทึก":"Recorder",
     "ทะเบียนรถ":"License plate","ชื่อคนขับ":"Driver name","ประเภทรถ":"Vehicle type","เบอร์โทรคนขับ":"Driver phone",
+    "ทะเบียนรถ — ขาออก":"Vehicle plates — outbound",
+    "พบ/ไม่พบป้ายตามลูกค้าและจำนวนกล่อง — แสดงเฉพาะลูกค้าที่มีในฐานข้อมูล":"Plates found/missing by customer and box count — only customers in the database",
+    "ค้นหาลูกค้า / รหัสกล่อง":"Search customer / box ID",
+    "พบป้าย":"Plate found","ไม่พบป้าย":"No plate","ไม่พบ":"None",
+    "RFID Gate + LPR":"RFID Gate + LPR",
+    "FX9600 + อ่านทะเบียนรถภายใน 30 วินาที":"FX9600 + LPR within 30 seconds",
+    "ยังไม่มีรายการขาออกในช่วงเวลานี้":"No outbound rows in this date range",
     "หมายเหตุ":"Note","สแกน":"Scan","ยืนยันส่งออก":"Confirm ship-out","แนะนำหยิบ (FIFO / FEFO)":"Pick suggestion (FIFO / FEFO)",
     "สถานะกล่องตอนนี้":"Current box status","รายงานลูกค้าส่งของช้า":"Late delivery report (customer)",
     "ช้ากี่วัน":"How many days late","7 วัน":"7 days","10 วัน":"10 days","1 เดือน":"1 month",
