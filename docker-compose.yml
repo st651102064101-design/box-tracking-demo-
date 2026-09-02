@@ -71,8 +71,12 @@ services:
     ports:
       - "4000:4000"
 
-  # main's build
+  # Always build the Web App Demo from this branch's source.
   frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:4000
     image: box-tracking-demo--frontend
     container_name: boxtrace-frontend
     restart: unless-stopped
