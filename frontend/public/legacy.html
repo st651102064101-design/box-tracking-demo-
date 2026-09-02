@@ -3147,7 +3147,7 @@ a{color:var(--accentInk);}
     <div class="wg xl wg-table">
       <div class="wg-top" style="flex-direction:column;align-items:stretch;"><div class="wg-hd-row"><span class="wg-lbl">รายการลูกค้า</span><span class="tag" id="cntCust"></span><div class="spacer"></div><button type="button" class="btn accent sm addbtn" onclick="addCust()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มลูกค้า</button></div><div class="wg-hd-row"><input id="schCust" placeholder="ค้นหา / สแกนบาร์โค้ด · รหัส · ชื่อ · ที่อยู่" autocomplete="off"><button class="btn ghost sm" onclick="openImportModal('cust')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button><button class="btn ghost sm" onclick="exportCustExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel</button>
       </div></div>
-      <div class="wg-body wg-scrollhint"><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
+      <div class="wg-body wg-scrollhint"><div id="custOrphanBanner" style="display:none;"></div><div class="twrap"><table><thead><tr><th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllCust" title="เลือกทั้งหมด"></th><th>รหัส</th><th>ชื่อลูกค้า / บริษัท</th><th>ประเภท</th><th>สถานะ</th><th class="r">คืนภายใน</th><th>ที่อยู่/สาขา</th><th>ติดต่อ</th><th class="r">ถืออยู่</th><th class="c">จัดการ</th></tr></thead>
         <tbody id="custBody"></tbody></table></div></div>
       <div class="pagerbar" id="pagerCust"></div>
       <div class="bulkbar" id="bulkCust" style="display:none;">
@@ -4769,13 +4769,17 @@ function emptyRow(c,t){return '<tr><td colspan="'+c+'"><div class="empty"><div c
 function chevSvg(id){return '<span class="chev" id="'+id+'"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5L7 5L3 8.5" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';}
 
 function typeName(id){return (S.boxtypes[id]||{}).name||id||'-';}
-/* ชื่อลูกค้าสำหรับแสดงผล — ตกกลับไปเป็นรหัสลูกค้าก็ต่อเมื่อหมดทางหาชื่อจริงแล้วเท่านั้น
-   (ทะเบียนลูกค้า → audit trail ของลูกค้าที่ถูกลบ ซึ่ง delCust เก็บระเบียนเต็มไว้ก่อนลบ →
-   snapshot ชื่อใน event เก่า) ประวัติ Gate/DO ที่อ้างถึงลูกค้าที่ถูกลบไปแล้วจึงยังอ่านเป็นชื่อ
-   ไม่ใช่รหัส ไม่ว่าจะแสดงที่หน้าไหน */
+/* ชื่อลูกค้าสำหรับแสดงผล ไล่หาจากทะเบียนลูกค้า → audit trail ของลูกค้าที่ถูกลบ (delCust
+   เก็บระเบียนเต็มไว้ก่อนลบ) → snapshot ชื่อใน event เก่า ประวัติ Gate/DO ที่อ้างถึงลูกค้า
+   ที่ถูกลบไปแล้วจึงยังอ่านเป็นชื่อ ไม่ใช่รหัส ไม่ว่าจะแสดงที่หน้าไหน
+   ถ้าหมดทุกทางแล้วจริง ๆ (รหัสลูกค้าที่ไม่มีชื่ออยู่ในระบบเลย เช่นข้อมูลที่นำเข้ามาโดย
+   ไม่มีทะเบียนลูกค้าคู่กัน) ห้ามคืนรหัสเปล่า ๆ ออกไปให้หน้าจอเอาไปวางในช่อง "ลูกค้า"
+   เพราะมันอ่านเหมือนเป็นชื่อบริษัท — ติดป้ายบอกให้ชัดว่ายังไม่มีชื่อ และคงรหัสไว้ท้าย
+   ข้อความเพื่อให้แถวสรุปแยกจากกันได้ ค้นหาเจอ และรู้ว่าต้องไปเพิ่มลูกค้ารายไหน */
+var CUST_NO_NAME_PREFIX='ยังไม่มีชื่อลูกค้า';
 function custName(id){
   if(!id)return id||'-';
-  return custNameKnown(id)||id;
+  return custNameKnown(id)||(CUST_NO_NAME_PREFIX+' · '+id);
 }
 /* ชื่อลูกค้าเท่าที่ "ยืนยันได้จริง" — คืนค่าว่างเมื่อยังหาชื่อไม่เจอ ไม่ตกกลับไปเป็นรหัสลูกค้า
    ที่ไหนที่จะเก็บชื่อลงข้อมูล (snapshot ใน S.events) ต้องใช้ตัวนี้ ไม่ใช่ custName() เพราะ
@@ -4826,6 +4830,41 @@ function custLabel(id,snapName){
   return custName(id);
 }
 window.custName=custName;window.custNameKnown=custNameKnown;window.custLabel=custLabel;
+/* รหัสลูกค้าที่กล่อง/ประวัติ/DO ยังอ้างถึงอยู่ แต่หาชื่อไม่ได้จากที่ไหนเลย — พวกนี้คือแถวที่
+   ขึ้นว่า "ยังไม่มีชื่อลูกค้า · CUST-xx" ตามหน้าจอต่าง ๆ ระบบเดาชื่อแทนไม่ได้ ต้องให้คนมาใส่
+   จึงรวบไว้ให้เห็นและกดเพิ่มเข้าทะเบียนได้จากหน้า ตั้งค่า > ลูกค้า ที่เดียวจบ */
+function custIdsMissingName(){
+  var seen={};
+  function mark(v){var k=String(v==null?'':v).trim();if(k)seen[k]=true;}
+  Object.values(S.boxes||{}).forEach(function(b){mark(b.customer);(b.history||[]).forEach(function(h){mark(h.customer);});});
+  (S.events||[]).forEach(function(e){mark(e.customer);});
+  Object.values(S.doRecords||{}).forEach(function(d){if(d)mark(d.customer);});
+  return Object.keys(seen).filter(function(id){return !custNameKnown(id);}).sort();
+}
+function renderCustOrphanBanner(){
+  var el=$('#custOrphanBanner');if(!el)return;
+  var ids=custIdsMissingName();
+  if(!ids.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='';
+  el.innerHTML='<div class="banner warn" style="margin:0 0 12px;"><b>รหัสลูกค้าที่ยังไม่มีชื่อ '+ids.length+' รหัส</b>'
+    +' — ประวัติประตูเข้า/ออกยังอ้างถึงรหัสพวกนี้อยู่ แต่ไม่มีระเบียนลูกค้าในระบบ หน้าจออื่นจึงแสดงเป็น'
+    +' “'+esc(CUST_NO_NAME_PREFIX)+'” กดเพิ่มเข้าทะเบียนแล้วใส่ชื่อจริง ประวัติเดิมทั้งหมดจะขึ้นชื่อนั้นทันที'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">'
+    +ids.map(function(id){return '<button type="button" class="btn ghost sm" onclick="addMissingCust(\''+esc(id)+'\')">+ '+esc(id)+'</button>';}).join('')
+    +'</div></div>';
+}
+/* เปิดฟอร์มเพิ่มลูกค้าโดยล็อกรหัสไว้ตามรหัสเดิมที่ประวัติอ้างถึง — ต้องเป็นรหัสเดิมเป๊ะ
+   ไม่ใช่รหัสใหม่ที่ระบบรันให้ ไม่งั้นประวัติเก่าก็ยังชี้ไปที่รหัสที่ไม่มีอยู่เหมือนเดิม */
+function addMissingCust(id){
+  if(typeof switchTab==='function')switchTab('setup');
+  if(typeof showSetupSub==='function')showSetupSub('cust');
+  addCust();
+  cIdAuto.edit(id);
+  setv('cName','');
+  var el=$('#cName');if(el)el.focus();
+  toast('เพิ่มลูกค้า '+id,'ใส่ชื่อลูกค้าแล้วกดบันทึก — ประวัติเดิมที่ผูกกับรหัสนี้จะแสดงชื่อทันที','info');
+}
+window.custIdsMissingName=custIdsMissingName;window.addMissingCust=addMissingCust;
 /* ปลายทางขาออกต้องเป็นลูกค้าเท่านั้น — คู่ค้าที่ตั้งไว้เป็นซัพพลายเออร์ล้วนคือ
    ต้นทางที่ส่งกล่องเข้ามา ไม่ใช่ที่ที่เราจ่ายกล่องออกไป จึงไม่ควรโผล่ให้เลือกผิด
    (kind ว่าง = ระเบียนเก่าก่อนมีฟิลด์นี้ ถือเป็นลูกค้าตามความหมายเดิม) */
@@ -13078,6 +13117,7 @@ function renderSetup(){
   $('#cntCust').textContent=cs.length+' ราย';
   setupBulkTable('custBody','cust-cb','cbAllCust','bulkCust','bulkCustCnt');
   $('#pagerCust').innerHTML=pagerBarHtml('cust',pgCust);
+  renderCustOrphanBanner();
 
   // employee add-form: employees have no right to add/edit OTHER employees, so the whole
   // form is hidden unless you're admin — or you're a non-admin who tapped "แก้ไข" on your
