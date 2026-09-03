@@ -195,7 +195,7 @@ export function LanguageToggle() {
           type="button"
           onClick={() => setLocale(option)}
           aria-pressed={locale === option}
-          className={`rounded-full px-3 py-1.5 transition ${locale === option ? 'bg-ink text-white' : 'text-ink-2/65 hover:text-ink'}`}
+          className={`rounded-full px-3 py-1.5 transition ${option === 'en' ? 'text-ink hover:text-ink' : locale === option ? 'bg-ink text-white' : 'text-ink-2 hover:text-ink'}`}
         >
           {t(`language.${option}` as TranslationKey)}
         </button>
