@@ -11255,7 +11255,7 @@ function refreshGateDisplays(){
   ['out','in'].forEach(function(dir){
     var fixedGates=fixedGatesRef();
     var g=fixedGates[dir];
-    if(g&&(!gateWh(g)||(gateDirOf(g)!=='both'&&gateDirOf(g)!==dir)){fixedGates[dir]='';saveFixedGates(dir);g='';} /* gate deleted or direction changed — never show it on the wrong screen */
+    if(g&&(!gateWh(g)||(gateDirOf(g)!=='both'&&gateDirOf(g)!==dir))){fixedGates[dir]='';saveFixedGates(dir);g='';} /* gate deleted or direction changed — never show it on the wrong screen */
     if(!g&&gatePrefsLoaded){
       /* Never leave the gate blank with a "ยังไม่ได้ตั้งค่า — กด เปลี่ยนประตู"
          prompt: resolve it from what's already in the database instead of
