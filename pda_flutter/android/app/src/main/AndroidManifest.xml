@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
 
     <application
-        android:label="SmartTrace PDA"
+        android:label="SmartTracking PDA thai summit"
         android:name="${applicationName}"
         android:icon="@drawable/app_icon"
         android:usesCleartextTraffic="true"

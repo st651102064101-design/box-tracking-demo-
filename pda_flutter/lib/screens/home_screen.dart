@@ -12,20 +12,18 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   /// Physical number-key shortcuts for the MC3390R's side keypad, matching
-  /// the [1]-[3] badges each _MenuTile shows — "press 1, land on Gate Out"
+  /// the [1]-[2] badges each _MenuTile shows — "press 1, land on Gate Out"
   /// without touching the screen at all, for an operator whose hands are
   /// already full of a box. Both the top-row digit and the numeric-keypad
   /// variant are handled since which one a given handheld's keymap actually
   /// sends isn't something this app controls. Only fires on key-down (not
-  /// up/repeat) and only once per tile is even visible — a gate posted
+  /// up/repeat), and only where the tile is visible at all — a gate posted
   /// IN-only or OUT-only hides the tile that wouldn't work anyway, so its
-  /// number does nothing rather than silently jumping to a menu item the
+  /// number does nothing rather than silently jumping somewhere the
   /// operator can't see.
   ///
-  /// Home keeps the two things every operator needs on every single scan
-  /// (Gate In/Out) plus one hub for everything else — ตรวจนับ / ค้นหา/เรดาร์ /
-  /// ติดตามกล่อง live inside MoreHubScreen, which itself excludes anything
-  /// Putaway/rack/RFID-binding (see more_hub_screen.dart).
+  /// thai_submit build: Gate Out + Gate In + MoreHub (ตรวจนับ / ค้นหา/เรดาร์ /
+  /// ติดตามกล่อง — see more_hub_screen.dart for what that hub exposes).
   static const _keyActions = <int, String>{
     1: 'out',
     2: 'in',
@@ -40,9 +38,14 @@ class HomeScreen extends StatelessWidget {
     if (action == null) return KeyEventResult.ignored;
     switch (action) {
       case 'out':
+        // currentGateType still matters even in this Gate-Out-only build —
+        // a gate an admin configured as receive-only (via the web app)
+        // must stay receive-only regardless of which app is scanning it.
         if (c.canScan && c.currentGateType != 'in') c.goScanOut();
         break;
       case 'in':
+        // Mirror of the Gate Out guard: a gate an admin configured as
+        // ship-only stays ship-only no matter which app is scanning it.
         if (c.canScan && c.currentGateType != 'out') c.goScanIn();
         break;
       case 'moreHub':
@@ -329,12 +332,13 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
     ),
     const SizedBox(height: 12),
     // Numbered [1]-[3] — matches the physical number-key bindings
-    // (HomeScreen's KeyboardListener) so the badge an operator sees is the
-    // same digit that jumps here from the keyboard. Colour groups follow
-    // one convention throughout: green = inbound, blue = outbound/transfer,
-    // red = everything-else. Home only keeps Gate In/Out plus one hub for
-    // the rest (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง —
-    // MoreHubScreen leaves out anything Putaway/rack/RFID-binding).
+    // (HomeScreen's _keyActions) so the badge an operator sees is the same
+    // digit that jumps here from the keyboard. Colour groups follow one
+    // convention throughout: green = inbound, blue = outbound/transfer,
+    // red = everything-else. thai_submit build: Gate Out + Gate In + one hub
+    // for the rest (ตรวจนับ / ค้นหา/เรดาร์ / ติดตามกล่อง — see
+    // more_hub_screen.dart, which leaves out anything Putaway/rack/
+    // RFID-binding).
     // ประตูที่ตั้งเป็น IN หรือ OUT อย่างเดียว (ไม่ใช่ both) แสดงได้แค่เมนูที่ตรงทิศทาง
     // ของประตูนั้น — กันไม่ให้ยิงกล่องออกจากประตูที่ตั้งไว้เป็นทางเข้าอย่างเดียว (หรือกลับกัน)
     if (c.canScan && c.currentGateType != 'in') ...[
@@ -356,7 +360,7 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
         color: C.menuGreen,
         bg: C.menuGreenBg,
         title: loc.t('รับคืน'),
-        sub: 'Return',
+        sub: 'Gate In',
         onTap: c.goScanIn,
       ),
       const SizedBox(height: 10),

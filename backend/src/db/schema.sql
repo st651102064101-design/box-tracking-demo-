@@ -385,6 +385,19 @@ CREATE TABLE IF NOT EXISTS events (
   data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
+-- FX9600 fixed readers. One row per physical reader, identified by the
+-- `reader` id it's configured to send on its HTTP POST Notification URL
+-- (?reader=<id>). `last_webhook_at` is stamped on every inbound call —
+-- including empty "no read" heartbeats — so online/offline is derived purely
+-- from recency, never from tag activity (see services/fx9600.ts).
+CREATE TABLE IF NOT EXISTS fx9600_readers (
+  id              TEXT PRIMARY KEY,
+  gate_no         INTEGER,
+  last_webhook_at TIMESTAMPTZ,
+  last_payload    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id          SERIAL PRIMARY KEY,
   action      TEXT,
