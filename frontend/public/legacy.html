@@ -8237,6 +8237,13 @@ function openEmpBadge(id,isSelf){
 
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='block';
   empBadgeBoot();
+  /* closeEmpBadge() removes is-visible so the fade-out can finish. Re-apply
+     it on every open; otherwise reopening without a page refresh leaves the
+     action rail transparent forever. */
+  requestAnimationFrame(function(){
+    if(!empBadge.open||!empBadge.el)return;
+    [empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});
+  });
 }
 window.openEmpBadge=openEmpBadge;
 function closeEmpBadge(){
