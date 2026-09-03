@@ -703,8 +703,8 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .emp-badge-return-note .emp-badge-note-edit svg{width:16px;height:16px;}
 .emp-badge-return-note.is-editing .emp-badge-note-edit{opacity:1;pointer-events:auto;background:var(--accent);color:var(--accentContrast);}
 .emp-badge-return-note.is-editing [contenteditable]{outline:1px dashed var(--accent);outline-offset:3px;cursor:text;}
-.emp-badge-float-btn{opacity:0;transform:scale(.78);transition:opacity .22s ease,transform .28s cubic-bezier(.22,1,.36,1);}
-.emp-badge-float-btn.is-visible{opacity:1;transform:scale(1);}
+.emp-badge-float-btn{opacity:0;pointer-events:none;transition:opacity .22s ease;}
+.emp-badge-float-btn.is-visible{opacity:1;pointer-events:auto;}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
@@ -3889,7 +3889,8 @@ html.emp-badge-dragging body{touch-action:none!important;}
 /* Hide every floating action around the employee badge while it is being
    dragged, then restore them smoothly as soon as the pointer is released. */
 #empBadgeOverlay>button{transition:opacity .18s ease,transform .18s ease;}
-html.emp-badge-dragging #empBadgeOverlay>button{opacity:0;pointer-events:none;}
+/* ปุ่มรอบบัตรไม่ควร fade ตอนลาก เพราะเป็นคนละสถานะกับการเปิด/ปิดบัตร
+   และการซ่อนระหว่างลากทำให้ดูเหมือน animation ทำงานมั่ว */
 #btypeCubeOverlay{position:fixed;inset:0;z-index:400;display:none;}
 #btypeCubeOverlay .btc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
