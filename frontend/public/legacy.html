@@ -13615,15 +13615,19 @@ function renderPlateOverview(){
 }
 function eventCustomerId(e,b){
   var direct=e&&e.customer||b&&b.customer||'';
-  if(direct)return direct;
+  /* Do not let stale/typo customer references (for example CUST-02 after the
+     master contains CUST-002) become fake customer rows in the reports. */
+  if(direct&&(S.customers[direct]||((S.auditLog||[]).some(function(a){return a.itemId===direct&&a.itemName;}))))return direct;
   var ts=new Date(e&&e.ts||0).getTime(),history=Array.isArray(b&&b.history)?b.history:[];
   var outs=history.filter(function(h){return h&&h.dir==='out'&&h.customer&&(!ts||new Date(h.ts||0).getTime()<=ts);}).sort(function(a,b){return new Date(b.ts||0)-new Date(a.ts||0);});
-  return outs[0]&&outs[0].customer||'';
+  var candidate=outs[0]&&outs[0].customer||'';
+  return candidate&&(S.customers[candidate]||((S.auditLog||[]).some(function(a){return a.itemId===candidate&&a.itemName;})))?candidate:'';
 }
 function eventCustomerName(e,b){
-  if(e&&e.customerName)return e.customerName;
+  var direct=e&&e.customer||b&&b.customer||'';
+  if(e&&e.customerName&&(!direct||eventCustomerId(e,b)))return e.customerName;
   var history=Array.isArray(b&&b.history)?b.history:[],outs=history.filter(function(h){return h&&h.dir==='out'&&h.customerName;}).sort(function(a,b){return new Date(b.ts||0)-new Date(a.ts||0);});
-  return outs[0]&&outs[0].customerName||'';
+  return outs[0]&&eventCustomerId({customer:outs[0].customer},b)?outs[0].customerName||'':'';
 }
 /* The FX9600 gate reader logs a dir:'in' event every time a tagged box
    physically passes the inbound gate — including put-away moves, staff
