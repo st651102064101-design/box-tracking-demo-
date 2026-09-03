@@ -11,6 +11,7 @@ import {
   loginSchema,
   registerSchema,
   updateRoleSchema,
+  firstSetupSchema,
   linkEmployeeSchema,
   forgotPasswordRequestSchema,
   resetPasswordSchema,
@@ -59,6 +60,90 @@ const ACCESS_BY_ROLE: Record<string, string> = { admin: 'admin', staff: 'operato
  *  along in `S.employees[x].access`) — only token-based authorization is
  *  normalized here. */
 const ROLE_BY_ACCESS: Record<string, string> = { admin: 'admin', operator: 'staff', supervisor: 'staff', viewer: 'viewer' };
+
+/**
+ * Compatibility session endpoint for the Android TC52 client.
+ *
+ * Early PDA builds use `/api/auth/pda-session` while the browser uses
+ * `/api/auth/login`.  Keeping the credential verification here (rather than
+ * redirecting on the client) lets a scanner remain on the warehouse LAN and
+ * avoids a misleading 404/"not found" after a successful barcode decode.
+ */
+authRouter.post(
+  '/pda-session',
+  asyncHandler(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // Do not log credentials.  Keys are sufficient to diagnose a future PDA
+    // version mismatch without exposing secrets in the container logs.
+    console.info('[pda-session] received fields:', Object.keys(body).sort().join(','));
+
+    const identifier = String(body.username ?? body.userName ?? body.user ?? body.identifier ?? '').trim();
+    const password = String(body.password ?? body.passcode ?? body.pin ?? '');
+    if (!identifier && !password) {
+      /* The TC52 provisioning QR contains the trusted LAN endpoint, not a
+         human password.  This is intentionally a *device* identity with the
+         legacy `staff` role (warehouse_staff permissions), never an admin
+         token.  It keeps scan transactions attributable to the handheld and
+         lets the operator authenticate separately by the app's employee/PIN
+         workflow when that is enabled. */
+      const sourceIp = String(req.ip ?? req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
+      const privateLan = sourceIp === '::1' || sourceIp === '127.0.0.1'
+        || /^10\./.test(sourceIp) || /^192\.168\./.test(sourceIp)
+        || /^172\.(1[6-9]|2\d|3[0-1])\./.test(sourceIp);
+      if (!privateLan) throw httpError(403, 'PDA QR session อนุญาตเฉพาะเครือข่ายภายใน', 'pda_lan_only');
+      const user = { id: 'pda-qr', username: 'pda-qr-device', name: 'PDA QR Device', role: 'staff' };
+      const token = signToken({ sub: user.id, username: user.username, name: user.name, role: user.role });
+      return res.json({ ok: true, status: 'connected', token, user, session: { token, user, mode: 'qr' } });
+    }
+    if (!identifier || !password) {
+      throw httpError(400, 'ข้อมูล session ของ PDA ไม่ครบถ้วน', 'invalid_pda_session');
+    }
+
+    const db = getDb();
+    let [row] = await db.select().from(users).where(eq(users.username, identifier));
+    if (!row && identifier.includes('@')) {
+      [row] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${identifier})`);
+    }
+    if (row && (await verifyPassword(password, row.passwordHash))) {
+      const token = signToken({ sub: row.id, username: row.username, name: row.name, role: row.role });
+      return res.json({ token, user: publicUser(row), session: { token, user: publicUser(row) } });
+    }
+
+    let [emp] = await db.select().from(employees).where(eq(employees.username, identifier));
+    if (!emp && identifier.includes('@')) {
+      [emp] = await db.select().from(employees).where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
+    }
+    if (emp?.passwordHash && (await verifyPassword(password, emp.passwordHash))) {
+      const access = (emp.data as Record<string, unknown> | null)?.access;
+      const role = ROLE_BY_ACCESS[typeof access === 'string' ? access : 'operator'] ?? 'staff';
+      const user = { id: emp.id, username: emp.username, name: emp.name, role, employeeId: emp.id };
+      const token = signToken({ sub: emp.id, username: emp.username!, name: emp.name ?? emp.username!, role, employeeId: emp.id });
+      return res.json({ token, user, session: { token, user } });
+    }
+
+    throw httpError(401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'invalid_credentials');
+  }),
+);
+
+authRouter.post('/first-setup', requireAuth, asyncHandler(async (req, res) => {
+  const input = firstSetupSchema.parse(req.body);
+  const actor = req.user!;
+  const db = getDb();
+  /* JWT payload accepts a string subject too, but users.id is a numeric serial. */
+  const actorId = Number(actor.sub);
+  if (!Number.isInteger(actorId)) throw httpError(401, 'เซสชันไม่ถูกต้อง', 'invalid_session');
+  const [row] = await db.select().from(users).where(eq(users.id, actorId));
+  if (!row || !row.mustChangePassword) throw httpError(409, 'บัญชีนี้ตั้งค่าเริ่มต้นเรียบร้อยแล้ว', 'first_setup_not_required');
+  const [existing] = await db.select().from(employees).where(eq(employees.id, input.username.toUpperCase()));
+  if (existing && existing.userId !== row.id) throw httpError(409, 'รหัสพนักงานนี้ถูกใช้งานแล้ว', 'employee_taken');
+  const passwordHash = await hashPassword(input.password);
+  const [updated] = await db.update(users).set({ username: input.username.toUpperCase(), name: input.name, email: input.email, passwordHash, mustChangePassword: false }).where(eq(users.id, row.id)).returning();
+  const data = { id: input.username.toUpperCase(), name: input.name, email: input.email, phone: input.phone, role: 'ผู้ดูแลระบบ', access: 'admin', dept: input.department, wh: input.warehouse, status: 'active' };
+  if (existing) await db.update(employees).set({ name: input.name, userId: row.id, roleId: 1, data, updatedAt: new Date() }).where(eq(employees.id, existing.id));
+  else await db.insert(employees).values({ id: input.username.toUpperCase(), name: input.name, userId: row.id, roleId: 1, data });
+  const token = signToken({ sub: updated.id, username: updated.username, name: updated.name, role: updated.role });
+  res.json({ token, user: publicUser(updated) });
+}));
 
 /** POST /api/auth/register — create a user account. Role is never client-supplied:
  *  every self-registration starts as 'staff'; an admin promotes via PATCH /users/:id/role. */
@@ -393,5 +478,5 @@ authRouter.patch(
 );
 
 function publicUser(row: typeof users.$inferSelect) {
-  return { id: row.id, username: row.username, name: row.name, role: row.role };
+  return { id: row.id, username: row.username, name: row.name, role: row.role, email: row.email, firstSetupRequired: row.mustChangePassword };
 }

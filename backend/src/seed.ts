@@ -40,6 +40,7 @@ async function main() {
       name,
       role: 'admin',
       roleId: superAdmin?.id ?? null,
+      mustChangePassword: true,
     });
     console.log(`[seed] created admin "${username}" (password: "${password}")`);
   }

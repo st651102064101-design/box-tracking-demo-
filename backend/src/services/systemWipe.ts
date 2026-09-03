@@ -42,6 +42,7 @@ import {
   cycleCounts,
   events,
   auditLog,
+  lineNotificationDeliveries,
   config,
   sequences,
   roles,
@@ -57,6 +58,42 @@ const STATE_WRITE_LOCK = 4711_0001;
 export interface WipeResult {
   /** Employee ids that held super_admin and were kept (profile reset, not deleted). */
   keptEmployeeIds: string[];
+}
+
+export interface MovementHistoryClearResult {
+  clearedEventRows: number;
+  clearedBoxHistories: number;
+}
+
+/** Clear operator-facing movement evidence while preserving every master and
+ * current box record.  This is intentionally narrower than a system wipe:
+ * only inbound/outbound RFID movements and LPR evidence disappear. */
+export async function clearMovementHistory(db: DB): Promise<MovementHistoryClearResult> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${STATE_WRITE_LOCK})`);
+    const rows = await tx.select({ tag: boxes.tag, history: boxes.history, data: boxes.data }).from(boxes);
+    let clearedBoxHistories = 0;
+    for (const row of rows) {
+      const original = Array.isArray(row.history) ? row.history : [];
+      const history = original.filter((item) => {
+        const dir = (item as Record<string, unknown>)?.dir;
+        return !['in', 'in-new', 'out', 'lpr'].includes(String(dir));
+      });
+      if (history.length !== original.length) {
+        clearedBoxHistories += original.length - history.length;
+        await tx.update(boxes).set({
+          history,
+          data: { ...(row.data as Record<string, unknown>), history },
+          updatedAt: new Date(),
+        }).where(eq(boxes.tag, row.tag));
+      }
+    }
+    const result = await tx.execute(sql`
+      delete from events
+      where data->>'dir' in ('in', 'in-new', 'out')
+    `);
+    return { clearedEventRows: Number(result.rowCount ?? 0), clearedBoxHistories };
+  });
 }
 
 /** Bootstrap-like default profile for a kept Super Admin employee. `access:
@@ -107,6 +144,7 @@ export async function wipeSystem(db: DB): Promise<WipeResult> {
     await tx.delete(inventory);
     await tx.delete(cycleCounts);
     await tx.delete(events);
+    await tx.delete(lineNotificationDeliveries);
     /* audit_log is append-only everywhere else in this codebase (see
        services/state.ts's comment on replaceState) — a Full Wipe is the one
        deliberate exception: it *is* the "start a clean audit trail" action,

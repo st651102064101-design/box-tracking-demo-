@@ -10,6 +10,7 @@ import { and, eq, gte } from 'drizzle-orm';
 import { writeAuditLog } from '../services/audit.js';
 import { bump, publishReaderStatus, publishRfidRead } from '../lib/bus.js';
 import { gateIn, gateOut } from '../services/gate.js';
+import { recordRfidObservation } from './lpr.js';
 
 export const rfidRouter = Router();
 
@@ -416,7 +417,10 @@ rfidRouter.put(
     if (!Number.isInteger(gate) || gate <= 0 || !['in', 'out'].includes(direction)) throw httpError(400, 'Gate/direction ไม่ถูกต้อง', 'invalid_auto_session');
     const customer = String(req.body?.customer ?? '').trim();
     const plate = String(req.body?.plate ?? '').trim();
-    if (direction === 'out' && (!customer || !plate)) throw httpError(400, 'Outbound auto session ต้องมีลูกค้าและทะเบียนรถ', 'outbound_context_required');
+    /* Outbound RFID staging starts with the destination customer.  The plate
+       is supplied by the LPR camera at the gate, so it is intentionally
+       optional here and is filled when the matching LPR event arrives. */
+    if (direction === 'out' && !customer) throw httpError(400, 'Outbound auto session ต้องมีลูกค้า', 'outbound_context_required');
     const ttlSeconds = Math.min(28_800, Math.max(30, Number(req.body?.ttlSeconds) || 1800));
     const row = {
       gateNo: gate, direction, customer: customer || null, doNo: String(req.body?.doNo ?? '').trim() || null,
@@ -443,20 +447,23 @@ rfidRouter.delete('/gates/:gate/auto-session', requireAuth, asyncHandler(async (
    confirmed shouldn't still be sitting in someone's queue, but nothing needs
    to run in the background to make that true. */
 const PENDING_TTL_MS = 10 * 60 * 1000;
-const DIRECTION_WINDOW_MS = 3_000;
 const AUTO_PROCESS_DEBOUNCE_MS = 10_000;
 type MovementDirection = 'in' | 'out';
 type AntennaRole = 'outer' | 'inner' | 'direct';
-const directionWindows = new Map<string, { firstRole: 'outer' | 'inner'; firstAt: number }>();
+/* A physical two-antenna gate has no valid universal crossing-time limit.
+   A forklift may pause between antennas, so retain the first side until the
+   other side sees the same tag. Scope it by Gate too: one FX9600 can route
+   ports to several business gates and must never combine their sequences. */
+const directionWindows = new Map<string, { firstRole: 'outer' | 'inner' }>();
 const autoProcessedAt = new Map<string, number>();
 const autoProcessing = new Set<string>();
 
-function detectDirection(readerId: string, tag: string, role: AntennaRole, now = Date.now()): MovementDirection | null {
+function detectDirection(readerId: string, gate: number, tag: string, role: AntennaRole): MovementDirection | null {
   if (role === 'direct') return null;
-  const key = `${readerId}:${tag}`;
+  const key = `${readerId}:${gate}:${tag}`;
   const previous = directionWindows.get(key);
-  if (!previous || now - previous.firstAt > DIRECTION_WINDOW_MS) {
-    directionWindows.set(key, { firstRole: role, firstAt: now });
+  if (!previous) {
+    directionWindows.set(key, { firstRole: role });
     return null;
   }
   if (previous.firstRole === role) return null;
@@ -471,6 +478,19 @@ async function gateDirection(db: ReturnType<typeof getDb>, gate: number): Promis
   const perGate = wh?.gateTypes && typeof wh.gateTypes === 'object' ? wh.gateTypes as Record<string, unknown> : {};
   const value = String(perGate[String(gate)] ?? wh?.gateType ?? 'both');
   return value === 'in' || value === 'out' ? value : 'both';
+}
+
+/* A bidirectional Gate is not automatically an antenna-direction Gate. The
+   warehouse master explicitly opts in before Outer/Inner sequencing is allowed
+   to create an inventory movement. Legacy records default to screen/manual. */
+async function bidirectionalMode(db: ReturnType<typeof getDb>, gate: number): Promise<'screen' | 'antenna'> {
+  const gateRow = (await db.select().from(gates).where(eq(gates.gateNo, gate)).limit(1))[0];
+  if (!gateRow?.warehouseId) return 'screen';
+  const wh = (await db.select().from(warehouses).where(eq(warehouses.id, gateRow.warehouseId)).limit(1))[0];
+  const data = wh?.data && typeof wh.data === 'object' ? wh.data as Record<string, unknown> : {};
+  const modes = data.gateBidirectionalModes && typeof data.gateBidirectionalModes === 'object'
+    ? data.gateBidirectionalModes as Record<string, unknown> : {};
+  return modes[String(gate)] === 'antenna' ? 'antenna' : 'screen';
 }
 
 async function autoProcessTag(
@@ -490,12 +510,12 @@ async function autoProcessTag(
     } else {
       if (box.status !== 'warehouse') return { processed: false, reason: 'not_shippable' };
       const session = (await db.select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
-      if (!session || session.direction !== 'out' || session.expiresAt.getTime() <= Date.now() || !session.customer || !session.plate) {
+      if (!session || session.direction !== 'out' || session.expiresAt.getTime() <= Date.now() || !session.customer) {
         return { processed: false, reason: 'outbound_context_required' };
       }
       await gateOut(db, {
         tags: [tag], gate, customer: session.customer, doNo: session.doNo ?? undefined, po: session.po ?? undefined,
-        plate: session.plate, driver: session.driver ?? undefined, vehicleType: session.vehicleType ?? undefined,
+        plate: session.plate ?? undefined, driver: session.driver ?? undefined, vehicleType: session.vehicleType ?? undefined,
         recorder: session.recorder ?? 'FX9600 Auto', device: readerId,
       });
     }
@@ -600,13 +620,13 @@ rfidRouter.post(
     const roleByAntenna = new Map(configuredMappings.map((m) => [m.antennaPort, m.antennaRole as AntennaRole]));
     const routedReads = reads.map((read) => ({ read, epc: extractEpc(read), antenna: extractAntenna(read) }));
     const epcs = routedReads.map((r) => r.epc).filter((epc): epc is string => epc !== null);
-    const statusGates = new Set<number>([fallbackGate, ...configuredMappings.map((m) => m.gateNo)]);
-    for (const gate of statusGates) {
-      await db.insert(gateWebhookStatus)
-        .values({ gateNo: gate, lastSeenAt: lastActiveAt, lastIp })
-        .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: lastActiveAt, lastIp } });
-      publishReaderStatus({ readerId: activeReader?.id ?? null, host: activeReader?.host ?? null, sourceIp: lastIp, gate, lastActiveAt: lastActiveAt.toISOString() });
-    }
+    /* A reader heartbeat proves only the reader's own gate is online.
+       Antenna mappings route TAG reads to other business gates, but must
+       never make those gates green merely because this reader is alive. */
+    await db.insert(gateWebhookStatus)
+      .values({ gateNo: fallbackGate, lastSeenAt: lastActiveAt, lastIp })
+      .onConflictDoUpdate({ target: gateWebhookStatus.gateNo, set: { lastSeenAt: lastActiveAt, lastIp } });
+    publishReaderStatus({ readerId: activeReader?.id ?? null, host: activeReader?.host ?? null, sourceIp: lastIp, gate: fallbackGate, lastActiveAt: lastActiveAt.toISOString() });
 
     if (!epcs.length) {
       pushFx9600DebugEntry({
@@ -620,6 +640,9 @@ rfidRouter.post(
         received: [],
         unknown: [],
       });
+      /* A heartbeat is still a webhook-log event. Publish it over SSE so an
+         already-open Gate log advances without polling or a second HTTP read. */
+      publishRfidRead(fallbackGate, [], { antennas: [], decoded: [], unknown: [], repeats: [] });
       res.json({ ok: true, received: [], unknown: [], count: 0, routed: {} });
       return;
     }
@@ -628,6 +651,7 @@ rfidRouter.post(
         ts: new Date().toISOString(), gate: fallbackGate, rawBody: body.text.slice(0, RAW_BODY_LOG_MAX),
         contentType, epcs, decoded: [], received: [], unknown: [],
       });
+      publishRfidRead(fallbackGate, [], { antennas: [], decoded: [], unknown: [], repeats: [] });
       res.json({ ok: true, paused: true, received: [], unknown: [], count: 0 });
       return;
     }
@@ -657,16 +681,20 @@ rfidRouter.post(
       const antennas = Array.from(new Set(group.map((r) => r.antenna).filter((a): a is number => a !== null))).sort((a, b) => a - b);
       await db.update(gateWebhookStatus).set({ lastTagSeenAt: lastActiveAt, lastAntennas: antennas }).where(eq(gateWebhookStatus.gateNo, gate));
       const tags = group.map((r) => decodeTag(r.epc));
+      // Make the physical FX9600 read available to the LPR correlator. The
+      // LPR camera can arrive in the same second or shortly after this POST.
+      recordRfidObservation(`GATE-${gate}`, tags, lastActiveAt.getTime());
       const { resolved, missing } = await resolveBoxesByCodes(db, Array.from(new Set(tags)));
       const boxTags = Array.from(new Set(Array.from(resolved.values()).map((row) => row.tag)));
       const { fresh, repeats } = splitRepeats(gate, boxTags);
       const now = Date.now();
       for (const tag of fresh) fx9600RecentlySeen.set(repeatKey(gate, tag), now);
       const configuredDirection = await gateDirection(db, gate);
+      const configuredBidirectionalMode = configuredDirection === 'both' ? await bidirectionalMode(db, gate) : 'screen';
       const movementByTag = new Map<string, MovementDirection>();
       if (configuredDirection === 'in' || configuredDirection === 'out') {
         for (const tag of boxTags) movementByTag.set(tag, configuredDirection);
-      } else if (activeReader) {
+      } else if (activeReader && configuredBidirectionalMode === 'antenna') {
         /* Preserve reader event order. A direction exists only after the same
            tag crosses two differently-positioned antennas inside 3 seconds. */
         for (const read of group) {
@@ -674,7 +702,7 @@ rfidRouter.post(
           const row = resolved.get(code);
           const role = read.antenna === null ? 'direct' : (roleByAntenna.get(read.antenna) ?? 'direct');
           if (!row) continue;
-          const detected = detectDirection(activeReader.id, row.tag, role);
+          const detected = detectDirection(activeReader.id, gate, row.tag, role);
           if (detected) movementByTag.set(row.tag, detected);
         }
       }
@@ -692,7 +720,7 @@ rfidRouter.post(
         }
       }
       const bidirectionalRoles = new Set(configuredMappings.filter((m) => m.gateNo === gate).map((m) => m.antennaRole));
-      if (configuredDirection === 'both' && (!activeReader || !bidirectionalRoles.has('outer') || !bidirectionalRoles.has('inner'))) {
+      if (configuredDirection === 'both' && (configuredBidirectionalMode === 'screen' || !activeReader || !bidirectionalRoles.has('outer') || !bidirectionalRoles.has('inner'))) {
         for (const tag of boxTags) if (!movementByTag.has(tag)) pending.push({ tag, direction: null });
       }
       if (pending.length) {
@@ -708,7 +736,12 @@ rfidRouter.post(
       allUnknown.push(...missing);
       console.log(`[fx9600] reader=${activeReader?.id ?? 'unbound'} gate=${gate} antenna=[${antennas.join(',')}] decoded=[${tags.join(', ')}] received=[${actionable.join(', ')}] auto=[${autoProcessed.join(', ')}] unknown=[${missing.join(', ')}] repeat=${repeats.length}`);
       pushFx9600DebugEntry({ ts: new Date().toISOString(), gate, rawBody: body.text.slice(0, RAW_BODY_LOG_MAX), contentType, parseError: body.parseError, epcs: group.map((r) => r.epc), decoded: tags, received: actionable, unknown: missing, repeats });
-      if (actionable.length) publishRfidRead(gate, actionable);
+      const processedSet = new Set(autoProcessed);
+      publishRfidRead(gate, actionable, {
+        inbound: Array.from(movementByTag).filter(([tag, direction]) => processedSet.has(tag) && direction === 'in').map(([tag]) => tag),
+        outbound: Array.from(movementByTag).filter(([tag, direction]) => processedSet.has(tag) && direction === 'out').map(([tag]) => tag),
+        antennas, decoded: tags, unknown: missing, repeats,
+      });
     }
     res.json({ ok: true, received: Array.from(new Set(allReceived)), unknown: Array.from(new Set(allUnknown)), count: allReceived.length, routed });
   }),

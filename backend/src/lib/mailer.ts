@@ -23,11 +23,20 @@ function getTransporter(): Transporter {
 }
 
 export async function sendMail(opts: { to: string; subject: string; text: string; html?: string }): Promise<void> {
-  await getTransporter().sendMail({
-    from: env.smtp.from,
-    to: opts.to,
-    subject: opts.subject,
-    text: opts.text,
-    html: opts.html,
-  });
+  try {
+    await getTransporter().sendMail({
+      from: env.smtp.from,
+      to: opts.to,
+      subject: opts.subject,
+      text: opts.text,
+      html: opts.html,
+    });
+  } catch (error) {
+    const code = String((error as { code?: string }).code ?? '');
+    const message = String((error as { message?: string }).message ?? '');
+    if (code === 'EAUTH' || /application-specific password|required/i.test(message)) {
+      throw httpError(502, 'Gmail ปฏิเสธการล็อกอิน: กรุณาตั้งค่า SMTP_PASS เป็น Google App Password 16 หลัก', 'smtp_auth_failed');
+    }
+    throw error;
+  }
 }

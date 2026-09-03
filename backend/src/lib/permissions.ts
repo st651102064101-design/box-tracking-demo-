@@ -88,6 +88,50 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     ],
   },
   {
+    key: 'operations',
+    label: 'งานปฏิบัติการคลัง',
+    permissions: [
+      { key: 'cycle_count.view', label: 'ดูงานตรวจนับสต็อก' },
+      { key: 'cycle_count.manage', label: 'เปิด/สแกน/ปิดงานตรวจนับสต็อก' },
+      { key: 'movement.view', label: 'ดูประวัติการเคลื่อนไหว' },
+    ],
+  },
+  {
+    key: 'warehouse',
+    label: 'คลังและประตู',
+    permissions: [
+      { key: 'warehouse.view', label: 'ดูคลังและประตู' },
+      { key: 'warehouse.manage', label: 'จัดการคลังและประตู' },
+      { key: 'gate.in', label: 'ทำรายการผ่านประตูขาเข้า' },
+      { key: 'gate.out', label: 'ทำรายการผ่านประตูขาออก' },
+    ],
+  },
+  {
+    key: 'integration',
+    label: 'อุปกรณ์และการเชื่อมต่อ',
+    permissions: [
+      { key: 'rfid.manage', label: 'จัดการ RFID / FX9600' },
+      { key: 'rfid.log', label: 'ดู RFID Webhook Log' },
+      { key: 'lpr.manage', label: 'จัดการ LPR' },
+      { key: 'lpr.log', label: 'ดู LPR Event Log' },
+      { key: 'device.manage', label: 'จัดการอุปกรณ์ PDA' },
+      { key: 'gateprefs.manage', label: 'จัดการค่าการทำงานของประตู' },
+    ],
+  },
+  {
+    key: 'security',
+    label: 'ความปลอดภัยและการตรวจสอบ',
+    permissions: [
+      { key: 'audit.view', label: 'ดู Audit Log' },
+      { key: 'audit.export', label: 'Export Audit Log' },
+      { key: 'notification.manage', label: 'จัดการการแจ้งเตือน' },
+      { key: 'ui.preferences', label: 'จัดการค่าการแสดงผลส่วนตัว' },
+      { key: 'branding.manage', label: 'จัดการชื่อระบบและโลโก้' },
+      { key: 'employee.pin.manage', label: 'จัดการ PIN พนักงาน' },
+      { key: 'system.maintenance', label: 'จัดการบำรุงรักษาและล้างข้อมูลระบบ' },
+    ],
+  },
+  {
     key: 'setting',
     label: 'การตั้งค่าระบบ',
     permissions: [
@@ -148,6 +192,9 @@ const WAREHOUSE_MANAGER_PERMS = [
   'transaction.cancel', 'transaction.history', 'overdue.manage',
   'partner.view', 'partner.create', 'partner.update', 'partner.history',
   'employee.view',
+  'warehouse.view', 'warehouse.manage', 'gate.in', 'gate.out',
+  'rfid.manage', 'rfid.log', 'lpr.manage', 'device.manage',
+  'cycle_count.view', 'cycle_count.manage', 'movement.view',
   'report.view', 'report.export', 'report.analytics',
   'setting.view',
 ];
@@ -157,6 +204,8 @@ const WAREHOUSE_STAFF_PERMS = [
   'box.view', 'box.detail', 'box.create', 'box.update', 'box.print',
   'transaction.view', 'borrow.create', 'return.create', 'transaction.history',
   'partner.view',
+  'warehouse.view', 'gate.in', 'gate.out',
+  'cycle_count.view', 'cycle_count.manage', 'movement.view',
 ];
 
 const VIEWER_PERMS = [

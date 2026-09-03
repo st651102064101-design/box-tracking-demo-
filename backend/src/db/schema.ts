@@ -31,6 +31,7 @@ export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
+  mustChangePassword: boolean('must_change_password').notNull().default(false),
   name: text('name').notNull(),
   role: text('role').notNull().default('staff'),
   /** Where "ลืมรหัสผ่าน?" sends its OTP — set at registration. Nullable only
@@ -90,6 +91,9 @@ export const config = pgTable('config', {
   agingDays: integer('aging_days').notNull().default(15),
   boxValue: numeric('box_value').notNull().default('450'),
   lostMode: text('lost_mode').notNull().default('manual'),
+  systemName: text('system_name').notNull().default('Smart Tracking'),
+  subtitle: text('subtitle').notNull().default('WMS · เฟส 1 · Returnable Asset Tracking'),
+  logoData: text('logo_data'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -104,6 +108,11 @@ export const customers = pgTable('customers', {
   name: text('name'),
   addr: text('addr'),
   contact: text('contact'),
+  lineUserId: text('line_user_id'),
+  lineDisplayName: text('line_display_name'),
+  linePictureUrl: text('line_picture_url'),
+  lineLinkedAt: timestamp('line_linked_at', { withTimezone: true }),
+  contactEmail: text('contact_email'),
   returnDays: integer('return_days'),
   data: jsonb('data').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -155,6 +164,21 @@ export const gateWebhookStatus = pgTable('gate_webhook_status', {
   lastIp: text('last_ip'),
   lastTagSeenAt: timestamp('last_tag_seen_at', { withTimezone: true }),
   lastAntennas: jsonb('last_antennas').notNull().default([]),
+});
+
+/** One-time invitations used to bind a customer to a verified LINE Login
+ * identity. Only SHA-256 hashes of bearer tokens/state are stored. */
+export const lineLinkInvites = pgTable('line_link_invites', {
+  id: serial('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  customerId: text('customer_id').notNull().references(() => customers.id),
+  oauthStateHash: text('oauth_state_hash'),
+  nonce: text('nonce'),
+  codeVerifier: text('code_verifier'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const rfidReaders = pgTable('rfid_readers', {
@@ -412,11 +436,42 @@ export const auditLog = pgTable('audit_log', {
   ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Durable outbox for automatic LINE reminders. The primary key is the
+ * business idempotency key (gate batch or customer/business date), while
+ * retryKey is reused for every retry so LINE also deduplicates the push. */
+export const lineNotificationDeliveries = pgTable(
+  'line_notification_deliveries',
+  {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull().default('line'),
+    kind: text('kind').notNull(),
+    customerId: text('customer_id').notNull(),
+    customerName: text('customer_name').notNull().default(''),
+    businessDate: text('business_date').notNull(),
+    recipient: text('recipient').notNull(),
+    retryKey: text('retry_key').notNull(),
+    status: text('status').notNull().default('processing'),
+    message: text('message').notNull(),
+    attemptCount: integer('attempt_count').notNull().default(1),
+    lineRequestId: text('line_request_id'),
+    error: text('error'),
+    metadata: jsonb('metadata').notNull().default({}),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    retryIdx: index('line_notification_deliveries_retry_idx').on(table.status, table.updatedAt),
+    customerIdx: index('line_notification_deliveries_customer_idx').on(table.customerId, table.createdAt),
+  }),
+);
+
 export type Schema = {
   users: typeof users;
   config: typeof config;
   sequences: typeof sequences;
   customers: typeof customers;
+  lineLinkInvites: typeof lineLinkInvites;
   boxTypes: typeof boxTypes;
   warehouses: typeof warehouses;
   gates: typeof gates;
@@ -436,6 +491,7 @@ export type Schema = {
   cycleCounts: typeof cycleCounts;
   events: typeof events;
   auditLog: typeof auditLog;
+  lineNotificationDeliveries: typeof lineNotificationDeliveries;
 };
 
 // re-export bundle for drizzle(client, { schema })
@@ -444,6 +500,7 @@ export const schema = {
   config,
   sequences,
   customers,
+  lineLinkInvites,
   boxTypes,
   warehouses,
   gates,
@@ -463,4 +520,5 @@ export const schema = {
   cycleCounts,
   events,
   auditLog,
+  lineNotificationDeliveries,
 };

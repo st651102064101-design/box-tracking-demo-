@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   id                        SERIAL PRIMARY KEY,
   username                  TEXT NOT NULL UNIQUE,
   password_hash             TEXT NOT NULL,
+  must_change_password      BOOLEAN NOT NULL DEFAULT false,
   name                      TEXT NOT NULL,
   role                      TEXT NOT NULL DEFAULT 'staff',
   email                     TEXT,
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Additive migrations for databases created before these columns existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
@@ -52,8 +54,14 @@ CREATE TABLE IF NOT EXISTS config (
   aging_days  INTEGER NOT NULL DEFAULT 15,
   box_value   NUMERIC NOT NULL DEFAULT 450,
   lost_mode   TEXT NOT NULL DEFAULT 'manual',
+  system_name TEXT NOT NULL DEFAULT 'Smart Tracking',
+  subtitle    TEXT NOT NULL DEFAULT 'WMS · เฟส 1 · Returnable Asset Tracking',
+  logo_data   TEXT,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE config ADD COLUMN IF NOT EXISTS system_name TEXT NOT NULL DEFAULT 'Smart Tracking';
+ALTER TABLE config ADD COLUMN IF NOT EXISTS subtitle TEXT NOT NULL DEFAULT 'WMS · เฟส 1 · Returnable Asset Tracking';
+ALTER TABLE config ADD COLUMN IF NOT EXISTS logo_data TEXT;
 
 CREATE TABLE IF NOT EXISTS sequences (
   name  TEXT PRIMARY KEY,
@@ -65,12 +73,36 @@ CREATE TABLE IF NOT EXISTS customers (
   name        TEXT,
   addr        TEXT,
   contact     TEXT,
+  line_user_id TEXT,
+  contact_email TEXT,
   return_days INTEGER,
   data        JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at  TIMESTAMPTZ
 );
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS line_user_id TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS line_display_name TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS line_picture_url TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS line_linked_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_email TEXT;
+
+CREATE TABLE IF NOT EXISTS line_link_invites (
+  id               SERIAL PRIMARY KEY,
+  token_hash       TEXT NOT NULL UNIQUE,
+  customer_id      TEXT NOT NULL REFERENCES customers(id),
+  oauth_state_hash TEXT,
+  nonce            TEXT,
+  code_verifier    TEXT,
+  expires_at       TIMESTAMPTZ NOT NULL,
+  consumed_at      TIMESTAMPTZ,
+  created_by       TEXT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS line_link_invites_customer_idx
+  ON line_link_invites (customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS line_link_invites_expiry_idx
+  ON line_link_invites (expires_at) WHERE consumed_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS box_types (
   id         TEXT PRIMARY KEY,
@@ -364,3 +396,30 @@ CREATE TABLE IF NOT EXISTS audit_log (
   data        JSONB NOT NULL DEFAULT '{}'::jsonb,
   ts          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Durable automatic LINE outbox. A stable business key prevents duplicate
+-- pushes after a repeated RFID scan, scheduler overlap, or container restart.
+CREATE TABLE IF NOT EXISTS line_notification_deliveries (
+  id              TEXT PRIMARY KEY,
+  channel         TEXT NOT NULL DEFAULT 'line',
+  kind            TEXT NOT NULL,
+  customer_id     TEXT NOT NULL,
+  customer_name   TEXT NOT NULL DEFAULT '',
+  business_date   TEXT NOT NULL,
+  recipient       TEXT NOT NULL,
+  retry_key       TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'processing',
+  message         TEXT NOT NULL,
+  attempt_count   INTEGER NOT NULL DEFAULT 1,
+  line_request_id TEXT,
+  error           TEXT,
+  metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  sent_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE line_notification_deliveries ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'line';
+CREATE INDEX IF NOT EXISTS line_notification_deliveries_retry_idx
+  ON line_notification_deliveries (status, updated_at);
+CREATE INDEX IF NOT EXISTS line_notification_deliveries_customer_idx
+  ON line_notification_deliveries (customer_id, created_at DESC);

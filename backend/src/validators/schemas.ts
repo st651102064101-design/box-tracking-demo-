@@ -82,7 +82,17 @@ export const customerSchema = z.object({
   name: z.string().min(1),
   addr: z.string().nullish(),
   contact: z.string().nullish(),
+  lineUserId: z.string().trim().max(64).nullish(),
+  contactEmail: z.string().trim().email().max(254).nullish(),
   returnDays: z.number().int().nonnegative().nullish(),
+});
+export const firstSetupSchema = z.object({
+  name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(160),
+  email: z.string().trim().email('อีเมลไม่ถูกต้อง').max(254),
+  username: z.string().trim().regex(/^EMP-[0-9]+$/i, 'Username ต้องเป็นรหัสพนักงาน เช่น EMP-001'),
+  password: z.string().min(10, 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร').regex(/[a-z]/, 'ต้องมีตัวพิมพ์เล็ก').regex(/[A-Z]/, 'ต้องมีตัวพิมพ์ใหญ่').regex(/[0-9]/, 'ต้องมีตัวเลข').regex(/[^A-Za-z0-9]/, 'ต้องมีอักขระพิเศษ'),
+  phone: z.string().optional().default(''), position: z.string().optional().default(''),
+  department: z.string().optional().default(''), warehouse: z.string().optional().default(''),
 });
 
 /* ─── gate operations ──────────────────────────────────────────────────────*/

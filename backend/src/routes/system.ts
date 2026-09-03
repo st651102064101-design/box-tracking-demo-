@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
 import { SUPER_ADMIN_KEY } from '../lib/permissions.js';
-import { wipeSystem } from '../services/systemWipe.js';
+import { clearMovementHistory, wipeSystem } from '../services/systemWipe.js';
 import { writeAuditLog } from '../services/audit.js';
 
 export const systemRouter = Router();
@@ -20,6 +20,30 @@ export const systemRouter = Router();
  * role itself. The frontend hides the button for anyone else, but that is a
  * courtesy; this check is what actually stops a direct API call.
  */
+systemRouter.post(
+  '/movement-history/clear',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const effective = await effectivePermissions(req.user);
+    if (effective.key !== SUPER_ADMIN_KEY) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'เฉพาะผู้ดูแลระบบสูงสุดเท่านั้นที่ล้างประวัติการเคลื่อนไหวได้',
+      });
+    }
+    const result = await clearMovementHistory(getDb());
+    await writeAuditLog(getDb(), {
+      action: 'movement_history_cleared',
+      actor: req.user!.username,
+      itemId: 'movement_history',
+      itemName: 'RFID / LPR and inbound/outbound history',
+      before: null,
+      after: result,
+    });
+    res.json({ ok: true, ...result });
+  }),
+);
+
 systemRouter.post(
   '/wipe',
   requireAuth,

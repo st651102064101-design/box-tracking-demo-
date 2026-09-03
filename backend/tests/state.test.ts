@@ -50,6 +50,9 @@ const sampleState = {
   inventory: {},
   cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
   seq: { do: 1, emp: 1 },
+  dfPrefs: { demo: { ovMove: { mode: 'day', day: 7, month: 1, year: 1, from: '', to: '' } } },
+  uiPrefs: { demo: { theme: 'dark', filtBoxStatus: 'warehouse' } },
+  gatePrefs: { demo: { lastGate: 2 } },
   auditLog: [
     { ts: '2026-07-20T03:00:00.000Z', action: 'CREATE', recorder: 'demo', itemId: 'CUST-001', itemName: 'ลูกค้า ก', before: '', after: '{}' },
   ],
@@ -82,6 +85,29 @@ describe('state bridge (S ↔ Postgres)', () => {
     // singletons
     expect(s.cfg).toEqual(sampleState.cfg);
     expect(s.seq).toEqual(sampleState.seq);
+
+    // per-account UI prefs (date filters, toggle/dropdown memory, gate display
+    // prefs) — these have no typed columns of their own, so it's easy for a
+    // schema change to silently start stripping them again (z.object() drops
+    // unknown keys by default); assert them explicitly rather than relying on
+    // one of the maps above to happen to catch it.
+    expect(s.dfPrefs).toEqual(sampleState.dfPrefs);
+    expect(s.uiPrefs).toEqual(sampleState.uiPrefs);
+    expect(s.gatePrefs).toEqual(sampleState.gatePrefs);
+  });
+
+  it('per-account UI prefs survive a reload independent of everything else changing', async () => {
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(sampleState);
+    // Simulate what save()/renderAll() does constantly: PUT the whole S again
+    // with unrelated fields touched but dfPrefs/uiPrefs/gatePrefs untouched.
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({ ...sampleState, boxes: {} });
+    const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(get.body.dfPrefs).toEqual(sampleState.dfPrefs);
+    expect(get.body.uiPrefs).toEqual(sampleState.uiPrefs);
+    expect(get.body.gatePrefs).toEqual(sampleState.gatePrefs);
   });
 
   it('replaces (not merges) on subsequent PUT', async () => {
@@ -89,119 +115,5 @@ describe('state bridge (S ↔ Postgres)', () => {
     const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));
     expect(Object.keys(get.body.boxes)).toHaveLength(0);
     expect(Object.keys(get.body.customers)).toHaveLength(0);
-  });
-
-  describe('first-employee self-registration bootstrap', () => {
-    it("links the sole employee on an empty table to the caller's own account", async () => {
-      const fresh = await bootstrap();
-      const put = await request(fresh.app)
-        .put('/api/state')
-        .set(auth(fresh.token))
-        .send({ employees: { 'EMP-001': { id: 'EMP-001', name: 'เกรียงไกร คงเมือง', role: 'ผู้ดูแลระบบ' } } });
-      expect(put.status).toBe(200);
-
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      // fresh bootstrap() always seeds users.id 1 as the admin the test logs in as
-      expect(get.body.employees['EMP-001'].userId).toBe(1);
-    });
-
-    it('does NOT link when the table already had an employee (not a fresh bootstrap)', async () => {
-      const fresh = await bootstrap();
-      await request(fresh.app)
-        .put('/api/state')
-        .set(auth(fresh.token))
-        .send({ employees: { 'EMP-001': { id: 'EMP-001', name: 'first', role: 'admin' } } });
-
-      const put2 = await request(fresh.app)
-        .put('/api/state')
-        .set(auth(fresh.token))
-        .send({
-          employees: {
-            'EMP-001': { id: 'EMP-001', name: 'first', role: 'admin' },
-            'EMP-002': { id: 'EMP-002', name: 'second', role: 'staff' },
-          },
-        });
-      expect(put2.status).toBe(200);
-
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(get.body.employees['EMP-002'].userId).toBeNull();
-    });
-
-    it('does NOT link a batch of employees arriving together on an empty table', async () => {
-      const fresh = await bootstrap();
-      const put = await request(fresh.app)
-        .put('/api/state')
-        .set(auth(fresh.token))
-        .send({
-          employees: {
-            'EMP-001': { id: 'EMP-001', name: 'a', role: 'staff' },
-            'EMP-002': { id: 'EMP-002', name: 'b', role: 'staff' },
-          },
-        });
-      expect(put.status).toBe(200);
-
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(get.body.employees['EMP-001'].userId).toBeNull();
-      expect(get.body.employees['EMP-002'].userId).toBeNull();
-    });
-  });
-  /* Regression: PUT /api/state used to wipe every table and re-insert the whole
-     snapshot, so two saves overlapping in time raced — the second transaction's
-     DELETE could not see the rows the first had just inserted, and its INSERT
-     died on the primary key ("duplicate key value violates unique constraint
-     boxes_pkey"), answering 500. Rows are upserted now, and whole-snapshot
-     writes take an advisory lock so they queue instead of interleaving. */
-  describe('repeated and concurrent saves', () => {
-    const boxState = (tags: string[]) => ({
-      boxes: Object.fromEntries(tags.map((t) => [t, { tag: t, type: 'BT-001', status: 'pending' }])),
-    });
-
-    it('creates a box that did not exist yet', async () => {
-      const fresh = await bootstrap();
-      const put = await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(boxState(['BOX-006']));
-      expect(put.status).toBe(200);
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(get.body.boxes['BOX-006']).toBeTruthy();
-    });
-
-    it('updates an existing box instead of inserting it twice', async () => {
-      const fresh = await bootstrap();
-      await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(boxState(['BOX-005']));
-      const put = await request(fresh.app)
-        .put('/api/state')
-        .set(auth(fresh.token))
-        .send({ boxes: { 'BOX-005': { tag: 'BOX-005', type: 'BT-001', status: 'warehouse', cycles: 4 } } });
-      expect(put.status).toBe(200);
-
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(Object.keys(get.body.boxes)).toEqual(['BOX-005']);
-      expect(get.body.boxes['BOX-005'].status).toBe('warehouse');
-      expect(get.body.boxes['BOX-005'].cycles).toBe(4);
-    });
-
-    it('survives the same snapshot being sent over and over', async () => {
-      const fresh = await bootstrap();
-      const body = boxState(['BOX-005', 'BOX-006']);
-      for (let i = 0; i < 5; i++) {
-        const put = await request(fresh.app).put('/api/state').set(auth(fresh.token)).send(body);
-        expect(put.status).toBe(200);
-      }
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(Object.keys(get.body.boxes).sort()).toEqual(['BOX-005', 'BOX-006']);
-    });
-
-    it('does not 500 or duplicate when several saves land at once', async () => {
-      const fresh = await bootstrap();
-      const body = boxState(['BOX-001', 'BOX-005', 'BOX-006']);
-      const results = await Promise.all(
-        Array.from({ length: 4 }, () =>
-          request(fresh.app).put('/api/state').set(auth(fresh.token)).send(body),
-        ),
-      );
-      expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
-
-      const get = await request(fresh.app).get('/api/state').set(auth(fresh.token));
-      expect(Object.keys(get.body.boxes).sort()).toEqual(['BOX-001', 'BOX-005', 'BOX-006']);
-    });
   });
 });

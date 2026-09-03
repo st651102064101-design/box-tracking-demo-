@@ -11,6 +11,7 @@ import type { DB } from '../db/client.js';
 import { boxes, customers, config, gates, events, doRecords, employees } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
 import { resolveBoxesByCodes } from './rfid.js';
+import { sendGateInNotifications, sendGateOutLineNotification } from './autoLineNotifications.js';
 
 const DAY = 86_400_000;
 const iso = () => new Date().toISOString();
@@ -210,6 +211,19 @@ export async function gateOut(db: DB, input: GateOutInput) {
       .onConflictDoUpdate({ target: doRecords.id, set: { data: { customer, po, returnDays } } });
   });
 
+  // This happens only after the stock transaction commits. Notification
+  // failure is persisted for retry and never rolls the physical movement back.
+  await sendGateOutLineNotification(db, {
+    customerId: cust.id,
+    customerName: cust.name ?? cust.id,
+    lineUserId: cust.lineUserId,
+    contactEmail: cust.contactEmail,
+    doNo,
+    tags: shipped,
+    dueAt: dueTs,
+    plate,
+  });
+
   return { ok: true, doNo, shipped, dueAt: dueTs, count: shipped.length };
 }
 
@@ -254,12 +268,19 @@ export async function gateIn(db: DB, input: GateInInput) {
   // Reported as the operator's own scanned code (barcode or RFID, whichever
   // they actually shot), not a canonical tag that was never resolved.
   const unknown: string[] = missing;
+  const returnedByCustomer = new Map<string, { doNo: string | null; tags: string[]; plate: string }>();
 
   await db.transaction(async (tx) => {
     for (const tag of canonicalTags) {
       const row = found.get(tag)!;
       const b = { ...(row.data as Record<string, unknown>) };
       const wasOut = b.status === 'out';
+      if (wasOut && row.customer) {
+        const key = `${row.customer}\n${row.doNo ?? ''}`;
+        const group = returnedByCustomer.get(key) ?? { doNo: row.doNo, tags: [], plate };
+        group.tags.push(tag);
+        returnedByCustomer.set(key, group);
+      }
       // A box the operator flagged while scanning it in lands on 'hold' or
       // 'damage' instead of 'warehouse' — same statuses the box list already
       // filters by (see legacy.html's filtBoxStatus) — so it can't ship back
@@ -350,6 +371,22 @@ export async function gateIn(db: DB, input: GateInInput) {
       received.push(tag);
     }
   });
+
+  for (const [key, group] of returnedByCustomer) {
+    const customerId = key.split('\n', 1)[0];
+    const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));
+    if (!customer) continue;
+    await sendGateInNotifications(db, {
+      customerId,
+      customerName: customer.name ?? customerId,
+      lineUserId: customer.lineUserId,
+      contactEmail: customer.contactEmail,
+      doNo: group.doNo,
+      tags: group.tags,
+      receivedAt: inTs,
+      plate: group.plate,
+    });
+  }
 
   return { ok: true, received, unknown, count: received.length };
 }

@@ -134,22 +134,21 @@ describe('full box lifecycle', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-LC-1/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: '3034AABBCCDD' });
+      .send({ rfid: '3034AABBCCDD' });
     expect(res.status).toBe(200);
     const box = await request(ctx.app).get('/api/boxes/BOX-LC-1').set(auth(ctx.token));
-    expect(box.body.rfidTid).toBe('E200001122334455');
-    expect(box.body.rfidEpc).toBe('3034AABBCCDD');
+    expect(box.body.rfid).toBe('3034AABBCCDD');
   });
 
-  it('refuses re-associating the same TID to another box without replace:true', async () => {
-    await syncBoxFromServer('BOX-LC-1'); // pick up the rfidTid the REST call above just set
+  it('refuses re-associating the same code to another box without replace:true', async () => {
+    await syncBoxFromServer('BOX-LC-1'); // pick up the rfid the REST call above just set
     const boxes = state.boxes as Record<string, any>;
     boxes['BOX-LC-2'] = { tag: 'BOX-LC-2', type: 'BT-LC', value: 500, status: 'pending', labeled: true, cycles: 0, history: [], location: {} };
     await putState({});
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-LC-2/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: 'AABBCCDDEEFF' });
+      .send({ rfid: '3034AABBCCDD' });
     expect(res.status).toBe(409);
   });
 

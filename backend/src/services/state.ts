@@ -34,6 +34,18 @@ import {
 import type { StatePayload } from '../validators/schemas.js';
 import type { JwtPayload } from '../lib/jwt.js';
 import { env } from '../env.js';
+import {
+  sendGateInNotifications,
+  sendGateOutLineNotification,
+  type GateInNotificationInput,
+  type GateOutLineInput,
+} from './autoLineNotifications.js';
+import { isEmployeeCrudAuditEntry } from './audit.js';
+
+// A full audit reset must not be undone by an already-open browser posting its
+// cached pre-reset audit array back through the legacy whole-state endpoint.
+const AUDIT_CACHE_CUTOFF = new Date();
+const LINE_USER_ID = /^U[0-9a-f]{32}$/i;
 
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v: unknown): Date | null => {
@@ -47,6 +59,24 @@ const toInt = (v: unknown): number | null => {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : null;
+};
+
+/* The legacy page still saves a complete state snapshot.  An LPR callback can
+   arrive between its GET and PUT, so the browser's older `history` array must
+   never erase camera evidence that was already committed by the webhook. */
+const isLprHistory = (entry: unknown): entry is Record<string, unknown> =>
+  !!entry && typeof entry === 'object' && (entry as Record<string, unknown>).dir === 'lpr';
+
+const lprHistoryKey = (entry: Record<string, unknown>): string =>
+  String(entry.eventId ?? `${entry.ts ?? ''}|${entry.gateNo ?? entry.gate ?? ''}|${entry.plateNumber ?? ''}`);
+
+const mergeLprHistory = (browserHistory: unknown, persistedHistory: unknown): unknown[] => {
+  const fromBrowser = Array.isArray(browserHistory) ? browserHistory : [];
+  const known = new Set(fromBrowser.filter(isLprHistory).map(lprHistoryKey));
+  const missingPersisted = (Array.isArray(persistedHistory) ? persistedHistory : [])
+    .filter(isLprHistory)
+    .filter((entry) => !known.has(lprHistoryKey(entry)));
+  return [...fromBrowser, ...missingPersisted];
 };
 
 /* ─── DB → S ───────────────────────────────────────────────────────────────*/
@@ -87,9 +117,12 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     db.select().from(putaway),
     db.select().from(inventory),
     db.select().from(events).orderBy(asc(events.id)),
-    /* newest-first by ts, not insertion order — audit_log is append-only now
-       (see replaceState below), so id order no longer tracks recency */
-    db.select().from(auditLog).orderBy(desc(auditLog.ts)),
+    /* Audit is append-only and can grow very quickly (FX9600 heartbeats are
+       operational events).  It must never be included wholesale in the SPA's
+       full-state snapshot: that causes a multi-megabyte GET /api/state, then
+       the browser mirrors it back in PUT /api/state and hits request limits.
+       The UI only needs recent activity; the complete audit stays in DB. */
+    db.select().from(auditLog).orderBy(desc(auditLog.ts)).limit(500),
     db.select().from(config),
     db.select().from(sequences),
   ]);
@@ -104,7 +137,14 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 
   return {
     boxes: mapBy(boxRows, (r) => r.tag),
-    customers: mapBy(custRows, (r) => r.id),
+    customers: Object.fromEntries(custRows.map((r) => [r.id, {
+      ...(r.data as Record<string, unknown>),
+      lineUserId: r.lineUserId ?? (r.data as Record<string, unknown>).lineUserId ?? '',
+      lineDisplayName: r.lineDisplayName ?? '',
+      linePictureUrl: r.linePictureUrl ?? '',
+      lineLinkedAt: r.lineLinkedAt?.toISOString() ?? '',
+      contactEmail: r.contactEmail ?? (r.data as Record<string, unknown>).contactEmail ?? '',
+    }])),
     boxtypes: mapBy(btRows, (r) => r.id),
     warehouses: mapBy(whRows, (r) => r.id),
     gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
@@ -156,7 +196,9 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     ),
     locations: mapBy(locRows, (r) => r.code),
     inventory: mapBy(invRows, (r) => r.id),
-    auditLog: auditRows.map((r) => r.data),
+    auditLog: auditRows
+      .map((r) => r.data)
+      .filter((entry) => isEmployeeCrudAuditEntry(entry as Record<string, unknown>)),
   };
 }
 
@@ -253,6 +295,8 @@ export async function replaceState(
   s: StatePayload,
   actor?: JwtPayload,
 ): Promise<void> {
+  const pendingGateOutNotifications: GateOutLineInput[] = [];
+  const pendingGateInNotifications: GateInNotificationInput[] = [];
   await db.transaction(async (tx) => {
     /* Serialize whole-snapshot writes against each other. Two clients saving at
        the same moment (two browser tabs, or the page and its sync module) used
@@ -325,8 +369,21 @@ export async function replaceState(
     await syncKeyed(tx, sequences, 'name', seqRows);
 
     // 4) boxes
+    // Preserve webhook-owned LPR evidence when an already-open legacy page
+    // posts its stale full-state snapshot back to the server.
+    const persistedBoxes = new Map(
+      (await tx.select({
+        tag: boxes.tag,
+        status: boxes.status,
+        customer: boxes.customer,
+        doNo: boxes.doNo,
+        history: boxes.history,
+      }).from(boxes))
+        .map((row) => [row.tag, row]),
+    );
     const boxRows = Object.entries(s.boxes ?? {}).map(([tag, raw]) => {
       const b = raw as Record<string, unknown>;
+      const history = mergeLprHistory(b.history, persistedBoxes.get(tag)?.history);
       return {
         tag,
         type: (b.type as string) ?? null,
@@ -351,32 +408,144 @@ export async function replaceState(
         rfidTid: (b.rfidTid as string) ?? null,
         rfidEpc: (b.rfidEpc as string) ?? null,
         location: (b.location as object) ?? {},
-        history: (b.history as unknown[]) ?? [],
-        data: b,
+        history,
+        // composeState returns this blob to the browser. Keeping its history
+        // aligned with the typed column is what makes the LPR panel update on
+        // the next SSE-triggered state refresh.
+        data: { ...b, history },
         updatedAt: new Date(),
       };
     });
+
+    // The legacy Web App ships boxes by changing its full state snapshot,
+    // rather than calling services/gate.ts. Detect the same warehouse→out
+    // transition here so browser, PDA and fixed-reader flows all produce the
+    // same automatic LINE side effect. Existing out rows and initial imports
+    // are excluded, preventing a normal state re-save from notifying twice.
+    const transitioned = new Map<string, { customerId: string; doNo: string; dueAt: Date; tags: string[]; plate: string }>();
+    const returned = new Map<string, { customerId: string; doNo: string | null; receivedAt: Date; tags: string[]; plate: string }>();
+    const historyPlate = (history: unknown): string => {
+      if (!Array.isArray(history)) return '';
+      for (let i = history.length - 1; i >= 0; i -= 1) {
+        const plate = String((history[i] as Record<string, unknown> | null)?.plate ?? '').trim();
+        if (plate) return plate;
+      }
+      return '';
+    };
+    for (const row of boxRows) {
+      const before = persistedBoxes.get(row.tag);
+      if (!before) continue;
+      if (before.status !== 'out' && row.status === 'out' && row.customer && row.dueAt) {
+        const doNo = row.doNo ?? `WEB-${row.outAt?.getTime() ?? Date.now()}`;
+        const key = `${row.customer}\n${doNo}\n${row.dueAt.toISOString()}`;
+        const group = transitioned.get(key) ?? { customerId: row.customer, doNo, dueAt: row.dueAt, tags: [], plate: historyPlate(row.history) };
+        group.tags.push(row.tag);
+        transitioned.set(key, group);
+      }
+      if (before.status === 'out' && row.status !== 'out' && before.customer) {
+        const receivedAt = row.lastSeenAt ?? new Date();
+        const key = `${before.customer}\n${before.doNo ?? ''}\n${receivedAt.toISOString()}`;
+        const group = returned.get(key) ?? {
+          customerId: before.customer,
+          doNo: before.doNo,
+          receivedAt,
+          tags: [],
+          plate: historyPlate(before.history),
+        };
+        group.tags.push(row.tag);
+        returned.set(key, group);
+      }
+    }
     await syncKeyed(tx, boxes, 'tag', boxRows);
 
     // 5) master data
+    // LINE linking is written by the OAuth callback while an older browser
+    // snapshot may still be open. Carry server-owned linkage/profile columns
+    // forward when that stale snapshot contains an empty id; otherwise the
+    // next unrelated save silently disconnects the customer. A new non-empty
+    // id entered by an admin is still accepted. Deliberate unlinking uses the
+    // dedicated DELETE /api/line/link/customers/:id route.
+    const persistedCustomerLine = new Map(
+      (await tx.select({
+        id: customers.id,
+        lineUserId: customers.lineUserId,
+        lineDisplayName: customers.lineDisplayName,
+        linePictureUrl: customers.linePictureUrl,
+        lineLinkedAt: customers.lineLinkedAt,
+      }).from(customers)).map((row) => [row.id, row]),
+    );
     await syncKeyed(
       tx,
       customers,
       'id',
       Object.entries(s.customers ?? {}).map(([id, raw]) => {
         const c = raw as Record<string, unknown>;
+        const persisted = persistedCustomerLine.get(id);
+        const incomingLineUserId = String(c.lineUserId ?? '').trim();
+        const persistedLineUserId = String(persisted?.lineUserId ?? '').trim();
+        // A stale UI has historically carried LINE usernames/basic IDs in
+        // this field. Only a real Messaging API user id may replace the OAuth
+        // value; invalid non-empty text must not disconnect a linked account.
+        const lineUserId = LINE_USER_ID.test(incomingLineUserId)
+          ? incomingLineUserId
+          : LINE_USER_ID.test(persistedLineUserId)
+            ? persistedLineUserId
+            : null;
         return {
           id,
           name: (c.name as string) ?? null,
           addr: (c.addr as string) ?? null,
           contact: (c.contact as string) ?? null,
+          lineUserId,
+          lineDisplayName: persisted?.lineDisplayName ?? null,
+          linePictureUrl: persisted?.linePictureUrl ?? null,
+          lineLinkedAt: persisted?.lineLinkedAt ?? null,
+          contactEmail: ((c.contactEmail ?? c.email) as string) ?? null,
           returnDays: toInt(c.returnDays),
-          data: c,
+          data: lineUserId ? { ...c, lineUserId } : c,
           updatedAt: new Date(),
         };
       }),
       { preserveCols: ['deletedAt'], liveOnly: isNull(customers.deletedAt) },
     );
+
+    if (transitioned.size || returned.size) {
+      const customerRows = new Map(
+        (await tx.select({
+          id: customers.id,
+          name: customers.name,
+          lineUserId: customers.lineUserId,
+          contactEmail: customers.contactEmail,
+        }).from(customers))
+          .map((row) => [row.id, row]),
+      );
+      for (const group of transitioned.values()) {
+        const customer = customerRows.get(group.customerId);
+        pendingGateOutNotifications.push({
+          customerId: group.customerId,
+          customerName: customer?.name ?? group.customerId,
+          lineUserId: customer?.lineUserId ?? null,
+          contactEmail: customer?.contactEmail ?? null,
+          doNo: group.doNo,
+          tags: group.tags,
+          dueAt: group.dueAt.toISOString(),
+          plate: group.plate,
+        });
+      }
+      for (const group of returned.values()) {
+        const customer = customerRows.get(group.customerId);
+        pendingGateInNotifications.push({
+          customerId: group.customerId,
+          customerName: customer?.name ?? group.customerId,
+          lineUserId: customer?.lineUserId ?? null,
+          contactEmail: customer?.contactEmail ?? null,
+          doNo: group.doNo,
+          tags: group.tags,
+          receivedAt: group.receivedAt.toISOString(),
+          plate: group.plate,
+        });
+      }
+    }
 
     await syncKeyed(
       tx,
@@ -397,19 +566,32 @@ export async function replaceState(
       { preserveCols: ['deletedAt'], liveOnly: isNull(boxTypes.deletedAt) },
     );
 
+    const persistedWarehouseModes = new Map(
+      (await tx.select({ id: warehouses.id, data: warehouses.data }).from(warehouses))
+        .map((row) => [row.id, (row.data as Record<string, unknown>)?.gateBidirectionalModes]),
+    );
     await syncKeyed(
       tx,
       warehouses,
       'id',
       Object.entries(s.warehouses ?? {}).map(([id, raw]) => {
         const w = raw as Record<string, unknown>;
+        const persistedModes = persistedWarehouseModes.get(id);
+        const hasIncomingModes = Object.prototype.hasOwnProperty.call(w, 'gateBidirectionalModes');
+        const gateBidirectionalModes = !hasIncomingModes && persistedModes && typeof persistedModes === 'object'
+          ? persistedModes : w.gateBidirectionalModes;
         return {
           id,
           name: (w.name as string) ?? null,
           gateType: (w.gateType as string) ?? null,
           gates: (w.gates as unknown[]) ?? [],
           gateTypes: (w.gateTypes as object) ?? {},
-          data: w,
+          /* gateBidirectionalModes is maintained by the RFID configuration
+             API. Preserve the server-side value when an older browser sends a
+             stale /api/state snapshot, otherwise a live page can silently
+             turn a configured two-antenna gate back into screen mode. */
+          data: !hasIncomingModes && gateBidirectionalModes
+            ? { ...w, gateBidirectionalModes } : w,
           updatedAt: new Date(),
         };
       }),
@@ -483,9 +665,8 @@ export async function replaceState(
              reasoning for the PIN/login columns, captured into pinById above
              since they never round-trip through `data` at all (see composeState). */
           userId: toInt(e.userId) ?? bootstrapUserId,
-          /* Carried over from the row that existed before the wipe, never read
-             from `e` — see the roleId comment on pinById above. */
-          roleId: pin?.roleId ?? null,
+          /* roleId is deliberately omitted: role assignment has its own API and
+             must never be overwritten by a stale whole-state snapshot. */
           data: e,
           pinHash: pin?.pinHash ?? null,
           pinResetOtpHash: pin?.pinResetOtpHash ?? null,
@@ -495,6 +676,7 @@ export async function replaceState(
           updatedAt: new Date(),
         };
       }),
+      { preserveCols: ['roleId'] },
     );
 
     // 6) simple keyed maps
@@ -554,7 +736,18 @@ export async function replaceState(
         auditKey(r.ts, r.action, r.entityId, r.actor),
       ),
     );
+    const isHumanAuditEntry = (entry: Record<string, unknown>) => {
+      const actor = String(entry.recorder ?? '').trim();
+      const action = String(entry.action ?? '').toLowerCase();
+      const timestamp = toDate(entry.ts);
+      // Device/webhook/heartbeat events are telemetry, not human actions.
+      return !!timestamp && timestamp >= AUDIT_CACHE_CUTOFF && actor !== '' && action !== ''
+        && !/^(system|auto|fx9600|lpr)/i.test(actor)
+        && !/(heartbeat|webhook|lpr|rfid_read|auto_)/i.test(action)
+        && isEmployeeCrudAuditEntry(entry);
+    };
     const newAuditRows = (s.auditLog ?? [])
+      .filter((a) => isHumanAuditEntry(a as Record<string, unknown>))
       .map((a) => {
         const e = a as Record<string, unknown>;
         return {
@@ -571,6 +764,15 @@ export async function replaceState(
       .filter((r) => !existingAuditKeys.has(auditKey(r.ts, r.action, r.entityId, r.actor)));
     await chunkInsert(tx, auditLog, newAuditRows);
   });
+
+  // Commit stock first. LINE errors are persisted in the durable outbox and
+  // retried independently; they must never roll back a completed Gate Out.
+  for (const notification of pendingGateOutNotifications) {
+    await sendGateOutLineNotification(db, notification);
+  }
+  for (const notification of pendingGateInNotifications) {
+    await sendGateInNotifications(db, notification);
+  }
 }
 
 /** Insert in bounded chunks to stay well under Postgres' bind-parameter limit. */

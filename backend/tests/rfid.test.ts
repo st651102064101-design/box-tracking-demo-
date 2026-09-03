@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { bootstrap, auth, type TestCtx } from './helpers.js';
-import { getDb } from '../src/db/client.js';
-import { boxes } from '../src/db/schema.js';
-import { eq } from 'drizzle-orm';
 
 let ctx: TestCtx;
 beforeAll(async () => {
@@ -51,20 +48,19 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D41' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBe('E200001122334455');
+    expect(res.body.rfid).toBe('000000000000424F582D41');
 
     const box = await request(ctx.app).get('/api/boxes/BOX-A').set(auth(ctx.token));
-    expect(box.body.rfidTid).toBe('E200001122334455');
-    expect(box.body.rfidEpc).toBe('000000000000424F582D41');
+    expect(box.body.rfid).toBe('000000000000424F582D41');
   });
 
-  it('rejects a TID that is already claimed by another box', async () => {
+  it('rejects a code that is already claimed by another box', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-B/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: 'AABBCCDDEEFF001122334455' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('rfid_tid_in_use');
   });
@@ -73,7 +69,7 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200009988776655', rfidEpc: 'AABBCCDDEEFF001122334455' });
+      .send({ rfid: 'AABBCCDDEEFF001122334455' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('already_tagged');
   });
@@ -82,37 +78,55 @@ describe('POST /api/boxes/:tag/rfid — association', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-A/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200009988776655', rfidEpc: 'AABBCCDDEEFF001122334455', replace: true });
+      .send({ rfid: 'AABBCCDDEEFF001122334455', replace: true });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBe('E200009988776655');
+    expect(res.body.rfid).toBe('AABBCCDDEEFF001122334455');
   });
 
-  it('the old TID is free again after a replace and can go on another box', async () => {
+  it('the old code is free again after a replace and can go on another box', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-B/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D42' });
+      .send({ rfid: '000000000000424F582D41' });
     expect(res.status).toBe(200);
+  });
+
+  /* A PDA or web client written against the older two-field payload must keep
+   * working; the EPC is the one that survives, since that is what a reader
+   * reports during the inventory sweeps these codes get scanned by. */
+  it('accepts the legacy {rfidTid, rfidEpc} payload and keeps the EPC', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-B/rfid')
+      .set(auth(ctx.token))
+      .send({ rfidTid: 'E200001122334455', rfidEpc: '000000000000424F582D42', replace: true });
+    expect(res.status).toBe(200);
+    expect(res.body.rfid).toBe('000000000000424F582D42');
+
+    const found = await request(ctx.app).get('/api/boxes/000000000000424F582D42').set(auth(ctx.token));
+    expect(found.status).toBe(200);
+    expect(found.body.tag).toBe('BOX-B');
+  });
+
+  it('rejects a payload carrying no RFID value at all', async () => {
+    const res = await request(ctx.app)
+      .post('/api/boxes/BOX-A/rfid')
+      .set(auth(ctx.token))
+      .send({ replace: true });
+    expect(res.status).toBe(400);
   });
 
   it('404s for a box that does not exist', async () => {
     const res = await request(ctx.app)
       .post('/api/boxes/NOPE/rfid')
       .set(auth(ctx.token))
-      .send({ rfidTid: 'E200000000000001', rfidEpc: '000000000000000000000001' });
+      .send({ rfid: '000000000000000000000001' });
     expect(res.status).toBe(404);
   });
 });
 
 describe('flexible scan resolution', () => {
-  it('GET /api/boxes/:code finds a box by its RFID EPC', async () => {
+  it('GET /api/boxes/:code finds a box by its RFID code', async () => {
     const res = await request(ctx.app).get('/api/boxes/AABBCCDDEEFF001122334455').set(auth(ctx.token));
-    expect(res.status).toBe(200);
-    expect(res.body.tag).toBe('BOX-A');
-  });
-
-  it('GET /api/boxes/:code finds a box by its RFID TID', async () => {
-    const res = await request(ctx.app).get('/api/boxes/E200009988776655').set(auth(ctx.token));
     expect(res.status).toBe(200);
     expect(res.body.tag).toBe('BOX-A');
   });
@@ -161,43 +175,8 @@ describe('DELETE /api/boxes/:tag/rfid', () => {
     const res = await request(ctx.app).delete('/api/boxes/BOX-B/rfid').set(auth(ctx.token));
     expect(res.status).toBe(200);
 
-    const [box] = await getDb().select().from(boxes).where(eq(boxes.tag, 'BOX-B'));
-    expect(box.rfidEpc).toBeNull();
-    expect(box.rfidTid).toBeNull();
-
-    /* This EPC is not an opaque identifier — 000000000000424F582D42 is the
-       ASCII text "BOX-B", which is how tags are commissioned here. So a lookup
-       still finds the box after detaching, and that is correct: the hex spells
-       the barcode, and refusing to read it would mean a tag written in bulk but
-       never bound through this endpoint is invisible to every scan (see
-       lib/epcCodec.ts). Detaching removes the *binding*; it cannot un-write
-       what is printed on the tag.
-
-       The assertion this replaces expected 404 here, from back when resolution
-       was binding-only. */
     const lookup = await request(ctx.app).get('/api/boxes/000000000000424F582D42').set(auth(ctx.token));
-    expect(lookup.status).toBe(200);
-    expect(lookup.body.tag).toBe('BOX-B');
-  });
-
-  it('leaves a numeric EPC unresolvable once detached — nothing spells the box', async () => {
-    /* The other half of the rule above: a factory-numeric EPC carries no text,
-       so the binding was the only thing connecting it to a box. Detached, it
-       must go back to being unknown. */
-    await request(ctx.app)
-      .post('/api/boxes/BOX-A/rfid')
-      .set(auth(ctx.token))
-      .send({ rfidEpc: 'E28011606000020000000009', replace: true });
-    const bound = await request(ctx.app)
-      .get('/api/boxes/E28011606000020000000009')
-      .set(auth(ctx.token));
-    expect(bound.status).toBe(200);
-
-    await request(ctx.app).delete('/api/boxes/BOX-A/rfid').set(auth(ctx.token));
-    const after = await request(ctx.app)
-      .get('/api/boxes/E28011606000020000000009')
-      .set(auth(ctx.token));
-    expect(after.status).toBe(404);
+    expect(lookup.status).toBe(404);
   });
 
   it('409s when the box has no tag to detach', async () => {
@@ -234,8 +213,7 @@ describe('POST /api/boxes/:tag/rfid — EPC-only commissioning', () => {
       .set(auth(ctx.token))
       .send({ rfidEpc: 'E280691500007006A375143E' });
     expect(res.status).toBe(200);
-    expect(res.body.rfidTid).toBeNull();
-    expect(res.body.rfidEpc).toBe('E280691500007006A375143E');
+    expect(res.body.rfid).toBe('E280691500007006A375143E');
   });
 
   it('resolves a later scan of that EPC back to the box', async () => {
@@ -269,5 +247,60 @@ describe('POST /api/boxes/:tag/rfid — EPC-only commissioning', () => {
     expect(res.status).toBe(200);
     const box = await request(ctx.app).get('/api/boxes/BOX-E1').set(auth(ctx.token));
     expect(box.body.rfidEpc).toBeNull();
+  });
+});
+
+/* The Gate ขาออก Excel import (and every other legacy-UI edit) saves by PUTting
+   the browser's whole `S` snapshot back. That snapshot is fetched at page load,
+   so a tag the PDA commissioned afterwards simply isn't in it — and the wholesale
+   replace used to rewrite the box row from it, unbinding the tag. */
+describe('PUT /api/state — RFID bindings survive a stale wholesale save', () => {
+  const EPC = '000000000000424F582D53';
+
+  const SEED = {
+    boxes: {
+      'BOX-S1': { tag: 'BOX-S1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+      'BOX-S2': { tag: 'BOX-S2', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {} },
+    },
+    customers: { 'CUST-X': { id: 'CUST-X', name: 'ลูกค้า X', returnDays: 10 } },
+    warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [5], gateTypes: { '5': 'both' } } },
+    gates: { '5': 'WH-001' },
+    cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
+  };
+
+  it('keeps a binding the payload knows nothing about', async () => {
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(SEED);
+    await request(ctx.app)
+      .post('/api/boxes/BOX-S1/rfid')
+      .set(auth(ctx.token))
+      .send({ rfid: EPC });
+
+    // a snapshot taken *before* that association — no rfid on any box
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(SEED);
+
+    const box = await request(ctx.app).get('/api/boxes/BOX-S1').set(auth(ctx.token));
+    expect(box.body.rfid).toBe(EPC);
+
+    // still resolvable by the physical tag, and visible to the legacy UI
+    const byCode = await request(ctx.app).get('/api/boxes/' + EPC).set(auth(ctx.token));
+    expect(byCode.body.tag).toBe('BOX-S1');
+    const state = await request(ctx.app).get('/api/state').set(auth(ctx.token));
+    expect(state.body.boxes['BOX-S1'].rfid).toBe(EPC);
+  });
+
+  it('a detach through the RFID endpoint still sticks across the next save', async () => {
+    await request(ctx.app).delete('/api/boxes/BOX-S1/rfid').set(auth(ctx.token));
+    await request(ctx.app)
+      .put('/api/state')
+      .set(auth(ctx.token))
+      .send({
+        boxes: {
+          // the stale snapshot still carries the old binding — must not resurrect it
+          'BOX-S1': { tag: 'BOX-S1', type: 'BT-001', value: 450, status: 'warehouse', cycles: 0, labeled: false, history: [], location: {}, rfid: EPC },
+        },
+        cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
+      });
+    const box = await request(ctx.app).get('/api/boxes/BOX-S1').set(auth(ctx.token));
+    expect(box.body.rfid).toBeNull();
   });
 });

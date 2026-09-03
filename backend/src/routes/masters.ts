@@ -5,6 +5,8 @@ import { boxTypes, customers } from '../db/schema.js';
 import { boxTypeSchema, customerSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
+import { sendMail } from '../lib/mailer.js';
+import { writeAuditLog } from '../services/audit.js';
 
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
@@ -21,6 +23,59 @@ const canManageMaster = requirePermission('master.manage');
 const canCreatePartner = requirePermission('partner.create');
 const canUpdatePartner = requirePermission('partner.update');
 const canDeletePartner = requirePermission('partner.delete');
+
+type ContactEmailNotice = { sent: boolean; error?: string };
+
+function normalizedEmail(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+/**
+ * Contact-email notifications are deliberately separate from LINE linking.
+ * Saving a LINE binding must never generate an email; this is only sent when
+ * an administrator adds or changes the customer's contact email address.
+ */
+async function notifyCustomerContactEmail(
+  db: ReturnType<typeof getDb>,
+  input: { id: string; name: string; email: string; actor: string },
+): Promise<ContactEmailNotice> {
+  try {
+    await sendMail({
+      to: input.email,
+      subject: 'ยืนยันการเพิ่มอีเมลติดต่อ — Box Tracking',
+      text: [
+        `เรียน ${input.name}`,
+        '',
+        `อีเมล ${input.email} ได้รับการบันทึกเป็นช่องทางติดต่อสำหรับบัญชีลูกค้า ${input.name} (${input.id}) ในระบบ Box Tracking แล้ว`,
+        'ระบบจะใช้อีเมลนี้สำหรับส่งการแจ้งเตือนสถานะกล่องตามที่ผู้ดูแลระบบดำเนินการ',
+        '',
+        'หากท่านไม่ได้ขอเพิ่มหรือเปลี่ยนอีเมลนี้ กรุณาติดต่อผู้ดูแลระบบทันที',
+      ].join('\n'),
+    });
+    await writeAuditLog(db, {
+      action: 'CUSTOMER_CONTACT_EMAIL_NOTICE_SENT',
+      actor: input.actor,
+      itemId: input.id,
+      itemName: input.name,
+      after: { channel: 'EMAIL', notice: 'contact_email_added_or_changed' },
+    });
+    return { sent: true };
+  } catch (error) {
+    console.warn('[masters] customer contact email notice failed', error instanceof Error ? error.message : error);
+    try {
+      await writeAuditLog(db, {
+        action: 'CUSTOMER_CONTACT_EMAIL_NOTICE_FAILED',
+        actor: input.actor,
+        itemId: input.id,
+        itemName: input.name,
+        after: { channel: 'EMAIL', notice: 'contact_email_added_or_changed' },
+      });
+    } catch (auditError) {
+      console.warn('[masters] contact email failure audit write failed', auditError instanceof Error ? auditError.message : auditError);
+    }
+    return { sent: false, error: 'บันทึกข้อมูลลูกค้าแล้ว แต่อีเมลแจ้งเตือนส่งไม่สำเร็จ' };
+  }
+}
 
 /* ─── box types ────────────────────────────────────────────────────────────*/
 mastersRouter.get(
@@ -141,6 +196,8 @@ mastersRouter.post(
           name: input.name,
           addr: input.addr ?? null,
           contact: input.contact ?? null,
+          lineUserId: input.lineUserId ?? null,
+          contactEmail: input.contactEmail ?? null,
           returnDays: input.returnDays ?? null,
           data: input,
           deletedAt: null,
@@ -153,11 +210,23 @@ mastersRouter.post(
         name: input.name,
         addr: input.addr ?? null,
         contact: input.contact ?? null,
+        lineUserId: input.lineUserId ?? null,
+        contactEmail: input.contactEmail ?? null,
         returnDays: input.returnDays ?? null,
         data: input,
       });
     }
-    res.status(201).json(input);
+    const previousEmail = normalizedEmail(existing[0]?.contactEmail);
+    const nextEmail = normalizedEmail(input.contactEmail);
+    const emailNotification = previousEmail !== nextEmail && nextEmail
+      ? await notifyCustomerContactEmail(db, {
+        id: input.id,
+        name: input.name,
+        email: input.contactEmail!.trim(),
+        actor: req.user?.username ?? 'system',
+      })
+      : undefined;
+    res.status(201).json({ ...input, emailNotification });
   }),
 );
 
@@ -167,12 +236,19 @@ mastersRouter.put(
   asyncHandler(async (req, res) => {
     const input = customerSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
+    const [before] = await db.select({ contactEmail: customers.contactEmail })
+      .from(customers)
+      .where(and(eq(customers.id, req.params.id), isNull(customers.deletedAt)))
+      .limit(1);
+    if (!before) throw httpError(404, 'ไม่พบลูกค้า', 'not_found');
     const updated = await db
       .update(customers)
       .set({
         name: input.name,
         addr: input.addr ?? null,
         contact: input.contact ?? null,
+        lineUserId: input.lineUserId ?? null,
+        contactEmail: input.contactEmail ?? null,
         returnDays: input.returnDays ?? null,
         data: input,
         updatedAt: new Date(),
@@ -180,7 +256,17 @@ mastersRouter.put(
       .where(and(eq(customers.id, req.params.id), isNull(customers.deletedAt)))
       .returning();
     if (!updated.length) throw httpError(404, 'ไม่พบลูกค้า', 'not_found');
-    res.json(input);
+    const previousEmail = normalizedEmail(before.contactEmail);
+    const nextEmail = normalizedEmail(input.contactEmail);
+    const emailNotification = previousEmail !== nextEmail && nextEmail
+      ? await notifyCustomerContactEmail(db, {
+        id: input.id,
+        name: input.name,
+        email: input.contactEmail!.trim(),
+        actor: req.user?.username ?? 'system',
+      })
+      : undefined;
+    res.json({ ...input, emailNotification });
   }),
 );
 

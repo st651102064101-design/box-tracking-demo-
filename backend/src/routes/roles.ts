@@ -120,7 +120,9 @@ rolesRouter.get(
     const counts = await memberCounts();
 
     res.json({
-      total: ALL_PERMISSIONS.length,
+      /* total ของ endpoint นี้คือจำนวนบทบาท ไม่ใช่จำนวน permission ในระบบ
+         ไม่อย่างนั้น UI จะแสดง badge ว่ามีบทบาทหลายรายการ แต่ตารางอาจว่างได้ */
+      total: roleRows.length,
       roles: roleRows
         .map((r) => ({
           id: r.id,

@@ -16,7 +16,7 @@
  * interface below is the seam where that swap happens.
  */
 export type ChangeListener = (version: number, origin: string | null) => void;
-export type RfidReadEvent = { id: string; gate: number; tags: string[]; ts: string };
+export type RfidReadEvent = { id: string; gate: number; tags: string[]; inbound?: string[]; outbound?: string[]; antennas?: number[]; decoded?: string[]; unknown?: string[]; repeats?: string[]; ts: string };
 export type RfidReadListener = (event: RfidReadEvent) => void;
 export type ReaderStatusEvent = {
   id: string;
@@ -28,11 +28,14 @@ export type ReaderStatusEvent = {
   lastActiveAt: string;
 };
 export type ReaderStatusListener = (event: ReaderStatusEvent) => void;
+export type LprDetectionEvent = { id: string; eventId: string; gateId: string; plateNumber: string; confidence: number; rfidTags: string[]; ts: string };
+export type LprDetectionListener = (event: LprDetectionEvent) => void;
 
 let version = 0;
 const listeners = new Set<ChangeListener>();
 const rfidReadListeners = new Set<RfidReadListener>();
 const readerStatusListeners = new Set<ReaderStatusListener>();
+const lprDetectionListeners = new Set<LprDetectionListener>();
 
 /** Record that state changed and notify every open stream. */
 export function bump(origin?: string | null): number {
@@ -58,11 +61,12 @@ export function subscribe(listener: ChangeListener): () => void {
 }
 
 /** Publish a tag-read delta without forcing every browser to reload /api/state. */
-export function publishRfidRead(gate: number, tags: string[]): RfidReadEvent {
+export function publishRfidRead(gate: number, tags: string[], movement?: { inbound?: string[]; outbound?: string[]; antennas?: number[]; decoded?: string[]; unknown?: string[]; repeats?: string[] }): RfidReadEvent {
   const event = {
     id: `${gate}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     gate,
     tags: Array.from(new Set(tags)),
+    ...movement,
     ts: new Date().toISOString(),
   };
   for (const listener of rfidReadListeners) {
@@ -92,6 +96,18 @@ export function publishReaderStatus(input: Omit<ReaderStatusEvent, 'id' | 'onlin
 export function subscribeReaderStatus(listener: ReaderStatusListener): () => void {
   readerStatusListeners.add(listener);
   return () => readerStatusListeners.delete(listener);
+}
+
+export function publishLprDetection(input: Omit<LprDetectionEvent, 'id'>): LprDetectionEvent {
+  const event = { ...input, id: `lpr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+  for (const listener of lprDetectionListeners) {
+    try { listener(event); } catch { /* dead stream */ }
+  }
+  return event;
+}
+export function subscribeLprDetection(listener: LprDetectionListener): () => void {
+  lprDetectionListeners.add(listener);
+  return () => lprDetectionListeners.delete(listener);
 }
 
 export const currentVersion = () => version;
