@@ -60,6 +60,7 @@ services:
       SEED_ADMIN_USERNAME: admin
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
       FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET:-change-me-in-production}
+      LPR_WEBHOOK_SECRET: ${LPR_WEBHOOK_SECRET:-BoxTrace-LPR-2026}
       # mail stays off, exactly as the running container had it: the real
       # credentials in .env are NOT wired in here on purpose, so grouping the
       # containers doesn't also switch outbound email on
