@@ -696,6 +696,8 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .emp-badge-photo-import:hover{transform:scale(1.035);background:var(--accentSoft)!important;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 38%,transparent);}
 .emp-badge-photo-import:hover .svgi svg{animation:empBadgeUploadNudge .7s ease-in-out infinite;}
 @keyframes empBadgeUploadNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.emp-badge-float-btn{opacity:0;transform:scale(.78);transition:opacity .22s ease,transform .28s cubic-bezier(.22,1,.36,1);}
+.emp-badge-float-btn.is-visible{opacity:1;transform:scale(1);}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
@@ -8073,6 +8075,10 @@ function empBadgeBoot(){
     actionBtns:[$('#empBadgeEditBtn'),$('#empBadgeCredBtn'),$('#empBadgePrintBtn'),$('#empBadgeBackBtn'),$('#empBadgeDelBtn')],
     backdrop:$('#empBadgeBackdrop'),flipBtn:$('#empBadgeFlipBtn')
   };
+  [empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){
+    if(btn)btn.classList.add('emp-badge-float-btn');
+  });
+  requestAnimationFrame(function(){[empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});});
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
   window.addEventListener('pointermove',empBadgeOnMove,{passive:false});
@@ -8196,6 +8202,7 @@ function closeEmpBadge(){
   empBadge.drag=null;
   if(empBadge.dragScroll){window.scrollTo(empBadge.dragScroll.x,empBadge.dragScroll.y);empBadge.dragScroll=null;}
   document.documentElement.classList.remove('emp-badge-dragging');
+  if(empBadge.el){[empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.remove('is-visible');});}
   if(empBadge.el&&empBadge.el.backdrop)empBadge.el.backdrop.classList.remove('no-blur');
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='none';
 }
