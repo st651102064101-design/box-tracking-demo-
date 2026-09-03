@@ -73,15 +73,11 @@ export async function gateOut(db, input) {
         lost: 'ถูกตีเป็นสูญหาย',
         pending: 'ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง',
         hold: 'ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้',
-        damage: 'สถานะชำรุด (Damage) — จ่ายออกไม่ได้ ยกเว้นส่งคืนผู้จำหน่าย (Supplier)',
+        damage: 'สถานะชำรุด (Damage) — จ่ายออกไม่ได้',
     };
-    // Damage stock is normally frozen, but a supplier return is exactly how a
-    // damaged box legitimately leaves — the destination has to be a supplier,
-    // not an ordinary customer, or "damage" would stop meaning anything.
-    const custKind = cust.data?.kind ?? 'customer';
     const blocked = canonicalTags
         .map((tag) => ({ tag, status: found.get(tag).status }))
-        .filter((b) => b.status !== 'warehouse' && !(b.status === 'damage' && custKind === 'supplier'));
+        .filter((b) => b.status !== 'warehouse');
     if (blocked.length) {
         const detail = blocked.map((b) => `${b.tag} (${NOT_SHIPPABLE[b.status] ?? b.status})`).join(', ');
         throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
@@ -191,20 +187,6 @@ export async function gateIn(db, input) {
     // Reported as the operator's own scanned code (barcode or RFID, whichever
     // they actually shot), not a canonical tag that was never resolved.
     const unknown = missing;
-    /* A box that never left is already accounted for — scanning it in again
-     * (a mis-scan, or someone repeating a receipt that already went through)
-     * must not silently re-stamp lastSeenAt and log a second "received" event
-     * as if a shipment had actually just come off a truck. Mirrors gateOut's
-     * NOT_SHIPPABLE guard: reject the whole batch up front, before any row is
-     * touched, rather than partially applying some tags and not others. Only
-     * 'warehouse' is checked here — pending/hold/damage/lost boxes are exactly
-     * what receiving is *for* (clearing a flag, or completing labeling), so
-     * those still proceed as before. */
-    const alreadyIn = canonicalTags.map((tag) => found.get(tag)).filter((row) => row.status === 'warehouse');
-    if (alreadyIn.length) {
-        const detail = alreadyIn.map((row) => `${row.tag} (อยู่ในคลังอยู่แล้ว)`).join(', ');
-        throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
-    }
     await db.transaction(async (tx) => {
         for (const tag of canonicalTags) {
             const row = found.get(tag);
@@ -217,18 +199,15 @@ export async function gateIn(db, input) {
             const condition = conditions[tag];
             const status = condition ?? 'warehouse';
             b.status = status;
-            // A returned box flagged hold/damage must not keep (or gain) a real rack
-            // position — it isn't sellable/shippable stock, so it can't sit on screen
-            // looking like ordinary shelved inventory. Park it in quarantine instead
-            // of leaving whatever location it happened to carry from before it went
-            // out; a real position only gets assigned again once someone clears the
-            // flag and runs it through the normal putaway endpoint (POST /:tag/putaway,
-            // see boxes.ts, which itself now refuses hold/damage boxes).
-            if (condition === 'hold' || condition === 'damage') {
-                b.location = { wh: '', zone: 'QUARANTINE_ZONE', rack: '', shelf: '', slot: '', gate: null, ts: inTs };
-            }
             b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
             b.lastSeenAt = inTs;
+            // Only a box actually landing on 'warehouse' gets the chosen shelf —
+            // see the docstring on GateInInput.location.
+            const location = !condition && input.location
+                ? { wh, zone: input.location.zone ?? '', rack: input.location.rack ?? '', shelf: input.location.shelf ?? '', slot: input.location.slot ?? '', gate: null, ts: inTs }
+                : undefined;
+            if (location)
+                b.location = location;
             b.plate = plate;
             b.driver = driver;
             b.vehicleType = vehicleType;
@@ -256,6 +235,7 @@ export async function gateIn(db, input) {
                 driver,
                 vehicleType,
                 ...(condition ? { condition } : {}),
+                ...(location ? { loc: location } : {}),
             });
             b.history = history;
             await tx
@@ -271,12 +251,9 @@ export async function gateIn(db, input) {
                 outWh: null,
                 outAt: null,
                 dueAt: null,
+                ...(location ? { location } : {}),
                 data: b,
                 updatedAt: new Date(),
-                // Only touch the typed location column for the quarantine case above —
-                // an ordinary inbound (status 'warehouse') still goes through the
-                // dedicated putaway endpoint to pick a real shelf position, same as always.
-                ...(condition === 'hold' || condition === 'damage' ? { location: b.location } : {}),
             })
                 .where(eq(boxes.tag, tag));
             await tx.insert(events).values({
@@ -297,6 +274,7 @@ export async function gateIn(db, input) {
                     driver,
                     vehicleType,
                     ...(condition ? { condition } : {}),
+                    ...(location ? { loc: location } : {}),
                 },
             });
             received.push(tag);

@@ -5,7 +5,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import { notFound, errorHandler } from './middleware/error.js';
-import { requireApiKey } from './middleware/auth.js';
 import { authRouter } from './routes/auth.js';
 import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
@@ -16,6 +15,16 @@ import { employeePinRouter } from './routes/pin.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
 import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
+import { gatePrefsRouter } from './routes/gatePrefs.js';
+import { uiPrefsRouter } from './routes/uiPrefs.js';
+import { rolesRouter } from './routes/roles.js';
+import { brandingRouter } from './routes/branding.js';
+import { systemRouter } from './routes/system.js';
+import { lprRouter } from './routes/lpr.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { lineWebhookRouter } from './routes/lineWebhook.js';
+import { lineLinkRouter } from './routes/lineLink.js';
+import { devicesRouter } from './routes/devices.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -39,23 +48,6 @@ const authLimiter = rateLimit({
   message: { error: 'too_many_requests', message: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
 });
 
-/**
- * Baseline throttle for every authenticated (operational) endpoint —
- * gate/boxes/masters/rfid/pin/state — previously unlimited entirely. 300
- * requests/min comfortably covers a real terminal (RFID batches, polling,
- * queue commits) while still bounding a runaway client or a credential
- * that's actively being abused. authLimiter above stays separate and
- * stricter since login/register are unauthenticated and a much cheaper
- * target to hammer.
- */
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'too_many_requests', message: 'มีการเรียก API ถี่เกินไป กรุณาลองใหม่ภายหลัง' },
-});
-
 /** Build the Express app (kept separate from listen() so Supertest can import it). */
 export function createApp() {
   const app = express();
@@ -77,6 +69,29 @@ export function createApp() {
   // Full-state snapshots can be large, but 25mb was needlessly generous for a
   // request body and widened the DoS surface; 10mb comfortably covers real
   // snapshots while capping worst-case memory per request.
+  /* The FX9600 webhook takes its body as raw bytes instead of going through
+     express.json() below, for two reasons found the hard way debugging a
+     live reader:
+       1. Zebra's IoT Connector doesn't document (or let you configure) the
+          Content-Type it sends tag data with, and express.json() silently
+          leaves req.body empty for anything it doesn't recognise as JSON —
+          which is indistinguishable, downstream, from "the reader sent a
+          heartbeat with no tags in it". Parsing the bytes ourselves makes
+          the route work regardless of what header the reader picked.
+       2. It lets the route log exactly what arrived on the wire (see
+          fx9600DebugLog in routes/rfid.ts), which is the only way to tell
+          "reader never sends tag data" apart from "reader sends it and we
+          fail to parse it" — the whole question when a reader connects
+          fine but no boxes ever get received.
+     Mounted before express.json() so it wins for this path; body-parser
+     skips anything already parsed (it sets req._body), so json() below is
+     a no-op here rather than a conflict. */
+  // Keep raw parsing scoped to the physical-reader webhook. Management APIs
+  // under /api/rfid/fx9600 still need normal JSON request parsing.
+  app.use('/api/rfid/fx9600/:gate/webhook', express.raw({ type: '*/*', limit: '10mb' }));
+  // Signature verification must see LINE's exact bytes. This must be mounted
+  // before express.json(); once JSON parsing runs the original byte stream is gone.
+  app.use('/api/line/webhook', express.raw({ type: '*/*', limit: '1mb' }));
   app.use(express.json({ limit: '10mb' }));
   /* The SSE URL carries the auth token as a query parameter, because
      EventSource cannot send headers. Access logs are the one place that
@@ -99,21 +114,27 @@ export function createApp() {
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth', authRouter);
-  // Every operational route beyond this point is authenticated (each
-  // router's own requireAuth), rate-limited, and — once API_KEY is set —
-  // also requires X-API-Key. /api/stream is excluded: it's a long-lived SSE
-  // connection, not a request burst, so the per-minute request limiter
-  // doesn't apply to it in any useful way, and it authenticates via its own
-  // query-param token instead of a header (EventSource can't send headers).
-  app.use('/api/state', apiLimiter, requireApiKey, stateRouter);
-  app.use('/api/gate', apiLimiter, requireApiKey, gateRouter);
-  app.use('/api/boxes', apiLimiter, requireApiKey, boxesRouter);
-  app.use('/api/rfid', apiLimiter, requireApiKey, rfidRouter);
-  app.use('/api/masters', apiLimiter, requireApiKey, mastersRouter);
-  app.use('/api/employees', apiLimiter, requireApiKey, employeePinRouter);
-  app.use('/api/cycle-counts', apiLimiter, requireApiKey, cycleCountsRouter);
-  app.use('/api/reports', apiLimiter, requireApiKey, reportsRouter);
+  app.use('/api/branding', brandingRouter);
+  app.use('/api/state', stateRouter);
+  // LPR cameras authenticate with their own webhook secret, not a user JWT.
+  // Mount before gateRouter, whose remaining endpoints require Bearer auth.
+  app.use('/api/gate/lpr', lprRouter);
+  app.use('/api/gate', gateRouter);
+  app.use('/api/boxes', boxesRouter);
+  app.use('/api/rfid', rfidRouter);
+  app.use('/api/masters', mastersRouter);
+  app.use('/api/employees', employeePinRouter);
+  app.use('/api/cycle-counts', cycleCountsRouter);
+  app.use('/api/reports', reportsRouter);
+  app.use('/api/devices', devicesRouter);
+  app.use('/api/notify-customer', notificationsRouter);
+  app.use('/api/line/webhook', lineWebhookRouter);
+  app.use('/api/line/link', lineLinkRouter);
   app.use('/api/stream', streamRouter);
+  app.use('/api/gate-prefs', gatePrefsRouter);
+  app.use('/api/ui-prefs', uiPrefsRouter);
+  app.use('/api/roles', rolesRouter);
+  app.use('/api/system', systemRouter);
 
   app.use(notFound);
   app.use(errorHandler);

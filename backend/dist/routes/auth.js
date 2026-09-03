@@ -6,6 +6,7 @@ import { users, employees, auditLog } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { sendMail } from '../lib/mailer.js';
 import { signToken } from '../lib/jwt.js';
+import { effectivePermissions } from '../lib/effectivePermissions.js';
 import { loginSchema, registerSchema, updateRoleSchema, linkEmployeeSchema, forgotPasswordRequestSchema, resetPasswordSchema, } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -253,7 +254,12 @@ authRouter.post('/reset-password', forgotPasswordLimiter, asyncHandler(async (re
 }));
 /** GET /api/auth/me — current user from the bearer token. */
 authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
-    res.json({ user: req.user });
+    /* The permission list rides along here so the SPA can hide menus/buttons
+       the account can't use. It is a convenience for the UI only — every route
+       re-checks server-side (requirePermission), because a hidden button is
+       not a security boundary. */
+    const role = await effectivePermissions(req.user);
+    res.json({ user: req.user, role, permissions: role.permissions });
 }));
 /** GET /api/auth/users — list employee accounts (for the PDA login picker). */
 authRouter.get('/users', requireAuth, asyncHandler(async (req, res) => {

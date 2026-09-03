@@ -11,48 +11,14 @@ import type { DB } from '../db/client.js';
 import { boxes, customers, config, gates, events, doRecords, employees } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
 import { resolveBoxesByCodes } from './rfid.js';
+import { sendGateInNotifications, sendGateOutLineNotification } from './autoLineNotifications.js';
 
 const DAY = 86_400_000;
 const iso = () => new Date().toISOString();
-const pad = (n: number, w: number) => String(n).padStart(w, '0');
-/** Same shape as the legacy web UI's genDocNo('DO') (DO-YYYY-MM-DD-HHMMSS) —
- *  this is the fallback used when a caller (PDA, an integration) ships a
- *  batch without generating its own DO number. It used to be `DO-${Date.now()}`,
- *  a raw epoch-ms stamp that looked nothing like the readable numbers the web
- *  app generates for the exact same kind of record, confusing anyone
- *  comparing a DO from the PDA against one from the web app. */
-function genDoNo(): string {
-  const d = new Date();
-  return (
-    `DO-${d.getFullYear()}-${pad(d.getMonth() + 1, 2)}-${pad(d.getDate(), 2)}-` +
-    `${pad(d.getHours(), 2)}${pad(d.getMinutes(), 2)}${pad(d.getSeconds(), 2)}`
-  );
-}
 
 async function warehouseOfGate(db: DB, gate: number): Promise<string> {
   const [row] = await db.select().from(gates).where(eq(gates.gateNo, gate));
   return row?.warehouseId ?? '';
-}
-
-/**
- * Best-effort "which warehouse does this box currently belong to" — the
- * typed `location.wh` column when it has one (shelved), otherwise the `wh`
- * off the box's most recent inbound history entry. A box received in "รอ
- * Putaway" (deferred) mode reaches `status: 'warehouse'` without ever
- * getting a location stamped (see gateIn below), so `location.wh` alone
- * under-reports which boxes are actually this warehouse's. Empty string
- * means genuinely unknown — callers must treat that as "don't know, don't
- * block", not as a mismatch.
- */
-function currentWhOf(row: typeof boxes.$inferSelect): string {
-  const locWh = (row.location as Record<string, unknown> | null)?.wh;
-  if (typeof locWh === 'string' && locWh) return locWh;
-  const history = Array.isArray(row.history) ? (row.history as Record<string, unknown>[]) : [];
-  for (let i = history.length - 1; i >= 0; i--) {
-    const h = history[i];
-    if ((h.dir === 'in' || h.dir === 'in-new') && typeof h.wh === 'string' && h.wh) return h.wh;
-  }
-  return '';
 }
 
 /** Who performed a scan, as recorded on every box's history and event row. */
@@ -110,8 +76,6 @@ export interface GateOutInput {
   vehicleType?: string;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
-  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
-  platform?: string;
 }
 
 export async function gateOut(db: DB, input: GateOutInput) {
@@ -119,8 +83,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const operator = await resolveOperator(db, input.employeeId, input.recorder);
   const { employeeId, recorder } = operator;
   const device = input.device ?? '';
-  const platform = input.platform ?? '';
-  const doNo = input.doNo ?? genDoNo();
+  const doNo = input.doNo ?? `DO-${Date.now()}`;
   const po = input.po ?? '';
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
@@ -148,36 +111,17 @@ export async function gateOut(db: DB, input: GateOutInput) {
     lost: 'ถูกตีเป็นสูญหาย',
     pending: 'ยังไม่ติด Tag / ยังไม่เคยผ่าน Gate เข้าคลัง',
     hold: 'ถูกพักการใช้งาน (Hold) — ปลด Hold ก่อนจึงจ่ายออกได้',
-    damage: 'สถานะชำรุด (Damage) — จ่ายออกไม่ได้ ยกเว้นส่งคืนผู้จำหน่าย (Supplier)',
+    damage: 'สถานะชำรุด (Damage) — จ่ายออกไม่ได้',
   };
-  // Damage stock is normally frozen, but a supplier return is exactly how a
-  // damaged box legitimately leaves — the destination has to be a supplier,
-  // not an ordinary customer, or "damage" would stop meaning anything.
-  const custKind = ((cust.data as Record<string, unknown> | null)?.kind as string | undefined) ?? 'customer';
-  const wh = await warehouseOfGate(db, gate);
   const blocked = canonicalTags
     .map((tag) => ({ tag, status: found.get(tag)!.status }))
-    .filter((b) => b.status !== 'warehouse' && !(b.status === 'damage' && custKind === 'supplier'));
+    .filter((b) => b.status !== 'warehouse');
   if (blocked.length) {
     const detail = blocked.map((b) => `${b.tag} (${NOT_SHIPPABLE[b.status] ?? b.status})`).join(', ');
     throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
   }
-  // A box actually sitting in warehouse-A's inventory can't ship from
-  // warehouse-B's gate — same "this device belongs to one warehouse" rule
-  // the PDA enforces client-side, repeated here since a physical reader or
-  // other integration can call this endpoint with no PDA in front of it at
-  // all. currentWhOf empty means genuinely unknown — fail open, not closed,
-  // on that data gap rather than block a legitimate shipment.
-  const wrongWh = canonicalTags
-    .map((tag) => ({ tag, row: found.get(tag)! }))
-    .filter((b) => {
-      const cwh = currentWhOf(b.row);
-      return cwh !== '' && cwh !== wh;
-    });
-  if (wrongWh.length) {
-    const detail = wrongWh.map((b) => `${b.tag} (${currentWhOf(b.row)})`).join(', ');
-    throw httpError(409, `จ่ายออกไม่ได้ — ไม่ใช่กล่องของคลังนี้: ${detail}`, 'box_wrong_warehouse');
-  }
+
+  const wh = await warehouseOfGate(db, gate);
   const returnDays = cust.returnDays ?? cfg?.agingDays ?? 15;
   const outTs = iso();
   const dueTs = new Date(Date.now() + returnDays * DAY).toISOString();
@@ -212,7 +156,6 @@ export async function gateOut(db: DB, input: GateOutInput) {
         recorder,
         employeeId,
         device,
-        platform,
         dueAt: dueTs,
         returnDays,
         plate,
@@ -240,7 +183,6 @@ export async function gateOut(db: DB, input: GateOutInput) {
 
       await tx.insert(events).values({
         ts: new Date(outTs),
-        platform: platform || null,
         data: {
           ts: outTs,
           dir: 'out',
@@ -255,7 +197,6 @@ export async function gateOut(db: DB, input: GateOutInput) {
           recorder,
           employeeId,
           device,
-          platform,
           plate,
           driver,
           vehicleType,
@@ -268,6 +209,19 @@ export async function gateOut(db: DB, input: GateOutInput) {
       .insert(doRecords)
       .values({ id: doNo, data: { customer, po, returnDays } })
       .onConflictDoUpdate({ target: doRecords.id, set: { data: { customer, po, returnDays } } });
+  });
+
+  // This happens only after the stock transaction commits. Notification
+  // failure is persisted for retry and never rolls the physical movement back.
+  await sendGateOutLineNotification(db, {
+    customerId: cust.id,
+    customerName: cust.name ?? cust.id,
+    lineUserId: cust.lineUserId,
+    contactEmail: cust.contactEmail,
+    doNo,
+    tags: shipped,
+    dueAt: dueTs,
+    plate,
   });
 
   return { ok: true, doNo, shipped, dueAt: dueTs, count: shipped.length };
@@ -287,8 +241,6 @@ export interface GateInInput {
   conditions?: Record<string, 'hold' | 'damage'>;
   /** Service account of the terminal that sent this, taken from the JWT. */
   device?: string;
-  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
-  platform?: string;
   /** One shelf position for the whole batch — see gateInLocationSchema.
    *  Omitted means "leave wherever it already was" (pending-putaway). Never
    *  applied to a tag that landed on hold/damage instead of warehouse: a
@@ -302,7 +254,6 @@ export async function gateIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
   const { employeeId, recorder } = await resolveOperator(db, input.employeeId, input.recorder);
   const device = input.device ?? '';
-  const platform = input.platform ?? '';
   const plate = input.plate ?? '';
   const driver = input.driver ?? '';
   const vehicleType = input.vehicleType ?? '';
@@ -317,41 +268,19 @@ export async function gateIn(db: DB, input: GateInInput) {
   // Reported as the operator's own scanned code (barcode or RFID, whichever
   // they actually shot), not a canonical tag that was never resolved.
   const unknown: string[] = missing;
-
-  /* A box that never left is already accounted for — scanning it in again
-   * (a mis-scan, or someone repeating a receipt that already went through)
-   * must not silently re-stamp lastSeenAt and log a second "received" event
-   * as if a shipment had actually just come off a truck. Mirrors gateOut's
-   * NOT_SHIPPABLE guard: reject the whole batch up front, before any row is
-   * touched, rather than partially applying some tags and not others. Only
-   * 'warehouse' is checked here — pending/hold/damage/lost boxes are exactly
-   * what receiving is *for* (clearing a flag, or completing labeling), so
-   * those still proceed as before. */
-  const alreadyIn = canonicalTags.map((tag) => found.get(tag)!).filter((row) => row.status === 'warehouse');
-  if (alreadyIn.length) {
-    const detail = alreadyIn.map((row) => `${row.tag} (อยู่ในคลังอยู่แล้ว)`).join(', ');
-    throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
-  }
-
-  // A box shipped out from warehouse-A has to come back to warehouse-A —
-  // this gate belongs to `wh`, and outWh disagreeing almost certainly means
-  // a mis-scan or the wrong gate, not a legitimate inter-warehouse transfer
-  // (this app has no such flow). A box that's never shipped (pending/new
-  // from a supplier, no outWh yet) is unrestricted — its first warehouse is
-  // whichever gate receives it first.
-  const wrongWh = canonicalTags
-    .map((tag) => found.get(tag)!)
-    .filter((row) => row.status === 'out' && row.outWh && row.outWh !== wh);
-  if (wrongWh.length) {
-    const detail = wrongWh.map((row) => `${row.tag} (ออกจากคลัง ${row.outWh})`).join(', ');
-    throw httpError(409, `รับเข้าไม่ได้ — ต้องคืนที่คลังเดิม: ${detail}`, 'box_wrong_warehouse');
-  }
+  const returnedByCustomer = new Map<string, { doNo: string | null; tags: string[]; plate: string }>();
 
   await db.transaction(async (tx) => {
     for (const tag of canonicalTags) {
       const row = found.get(tag)!;
       const b = { ...(row.data as Record<string, unknown>) };
       const wasOut = b.status === 'out';
+      if (wasOut && row.customer) {
+        const key = `${row.customer}\n${row.doNo ?? ''}`;
+        const group = returnedByCustomer.get(key) ?? { doNo: row.doNo, tags: [], plate };
+        group.tags.push(tag);
+        returnedByCustomer.set(key, group);
+      }
       // A box the operator flagged while scanning it in lands on 'hold' or
       // 'damage' instead of 'warehouse' — same statuses the box list already
       // filters by (see legacy.html's filtBoxStatus) — so it can't ship back
@@ -359,16 +288,6 @@ export async function gateIn(db: DB, input: GateInInput) {
       const condition = conditions[tag];
       const status = condition ?? 'warehouse';
       b.status = status;
-      // A returned box flagged hold/damage must not keep (or gain) a real rack
-      // position — it isn't sellable/shippable stock, so it can't sit on screen
-      // looking like ordinary shelved inventory. Park it in quarantine instead
-      // of leaving whatever location it happened to carry from before it went
-      // out; a real position only gets assigned again once someone clears the
-      // flag and runs it through the normal putaway endpoint (POST /:tag/putaway,
-      // see boxes.ts, which itself now refuses hold/damage boxes).
-      if (condition === 'hold' || condition === 'damage') {
-        b.location = { wh: '', zone: 'QUARANTINE_ZONE', rack: '', shelf: '', slot: '', gate: null, ts: inTs };
-      }
       b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
       b.lastSeenAt = inTs;
       // Only a box actually landing on 'warehouse' gets the chosen shelf —
@@ -401,7 +320,6 @@ export async function gateIn(db: DB, input: GateInInput) {
         recorder,
         employeeId,
         device,
-        platform,
         plate,
         driver,
         vehicleType,
@@ -426,16 +344,11 @@ export async function gateIn(db: DB, input: GateInInput) {
           ...(location ? { location } : {}),
           data: b,
           updatedAt: new Date(),
-          // Only touch the typed location column for the quarantine case above —
-          // an ordinary inbound (status 'warehouse') still goes through the
-          // dedicated putaway endpoint to pick a real shelf position, same as always.
-          ...(condition === 'hold' || condition === 'damage' ? { location: b.location } : {}),
         })
         .where(eq(boxes.tag, tag));
 
       await tx.insert(events).values({
         ts: new Date(inTs),
-        platform: platform || null,
         data: {
           ts: inTs,
           dir: wasOut ? 'in' : 'in-new',
@@ -448,7 +361,6 @@ export async function gateIn(db: DB, input: GateInInput) {
           recorder,
           employeeId,
           device,
-          platform,
           plate,
           driver,
           vehicleType,
@@ -459,6 +371,22 @@ export async function gateIn(db: DB, input: GateInInput) {
       received.push(tag);
     }
   });
+
+  for (const [key, group] of returnedByCustomer) {
+    const customerId = key.split('\n', 1)[0];
+    const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));
+    if (!customer) continue;
+    await sendGateInNotifications(db, {
+      customerId,
+      customerName: customer.name ?? customerId,
+      lineUserId: customer.lineUserId,
+      contactEmail: customer.contactEmail,
+      doNo: group.doNo,
+      tags: group.tags,
+      receivedAt: inTs,
+      plate: group.plate,
+    });
+  }
 
   return { ok: true, received, unknown, count: received.length };
 }

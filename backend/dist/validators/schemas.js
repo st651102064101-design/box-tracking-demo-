@@ -74,19 +74,6 @@ export const customerSchema = z.object({
     contact: z.string().nullish(),
     returnDays: z.number().int().nonnegative().nullish(),
 });
-/** One row of the Location Master — `code` is the primary key (see
- *  db/schema.ts's `locations` table); zone/rack/shelf/slot are each
- *  optional so a partial location (e.g. zone-only) can still be recorded. */
-export const locationSchema = z.object({
-    code: z.string().min(1),
-    wh: z.string().nullish(),
-    zone: z.string().nullish(),
-    rack: z.string().nullish(),
-    shelf: z.string().nullish(),
-    slot: z.string().nullish(),
-    type: z.string().nullish(),
-    note: z.string().nullish(),
-});
 /* ─── gate operations ──────────────────────────────────────────────────────*/
 export const gateOutSchema = z.object({
     tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
@@ -114,6 +101,17 @@ export const rfidAssociateSchema = z.object({
      *  no tag yet just associates normally. */
     replace: z.boolean().optional().default(false),
 });
+/** Where a Gate In batch lands on the shelf, when the operator chose one —
+ *  omitted entirely means "leave it wherever it already was" (the pending-
+ *  putaway holding pattern, and the only behavior gateIn had before this
+ *  existed). `wh` isn't part of this — the box's own gate already implies
+ *  the warehouse, same as every other location the box ever gets. */
+export const gateInLocationSchema = z.object({
+    zone: z.string().trim().optional().default(''),
+    rack: z.string().trim().optional().default(''),
+    shelf: z.string().trim().optional().default(''),
+    slot: z.string().trim().optional().default(''),
+});
 export const gateInSchema = z.object({
     tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
     gate: z.number().int().positive(),
@@ -128,5 +126,23 @@ export const gateInSchema = z.object({
      *  same statuses legacy.html's own box list already filters by. Any tag
      *  not present here is assumed fine and goes straight to 'warehouse'. */
     conditions: z.record(z.string(), z.enum(['hold', 'damage'])).optional(),
+    /** One shelf position applied to every tag in this batch that actually
+     *  lands on 'warehouse' (not hold/damage) — the PDA's three-way choice at
+     *  Gate In: a system-suggested empty shelf, a spot the operator picked by
+     *  hand, or omitted to leave the batch in the pending-putaway holding
+     *  pattern for later. See services/gate.ts's gateIn for how it's applied. */
+    location: gateInLocationSchema.optional(),
+});
+/* ─── ตรวจนับ (cycle count) ────────────────────────────────────────────────*/
+export const cycleCountOpenSchema = z.object({
+    wh: z.string().trim().min(1, 'ต้องระบุคลัง'),
+    /** Empty string = count the whole warehouse, not one zone. */
+    zone: z.string().trim().optional().default(''),
+});
+export const cycleCountScanSchema = z.object({
+    /** A batch, not one tag per request: an RFID sweep produces tags far faster
+     *  than a round trip per read could keep up with, and the PDA already
+     *  de-duplicates locally before posting. Barcodes just send arrays of one. */
+    tags: z.array(z.string().trim().min(1)).min(1, 'ต้องมีอย่างน้อย 1 รหัส'),
 });
 //# sourceMappingURL=schemas.js.map

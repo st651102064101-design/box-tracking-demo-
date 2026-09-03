@@ -11,6 +11,7 @@ import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import { boxes } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
+import { epcTagCandidates } from '../lib/epcCodec.js';
 import { writeAuditLog } from './audit.js';
 
 type BoxRow = typeof boxes.$inferSelect;
@@ -32,16 +33,29 @@ export interface ResolveResult {
  */
 export async function resolveBoxesByCodes(db: DB, codes: string[]): Promise<ResolveResult> {
   const uniq = Array.from(new Set(codes));
-  const rows = uniq.length
+  /* An ASCII-encoded EPC carries the box's barcode in its hex (see
+     lib/epcCodec.ts). Decoding it here means a raw reader hex resolves even
+     when the tag was never bound through POST /api/boxes/:tag/rfid — the
+     common case for tags written in bulk, and previously the reason a scan of
+     a perfectly ordinary box came back "unknown" from every endpoint that
+     takes one. The decoded candidates are folded into the same single query so
+     this stays one round-trip. */
+  const decoded = new Map<string, string[]>();
+  for (const code of uniq) {
+    const cands = epcTagCandidates(code).filter((c) => c !== code);
+    if (cands.length) decoded.set(code, cands);
+  }
+  const lookup = Array.from(new Set([...uniq, ...[...decoded.values()].flat()]));
+
+  const rows = lookup.length
     ? await db
         .select()
         .from(boxes)
         .where(
           or(
-            inArray(boxes.tag, uniq),
-            inArray(boxes.rfid, uniq),
-            inArray(boxes.rfidEpc, uniq),
-            inArray(boxes.rfidTid, uniq),
+            inArray(boxes.tag, lookup),
+            inArray(boxes.rfidEpc, lookup),
+            inArray(boxes.rfidTid, lookup),
           ),
         )
     : [];
@@ -49,9 +63,17 @@ export async function resolveBoxesByCodes(db: DB, codes: string[]): Promise<Reso
   const resolved = new Map<string, BoxRow>();
   const missing: string[] = [];
   for (const code of uniq) {
-    const row = rows.find(
-      (r) => r.tag === code || r.rfid === code || r.rfidEpc === code || r.rfidTid === code,
-    );
+    let row = rows.find((r) => r.tag === code || r.rfidEpc === code || r.rfidTid === code);
+    /* Only after a verbatim match fails: a bound EPC must always win over a
+       barcode guessed out of the same hex. Candidates are in best-first order
+       and the first that names a real box is taken — a suffix that matches
+       nothing is never adopted, so this can only ever find a box that exists. */
+    if (!row) {
+      for (const cand of decoded.get(code) ?? []) {
+        row = rows.find((r) => r.tag === cand);
+        if (row) break;
+      }
+    }
     if (row) resolved.set(code, row);
     else missing.push(code);
   }
@@ -66,9 +88,10 @@ export async function resolveBoxByCode(db: DB, code: string): Promise<BoxRow | u
 
 export interface AssociateInput {
   tag: string;
-  /** The single identifier the reader reports during a normal inventory —
-   *  see `boxes.rfid` in db/schema.ts for why it is exactly one value. */
-  rfid: string;
+  /** Null when the commissioning device can't read one — see the note on
+   *  `rfidAssociateSchema`. The EPC then carries the tag's identity alone. */
+  rfidTid: string | null;
+  rfidEpc: string;
   replace: boolean;
   actor: string;
 }
@@ -77,34 +100,32 @@ export interface AssociateInput {
  * Attaches (or, with `replace: true`, re-attaches after a damaged tag swap)
  * an RFID tag to a box. Two exception cases this deliberately guards:
  *
- * 1. **Reused tag** — the identifier is already on *another* box, which is
- *    either a mis-scan or someone peeling a tag off one box and sticking it
- *    on another without going through this endpoint. Always rejected (409),
- *    `replace` doesn't override this one — replace is for putting a *new,
- *    clean* tag on this box, not stealing another box's tag.
- * 2. **Already tagged** — a box that already carries a different tag needs
+ * 1. **Reused TID** — `rfid_tid` is a factory-burned serial, so if it's
+ *    already on *another* box, that's either a mis-scan or someone peeling a
+ *    tag off one box and sticking it on another without going through this
+ *    endpoint. Always rejected (409), `replace` doesn't override this one —
+ *    replace is for putting a *new, clean* tag on this box, not stealing
+ *    another box's tag.
+ * 2. **Already tagged** — a box that already carries a different TID needs
  *    `replace: true` to overwrite, so a second accidental scan of the wrong
  *    box doesn't silently detach its real tag.
  */
 export async function associateTag(db: DB, input: AssociateInput) {
-  const { tag, rfid, replace, actor } = input;
+  const { tag, rfidTid, rfidEpc, replace, actor } = input;
 
   return db.transaction(async (tx) => {
     const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
 
-    // Checked against the legacy columns too, so a tag registered under the
-    // old two-column scheme can't be handed to a second box just because the
-    // new column hasn't been written for it yet.
-    const [claimedBy] = await tx
-      .select()
-      .from(boxes)
-      .where(
-        and(
-          or(eq(boxes.rfid, rfid), eq(boxes.rfidTid, rfid), eq(boxes.rfidEpc, rfid)),
-          ne(boxes.tag, tag),
-        ),
-      );
+    // "Is this physical tag already on another box?" — asked against whichever
+    // identifiers we were given. With a TID that's the factory serial; without
+    // one the EPC is the only identity the tag has, so it has to carry the same
+    // guard, otherwise the same tag could be commissioned onto two boxes and
+    // every later scan would resolve ambiguously.
+    const identity = rfidTid
+      ? or(eq(boxes.rfidTid, rfidTid), eq(boxes.rfidEpc, rfidEpc))!
+      : eq(boxes.rfidEpc, rfidEpc);
+    const [claimedBy] = await tx.select().from(boxes).where(and(identity, ne(boxes.tag, tag)));
     if (claimedBy) {
       throw httpError(
         409,
@@ -113,30 +134,32 @@ export async function associateTag(db: DB, input: AssociateInput) {
       );
     }
 
-    const current = box.rfid ?? box.rfidTid ?? box.rfidEpc;
-    if (current && current !== rfid && !replace) {
+    // Same rule as before, but keyed on whatever this box actually carries: a
+    // box commissioned by EPC alone has no TID to compare against, and gating
+    // on TID would let a second scan silently overwrite its tag.
+    const carries = box.rfidTid ?? box.rfidEpc;
+    const incomingMatches = box.rfidTid ? box.rfidTid === rfidTid : box.rfidEpc === rfidEpc;
+    if (carries && !incomingMatches && !replace) {
       throw httpError(
         409,
-        `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${current}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`,
+        `กล่อง ${tag} มีแท็ก RFID ผูกอยู่แล้ว (${carries}) — ส่ง replace: true เพื่อเปลี่ยนแท็ก`,
         'already_tagged',
       );
     }
 
-    const before = { rfid: current ?? null };
+    const before = { rfidTid: box.rfidTid, rfidEpc: box.rfidEpc };
     // `data` is the JSONB snapshot the legacy UI actually reads (via the
     // /api/state bridge) — the typed columns alone are invisible to it, per
-    // the hybrid relational+JSONB design in db/schema.ts. The old keys are
-    // cleared alongside so a replaced tag can't keep resolving by its
-    // previous identifier.
-    const data = { ...(box.data as Record<string, unknown>), rfid, rfidTid: null, rfidEpc: null };
+    // the hybrid relational+JSONB design in db/schema.ts.
+    const data = { ...(box.data as Record<string, unknown>), rfidTid, rfidEpc };
     await tx
       .update(boxes)
-      .set({ rfid, rfidTid: null, rfidEpc: null, data, updatedAt: new Date() })
+      .set({ rfidTid, rfidEpc, data, updatedAt: new Date() })
       .where(eq(boxes.tag, tag));
 
-    const after = { rfid };
+    const after = { rfidTid, rfidEpc };
     await writeAuditLog(tx, {
-      action: current ? 'rfid_replace' : 'rfid_associate',
+      action: before.rfidTid ? 'rfid_replace' : 'rfid_associate',
       actor,
       itemId: tag,
       itemName: tag,
@@ -144,7 +167,7 @@ export async function associateTag(db: DB, input: AssociateInput) {
       after,
     });
 
-    return { tag, rfid };
+    return { tag, rfidTid, rfidEpc };
   });
 }
 
@@ -154,17 +177,20 @@ export async function detachTag(db: DB, tag: string, actor: string) {
   return db.transaction(async (tx) => {
     const [box] = await tx.select().from(boxes).where(eq(boxes.tag, tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
-    const current = box.rfid ?? box.rfidTid ?? box.rfidEpc;
-    if (!current) throw httpError(409, `กล่อง ${tag} ไม่มีแท็ก RFID ผูกอยู่`, 'not_tagged');
+    // Either identifier counts as "tagged" — a box commissioned by EPC alone
+    // has no TID, and gating on TID would make its tag undetachable.
+    if (!box.rfidTid && !box.rfidEpc) {
+      throw httpError(409, `กล่อง ${tag} ไม่มีแท็ก RFID ผูกอยู่`, 'not_tagged');
+    }
 
-    const before = { rfid: current };
-    const data = { ...(box.data as Record<string, unknown>), rfid: null, rfidTid: null, rfidEpc: null };
+    const before = { rfidTid: box.rfidTid, rfidEpc: box.rfidEpc };
+    const data = { ...(box.data as Record<string, unknown>), rfidTid: null, rfidEpc: null };
     await tx
       .update(boxes)
-      .set({ rfid: null, rfidTid: null, rfidEpc: null, data, updatedAt: new Date() })
+      .set({ rfidTid: null, rfidEpc: null, data, updatedAt: new Date() })
       .where(eq(boxes.tag, tag));
 
-    const after = { rfid: null };
+    const after = { rfidTid: null, rfidEpc: null };
     await writeAuditLog(tx, { action: 'rfid_detach', actor, itemId: tag, itemName: tag, before, after });
 
     return { tag };

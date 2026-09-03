@@ -3,13 +3,17 @@ import { getDb } from '../db/client.js';
 import { gateOut, gateIn } from '../services/gate.js';
 import { gateOutSchema, gateInSchema } from '../validators/schemas.js';
 import { asyncHandler } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { bump } from '../lib/bus.js';
 
 /** Server-side gate operations for physical readers / integrations. */
 export const gateRouter = Router();
 gateRouter.use(requireAuth);
-gateRouter.use(requireRole('admin', 'staff'));
+/* Out is a borrow, in is a return — a role may be trusted with one and not
+   the other (a receiving-only station, say), so they are checked separately
+   rather than behind one blanket "may use the gate". */
+const canBorrow = requirePermission('borrow.create');
+const canReturn = requirePermission('return.create');
 
 /**
  * The terminal that sent the scan, from its own bearer token — a handheld
@@ -21,6 +25,7 @@ const deviceOf = (req: { user?: { username: string } }) => req.user?.username ??
 
 gateRouter.post(
   '/out',
+  canBorrow,
   asyncHandler(async (req, res) => {
     const input = gateOutSchema.parse(req.body);
     /* platform is client-declared (see gateOutSchema) — NOT defaulted here.
@@ -38,6 +43,7 @@ gateRouter.post(
 
 gateRouter.post(
   '/in',
+  canReturn,
   asyncHandler(async (req, res) => {
     const input = gateInSchema.parse(req.body);
     const result = await gateIn(getDb(), { ...input, device: deviceOf(req) });

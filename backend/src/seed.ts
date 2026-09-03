@@ -7,9 +7,11 @@
  */
 import { eq } from 'drizzle-orm';
 import { applySchema, getDb, closeDb } from './db/client.js';
-import { users, config, sequences } from './db/schema.js';
+import { users, config, sequences, roles } from './db/schema.js';
+import { seedRoles } from './db/seedRoles.js';
 import { hashPassword } from './lib/password.js';
 import { env } from './env.js';
+import { SUPER_ADMIN_KEY } from './lib/permissions.js';
 
 async function main() {
   await applySchema();
@@ -21,16 +23,24 @@ async function main() {
     .values([{ name: 'do', value: 0 }, { name: 'emp', value: 0 }])
     .onConflictDoNothing({ target: sequences.name });
 
+  await seedRoles();
+
   const { username, password, name } = env.seedAdmin;
   const existing = await db.select().from(users).where(eq(users.username, username));
   if (existing.length) {
     console.log(`[seed] admin "${username}" already exists — skipping`);
   } else {
+    /* The bootstrap account is Super Admin, not plain admin: it is the only
+       account that exists at this point, so it has to be the one that can
+       always get back into Role & Permission. */
+    const [superAdmin] = await db.select().from(roles).where(eq(roles.key, SUPER_ADMIN_KEY));
     await db.insert(users).values({
       username,
       passwordHash: await hashPassword(password),
       name,
       role: 'admin',
+      roleId: superAdmin?.id ?? null,
+      mustChangePassword: true,
     });
     console.log(`[seed] created admin "${username}" (password: "${password}")`);
   }

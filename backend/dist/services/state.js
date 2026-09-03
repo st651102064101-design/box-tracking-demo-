@@ -10,8 +10,8 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc, sql } from 'drizzle-orm';
-import { boxes, customers, boxTypes, warehouses, gates, locations, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
+import { asc, desc } from 'drizzle-orm';
+import { boxes, customers, boxTypes, warehouses, gates, gateWebhookStatus, locations, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v) => {
     if (!v)
@@ -28,12 +28,13 @@ const toInt = (v) => {
 };
 /* ─── DB → S ───────────────────────────────────────────────────────────────*/
 export async function composeState(db) {
-    const [boxRows, custRows, btRows, whRows, gateRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
+    const [boxRows, custRows, btRows, whRows, gateRows, gateStatusRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
         db.select().from(boxes),
         db.select().from(customers),
         db.select().from(boxTypes),
         db.select().from(warehouses),
         db.select().from(gates),
+        db.select().from(gateWebhookStatus),
         db.select().from(locations),
         db.select().from(employees),
         db.select().from(vehicles),
@@ -58,6 +59,17 @@ export async function composeState(db) {
         boxtypes: mapBy(btRows, (r) => r.id),
         warehouses: mapBy(whRows, (r) => r.id),
         gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
+        /* Read-only from the client's point of view — see the schema.sql comment
+           on gate_webhook_status for why this is a separate table from `gates`.
+           Only the FX9600 webhook route (routes/rfid.ts) ever writes to it;
+           replaceState() below doesn't touch it, so nothing sent via PUT
+           /api/state can clobber or fake a "connected" status. */
+        gateWebhookLastSeen: Object.fromEntries(gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()])),
+        /* Source IP of the reader's most recent webhook hit — lets the frontend
+           link straight to the FX9600's own admin UI (readers serve one on their
+           IP) without anyone hardcoding an address. Same read-only-from-client
+           reasoning as gateWebhookLastSeen above. */
+        gateWebhookLastIp: Object.fromEntries(gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp])),
         events: eventRows.map((r) => r.data),
         cfg,
         seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),
@@ -75,6 +87,10 @@ export async function composeState(db) {
             {
                 ...r.data,
                 userId: r.userId,
+                /* Overrides whatever copy of roleId the blob is carrying: the column
+                   is the one permission checks read, so the screen must show that
+                   and not a stale value from the last client that saved state. */
+                roleId: r.roleId,
                 hasPin: !!r.pinHash,
                 hasLogin: !!r.passwordHash,
                 loginUsername: r.username ?? null,
@@ -86,22 +102,8 @@ export async function composeState(db) {
     };
 }
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
-export async function replaceState(db, s) {
+export async function replaceState(db, s, actor) {
     await db.transaction(async (tx) => {
-        // The legacy web UI calls this on essentially every edit (see the
-        // frequent PUT /api/state traffic in the logs), and this whole
-        // function is delete-everything-then-reinsert — two of those firing
-        // close together (a double-click, two tabs, an autosave racing a
-        // manual save) is exactly what produced a live 500: TX A deletes and
-        // starts inserting 'BOX-007'; TX B, mid-flight against the same
-        // pre-delete snapshot, inserts its own 'BOX-007' row right into the
-        // gap, and one of them hits `boxes_pkey` on a table it just wiped in
-        // its own transaction. A session-scoped advisory lock serializes
-        // concurrent replaceState calls so the second one simply waits for the
-        // first to finish (and see its result) instead of interleaving with
-        // it — cheap (released automatically at commit/rollback) and doesn't
-        // touch any table's own row-level locking.
-        await tx.execute(sql `SELECT pg_advisory_xact_lock(727001)`);
         // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
         // own web-app login (username/passwordHash) never round-trip through the
         // legacy `S.employees` payload — the frontend that calls PUT /api/state
@@ -115,6 +117,12 @@ export async function replaceState(db, s) {
             pinResetExpiresAt: employees.pinResetExpiresAt,
             username: employees.username,
             passwordHash: employees.passwordHash,
+            /* role_id is captured here for a second reason on top of "the blob
+               doesn't carry it": it must never be taken FROM the blob. Anyone
+               who can save state could otherwise hand themselves a Super Admin
+               role by editing one number in the payload. Roles change only
+               through PUT /api/roles/assign*, which checks permission.manage. */
+            roleId: employees.roleId,
         })
             .from(employees)).map((r) => [r.id, r]));
         // 1) wipe all domain tables (users are untouched)
@@ -247,6 +255,33 @@ export async function replaceState(db, s) {
                 updatedAt: new Date(),
             };
         }));
+        /* Bootstrap self-registration: the legacy UI's "ลงทะเบียนผู้ใช้งานคนแรก"
+           modal (opened client-side whenever S.employees comes back empty) tells
+           the operator they'll "automatically get Admin access" — but the modal
+           never collects a password, and this endpoint had no notion of linking
+           the employee row it creates to any `users` account at all. The result
+           was a real employee record with name/phone/email saved correctly, but
+           userId/username/passwordHash all left null, so that person could never
+           actually log in as themselves — only the request's own already-
+           authenticated account (bootstrapped from the seed admin) could reach
+           this endpoint at all (requireRole('admin','staff') above), and that's
+           exactly the account this bootstrap employee is standing in for. Link
+           them to it: only when the employees table was genuinely empty before
+           this write (pinById, captured pre-wipe above, is the "before" state),
+           the caller authenticated via a `users` row (not an employee login —
+           employeeId is only set on the latter, see JwtPayload), and the
+           incoming row doesn't already carry an explicit userId of its own.
+           Also requires exactly one incoming employee — an empty table plus a
+           multi-row batch import (Master ▸ Excel) landing in the same instant
+           is a real possibility and must NOT link every imported employee to
+           whichever admin happened to run the import. */
+        const incomingEmployeeCount = Object.keys(s.employees ?? {}).length;
+        const bootstrapUserId = pinById.size === 0 &&
+            incomingEmployeeCount === 1 &&
+            actor &&
+            actor.employeeId === undefined
+            ? toInt(actor.sub)
+            : null;
         await chunkInsert(tx, employees, Object.entries(s.employees ?? {}).map(([id, raw]) => {
             const e = raw;
             const pin = pinById.get(id);
@@ -260,7 +295,10 @@ export async function replaceState(db, s) {
                    silently dropped on the very next unrelated state save. Same
                    reasoning for the PIN/login columns, captured into pinById above
                    since they never round-trip through `data` at all (see composeState). */
-                userId: toInt(e.userId),
+                userId: toInt(e.userId) ?? bootstrapUserId,
+                /* Carried over from the row that existed before the wipe, never read
+                   from `e` — see the roleId comment on pinById above. */
+                roleId: pin?.roleId ?? null,
                 data: e,
                 pinHash: pin?.pinHash ?? null,
                 pinResetOtpHash: pin?.pinResetOtpHash ?? null,

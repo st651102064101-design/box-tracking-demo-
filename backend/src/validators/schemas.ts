@@ -65,13 +65,6 @@ export const stateSchema = z.object({
   locations: record.optional().default({}),
   inventory: record.optional().default({}),
   auditLog: z.array(z.any()).optional().default([]),
-  // Per-account UI preferences (date-range filters, toggle/dropdown memory, gate
-  // display prefs) — previously silently stripped here since z.object() drops
-  // unknown keys by default, so the frontend's save()/loadFromServer() round
-  // trip looked correct but every one of these reset on the next real reload.
-  dfPrefs: record.optional().default({}),
-  uiPrefs: record.optional().default({}),
-  gatePrefs: record.optional().default({}),
 });
 export type StatePayload = z.infer<typeof stateSchema>;
 
@@ -89,21 +82,17 @@ export const customerSchema = z.object({
   name: z.string().min(1),
   addr: z.string().nullish(),
   contact: z.string().nullish(),
+  lineUserId: z.string().trim().max(64).nullish(),
+  contactEmail: z.string().trim().email().max(254).nullish(),
   returnDays: z.number().int().nonnegative().nullish(),
 });
-
-/** One row of the Location Master — `code` is the primary key (see
- *  db/schema.ts's `locations` table); zone/rack/shelf/slot are each
- *  optional so a partial location (e.g. zone-only) can still be recorded. */
-export const locationSchema = z.object({
-  code: z.string().min(1),
-  wh: z.string().nullish(),
-  zone: z.string().nullish(),
-  rack: z.string().nullish(),
-  shelf: z.string().nullish(),
-  slot: z.string().nullish(),
-  type: z.string().nullish(),
-  note: z.string().nullish(),
+export const firstSetupSchema = z.object({
+  name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(160),
+  email: z.string().trim().email('อีเมลไม่ถูกต้อง').max(254),
+  username: z.string().trim().regex(/^EMP-[0-9]+$/i, 'Username ต้องเป็นรหัสพนักงาน เช่น EMP-001'),
+  password: z.string().min(10, 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร').regex(/[a-z]/, 'ต้องมีตัวพิมพ์เล็ก').regex(/[A-Z]/, 'ต้องมีตัวพิมพ์ใหญ่').regex(/[0-9]/, 'ต้องมีตัวเลข').regex(/[^A-Za-z0-9]/, 'ต้องมีอักขระพิเศษ'),
+  phone: z.string().optional().default(''), position: z.string().optional().default(''),
+  department: z.string().optional().default(''), warehouse: z.string().optional().default(''),
 });
 
 /* ─── gate operations ──────────────────────────────────────────────────────*/
@@ -119,40 +108,21 @@ export const gateOutSchema = z.object({
   plate: z.string().optional(),
   driver: z.string().optional(),
   vehicleType: z.string().optional(),
-  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
-  platform: z.enum(['web', 'pda']).optional(),
 });
 
 /* ─── RFID tag association ─────────────────────────────────────────────────*/
 const HEX = /^[0-9A-Fa-f]+$/;
-/**
- * A box carries exactly one RFID identifier (see `boxes.rfid` in
- * db/schema.ts), so this takes exactly one value.
- *
- * The older `{ rfidTid, rfidEpc }` shape is still accepted from clients that
- * haven't been updated. The EPC wins when both are sent: it is the value every
- * reader reports during a plain inventory sweep, whereas a TID often has to be
- * fetched with a separate access operation that stops the sweep. Whichever
- * form arrives, the result is a single `rfid`.
- */
-export const rfidAssociateSchema = z
-  .object({
-    rfid: z.string().regex(HEX, 'RFID ต้องเป็นเลขฐาน 16').min(8).optional(),
-    rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8).optional(),
-    rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8).optional(),
-    /** Must be set explicitly to overwrite a box that already carries a tag —
-     *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
-     *  no tag yet just associates normally. */
-    replace: z.boolean().optional().default(false),
-  })
-  .transform((v, ctx) => {
-    const rfid = v.rfid ?? v.rfidEpc ?? v.rfidTid;
-    if (!rfid) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ต้องระบุค่า RFID', path: ['rfid'] });
-      return z.NEVER;
-    }
-    return { rfid, replace: v.replace };
-  });
+export const rfidAssociateSchema = z.object({
+  /** Optional: the MC3390R never reports a TID during inventory, and reading
+   *  one explicitly means halting the inventory, so the PDA commissions tags
+   *  by EPC alone. Still accepted from any client that does have one. */
+  rfidTid: z.string().regex(HEX, 'TID ต้องเป็นเลขฐาน 16').min(8).optional(),
+  rfidEpc: z.string().regex(HEX, 'EPC ต้องเป็นเลขฐาน 16').min(8),
+  /** Must be set explicitly to overwrite a box that already carries a tag —
+   *  the "damaged tag, put on a new one" flow. Omitted/false on a box with
+   *  no tag yet just associates normally. */
+  replace: z.boolean().optional().default(false),
+});
 
 /** Where a Gate In batch lands on the shelf, when the operator chose one —
  *  omitted entirely means "leave it wherever it already was" (the pending-
@@ -186,8 +156,6 @@ export const gateInSchema = z.object({
    *  hand, or omitted to leave the batch in the pending-putaway holding
    *  pattern for later. See services/gate.ts's gateIn for how it's applied. */
   location: gateInLocationSchema.optional(),
-  /** Which client sent this — 'web' (PC) or 'pda' (handheld, e.g. MC3390R). */
-  platform: z.enum(['web', 'pda']).optional(),
 });
 
 /* ─── ตรวจนับ (cycle count) ────────────────────────────────────────────────*/

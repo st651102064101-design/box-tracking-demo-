@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes, warehouses } from '../db/schema.js';
+import { boxes, boxTypes, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -12,7 +12,11 @@ import { bump } from '../lib/bus.js';
 /** Read-only box queries (real reporting API alongside the state bridge). */
 export const boxesRouter = Router();
 boxesRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+/* RBAC replaces the old blanket admin/staff check: each write now names the
+   permission it actually needs, so a role can be allowed to register boxes
+   without also being allowed to delete them. */
+const canCreate = requirePermission('box.create');
+const canUpdate = requirePermission('box.update');
 /**
  * Count-by-status only — backs the filter-tab badges (see legacy.html's
  * `#invStatusSeg`) without pulling every box's full jsonb `data` blob the way
@@ -41,6 +45,43 @@ boxesRouter.get('/status-summary', asyncHandler(async (_req, res) => {
         byStatus[r.bucket] = Number(r.count);
     res.json({ byStatus });
 }));
+/**
+ * The PDA's "รับเข้า" (Gate In) three-way shelf choice — "ตามที่ระบบแนะนำ" is
+ * this endpoint: the first location on [wh]'s own master list (an admin's
+ * defined rack/shelf/slot layout, see the `locations` table) that no
+ * 'warehouse' box is currently sitting on. "Empty" here means literally
+ * unoccupied, not "has spare capacity" — there's no capacity column on a
+ * location, so one box is treated as filling it. Returns `{ suggestion:
+ * null }` (200, not 404) when the warehouse has no master locations defined
+ * yet, or every one of them already has a box — both are "nothing to
+ * suggest", not an error, and the PDA falls back to its other two choices
+ * (pick by hand, or leave pending-putaway) either way.
+ */
+boxesRouter.get('/suggest-location', asyncHandler(async (req, res) => {
+    const wh = typeof req.query.wh === 'string' ? req.query.wh.trim() : '';
+    if (!wh)
+        throw httpError(400, 'ต้องระบุคลัง', 'wh_required');
+    const db = getDb();
+    const locRows = await db.select().from(locations).where(eq(locations.wh, wh));
+    // `reason` distinguishes "nobody ever defined a shelf layout for this
+    // warehouse" from "every defined shelf already has a box on it" — both
+    // render as the same "nothing to suggest" outcome to the client, but a
+    // dev/ops person staring at this response while debugging "the PDA says
+    // no shelf found and I can see empty ones" needs to tell them apart, since
+    // the fixes are completely different (define locations vs. free up a
+    // shelf / the request wasn't reaching this code at all).
+    if (!locRows.length)
+        return res.json({ suggestion: null, reason: 'no_master_locations' });
+    const boxRows = await db.select({ location: boxes.location }).from(boxes).where(eq(boxes.status, 'warehouse'));
+    const key = (l) => `${l.wh ?? ''}|${l.zone ?? ''}|${l.rack ?? ''}|${l.shelf ?? ''}|${l.slot ?? ''}`;
+    const occupied = new Set(boxRows.map((r) => key((r.location ?? {}))));
+    const free = locRows.find((loc) => !occupied.has(key(loc)));
+    if (!free)
+        return res.json({ suggestion: null, reason: 'all_occupied' });
+    res.json({
+        suggestion: { zone: free.zone ?? '', rack: free.rack ?? '', shelf: free.shelf ?? '', slot: free.slot ?? '' },
+    });
+}));
 boxesRouter.get('/', asyncHandler(async (req, res) => {
     const db = getDb();
     const conds = [];
@@ -57,51 +98,9 @@ boxesRouter.get('/', asyncHandler(async (req, res) => {
         .limit(limit);
     res.json({ count: rows.length, items: rows.map((r) => r.data) });
 }));
-/**
- * Suggests the next tag for a box type, counted from the highest tag
- * actually in the DB right now under that type's prefix — not from
- * whatever a client's own locally-cached box list happens to hold. A
- * second device (or a second tab) that hasn't refreshed since another one
- * just registered a box would otherwise suggest a tag that's already
- * taken; asking the DB directly, right before showing the suggestion, is
- * what "count from the latest code in the DB" actually means. Mirrors
- * legacy.html's tagPrefixForType()/nextTagForType() exactly, so the web
- * and the PDA app suggest the same tag for the same type. This is only a
- * *suggestion* — POST / above still rejects a genuine duplicate tag with
- * 409 regardless of where it came from, which is the real uniqueness
- * guarantee.
- */
-boxesRouter.get('/next-tag', asyncHandler(async (req, res) => {
-    const typeId = typeof req.query.type === 'string' ? req.query.type : '';
-    const prefix = typeId ? typeId.toUpperCase().replace(/[^A-Z0-9]/g, '') + '-' : '';
-    if (!prefix)
-        return res.json({ tag: null });
-    const db = getDb();
-    const rows = await db
-        .select({ tag: boxes.tag })
-        .from(boxes)
-        .where(sql `${boxes.tag} LIKE ${prefix + '%'}`);
-    let max = 0;
-    const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
-    for (const row of rows) {
-        const m = re.exec(row.tag);
-        if (m)
-            max = Math.max(max, parseInt(m[1], 10));
-    }
-    res.json({ tag: `${prefix}${max + 1}` });
-}));
 const createBoxSchema = z.object({
     tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
     type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),
-    // Both optional and both free text — scanned off a supplier's own lot/
-    // expiry barcode where one exists, typed where it doesn't. Round-trip
-    // straight through `data` (see composeState in services/state.ts, which
-    // returns a box's `data` column verbatim) so the print-label templates
-    // that already read b.lot/b.expiry (frontend/public/legacy.html's
-    // finLabelHtml/labelToPNG/labelPrintCardHtml) start actually finding
-    // something to render instead of always getting undefined.
-    lot: z.string().trim().optional(),
-    expiry: z.string().trim().optional(),
 });
 /**
  * Registers a brand-new box straight off a supplier delivery — the PDA
@@ -119,7 +118,7 @@ const createBoxSchema = z.object({
  * look correct in this API's own responses and simply not exist on the web
  * dashboard.
  */
-boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/', canCreate, asyncHandler(async (req, res) => {
     const input = createBoxSchema.parse(req.body);
     const db = getDb();
     const tag = input.tag.toUpperCase();
@@ -132,21 +131,7 @@ boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
     const value = bt.value == null ? null : Number(bt.value);
     const now = new Date();
     const ts = now.toISOString();
-    /* A freshly-registered box has physically arrived (or is being data-entered
-     * as it arrives) but has no barcode sticker yet, so it can't be scanned
-     * through a real Gate/putaway flow — leaving location entirely blank read
-     * as "not in the building at all" (loc-none) to anyone looking at the
-     * table, which is a real data-integrity problem: the box is sitting at
-     * the receiving dock, taking up floor space and countable as on-hand
-     * stock, but the system couldn't say where. Auto-assign the default
-     * receiving/staging spot instead — mirrors legacy.html's own
-     * pendingStageLocation(). Only guessed when there's exactly one
-     * warehouse on file; with several, which one this box physically landed
-     * at can't be inferred, so it's left unset (still flagged staging via
-     * zone/rack, just without a wh) rather than guessed wrong. */
-    const whList = await db.select({ id: warehouses.id }).from(warehouses);
-    const wh = whList.length === 1 ? whList[0].id : '';
-    const location = { wh, zone: 'พื้นที่รับของขาเข้า', rack: 'STG-01', shelf: '', slot: '', gate: null, ts };
+    const location = { wh: '', zone: '', rack: '', shelf: '', slot: '', gate: null, ts };
     const history = [{ dir: 'reg', ts, recorder: req.user.username }];
     const data = {
         tag,
@@ -165,8 +150,6 @@ boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
         lastSeenAt: ts,
         labeled: false,
         history,
-        ...(input.lot ? { lot: input.lot } : {}),
-        ...(input.expiry ? { expiry: input.expiry } : {}),
     };
     await db.insert(boxes).values({
         tag,
@@ -198,7 +181,7 @@ boxesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
  * box has no barcode a gate scan could ever resolve again). Mirrors
  * legacy.html's "ยืนยันติดป้ายเสร็จแล้ว" button.
  */
-boxesRouter.post('/:tag/label', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/label', canUpdate, asyncHandler(async (req, res) => {
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
     if (!box)
@@ -237,7 +220,7 @@ const putawaySchema = z.object({
  * box moving out of 'pending' for the first time logs `dir:'putaway'`,
  * anything already 'warehouse' being moved again logs `dir:'relocate'`.
  */
-boxesRouter.post('/:tag/putaway', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/putaway', canUpdate, asyncHandler(async (req, res) => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
@@ -247,12 +230,6 @@ boxesRouter.post('/:tag/putaway', canWrite, asyncHandler(async (req, res) => {
         throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
     if (box.status === 'out')
         throw httpError(409, `กล่อง ${box.tag} ออกอยู่กับลูกค้า ย้ายตำแหน่งไม่ได้`, 'box_out');
-    // Hold/Damage boxes don't get a normal shelf position — Gate In already
-    // parks them in quarantine (see gateIn in services/gate.ts). Moving them
-    // here instead would silently promote a flagged box back to 'warehouse'
-    // and make it look like ordinary shippable stock again.
-    if (box.status === 'hold' || box.status === 'damage')
-        throw httpError(409, `กล่อง ${box.tag} ถูกพักไว้ (${box.status === 'hold' ? 'Hold' : 'ชำรุด'}) — ปลดสถานะก่อนจึง Putaway ขึ้นชั้นวางปกติได้`, 'box_on_hold');
     const wasPending = box.status === 'pending';
     const ts = new Date().toISOString();
     const location = { wh: input.wh, zone: input.zone, rack: input.rack, shelf: input.shelf, slot: input.slot, gate: null, ts };
@@ -292,7 +269,7 @@ boxesRouter.get('/:code', asyncHandler(async (req, res) => {
  * swap) an RFID tag to a box that's already registered by barcode. See
  * services/rfid.ts for the reused-TID and already-tagged exception rules.
  */
-boxesRouter.post('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.post('/:tag/rfid', canUpdate, asyncHandler(async (req, res) => {
     const input = rfidAssociateSchema.parse(req.body);
     const result = await associateTag(getDb(), {
         tag: req.params.tag,
@@ -308,10 +285,68 @@ boxesRouter.post('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
     res.json(result);
 }));
 /** Detaches whatever RFID tag a box currently carries. */
-boxesRouter.delete('/:tag/rfid', canWrite, asyncHandler(async (req, res) => {
+boxesRouter.delete('/:tag/rfid', canUpdate, asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user.username);
     bump(req.get('X-Client-Id'));
     res.json(result);
+}));
+const holdSchema = z.object({
+    // 'warehouse' is release — the box goes back to being pickable. Kept as
+    // one endpoint/one verb rather than a separate /release route, because
+    // hold/damage/release are really one PDA screen (a status toggle with a
+    // reason), not three different actions.
+    status: z.enum(['hold', 'damage', 'warehouse']),
+    reason: z.string().trim().max(500).optional().default(''),
+});
+/**
+ * Sets or clears hold/damage on a box that's already in the warehouse —
+ * the PDA counterpart to a box found damaged on a shelf, or one that needs
+ * pulling from pick eligibility for QC, *after* it already cleared Gate In.
+ * Gate In's own condition flags (see ApiClient.gateIn's `conditions`) cover
+ * the same statuses at receiving time; this is the only way to reach them
+ * any other time.
+ *
+ * Deliberately narrow about which boxes this applies to: 'out' (already
+ * shipped) and 'pending'/'lost' boxes aren't sitting on a shelf for an
+ * operator to have found a problem with, so holding them here wouldn't mean
+ * anything a person standing in the warehouse could have observed. Only
+ * 'warehouse'/'hold'/'damage' — i.e. a box physically on hand — can move
+ * between those three.
+ */
+boxesRouter.post('/:tag/hold', canUpdate, asyncHandler(async (req, res) => {
+    const input = holdSchema.parse(req.body);
+    const db = getDb();
+    const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
+    if (!box)
+        throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
+    if (!['warehouse', 'hold', 'damage'].includes(box.status)) {
+        throw httpError(409, `กล่อง ${box.tag} สถานะ "${box.status}" ไม่สามารถพัก/แจ้งชำรุดได้ — ต้องอยู่ในคลังเท่านั้น`, 'box_not_in_warehouse');
+    }
+    if (box.status === input.status) {
+        throw httpError(409, `กล่อง ${box.tag} อยู่ในสถานะนี้อยู่แล้ว`, 'status_unchanged');
+    }
+    const ts = new Date();
+    const dir = input.status === 'warehouse' ? 'release' : input.status; // 'hold' | 'damage' | 'release'
+    const prevHistory = Array.isArray(box.history) ? box.history : [];
+    const history = [
+        ...prevHistory,
+        { dir, ts: ts.toISOString(), reason: input.reason, recorder: req.user.username },
+    ];
+    const data = { ...box.data, status: input.status, history };
+    await db
+        .update(boxes)
+        .set({ status: input.status, history, data, updatedAt: ts })
+        .where(eq(boxes.tag, req.params.tag));
+    await writeAuditLog(db, {
+        action: dir === 'release' ? 'ปลดพัก' : dir === 'hold' ? 'พักสินค้า' : 'แจ้งชำรุด',
+        actor: req.user.username,
+        itemId: box.tag,
+        itemName: box.tag,
+        before: { status: box.status },
+        after: { status: input.status, reason: input.reason },
+    });
+    bump(req.get('X-Client-Id'));
+    res.json(data);
 }));
 export default boxesRouter;
 //# sourceMappingURL=boxes.js.map

@@ -4,6 +4,7 @@
  */
 import { getDb, applySchema, closeDb } from './client.js';
 import { config, sequences } from './schema.js';
+import { seedRoles } from './seedRoles.js';
 import { sql } from 'drizzle-orm';
 async function main() {
     console.log('[migrate] applying schema…');
@@ -19,6 +20,9 @@ async function main() {
         .insert(sequences)
         .values([{ name: 'do', value: 0 }, { name: 'emp', value: 0 }])
         .onConflictDoNothing({ target: sequences.name });
+    // Built-in roles must exist before any request runs: with no roles at all
+    // every permission check resolves to "denied" and locks out even the admin.
+    await seedRoles();
     // Touch the DB so misconfiguration surfaces immediately.
     await db.execute(sql `select 1`);
     console.log('[migrate] done ✓');
