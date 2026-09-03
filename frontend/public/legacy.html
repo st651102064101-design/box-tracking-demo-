@@ -3872,6 +3872,10 @@ a{color:var(--accentInk);}
 /* Keep the document behind a draggable overlay card completely stationary. */
 html.emp-badge-dragging,html.emp-badge-dragging body{overflow:hidden!important;overscroll-behavior:none!important;}
 html.emp-badge-dragging body{touch-action:none!important;}
+/* Hide every floating action around the employee badge while it is being
+   dragged, then restore them smoothly as soon as the pointer is released. */
+#empBadgeOverlay>button{transition:opacity .18s ease,transform .18s ease;}
+html.emp-badge-dragging #empBadgeOverlay>button{opacity:0;pointer-events:none;}
 #btypeCubeOverlay{position:fixed;inset:0;z-index:400;display:none;}
 #btypeCubeOverlay .btc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
