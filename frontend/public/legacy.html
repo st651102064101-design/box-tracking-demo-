@@ -7297,8 +7297,16 @@ function openDeleteBoxModal(tag){
   btn.onclick=function(){
     if(btn.disabled)return;
     var before=Object.assign({},S.boxes[tag]);delete S.boxes[tag];
-    auditEntry('DELETE',USER,tag,typeName(before.type),before,null);save();
-    closeModal();toast('ลบแล้ว',tag+' · ยืนยันถอดแท็กแล้ว');trackTags=trackTags.filter(function(x){return x!==tag;});renderAll();
+    auditEntry('DELETE',USER,tag,typeName(before.type),before,null);
+    /* Wait for the authoritative server write before closing/redrawing.  The
+       old fire-and-forget save allowed a stale tab or the next poll to put the
+       deleted box back into the full-state snapshot. */
+    save().then(function(ok){
+      if(!ok)return;
+      closeModal();toast('ลบแล้ว',tag+' · ยืนยันถอดแท็กแล้ว');
+      trackTags=trackTags.filter(function(x){return x!==tag;});
+      btSuppressSave(renderAll);
+    });
   };
 }
 window.openDeleteBoxModal=openDeleteBoxModal;
