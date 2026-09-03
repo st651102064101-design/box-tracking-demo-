@@ -76,6 +76,28 @@
   var putTimer = null;
   var pendingValue = null;
 
+  // Plate imagery is intentionally not persisted in browser state.  Old tabs
+  // can still contain base64 data from earlier releases; remove it before it
+  // reaches localStorage or the state API so it cannot exhaust either limit.
+  function textOnlySnapshot(value) {
+    if (typeof value !== 'string' || value.indexOf('image') < 0) return value;
+    try {
+      var data = JSON.parse(value);
+      (function strip(value) {
+        if (!value || typeof value !== 'object') return;
+        if (Array.isArray(value)) { value.forEach(strip); return; }
+        Object.keys(value).forEach(function (key) {
+          if (key === 'imageBase64' || key === 'imageUrl' || key === 'plateImage') delete value[key];
+          else strip(value[key]);
+        });
+      })(data);
+      // The audit table is append-only. Keep the browser snapshot bounded;
+      // complete history remains queryable from the backend/database.
+      if (Array.isArray(data.auditLog) && data.auditLog.length > 500) data.auditLog = data.auditLog.slice(0, 500);
+      return JSON.stringify(data);
+    } catch (e) { return value; }
+  }
+
   try {
     var de = document.documentElement;
     de.style.visibility = 'hidden';
@@ -86,9 +108,19 @@
   /* ── persistence OUT: intercept the app's own save() ─────────────────────*/
   var realSetItem = Storage.prototype.setItem;
   Storage.prototype.setItem = function (k, v) {
+    if (k === KEY) v = textOnlySnapshot(v);
     realSetItem.apply(this, arguments);
     if (k === KEY) scheduleSync(v);
   };
+  try {
+    var existingSnapshot = localStorage.getItem(KEY);
+    var cleanedSnapshot = textOnlySnapshot(existingSnapshot);
+    if (cleanedSnapshot !== existingSnapshot) realSetItem.call(localStorage, KEY, cleanedSnapshot);
+  } catch (e) {
+    // If a legacy snapshot already exceeded quota, discard only this cache;
+    // PostgreSQL remains the source of truth and will repopulate it on prime.
+    try { localStorage.removeItem(KEY); } catch (_) {}
+  }
 
   function scheduleSync(value) {
     pendingValue = value;

@@ -13,3 +13,65 @@ body {
   margin: 0;
   background: #f5f5f7;
 }
+
+/* Dark-mode skeleton tokens. Mirrors legacy.html's own dark palette
+   (public/legacy.html ~line 70: --bg:#000, --surface:#161618,
+   --line:#2a2a2c) so the skeleton doesn't look like a different app for
+   the instant before the iframe takes over. Same convention as
+   legacy.html: an explicit data-theme wins over the OS preference, and
+   with neither set (theme never saved yet) prefers-color-scheme decides. */
+html[data-theme="dark"],
+html:not([data-theme="light"]):not([data-theme="dark"]) {
+  color-scheme: dark;
+}
+html[data-theme="dark"] body,
+html:not([data-theme="light"]):not([data-theme="dark"]) body {
+  background: #000;
+}
+
+.app-shell{position:relative;min-height:100vh;overflow:hidden}.app-frame{display:block;width:100vw;height:100vh;border:0;opacity:0}.app-frame.is-ready{opacity:1}.app-skeleton{position:absolute;inset:0;z-index:2;background:#f5f5f7}.skeleton-header{height:70px;padding:0 28px;display:flex;align-items:center;gap:26px;background:rgba(255,255,255,.9);border-bottom:1px solid #e5e7eb}.skeleton-nav{display:flex;gap:12px;margin:0 auto}.skeleton-content{width:min(1180px,calc(100% - 40px));margin:0 auto;padding:58px 0 80px}.skeleton-line,.skeleton-circle,.skeleton-card,.skeleton-table-head,.skeleton-table-row{background:#e3e5e8;overflow:hidden;position:relative}.skeleton-line::after,.skeleton-circle::after,.skeleton-card::after,.skeleton-table-head::after,.skeleton-table-row::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);animation:skeleton-shimmer 1.5s ease-in-out infinite}.skeleton-line{height:14px;border-radius:999px}.skeleton-circle{width:34px;height:34px;border-radius:50%;flex:0 0 auto}.skeleton-brand{width:168px;height:22px}.skeleton-nav-item{width:84px;height:34px}.skeleton-eyebrow{width:135px;margin-bottom:22px}.skeleton-title{width:min(520px,75%);height:58px;margin-bottom:18px}.skeleton-subtitle{width:min(640px,90%);height:18px;margin-bottom:44px}.skeleton-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}.skeleton-card{height:154px;border-radius:20px;padding:20px;background:#fff;border:1px solid #e5e7eb}.skeleton-card-icon{width:36px;height:36px}.skeleton-card-value{width:45%;height:30px;margin-top:22px}.skeleton-card-label{width:70%;margin-top:13px}.skeleton-section-title{width:180px;margin:48px 0 16px}.skeleton-table{overflow:hidden;border:1px solid #e5e7eb;border-radius:18px;background:#fff}.skeleton-table-head{height:48px;background:#eceef1}.skeleton-table-row{height:54px;margin:0 18px;border-bottom:1px solid #eef0f2;background:transparent}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@keyframes skeleton-shimmer{to{transform:translateX(100%)}}@media(prefers-reduced-motion:reduce){.app-skeleton *::after{animation:none}}@media(max-width:900px){.skeleton-nav{display:none}.skeleton-header{justify-content:space-between}.skeleton-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.skeleton-grid .skeleton-card:last-child{display:none}}@media(max-width:520px){.skeleton-header{height:60px;padding:0 16px}.skeleton-content{width:calc(100% - 28px);padding-top:34px}.skeleton-title{height:42px;width:85%}.skeleton-grid{grid-template-columns:1fr}.skeleton-card{height:112px}}
+
+/* form (gateout/gatein): one wide panel of field-shaped rows, no cards/grid — nothing like Overview */
+.skeleton-form{border:1px solid #e5e7eb;border-radius:20px;background:#fff;padding:26px;display:flex;flex-direction:column;gap:20px}
+.skeleton-form-field{height:44px;border-radius:12px}
+/* table (inventory/track): a toolbar line above the table instead of a card grid */
+.skeleton-toolbar{width:min(420px,60%);height:38px;border-radius:12px;margin-bottom:18px}
+/* setup: a row of section pills above the table */
+.skeleton-pills{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap}
+.skeleton-pill{width:112px;height:36px;border-radius:999px}
+@media(max-width:520px){.skeleton-form{padding:18px}.skeleton-pill{width:88px;height:32px}}
+
+html[data-theme="dark"] .app-skeleton,
+html:not([data-theme="light"]):not([data-theme="dark"]) .app-skeleton{background:#000}
+html[data-theme="dark"] .skeleton-header,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-header{background:rgba(22,22,24,.9);border-bottom-color:#2a2a2c}
+html[data-theme="dark"] .skeleton-line,
+html[data-theme="dark"] .skeleton-circle,
+html[data-theme="dark"] .skeleton-card,
+html[data-theme="dark"] .skeleton-table-head,
+html[data-theme="dark"] .skeleton-table-row,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-line,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-circle,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-card,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-head,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-row{background:#1c1c1e}
+html[data-theme="dark"] .skeleton-line::after,
+html[data-theme="dark"] .skeleton-circle::after,
+html[data-theme="dark"] .skeleton-card::after,
+html[data-theme="dark"] .skeleton-table-head::after,
+html[data-theme="dark"] .skeleton-table-row::after,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-line::after,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-circle::after,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-card::after,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-head::after,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-row::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent)}
+html[data-theme="dark"] .skeleton-card,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-card{background:#161618;border-color:#2a2a2c}
+html[data-theme="dark"] .skeleton-table,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table,
+html[data-theme="dark"] .skeleton-form,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-form{background:#161618;border-color:#2a2a2c}
+html[data-theme="dark"] .skeleton-table-head,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-head{background:#1c1c1e}
+html[data-theme="dark"] .skeleton-table-row,
+html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-row{border-bottom-color:#2a2a2c}
