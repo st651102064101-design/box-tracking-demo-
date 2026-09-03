@@ -21786,6 +21786,7 @@ function connectStream(){
     updateRfidGateAvailability();
     renderRfidGateStatus();
   });
+  var lastRfidAlertId='';
   es.addEventListener('rfid-read',ev=>{
     liveStream=true;renderLiveSyncIndicator();
     let d=null;try{d=JSON.parse(ev.data);}catch(_){ }
@@ -21796,6 +21797,12 @@ function connectStream(){
     if($('#ssec-wh')&&$('#ssec-wh').style.display!=='none'&&typeof loadRfidDebugLog==='function')loadRfidDebugLog();
     var inbound=Array.isArray(d.inbound)?d.inbound:[];
     var outbound=Array.isArray(d.outbound)?d.outbound:[];
+    /* A reader report can be a real tag read even when it is not actionable
+       yet (unknown tag, wrong direction, or waiting for LPR).  Surface that
+       state too; otherwise the operator sees a silent gate although the
+       reader is working.  Heartbeats have no decoded/tags and are ignored. */
+    var readTags=Array.from(new Set([].concat(d.decoded||[],d.tags||[]).filter(Boolean)));
+    var alertId=String(d.id||d.ts||'')+'|'+readTags.join(',')+'|'+inbound.join(',')+'|'+outbound.join(',');
     if(inbound.length){
       toast('รับเข้าแล้ว','กล่อง '+inbound.join(', ')+' ผ่าน Gate '+(d.gate||'-')+' เรียบร้อย','ok');
       syncNow();
@@ -21803,6 +21810,12 @@ function connectStream(){
     if(outbound.length){
       toast('ส่งออกแล้ว','กล่อง '+outbound.join(', ')+' ผ่าน Gate '+(d.gate||'-')+' เรียบร้อย','ok');
       syncNow();
+    }
+    if(!inbound.length&&!outbound.length&&readTags.length&&alertId!==lastRfidAlertId){
+      lastRfidAlertId=alertId;
+      var unknown=Array.isArray(d.unknown)?d.unknown:[];
+      var waiting=readTags.filter(function(tag){return unknown.indexOf(tag)<0;});
+      toast(unknown.length?'พบ RFID ที่ยังไม่ลงทะเบียน':'อ่าน RFID แล้ว','ป้าย '+(unknown.length?unknown:waiting).join(', ')+' · รอตรวจสอบ/จับคู่รายการ','warn');
     }
   });
   es.addEventListener('lpr-detection',ev=>{
