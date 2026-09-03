@@ -3761,7 +3761,6 @@ a{color:var(--accentInk);}
         </div>
 
         <div style="flex:0 0 auto;padding:30px 26px 0;text-align:center;">
-          <div id="empBadgeName" style="font-size:31px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
         </div>
 
         <!-- คำใบ้ชี้ให้พลิกดูด้านหลัง — flex:1 ดันให้คำใบ้อยู่กึ่งกลางพื้นที่ว่างที่เหลือของบัตร
@@ -8143,7 +8142,6 @@ function openEmpBadge(id,isSelf){
   var scanCode=empCardScanValue(e);
   renderEmpBadgeAvatar(e);
   setText('empBadgeId',e.id);
-  setText('empBadgeName',e.id||e.name);
   setText('empBadgeRole',e.role||'-');
   setText('empBadgeDept',e.dept||'-');
   setText('empBadgeIdBack',e.id);
