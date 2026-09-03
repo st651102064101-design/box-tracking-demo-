@@ -3840,11 +3840,11 @@ a{color:var(--accentInk);}
 
           <!-- margin-top:auto ดันข้อความส่งคืนบริษัทลงไปชิดขอบล่างสุดของบัตรเสมอเมื่อเนื้อหา
                ด้านบนสั้นกว่าพื้นที่ที่มี — ถ้าล้น กล่อง overflow-y:auto ด้านนอกจะเลื่อนตามปกติ -->
-          <div id="empBadgeReturnNote" class="emp-badge-return-note" style="margin-top:auto;padding-top:22px;border-top:.5px solid var(--line);font-size:12.5px;line-height:1.7;color:var(--muted);">
-            <button id="empBadgeReturnNoteEdit" type="button" class="emp-badge-note-edit" onclick="event.stopPropagation();toggleEmpBadgeReturnNoteEdit()" aria-label="แก้ไขข้อความด้านหลังบัตร" data-app-tooltip-th="แก้ไขข้อความด้านหลังบัตร"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"></path><path d="m14.2 4.8 5 5"></path></svg></span></button>
-            <div id="empBadgeReturnCompany" contenteditable="false"></div>
-            <div id="empBadgeReturnDepartment" contenteditable="false"></div>
-            <div id="empBadgeReturnPhone" contenteditable="false" style="font-family:var(--mono);color:var(--ink2);"></div>
+          <div id="empBadgeReturnNote" class="emp-badge-return-note" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" ondragstart="return false" style="margin-top:auto;padding-top:22px;border-top:.5px solid var(--line);font-size:12.5px;line-height:1.7;color:var(--muted);">
+            <button id="empBadgeReturnNoteEdit" type="button" class="emp-badge-note-edit" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();toggleEmpBadgeReturnNoteEdit()" aria-label="แก้ไขข้อความด้านหลังบัตร" data-app-tooltip-th="แก้ไขข้อความด้านหลังบัตร"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"></path><path d="m14.2 4.8 5 5"></path></svg></span></button>
+            <div id="empBadgeReturnCompany" contenteditable="false" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()"></div>
+            <div id="empBadgeReturnDepartment" contenteditable="false" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()"></div>
+            <div id="empBadgeReturnPhone" contenteditable="false" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" style="font-family:var(--mono);color:var(--ink2);"></div>
           </div>
         </div>
         </div>
