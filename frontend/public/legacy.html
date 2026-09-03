@@ -6756,7 +6756,7 @@ function whRfidApi(path,opt){
   opt=opt||{};opt.headers=Object.assign({'Content-Type':'application/json'},authHeaders(),opt.headers||{});
   return apiFetch(path,opt).then(function(r){return r.json().catch(function(){return{};}).then(function(j){if(!r.ok)throw new Error(j.message||('HTTP '+r.status));return j;});});
 }
-function whGateRfidOnline(g){var seen=S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)];if(!seen)return false;var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Date.now()-Date.parse(seen)<=Math.max(15000,sec*5000);}
+function whGateRfidOnline(g){var seen=S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)];if(!seen)return false;var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Date.now()-Date.parse(seen)<=Math.max(90000,sec*5000);}
 function syncWhRfidEnabled(enabled){
   enabled=enabled!==false;var input=$('#whRfidEnabled'),btn=$('#btnWhRfidEnabled'),section=$('#whGateRfidSection'),hint=$('#whRfidEnabledHint');
   if(input)input.value=enabled?'1':'0';
@@ -11425,7 +11425,7 @@ function loadRfidGateBindings(){
 }
 function rfidGateUnavailableHtml(g){var bound=rfidGateIsBound(g);return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT(bound?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>';}
 function fx9600LastSeen(g){return S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)]||'';}
-function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(15000,sec*5000);}
+function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(90000,sec*5000);}
 function fx9600IsOnline(g){var ts=Date.parse(fx9600LastSeen(g));return !!ts&&(Date.now()-ts)<=fx9600OfflineAfterMs(g);}
 function fx9600SeenText(g){
   var ts=Date.parse(fx9600LastSeen(g));
@@ -15757,6 +15757,7 @@ function settingsGoSelectiveClear(){
   var h='<style>.selective-clear-body{padding-top:14px;overflow:auto}.selective-clear-tools{display:flex;align-items:center;gap:8px;margin:14px 0 6px}.selective-clear-tools b{flex:1}.selective-clear-row{display:flex!important;align-items:center!important;gap:14px!important;width:100%!important;min-height:58px;padding:10px 4px!important;border-bottom:1px solid var(--line);cursor:pointer}.selective-clear-row input{flex:0 0 auto;width:19px;height:19px;accent-color:var(--neg)}.selective-clear-copy{display:flex;flex-direction:column;gap:3px;min-width:0}.selective-clear-copy b{font-size:14px}.selective-clear-copy .small{font-size:12px}</style><div class="mhead">'+settingsBackBtn('settingsGoAdvanced')+'<h3>ล้างข้อมูลเฉพาะส่วน</h3>'+settingsCloseX()+'</div><div class="mbody selective-clear-body"><div class="banner info">เลือก table ที่ต้องการล้าง ข้อมูลส่วนอื่นจะคงเดิม</div><div class="selective-clear-tools"><b>เลือกข้อมูล</b><button class="btn ghost sm" onclick="selectiveClearToggle(true)">เลือกทั้งหมด</button><button class="btn ghost sm" onclick="selectiveClearToggle(false)">ล้างการเลือก</button></div>';
   defs.forEach(function(d){var v=S[d[0]],n=d[0]==='movementHistory'?(Array.isArray(S.events)?S.events.length:0):Array.isArray(v)?v.length:Object.keys(v||{}).length;h+='<div class="selective-clear-item"><label class="selective-clear-row" onclick="selectiveClearPreview(event,\''+d[0]+'\')"><input type="checkbox" class="selective-clear-cb" value="'+d[0]+'"><span class="selective-clear-copy"><b>'+d[1]+'</b><span class="muted small">'+n+' รายการ · กดเพื่อดูรายละเอียด</span></span><span class="selective-clear-chevron">›</span></label><div class="selective-clear-detail" data-detail="'+d[0]+'"></div></div>';});
   h+='</div><div class="mfoot"><button class="btn gray" onclick="settingsGoAdvanced()">ยกเลิก</button><div class="spacer"></div><button class="btn red" id="selectiveClearBtn" disabled onclick="settingsCommitSelectiveClear()">ล้างรายการที่เลือก</button></div>';openModal(h);
+  var selectiveClearBtn=$('#selectiveClearBtn');if(selectiveClearBtn)selectiveClearBtn.addEventListener('click',function(){if(!$all('.selective-clear-cb').some(function(x){return x.checked&&x.value==='doRecords';}))return;Object.values(S.boxes||{}).forEach(function(b){delete b.do;delete b.po;});(S.events||[]).forEach(function(e){delete e.do;delete e.po;});});
   $all('.selective-clear-cb').forEach(function(c){c.onchange=function(){var b=$('#selectiveClearBtn');b.disabled=!$all('.selective-clear-cb').some(function(x){return x.checked;});};});
 }
 window.settingsGoSelectiveClear=settingsGoSelectiveClear;
