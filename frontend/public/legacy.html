@@ -5016,7 +5016,7 @@ function avatarHTML(name,photo,size){
   var base='width:'+size+'px;height:'+size+'px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;background:var(--accentSoft);color:var(--accentInk);font-size:'+Math.round(size*0.36)+'px;font-weight:700;';
   if(photo)return '<div style="'+base+'"><img src="'+esc(photo)+'" alt="" style="width:100%;height:100%;object-fit:cover;"></div>';
   var initials=(name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
-  return '<div style="'+base+'">'+esc(initials)+'</div>';
+  return '<div style="'+base+'"><span class="svgi" style="width:'+Math.round(size*.58)+'px;height:'+Math.round(size*.58)+'px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 20a6.5 6.5 0 0 1 13 0"></path></svg></span></div>';
 }
 function nf(n){return (Number(n)||0).toLocaleString('en-US');}
 function money(n){return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
