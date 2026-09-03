@@ -90,7 +90,13 @@ lineLinkRouter.post('/unlink', requireAuth, requirePermission('partner.update'),
   const db = getDb();
   const [customer] = await db.select({ id: customers.id, name: customers.name, lineUserId: customers.lineUserId, lineDisplayName: customers.lineDisplayName, data: customers.data })
     .from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).limit(1);
-  if (!customer) throw httpError(404, 'ไม่พบข้อมูลลูกค้า', 'customer_not_found');
+  // A browser can briefly retain a customer card while a system wipe or
+  // state refresh removes that customer from the database. Treat that stale
+  // profile lookup as an unlinked profile so the UI does not emit a noisy 404.
+  if (!customer) {
+    res.json({ customerId, linked: false, displayName: '', pictureUrl: '', linkedAt: null });
+    return;
+  }
   // Deliver the final notice while the old Messaging User ID still exists.
   // A push failure must not prevent the administrator from revoking access.
   if (customer.lineUserId && LINE_USER_ID.test(customer.lineUserId)) {
@@ -158,7 +164,10 @@ lineLinkRouter.get('/customers/:customerId/profile', requireAuth, requirePermiss
     lineDisplayName: customers.lineDisplayName, linePictureUrl: customers.linePictureUrl,
     lineLinkedAt: customers.lineLinkedAt,
   }).from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).limit(1);
-  if (!customer) throw httpError(404, 'ไม่พบข้อมูลลูกค้า', 'customer_not_found');
+  if (!customer) {
+    res.json({ customerId, linked: false, displayName: '', pictureUrl: '', linkedAt: null });
+    return;
+  }
   let displayName = customer.lineDisplayName ?? '';
   let pictureUrl = customer.linePictureUrl ?? '';
   let linkedAt = customer.lineLinkedAt;
