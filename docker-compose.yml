@@ -123,13 +123,21 @@ services:
       - "3001:3000"
 
   pda:
-    image: wt-main-pda
+    build: ./pda_flutter
+    image: boxtrace-pda:latest
     container_name: boxtrace-pda
     restart: unless-stopped
     depends_on:
       - backend
     ports:
       - "5100:80"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./pda_flutter
+          ignore:
+            - ./pda_flutter/.dart_tool/
+            - ./pda_flutter/build/
 
 volumes:
   # external + explicit name: renaming the project would otherwise make compose
