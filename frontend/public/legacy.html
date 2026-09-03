@@ -689,6 +689,9 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 /* compact numeric input embedded inside a "{n} วัน/เดือน/ปี" ivs-btn — reusable
    date-range filter (see dfBarHtml/dfSetMode) */
 .df-mode-icon{width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.emp-badge-brand-mark{width:26px;height:26px;border-radius:8px;background:var(--accent);color:var(--accentContrast);display:grid;place-items:center;overflow:hidden;flex:0 0 26px;}
+.emp-badge-brand-mark .svgi{width:18px;height:18px;}
+.emp-badge-brand-mark img{width:100%;height:100%;object-fit:contain;background:#fff;padding:3px;}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
@@ -3742,7 +3745,7 @@ a{color:var(--accentInk);}
           <div style="position:absolute;left:50%;top:-186px;transform:translateX(-50%);width:376px;height:376px;border-radius:50%;background:var(--accent2);opacity:.36;"></div>
           <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;">
             <div style="display:inline-flex;align-items:center;gap:10px;">
-              <span class="emp-card-brand-mark" style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:var(--accent);"></span>
+              <span id="empBadgeBrandMarkFront" class="emp-badge-brand-mark" aria-hidden="true"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"></rect><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"></path></svg></span></span>
               <span style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
             </div>
             <div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--accentInk);">บัตรประจำตัวพนักงาน</div>
@@ -3791,7 +3794,7 @@ a{color:var(--accentInk);}
         <div id="empBadgeBackContent" style="flex:1 1 auto;min-height:0;display:flex;flex-direction:column;">
         <div style="flex:0 0 auto;padding:22px 30px 0;text-align:center;">
           <div style="display:inline-flex;align-items:center;gap:10px;">
-            <span class="emp-card-brand-mark" style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:var(--accent);"></span>
+            <span id="empBadgeBrandMarkBack" class="emp-badge-brand-mark" aria-hidden="true"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"></rect><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"></path></svg></span></span>
             <span style="font-size:26px;font-weight:700;letter-spacing:.16em;color:var(--ink);">ABSS</span>
           </div>
           <div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--faint);margin-top:6px;">ข้อมูลบัตร</div>
@@ -21863,6 +21866,14 @@ document.addEventListener('visibilitychange',()=>{
     if(n)n.textContent=APP_BRANDING.systemName;if(s)s.textContent=APP_BRANDING.subtitle;
     if(mobileName)mobileName.textContent=APP_BRANDING.systemName;
     if(mobileSub)mobileSub.textContent=APP_BRANDING.subtitle;
+    /* Employee badge uses the same branding source as the navbar. Keep an SVG
+       fallback, then hydrate the two badge marks from logoData returned by DB. */
+    var badgeMark=APP_BRANDING.logoData
+      ? '<img src="'+esc(APP_BRANDING.logoData)+'" alt="'+esc(APP_BRANDING.systemName)+'">'
+      : defaultMark;
+    ['empBadgeBrandMarkFront','empBadgeBrandMarkBack'].forEach(function(id){
+      var bm=document.getElementById(id);if(bm)bm.innerHTML=badgeMark;
+    });
     /* Browser หลายตัวจำ favicon ตัวแรกตั้งแต่ parse <head> แม้จะเปลี่ยน href
        ภายหลัง จึงต้องถอด link เดิมแล้วใส่ node ใหม่จาก logoData ใน DB เพื่อให้ไอคอน
        บนแท็บเป็นรูปเดียวกับโลโก้มุมซ้ายบน ไม่ค้าง SVG ค่าเริ่มต้น */
