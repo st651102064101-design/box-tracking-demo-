@@ -3863,6 +3863,9 @@ a{color:var(--accentInk);}
    look (what's on screen 95% of the time anyone's looking at it) is
    unchanged from before. */
 .perf-backdrop.no-blur{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+/* Keep the document behind a draggable overlay card completely stationary. */
+html.emp-badge-dragging,html.emp-badge-dragging body{overflow:hidden!important;overscroll-behavior:none!important;}
+html.emp-badge-dragging body{touch-action:none!important;}
 #btypeCubeOverlay{position:fixed;inset:0;z-index:400;display:none;}
 #btypeCubeOverlay .btc-backdrop{position:absolute;inset:0;background:rgba(20,20,22,.5);
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
@@ -8036,14 +8039,17 @@ function empBadgeBoot(){
   };
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
-  window.addEventListener('pointermove',empBadgeOnMove);
+  window.addEventListener('pointermove',empBadgeOnMove,{passive:false});
   window.addEventListener('pointerup',empBadgeRelease);
   window.addEventListener('pointercancel',empBadgeRelease);
 }
 function empBadgeOnKey(ev){if(ev.key==='Escape'&&empBadge.open)closeEmpBadge();}
-function empBadgeOnMove(ev){empBadge.mx=ev.clientX;empBadge.my=ev.clientY;if(empBadge.drag){empBadge.drag.x=ev.clientX;empBadge.drag.y=ev.clientY;}}
+function empBadgeOnMove(ev){empBadge.mx=ev.clientX;empBadge.my=ev.clientY;if(empBadge.drag){ev.preventDefault();empBadge.drag.x=ev.clientX;empBadge.drag.y=ev.clientY;}}
 function empBadgeGrab(ev){
   if(!empBadge.open)return;ev.preventDefault();
+  if(ev.currentTarget&&ev.currentTarget.setPointerCapture){try{ev.currentTarget.setPointerCapture(ev.pointerId);}catch(_){} }
+  empBadge.dragScroll={x:window.scrollX,y:window.scrollY};
+  document.documentElement.classList.add('emp-badge-dragging');
   var c=Math.cos(-empBadge.theta),s=Math.sin(-empBadge.theta);
   var dx=ev.clientX-empBadge.cx,dy=ev.clientY-empBadge.cy;
   empBadge.drag={lx:(dx*c-dy*s)/empBadge.s,ly:(dx*s+dy*c)/empBadge.s,x:ev.clientX,y:ev.clientY};
@@ -8059,6 +8065,8 @@ function empBadgeGrab(ev){
 function empBadgeRelease(ev){
   var wasDragging=!!empBadge.drag;
   empBadge.drag=null;
+  if(empBadge.dragScroll){window.scrollTo(empBadge.dragScroll.x,empBadge.dragScroll.y);empBadge.dragScroll=null;}
+  document.documentElement.classList.remove('emp-badge-dragging');
   var el=empBadge.el;
   if(el.card)el.card.style.cursor='grab';
   if(el.backdrop)el.backdrop.classList.remove('no-blur');
@@ -8158,6 +8166,8 @@ window.openEmpBadge=openEmpBadge;
 function closeEmpBadge(){
   empBadge.open=false;
   empBadge.drag=null;
+  if(empBadge.dragScroll){window.scrollTo(empBadge.dragScroll.x,empBadge.dragScroll.y);empBadge.dragScroll=null;}
+  document.documentElement.classList.remove('emp-badge-dragging');
   if(empBadge.el&&empBadge.el.backdrop)empBadge.el.backdrop.classList.remove('no-blur');
   var ov=$('#empBadgeOverlay');if(ov)ov.style.display='none';
 }
