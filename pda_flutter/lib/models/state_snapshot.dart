@@ -118,8 +118,9 @@ class StateSnapshot {
   /// Return-days for a customer, falling back to config aging days.
   int returnDaysFor(String? customerId) {
     final c = customerId == null ? null : customers[customerId];
-    if (c is Map && c['returnDays'] is num)
+    if (c is Map && c['returnDays'] is num) {
       return (c['returnDays'] as num).toInt();
+    }
     return agingDays;
   }
 

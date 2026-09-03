@@ -30,7 +30,7 @@ class BrandMark extends StatelessWidget {
   }
 }
 
-/// "BoxTrace PDA" wordmark.
+/// "SmartTrace PDA" wordmark.
 class Wordmark extends StatelessWidget {
   final double size;
   const Wordmark({super.key, this.size = 19});
@@ -44,7 +44,7 @@ class Wordmark extends StatelessWidget {
             letterSpacing: -0.5,
             color: C.ink),
         children: [
-          TextSpan(text: 'BoxTrace '),
+          TextSpan(text: 'SmartTrace '),
           TextSpan(text: 'PDA', style: TextStyle(color: C.limeText)),
         ],
       ),
@@ -111,7 +111,7 @@ class PrimaryButton extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                          color: C.lime.withOpacity(0.4),
+                          color: C.lime.withValues(alpha: 0.4),
                           blurRadius: 22,
                           offset: const Offset(0, 8))
                     ],
@@ -625,7 +625,7 @@ String locationText(Map<String, String> l) => [
 /// each screen, because the hardware trigger is dispatched centrally too (see
 /// AppController._onReaderTrigger) — a screen-local toggle that dispatcher
 /// never saw is exactly how "barcode mode" still fired the antenna.
-class ScanModeToggle extends StatelessWidget {
+class ScanModeToggle extends StatefulWidget {
   /// Extra label on the RFID segment, e.g. "หลายกล่อง" where a sweep is a
   /// bulk-select rather than a single read.
   final String? rfidNote;
@@ -637,62 +637,147 @@ class ScanModeToggle extends StatelessWidget {
   const ScanModeToggle({super.key, this.rfidNote, this.onChanged});
 
   @override
+  State<ScanModeToggle> createState() => _ScanModeToggleState();
+}
+
+class _ScanModeToggleState extends State<ScanModeToggle> {
+  static const _padding = 3.0;
+
+  /// 0 (barcode) .. 1 (rfid) while a drag is live; null the rest of the
+  /// time, when the thumb just sits at whichever side [ScanInputMode]
+  /// says. Kept as plain state rather than an AnimationController — each
+  /// drag frame sets this directly from the pointer, so there's nothing to
+  /// animate *during* the drag; only the release needs a tween, which
+  /// AnimatedPositioned already gives for free.
+  double? _dragFraction;
+
+  void _switchTo(AppController c, ScanInputMode m) {
+    if (c.scanInputMode == m) return;
+    c.setScanInputMode(m);
+    widget.onChanged?.call(m);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
 
-    Widget seg(ScanInputMode m, String label, IconData icon) {
-      final selected = c.scanInputMode == m;
-      return Expanded(
-        child: GestureDetector(
-          // Opaque so a tap anywhere on the segment counts, not just on the
-          // glyphs — this is worn with gloves on.
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            if (c.scanInputMode == m) return;
-            c.setScanInputMode(m);
-            onChanged?.call(m);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? C.ink : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? C.surface : C.ink2)),
-                ),
-              ],
-            ),
+    Widget segLabel(String label, IconData icon, bool selected) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 15, color: selected ? C.surface : C.ink2),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? C.surface : C.ink2)),
           ),
-        ),
+        ],
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-          color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          seg(ScanInputMode.barcode, loc.t('บาร์โค้ด'), Icons.qr_code_scanner),
-          seg(
-              ScanInputMode.rfid,
-              rfidNote == null ? 'RFID' : 'RFID (${loc.t(rfidNote!)})',
-              Icons.wifi_tethering),
-        ],
-      ),
+    final restingFraction = c.scanInputMode == ScanInputMode.rfid ? 1.0 : 0.0;
+    final fraction = _dragFraction ?? restingFraction;
+    final rfidLabel =
+        widget.rfidNote == null ? 'RFID' : 'RFID (${loc.t(widget.rfidNote!)})';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackWidth = constraints.maxWidth - _padding * 2;
+        final segWidth = trackWidth / 2;
+
+        // Every pointer move sets the thumb's fraction straight from the
+        // finger's x with no smoothing/threshold — that's what keeps it
+        // glued to the finger frame-for-frame instead of catching up late.
+        void followPointer(double localX) {
+          final f = ((localX - _padding) / trackWidth).clamp(0.0, 1.0);
+          if (f == _dragFraction) return;
+          setState(() => _dragFraction = f);
+        }
+
+        void settle() {
+          final wasRfid = (_dragFraction ?? restingFraction) > 0.5;
+          setState(() => _dragFraction = null);
+          _switchTo(c, wasRfid ? ScanInputMode.rfid : ScanInputMode.barcode);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (d) => followPointer(d.localPosition.dx),
+          onHorizontalDragUpdate: (d) => followPointer(d.localPosition.dx),
+          onHorizontalDragEnd: (_) => settle(),
+          onHorizontalDragCancel: () => setState(() => _dragFraction = null),
+          child: Container(
+            padding: const EdgeInsets.all(_padding),
+            decoration: BoxDecoration(
+                color: C.neutralBg2, borderRadius: BorderRadius.circular(12)),
+            child: SizedBox(
+              height: 35,
+              child: Stack(
+                // Stack defaults to top-left for non-positioned children —
+                // without this the label Row (icon+text, shorter than the
+                // 35px track) pins to the top instead of centering in it,
+                // which is exactly the "not centered on the y axis" bug.
+                alignment: Alignment.center,
+                children: [
+                  // No-animation while dragging (thumb == finger, 1:1, every
+                  // frame) — only the release-to-rest snap gets a tween, via
+                  // this same widget switching to a non-zero duration.
+                  AnimatedPositioned(
+                    duration: _dragFraction == null
+                        ? const Duration(milliseconds: 160)
+                        : Duration.zero,
+                    curve: Curves.easeOut,
+                    left: fraction * segWidth,
+                    top: 0,
+                    bottom: 0,
+                    width: segWidth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: C.ink,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          // Opaque so a tap anywhere on the segment counts,
+                          // not just on the glyphs — this is worn with
+                          // gloves on. Tap and the outer horizontal-drag
+                          // are different gesture-arena recognizers, so a
+                          // plain tap still resolves immediately with no
+                          // drag involved.
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              _switchTo(c, ScanInputMode.barcode),
+                          child: segLabel(loc.t('บาร์โค้ด'),
+                              Icons.qr_code_scanner,
+                              c.scanInputMode == ScanInputMode.barcode),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _switchTo(c, ScanInputMode.rfid),
+                          child: segLabel(rfidLabel, Icons.wifi_tethering,
+                              c.scanInputMode == ScanInputMode.rfid),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

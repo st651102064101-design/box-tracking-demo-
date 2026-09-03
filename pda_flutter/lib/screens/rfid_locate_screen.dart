@@ -193,8 +193,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // this screen is gone must not invoke a closure that calls setState on
     // an unmounted State.
     final c = context.read<AppController>();
-    if (identical(c.systemBackOverride, _handleBack))
+    if (identical(c.systemBackOverride, _handleBack)) {
       c.systemBackOverride = null;
+    }
     c.rfidLocateSweepStep = false;
     _tagSub?.cancel();
     _statusSub?.cancel();
@@ -219,10 +220,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // A read matches on whichever identifier the box is bound by — the
     // reader reports EPC (and sometimes TID) and `rfidCode` is compared to
     // both, since a box commissioned through the current endpoint stores
-    // that value in `rfid`, not in the old EPC/TID pair.
+    // that value in `rfid`, not in the old EPC/TID pair. `want` is null for
+    // a box with nothing bound via /api/boxes/:tag/rfid yet — that used to
+    // bail out of this whole function before it even reached
+    // epcMatchesTag(epc, wantTag) below, which is exactly the fallback path
+    // for a tag that's physically on the box (its own barcode written in as
+    // ASCII) but was never bound through the API. A box register/locate flow
+    // that lets an unbound box be picked (see box_register_screen.dart) has
+    // to actually sweep for it, not silently do nothing every batch.
     final want = _target!.rfidCode?.toUpperCase();
     final wantTag = _target!.tag.toUpperCase();
-    if (want == null || want.isEmpty) return;
 
     int? best;
     for (final r in batch) {
@@ -231,9 +238,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // Also a hit when the EPC is this box's own barcode written as ASCII
       // (how tags are encoded here) — the same read the gate screens resolve
       // through AppController.resolveTag.
-      final isMatch = epc == want ||
-          tid == want ||
-          epcMatchesTag(epc, wantTag);
+      final isMatch =
+          (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
+              epcMatchesTag(epc, wantTag);
       if (!isMatch) continue;
       final rssi = r.rssi ??
           _rssiClose; // no RSSI field on this read: treat as a direct hit
@@ -300,13 +307,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     for (final target in _multiTargets) {
       final want = target.rfidCode?.toUpperCase();
       final wantTag = target.tag.toUpperCase();
-      if (want == null || want.isEmpty) continue;
+      // See _onBatch's comment above — a null/empty `want` (nothing bound
+      // via the API yet) must still fall through to epcMatchesTag below,
+      // not skip this target entirely.
       int? best;
       for (final r in batch) {
         final epc = r.epc.toUpperCase();
         final tid = r.tid?.toUpperCase();
-        final isMatch = epc == want ||
-            tid == want ||
+        final isMatch = (want != null &&
+                want.isNotEmpty &&
+                (epc == want || tid == want)) ||
             epcMatchesTag(epc, wantTag);
         if (!isMatch) continue;
         final rssi = r.rssi ?? _rssiClose;
@@ -404,11 +414,14 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       setState(() => _scanError = '${loc.t('ไม่พบกล่องรหัส')} "$raw"');
       return;
     }
-    if (!b.hasRfid) {
-      setState(() =>
-          _scanError = '${b.tag} ${loc.t('ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้')}');
-      return;
-    }
+    // No hard block for a box with no RFID mapped yet (removed — this used
+    // to stop the operator right here with "ยังไม่ได้ผูกแท็ก RFID — หาไม่ได้",
+    // framing it as an error to fix before they could even try). Any box
+    // that resolves is pickable, same as Track/Transfer never special-case
+    // RFID status either; _locateBody shows a plain notice instead once
+    // inside the sweep step if there's genuinely nothing to match against
+    // (see the box.hasRfid check there) — the entry point itself no longer
+    // gates on it.
     setState(() => _scanError = null);
     if (_multiMode) {
       _addMultiTarget(b);
@@ -492,10 +505,24 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // Kept in sync every rebuild rather than only in initState/step
     // transitions — cheap, and guarantees a system back press always
     // matches whatever the StickyHeader arrow below would do right now.
-    c.systemBackOverride =
-        (_step == _Step.locate || _step == _Step.locateMulti)
-            ? _handleBack
-            : null;
+    //
+    // Guarded on c.screen still being rfidLocate: RootScreen cross-fades
+    // between the outgoing and incoming screen (AnimatedSwitcher), so both
+    // stay mounted and both rebuild off the same notifyListeners() call that
+    // navigates away — including this one, moments after backToHome()/
+    // handleSystemBack() already moved c.screen elsewhere. Without this
+    // guard, that stale rebuild re-asserts _handleBack right after the new
+    // screen just cleared it, leaving systemBackOverride pointing at a
+    // screen that's about to be disposed — the next back press then either
+    // no-ops or throws calling into a defunct State, and the hardware/
+    // gesture back control looks permanently dead from every screen until
+    // the app restarts.
+    if (c.screen == Screen.rfidLocate) {
+      c.systemBackOverride =
+          (_step == _Step.locate || _step == _Step.locateMulti)
+              ? _handleBack
+              : null;
+    }
     return ScanCapture(
       // Live on the pick step only — locate/locateMulti are RFID-only by
       // definition and drive their own reader stream instead. No mode check
@@ -528,30 +555,32 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   // ── Step 1: pick ──────────────────────────────────────────────────────
   Widget _pickBody(AppController c, LocaleController loc) {
     final bottom = MediaQuery.of(context).padding.bottom;
-    // Every taggable box, browsable without typing anything — this is what a
+    // Every box, browsable without typing anything — this is what a
     // scan-only pick step falls back to when there's no picking ticket or
-    // pallet label in hand to scan.
-    final allTagged = (c.S?.boxes.toList() ?? const <Box>[])
-        .where((b) => b.hasRfid)
-        .toList()
+    // pallet label in hand to scan. Used to be filtered to b.hasRfid only
+    // (a box with no RFID mapped yet couldn't even be picked here) — removed
+    // per request: picking a box no longer requires it to already be
+    // RFID-mapped, matching how Track/Transfer never gate on RFID status
+    // either. A box with nothing to match against just won't move the meter
+    // once inside the sweep step (see the notice in _locateBody).
+    final allBoxes = (c.S?.boxes.toList() ?? const <Box>[])
       ..sort((a, b) => a.tag.compareTo(b.tag));
 
-    // Distinct types actually present, by display name — a type with zero
-    // tagged boxes right now would just be a dead-end chip. '' stands in for
+    // Distinct types actually present, by display name. '' stands in for
     // "no type set" so it can still be a normal map key.
     final typeNames = <String, String>{}; // type id -> display name
-    for (final b in allTagged) {
+    for (final b in allBoxes) {
       final id = b.type ?? '';
       typeNames[id] = c.S!.typeName(b.type);
     }
     final typeIds = typeNames.keys.toList()
       ..sort((a, b) => typeNames[a]!.compareTo(typeNames[b]!));
     if (_typeFilter != null && !typeIds.contains(_typeFilter)) {
-      _typeFilter = null; // the selected type's last box lost its tag/moved out
+      _typeFilter = null; // the selected type's last box moved out
     }
     final tagged = _typeFilter == null
-        ? allTagged
-        : allTagged.where((b) => (b.type ?? '') == _typeFilter).toList();
+        ? allBoxes
+        : allBoxes.where((b) => (b.type ?? '') == _typeFilter).toList();
 
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
@@ -646,10 +675,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         const SizedBox(height: 14),
         if (_multiMode)
           ..._multiPickList(c, loc)
-        else if (allTagged.isEmpty)
+        else if (allBoxes.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-            child: Text(loc.t('ยังไม่มีกล่องที่ผูกแท็ก RFID ในระบบ'),
+            child: Text(loc.t('ยังไม่มีกล่องในระบบ'),
                 style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
           )
         else ...[
@@ -693,7 +722,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             Padding(
               padding:
                   const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
-              child: Text(loc.t('ไม่มีกล่องประเภทนี้ที่ผูกแท็ก RFID ในระบบ'),
+              child: Text(loc.t('ไม่มีกล่องประเภทนี้ในระบบ'),
                   style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
             )
           else
@@ -879,8 +908,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       locParts.add(loc.t('แจ้งสูญหาย'));
     } else {
       locParts.add(S.whName(l['wh']?.toString()));
-      if ((l['zone'] ?? '').toString().isNotEmpty)
+      if ((l['zone'] ?? '').toString().isNotEmpty) {
         locParts.add('${loc.t('โซน')} ${l['zone']}');
+      }
       if ((l['rack'] ?? '').toString().isNotEmpty) locParts.add('${l['rack']}');
     }
 
@@ -929,6 +959,38 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           ),
         ),
         const SizedBox(height: 14),
+        // Picking a box here no longer requires it to already have an RFID
+        // tag mapped (see _pickBody/_onScan) — if it genuinely has none, say
+        // so plainly instead of leaving the operator to wonder why the
+        // meter never moves. box_register_screen.dart is the one place a
+        // tag actually gets bound (see its own comment on why), so this is
+        // a pointer there, not a binding action taken from this screen.
+        if (!b.hasRfid) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: C.orangeBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: C.orangeBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 18, color: C.orange),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    loc.t(
+                        'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ผูกแท็กได้ที่หน้า "ลงทะเบียนกล่อง"'),
+                    style: TextStyle(fontSize: 12.5, color: C.orange, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         Panel(
           padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
           radius: 20,

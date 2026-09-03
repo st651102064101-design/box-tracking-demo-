@@ -1,7 +1,7 @@
-name: boxtrace_pda
-description: BoxTrace PDA — Zebra MC3390R handheld terminal for the BoxTrace RFID gate backend.
+name: smarttrace_pda
+description: SmartTrace PDA — Zebra MC3390R handheld terminal for the SmartTrace RFID gate backend.
 publish_to: "none"
-version: 1.0.0+12
+version: 1.0.0+55
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -19,7 +19,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

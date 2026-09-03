@@ -4,7 +4,7 @@ import '../theme.dart';
 import 'prefs.dart';
 
 /// TH/EN toggle for the PDA app, mirroring the language switch already used
-/// in the BoxTrace web reference mockup (`btnLang` / `toggleLang()` there):
+/// in the SmartTrace web reference mockup (`btnLang` / `toggleLang()` there):
 /// Thai copy is the source of truth in the widget tree, this just swaps in an
 /// English string when one is known and persists the choice like the mockup
 /// does via localStorage.
@@ -36,8 +36,8 @@ class LocaleController extends ChangeNotifier {
     'ตั้งค่าการเชื่อมต่อ': 'Connection settings',
     'ยังไม่มีพนักงานในระบบ': 'No employees on file yet',
     'รอเชื่อมต่อกับระบบหลักก่อน': 'Waiting to connect to the main system',
-    'ยังไม่พบข้อมูลจากระบบหลัก BoxTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
-        'No data from the BoxTrace main system yet — tap below to set up the connection',
+    'ยังไม่พบข้อมูลจากระบบหลัก SmartTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
+        'No data from the SmartTrace main system yet — tap below to set up the connection',
     'เชื่อมต่อไม่ได้': 'Could not connect',
     'ผู้ดูแลระบบ': 'Administrator',
     'ยืนยัน': 'Confirm',
@@ -81,11 +81,14 @@ class LocaleController extends ChangeNotifier {
     // shared
     'เข้า': 'In',
     'ออก': 'Out',
+    'รับ': 'Received',
     'โซน': 'Zone',
     'วันนี้': 'Today',
     'ออนไลน์': 'Online',
     'ออฟไลน์': 'Offline',
     'ไม่มีกล่อง': 'No boxes',
+    'ไม่ระบุลูกค้า': 'No customer on file',
+    'ไม่ทราบประเภท': 'Unknown type',
 
     // home screen
     'ยังไม่ได้เชื่อมข้อมูลกับระบบหลัก — ไปที่ตั้งค่าเพื่อเชื่อมต่อ หรือใส่ข้อมูลตัวอย่าง':
@@ -108,7 +111,7 @@ class LocaleController extends ChangeNotifier {
     'ลงทะเบียนกล่อง': 'Register box',
     'รับกล่องจาก supplier — สร้างกล่อง ติดป้าย ผูกแท็ก แล้ว Putaway':
         'Receive boxes from a supplier — create, label, tag, then put away',
-    'รับเข้า / รับคืน': 'Gate In / Return',
+    'รับคืน': 'Return',
     'Gate In — ยิงกล่องกลับเข้าคลัง':
         'Gate In — scan boxes back into the warehouse',
     'ส่งออก': 'Gate Out',
@@ -134,8 +137,10 @@ class LocaleController extends ChangeNotifier {
     'เหนี่ยวไกเพื่ออ่านแท็ก RFID': 'Pull the trigger to read an RFID tag',
     'พบ': 'Found',
     'แท็ก': 'tags',
+    'ล้าง': 'Clear',
     'ไม่พบกล่อง': 'Box',
     'ในระบบ': 'not found in the system',
+    'ไม่พบกล่องที่ตรงกับแท็กนี้': 'No box matches this tag',
     'บาร์โค้ด': 'Barcode',
     'ไม่พบกล่องนี้ในระบบ': 'This box is not in the system',
     'ลูกค้า / DO': 'Customer / DO',
@@ -199,7 +204,7 @@ class LocaleController extends ChangeNotifier {
 
     // settings screen
     'ตั้งค่า': 'Settings',
-    'เชื่อมต่อกับ BoxTrace แล้ว': 'Connected to BoxTrace',
+    'เชื่อมต่อกับ SmartTrace แล้ว': 'Connected to SmartTrace',
     'กล่องในฐานข้อมูล': 'boxes in the database',
     'แตะเพื่อเชื่อมต่อใหม่': 'Tap to reconnect',
     'รับค่า RFID': 'RFID readout',
@@ -213,7 +218,7 @@ class LocaleController extends ChangeNotifier {
     'ยังไม่ได้ตั้ง — แตะเพื่อตั้งรหัสกันคนอื่นแตะชื่อคุณ':
         'Not set yet — tap to set one and keep others from tapping your name',
     'กลับไปหน้ายิงบัตร': 'Back to the badge screen',
-    'เชื่อมกับ BoxTrace backend': 'Connects to the BoxTrace backend',
+    'เชื่อมกับ SmartTrace backend': 'Connects to the SmartTrace backend',
     'ใส่รหัส PIN เดิมของ': 'Enter the current PIN for',
     'ยืนยันตัวตนก่อนตั้งรหัสใหม่':
         'Verify your identity before setting a new PIN',
@@ -292,7 +297,7 @@ class LocaleController extends ChangeNotifier {
     'รับเข้า': 'Gate In',
     'ตรวจนับ': 'Cycle Count',
     'ค้นหา/เรดาร์': 'Search / Radar',
-    'ผูก Tag / ชำรุด / อื่นๆ': 'Tag / Damage / More',
+    'เมนูอื่นๆ': 'More',
     // transfer screen
     'ยิงหรือพิมพ์รหัสกล่องที่จะย้าย': 'Scan or type the box code to move',
     'ตำแหน่งใหม่': 'New location',
@@ -312,6 +317,9 @@ class LocaleController extends ChangeNotifier {
     'กำลังเริ่ม…': 'Starting…',
     'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้':
         'The count is recorded on the server — if someone already has a count open for this zone, you\'ll continue theirs',
+    'ตรวจนับครบถ้วน': 'Count complete',
+    'ขอแสดงความยินดี ท่านได้ดำเนินการตรวจนับครบถ้วนทุกรายการที่คาดไว้เรียบร้อยแล้ว':
+        'Congratulations — every expected item has been counted',
     'ปิดรอบและบันทึกผล': 'Close and save result',
     'ปิดรอบตรวจนับ': 'Close this count?',
     'ปิดรอบแล้วจะบันทึกผลลงระบบ และเพิ่มสแกนอีกไม่ได้':
@@ -347,7 +355,7 @@ class LocaleController extends ChangeNotifier {
     'แก้ไขข้อมูลลูกค้า/รถ': 'Edit customer/vehicle info',
     'ถัดไป': 'Next',
     'ยืนยันส่งออก': 'Confirm Gate Out',
-    'ยืนยันรับเข้าคลัง': 'Confirm Gate In',
+    'ยืนยันรับคืน': 'Confirm Return',
     'ลูกค้าปลายทาง *': 'Destination customer *',
     '— เลือกลูกค้า —': '— Choose customer —',
     'ทะเบียนรถ *': 'License plate *',
@@ -450,8 +458,6 @@ class LocaleController extends ChangeNotifier {
     'พัก / แจ้งชำรุด': 'Hold / flag damage',
     'กล่องที่อยู่ในคลังแล้ว — ชำรุดทีหลัง, พักรอ QC, หรือปลดพัก':
         'A box already in the warehouse — damaged later, held for QC, or released',
-    'แจ้งปัญหาหน้างาน': 'Report a floor problem',
-    'ของหาย / ช่องเก็บเต็ม': 'Missing box / bin full',
     'เช็คช่อง': 'Check a bin',
     'ยิงบาร์โค้ดชั้นวาง ดูว่าควรมีอะไรอยู่':
         'Scan a shelf barcode to see what should be there',

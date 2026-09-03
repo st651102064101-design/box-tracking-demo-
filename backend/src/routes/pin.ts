@@ -137,6 +137,31 @@ employeePinRouter.post(
   }),
 );
 
+/** Checks an OTP against what's on file without consuming it or touching the
+ *  PIN — lets the client gate the "set a new PIN" screen behind a correct
+ *  code instead of only finding out it was wrong after the operator already
+ *  typed a new PIN twice. */
+const verifyResetSchema = z.object({ otp: z.string().regex(/^\d{6}$/, 'OTP ต้องเป็นตัวเลข 6 หลัก') });
+employeePinRouter.post(
+  '/:id/pin/reset/verify',
+  asyncHandler(async (req, res) => {
+    const { otp } = verifyResetSchema.parse(req.body);
+    const db = getDb();
+    const rows = await db.select().from(employees).where(eq(employees.id, req.params.id));
+    const row = rows[0];
+    if (!row) throw httpError(404, 'ไม่พบพนักงาน', 'not_found');
+    if (!row.pinResetOtpHash || !row.pinResetExpiresAt) {
+      throw httpError(400, 'ยังไม่มีคำขอรีเซ็ต PIN — กด "ลืมรหัส PIN?" เพื่อขอรหัสใหม่ก่อน', 'no_reset_pending');
+    }
+    if (row.pinResetExpiresAt.getTime() < Date.now()) {
+      throw httpError(400, 'รหัส OTP หมดอายุแล้ว — กด "ลืมรหัส PIN?" เพื่อขอรหัสใหม่', 'otp_expired');
+    }
+    const otpOk = await verifyPassword(otp, row.pinResetOtpHash);
+    if (!otpOk) throw httpError(400, 'รหัส OTP ไม่ถูกต้อง', 'otp_invalid');
+    res.json({ ok: true });
+  }),
+);
+
 /** The employee's side of a reset: enter the OTP that arrived by email,
  *  set a new PIN. */
 const confirmResetSchema = z.object({

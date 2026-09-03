@@ -42,6 +42,13 @@ beforeAll(async () => {
           history: [{ dir: 'in-new', ts: '2026-01-01T00:00:00.000Z', wh: 'WH-2' }],
           location: {}, outWh: 'WH-2', customer: 'CUST-001',
         },
+        // Shipped out of WH-2 but still carrying WH-2's shelf position —
+        // receiving it at WH-1 has to re-home it, not keep the stale location.
+        'WH2-OUT2': {
+          tag: 'WH2-OUT2', type: 'BT-001', status: 'out', cycles: 0, labeled: true,
+          history: [{ dir: 'in-new', ts: '2026-01-01T00:00:00.000Z', wh: 'WH-2' }],
+          location: { wh: 'WH-2', zone: 'A', rack: '1', shelf: '2', slot: '' }, outWh: 'WH-2', customer: 'CUST-001',
+        },
         // Brand new from a supplier — no outWh, never received anywhere yet.
         'NEW-1': { tag: 'NEW-1', type: 'BT-001', status: 'pending', labeled: true, history: [], location: {} },
       },
@@ -88,16 +95,25 @@ describe('gate warehouse ownership', () => {
     expect(res.status).toBe(200);
   });
 
-  it('refuses to receive a returning box at a gate belonging to another warehouse', async () => {
+  it('receives a box shipped from another warehouse — an inter-warehouse transfer', async () => {
     const res = await request(ctx.app)
       .post('/api/gate/in')
       .set(auth(ctx.token))
-      .send({ tags: ['WH2-OUT'], gate: 1 }); // gate 1 = WH-1, box shipped from WH-2
-    expect(res.status).toBe(409);
-    expect(res.body.error).toBe('box_wrong_warehouse');
+      .send({ tags: ['WH2-OUT2'], gate: 1 }); // gate 1 = WH-1, box shipped from WH-2
+    expect(res.status).toBe(200);
 
-    const box = await request(ctx.app).get('/api/boxes/WH2-OUT').set(auth(ctx.token));
-    expect(box.body.status).toBe('out'); // untouched
+    const box = await request(ctx.app).get('/api/boxes/WH2-OUT2').set(auth(ctx.token));
+    expect(box.body.status).toBe('warehouse');
+    // Re-homed onto WH-1 with no position — WH-2's rack didn't travel with it.
+    expect(box.body.location.wh).toBe('WH-1');
+    expect(box.body.location.rack).toBe('');
+
+    // ...and it can now ship straight back out of the warehouse it's in.
+    const out = await request(ctx.app)
+      .post('/api/gate/out')
+      .set(auth(ctx.token))
+      .send({ tags: ['WH2-OUT2'], customer: 'CUST-001', gate: 1 });
+    expect(out.status).toBe(200);
   });
 
   it('receives a returning box fine at its own warehouse gate', async () => {

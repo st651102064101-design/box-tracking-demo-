@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:boxtrace_pda/services/epc_codec.dart';
+import 'package:smarttrace_pda/services/epc_codec.dart';
 
 void main() {
   group('epcToAscii', () {

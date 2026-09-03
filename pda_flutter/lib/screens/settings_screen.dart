@@ -92,7 +92,7 @@ class SettingsScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     c.connected
-                                        ? loc.t('เชื่อมต่อกับ BoxTrace แล้ว')
+                                        ? loc.t('เชื่อมต่อกับ SmartTrace แล้ว')
                                         : (c.connError ??
                                             loc.t('ยังไม่พบข้อมูล')),
                                     style: const TextStyle(
@@ -174,7 +174,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Center(
                   child: Text(
-                    'BoxTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ BoxTrace backend')}',
+                    'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),
@@ -323,8 +323,9 @@ class SettingsScreen extends StatelessWidget {
       validate: (entered) async =>
           entered == first.pin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
     );
-    if (confirm == null || confirm.pin == null)
+    if (confirm == null || confirm.pin == null) {
       return; // cancelled — nothing saved
+    }
     if (!context.mounted) return;
     try {
       await c.api.setEmployeePin(e.id, first.pin!);
@@ -354,26 +355,11 @@ class SettingsScreen extends StatelessWidget {
       ResultKind.info,
     );
     if (!context.mounted) return;
-    // New PIN first, OTP last — see login_screen.dart's _forgotPin for the
-    // full reasoning: confirmPinReset is the only endpoint that checks an
-    // OTP, and it sets the PIN in the same call, so the OTP can only be
-    // validated at the step where it's typed if the PIN is already in hand.
-    final newPinResult = await showPinPad(context,
-        title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!context.mounted) return;
-    final confirm = await showPinPad(
-      context,
-      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
-      validate: (entered) async =>
-          entered == newPin ? null : loc.t('รหัสไม่ตรงกัน ลองใหม่'),
-    );
-    if (confirm == null || confirm.pin == null) return;
-
-    if (!context.mounted) return;
-    var applied = false;
+    // OTP first — see login_screen.dart's _forgotPin for the full reasoning:
+    // verifyPinReset checks the code without consuming it or touching the
+    // PIN, so a wrong/expired OTP is caught right here instead of after the
+    // operator has already typed a new PIN twice. The actual write still
+    // goes through confirmPinReset at the end, carrying this verified OTP.
     final otpResult = await showPinPad(
       context,
       title: loc.t('กรอกรหัส OTP'),
@@ -383,8 +369,7 @@ class SettingsScreen extends StatelessWidget {
       length: 6,
       validate: (otp) async {
         try {
-          await c.api.confirmPinReset(e.id, otp: otp, pin: newPin);
-          applied = true;
+          await c.api.verifyPinReset(e.id, otp);
           return null;
         } on ApiException catch (err) {
           return err.message.isEmpty
@@ -408,7 +393,36 @@ class SettingsScreen extends StatelessWidget {
         }
       },
     );
-    if (otpResult == null || !applied) return;
+    if (otpResult == null || otpResult.pin == null) return;
+    final verifiedOtp = otpResult.pin!;
+
+    if (!context.mounted) return;
+    final newPinResult = await showPinPad(context,
+        title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
+    if (newPinResult == null || newPinResult.pin == null) return;
+    final newPin = newPinResult.pin!;
+
+    if (!context.mounted) return;
+    var applied = false;
+    final confirm = await showPinPad(
+      context,
+      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
+      validate: (entered) async {
+        if (entered != newPin) return loc.t('รหัสไม่ตรงกัน ลองใหม่');
+        try {
+          await c.api.confirmPinReset(e.id, otp: verifiedOtp, pin: newPin);
+          applied = true;
+          return null;
+        } on ApiException catch (err) {
+          return err.message.isEmpty
+              ? loc.t('รหัส OTP ไม่ถูกต้องหรือหมดอายุ')
+              : err.message;
+        } catch (err) {
+          return c.errorMessage(err);
+        }
+      },
+    );
+    if (confirm == null || !applied) return;
 
     c.prefs.clearPinSkip(e.id);
     c.prefs.cachePinHash(e.id, newPin);
@@ -566,8 +580,9 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 
   String _label(AppController c, LocaleController loc) {
-    if (!c.rfid.supported)
+    if (!c.rfid.supported) {
       return loc.t('ใช้ได้เฉพาะบนเครื่อง Android ที่มีเครื่องอ่าน Zebra');
+    }
     switch (c.rfidStatus.state) {
       case RfidState.connected:
         return loc.t('เชื่อมต่อเครื่องอ่านแล้ว');
@@ -821,6 +836,16 @@ class _RfidPanelState extends State<_RfidPanel> {
             _row(loc.t('ภูมิภาค (Region)'), _d['region']),
             _row(loc.t('ช่องทางเชื่อมต่อ'), _d['transport']),
             _row(loc.t('กำลังส่ง (index)'), power),
+            // Link profile — the knob that decides how fast tag replies come
+            // back. Shows what's in force and the fastest the reader offers,
+            // so "is the radio actually flat out?" is answerable on the floor
+            // instead of only from a log nobody can read on this device.
+            _row(loc.t('โปรไฟล์สัญญาณ (RF mode)'), _d['rfModeIndex'] == null
+                ? null
+                : 'index ${_d['rfModeIndex']}'
+                    '${_d['rfModeBdr'] != null && _d['rfModeBdr'] != -1 ? ' · ${_d['rfModeBdr']} bps' : ''}'
+                    '${_d['rfModeBest'] != null && _d['rfModeBest'] != _d['rfModeIndex'] ? '  (เร็วสุด: ${_d['rfModeBest']})' : '  (เร็วสุดแล้ว)'}'
+                    '${_d['rfModeCount'] != null ? ' · มี ${_d['rfModeCount']} โปรไฟล์' : ''}'),
             const SizedBox(height: 10),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
@@ -985,7 +1010,7 @@ class _RssiPicker extends StatelessWidget {
             activeTrackColor: C.ink,
             inactiveTrackColor: C.neutralBg2,
             thumbColor: C.ink,
-            overlayColor: C.ink.withOpacity(0.12),
+            overlayColor: C.ink.withValues(alpha: 0.12),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
           child: Slider(
@@ -1053,7 +1078,7 @@ class _RangePicker extends StatelessWidget {
             activeTrackColor: C.ink,
             inactiveTrackColor: C.neutralBg2,
             thumbColor: C.ink,
-            overlayColor: C.ink.withOpacity(0.12),
+            overlayColor: C.ink.withValues(alpha: 0.12),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
           child: Slider(

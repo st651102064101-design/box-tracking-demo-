@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Design tokens ported 1:1 from the "BoxTrace PDA (offline)" mockup so the
+/// Design tokens ported 1:1 from the "SmartTrace PDA (offline)" mockup so the
 /// Flutter build reads identically to the reference handheld UI.
 ///
 /// Mutable (not `static const`) so [apply] can swap the whole palette for

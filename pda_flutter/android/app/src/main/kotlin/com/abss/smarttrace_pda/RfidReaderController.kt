@@ -1,12 +1,14 @@
-package com.abss.boxtrace_pda
+package com.abss.smarttrace_pda
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.ToneGenerator
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -38,7 +40,7 @@ class RfidReaderController(private val context: Context) :
     Readers.RFIDReaderEventHandler {
 
     companion object {
-        private const val TAG = "BoxTraceRFID"
+        private const val TAG = "SmartTraceRFID"
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -339,6 +341,10 @@ class RfidReaderController(private val context: Context) :
             "playSound" -> { playSoundId(call.argument<String>("soundId") ?: "none"); result.success(true) }
             "setSoundVolume" -> { setSoundVolume(call.argument<Double>("volume") ?: 1.0); result.success(true) }
             "setDetailMode" -> { setDetailMode(call.argument<Boolean>("enabled") == true); result.success(true) }
+            "setBarcodeScannerEnabled" -> {
+                setBarcodeScannerEnabled(call.argument<Boolean>("enabled") ?: true)
+                result.success(true)
+            }
             "isConnected" -> result.success(isConnected())
             "diagnostics" -> result.success(diagnostics())
             "deviceInfo" -> result.success(deviceInfo())
@@ -347,6 +353,113 @@ class RfidReaderController(private val context: Context) :
     }
 
     private fun isConnected(): Boolean = reader?.isConnected == true
+
+    /** DataWedge profile this app owns — see [ensureDataWedgeProfile]. */
+    private val dataWedgeProfileName = "SmartTracePDA"
+    private var dataWedgeProfileEnsured = false
+
+    /**
+     * Creates (idempotent) and associates a DataWedge profile with this
+     * app's package before the first [setBarcodeScannerEnabled] call.
+     *
+     * Without an app-owned profile, this app runs under DataWedge's
+     * "Profile0" — the catch-all default for unassociated apps — where
+     * runtime plugin toggles observably don't stick (confirmed on-device:
+     * DISABLE_PLUGIN broadcasts are received and processed by DataWedge's
+     * ScanningService, yet the physical imager keeps arming/illuminating
+     * on trigger pull). Giving the app its own profile is what every
+     * DataWedge integration guide assumes as the starting point; Profile0
+     * is meant to be left alone.
+     *
+     * The KEYSTROKE plugin is left enabled here so barcode mode's existing
+     * scan-into-focused-textfield capture (ScanCapture/scan_speed_detector)
+     * keeps working exactly as it did under Profile0 — only the BARCODE
+     * (decoder/imager) plugin's enabled state is what the mode toggle now
+     * actually controls per scan.
+     */
+    private fun ensureDataWedgeProfile() {
+        if (dataWedgeProfileEnsured) return
+        dataWedgeProfileEnsured = true
+
+        sendDataWedge("com.symbol.datawedge.api.CREATE_PROFILE", dataWedgeProfileName)
+
+        val appConfig = Bundle()
+        appConfig.putString("PACKAGE_NAME", context.packageName)
+        appConfig.putStringArray("ACTIVITY_LIST", arrayOf("*"))
+
+        val profileConfig = Bundle()
+        profileConfig.putString("PROFILE_NAME", dataWedgeProfileName)
+        profileConfig.putString("PROFILE_ENABLED", "true")
+        profileConfig.putString("CONFIG_MODE", "UPDATE")
+        profileConfig.putParcelableArray("APP_LIST", arrayOf(appConfig))
+        sendDataWedgeConfig(profileConfig)
+
+        val keystrokeParams = Bundle()
+        keystrokeParams.putString("keystroke_output_enabled", "true")
+        sendDataWedgePluginConfig("KEYSTROKE", keystrokeParams)
+    }
+
+    /**
+     * Arms/disarms the handheld's *barcode* imager (laser/LED/beep) via
+     * DataWedge's public intent API — separate from the RFID antenna, which
+     * is entirely on the RFIDAPI3 side above. Without this, DataWedge owns
+     * the same physical trigger the RFID SDK listens to, so picking "RFID"
+     * in the app's scan-mode toggle silenced the antenna on our side but
+     * left DataWedge free to also decode a barcode (light/beep and all) on
+     * the same trigger pull, and vice versa in barcode mode.
+     *
+     * Targets this app's own profile (see [ensureDataWedgeProfile]) via
+     * SET_CONFIG rather than only the quick SCANNERINPUTPLUGIN command —
+     * the latter alone was observed not to stick while running under
+     * Profile0. Both are sent; SCANNERINPUTPLUGIN is a harmless no-op once
+     * the profile-scoped config is what's actually taking effect.
+     *
+     * No EMDK license needed — DataWedge ships pre-installed on Zebra
+     * devices and listens for these broadcasts system-wide.
+     */
+    private fun setBarcodeScannerEnabled(enabled: Boolean) {
+        ensureDataWedgeProfile()
+
+        val barcodeParams = Bundle()
+        barcodeParams.putString("scanner_input_enabled", if (enabled) "true" else "false")
+        sendDataWedgePluginConfig("BARCODE", barcodeParams)
+
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra(
+            "com.symbol.datawedge.api.SCANNERINPUTPLUGIN",
+            if (enabled) "ENABLE_PLUGIN" else "DISABLE_PLUGIN"
+        )
+        context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedge(extraName: String, extraValue: String) {
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra(extraName, extraValue)
+        context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedgeConfig(profileConfig: Bundle) {
+        val intent = Intent()
+        intent.action = "com.symbol.datawedge.api.ACTION"
+        intent.putExtra("com.symbol.datawedge.api.SET_CONFIG", profileConfig)
+        context.sendBroadcast(intent)
+    }
+
+    private fun sendDataWedgePluginConfig(pluginName: String, params: Bundle) {
+        val pluginConfig = Bundle()
+        pluginConfig.putString("PLUGIN_NAME", pluginName)
+        pluginConfig.putString("RESET_CONFIG", "true")
+        pluginConfig.putBundle("PARAM_LIST", params)
+
+        val profileConfig = Bundle()
+        profileConfig.putString("PROFILE_NAME", dataWedgeProfileName)
+        profileConfig.putString("PROFILE_ENABLED", "true")
+        profileConfig.putString("CONFIG_MODE", "UPDATE")
+        profileConfig.putParcelable("PLUGIN_CONFIG", pluginConfig)
+        sendDataWedgeConfig(profileConfig)
+    }
 
     /**
      * What the OS itself says this handheld actually is — independent of
@@ -403,6 +516,17 @@ class RfidReaderController(private val context: Context) :
                 val idx = rd.Config.Antennas.getAntennaRfConfig(1).getTransmitPowerIndex()
                 values[idx]
             }
+            /* The link profile in force, and the fastest the reader says it
+               has. Surfaced because read rate lives or dies on it and the
+               app's own logs aren't readable on a locked-down device — this
+               panel is the only way to see, on the floor, whether the radio
+               is actually on its quickest setting. */
+            m["rfModeIndex"] = num {
+                rd.Config.Antennas.getAntennaRfConfig(1).getrfModeTableIndex().toInt()
+            }
+            m["rfModeBdr"] = num { bdrForModeIndex(rd, rd.Config.Antennas.getAntennaRfConfig(1).getrfModeTableIndex().toInt()) }
+            m["rfModeBest"] = num { fastestRfModeIndex(rd) }
+            m["rfModeCount"] = num { rfModeEntryCount(rd) }
         }
         return m
     }
@@ -550,15 +674,61 @@ class RfidReaderController(private val context: Context) :
             maxPower = rd.ReaderCapabilities.getTransmitPowerLevelValues().size - 1
             val cfg = rd.Config.Antennas.getAntennaRfConfig(1)
             cfg.setTransmitPowerIndex(maxPower)
-            cfg.setrfModeTableIndex(0)
-            cfg.setTari(0)
+            // The link profile: was hardcoded to index 0, which is simply
+            // "whatever the SDK lists first" and carries no promise of being
+            // the fast one. Each entry in the reader's own RF mode table
+            // reports its backscatter data rate (bdrValue, bits/sec) — the
+            // rate tag replies come back at, and the single biggest lever on
+            // how many reads/sec this radio can do. So ask the reader what it
+            // supports and take the fastest, instead of assuming.
+            //
+            // Every entry is logged: the table is firmware- and region-
+            // dependent, so this is also how we can see on a real device what
+            // was actually available and what got picked.
+            cfg.setrfModeTableIndex(fastestRfModeIndex(rd).toLong())
+            cfg.setTari(0L) // 0 = let the reader use the chosen mode's own default
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
-            // singulation S0 / state A — read tags continuously while triggered
+            // Singulation. The comment here used to claim "state A — read tags
+            // continuously while triggered", which is precisely what target A
+            // does NOT do.
+            //
+            // Gen2: a tag that answers an inventory round flips its inventoried
+            // flag A->B, and in S0 that flag holds for as long as the tag stays
+            // energised. The reader's field is continuous while the trigger is
+            // held, so a tag read once sits in B and simply stops answering the
+            // A queries the reader keeps sending. One read per tag, then
+            // silence — the "เจอแล้วไม่รัวต่อ" symptom, and the reason reads
+            // trickled in at roughly one a second instead of streaming: what
+            // arrived was tags briefly dropping out of the field and resetting,
+            // not the reader working.
+            //
+            // AB_FLIP alternates the target between rounds, so the tags now
+            // sitting in B answer the next round (flipping back to A), and so
+            // on. That is what makes a held trigger re-read the same tags over
+            // and over at the reader's real rate.
             val s = rd.Config.Antennas.getSingulationControl(1)
             s.setSession(SESSION.SESSION_S0)
-            s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_A)
+            s.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_AB_FLIP)
             s.Action.setSLFlag(SL_FLAG.SL_ALL)
+            // Gen2 sizes its slot count as 2^Q, and this estimate is what
+            // picks the STARTING Q. 300 was set here to help a dense pallet
+            // sweep, and it did the opposite of what its own comment claimed:
+            // 300 starts Q at ~8, i.e. 256 slots per inventory round. Point
+            // the reader at four tags — the settings-screen read test, or a
+            // handful of boxes at the gate — and ~252 of those slots are
+            // empty air the reader still has to clock through before the
+            // round ends. That is exactly the "1… 2… 3… 4…" crawl.
+            //
+            // Dynamic Q is self-correcting, but only in one direction in
+            // practice: it ratchets Q *up* fast when it sees collisions and
+            // creeps it back *down* slowly across many empty slots. So the
+            // starting estimate should be biased LOW — a handheld sees a
+            // handful of tags almost every time, and the rare dense pallet
+            // costs a few collisions before Q climbs to fit it. Starting
+            // high, as before, taxed every single read for a case that
+            // almost never happens.
+            s.setTagPopulation(16)
             rd.Config.Antennas.setSingulationControl(1, s)
 
             rd.Actions.PreFilters.deleteAll()
@@ -566,6 +736,74 @@ class RfidReaderController(private val context: Context) :
             applyReadProfile(rd)
         } catch (e: Exception) {
             Log.e(TAG, "configure failed", e)
+        }
+    }
+
+    /**
+     * The reader's fastest Gen2 link profile, as an RF-mode-table index.
+     *
+     * `bdrValue` is the entry's backscatter data rate in bits/sec — how fast a
+     * tag's reply comes back over the air. Everything else being equal, the
+     * highest one gives the most reads/sec, which is the whole reason this
+     * function exists instead of the old hardcoded 0.
+     *
+     * Falls back to 0 (the previous behaviour) if the table can't be read or
+     * comes back empty, so a firmware that doesn't expose it is no worse off
+     * than before.
+     */
+    /** Backscatter data rate of one mode index, or -1 if the table has no
+     *  such entry — see [fastestRfModeIndex] for what bdr means here. */
+    private fun bdrForModeIndex(rd: RFIDReader, index: Int): Int {
+        val modes = rd.ReaderCapabilities.RFModes
+        for (t in 0 until modes.Length()) {
+            val table = modes.getRFModeTableInfo(t) ?: continue
+            for (i in 0 until table.length()) {
+                val e = table.getRFModeTableEntryInfo(i) ?: continue
+                if (e.getModeIdentifer() == index) return e.getBdrValue()
+            }
+        }
+        return -1
+    }
+
+    private fun rfModeEntryCount(rd: RFIDReader): Int {
+        val modes = rd.ReaderCapabilities.RFModes
+        var n = 0
+        for (t in 0 until modes.Length()) n += (modes.getRFModeTableInfo(t)?.length() ?: 0)
+        return n
+    }
+
+    private fun fastestRfModeIndex(rd: RFIDReader): Int {
+        try {
+            val modes = rd.ReaderCapabilities.RFModes
+            var bestIndex = 0
+            var bestBdr = -1
+            var found = 0
+            for (t in 0 until modes.Length()) {
+                val table = modes.getRFModeTableInfo(t) ?: continue
+                for (i in 0 until table.length()) {
+                    val e = table.getRFModeTableEntryInfo(i) ?: continue
+                    found++
+                    Log.i(
+                        TAG,
+                        "rf mode[$t/$i] id=${e.getModeIdentifer()} bdr=${e.getBdrValue()}" +
+                            " mod=${e.getModulation()} dr=${e.getDivideRatio()}" +
+                            " tari=${e.getMinTariValue()}..${e.getMaxTariValue()}"
+                    )
+                    if (e.getBdrValue() > bestBdr) {
+                        bestBdr = e.getBdrValue()
+                        bestIndex = e.getModeIdentifer()
+                    }
+                }
+            }
+            if (found == 0) {
+                Log.w(TAG, "rf mode table empty — keeping index 0")
+                return 0
+            }
+            Log.i(TAG, "rf mode: picked index=$bestIndex (bdr=$bestBdr bps) out of $found entries")
+            return bestIndex
+        } catch (e: Exception) {
+            Log.w(TAG, "rf mode table unavailable — keeping index 0", e)
+            return 0
         }
     }
 

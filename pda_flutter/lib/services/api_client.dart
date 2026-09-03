@@ -20,7 +20,7 @@ class SuggestLocationResult {
   SuggestLocationResult({required this.suggestion, this.reason});
 }
 
-/// Thin REST wrapper around the BoxTrace Express backend.
+/// Thin REST wrapper around the SmartTrace Express backend.
 ///
 /// All endpoints except `/auth` and `/health` require `Authorization: Bearer`.
 ///
@@ -83,8 +83,9 @@ class ApiClient {
   /// the retry picks up the *new* token instead of replaying the stale one.
   Future<dynamic> _send(Future<http.Response> Function() send) async {
     final r = await send().timeout(_timeout);
-    if (r.statusCode != 401 || _refreshing || reauthenticate == null)
+    if (r.statusCode != 401 || _refreshing || reauthenticate == null) {
       return _decode(r);
+    }
 
     _refreshing = true;
     bool refreshed;
@@ -322,23 +323,34 @@ class ApiClient {
         as Map<String, dynamic>;
   }
 
-  /// POST /api/reports { kind, tag?, location?, note? } — the PDA's
-  /// floor-exception buttons ("ของหาย" / "ช่องเก็บเต็ม"). Records only; never
-  /// changes a box's status or location — see ReportProblemScreen.
+  /// POST /api/reports { kind, tag, note? } — flips a box's status/flags to
+  /// record a floor exception ("missing" / "unreadable_tag" / "damaged"),
+  /// not just logs a note — see the backend route's own doc comment.
   Future<Map<String, dynamic>> report({
     required String kind,
-    String? tag,
-    Map<String, String>? location,
+    required String tag,
     String note = '',
   }) async {
     return await _send(() => http.post(_u('/api/reports'),
         headers: _headers,
         body: jsonEncode({
           'kind': kind,
-          if (tag != null) 'tag': tag,
-          if (location != null) 'location': location,
+          'tag': tag,
           'note': note,
         }))) as Map<String, dynamic>;
+  }
+
+  /// POST /api/reports/resolve { kind, tag } — closes an open report from
+  /// [report] above ("เจอของแล้ว" / "อ่านแท็กติดแล้ว / ป้ายไม่หายแล้ว" /
+  /// "ซ่อมแล้ว"), putting the box's status/flags back to what they were
+  /// before that report.
+  Future<Map<String, dynamic>> resolveReport({
+    required String kind,
+    required String tag,
+  }) async {
+    return await _send(() => http.post(_u('/api/reports/resolve'),
+        headers: _headers,
+        body: jsonEncode({'kind': kind, 'tag': tag}))) as Map<String, dynamic>;
   }
 
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN
@@ -375,6 +387,17 @@ class ApiClient {
     return await _send(() => http.post(
         _u('/api/employees/$employeeId/pin/reset'),
         headers: _headers)) as Map<String, dynamic>;
+  }
+
+  /// POST /api/employees/:id/pin/reset/verify { otp } — checks the OTP
+  /// against what's on file without consuming it or setting a PIN. Lets the
+  /// client gate the "set a new PIN" screen behind a correct code instead of
+  /// only learning it was wrong after a new PIN was already typed twice.
+  Future<void> verifyPinReset(String employeeId, String otp) async {
+    await _send(() => http.post(
+        _u('/api/employees/$employeeId/pin/reset/verify'),
+        headers: _headers,
+        body: jsonEncode({'otp': otp})));
   }
 
   /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that

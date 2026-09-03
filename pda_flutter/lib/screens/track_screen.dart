@@ -193,11 +193,36 @@ class _TrackScreenState extends State<TrackScreen> {
                 if (hits.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.only(left: 2, bottom: 8),
-                    child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: C.muted)),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: C.muted)),
+                        ),
+                        // Only real once there's something to clear — a
+                        // sweep in RFID mode (or a leftover barcode search)
+                        // that picked up the wrong pile previously had no
+                        // way back to empty short of leaving the screen.
+                        GestureDetector(
+                          onTap: c.clearTrackHits,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.close, size: 14, color: C.muted),
+                              const SizedBox(width: 3),
+                              Text(loc.t('ล้าง'),
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: C.muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   _hitsList(c, hits, hitsIcon, loc),
                   if (box != null) const SizedBox(height: 14),
@@ -402,8 +427,9 @@ class _TrackScreenState extends State<TrackScreen> {
     } else {
       final l = b.location;
       final parts = <String>[S.whName(l['wh']?.toString())];
-      if ((l['zone'] ?? '').toString().isNotEmpty)
+      if ((l['zone'] ?? '').toString().isNotEmpty) {
         parts.add('${loc.t('โซน')} ${l['zone']}');
+      }
       if ((l['rack'] ?? '').toString().isNotEmpty) parts.add('${l['rack']}');
       line1Label = loc.t('ตำแหน่ง');
       line1 = (l['zone'] != null || l['rack'] != null) && parts.length > 1
@@ -434,7 +460,7 @@ class _TrackScreenState extends State<TrackScreen> {
         border: Border.all(color: C.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 20,
               offset: const Offset(0, 6))
         ],
@@ -528,10 +554,13 @@ class _TrackScreenState extends State<TrackScreen> {
                       title = loc.t('ลงทะเบียน');
                     }
                     final meta = <String>[c.fmtTs(h['ts']?.toString())];
-                    if ((h['recorder'] ?? '').toString().isNotEmpty)
+                    if ((h['recorder'] ?? '').toString().isNotEmpty) {
                       meta.add('${loc.t('โดย')} ${h['recorder']}');
-                    if (dir == 'out' && (h['do'] ?? '').toString().isNotEmpty)
+                    }
+                    if (dir == 'out' &&
+                        (h['do'] ?? '').toString().isNotEmpty) {
                       meta.add('${h['do']}');
+                    }
                     return _histRow(
                       color: histColor(dir),
                       title: title,

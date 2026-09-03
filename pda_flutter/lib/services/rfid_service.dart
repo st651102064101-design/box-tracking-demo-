@@ -76,8 +76,8 @@ class RfidTagRead {
 /// gracefully to no-ops so the rest of the app — manual entry + the simulator —
 /// keeps working for development.
 class RfidService {
-  static const _method = MethodChannel('boxtrace/rfid');
-  static const _events = EventChannel('boxtrace/rfid/events');
+  static const _method = MethodChannel('smarttrace/rfid');
+  static const _events = EventChannel('smarttrace/rfid/events');
 
   final _tagCtrl = StreamController<String>.broadcast();
   final _rawTagCtrl = StreamController<RfidTagRead>.broadcast();
@@ -281,6 +281,19 @@ class RfidService {
     if (!supported) return;
     try {
       await _method.invokeMethod('setDetailMode', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// Arms/disarms the handheld's physical barcode imager (laser/LED/beep) via
+  /// DataWedge, independent of the RFID antenna — see
+  /// RfidReaderController.setBarcodeScannerEnabled on the native side for
+  /// why this exists: without it, DataWedge and the RFID SDK both own the
+  /// same trigger button, so RFID mode alone never stopped a barcode decode
+  /// from also firing on the same pull.
+  Future<void> setBarcodeScannerEnabled(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setBarcodeScannerEnabled', {'enabled': enabled});
     } catch (_) {}
   }
 

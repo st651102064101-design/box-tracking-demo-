@@ -30,7 +30,6 @@ enum Screen {
   cycleCount,
   moreHub,
   holdRelease,
-  reportProblem,
   locationInquiry,
 }
 
@@ -100,7 +99,7 @@ class Toast {
 }
 
 /// The single orchestrator for the whole PDA app — a Dart port of the mockup's
-/// `Component`, backed by the real BoxTrace REST API and the Zebra reader.
+/// `Component`, backed by the real SmartTrace REST API and the Zebra reader.
 ///
 /// Identity is split in two on purpose:
 ///
@@ -147,6 +146,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         rfid.stopInventory();
         break;
       case AppLifecycleState.resumed:
+        // DataWedge re-asserts its own default (enabled) scanner state on
+        // some devices whenever the foreground app regains focus, silently
+        // undoing setScanInputMode's earlier disable — reapply it every
+        // time this app comes back, not just when the toggle itself moves.
+        rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+        break;
       case AppLifecycleState.detached:
         break;
     }
@@ -375,6 +380,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// pile" resolve to exactly 5 rows instead of a beep/flash storm.
   final List<String> trackRfidHits = [];
 
+  /// Same idea as [trackRfidHits], for CycleCountScreen's RFID sweep — a
+  /// stock take used to be barcode-only even though the physical trigger was
+  /// already allowlisted to arm the antenna on this screen (_onReaderTrigger)
+  /// and the server's /scan endpoint already resolves EPC/TID on its own
+  /// (see that screen's _submitScan comment); the one missing piece was a
+  /// Screen.cycleCount case here to actually do something with a found tag.
+  /// CycleCountScreen watches this, POSTs any new entry the same way a
+  /// barcode read would, then clears it — this list is just the hand-off,
+  /// not the count itself (that's server state, S._session).
+  final List<String> cycleCountRfidHits = [];
+
   /// Same idea as [trackRfidHits] but for barcode mode: every distinct box a
   /// scan (or a completed typed code) has resolved to, in the order found.
   /// Without this, a keyboard-wedge scanner that doesn't clear the field
@@ -383,6 +399,42 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// concatenating into one garbled search string instead of becoming two
   /// results.
   final List<String> trackBarcodeHits = [];
+
+  /// Raw EPCs that have already surfaced the "tag doesn't match any box"
+  /// toast this screen visit, on Track/Cycle Count's RFID sweep — without
+  /// this, a foreign/unbound tag sitting in the pile re-warns on every one
+  /// of the dozens of reads a second a held trigger produces, drowning out
+  /// everything else. Cleared alongside the hit lists in goTrack()/
+  /// goCycleCount() so a fresh visit re-warns instead of staying silent
+  /// forever because of what a previous visit already saw.
+  final Set<String> _unresolvedRfidWarned = {};
+
+  /// Called from _onReaderTag's Screen.track/Screen.cycleCount cases when a
+  /// read resolves to nothing on file — previously a silent no-op
+  /// indistinguishable from "the reader isn't picking anything up at all".
+  /// [decoded] is resolveTag's best-effort text so the toast shows something
+  /// readable when the tag *did* carry an ASCII payload, falling back to the
+  /// raw hex only when even that failed.
+  void _warnUnresolvedRfid(String rawEpc, String decoded) {
+    if (!_unresolvedRfidWarned.add(rawEpc)) return;
+    toastMsg('ไม่พบกล่องที่ตรงกับแท็กนี้',
+        decoded.isNotEmpty ? decoded : rawEpc, ResultKind.warn);
+  }
+
+  /// Clears whichever of [trackRfidHits]/[trackBarcodeHits] matches the
+  /// current scan mode — the "ล้าง" button TrackScreen shows once there's
+  /// something to clear. A sweep that picked up the wrong pile, or a search
+  /// left over from the last box looked up, previously had no way back to
+  /// empty short of leaving the screen and coming back (which also nukes
+  /// trackVal/trackBox — more than the operator actually wanted gone).
+  void clearTrackHits() {
+    if (scanInputMode == ScanInputMode.rfid) {
+      trackRfidHits.clear();
+    } else {
+      trackBarcodeHits.clear();
+    }
+    notifyListeners();
+  }
 
   // ── settings ────────────────────────────────────────────────────────────
   RfidStatus rfidStatus = const RfidStatus(RfidState.idle, '');
@@ -395,6 +447,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription? _tagSub, _trigSub, _statusSub;
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
+  Timer? _offlineDialogDebounce;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -560,6 +613,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final wasConnected = _liveConnected;
     _liveConnected = up;
     if (up) {
+      // A blip that recovers inside the debounce window below must not
+      // still pop the dialog a moment later — the connection is back
+      // before the operator would even see it.
+      _offlineDialogDebounce?.cancel();
       connError = null;
       // Walked back into signal after queuing scans in a dead zone: sync
       // straight to the server in the background, no operator action
@@ -572,7 +629,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // dialog and the reconnect sheet both have their own wording for
       // "just offline", and echoing a generic string here only made the
       // alert repeat its own title back as the body.
-      if (wasConnected) offlineEventId++;
+      //
+      // The SSE stream's own retry loop (RealtimeService's exponential
+      // backoff, starting at 2s) can reconnect well inside a few seconds
+      // of a routine blip — an idle-timeout proxy killing the long-lived
+      // connection, a brief Wi-Fi drop — so firing the modal the instant
+      // `up` goes false meant it was still on screen (it doesn't
+      // auto-dismiss) well after the chip already read "online" again.
+      // Only count it as a real outage, worth interrupting the operator
+      // for, if it's still down after this debounce window.
+      if (wasConnected) {
+        _offlineDialogDebounce?.cancel();
+        _offlineDialogDebounce = Timer(const Duration(seconds: 4), () {
+          if (!_liveConnected) {
+            offlineEventId++;
+            notifyListeners();
+          }
+        });
+      }
     }
     notifyListeners();
   }
@@ -599,8 +673,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         s.contains('Failed host lookup')) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจสอบว่าเครื่องนี้อยู่ในเครือข่าย/Wi-Fi เดียวกับเซิร์ฟเวอร์ และ Base URL ในหน้าตั้งค่าถูกต้อง';
     }
-    if (e is TimeoutException)
+    if (e is TimeoutException) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ (หมดเวลา) — ลองใหม่อีกครั้ง';
+    }
     final m = RegExp(r'^[A-Za-z_]*(Exception|Error): ').firstMatch(s);
     return m == null ? s : s.substring(m.end);
   }
@@ -619,6 +694,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _trigSub?.cancel();
     _statusSub?.cancel();
     _realtimeDebounce?.cancel();
+    _offlineDialogDebounce?.cancel();
     _realtime.dispose();
     super.dispose();
   }
@@ -793,7 +869,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (screen == Screen.deviceSetup && !deviceConfigured) return;
     if (screen == Screen.home ||
         screen == Screen.login ||
-        screen == Screen.boot) return;
+        screen == Screen.boot) {
+      return;
+    }
     backToHome();
   }
 
@@ -849,8 +927,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Starts a session for [e]. Returns an error message to show, or null.
   String? identifyAs(Employee e) {
-    if (!e.active)
+    if (!e.active) {
       return '${e.name} ไม่อยู่ในสถานะปฏิบัติงาน — ติดต่อหัวหน้างาน';
+    }
     emp = e;
     prefs.lastEmpId = e.id;
     _resetPost();
@@ -878,8 +957,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Badge read from the UI or the reader: identifies, or explains why not.
   void badgeScanned(String code) {
     final err = identifyByScanCode(code);
-    if (err != null)
+    if (err != null) {
       toastMsg(err, 'ลองใหม่ หรือแตะชื่อของคุณด้านล่าง', ResultKind.err);
+    }
   }
 
   /// Ends the current operator's session and returns to the badge screen. The
@@ -1000,6 +1080,16 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
     _connectReader();
+  }
+
+  /// device_setup_screen.dart's bottom button falls back to this when the
+  /// operator hasn't scanned a connect barcode — skips the network call
+  /// [completeDeviceSetup] would attempt against an empty base URL, and
+  /// finishes setup straight away. The runtime already tolerates a
+  /// terminal with no working connection (offline PIN login, outbox queue),
+  /// so there's nothing else this needs to set up.
+  void useOffline() {
+    finishDeviceSetup();
   }
 
   void setDeviceModel(String id) {
@@ -1136,6 +1226,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     trackTried = false;
     trackRfidHits.clear();
     trackBarcodeHits.clear();
+    _unresolvedRfidWarned.clear();
     notifyListeners();
     _connectReader();
   }
@@ -1176,7 +1267,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
+    cycleCountRfidHits.clear();
+    _unresolvedRfidWarned.clear();
     notifyListeners();
+    _connectReader();
   }
 
   /// "พัก / แจ้งชำรุด" — HoldReleaseScreen. The only way to hold, flag
@@ -1184,12 +1278,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// (see scan_screen.dart's own _ConditionPicker for that path).
   void goHoldRelease() {
     screen = Screen.holdRelease;
-    notifyListeners();
-  }
-
-  /// "แจ้งปัญหาหน้างาน" — ReportProblemScreen ("ของหาย" / "ช่องเก็บเต็ม").
-  void goReportProblem() {
-    screen = Screen.reportProblem;
     notifyListeners();
   }
 
@@ -1230,7 +1318,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (s == null || s.boxesRaw.isEmpty) {
       scanVal = '';
       lastResult = const ScanResult(
-          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล BoxTrace');
+          ResultKind.err, '', 'ยังไม่ได้เชื่อมข้อมูล SmartTrace');
       notifyListeners();
       return;
     }
@@ -1249,20 +1337,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         _reject(tag, ResultKind.warn, 'อยู่ในคลังอยู่แล้ว');
         return;
       }
-      // A box shipped out from one warehouse has to come back to that same
-      // warehouse — the operator standing at this gate belongs to `wh`
-      // (whatever they picked at device setup / post confirm), and a box
-      // whose outWh says otherwise almost certainly means someone read the
-      // wrong tag or is standing at the wrong gate, not a legitimate
-      // inter-warehouse transfer (this app has no such flow). A box that's
-      // never shipped (pending/new from a supplier) has no outWh yet and
-      // isn't restricted — its first warehouse is whichever gate receives
-      // it first.
-      if (b.status == 'out' && b.outWh != null && b.outWh!.isNotEmpty && b.outWh != wh) {
-        _reject(tag, ResultKind.err,
-            'กล่องนี้ออกจากคลัง ${S?.whName(b.outWh!) ?? b.outWh} — ต้องคืนที่คลังเดิม');
-        return;
-      }
+      // A box can be received back at any gate/warehouse, not only the one
+      // it originally shipped from — receiving no longer requires an
+      // inter-warehouse transfer flow to explain the mismatch, so outWh is
+      // just historical, not a gate.
     } else {
       // Only a box actually sitting in *this* warehouse's inventory can ship
       // from here — same reasoning as the gate-in check above, mirrored for
@@ -1412,6 +1490,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // an inventory is running from before the switch) must not leave the
     // reader sweeping in the background on a mode that just said "don't".
     if (m == ScanInputMode.barcode) rfid.stopInventory();
+    // DataWedge owns the same physical trigger as the RFID SDK, so the
+    // mode picked here must also arm/disarm the barcode imager itself
+    // (laser/LED/beep) — otherwise RFID mode silences our antenna but
+    // DataWedge still decodes (and beeps for) a barcode on the same pull,
+    // and barcode mode leaves the imager off from the last RFID session.
+    rfid.setBarcodeScannerEnabled(m == ScanInputMode.barcode);
     notifyListeners();
   }
 
@@ -1817,8 +1901,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     String? password,
   }) async {
     prefs.baseUrl = baseUrl.trim();
-    if (username != null && username.trim().isNotEmpty)
+    if (username != null && username.trim().isNotEmpty) {
       prefs.username = username.trim();
+    }
     if (password != null && password.isNotEmpty) prefs.password = password;
     prefs.token = null;
     api
@@ -1861,6 +1946,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;
     rfid.connect();
+    // Match the imager to whatever scan mode is already selected — a fresh
+    // connect shouldn't leave DataWedge on its own default if the operator
+    // starts (or comes back) in RFID mode.
+    rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
   }
 
   /// Pushes the reader's transmit power to its own maximum — for any screen
@@ -1913,11 +2002,19 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // deliberately left untouched: it's the barcode field's own state,
         // and populating it from an RFID read is what used to leak the last
         // tag number into the barcode box after switching modes.
+        // Only a tag that actually resolves to a box on file counts as a
+        // "find" — a sweep picking up a stray/foreign tag with no matching
+        // record must not surface it at all, same reasoning as the
+        // Screen.transfer case just below.
         final tag = resolveTag(epc);
-        if (!trackRfidHits.contains(tag)) {
-          trackRfidHits.add(tag);
-          rfid.playSound(prefs.rfidSoundId);
-          notifyListeners();
+        if (S?.box(tag) != null) {
+          if (!trackRfidHits.contains(tag)) {
+            trackRfidHits.add(tag);
+            rfid.playSound(prefs.rfidSoundId);
+            notifyListeners();
+          }
+        } else {
+          _warnUnresolvedRfid(epc, tag);
         }
         break;
       case Screen.transfer:
@@ -1937,6 +2034,31 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           transferRfidHits.add(t);
           rfid.playSound(prefs.rfidSoundId);
           notifyListeners();
+        }
+        break;
+      case Screen.cycleCount:
+        // resolveTag(epc), not the raw hex EPC, is what gets queued — a tag
+        // commissioned by this system carries the box's own barcode written
+        // into the EPC bank as zero-padded ASCII (see resolveTag's own
+        // comment), and that decoded box code is what must reach the
+        // server, not the raw hex the reader returns. resolveTag also
+        // doubles as the existence check: a stray/foreign tag with no
+        // matching box record resolves to nothing recognisable, so
+        // S.box(tag) comes back null and it never queues at all — same
+        // reasoning as Screen.track/Screen.transfer above. Deduping only
+        // stops the same tag re-queuing dozens of times a second while the
+        // trigger's held; the screen dedupes against the session's own
+        // 'counted' list separately, since a tag legitimately re-appears
+        // across multiple trigger pulls in one count.
+        final ccTag = resolveTag(epc);
+        if (S?.box(ccTag) != null) {
+          if (!cycleCountRfidHits.contains(ccTag)) {
+            cycleCountRfidHits.add(ccTag);
+            rfid.playSound(prefs.rfidSoundId);
+            notifyListeners();
+          }
+        } else {
+          _warnUnresolvedRfid(epc, ccTag);
         }
         break;
       default:
@@ -1981,7 +2103,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         screen != Screen.transfer &&
         screen != Screen.cycleCount &&
         screen != Screen.holdRelease &&
-        screen != Screen.reportProblem &&
         screen != Screen.locationInquiry) {
       // A screen with no scanning purpose at all (Home, device setup, …).
       // Settings is included here — its RFID diagnostics panel has its own

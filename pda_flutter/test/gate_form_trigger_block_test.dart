@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import 'package:boxtrace_pda/controllers/app_controller.dart';
-import 'package:boxtrace_pda/screens/scan_screen.dart';
-import 'package:boxtrace_pda/services/i18n.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/screens/scan_screen.dart';
+import 'package:smarttrace_pda/services/i18n.dart';
 
 import 'app_controller_test.dart' show FakeApi, makeController, fillVehicle;
 

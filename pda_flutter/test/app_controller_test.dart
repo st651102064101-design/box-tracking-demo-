@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:boxtrace_pda/controllers/app_controller.dart';
-import 'package:boxtrace_pda/models/employee.dart';
-import 'package:boxtrace_pda/services/api_client.dart';
-import 'package:boxtrace_pda/services/prefs.dart';
-import 'package:boxtrace_pda/services/rfid_service.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/models/employee.dart';
+import 'package:smarttrace_pda/services/api_client.dart';
+import 'package:smarttrace_pda/services/prefs.dart';
+import 'package:smarttrace_pda/services/rfid_service.dart';
 
 /// Records what the controller sends instead of hitting the network.
 class FakeApi extends ApiClient {
@@ -166,8 +166,7 @@ class FakeApi extends ApiClient {
   @override
   Future<Map<String, dynamic>> report({
     required String kind,
-    String? tag,
-    Map<String, String>? location,
+    required String tag,
     String note = '',
   }) async {
     if (throwOnReport != null) {
@@ -175,8 +174,24 @@ class FakeApi extends ApiClient {
       throwOnReport = null;
       throw e;
     }
-    reportCalls
-        .add({'kind': kind, 'tag': tag, 'location': location, 'note': note});
+    reportCalls.add({'kind': kind, 'tag': tag, 'note': note});
+    return {'dir': kind, 'tag': tag};
+  }
+
+  final List<Map<String, dynamic>> resolveReportCalls = [];
+  Object? throwOnResolveReport;
+
+  @override
+  Future<Map<String, dynamic>> resolveReport({
+    required String kind,
+    required String tag,
+  }) async {
+    if (throwOnResolveReport != null) {
+      final e = throwOnResolveReport!;
+      throwOnResolveReport = null;
+      throw e;
+    }
+    resolveReportCalls.add({'kind': kind, 'tag': tag});
     return {'dir': kind, 'tag': tag};
   }
 }
@@ -405,7 +420,8 @@ void main() {
       expect(c.queue, ['CRT-01']);
     });
 
-    test('gate in refuses a returning box that shipped from another warehouse',
+    test(
+        'gate in accepts a returning box at a warehouse other than the one it shipped from',
         () async {
       final api = FakeApi();
       final state = fixtureState();
@@ -417,9 +433,7 @@ void main() {
       final c = await makeController(api); // stationed at WH-1
       c.mode = 'in';
       c.addScan('CRT-02');
-      expect(c.queue, isEmpty);
-      expect(c.lastResult!.kind, ResultKind.err);
-      expect(c.lastResult!.msg, contains('ต้องคืนที่คลังเดิม'));
+      expect(c.queue, ['CRT-02']);
     });
 
     test('gate in accepts a brand-new box from a supplier regardless of warehouse',

@@ -40,8 +40,6 @@ void main() {
             'and the scan step itself has had no field since ScanCapture',
     'lib/screens/hold_release_screen.dart':
         'the hold/damage reason — free-text notes, not an identifying code',
-    'lib/screens/report_problem_screen.dart':
-        'the missing/bin-full report note — same as the hold reason above',
   };
 
   test('scan-only screens have no typable field at all', () {

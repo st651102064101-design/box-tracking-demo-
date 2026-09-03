@@ -106,8 +106,9 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
   void _onTagChanged() {
     _autoSubmitTimer?.cancel();
     final text = _tagCtrl.text.trim();
-    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null)
+    if (text.length < _autoSubmitMinLen || _creating || _selectedType == null) {
       return;
+    }
     _autoSubmitTimer = Timer(_autoSubmitDelay, () {
       if (!mounted || _creating || _tagCtrl.text.trim() != text) return;
       _submitCreate();
