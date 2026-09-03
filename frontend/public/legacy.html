@@ -686,7 +686,7 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .ivs-btn{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:6px;position:relative;z-index:1;}
 .ivs-btn:hover{color:var(--ink);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
-/* compact numeric input embedded inside a "{n} วัน/เดือน/ปี" ivs-btn — reusable
+/* compact numeric input embedded inside a "{n} + SVG" ivs-btn — reusable
    date-range filter (see dfBarHtml/dfSetMode) */
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
@@ -696,7 +696,12 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
    so the bar doesn't sit there showing four buttons none of which reflect the
    active filter. A small chevron hints they're still reachable; hovering the
    whole bar smoothly reveals them again without changing the selected mode —
-   only clicking one actually switches it (dfSetMode). */
+   only clicking one actually switches it (dfSetMode).
+   Mode labels are SVG-only (titles keep the Thai meaning); day/month/year keep
+   the numeric chip so operators can still type N. */
+.df-sw .ivs-btn{padding:6px 10px;gap:5px;}
+.df-sw .ivs-btn .svgi{width:15px;height:15px;flex:0 0 auto;}
+.df-sw .ivs-btn .svgi svg{stroke-width:1.9;}
 .df-sw .df-collapsible{display:inline-flex;gap:2px;overflow:hidden;max-width:600px;opacity:1;
   transition:max-width .32s cubic-bezier(.22,1,.36,1),opacity .2s ease,margin .32s cubic-bezier(.22,1,.36,1);}
 .df-sw .df-hidden-hint{display:none;align-items:center;color:var(--muted);width:0;overflow:hidden;
@@ -13064,6 +13069,19 @@ function dfSave(id){uiPrefTouch('df:'+id);}
    result into a placeholder <div>, e.g. $('#df-ovMove-mount').innerHTML=
    dfBarHtml('ovMove'); keeps the markup (and any future report that wants
    the same filter) in one place instead of copy-pasted per report. */
+/* SVG glyphs for date-range modes — stroke icons matching .svgi elsewhere.
+   Text labels were dropped in favor of icons (titles keep Thai tooltips);
+   day/month/year still embed the numeric chip so N stays editable. */
+function dfModeSvg(mode){
+  var path={
+    all:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="2"/>',
+    day:'<circle cx="12" cy="12" r="3.4"/><path d="M12 3.2v2.1M12 18.7v2.1M4.7 4.7l1.5 1.5M17.8 17.8l1.5 1.5M3.2 12h2.1M18.7 12h2.1M4.7 19.3l1.5-1.5M17.8 6.2l1.5-1.5"/>',
+    month:'<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M8 14h2M12 14h2M16 14h1.5M8 17h2M12 17h2"/>',
+    year:'<path d="M8 2.8v3M16 2.8v3"/><rect x="3.5" y="5.5" width="17" height="5" rx="1.5"/><rect x="5" y="11.5" width="14" height="4.2" rx="1.2"/><rect x="6.5" y="16.8" width="11" height="3.6" rx="1"/>',
+    custom:'<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M8 15.5h3.2M12.8 15.5h3.2M11.2 13.8v3.4"/>'
+  }[mode]||'';
+  return '<span class="svgi" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg></span>';
+}
 function dfBarHtml(id){
   var retainer=id==='ovRetainers',labels=retainer?{all:'กล่องที่เกินกำหนดคืนทั้งหมด',day:'เกินกำหนดคืนตามจำนวนวัน',month:'เกินกำหนดคืนตามจำนวนเดือน',year:'เกินกำหนดคืนตามจำนวนปี',custom:'เลือกวันครบกำหนดคืน'}:{all:'ไม่จำกัดช่วงเวลา',day:'แสดงข้อมูลย้อนหลังตามจำนวนวัน รวมวันนี้',month:'แสดงข้อมูลย้อนหลังตามจำนวนเดือน',year:'แสดงข้อมูลย้อนหลังตามจำนวนปี',custom:'กำหนดช่วงวันที่เริ่มต้นและสิ้นสุด'};
   return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
@@ -13074,12 +13092,12 @@ function dfBarHtml(id){
     +'<span class="inv-view-sw df-sw" data-no-drag="1" id="df-'+id+'-sw" style="flex-shrink:0;">'
     +'<span class="df-hidden-hint" title="ยังมีตัวเลือกช่วงเวลาอื่นซ่อนอยู่ — เอาเมาส์ชี้เพื่อดู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span>'
     +'<span class="df-collapsible">'
-    +'<button type="button" class="ivs-btn active" data-mode="all" title="'+labels.all+'" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
-    +'<button type="button" class="ivs-btn" data-mode="day" title="'+labels.day+'" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="'+(retainer?3:1)+'" title="'+labels.day+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
-    +'<button type="button" class="ivs-btn" data-mode="month" title="'+labels.month+'" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" title="'+labels.month+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
-    +'<button type="button" class="ivs-btn" data-mode="year" title="'+labels.year+'" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" title="'+labels.year+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
+    +'<button type="button" class="ivs-btn active" data-mode="all" title="'+labels.all+'" aria-label="'+labels.all+'" onclick="dfSetMode(\''+id+'\',\'all\')">'+dfModeSvg('all')+'</button>'
+    +'<button type="button" class="ivs-btn" data-mode="day" title="'+labels.day+'" aria-label="'+labels.day+'" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="'+(retainer?3:1)+'" title="'+labels.day+'" aria-label="'+labels.day+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')">'+dfModeSvg('day')+'</button>'
+    +'<button type="button" class="ivs-btn" data-mode="month" title="'+labels.month+'" aria-label="'+labels.month+'" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" title="'+labels.month+'" aria-label="'+labels.month+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')">'+dfModeSvg('month')+'</button>'
+    +'<button type="button" class="ivs-btn" data-mode="year" title="'+labels.year+'" aria-label="'+labels.year+'" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" title="'+labels.year+'" aria-label="'+labels.year+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')">'+dfModeSvg('year')+'</button>'
     +'</span>'
-    +'<button type="button" class="ivs-btn" data-mode="custom" title="'+labels.custom+'" onclick="dfSetMode(\''+id+'\',\'custom\')">ระบุวัน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="custom" title="'+labels.custom+'" aria-label="'+labels.custom+'" onclick="dfSetMode(\''+id+'\',\'custom\')">'+dfModeSvg('custom')+'</button>'
     +'</span>'
     +'<span id="df-'+id+'-custom" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">'
     +'<label class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>'
