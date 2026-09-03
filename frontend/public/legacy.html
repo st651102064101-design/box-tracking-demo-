@@ -5000,6 +5000,15 @@ function renderAvatar(id,name,photo){
      here, which wraps its own fixed-size (default 32px) div and would nest
      a small avatar inside the target instead of filling it. */
   if(photo){e.innerHTML='<img src="'+esc(photo)+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';}
+  else if(id==='empBadgeAvatar'){
+    e.innerHTML='<label title="เลือกรูปพนักงาน หรือลากไฟล์มาวาง" style="width:100%;height:100%;border-radius:50%;display:grid;place-items:center;align-content:center;gap:6px;cursor:pointer;color:var(--accentInk);font-size:12px;font-weight:600;text-align:center;padding:20px;box-sizing:border-box;"><span class="svgi" style="width:28px;height:28px;"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.4"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-4 3 2.4L16 12l4 4"/></svg></span><span>กดหรือลากรูปมาวาง</span><input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="visually-hidden"></label>';
+    var input=e.querySelector('input'),label=e.querySelector('label'),fileInput=$('#ePhotoFile');
+    if(fileInput) input.addEventListener('change',function(){if(input.files&&input.files[0]){var dt=new DataTransfer();dt.items.add(input.files[0]);fileInput.files=dt.files;fileInput.dispatchEvent(new Event('change',{bubbles:true}));}});
+    e.addEventListener('dragover',function(ev){ev.preventDefault();e.style.outline='3px solid var(--accent)';});
+    e.addEventListener('dragleave',function(){e.style.outline='';});
+    e.addEventListener('drop',function(ev){ev.preventDefault();e.style.outline='';var f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];if(f&&fileInput){var dt=new DataTransfer();dt.items.add(f);fileInput.files=dt.files;fileInput.dispatchEvent(new Event('change',{bubbles:true}));}});
+    if(fileInput) label.addEventListener('click',function(ev){if(ev.target!==input) {ev.preventDefault();fileInput.click();}});
+  }
   else{var initials=(name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');e.textContent=initials;}
 }
 /* Same photo-or-initials avatar as renderAvatar(), but returns a markup string
