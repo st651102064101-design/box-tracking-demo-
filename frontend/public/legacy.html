@@ -3710,6 +3710,9 @@ a{color:var(--accentInk);}
   <button id="empBadgeDelBtn" onclick="event.stopPropagation();empBadgeAction('del')" title="ลบพนักงานออกจากระบบ" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--neg);color:#fff;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13"/></svg>
   </button>
+  <button id="empBadgeFlipBtn" onclick="event.stopPropagation();flipEmpBadge()" title="พลิกบัตร" aria-label="พลิกบัตร" style="position:absolute;left:0;top:0;width:42px;height:42px;border-radius:50%;background:var(--accent);color:var(--accentContrast);display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.35);z-index:410;">
+    <span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12l-2.5-2.5M20 17H8l2.5 2.5M16 7l3 3-3 3M8 17l-3-3 3-3"/></svg></span>
+  </button>
 
   <div id="empBadgeCard" style="position:absolute;left:0;top:0;width:408px;height:627px;transform-origin:50% 50%;will-change:transform;perspective:1600px;cursor:grab;">
     <!-- คลิปเดิมลอยสูงเกินไป ห่างจากช่องบากบนบัตร (บรรทัดถัดไปในการ์ด) เห็นเป็นช่องว่างโหว่ ๆ
@@ -8022,6 +8025,11 @@ function empBadgeSetFace(back){
   if(empBadgeBackBlank()||empBadge.drag){empBadge.flipTarget=0;return;}
   empBadge.flipTarget=back?180:0;
 }
+function flipEmpBadge(){
+  if(!empBadge.open||empBadgeBackBlank())return;
+  empBadge.flipTarget=Math.abs(empBadge.flipTarget-180);
+}
+window.flipEmpBadge=flipEmpBadge;
 function empBadgeToast(msg){
   var el=$('#empBadgeToast');if(!el)return;
   el.textContent=msg;el.style.opacity='1';
@@ -8038,7 +8046,7 @@ function empBadgeBoot(){
     strap:$('#empBadgeStrap'),shade:$('#empBadgeStrapShade'),close:$('#empBadgeClose'),
     logout:$('#empBadgeLogout'),
     actionBtns:[$('#empBadgeEditBtn'),$('#empBadgeCredBtn'),$('#empBadgePrintBtn'),$('#empBadgeBackBtn'),$('#empBadgeDelBtn')],
-    backdrop:$('#empBadgeBackdrop')
+    backdrop:$('#empBadgeBackdrop'),flipBtn:$('#empBadgeFlipBtn')
   };
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
@@ -8073,14 +8081,7 @@ function empBadgeRelease(ev){
   var el=empBadge.el;
   if(el.card)el.card.style.cursor='grab';
   if(el.backdrop)el.backdrop.classList.remove('no-blur');
-  /* pointerenter does not fire again after drag. Inspect the element directly
-     under pointerup, which stays correct even while the card is transformed. */
-  if(wasDragging&&el.card&&!empBadgeBackBlank()){
-    var x=ev&&Number.isFinite(ev.clientX)?ev.clientX:empBadge.mx;
-    var y=ev&&Number.isFinite(ev.clientY)?ev.clientY:empBadge.my;
-    var under=(Number.isFinite(x)&&Number.isFinite(y))?document.elementFromPoint(x,y):null;
-    empBadgeSetFace(!!(under&&(under===el.card||el.card.contains(under))));
-  }
+  /* Dragging only moves the card; flipping is an explicit button action. */
 }
 function openEmpBadge(id,isSelf){
   var e=(S.employees||{})[id];
@@ -8401,6 +8402,13 @@ function empBadgeStep(){
     var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
     closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
   }
+  /* ปุ่มพลิกบัตรอยู่กึ่งกลางด้านซ้าย และหมุนตำแหน่งตามบัตรแต่ตัวปุ่มยังตั้งตรง */
+  var flipBtn=eb.el.flipBtn;
+  if(flipBtn){
+    var flx=-204*s-OVERLAY_BTN_GAP,fly=0;
+    var fbx=eb.cx+(flx*cth-fly*sth),fby=eb.cy+(flx*sth+fly*cth);
+    flipBtn.style.transform='translate('+(fbx-21).toFixed(1)+'px,'+(fby-21).toFixed(1)+'px)';
+  }
   // ปุ่มล็อกเอาท์ + ปุ่มจัดการ (แก้ไข/ตั้งรหัสผ่าน/พิมพ์บัตร/ลบ) — เกาะมุมเดียวกับปุ่มปิด
   // เรียงต่อกันทีละ 54px ลงมาเป็นแถวยาว ข้ามปุ่มที่ถูกซ่อนไว้ (display:none — ปุ่มจัดการ
   // ซ่อนตามสิทธิ์ผู้ใช้จาก openEmpBadge) เพื่อไม่ให้เหลือช่องว่างเปล่ากลางแถว
@@ -8418,8 +8426,7 @@ function empBadgeStep(){
   var card=document.getElementById('empBadgeCard');
   if(!card)return;
   card.addEventListener('pointerdown',empBadgeGrab);
-  card.addEventListener('mouseenter',function(){empBadgeSetFace(true);});
-  card.addEventListener('mouseleave',function(){empBadgeSetFace(false);});
+  /* พลิกบัตรด้วยปุ่ม empBadgeFlipBtn เท่านั้น ไม่พลิกเองตาม hover */
 })();
 
 /* ===== ประเภทกล่อง — กล่อง 3D หกด้าน (physics drop + CSS 3D) =====
