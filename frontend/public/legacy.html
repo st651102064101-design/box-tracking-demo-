@@ -692,6 +692,10 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .emp-badge-brand-mark{width:26px;height:26px;border-radius:8px;background:var(--accent);color:var(--accentContrast);display:grid;place-items:center;overflow:hidden;flex:0 0 26px;}
 .emp-badge-brand-mark .svgi{width:18px;height:18px;}
 .emp-badge-brand-mark img{width:100%;height:100%;object-fit:contain;background:#fff;padding:3px;}
+.emp-badge-photo-import{transition:transform .18s ease,background .18s ease,box-shadow .18s ease;}
+.emp-badge-photo-import:hover{transform:scale(1.035);background:var(--accentSoft)!important;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 38%,transparent);}
+.emp-badge-photo-import:hover .svgi svg{animation:empBadgeUploadNudge .7s ease-in-out infinite;}
+@keyframes empBadgeUploadNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
@@ -8035,7 +8039,7 @@ function renderEmpBadgeAvatar(e){
   var el=$('#empBadgeAvatar');if(!el)return;
   if(e&&e.photo){renderAvatar('empBadgeAvatar',e.name,e.photo);return;}
   var initials=(e&&e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
-  el.innerHTML='<button type="button" title="นำเข้ารูปพนักงาน" aria-label="นำเข้ารูปพนักงาน" style="position:absolute;inset:0;border:0;background:transparent;color:var(--accentInk);font:inherit;cursor:pointer;display:grid;place-items:center;z-index:2;" onpointerdown="event.stopPropagation()" ondragstart="return false" onclick="event.stopPropagation();document.getElementById(\'empBadgePhotoFile\').click()"><span style="display:grid;place-items:center;gap:5px;"><span class="svgi" style="width:34px;height:34px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></span><span style="font-size:13px;">นำเข้ารูป</span><b style="font-size:52px;line-height:.9;">'+esc(initials)+'</b></span></button><input id="empBadgePhotoFile" type="file" accept="image/*" style="display:none" onchange="empBadgeImportPhoto(this)">';
+  el.innerHTML='<button type="button" class="emp-badge-photo-import" title="นำเข้ารูปพนักงาน" aria-label="นำเข้ารูปพนักงาน" style="position:absolute;inset:0;border:0;background:transparent;color:var(--accentInk);font:inherit;cursor:pointer;display:grid;place-items:center;z-index:2;" onpointerdown="event.stopPropagation()" ondragstart="return false" onclick="event.stopPropagation();document.getElementById(\'empBadgePhotoFile\').click()"><span style="display:grid;place-items:center;gap:5px;"><span class="svgi" style="width:34px;height:34px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></span><span style="font-size:13px;">นำเข้ารูป</span><b style="font-size:52px;line-height:.9;">'+esc(initials)+'</b></span></button><input id="empBadgePhotoFile" type="file" accept="image/*" style="display:none" onchange="empBadgeImportPhoto(this)">';
 }
 function empBadgeImportPhoto(input){
   var file=input&&input.files&&input.files[0];if(!file)return;
