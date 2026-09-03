@@ -4772,6 +4772,15 @@ function normalizeState(d){
     delete d.boxes[oldTag];
   });
   boxDeletes.forEach(function(oldTag){delete d.boxes[oldTag];});
+  /* Remove the old demo-only overdue fixture.  It was previously recreated on
+     every boot as BOX-011 (DO-DEMO-011/CUST-02), so deleting it in the UI did
+     not stick.  Only this exact fixture is migrated; real BOX-011 records are
+     left untouched. */
+  var demoBox=d.boxes['BOX-011'];
+  if(demoBox&&demoBox.do==='DO-DEMO-011'&&demoBox.customer==='CUST-02'){
+    delete d.boxes['BOX-011'];
+    if(Array.isArray(d.events))d.events=d.events.filter(function(e){return e&&e.tag!=='BOX-011';});
+  }
   if(Object.keys(boxRenames).length){
     (d.events||[]).forEach(function(e){if(e.tag&&boxRenames[e.tag])e.tag=boxRenames[e.tag];});
     (d.auditLog||[]).forEach(function(a){if(a.itemId&&boxRenames[a.itemId])a.itemId=boxRenames[a.itemId];});
@@ -16039,36 +16048,6 @@ function seedDemo(){
 }
 window.seedDemo=seedDemo;
 
-/* Demo-only fixture: existing demo accounts may already have persisted state,
-   so seedDemo() is not run on every boot. Ensure the overdue dashboard card
-   still has one visible test record without replacing the user's other data. */
-function ensureDemoOverdueMock(){
-  function ago(d){return iso(new Date(Date.now()-d*86400000));}
-  var boxes=Object.values(S.boxes||{});
-  var b=boxes.find(function(x){return x&&String(x.tag||'').toUpperCase()==='BOX-011';});
-  if(!b){
-    var type=Object.values(S.boxtypes||{})[0]||{id:'BT-CRT',name:'ลังพลาสติก 60L',value:450};
-    var wh=Object.values(S.warehouses||{})[0]||{id:'WH-1'};
-    b={tag:'BOX-011',type:type.id,value:type.value||450,status:'out',cycles:1,
-      customer:'CUST-02',do:'DO-DEMO-011',po:'PO-DEMO-011',outGate:1,outWh:wh.id,
-      outAt:ago(12),dueAt:null,dueDate:null,lastSeenAt:ago(12),labeled:true,history:[]};
-    b.dueAt=new Date(Date.now()-2*86400000).toISOString();
-    b.dueDate=ddmmyyyy(new Date(b.dueAt));
-    b.history=[{dir:'out',ts:b.outAt,do:b.do,po:b.po,customer:b.customer,gate:1,wh:wh.id,
-      plate:'กข-1234',driver:'นายสมชาย ใจดี',dueAt:b.dueAt}];
-    S.boxes[b.tag]=b;
-    S.events=S.events||[];
-    S.events.push({ts:b.outAt,dir:'out',tag:b.tag,type:b.type,do:b.do,po:b.po,customer:b.customer,
-      gate:1,wh:wh.id,plate:'กข-1234',driver:'นายสมชาย ใจดี'});
-    return true;
-  }
-  var dueTs=new Date(Date.now()-2*86400000).toISOString();
-  b.dueAt=dueTs;b.dueDate=ddmmyyyy(new Date(dueTs));
-  var h=Array.isArray(b.history)?b.history.slice().reverse().find(function(x){return x&&x.dir==='out';}):null;
-  if(h)h.dueAt=dueTs;
-  return true;
-}
-
 /* file restore */
 (function(){var inp=document.createElement('input');inp.type='file';inp.id='fileR';inp.accept='.json';inp.style.display='none';
   inp.addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
@@ -16149,7 +16128,6 @@ function restoreUiPrefs(){
 }
 
 loadFromServer().then(function(){
-  if(ensureDemoOverdueMock())save();
   /* ต้องมาก่อน restoreUiPrefs()/renderAll() เสมอ — ทั้งสองอ่านผ่าน uiPrefGet()
      ซึ่งตอนนี้อ่านจาก UIP ที่โหลดมาจาก /api/ui-prefs ไม่ใช่จาก S อีกแล้ว */
   return uiPrefsLoad();
