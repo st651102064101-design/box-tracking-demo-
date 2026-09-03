@@ -42,6 +42,7 @@ import {
   cycleCounts,
   events,
   auditLog,
+  lineLinkInvites,
   lineNotificationDeliveries,
   config,
   sequences,
@@ -129,6 +130,8 @@ export async function wipeSystem(db: DB): Promise<WipeResult> {
        tables (see schema.sql — the only real FKs are employees/users → roles
        and employees → users), so order among them doesn't matter. ────────── */
     await tx.delete(boxes);
+    // Invitations reference customers and must be removed before customers.
+    await tx.delete(lineLinkInvites);
     await tx.delete(customers);
     await tx.delete(boxTypes);
     await tx.delete(warehouses);
