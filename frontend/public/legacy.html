@@ -4388,7 +4388,7 @@ function hydrateIcons(root){(root||document).querySelectorAll('[data-ico]').forE
 var KEY='smarttrace_p1';
 /** @type {AppState} */
 var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
-var APP_BRANDING={systemName:'Smart Tracking',subtitle:'WMS · เฟส 1 · Returnable Asset Tracking',logoData:null};
+var APP_BRANDING={systemName:'Smart Tracking',subtitle:'WMS · เฟส 1 · Returnable Asset Tracking',logoData:null,returnNoteCompany:'ABSS',returnNoteDepartment:'ฝ่ายทรัพยากรบุคคล',returnNotePhone:'0xx-xxx-xxxx'};
 var USER='demo';try{var savedUser=localStorage.getItem('smarttrace_user');if(savedUser)USER=savedUser;}catch(e){}
 /* ===== ที่เก็บค่าตั้งค่าหน้าจอรายบัญชี (ui_prefs) — ตัวแปรสถานะ =====
    ประกาศไว้ต้นไฟล์ทั้งที่ตัวฟังก์ชัน uiPrefGet/uiPrefSet อยู่ไกลลงไปข้างล่าง เพราะ
@@ -8151,7 +8151,7 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeCardId',empCardId(e));
   setText('empBadgeValidUntil',EMP_CARD_ORG.validUntil);
   var rn=$('#empBadgeReturnNote');
-  if(rn)rn.innerHTML='บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(EMP_CARD_ORG.name)+'<br>หากพบกรุณาส่งคืนบริษัท / ฝ่ายทรัพยากรบุคคล<br><span style="font-family:var(--mono);color:var(--ink2);">โทร. '+esc(EMP_CARD_ORG.tel)+'</span>';
+  if(rn)rn.innerHTML='บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(APP_BRANDING.returnNoteCompany)+'<br>หากพบกรุณาส่งคืนบริษัท / '+esc(APP_BRANDING.returnNoteDepartment)+'<br><span style="font-family:var(--mono);color:var(--ink2);">โทร. '+esc(APP_BRANDING.returnNotePhone)+'</span>';
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
   var fbc=$('#empBadgeFrontBarcode');if(fbc)fbc.innerHTML=code128SVG(scanCode,58);
   /* เปิดบัตรใหม่ทุกครั้ง = คืนการควบคุมการพลิกให้ hover ตามปกติ แต่ตัวเลือก
@@ -15645,11 +15645,11 @@ function pickBrandingLogo(file){
 function clearBrandingLogo(){brandingDraftLogo=null;refreshBrandingDraftPreview();}
 function saveBrandingSettings(){
   if(!validateForm(VALIDATION_SCHEMAS.branding,$('#brandingSettingsBlock')))return;
-  var systemName=val('brandingSystemName').trim(),subtitle=val('brandingSubtitle').trim();
+  var systemName=val('brandingSystemName').trim(),subtitle=val('brandingSubtitle').trim(),returnNoteCompany=val('brandingReturnCompany').trim(),returnNoteDepartment=val('brandingReturnDepartment').trim(),returnNotePhone=val('brandingReturnPhone').trim();
   if(!systemName)return toast('กรุณากรอกชื่อระบบ',null,'err');
   var btn=$('#btnSaveBranding');if(btn)btn.disabled=true;
   apiFetch('/api/branding',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
-    body:JSON.stringify({systemName:systemName,subtitle:subtitle,logoData:brandingDraftLogo})})
+    body:JSON.stringify({systemName:systemName,subtitle:subtitle,logoData:brandingDraftLogo,returnNoteCompany:returnNoteCompany,returnNoteDepartment:returnNoteDepartment,returnNotePhone:returnNotePhone})})
     .then(function(r){return r.json().catch(function(){return {};}).then(function(j){if(!r.ok){var e=new Error(j.message||'บันทึกไม่สำเร็จ');e.body=j;throw e;}return j;});})
     .then(function(b){applyBranding(b);closeModal();renderAll();toast('บันทึกชื่อระบบและโลโก้แล้ว',b.systemName,'ok');})
     .catch(function(e){if(e.body&&e.body.errors)applyServerValidationErrors(e.body.errors,$('#brandingSettingsBlock'));else toast('บันทึกไม่ได้',e.message||'','err');if(btn)btn.disabled=false;});
@@ -15722,6 +15722,9 @@ function settingsGoGeneral(focusBranding){
       +'</div>'
       +'<div class="field"><label>ชื่อระบบ</label><input id="brandingSystemName" maxlength="80" value="'+esc(APP_BRANDING.systemName)+'"></div>'
       +'<div class="field" style="margin-top:12px;"><label>ข้อความใต้ชื่อระบบ</label><input id="brandingSubtitle" maxlength="180" value="'+esc(APP_BRANDING.subtitle)+'"></div>'
+      +'<div class="field" style="margin-top:12px;"><label>ชื่อบริษัทบนบัตรพนักงาน</label><input id="brandingReturnCompany" maxlength="120" value="'+esc(APP_BRANDING.returnNoteCompany)+'"></div>'
+      +'<div class="field" style="margin-top:12px;"><label>ฝ่ายที่ให้ส่งคืนบัตร</label><input id="brandingReturnDepartment" maxlength="120" value="'+esc(APP_BRANDING.returnNoteDepartment)+'"></div>'
+      +'<div class="field" style="margin-top:12px;"><label>เบอร์โทรบนบัตรพนักงาน</label><input id="brandingReturnPhone" maxlength="80" value="'+esc(APP_BRANDING.returnNotePhone)+'"></div>'
       +'</div>'
     : '<p class="muted" style="padding:20px 2px;">เฉพาะผู้ดูแลระบบสูงสุด (Super Admin) เท่านั้นที่แก้ไขชื่อระบบและโลโก้ได้</p>';
   var h='<div class="mhead">'+settingsBackBtn('settingsGoHome')+'<h3>ระบบและแบรนด์</h3>'+settingsCloseX()+'</div>'
@@ -21888,7 +21891,8 @@ document.addEventListener('visibilitychange',()=>{
 (function(){
   var defaultMark='<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8M9 8h4a2 2 0 0 1 0 4H9M9 12h4.5a2 2 0 0 1 0 4H9"/></svg></span>';
   window.applyBranding=function(b){
-    APP_BRANDING={systemName:(b&&b.systemName)||'Smart Tracking',subtitle:(b&&b.subtitle)||'',logoData:(b&&b.logoData)||null};
+    APP_BRANDING={systemName:(b&&b.systemName)||'Smart Tracking',subtitle:(b&&b.subtitle)||'',logoData:(b&&b.logoData)||null,returnNoteCompany:(b&&b.returnNoteCompany)||'ABSS',returnNoteDepartment:(b&&b.returnNoteDepartment)||'ฝ่ายทรัพยากรบุคคล',returnNotePhone:(b&&b.returnNotePhone)||'0xx-xxx-xxxx'};
+    if(typeof EMP_CARD_ORG!=='undefined'){EMP_CARD_ORG.name=APP_BRANDING.returnNoteCompany;EMP_CARD_ORG.tel=APP_BRANDING.returnNotePhone;}
     var n=document.getElementById('appBrandName'),s=document.getElementById('appBrandSubtitle'),m=document.getElementById('appBrandMark');
     var mobileName=document.getElementById('mobileNavBrandName'),mobileSub=document.getElementById('mobileNavBrandSubtitle'),mobileMark=document.getElementById('mobileNavBrandMark');
     if(n)n.textContent=APP_BRANDING.systemName;if(s)s.textContent=APP_BRANDING.subtitle;
