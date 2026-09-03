@@ -8423,10 +8423,10 @@ function empBadgeStep(){
     var bx=eb.cx+(lx*cth-ly*sth),by=eb.cy+(lx*sth+ly*cth);
     closeBtn.style.transform='translate('+(bx-21).toFixed(1)+'px,'+(by-21).toFixed(1)+'px)';
   }
-  /* ปุ่มพลิกบัตรอยู่กึ่งกลางด้านซ้าย และหมุนตำแหน่งตามบัตรแต่ตัวปุ่มยังตั้งตรง */
+  /* ปุ่มพลิกบัตรอยู่กึ่งกลางด้านล่าง และหมุนตำแหน่งตามบัตรแต่ตัวปุ่มยังตั้งตรง */
   var flipBtn=eb.el.flipBtn;
   if(flipBtn){
-    var flx=-204*s-OVERLAY_BTN_GAP,fly=0;
+    var flx=0,fly=313.5*s+OVERLAY_BTN_GAP;
     var fbx=eb.cx+(flx*cth-fly*sth),fby=eb.cy+(flx*sth+fly*cth);
     flipBtn.style.transform='translate('+(fbx-21).toFixed(1)+'px,'+(fby-21).toFixed(1)+'px)';
   }
