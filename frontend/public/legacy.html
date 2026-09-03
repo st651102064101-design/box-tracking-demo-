@@ -8082,8 +8082,8 @@ function empBadgeGrab(ev){
   var c=Math.cos(-empBadge.theta),s=Math.sin(-empBadge.theta);
   var dx=ev.clientX-empBadge.cx,dy=ev.clientY-empBadge.cy;
   empBadge.drag={lx:(dx*c-dy*s)/empBadge.s,ly:(dx*s+dy*c)/empBadge.s,x:ev.clientX,y:ev.clientY};
-  /* While held, the card remains face-on. Hover flip resumes after release. */
-  empBadge.flipTarget=0;empBadge.flipCur=0;
+  /* Dragging must preserve the face selected by the user; only the flip button
+     is allowed to change flipTarget. */
   var el=empBadge.el;
   if(el.card)el.card.style.cursor='grabbing';
   /* Dragging is exactly the span the reported jank happens in — drop the
