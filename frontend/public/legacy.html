@@ -697,6 +697,8 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .emp-badge-photo-import:hover .svgi svg{animation:empBadgeUploadNudge .7s ease-in-out infinite;}
 @keyframes empBadgeUploadNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .emp-badge-return-note{position:relative;}
+.emp-badge-return-note,.emp-badge-return-note [contenteditable="false"]{cursor:default;}
+.emp-badge-return-note.is-editing [contenteditable="true"]{cursor:text;}
 .emp-badge-return-note .emp-badge-note-edit{position:absolute;right:8px;top:10px;width:30px;height:30px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--surface2);color:var(--ink2);opacity:0;pointer-events:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease,background .18s ease;}
 .emp-badge-return-note:hover .emp-badge-note-edit,.emp-badge-return-note:focus-within .emp-badge-note-edit{opacity:1;pointer-events:auto;}
 .emp-badge-return-note .emp-badge-note-edit:hover{background:var(--accent);color:var(--accentContrast);transform:scale(1.08);}
