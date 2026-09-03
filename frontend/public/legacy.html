@@ -688,6 +688,7 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .ivs-btn.active{background:var(--ink);color:var(--bg);box-shadow:0 4px 12px color-mix(in srgb,var(--ink) 20%,transparent);}
 /* compact numeric input embedded inside a "{n} วัน/เดือน/ปี" ivs-btn — reusable
    date-range filter (see dfBarHtml/dfSetMode) */
+.df-mode-icon{width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
 .ivs-btn.active .df-n{background:color-mix(in srgb,var(--bg) 25%,transparent);}
 .df-n::-webkit-outer-spin-button,.df-n::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
@@ -13074,12 +13075,12 @@ function dfBarHtml(id){
     +'<span class="inv-view-sw df-sw" data-no-drag="1" id="df-'+id+'-sw" style="flex-shrink:0;">'
     +'<span class="df-hidden-hint" title="ยังมีตัวเลือกช่วงเวลาอื่นซ่อนอยู่ — เอาเมาส์ชี้เพื่อดู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span>'
     +'<span class="df-collapsible">'
-    +'<button type="button" class="ivs-btn active" data-mode="all" title="'+labels.all+'" onclick="dfSetMode(\''+id+'\',\'all\')">ทั้งหมด</button>'
-    +'<button type="button" class="ivs-btn" data-mode="day" title="'+labels.day+'" onclick="dfSetMode(\''+id+'\',\'day\')"><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="'+(retainer?3:1)+'" title="'+labels.day+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
-    +'<button type="button" class="ivs-btn" data-mode="month" title="'+labels.month+'" onclick="dfSetMode(\''+id+'\',\'month\')"><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" title="'+labels.month+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
-    +'<button type="button" class="ivs-btn" data-mode="year" title="'+labels.year+'" onclick="dfSetMode(\''+id+'\',\'year\')"><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" title="'+labels.year+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
+    +'<button type="button" class="ivs-btn active" data-mode="all" title="'+labels.all+'" onclick="dfSetMode(\''+id+'\',\'all\')"><svg class="df-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg>ทั้งหมด</button>'
+    +'<button type="button" class="ivs-btn" data-mode="day" title="'+labels.day+'" onclick="dfSetMode(\''+id+'\',\'day\')"><svg class="df-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="number" min="1" class="df-n" id="df-'+id+'-day-n" value="'+(retainer?3:1)+'" title="'+labels.day+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'day\')"> วัน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="month" title="'+labels.month+'" onclick="dfSetMode(\''+id+'\',\'month\')"><svg class="df-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="number" min="1" class="df-n" id="df-'+id+'-month-n" value="1" title="'+labels.month+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'month\')"> เดือน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="year" title="'+labels.year+'" onclick="dfSetMode(\''+id+'\',\'year\')"><svg class="df-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><input type="number" min="1" class="df-n" id="df-'+id+'-year-n" value="1" title="'+labels.year+'" onclick="event.stopPropagation()" onchange="dfSetMode(\''+id+'\',\'year\')"> ปี</button>'
     +'</span>'
-    +'<button type="button" class="ivs-btn" data-mode="custom" title="'+labels.custom+'" onclick="dfSetMode(\''+id+'\',\'custom\')">ระบุวัน</button>'
+    +'<button type="button" class="ivs-btn" data-mode="custom" title="'+labels.custom+'" onclick="dfSetMode(\''+id+'\',\'custom\')"><svg class="df-mode-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>ระบุวัน</button>'
     +'</span>'
     +'<span id="df-'+id+'-custom" style="display:none;align-items:center;gap:6px;flex-shrink:0;padding-left:10px;border-left:.5px solid var(--line2);">'
     +'<label class="muted small" style="font-weight:400;white-space:nowrap;">จาก</label>'
