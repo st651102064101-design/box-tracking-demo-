@@ -696,6 +696,13 @@ tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 .emp-badge-photo-import:hover{transform:scale(1.035);background:var(--accentSoft)!important;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 38%,transparent);}
 .emp-badge-photo-import:hover .svgi svg{animation:empBadgeUploadNudge .7s ease-in-out infinite;}
 @keyframes empBadgeUploadNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.emp-badge-return-note{position:relative;}
+.emp-badge-return-note .emp-badge-note-edit{position:absolute;right:8px;top:10px;width:30px;height:30px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--surface2);color:var(--ink2);opacity:0;pointer-events:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease,background .18s ease;}
+.emp-badge-return-note:hover .emp-badge-note-edit,.emp-badge-return-note:focus-within .emp-badge-note-edit{opacity:1;pointer-events:auto;}
+.emp-badge-return-note .emp-badge-note-edit:hover{background:var(--accent);color:var(--accentContrast);transform:scale(1.08);}
+.emp-badge-return-note .emp-badge-note-edit svg{width:16px;height:16px;}
+.emp-badge-return-note.is-editing .emp-badge-note-edit{opacity:1;pointer-events:auto;background:var(--accent);color:var(--accentContrast);}
+.emp-badge-return-note.is-editing [contenteditable]{outline:1px dashed var(--accent);outline-offset:3px;cursor:text;}
 .emp-badge-float-btn{opacity:0;transform:scale(.78);transition:opacity .22s ease,transform .28s cubic-bezier(.22,1,.36,1);}
 .emp-badge-float-btn.is-visible{opacity:1;transform:scale(1);}
 .df-n{width:2.6em;flex:0 0 auto;border:none;background:color-mix(in srgb,var(--ink) 10%,transparent);color:inherit;font:inherit;font-weight:700;text-align:center;border-radius:6px;padding:1px 2px;-moz-appearance:textfield;}
@@ -3833,7 +3840,12 @@ a{color:var(--accentInk);}
 
           <!-- margin-top:auto ดันข้อความส่งคืนบริษัทลงไปชิดขอบล่างสุดของบัตรเสมอเมื่อเนื้อหา
                ด้านบนสั้นกว่าพื้นที่ที่มี — ถ้าล้น กล่อง overflow-y:auto ด้านนอกจะเลื่อนตามปกติ -->
-          <div id="empBadgeReturnNote" style="margin-top:auto;padding-top:22px;border-top:.5px solid var(--line);font-size:12.5px;line-height:1.7;color:var(--muted);"></div>
+          <div id="empBadgeReturnNote" class="emp-badge-return-note" style="margin-top:auto;padding-top:22px;border-top:.5px solid var(--line);font-size:12.5px;line-height:1.7;color:var(--muted);">
+            <button id="empBadgeReturnNoteEdit" type="button" class="emp-badge-note-edit" onclick="event.stopPropagation();toggleEmpBadgeReturnNoteEdit()" aria-label="แก้ไขข้อความด้านหลังบัตร" data-app-tooltip-th="แก้ไขข้อความด้านหลังบัตร"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"></path><path d="m14.2 4.8 5 5"></path></svg></span></button>
+            <div id="empBadgeReturnCompany" contenteditable="false"></div>
+            <div id="empBadgeReturnDepartment" contenteditable="false"></div>
+            <div id="empBadgeReturnPhone" contenteditable="false" style="font-family:var(--mono);color:var(--ink2);"></div>
+          </div>
         </div>
         </div>
 
@@ -8051,6 +8063,36 @@ function empBadgeImportPhoto(input){
   var check=validateUploadFile(file,'image');if(!check.ok){input.value='';return toast('เลือกรูปไม่ได้',check.message,'err');}
   var reader=new FileReader();reader.onload=function(){var img=new Image();img.onload=function(){var size=240,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;var side=Math.min(img.width,img.height),ctx=canvas.getContext('2d');ctx.drawImage(img,(img.width-side)/2,(img.height-side)/2,side,side,0,0,size,size);var photo=canvas.toDataURL('image/jpeg',.82),e=S.employees[empBadge.id];if(!e)return;e.photo=photo;renderAvatar('empBadgeAvatar',e.name,photo);save();renderAll();toast('บันทึกรูปแล้ว','รูปถูกบันทึกในข้อมูลพนักงาน','ok');};img.src=reader.result;};reader.readAsDataURL(file);input.value='';
 }
+function renderEmpBadgeReturnNote(){
+  var company=$('#empBadgeReturnCompany'),department=$('#empBadgeReturnDepartment'),phone=$('#empBadgeReturnPhone');
+  if(company)company.textContent='บัตรนี้เป็นทรัพย์สินของบริษัท '+(APP_BRANDING.returnNoteCompany||'');
+  if(department)department.textContent='หากพบกรุณาส่งคืนบริษัท / '+(APP_BRANDING.returnNoteDepartment||'');
+  if(phone)phone.textContent='โทร. '+(APP_BRANDING.returnNotePhone||'');
+}
+function toggleEmpBadgeReturnNoteEdit(){
+  var wrap=$('#empBadgeReturnNote'),btn=$('#empBadgeReturnNoteEdit');
+  if(!wrap||!btn)return;
+  var editing=wrap.classList.toggle('is-editing');
+  var fields=[$('#empBadgeReturnCompany'),$('#empBadgeReturnDepartment'),$('#empBadgeReturnPhone')];
+  fields.forEach(function(el){if(el)el.contentEditable=editing?'true':'false';});
+  if(editing){
+    btn.setAttribute('aria-label','บันทึกข้อความด้านหลังบัตร');btn.setAttribute('data-app-tooltip-th','บันทึกข้อความด้านหลังบัตร');
+    btn.innerHTML='<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.2 4.2L19 6.5"></path></svg></span>';
+    setTimeout(function(){if(fields[0]){fields[0].focus();var s=window.getSelection(),r=document.createRange();r.selectNodeContents(fields[0]);r.collapse(false);s.removeAllRanges();s.addRange(r);}},0);
+  }else{
+    var company=(fields[0]&&fields[0].textContent||'').replace(/^บัตรนี้เป็นทรัพย์สินของบริษัท\s*/,'').trim();
+    var department=(fields[1]&&fields[1].textContent||'').replace(/^หากพบกรุณาส่งคืนบริษัท\s*\/\s*/,'').trim();
+    var phone=(fields[2]&&fields[2].textContent||'').replace(/^โทร\.\s*/,'').trim();
+    if(!company||!department||!phone){toast('บันทึกไม่ได้','กรุณากรอกข้อความให้ครบทั้ง 3 บรรทัด','err');wrap.classList.add('is-editing');fields.forEach(function(el){if(el)el.contentEditable='true';});return;}
+    btn.disabled=true;
+    apiFetch('/api/branding',{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({systemName:APP_BRANDING.systemName,subtitle:APP_BRANDING.subtitle,logoData:APP_BRANDING.logoData,returnNoteCompany:company,returnNoteDepartment:department,returnNotePhone:phone})})
+      .then(function(r){if(!r.ok)return r.json().catch(function(){return {};}).then(function(x){throw new Error(x.message||'บันทึกไม่สำเร็จ');});return r.json();})
+      .then(function(data){APP_BRANDING=Object.assign({},APP_BRANDING,data);renderEmpBadgeReturnNote();toast('บันทึกข้อความแล้ว','ข้อความด้านหลังบัตรถูกบันทึกลงฐานข้อมูล','ok');})
+      .catch(function(e){renderEmpBadgeReturnNote();toast('บันทึกไม่ได้',e.message||'','err');})
+      .finally(function(){btn.disabled=false;btn.setAttribute('aria-label','แก้ไขข้อความด้านหลังบัตร');btn.setAttribute('data-app-tooltip-th','แก้ไขข้อความด้านหลังบัตร');btn.innerHTML='<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"></path><path d="m14.2 4.8 5 5"></path></svg></span>';});
+  }
+}
+window.toggleEmpBadgeReturnNoteEdit=toggleEmpBadgeReturnNoteEdit;
 window.empBadgeImportPhoto=empBadgeImportPhoto;
 function flipEmpBadge(){
   if(!empBadge.open||empBadgeBackBlank())return;
@@ -8159,8 +8201,7 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeFrontScanCode',scanCode);
   setText('empBadgeCardId',empCardId(e));
   setText('empBadgeValidUntil',EMP_CARD_ORG.validUntil);
-  var rn=$('#empBadgeReturnNote');
-  if(rn)rn.innerHTML='บัตรนี้เป็นทรัพย์สินของบริษัท '+esc(APP_BRANDING.returnNoteCompany)+'<br>หากพบกรุณาส่งคืนบริษัท / '+esc(APP_BRANDING.returnNoteDepartment)+'<br><span style="font-family:var(--mono);color:var(--ink2);">โทร. '+esc(APP_BRANDING.returnNotePhone)+'</span>';
+  renderEmpBadgeReturnNote();
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
   var fbc=$('#empBadgeFrontBarcode');if(fbc)fbc.innerHTML=code128SVG(scanCode,58);
   /* เปิดบัตรใหม่ทุกครั้ง = คืนการควบคุมการพลิกให้ hover ตามปกติ แต่ตัวเลือก
