@@ -2306,7 +2306,7 @@ a{color:var(--accentInk);}
   <div id="ovHardwareAlert" style="display:none;"></div>
   <div class="wg-board units reveal">
     <div class="wg xl"><div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8a9 9 0 0 1 14 0M7.5 11a6 6 0 0 1 9 0M10 14a3 3 0 0 1 4 0"/><circle cx="12" cy="18" r="1"/></svg></span></span><span class="wg-lbl">สถานะอุปกรณ์</span></div><div id="ovHardwareHealth" class="muted small" style="margin-top:10px;"></div></div>
-    <button type="button" class="wg xl" data-act onclick="goInventory({status:'out',label:'กล่องที่อยู่กับลูกค้า',showValue:true});"><span class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v11H3z"/><circle cx="12" cy="12.5" r="2.5"/></svg></span></span><span class="wg-lbl">มูลค่าทรัพย์สินที่อยู่นอกคลัง</span></span><span class="wg-fig"><span class="wg-n mono" id="ovValueAtRisk">0</span><span class="wg-unit">บาท</span></span><div class="muted small" id="ovValueAtRiskTrend" style="margin-top:8px;"></div></button>
+    <button type="button" class="wg xl" id="ovValueAtRiskCard" data-act onclick="goInventory({status:'out',label:'กล่องที่อยู่กับลูกค้า',showValue:true});"><span class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v11H3z"/><circle cx="12" cy="12.5" r="2.5"/></svg></span></span><span class="wg-lbl">มูลค่าทรัพย์สินที่อยู่นอกคลัง</span></span><span class="wg-fig"><span class="wg-n mono" id="ovValueAtRisk">0</span><span class="wg-unit">บาท</span></span><div class="muted small" id="ovValueAtRiskTrend" style="margin-top:8px;"></div></button>
   </div>
   <div class="wg-board reveal" id="ovTopRetainersBoard"><div class="wg xl wg-table ov-top-retainers-card"><div class="wg-top"><span class="wg-lbl">ลูกค้าผู้ดองกล่อง · Top <input id="ovRetainersTopN" class="retainer-top-n" type="number" min="1" max="50" step="1" value="3" inputmode="numeric" aria-label="จำนวนลูกค้าอันดับสูงสุด" title="ระบุจำนวนลูกค้าอันดับสูงสุด" onchange="setOvRetainersTop(this.value)"></span><div class="spacer"></div><div class="wg-scope" id="df-ovRetainers-mount"></div></div><p class="wg-cap" id="ovTopRetainersDesc">แสดงเฉพาะกล่องที่อยู่นอกคลังเกิน 3 วัน เพื่อให้ทีมติดตามดำเนินการต่อ</p><div class="wg-body ov-top-retainers-body"><div id="ovTopRetainers"></div><div class="ov-retainer-actions"><button class="btn accent sm" onclick="switchTab('gateout')">ส่งออกด่วน</button><button class="btn ghost sm" style="border-color:var(--accent);color:var(--accentInk);background:var(--accentSoft);font-weight:700;" onclick="switchTab('gatein')">รับเข้าด่วน</button><button class="btn ghost sm" id="ovRetainerTrackBtn" onclick="switchTab('track')">ติดตาม/แจ้งเตือน</button></div></div></div></div>
 
@@ -13368,6 +13368,8 @@ function renderOverviewOperations(all){
     alert.innerHTML=alerts.join('');
   }
   var risk=all.filter(function(b){return b.status==='out';}).reduce(function(sum,b){return sum+Number(b.value||0);},0),riskEl=$('#ovValueAtRisk');
+  var riskCard=$('#ovValueAtRiskCard');
+  if(riskCard)riskCard.style.display=risk>0?'':'none';
   if(riskEl)riskEl.textContent=money(risk);
   var trend=$('#ovValueAtRiskTrend');
   if(trend){
