@@ -8034,6 +8034,18 @@ function empBadgeSetFace(back){
   if(empBadgeBackBlank()||empBadge.drag){empBadge.flipTarget=0;return;}
   empBadge.flipTarget=back?180:0;
 }
+function renderEmpBadgeAvatar(e){
+  var el=$('#empBadgeAvatar');if(!el)return;
+  if(e&&e.photo){renderAvatar('empBadgeAvatar',e.name,e.photo);return;}
+  var initials=(e&&e.name||'').trim().split(/\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('');
+  el.innerHTML='<button type="button" title="นำเข้ารูปพนักงาน" aria-label="นำเข้ารูปพนักงาน" style="position:absolute;inset:0;border:0;background:transparent;color:var(--accentInk);font:inherit;cursor:pointer;display:grid;place-items:center;z-index:2;" onclick="document.getElementById(\'empBadgePhotoFile\').click()"><span style="display:grid;place-items:center;gap:5px;"><span class="svgi" style="width:34px;height:34px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></span><span style="font-size:13px;">นำเข้ารูป</span><b style="font-size:52px;line-height:.9;">'+esc(initials)+'</b></span></button><input id="empBadgePhotoFile" type="file" accept="image/*" style="display:none" onchange="empBadgeImportPhoto(this)">';
+}
+function empBadgeImportPhoto(input){
+  var file=input&&input.files&&input.files[0];if(!file)return;
+  var check=validateUploadFile(file,'image');if(!check.ok){input.value='';return toast('เลือกรูปไม่ได้',check.message,'err');}
+  var reader=new FileReader();reader.onload=function(){var img=new Image();img.onload=function(){var size=240,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;var side=Math.min(img.width,img.height),ctx=canvas.getContext('2d');ctx.drawImage(img,(img.width-side)/2,(img.height-side)/2,side,side,0,0,size,size);var photo=canvas.toDataURL('image/jpeg',.82),e=S.employees[empBadge.id];if(!e)return;e.photo=photo;renderAvatar('empBadgeAvatar',e.name,photo);save();renderAll();toast('บันทึกรูปแล้ว','รูปถูกบันทึกในข้อมูลพนักงาน','ok');};img.src=reader.result;};reader.readAsDataURL(file);input.value='';
+}
+window.empBadgeImportPhoto=empBadgeImportPhoto;
 function flipEmpBadge(){
   if(!empBadge.open||empBadgeBackBlank())return;
   empBadge.flipTarget=Math.abs(empBadge.flipTarget-180);
@@ -8128,7 +8140,7 @@ function openEmpBadge(id,isSelf){
   /* ค่าที่โชว์บนบัตรบนจอ = ชุดเดียวกับบัตรที่พิมพ์จริง (empCardScanValue/empCardId/
      EMP_CARD_ORG) เพื่อให้บัตรบนจอกับบัตรที่ออกมาจากเครื่องพิมพ์ตรงกันเป๊ะ */
   var scanCode=empCardScanValue(e);
-  renderAvatar('empBadgeAvatar',e.name,e.photo);
+  renderEmpBadgeAvatar(e);
   setText('empBadgeId',e.id);
   setText('empBadgeName',e.name||e.id);
   setText('empBadgeRole',e.role||'-');
