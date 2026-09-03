@@ -12510,7 +12510,8 @@ function ensureInGate(){
 function saveInbound(){
   if(!pendingIn.length)return toast('ยังไม่ได้ยิงกล่อง',null,'err');
   var gate=val('inGate');if(!gate)return toast('เลือกประตูขาเข้า',null,'err');
-  if(gateInEntryMode==='rfid'&&isScreenDirectionGate('in')&&!val('inPlate').trim())return toast('รอ LPR อ่านทะเบียนรถ','ประตูเข้า-ออกร่วมกันต้องมี RFID และ LPR ก่อนยืนยันรับเข้า','warn');
+  /* LPR is optional. RFID or manual/PDA receipt must be able to complete
+     even when no camera is installed or the camera is unavailable. */
   var partner=val('inPartner');
   if(!val('inRecorder'))setv('inRecorder',USER);
   var recorder=val('inRecorder')||USER;
