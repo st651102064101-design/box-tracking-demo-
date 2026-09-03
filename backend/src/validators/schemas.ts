@@ -136,6 +136,14 @@ export const gateInLocationSchema = z.object({
   slot: z.string().trim().optional().default(''),
 });
 
+/* Location Master CRUD accepts the database-shaped record, including its code. */
+export const locationSchema = z.object({
+  code: z.string().min(1),
+  wh: z.string().nullish(), zone: z.string().nullish(), rack: z.string().nullish(),
+  shelf: z.string().nullish(), slot: z.string().nullish(), type: z.string().nullish(),
+  note: z.string().nullish(),
+});
+
 export const gateInSchema = z.object({
   tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),
   gate: z.number().int().positive(),

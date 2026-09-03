@@ -20,6 +20,7 @@ mastersRouter.use(requireAuth);
    permissions, so "may add a customer" no longer implies "may re-price the
    entire box catalogue". */
 const canManageMaster = requirePermission('master.manage');
+const canWrite = requirePermission('master.manage');
 const canCreatePartner = requirePermission('partner.create');
 const canUpdatePartner = requirePermission('partner.update');
 const canDeletePartner = requirePermission('partner.delete');

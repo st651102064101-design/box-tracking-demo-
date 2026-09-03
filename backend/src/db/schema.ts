@@ -424,6 +424,15 @@ export const events = pgTable('events', {
   data: jsonb('data').notNull().default({}),
 });
 
+/** FX9600 heartbeat/read status, kept separate from the legacy state blob. */
+export const fx9600Readers = pgTable('fx9600_readers', {
+  id: text('id').primaryKey(),
+  gateNo: integer('gate_no'),
+  lastWebhookAt: timestamp('last_webhook_at', { withTimezone: true }),
+  lastPayload: jsonb('last_payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const auditLog = pgTable('audit_log', {
   id: serial('id').primaryKey(),
   action: text('action'),
