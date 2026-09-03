@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS config (
 ALTER TABLE config ADD COLUMN IF NOT EXISTS system_name TEXT NOT NULL DEFAULT 'Smart Tracking';
 ALTER TABLE config ADD COLUMN IF NOT EXISTS subtitle TEXT NOT NULL DEFAULT 'WMS · เฟส 1 · Returnable Asset Tracking';
 ALTER TABLE config ADD COLUMN IF NOT EXISTS logo_data TEXT;
+ALTER TABLE config ADD COLUMN IF NOT EXISTS return_note_company TEXT NOT NULL DEFAULT 'ABSS';
+ALTER TABLE config ADD COLUMN IF NOT EXISTS return_note_department TEXT NOT NULL DEFAULT 'ฝ่ายทรัพยากรบุคคล';
+ALTER TABLE config ADD COLUMN IF NOT EXISTS return_note_phone TEXT NOT NULL DEFAULT '0xx-xxx-xxxx';
 
 CREATE TABLE IF NOT EXISTS sequences (
   name  TEXT PRIMARY KEY,

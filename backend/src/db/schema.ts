@@ -94,6 +94,9 @@ export const config = pgTable('config', {
   systemName: text('system_name').notNull().default('Smart Tracking'),
   subtitle: text('subtitle').notNull().default('WMS · เฟส 1 · Returnable Asset Tracking'),
   logoData: text('logo_data'),
+  returnNoteCompany: text('return_note_company').notNull().default('ABSS'),
+  returnNoteDepartment: text('return_note_department').notNull().default('ฝ่ายทรัพยากรบุคคล'),
+  returnNotePhone: text('return_note_phone').notNull().default('0xx-xxx-xxxx'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
