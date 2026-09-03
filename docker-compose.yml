@@ -71,6 +71,13 @@ services:
       SMTP_FROM: ""
     ports:
       - "4000:4000"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend
+          ignore:
+            - ./backend/node_modules/
+            - ./backend/dist/
 
   # Always build the Web App Demo from this branch's source.
   frontend:
@@ -90,6 +97,13 @@ services:
       BACKEND_URL: http://backend:4000
     ports:
       - "3000:3000"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./frontend
+          ignore:
+            - ./frontend/node_modules/
+            - ./frontend/.next/
 
   # this branch's build (WEB_APP_DEMO_THAI_SUBMIT)
   frontend-thai:
