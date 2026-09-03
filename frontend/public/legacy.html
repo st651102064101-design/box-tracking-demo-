@@ -6850,7 +6850,16 @@ function toggleRfidReader(btn){
   var id=btn&&btn.dataset.readerId;if(!id)return;
   var enabled=btn.dataset.readerEnabled!=='1';btn.disabled=true;btn.textContent='กำลังบันทึก…';
   whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id)+'/reading',{method:'POST',body:JSON.stringify({enabled:enabled})})
-    .then(function(){toast(enabled?'เปิดใช้งาน FX9600 แล้ว':'ปิดใช้งาน FX9600 แล้ว',id,'ok');var w=S.warehouses[editingWh];if(w)loadWhGateRfidCrud(w);})
+    .then(function(reader){
+      /* Use the value confirmed by the API, not the optimistic click value.
+         This keeps the label correct even when another operator changed the
+         same reader or the backend normalizes the value. */
+      var confirmed=reader&&typeof reader.readingEnabled==='boolean'?reader.readingEnabled:enabled;
+      var local=whGateRfidReaders.filter(function(x){return String(x.id)===String(id);})[0];
+      if(local)local.readingEnabled=confirmed;
+      toast(confirmed?'เปิดใช้งาน FX9600 แล้ว':'ปิดใช้งาน FX9600 แล้ว',id,'ok');
+      var w=S.warehouses[editingWh];if(w)renderWhGateRfidCrud(w,whGateRfidReaders);
+    })
     .catch(function(e){btn.disabled=false;btn.textContent=enabled?'เปิดใช้งาน FX9600':'ปิดใช้งาน FX9600';toast('เปลี่ยนสถานะไม่สำเร็จ',e.message||'','err');});
 }
 window.toggleRfidReader=toggleRfidReader;
