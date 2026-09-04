@@ -53,6 +53,7 @@ export const stateSchema = z.object({
       agingDays: z.number().optional(),
       boxValue: z.number().optional(),
       lostMode: z.string().optional(),
+      putawayEnabled: z.boolean().optional(),
     })
     .passthrough()
     .optional()
