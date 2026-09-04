@@ -1,0 +1,59 @@
+name: boxtracking-putaway-test
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: boxtrace-putaway-test-db
+    environment:
+      POSTGRES_USER: boxtrace
+      POSTGRES_PASSWORD: boxtrace
+      POSTGRES_DB: boxtrace
+    ports:
+      - "5433:5432"
+    volumes:
+      - putaway-test-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boxtrace -d boxtrace"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: boxtrace-backend:latest
+    container_name: boxtrace-putaway-test-backend
+    working_dir: /app
+    command: sh -c "node dist/db/migrate.js && node dist/seed.js && node dist/index.js"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      USE_PGLITE: "false"
+      DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
+      CORS_ORIGIN: http://localhost:3002
+      JWT_SECRET: boxtrace-putaway-test-jwt
+      JWT_EXPIRES_IN: 2h
+      SEED_ADMIN_USERNAME: admin
+      SEED_ADMIN_PASSWORD: admin123
+      FX9600_WEBHOOK_SECRET: BoxTrace-FX9600-2026
+      LPR_WEBHOOK_SECRET: BoxTrace-LPR-2026
+    ports:
+      - "4001:4000"
+
+  frontend:
+    image: box-tracking-demo--frontend:latest
+    container_name: boxtrace-putaway-test-frontend
+    working_dir: /app
+    command: ["npm", "run", "start"]
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:4000
+    ports:
+      - "3002:3000"
+
+volumes:
+  putaway-test-db:
+    name: boxtrace-putaway-test-db-data
