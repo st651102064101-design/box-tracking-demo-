@@ -4409,7 +4409,7 @@ function hydrateIcons(root){(root||document).querySelectorAll('[data-ico]').forE
 /* ===== STATE ===== */
 var KEY='smarttrace_p1';
 /** @type {AppState} */
-var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
+var S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual',putawayEnabled:false},seq:{do:0,emp:0},vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
 var APP_BRANDING={systemName:'Smart Tracking',subtitle:'WMS · เฟส 1 · Returnable Asset Tracking',logoData:null,returnNoteCompany:'ABSS',returnNoteDepartment:'ฝ่ายทรัพยากรบุคคล',returnNotePhone:'0xx-xxx-xxxx'};
 var USER='demo';try{var savedUser=localStorage.getItem('smarttrace_user');if(savedUser)USER=savedUser;}catch(e){}
 /* ===== ที่เก็บค่าตั้งค่าหน้าจอรายบัญชี (ui_prefs) — ตัวแปรสถานะ =====
@@ -15759,6 +15759,7 @@ function settingsGoHome(){
   var h='<div class="mhead"><h3>ตั้งค่าระบบ</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody" style="padding-top:6px;">'
     +settingsRow(SICON_BRAND,'ระบบและแบรนด์','ชื่อระบบ โลโก้ และข้อความใต้ชื่อระบบ','settingsGoGeneral()')
+    +settingsRow(SICON_DEVICE,'Workflow คลังสินค้า',S.cfg&&S.cfg.putawayEnabled?'Putaway เปิดใช้งานอยู่':'Putaway ปิดใช้งานอยู่','settingsGoWorkflow()')
     +settingsRow(SICON_DEVICE,'อุปกรณ์','เชื่อมต่อ PDA และอุปกรณ์เสริม','settingsGoDevices()')
     +settingsRow(SICON_DATA,'ข้อมูลและการสำรอง','นำเข้า และสำรองข้อมูล','settingsGoData()')
     +settingsRow(SICON_SHIELD,'ความปลอดภัย','บทบาทและสิทธิ์การเข้าถึง','settingsGoSecurity()')
@@ -15768,6 +15769,25 @@ function settingsGoHome(){
   openModal(h);
 }
 window.settingsGoHome=settingsGoHome;
+
+function settingsGoWorkflow(){
+  var enabled=!!(S.cfg&&S.cfg.putawayEnabled);
+  var h='<div class="mhead">'+settingsBackBtn('settingsGoHome')+'<h3>Workflow คลังสินค้า</h3>'+settingsCloseX()+'</div>'
+    +'<div class="mbody">'
+    +'<div class="banner info"><b>Putaway</b><span class="muted small">เปิดใช้เมื่อต้องการจัดการ Location Master และขั้นตอนนำกล่องเข้าตำแหน่งจัดเก็บ</span></div>'
+    +'<label class="row" style="justify-content:space-between;gap:14px;margin-top:18px;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer;">'
+    +'<span><b>เปิดใช้งาน Putaway</b><span class="muted small" style="display:block;margin-top:4px;">เมื่อปิด ระบบรับกล่องเข้าคลังโดยไม่บังคับตำแหน่งจัดเก็บ</span></span>'
+    +'<input id="settingsPutawayEnabled" type="checkbox" '+(enabled?'checked':'')+' onchange="settingsSetPutaway(this.checked)" style="width:20px;height:20px;accent-color:var(--accent);">'
+    +'</label></div>'
+    +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button></div>';
+  openModal(h);
+}
+function settingsSetPutaway(enabled){
+  S.cfg=S.cfg||{}; S.cfg.putawayEnabled=!!enabled;
+  save().then(function(){renderAll();toast(enabled?'เปิดใช้งาน Putaway แล้ว':'ปิดใช้งาน Putaway แล้ว','','ok');}).catch(function(){S.cfg.putawayEnabled=!enabled;var el=$('#settingsPutawayEnabled');if(el)el.checked=!enabled;toast('บันทึกการตั้งค่าไม่สำเร็จ','','err');});
+}
+window.settingsGoWorkflow=settingsGoWorkflow;
+window.settingsSetPutaway=settingsSetPutaway;
 
 /* ── ระบบและแบรนด์: ใช้ brandingDraftLogo/pickBrandingLogo/clearBrandingLogo/
    saveBrandingSettings เดิมทั้งหมด (PUT /api/branding เดิม ไม่แตะ) เฉพาะ Super
