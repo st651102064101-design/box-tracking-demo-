@@ -2011,6 +2011,180 @@ a{color:var(--accentInk);}
   table.mobile-card-table tbody td.cb-td{display:none!important;}
   .twrap,.wg-scrollhint,.tablecard{overflow:visible!important;max-height:none!important;}
 }
+/* Restored Rack/Location Master visual system from recovered commit 4bb33f1. */
+/* ── Location Master: Apple-style filter bar ────────────────────────────── */
+.loc-filter-bar{padding:14px 18px 0;display:flex;flex-direction:column;gap:10px;}
+.loc-search-row{display:flex;align-items:center;gap:10px;}
+.loc-search-wrap{flex:1;display:flex;align-items:center;gap:9px;background:var(--surface2);
+  border:.5px solid var(--line2);border-radius:12px;padding:10px 14px;
+  transition:border-color .2s,box-shadow .3s var(--ease);}
+.loc-search-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px var(--accentSoft);}
+.loc-search-wrap .lsw-ic{color:var(--muted);font-size:14px;flex:0 0 auto;}
+.loc-search-wrap input{border:none;background:transparent;font-size:14px;color:var(--ink);padding:0;width:100%;}
+.loc-search-wrap input:focus{outline:none;box-shadow:none;}
+.loc-filter-chips-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:12px;}
+.loc-chip-divider{width:.5px;height:20px;background:var(--line2);flex:0 0 auto;margin:0 2px;}
+/* ===== filter pills — native <select>, styled to read as an Apple-style
+   pill. All open/close/positioning/keyboard/outside-click behavior is
+   handled natively by the browser; nothing here can get "stuck open" or
+   overlap, because there is no custom show/hide state to get wrong. ===== */
+.loc-select-wrap{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  padding:7px 11px 7px 13px;border-radius:999px;border:.5px solid var(--line2);
+  background:var(--surface2);transition:background .15s var(--ease),border-color .15s var(--ease);}
+.loc-select-wrap:hover{border-color:var(--ink2);}
+/* active = a filter is set on this control. Uses the brand accent (not the ink/bg pair)
+   so contrast is fixed and doesn't depend on light/dark theme polarity — some browsers
+   paint a native OS accent tint through an unstyled <select>'s own box, which combined
+   with theme-relative colors here could otherwise wash out to something unreadable. */
+.loc-select-wrap.active{background:var(--accent);border-color:var(--accent);}
+.loc-select-wrap.active .loc-select-lbl,.loc-select-wrap.active .loc-select{color:var(--accentContrast)!important;}
+.loc-select-lbl{font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;}
+.loc-select{-webkit-appearance:none;-moz-appearance:none;appearance:none;color-scheme:normal;
+  border:none;background-color:transparent!important;font-family:inherit;font-size:13px;
+  font-weight:650;color:var(--ink);cursor:pointer;padding:0;margin:0;
+  max-width:150px;text-overflow:ellipsis;}
+.loc-select:focus,.loc-select:focus-visible{outline:none;box-shadow:none;background-color:transparent!important;}
+.loc-select::-ms-expand{display:none;}
+/* explicit popup-list colors (Firefox honors option bg/color directly;
+   Chromium/Safari rely on color-scheme above, this is just extra safety).
+   The list itself always uses the light palette regardless of page theme, since native
+   dropdown panels don't inherit color-scheme:dark reliably across browsers. */
+.loc-select option,select option{background:#fff;color:#1d1d1f;}
+.lp-clear{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:999px;border:none;
+  background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--accentInk);
+  font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s var(--ease);}
+.lp-clear:hover{background:color-mix(in srgb,var(--accent) 19%,transparent);}
+/* ===== hierarchical group rows ===== */
+.loc-grp-h{cursor:pointer;user-select:none;}
+.loc-grp-h:hover td{background:color-mix(in srgb,var(--ink) 4%,transparent);}
+.loc-grp-h td{padding:9px 16px !important;font-weight:700;font-size:12.5px;color:var(--ink2);}
+.loc-grp-h.lvl1 td{padding-left:38px !important;font-weight:600;font-size:12px;color:var(--muted);}
+.loc-grp-h.lvl2 td{padding-left:58px !important;font-weight:500;font-size:11.5px;color:var(--faint);}
+.loc-grp-h.lvl3 td{padding-left:78px !important;font-weight:500;font-size:11px;color:var(--faint);}
+.loc-grp-chev{display:inline-block;width:14px;font-size:10px;color:var(--faint);transition:transform .15s var(--ease);}
+.loc-grp-h.collapsed .loc-grp-chev{transform:rotate(-90deg);}
+/* Divider line between filter groups */
+.loc-chip-divider{width:.5px;height:20px;background:var(--line2);flex:0 0 auto;margin:0 2px;}
+/* Base chip — inactive */
+.loc-chip{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  font-size:13px;font-weight:500;color:var(--ink2);
+  background:var(--surface2);border:.5px solid var(--line2);border-radius:999px;
+  padding:6px 14px;cursor:pointer;user-select:none;flex:0 0 auto;
+  transition:all .2s var(--ease);}
+.loc-chip:hover{border-color:var(--ink2);color:var(--ink);}
+/* Active chip — filled pill */
+.loc-chip.active{background:var(--ink);color:var(--bg);border-color:var(--ink);
+  box-shadow:0 2px 8px color-mix(in srgb,var(--ink) 22%,transparent);}
+html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
+/* Clear chip — accent tint */
+.loc-chip.clear-chip{background:color-mix(in srgb,var(--accent) 10%,var(--surface2));
+  color:var(--accentInk);border-color:color-mix(in srgb,var(--accent) 30%,var(--line2));}
+.loc-chip.clear-chip:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface2));}
+/* Sort/group chips with chevron icon */
+.loc-chip .lc-ico{font-size:12px;opacity:.7;}
+/* Section label above chips */
+.loc-chip-label{font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.04em;
+  text-transform:uppercase;white-space:nowrap;flex:0 0 auto;padding:0 2px;}
+/* Active filter count badge */
+.loc-filter-active-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--accentContrast);
+  font-size:10px;font-weight:700;margin-left:2px;}
+
+/* ── Location Master: occupancy legend + mini stat ────────────────────── */
+.loc-occ-mini{display:inline-flex;align-items:center;gap:12px;font-size:12px;font-weight:600;color:var(--muted);}
+.loc-occ-mini b{font-family:var(--mono);color:var(--ink);font-weight:700;}
+.loc-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 18px;font-size:12.5px;color:var(--ink2);
+  border-bottom:.5px solid var(--line);}
+.loc-legend span{display:inline-flex;align-items:center;gap:7px;font-weight:600;}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+  font-size:11.5px;font-weight:700;white-space:nowrap;}
+.loc-dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;display:inline-block;}
+.loc-dot.e{background:var(--posSoft);border:1.5px solid var(--faint);}
+.loc-dot.o{background:var(--accentSoft);border:1.5px solid var(--accent);}
+
+
+
+#locMapView{padding:16px 18px 20px;}
+.locmap-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;}
+.locmap-whgroup{margin-bottom:26px;}
+.locmap-whgroup:last-child{margin-bottom:0;}
+.locmap-whhead{display:flex;align-items:center;gap:10px;padding:4px 2px 12px;border-bottom:1.5px solid var(--line2);margin-bottom:14px;color:var(--ink);}
+.locmap-whhead .svgi{width:18px;height:18px;color:var(--muted);flex:0 0 auto;}
+.locmap-whhead h4{margin:0;font-size:15px;font-weight:800;letter-spacing:-.02em;}
+.locmap-whmeta{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500;}
+.locmap-zone{border:.5px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:16px;background:var(--surface2);}
+.locmap-zone:last-child{margin-bottom:0;}
+.locmap-zonehead{display:flex;align-items:center;gap:12px;padding:12px 16px;
+  background:var(--ink);color:var(--bg);}
+.locmap-zbadge{font-family:var(--mono);font-weight:800;font-size:16px;flex:0 0 auto;
+  width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:var(--accent);color:var(--accentContrast);}
+.locmap-zonehead h5{margin:0;font-size:13.5px;font-weight:700;}
+.locmap-zmeta{font-size:11.5px;opacity:.65;font-weight:500;}
+.locmap-zfill{margin-left:auto;font-family:var(--mono);font-size:12px;opacity:.8;white-space:nowrap;}
+.locmap-body{padding:16px;display:flex;flex-wrap:wrap;gap:18px 22px;}
+.locmap-rack{flex:0 0 auto;}
+.locmap-racklabel{font-family:var(--mono);font-weight:700;font-size:12px;color:var(--ink);margin-bottom:7px;
+  display:flex;align-items:center;gap:6px;}
+.locmap-racklabel .n{color:var(--muted);font-weight:500;}
+.locmap-shelfrow{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.locmap-shelftag{width:22px;text-align:right;flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--faint);}
+.locmap-slot{width:30px;height:30px;border-radius:7px;flex:0 0 auto;cursor:pointer;position:relative;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9.5px;font-weight:700;
+  border:1.5px solid var(--faint);background:var(--posSoft);color:var(--ink2);
+  transition:transform .12s var(--ease),box-shadow .12s var(--ease);}
+.locmap-slot:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.18);z-index:2;}
+/* occupied = solid fill, not just an outline, so it reads at a glance without hovering */
+.locmap-slot.occ{background:var(--accent);border-color:var(--accent);color:var(--accentContrast);
+  box-shadow:0 1px 4px color-mix(in srgb,var(--accent) 45%,transparent);}
+/* reported "ช่องเก็บเต็ม" (POST /api/reports or the web's own reportLocFull)
+   — red, and takes priority over the green occupied fill so an operator
+   scanning the rack map sees "don't put anything here" before "it has
+   boxes in it"; a slot can be both occupied AND flagged full at once. */
+.locmap-slot.full{background:var(--neg,#b42318);border-color:var(--neg,#b42318);color:#fff;
+  box-shadow:0 1px 4px color-mix(in srgb,var(--neg,#b42318) 45%,transparent);}
+/* small count badge in the corner — shows exactly how many boxes sit in that slot */
+.locmap-slot-badge{position:absolute;top:-6px;right:-6px;min-width:15px;height:15px;padding:0 3px;
+  border-radius:999px;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  border:1.5px solid var(--surface2);box-shadow:0 1px 2px rgba(0,0,0,.3);}
+/* delete controls at every level of the rack map — zone / rack / shelf / single slot.
+   Uses the shared DEL_BADGE_SVG (red filled circle + white X, Apple xmark.circle.fill
+   style). Hidden by default, revealed only when hovering the row/header it belongs to —
+   keeps the screen clean and avoids a wall of red circles when just browsing. */
+.locmap-del{flex:0 0 auto;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform .15s var(--ease),filter .15s,opacity .15s;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+  opacity:0;}
+.locmap-del svg{width:100%;height:100%;display:block;}
+.locmap-del:hover{transform:scale(1.15);filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)) brightness(1.12);}
+.locmap-del:active{transform:scale(.9);}
+.locmap-zonehead:hover .locmap-del,.locmap-racklabel:hover .locmap-del,.locmap-shelftag-wrap:hover .locmap-del,.locmap-whhead:hover .locmap-del{opacity:1;}
+.locmap-edit{border:0;background:transparent;color:inherit;width:25px;height:25px;padding:4px;border-radius:7px;display:inline-grid;place-items:center;cursor:pointer;opacity:.55;transition:opacity .15s,background .15s,transform .15s;}
+.locmap-edit:hover{opacity:1;background:color-mix(in srgb,var(--accent) 18%,transparent);transform:translateY(-1px);}
+.locmap-edit .svgi{width:15px;height:15px;}
+.locmap-whhead .locmap-del{margin-left:10px;}
+.locmap-zonehead .locmap-del{margin-left:8px;}
+.locmap-racklabel .locmap-del{margin-left:6px;}
+.locmap-shelftag-wrap{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
+/* single-slot delete now lives inside the Putaway modal (click the slot to open it) —
+   no hover-reveal icon on the grid itself, so a click always means "open," never "delete" */
+/* same badge style, reused for the zone/rack/shelf delete controls in the hierarchical TABLE view —
+   revealed on hovering the group-header row (tr.loc-grp-h) it sits in */
+.del-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 auto;
+  cursor:pointer;vertical-align:middle;margin-left:10px;transition:transform .15s var(--ease),filter .15s,opacity .15s;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));opacity:0;}
+.del-badge svg{width:100%;height:100%;display:block;}
+.del-badge:hover{transform:scale(1.15);filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)) brightness(1.12);}
+.del-badge:active{transform:scale(.9);}
+.loc-grp-h:hover .del-badge{opacity:1;}
+#locBody tr:hover .del-badge{opacity:1;}
+
+
+/* Putaway modal step UI */
+.putaway-step{background:var(--surface2);border:.5px solid var(--line);border-radius:16px;padding:14px 16px;}
+.putaway-step-hd{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:12px;}
+.putaway-step-num{width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);
+  display:grid;place-items:center;font-size:12px;font-weight:800;flex:0 0 auto;}
 </style>
 <script src="/legacy-sync.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -6289,11 +6463,51 @@ var _locViewMode = 'map';
   });
 })();
 
+/* Edit a physical scope without forcing the operator to modify every slot row.
+   Renaming a rack/shelf rewrites all child Location Master keys atomically and
+   keeps live box/putaway coordinates aligned with the renamed structure. */
+var _locScopeEdit = null;
+function openLocScopeEditor(wh, zone, rack, shelf) {
+  _locScopeEdit = {wh:wh||'', zone:zone||'', rack:rack||'', shelf:shelf==null?null:String(shelf)};
+  var isShelf = _locScopeEdit.shelf !== null;
+  var current = isShelf ? _locScopeEdit.shelf : _locScopeEdit.rack;
+  openModal('<div class="mhead"><h3>'+(isShelf?'จัดการชั้น '+esc(current):'จัดการแร็ค '+esc(current))+'</h3><button class="x" data-close>×</button></div>'
+    +'<div class="mbody"><div class="field"><label>'+(isShelf?'หมายเลขชั้น':'รหัสแร็ค')+' <span class="req">*</span></label><input id="locScopeNewValue" value="'+esc(current)+'" autocomplete="off"></div>'
+    +'<div class="banner info" style="margin-top:14px;">การแก้ไขจะปรับตำแหน่งลูกทุกช่องและตำแหน่งของกล่องที่อยู่ในขอบเขตนี้ให้ตรงกัน</div></div>'
+    +'<div class="mfoot"><button class="btn ghost" onclick="startAddLocAtScope()">'+(isShelf?'เพิ่มช่องในชั้นนี้':'เพิ่มชั้น/ช่องในแร็คนี้')+'</button><div class="spacer"></div><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" onclick="commitLocScopeEditor()">บันทึกการแก้ไข</button></div>');
+  setTimeout(function(){var i=$('#locScopeNewValue');if(i){i.focus();i.select();}},0);
+}
+window.openLocScopeEditor = openLocScopeEditor;
+function startAddLocAtScope() {
+  var s=_locScopeEdit;if(!s)return;
+  closeModal();
+  var single=$('#locSingleMode'),bulk=$('#locBulkMode');if(single)single.style.display='';if(bulk)bulk.style.display='none';
+  $all('#locModeSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.lmode==='single');});
+  setv('locWh',s.wh);populateZoneSelect('locZone','locZoneOther',s.wh,s.zone);populateRackSelect('locRack','locRackOther',s.wh,s.rack);
+  setv('locShelf',s.shelf||'');setv('locSlot','');locCodeOverride=false;locAutoCode();
+  var form=$('#locSingleMode');if(form)form.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(function(){var i=$('#locSlot');if(i)i.focus();},250);
+}
+window.startAddLocAtScope = startAddLocAtScope;
+function commitLocScopeEditor() {
+  var s=_locScopeEdit, next=val('locScopeNewValue').trim().toUpperCase();if(!s||!next)return toast('กรุณาระบุค่าใหม่',null,'err');
+  var targets=Object.keys(S.locations).filter(function(code){var l=S.locations[code]||{};return (l.wh||'')===s.wh&&(l.zone||'')===s.zone&&(l.rack||'')===s.rack&&(s.shelf===null||String(l.shelf||'')===s.shelf);});
+  if(!targets.length)return toast('ไม่พบข้อมูลที่ต้องการแก้ไข',null,'err');
+  var targetSet={};targets.forEach(function(c){targetSet[c]=true;});var replacements={};
+  for(var i=0;i<targets.length;i++){var old=targets[i],l=S.locations[old],nr=s.shelf===null?next:(l.rack||''),ns=s.shelf===null?(l.shelf||''):next,nc=locBuildCode(l.zone||'',nr,ns,l.slot||'');if(S.locations[nc]&&!targetSet[nc])return toast('แก้ไขไม่ได้','รหัสตำแหน่ง '+nc+' มีอยู่แล้ว','err');replacements[old]={code:nc,loc:Object.assign({},l,{code:nc,rack:nr,shelf:ns})};}
+  targets.forEach(function(c){delete S.locations[c];});Object.keys(replacements).forEach(function(c){var x=replacements[c];S.locations[x.code]=x.loc;});
+  Object.values(S.boxes||{}).forEach(function(b){var l=b.location||{};if((l.wh||'')===s.wh&&(l.zone||'')===s.zone&&(l.rack||'')===s.rack&&(s.shelf===null||String(l.shelf||'')===s.shelf)){if(s.shelf===null)l.rack=next;else l.shelf=next;}});
+  Object.values(S.putaway||{}).forEach(function(l){if(!l)return;if((l.wh||'')===s.wh&&(l.zone||'')===s.zone&&(l.rack||'')===s.rack&&(s.shelf===null||String(l.shelf||'')===s.shelf)){if(s.shelf===null)l.rack=next;else l.shelf=next;}});
+  closeModal();save();renderLocDatalist();renderLocMaster();toast(s.shelf===null?'แก้ไขแร็คแล้ว':'แก้ไขชั้นแล้ว',next,'ok');
+}
+window.commitLocScopeEditor = commitLocScopeEditor;
+
 /* ── rack map: elevation-style visual grid grouped Zone > Rack > Shelf ── */
 function renderLocRackMap(locs, occ) {
   var el = $('#locMapView'); if (!el) return;
   if (!locs.length) { el.innerHTML = '<div class="locmap-empty">ไม่พบตำแหน่งที่ตรงเงื่อนไข</div>'; return; }
   var delIco = DEL_BADGE_SVG;
+  var editIco = '<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"/><path d="m14.2 4.8 5 5"/></svg></span>';
   var jsq = function(s){ return esc(s).replace(/'/g,"\\'"); }; /* safe to embed inside a single-quoted onclick string */
   /* Warehouse is the top grouping level — two warehouses can each have a "Zone A" with
      an "R-01", so grouping starts at wh or racks/zones from different sites would visually
@@ -6343,6 +6557,7 @@ function renderLocRackMap(locs, occ) {
               shOrder.sort(function(a,b){ return (parseInt(b)||0) - (parseInt(a)||0); }); /* top shelf first */
               return '<div class="locmap-rack">'
                 + '<div class="locmap-racklabel">'+esc(r)+' <span class="n">('+rackLocs.length+')</span>'
+                  + '<button class="locmap-edit" onclick="event.stopPropagation();openLocScopeEditor(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\')" title="แก้ไขชื่อแร็ค">'+editIco+'</button>'
                   + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\')" title="ลบทั้งแร็คนี้">'+delIco+'</button>'
                 + '</div>'
                 + shOrder.map(function(sh){
@@ -6350,6 +6565,7 @@ function renderLocRackMap(locs, occ) {
                   return '<div class="locmap-shelfrow">'
                     + '<div class="locmap-shelftag-wrap">'
                       + '<div class="locmap-shelftag">ช'+esc(sh)+'</div>'
+                      + '<button class="locmap-edit" onclick="event.stopPropagation();openLocScopeEditor(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\',\''+jsq(sh)+'\')" title="แก้ไขชั้น">'+editIco+'</button>'
                       + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\',\''+jsq(sh)+'\')" title="ลบทั้งชั้นนี้">'+delIco+'</button>'
                     + '</div>'
                     + slots.map(function(l){
@@ -7011,6 +7227,7 @@ function renderLocMaster() {
             +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> แร็ค '+esc(r)
             +' <span class="tag" style="margin-left:6px;">'+rObj.n+'</span>'
             +' <button class="btn ghost sm" style="padding:2px 9px;font-size:11px;margin-left:8px;" data-hier-print-z="'+esc(z)+'" data-hier-print-r="'+esc(r)+'"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์แร็คนี้</button>'
+            +' <button class="btn ghost sm" style="padding:2px 9px;font-size:11px;margin-left:5px;" data-hier-edit-wh="'+esc(wh)+'" data-hier-edit-z="'+esc(z)+'" data-hier-edit-r="'+esc(r)+'">แก้ไขแร็ค</button>'
             +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" data-hier-del-z="'+esc(z)+'" data-hier-del-r="'+esc(r)+'" title="ลบทั้งแร็คนี้">'+delIco+'</button>'
             +'</td></tr>';
           if (rCol) return;
@@ -7021,6 +7238,7 @@ function renderLocMaster() {
             h += '<tr class="loc-grp-h lvl3'+(shCol?' collapsed':'')+'" data-grp-toggle="'+esc(shKey)+'" style="background:color-mix(in srgb,var(--ink) 1.5%,var(--surface));">'
               +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> ชั้น '+esc(sh)
               +' <span class="tag" style="margin-left:6px;">'+slots.length+' ช่อง</span>'
+              +' <button class="btn ghost sm" style="padding:2px 9px;font-size:11px;margin-left:5px;" data-hier-edit-wh="'+esc(wh)+'" data-hier-edit-z="'+esc(z)+'" data-hier-edit-r="'+esc(r)+'" data-hier-edit-sh="'+esc(sh)+'">แก้ไขชั้น</button>'
               +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" data-hier-del-z="'+esc(z)+'" data-hier-del-r="'+esc(r)+'" data-hier-del-sh="'+esc(sh)+'" title="ลบทั้งชั้นนี้">'+delIco+'</button>'
               +'</td></tr>';
             if (!shCol) h += slots.map(_locRowHtml).join('');
@@ -7064,6 +7282,12 @@ var _locCollapsed = {};
 (function(){
   var body = $('#locBody'); if(!body) return;
   body.addEventListener('click', function(e){
+    var edit = e.target.closest('[data-hier-edit-wh]');
+    if (edit) {
+      e.stopPropagation();
+      openLocScopeEditor(edit.getAttribute('data-hier-edit-wh')||'', edit.getAttribute('data-hier-edit-z')||'', edit.getAttribute('data-hier-edit-r')||'', edit.getAttribute('data-hier-edit-sh'));
+      return;
+    }
     var pr = e.target.closest('[data-hier-print-z]');
     if (pr) {
       e.stopPropagation();
