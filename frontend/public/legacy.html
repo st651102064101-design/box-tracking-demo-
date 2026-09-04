@@ -3772,6 +3772,7 @@ a{color:var(--accentInk);}
         </div>
 
         <div style="flex:0 0 auto;padding:30px 26px 0;text-align:center;">
+          <div id="empBadgeName" style="font-size:31px;font-weight:700;letter-spacing:-.03em;line-height:1.2;"></div>
         </div>
 
         <!-- คำใบ้ชี้ให้พลิกดูด้านหลัง — flex:1 ดันให้คำใบ้อยู่กึ่งกลางพื้นที่ว่างที่เหลือของบัตร
@@ -8074,6 +8075,26 @@ function renderEmpBadgeReturnNote(){
   if(department)department.textContent='หากพบกรุณาส่งคืนบริษัท / '+(APP_BRANDING.returnNoteDepartment||'');
   if(phone)phone.textContent='โทร. '+(APP_BRANDING.returnNotePhone||'');
 }
+function renderEmpBadgeName(e){
+  var wrap=$('#empBadgeName');if(!wrap)return;
+  var name=String(e&&e.name||'').trim();
+  if(name){wrap.textContent=name;wrap.contentEditable='false';wrap.classList.remove('emp-badge-name-editing');return;}
+  wrap.contentEditable='false';wrap.classList.add('emp-badge-name-editing');
+  wrap.innerHTML='<button type="button" aria-label="กรอกชื่อพนักงาน" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();editEmpBadgeName()" style="border:0;background:transparent;color:var(--accentInk);cursor:pointer;font:inherit;display:inline-grid;place-items:center;gap:6px;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z"></path><path d="m14.2 4.8 5 5"></path></svg></span><span style="font-size:13px;">กรอกชื่อพนักงาน</span></button>';
+}
+function editEmpBadgeName(){
+  var wrap=$('#empBadgeName');if(!wrap)return;
+  wrap.classList.add('emp-badge-name-editing');
+  wrap.innerHTML='<span contenteditable="true" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" style="outline:1px dashed var(--accent);outline-offset:4px;cursor:text;display:inline-block;min-width:120px;"></span><button type="button" aria-label="บันทึกชื่อพนักงาน" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();saveEmpBadgeName()" style="margin-left:8px;border:0;background:var(--accent);color:var(--accentContrast);width:34px;height:34px;border-radius:50%;cursor:pointer;vertical-align:middle;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.2 4.2L19 6.5"></path></svg></span></button>';
+  var input=wrap.querySelector('[contenteditable]');if(input){input.focus();}
+}
+function saveEmpBadgeName(){
+  var e=S.employees&&S.employees[empBadge.id],wrap=$('#empBadgeName'),input=wrap&&wrap.querySelector('[contenteditable]');
+  if(!e||!input)return;
+  var name=input.textContent.trim();if(!name)return toast('บันทึกไม่ได้','กรุณากรอกชื่อพนักงาน','err');
+  e.name=name;save();renderEmpBadgeName(e);renderAll();toast('บันทึกชื่อแล้ว',name,'ok');
+}
+window.editEmpBadgeName=editEmpBadgeName;window.saveEmpBadgeName=saveEmpBadgeName;
 function toggleEmpBadgeReturnNoteEdit(){
   var wrap=$('#empBadgeReturnNote'),btn=$('#empBadgeReturnNoteEdit');
   if(!wrap||!btn)return;
@@ -8197,6 +8218,7 @@ function openEmpBadge(id,isSelf){
      EMP_CARD_ORG) เพื่อให้บัตรบนจอกับบัตรที่ออกมาจากเครื่องพิมพ์ตรงกันเป๊ะ */
   var scanCode=String(e.id||empCardScanValue(e)).toUpperCase();
   renderEmpBadgeAvatar(e);
+  renderEmpBadgeName(e);
   setText('empBadgeId',e.id);
   setText('empBadgeRole',e.role||'-');
   setText('empBadgeDept',e.dept||'-');
