@@ -4749,7 +4749,8 @@ function normalizeState(d){
     if(w.status==='inactive')return;
     (w.gates||[]).forEach(function(g){d.gates[g]=w.id;});
   });
-  d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual'};
+  d.events=d.events||[];d.cfg=d.cfg||{agingDays:15,boxValue:450,lostMode:'manual',putawayEnabled:false};
+  if(d.cfg.putawayEnabled===undefined)d.cfg.putawayEnabled=false;
   if(d.cfg.lostMode===undefined)d.cfg.lostMode='manual';d.seq=d.seq||{do:0};
   d.inventory=d.inventory||{};d.auditLog=d.auditLog||[];
   d.vehicles=d.vehicles||{};d.putaway=d.putaway||{};d.doRecords=d.doRecords||{};d.locations=d.locations||{};
