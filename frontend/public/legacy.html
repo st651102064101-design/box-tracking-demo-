@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.184.0/build/three.module.js","three/addons/controls/OrbitControls.js":"https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js"}}
+</script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
@@ -2107,6 +2110,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 #locMapView{padding:16px 18px 20px;}
 .locmap-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;}
 .loc3d-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:.5px solid var(--line);background:var(--surface2)}
+.loc3d-stage{position:relative;height:min(68vh,720px);min-height:520px;overflow:hidden;background:#111316}.loc3d-stage canvas{display:block;width:100%;height:100%;cursor:grab}.loc3d-stage canvas:active{cursor:grabbing}.loc3d-loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);pointer-events:none}
 .loc3d-toolbar>div:first-child{display:grid;gap:3px}.loc3d-scene{min-height:520px;padding:28px;overflow:auto;background:radial-gradient(circle at 50% 0,var(--surface3),var(--surface) 68%);perspective:1200px}
 .loc3d-zone{min-width:max-content;margin:0 0 34px;transform:rotateX(4deg);transform-origin:top center}.loc3d-zone>h4{margin:0 0 14px;color:var(--accent);font-size:14px}
 .loc3d-floor{display:flex;align-items:flex-end;gap:32px;padding:26px 30px 36px;border:1px solid var(--line2);border-radius:18px;background:linear-gradient(135deg,var(--surface2),var(--surface));box-shadow:0 22px 40px rgba(0,0,0,.16);transform:rotateY(-3deg);transform-origin:left center}
@@ -6491,20 +6495,14 @@ window.openLocDrawer=openLocDrawer;
    Location Master only: zone > rack > shelf > slot. */
 function renderLoc3D(){
   var root=$('#loc3dView');if(!root)return;
-  var cmp=function(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});};
   var all=Object.values(S.locations||{}).filter(function(l){return l&&l.wh&&l.zone&&l.rack;});
   var whs=[];all.forEach(function(l){if(whs.indexOf(l.wh)<0)whs.push(l.wh);});
   if(!_loc3dWh||whs.indexOf(_loc3dWh)<0)_loc3dWh=whs[0]||'';
   if(!whs.length){root.innerHTML='<div class="locmap-empty">ยังไม่มีข้อมูลแร็กสำหรับแสดงผล 3D</div>';return;}
-  var occ=locOccupancyMap(),locs=all.filter(function(l){return l.wh===_loc3dWh;}),grouped={};
-  locs.forEach(function(l){var z=l.zone||'—',r=l.rack;(grouped[z]||(grouped[z]={}));(grouped[z][r]||(grouped[z][r]=[])).push(l);});
   var chips=whs.map(function(w){return '<button class="btn sm '+(w===_loc3dWh?'accent':'ghost')+'" onclick="_loc3dWh=\''+esc(w)+'\';renderLoc3D()">'+esc(whName(w))+'</button>';}).join('');
-  var zones=Object.keys(grouped).sort(cmp).map(function(z){
-    var racks=Object.keys(grouped[z]).sort(cmp).map(function(r){var rows=grouped[z][r],shelves={};rows.forEach(function(l){(shelves[String(l.shelf||'—')]||(shelves[String(l.shelf||'—')]=[])).push(l);});
-      var shelfHtml=Object.keys(shelves).sort(cmp).reverse().map(function(sh){var slots=shelves[sh].sort(function(a,b){return cmp(String(a.slot||''),String(b.slot||''));}).map(function(l){return '<button class="loc3d-slot '+(occ[l.code]?'occupied':'')+'" title="'+esc(l.code)+'" onclick="editLocRow(\''+esc(l.code)+'\')"><span>'+esc(l.slot||'—')+'</span></button>';}).join('');return '<div class="loc3d-shelf"><b>'+esc(sh)+'</b><div>'+slots+'</div></div>';}).join('');
-      return '<section class="loc3d-rack"><header><b>'+esc(r)+'</b><button class="iconbtn" onclick="openLocScopeEditor(\''+esc(_loc3dWh)+'\',\''+esc(z)+'\',\''+esc(r)+'\',null)" title="จัดการแร็ก">⋯</button></header><div class="loc3d-frame">'+shelfHtml+'</div></section>';}).join('');
-    return '<article class="loc3d-zone"><h4>โซน '+esc(z)+'</h4><div class="loc3d-floor">'+racks+'</div></article>';}).join('');
-  root.innerHTML='<div class="loc3d-toolbar"><div><b>คลังที่แสดง</b><span class="muted small">เลือกคลังเพื่อดูทุกโซน แร็ก ชั้น และช่อง</span></div><div class="row">'+chips+'</div></div><div class="loc3d-scene">'+zones+'</div>';
+  root.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากเพื่อหมุน · เลื่อนเพื่อซูม · คลิกช่องเพื่อแก้ไข</span></div><div class="row">'+chips+'</div></div><div class="loc3d-stage"><canvas id="loc3dCanvas"></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
+  if(window.LocationWarehouse3D)window.LocationWarehouse3D.mount($('#loc3dCanvas'),all.filter(function(l){return l.wh===_loc3dWh;}),locOccupancyMap(),function(code){editLocRow(code);});
+  else setTimeout(function(){if(_locViewMode==='3d')renderLoc3D();},250);
 }
 window.renderLoc3D=renderLoc3D;
 
@@ -23877,5 +23875,6 @@ document.addEventListener('visibilitychange',()=>{
   setVar();
 })();
 </script>
+<script type="module" src="/loc3d.js"></script>
 </body>
 </html>
