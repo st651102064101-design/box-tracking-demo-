@@ -42,6 +42,10 @@ services:
       - "4001:4000"
 
   frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://host.docker.internal:4001
     image: boxtrace-putaway-test-frontend:latest
     container_name: boxtrace-putaway-test-frontend
     working_dir: /app
