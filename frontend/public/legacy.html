@@ -8298,7 +8298,9 @@ function syncEmpBadgeBack(){
                    :'หลังบัตรมีข้อมูล — กดเพื่อทำให้เป็นกระดาษเปล่า';
     btn.style.background=blank?'var(--accent)':'var(--ink)';
     btn.style.color=blank?'var(--accentContrast)':'var(--surface)';
-    btn.style.display=blank?'grid':'none';
+    /* ปุ่มตั้งค่าสถานะหลังบัตรต้องอยู่ให้กดได้เสมอ ไม่ควรถูกซ่อนเมื่อ
+       สถานะเปลี่ยน เพราะผู้ใช้ต้องใช้ปุ่มนี้เพื่อสลับกลับมาแสดงข้อมูล */
+    btn.style.display='grid';
   }
   var flipBtn=$('#empBadgeFlipBtn');
   if(flipBtn)flipBtn.style.display=blank?'none':'grid';
