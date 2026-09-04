@@ -7125,6 +7125,7 @@ $('#btnAddLoc').onclick = function() {
   }
   var wh = val('locWh'), locZone = locTypeValue('locZone','locZoneOther'), locRack = locTypeValue('locRack','locRackOther');
   if (!locZone) return toast('ยังไม่ได้ระบุโซน', 'กรุณาเลือกหรือกรอกโซนก่อนบันทึก — ตำแหน่งต้องมีโซนเสมอ', 'err');
+  if (!locRack) return toast('ยังไม่ได้ระบุแร็ค', 'กรุณาเลือกหรือกรอกรหัสแร็คก่อนบันทึก — ข้อมูลแร็คห้ามเป็นค่าว่าง', 'err');
   var conflictZone = rackConflictZone(wh, locZone, locRack);
   if (conflictZone && !(editingLoc && S.locations[editingLoc] && (S.locations[editingLoc].zone||'')===locZone))
     return toast('ชื่อแร็คซ้ำ', 'แร็ค '+locRack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
