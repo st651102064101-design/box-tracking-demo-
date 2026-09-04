@@ -7882,7 +7882,9 @@ function empCardFrontHtml(e){
     +'</div>';
 }
 function empCardBackHtml(e){
-  var scanCode=empCardScanValue(e);
+  /* บัตรเสมือนต้องแสดงรหัสเดียวกับพนักงานเสมอ ไม่ใช้ scanCode เก่าหรือค่า
+     ที่มาจากข้อมูลทดสอบคนละชุด เพราะจะทำให้ข้อความใต้ barcode ไม่ตรงกับบัตร */
+  var scanCode=String(e.id||empCardScanValue(e)).toUpperCase();
   return '<div style="'+EMP_CARD_SHELL+'">'
     +empCardNotchHtml()
     +empCardOrgMarkHtml('ข้อมูลบัตร')
@@ -8123,7 +8125,6 @@ function empBadgeBoot(){
   [empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){
     if(btn)btn.classList.add('emp-badge-float-btn');
   });
-  requestAnimationFrame(function(){[empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});});
   empBadge.raf=requestAnimationFrame(empBadgeTick);
   window.addEventListener('keydown',empBadgeOnKey);
   window.addEventListener('pointermove',empBadgeOnMove,{passive:false});
@@ -8194,7 +8195,7 @@ function openEmpBadge(id,isSelf){
 
   /* ค่าที่โชว์บนบัตรบนจอ = ชุดเดียวกับบัตรที่พิมพ์จริง (empCardScanValue/empCardId/
      EMP_CARD_ORG) เพื่อให้บัตรบนจอกับบัตรที่ออกมาจากเครื่องพิมพ์ตรงกันเป๊ะ */
-  var scanCode=empCardScanValue(e);
+  var scanCode=String(e.id||empCardScanValue(e)).toUpperCase();
   renderEmpBadgeAvatar(e);
   setText('empBadgeId',e.id);
   setText('empBadgeRole',e.role||'-');
@@ -8242,10 +8243,8 @@ function openEmpBadge(id,isSelf){
   /* closeEmpBadge() removes is-visible so the fade-out can finish. Re-apply
      it on every open; otherwise reopening without a page refresh leaves the
      action rail transparent forever. */
-  requestAnimationFrame(function(){
-    if(!empBadge.open||!empBadge.el)return;
-    [empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});
-  });
+  empBadge._settleFrames=0;empBadge._buttonsShown=false;
+  if(empBadge.el)[empBadge.el.close,empBadge.el.logout].concat(empBadge.el.actionBtns||[],[empBadge.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.remove('is-visible');});
 }
 window.openEmpBadge=openEmpBadge;
 function closeEmpBadge(){
@@ -8502,6 +8501,12 @@ function empBadgeStep(){
     var alx=204*s+OVERLAY_BTN_GAP;
     var abx=eb.cx+(alx*cth-aly*sth),aby=eb.cy+(alx*sth+aly*cth);
     ab.style.transform='translate('+(abx-21).toFixed(1)+'px,'+(aby-21).toFixed(1)+'px)';
+  }
+  if(!entering&&!eb.drag&&Math.abs(eb.omega)<0.0025&&Math.abs(eb.vx)<0.5)eb._settleFrames=(eb._settleFrames||0)+1;
+  else if(entering||eb.drag)eb._settleFrames=0;
+  if(!eb._buttonsShown&&eb._settleFrames>=12&&eb.el){
+    [eb.el.close,eb.el.logout].concat(eb.el.actionBtns||[],[eb.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});
+    eb._buttonsShown=true;
   }
 }
 (function(){
