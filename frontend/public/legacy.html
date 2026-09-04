@@ -6453,7 +6453,7 @@ $('#btnAddBox').onclick = function() {
        พิกัดจริง (ดู locShort()) — เก็บจากผู้ใช้ตรงนี้แทนตั้งแต่ลงทะเบียน */
     S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
       lot:lot,expiry:expiry,supplier:sup,regAt:regTs,regBy:USER,
-      location:{wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs},lastSeenAt:regTs,labeled:true,
+      location:(S.cfg&&S.cfg.putawayEnabled?{wh:wh,zone:whStaging(wh).zone,rack:whStaging(wh).rack,shelf:'',slot:'',staging:true,gate:null,ts:regTs}:{wh:wh,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTs}),lastSeenAt:regTs,labeled:true,
       /* ขั้น "สร้างข้อมูล" ต้องอยู่ใน history ด้วย ไม่ใช่แค่ field regAt — ไม่งั้น
          stepper ขึ้นติ๊กถูกแต่ไทม์ไลน์ว่าง (ดู boxTimeline) */
       history:[{dir:'reg',ts:regTs,recorder:USER}]};
@@ -6471,7 +6471,7 @@ $('#btnAddBox').onclick = function() {
     for (var i = 0; i < qty; i++) { var n = start + i; var tag = formatBoxTag(n);
       if (!S.boxes[tag]) { var regTsB=iso(); S.boxes[tag] = {tag:tag,type:type,value:value,status:'warehouse',cycles:0,customer:'',do:'',po:'',outGate:null,outWh:'',outAt:null,dueAt:null,
         lot:blot,expiry:bexp,supplier:bsup,regAt:regTsB,regBy:USER,
-        location:{wh:whB,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB},lastSeenAt:regTsB,labeled:true,
+        location:(S.cfg&&S.cfg.putawayEnabled?{wh:whB,zone:whStaging(whB).zone,rack:whStaging(whB).rack,shelf:'',slot:'',staging:true,gate:null,ts:regTsB}:{wh:whB,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:regTsB}),lastSeenAt:regTsB,labeled:true,
         history:[{dir:'reg',ts:regTsB,recorder:USER,note:'สร้างเป็นชุด'}]}; added++; addedTags.push(tag); } }
     if (added) auditEntry('CREATE', USER, formatBoxTag(start)+'…'+formatBoxTag(start+qty-1), 'สร้างเป็นชุด · '+typeName(type), null, {type:type,value:value,qty:added,wh:whB,supplier:bsup,tags:addedTags});
     save(); toast('สร้างกล่องเป็นชุดแล้ว', 'เพิ่ม ' + added + ' ใบ · เข้าคลัง ' + whName(whB) + ' แล้ว'); renderPrefixDatalist(); renderAll();
@@ -6660,7 +6660,11 @@ var DEFAULT_STAGING={zone:'พื้นที่รับของขาเข�
 function whStaging(whId){var w=S.warehouses[whId]||{};
   return {zone:(w.stagingZone||DEFAULT_STAGING.zone),rack:(w.stagingRack||DEFAULT_STAGING.rack)};}
 /* True if a location is a staging point (explicit flag, or configured/legacy staging rack, or empty) */
-function isStagingLoc(loc){ return false; } /* SOW: no Putaway/staging */
+function isStagingLoc(loc){
+  if(!(S.cfg&&S.cfg.putawayEnabled))return false;
+  loc=loc||{};var st=whStaging(loc.wh);
+  return !!(loc.staging===true||(loc.zone===st.zone&&loc.rack===st.rack&&(!loc.shelf&&!loc.slot)));
+}
 /* Human label for a staging location — shows the actual configured zone/rack, not a hardcoded value */
 function stagingLabel(loc){loc=loc||{};var st=whStaging(loc.wh);
   var zone=loc.zone||st.zone,rack=loc.rack||st.rack;
