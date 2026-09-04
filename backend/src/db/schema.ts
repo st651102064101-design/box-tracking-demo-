@@ -91,6 +91,7 @@ export const config = pgTable('config', {
   agingDays: integer('aging_days').notNull().default(15),
   boxValue: numeric('box_value').notNull().default('450'),
   lostMode: text('lost_mode').notNull().default('manual'),
+  putawayEnabled: boolean('putaway_enabled').notNull().default(false),
   systemName: text('system_name').notNull().default('Smart Tracking'),
   subtitle: text('subtitle').notNull().default('WMS · เฟส 1 · Returnable Asset Tracking'),
   logoData: text('logo_data'),

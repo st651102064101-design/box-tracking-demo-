@@ -132,8 +132,8 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 
   const cfgRow = cfgRows[0];
   const cfg = cfgRow
-    ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode }
-    : { agingDays: 15, boxValue: 450, lostMode: 'manual' };
+    ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode, putawayEnabled: cfgRow.putawayEnabled }
+    : { agingDays: 15, boxValue: 450, lostMode: 'manual', putawayEnabled: false };
 
   return {
     boxes: mapBy(boxRows, (r) => r.tag),
@@ -349,6 +349,7 @@ export async function replaceState(
         agingDays: toInt(cfg.agingDays) ?? 15,
         boxValue: toNumStr(cfg.boxValue) ?? '450',
         lostMode: (cfg.lostMode as string) ?? 'manual',
+        putawayEnabled: Boolean(cfg.putawayEnabled),
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -357,6 +358,7 @@ export async function replaceState(
           agingDays: toInt(cfg.agingDays) ?? 15,
           boxValue: toNumStr(cfg.boxValue) ?? '450',
           lostMode: (cfg.lostMode as string) ?? 'manual',
+          putawayEnabled: Boolean(cfg.putawayEnabled),
           updatedAt: new Date(),
         },
       });
