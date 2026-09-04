@@ -8505,9 +8505,9 @@ function empBadgeStep(){
     var abx=eb.cx+(alx*cth-aly*sth),aby=eb.cy+(alx*sth+aly*cth);
     ab.style.transform='translate('+(abx-21).toFixed(1)+'px,'+(aby-21).toFixed(1)+'px)';
   }
-  if(!entering&&!eb.drag&&Math.abs(eb.omega)<0.0025&&Math.abs(eb.vx)<0.5)eb._settleFrames=(eb._settleFrames||0)+1;
-  else if(entering||eb.drag)eb._settleFrames=0;
-  if(!eb._buttonsShown&&eb._settleFrames>=12&&eb.el){
+  /* เริ่ม fade-in ทันทีเมื่อบัตรลงถึงจุดปลายทางครั้งแรก ไม่ต้องรอให้แรงแกว่ง
+     ของบัตรหรือเชือกหยุดนิ่ง เพราะผู้ใช้ต้องการให้ปุ่มพร้อมใช้งานเร็วขึ้น */
+  if(!eb._buttonsShown&&eb.anchor.y>=eb.anchorTargetY&&!eb.drag&&eb.el){
     [eb.el.close,eb.el.logout].concat(eb.el.actionBtns||[],[eb.el.flipBtn]).forEach(function(btn){if(btn)btn.classList.add('is-visible');});
     eb._buttonsShown=true;
   }
