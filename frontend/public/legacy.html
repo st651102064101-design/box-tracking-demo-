@@ -4608,7 +4608,7 @@ var MY_EMPLOYEE_ID=JWT_CLAIMS.employeeId||null;
      1) ?api=http://192.168.3.128:4000  (จำลง localStorage ให้เลย)
      2) localStorage 'smarttrace_api_root'
      3) auto — ถ้า origin ปัจจุบันเรียก /api ไม่ได้ สลับไป http://<host>:4000 เอง */
-var API_PORT='4000';
+var API_PORT=location.port==='3002'?'4001':'4000';
 var API_ROOT=(function(){
   var q='';try{q=new URLSearchParams(location.search).get('api')||'';}catch(e){}
   if(q){try{localStorage.setItem('smarttrace_api_root',q.replace(/\/+$/,''));}catch(e){}}
