@@ -42,7 +42,7 @@ services:
       - "4001:4000"
 
   frontend:
-    image: box-tracking-demo--frontend:latest
+    image: boxtrace-putaway-test-frontend:latest
     container_name: boxtrace-putaway-test-frontend
     working_dir: /app
     command: ["npm", "run", "start"]
