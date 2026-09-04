@@ -8225,7 +8225,7 @@ function openEmpBadge(id,isSelf){
   setText('empBadgeIdBack',e.id);
   setText('empBadgeScanCode',scanCode);
   setText('empBadgeFrontScanCode',scanCode);
-  setText('empBadgeCardId',empCardId(e));
+  setText('empBadgeCardId',e.id||'-');
   setText('empBadgeValidUntil',EMP_CARD_ORG.validUntil);
   renderEmpBadgeReturnNote();
   var bc=$('#empBadgeBarcode');if(bc)bc.innerHTML=code128SVG(scanCode,86);
