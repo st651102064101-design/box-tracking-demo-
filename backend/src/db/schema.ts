@@ -269,7 +269,7 @@ export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),
   zone: text('zone'),
-  rack: text('rack'),
+  rack: text('rack').notNull(),
   shelf: text('shelf'),
   slot: text('slot'),
   type: text('type'),

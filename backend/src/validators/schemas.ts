@@ -41,6 +41,9 @@ export const updateRoleSchema = z.object({
  * shape of every record, so we accept it verbatim and never reject valid data.
  * Typed columns are extracted best-effort on the server side. */
 const record = z.record(z.any());
+const locationRecord = z.record(
+  z.object({ rack: z.string().trim().min(1, 'Location rack is required') }).passthrough(),
+);
 export const stateSchema = z.object({
   boxes: record.optional().default({}),
   customers: record.optional().default({}),
@@ -63,7 +66,7 @@ export const stateSchema = z.object({
   putaway: record.optional().default({}),
   doRecords: record.optional().default({}),
   employees: record.optional().default({}),
-  locations: record.optional().default({}),
+  locations: locationRecord.optional().default({}),
   inventory: record.optional().default({}),
   auditLog: z.array(z.any()).optional().default([]),
 });

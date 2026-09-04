@@ -605,11 +605,13 @@ export async function replaceState(
       'code',
       Object.entries(s.locations ?? {}).map(([code, raw]) => {
         const l = raw as Record<string, unknown>;
+        const rack = typeof l.rack === 'string' ? l.rack.trim() : '';
+        if (!rack) throw new Error(`Location ${code} requires a rack`);
         return {
           code,
           wh: (l.wh as string) ?? null,
           zone: (l.zone as string) ?? null,
-          rack: (l.rack as string) ?? null,
+          rack,
           shelf: (l.shelf as string) ?? null,
           slot: (l.slot as string) ?? null,
           type: (l.type as string) ?? null,

@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS locations (
   code       TEXT PRIMARY KEY,
   wh         TEXT,
   zone       TEXT,
-  rack       TEXT,
+  rack       TEXT NOT NULL,
   shelf      TEXT,
   slot       TEXT,
   type       TEXT,
@@ -400,6 +400,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
   data        JSONB NOT NULL DEFAULT '{}'::jsonb,
   ts          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Location Master records must always identify their physical rack. Older
+-- snapshots may have stored NULL; preserve those rows under an explicit
+-- migration marker so the column can be made structurally non-null.
+UPDATE locations
+SET rack = COALESCE(NULLIF(BTRIM(rack), ''), NULLIF(BTRIM(data->>'rack'), ''), 'UNASSIGNED')
+WHERE rack IS NULL OR BTRIM(rack) = '';
+ALTER TABLE locations ALTER COLUMN rack SET NOT NULL;
 
 -- Durable automatic LINE outbox. A stable business key prevents duplicate
 -- pushes after a repeated RFID scan, scheduler overlap, or container restart.
