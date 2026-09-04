@@ -2996,6 +2996,7 @@ a{color:var(--accentInk);}
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
     <button class="btn ghost sm stab" data-stab="cust"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> ลูกค้า<span class="sf-badge" data-stab-badge="cust"></span></button>
     <button class="btn ghost sm stab" data-stab="emp"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span> พนักงาน<span class="sf-badge" data-stab-badge="emp"></span></button>
+    <button class="btn ghost sm stab" data-stab="loc" id="stabLoc" style="display:none;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> Master Rack<span class="sf-badge" data-stab-badge="loc"></span></button>
     <button class="btn ghost sm stab" data-stab="role" id="stabRole"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 8.5-4.1-.9-7-4.3-7-8.5V6Z"/><path d="m9.2 12.2 2 2 3.6-3.9"/></svg></span> บทบาทและสิทธิ์<span class="sf-badge" data-stab-badge="role"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
@@ -3521,6 +3522,7 @@ a{color:var(--accentInk);}
        (backend/src/lib/permissions.ts) แอดมินเลือกได้ แต่สร้าง key ใหม่เองไม่ได้
        ตัวเลือกที่เห็นในหน้านี้จึงโหลดมาจาก GET /api/roles/permissions ไม่ได้ hardcode ไว้
        ที่นี่ ไม่งั้นสองฝั่งจะเพี้ยนกันเมื่อมี permission ใหม่ -->
+  <div class="ssec" id="ssec-loc" style="display:none;"><div class="card hover"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3Z"/><path d="M3 10h18M9 5v14M16 5v14"/></svg></span> Master Rack / Location</h3><p class="desc">จัดการตำแหน่งจัดเก็บสำหรับ Putaway — ใช้ข้อมูลตำแหน่งเดิมในระบบ</p><div class="grid g4"><div class="field"><label>รหัสตำแหน่ง</label><input id="locCode" placeholder="A-R01-1-01"></div><div class="field"><label>คลัง</label><select id="locWh"></select></div><div class="field"><label>โซน</label><input id="locZone" placeholder="A"></div><div class="field"><label>แร็ค</label><input id="locRack" placeholder="R01"></div><div class="field"><label>ชั้น</label><input id="locShelf" placeholder="1"></div><div class="field"><label>ช่อง</label><input id="locSlot" placeholder="01"></div></div><div class="row" style="margin-top:16px;"><button class="btn accent" onclick="saveOptionalLocation()">บันทึกตำแหน่ง</button><button class="btn ghost" onclick="clearOptionalLocationForm()">ล้างฟอร์ม</button></div></div><div class="tablecard"><div class="tablehead"><h4>ตำแหน่งที่ลงทะเบียน</h4><span class="tag" id="cntLoc"></span></div><div class="twrap"><table><thead><tr><th>รหัส</th><th>คลัง</th><th>โซน</th><th>แร็ค</th><th>ชั้น</th><th>ช่อง</th><th>จัดการ</th></tr></thead><tbody id="locBody"></tbody></table></div></div></div>
   <div class="ssec" id="ssec-role" style="display:none;">
     <!-- การ์ดฟอร์ม: ซ่อนไว้ในหน้า แล้ว openCardDrawer() ยืมไปแสดงใน side drawer
          ตอนกด "เพิ่มบทบาท"/"แก้ไข" เหมือนฟอร์มพนักงาน (ห้ามลบ/ห้ามใส่ display:none
@@ -6018,6 +6020,16 @@ function restoreLastTab(){
   if(cur&&cur.dataset.tab===want)return;   /* อยู่ถูกแท็บแล้ว ไม่ต้อง render ซ้ำ */
   switchTab(want);
 }
+function renderOptionalLocation(){
+  var tab=$('#stabLoc');if(tab)tab.style.display=S.cfg&&S.cfg.putawayEnabled?'':'none';
+  var sec=$('#ssec-loc');if(sec&&!(S.cfg&&S.cfg.putawayEnabled))sec.style.display='none';
+  var sel=$('#locWh');if(sel)sel.innerHTML=Object.values(S.warehouses||{}).map(function(w){return '<option value="'+esc(w.id)+'">'+esc(w.name||w.id)+'</option>';}).join('');
+  var rows=Object.values(S.locations||{}),body=$('#locBody');if(body)body.innerHTML=rows.length?rows.map(function(l){return '<tr><td class="mono"><b>'+esc(l.code)+'</b></td><td>'+esc(l.wh||'-')+'</td><td>'+esc(l.zone||'-')+'</td><td>'+esc(l.rack||'-')+'</td><td>'+esc(l.shelf||'-')+'</td><td>'+esc(l.slot||'-')+'</td><td><button class="btn sm red" onclick="deleteOptionalLocation(\''+esc(l.code)+'\')">ลบ</button></td></tr>';}).join(''):emptyRow(7,'ยังไม่มีตำแหน่ง');var cnt=$('#cntLoc');if(cnt)cnt.textContent=rows.length+' ตำแหน่ง';
+}
+function saveOptionalLocation(){if(!(S.cfg&&S.cfg.putawayEnabled))return toast('Putaway ปิดอยู่','','err');var code=val('locCode').trim().toUpperCase();if(!code)return toast('กรุณาระบุรหัสตำแหน่ง','','err');S.locations=S.locations||{};S.locations[code]={code:code,wh:val('locWh'),zone:val('locZone'),rack:val('locRack'),shelf:val('locShelf'),slot:val('locSlot'),type:'',note:''};save().then(function(){renderAll();toast('บันทึกตำแหน่งแล้ว','','ok');});}
+function clearOptionalLocationForm(){['locCode','locZone','locRack','locShelf','locSlot'].forEach(function(id){var e=$('#'+id);if(e)e.value='';});}
+function deleteOptionalLocation(code){if(!S.locations||!S.locations[code])return;delete S.locations[code];save().then(function(){renderAll();toast('ลบตำแหน่งแล้ว','','ok');});}
+window.renderOptionalLocation=renderOptionalLocation;window.saveOptionalLocation=saveOptionalLocation;window.clearOptionalLocationForm=clearOptionalLocationForm;window.deleteOptionalLocation=deleteOptionalLocation;
 function goSetup(stab){
   switchTab('setup');
   setTimeout(function(){
@@ -15558,7 +15570,7 @@ $('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-c
 
 /* ===== RENDER ALL ===== */
 function renderAll(){
-  renderOverview();renderReports();renderSetup();renderTrack();
+  renderOverview();renderReports();renderSetup();renderOptionalLocation();renderTrack();
   buildQuickOut();buildQuickIn();buildQuickTrack();
   renderOutResult();renderInResult();renderVehicleQuick();
   refreshGateDisplays();
