@@ -19,7 +19,7 @@ services:
       retries: 20
 
   backend:
-    image: boxtrace-backend:latest
+    image: boxtrace-putaway-test-backend:latest
     container_name: boxtrace-putaway-test-backend
     working_dir: /app
     command: sh -c "node dist/db/migrate.js && node dist/seed.js && node dist/index.js"

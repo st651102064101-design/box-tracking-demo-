@@ -3522,7 +3522,162 @@ a{color:var(--accentInk);}
        (backend/src/lib/permissions.ts) แอดมินเลือกได้ แต่สร้าง key ใหม่เองไม่ได้
        ตัวเลือกที่เห็นในหน้านี้จึงโหลดมาจาก GET /api/roles/permissions ไม่ได้ hardcode ไว้
        ที่นี่ ไม่งั้นสองฝั่งจะเพี้ยนกันเมื่อมี permission ใหม่ -->
-  <div class="ssec" id="ssec-loc" style="display:none;"><div class="card hover"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3Z"/><path d="M3 10h18M9 5v14M16 5v14"/></svg></span> Master Rack / Location</h3><p class="desc">จัดการตำแหน่งจัดเก็บสำหรับ Putaway — ใช้ข้อมูลตำแหน่งเดิมในระบบ</p><div class="grid g4"><div class="field"><label>รหัสตำแหน่ง</label><input id="locCode" placeholder="A-R01-1-01"></div><div class="field"><label>คลัง</label><select id="locWh"></select></div><div class="field"><label>โซน</label><input id="locZone" placeholder="A"></div><div class="field"><label>แร็ค</label><input id="locRack" placeholder="R01"></div><div class="field"><label>ชั้น</label><input id="locShelf" placeholder="1"></div><div class="field"><label>ช่อง</label><input id="locSlot" placeholder="01"></div></div><div class="row" style="margin-top:16px;"><button class="btn accent" onclick="saveOptionalLocation()">บันทึกตำแหน่ง</button><button class="btn ghost" onclick="clearOptionalLocationForm()">ล้างฟอร์ม</button></div></div><div class="tablecard"><div class="tablehead"><h4>ตำแหน่งที่ลงทะเบียน</h4><span class="tag" id="cntLoc"></span></div><div class="twrap"><table><thead><tr><th>รหัส</th><th>คลัง</th><th>โซน</th><th>แร็ค</th><th>ชั้น</th><th>ช่อง</th><th>จัดการ</th></tr></thead><tbody id="locBody"></tbody></table></div></div></div>
+  <div class="ssec" id="ssec-loc" style="display:none;">
+    <div class="card hover">
+      <h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> ตำแหน่งแร็ค / ชั้นวาง (Location Master)</h3>
+      <p class="desc">ลงทะเบียนตำแหน่งชั้นวาง — รหัสป้ายสร้างอัตโนมัติ ซื้อแร็คมาใหม่ใช้ <b>Bulk Generate</b> สร้างทุก Slot ได้ในคลิกเดียว พนักงานสแกนป้ายที่ชั้นวางก่อนสแกนกล่องใน Putaway</p>
+
+      <!-- Mode switcher -->
+      <div class="inv-view-sw" id="locModeSw" style="margin-bottom:18px;">
+        <button class="ivs-btn active" data-lmode="single"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มทีละตำแหน่ง</button>
+        <button class="ivs-btn" data-lmode="bulk"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> Bulk Generate (ซื้อแร็คใหม่)</button>
+      </div>
+
+      <!-- Single mode -->
+      <div id="locSingleMode">
+        <div class="grid g4" style="margin-bottom:14px;">
+          <div class="field"><label>คลัง <span class="req">*</span></label><select id="locWh" onchange="suggestSingleZone();suggestSingleRack();locAutoCode()"></select></div>
+          <div class="field"><label>โซน</label>
+            <select id="locZone" onchange="toggleLocTypeOther('locZone','locZoneOther');locAutoCode();"></select>
+            <input id="locZoneOther" placeholder="ระบุโซนใหม่ เช่น A" autocomplete="off" style="display:none;margin-top:8px;" oninput="locAutoCode()">
+          </div>
+          <div class="field"><label>แร็ค</label>
+            <select id="locRack" onchange="toggleLocTypeOther('locRack','locRackOther');locAutoCode();"></select>
+            <input id="locRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locAutoCode()">
+          </div>
+          <div class="field"><label>ชั้น (Shelf)</label>
+            <div class="auto-tag-row">
+              <input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="addLocFieldValue('locShelf')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
+          <div class="field"><label>ช่อง (Slot)</label>
+            <div class="auto-tag-row">
+              <input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()">
+              <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="addLocFieldValue('locSlot')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
+          <div class="field"><label>ประเภทแร็ค</label>
+            <select id="locType" onchange="toggleLocTypeOther('locType','locTypeOther')">
+              <option value="Selective">Selective (ทั่วไป)</option>
+              <option value="Drive-in">Drive-in</option>
+              <option value="Flow">Flow Rack</option>
+              <option value="Cantilever">Cantilever</option>
+              <option value="Pallet">Pallet Rack</option>
+              <option value="__other__">อื่นๆ (กำหนดเอง)</option>
+            </select>
+            <input id="locTypeOther" placeholder="ระบุประเภทแร็ค" autocomplete="off" style="display:none;margin-top:8px;">
+          </div>
+          <div class="field"><label>หมายเหตุ</label><input id="locNote" placeholder="เช่น น้ำหนักสูงสุด 500 กก." autocomplete="off"></div>
+          <div class="field"><label>รหัสตำแหน่ง / บาร์โค้ดป้าย <span class="req">*</span></label>
+            <div class="auto-tag-row">
+              <input id="locCode" readonly style="font-family:var(--mono);" placeholder="สร้างอัตโนมัติ">
+              <button type="button" class="iconbtn" id="btnRegenLocCode" title="สร้างรหัสใหม่"><span class="svgi hoverspin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2L20 9M20 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2L4 15M4 20v-5h5"/></svg></span></button>
+              <button type="button" class="iconbtn" id="btnCopyLocCode" title="คัดลอก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></span></button>
+              <button type="button" class="btn ghost sm" id="btnOverrideLocCode">แก้เอง</button>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:4px;">
+          <button class="btn accent" id="btnAddLoc">บันทึกตำแหน่ง</button>
+          <button class="btn gray" id="btnCancelLoc" style="display:none;">ยกเลิกแก้ไข</button>
+          <div class="spacer"></div>
+          <button class="btn ghost sm" onclick="openLocationLabelTool()" title="สร้างบาร์โค้ดป้ายแบบกำหนดเอง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> สร้างป้ายแบบกำหนดเอง</button>
+        </div>
+      </div>
+
+      <!-- Bulk Generate mode -->
+      <div id="locBulkMode" style="display:none;">
+        <div class="banner info" style="margin-bottom:14px;"><span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><div>ระบุข้อมูลแร็ค 1 ชุด ระบบจะสร้างตำแหน่งทุก ชั้น × ช่อง ให้อัตโนมัติ<br><span class="muted small">เช่น โซน A · แร็ค R-03 · 4 ชั้น · 5 ช่อง/ชั้น → สร้าง 20 ตำแหน่ง (A-R03-1-01 ถึง A-R03-4-05)</span></div></div>
+        <div class="grid g4" style="margin-bottom:14px;">
+          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bulkLocWh"></select></div>
+          <div class="field"><label>โซน</label>
+            <select id="bulkLocZone" onchange="toggleLocTypeOther('bulkLocZone','bulkLocZoneOther');suggestBulkRack();locBulkPreview();"></select>
+            <input id="bulkLocZoneOther" placeholder="ระบุโซนใหม่ เช่น A" autocomplete="off" style="display:none;margin-top:8px;" oninput="locBulkPreview()">
+          </div>
+          <div class="field"><label>แร็ค <span class="req">*</span></label>
+            <select id="bulkLocRack" onchange="toggleLocTypeOther('bulkLocRack','bulkLocRackOther');locBulkPreview();"></select>
+            <input id="bulkLocRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locBulkPreview()">
+          </div>
+          <div class="field"><label>ประเภทแร็ค</label>
+            <select id="bulkLocType" onchange="toggleLocTypeOther('bulkLocType','bulkLocTypeOther')">
+              <option value="Selective">Selective (ทั่วไป)</option>
+              <option value="Drive-in">Drive-in</option>
+              <option value="Flow">Flow Rack</option>
+              <option value="Cantilever">Cantilever</option>
+              <option value="Pallet">Pallet Rack</option>
+              <option value="__other__">อื่นๆ (กำหนดเอง)</option>
+            </select>
+            <input id="bulkLocTypeOther" placeholder="ระบุประเภทแร็ค" autocomplete="off" style="display:none;margin-top:8px;">
+          </div>
+          <div class="field"><label>จำนวนชั้น <span class="req">*</span></label><select id="bulkLocShelves" onchange="locBulkPreview()"></select></div>
+          <div class="field"><label>จำนวนช่อง/ชั้น <span class="req">*</span></label><select id="bulkLocSlots" onchange="locBulkPreview()"></select></div>
+          <!-- เลขเริ่มต้นชั้น/ช่อง คำนวณอัตโนมัติจากข้อมูลแร็คที่มีอยู่แล้ว (ต่อเลขให้เอง) — ไม่ให้ผู้ใช้กรอกเองเพื่อกันเลขชนหรือเว้นช่องว่างโดยไม่ตั้งใจ -->
+          <input type="hidden" id="bulkLocShelfStart" value="1">
+          <input type="hidden" id="bulkLocSlotStart" value="1">
+        </div>
+        <div id="locBulkPreviewBox" class="banner" style="margin-bottom:14px;display:none;"></div>
+        <div class="row">
+          <button class="btn accent" id="btnBulkGenLoc"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> Generate ตำแหน่งทั้งหมด</button>
+        </div>
+      </div>
+    </div>
+    <div class="tablecard">
+      <div class="tablehead" style="flex-wrap:wrap;gap:8px;">
+        <h4>รายการตำแหน่งแร็ค</h4><span class="tag" id="cntLoc"></span>
+        <span class="loc-occ-mini" id="locOccMini"></span>
+        <div class="spacer"></div>
+        <div class="inv-view-sw" id="locViewSw">
+          <button class="ivs-btn active" data-lview="map"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> ผังแร็ค</button>
+          <button class="ivs-btn" data-lview="table"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span> ตาราง</button>
+        </div>
+        <button class="btn ghost sm" onclick="openImportModal('loc')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
+        <button class="btn ghost sm" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+        <button class="btn ghost sm" onclick="printFilteredLocLabels()" title="พิมพ์บาร์โค้ดป้ายเฉพาะที่กรองอยู่"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้าย (ที่กรอง)</button>
+        <button class="btn ghost sm" id="btnClearOrphanLoc" style="display:none;color:var(--neg);" title="ลบตำแหน่งที่ไม่มีโซน (ข้อมูลตกค้างจากบั๊กเดิม)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ล้างตำแหน่งไม่มีโซน</button>
+      </div>
+      <!-- Apple-style filter bar — rendered by JS into #locFilterBar -->
+      <div class="loc-filter-bar" id="locFilterBar" style="border-bottom:.5px solid var(--line);">
+        <!-- search -->
+        <div class="loc-search-row">
+          <div class="loc-search-wrap">
+            <span class="lsw-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span></span>
+            <input id="schLoc" placeholder="ค้นหา รหัส · แร็ค · โซน · ประเภท..." oninput="renderLocMaster()">
+          </div>
+          <!-- hidden state inputs — driven by chip JS, read by renderLocMaster -->
+          <input type="hidden" id="filtLocWh">
+          <input type="hidden" id="filtLocZone">
+          <input type="hidden" id="filtLocRack">
+          <input type="hidden" id="filtLocType">
+          <input type="hidden" id="locGroupBy">
+          <input type="hidden" id="locSortKey" value="natural">
+        </div>
+        <!-- dynamic chip rows rendered by buildLocChips() -->
+        <div class="loc-filter-chips-row" id="locChipsRow"></div>
+      </div>
+      <div class="loc-legend" id="locLegend">
+        <span><i class="loc-dot e"></i> ว่าง — พร้อมวางกล่อง</span>
+        <span><i class="loc-dot o"></i> มีของ — มีกล่องอยู่แล้ว</span>
+        <span class="muted small" style="margin-left:auto;">คลิกที่ช่องบนผังเพื่อสแกนจัดเก็บ (Putaway) · คลิกแถวในมุมมองตารางเพื่อแก้ไขตำแหน่ง</span>
+      </div>
+      <!-- Rack Map view: visual elevation grid, color = occupied/empty -->
+      <div id="locMapView"></div>
+      <!-- Table view -->
+      <div id="locTableView" style="display:none;">
+        <div class="bulkbar" id="bulkLoc" style="display:none;">
+          <span class="bcnt" id="bulkLocCnt"></span>
+          <button class="btn sm ghost" id="bulkLocLabel">พิมพ์ป้าย</button>
+          <button class="btn sm red" id="bulkLocDel">ลบที่เลือก</button>
+          <button class="btn sm gray" id="bulkLocClear">ยกเลิก</button>
+        </div>
+        <div class="twrap"><table><thead><tr>
+          <th class="cb-th"><input type="checkbox" class="row-cb" id="cbAllLoc" title="เลือกทั้งหมด"></th>
+          <th>รหัส / บาร์โค้ด</th><th>สถานะ</th><th>คลัง</th><th>โซน</th><th>แร็ค</th><th>ชั้น</th><th>ช่อง</th><th>ประเภท</th><th>หมายเหตุ</th><th class="c">ป้าย</th><th></th>
+        </tr></thead><tbody id="locBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
   <div class="ssec" id="ssec-role" style="display:none;">
     <!-- การ์ดฟอร์ม: ซ่อนไว้ในหน้า แล้ว openCardDrawer() ยืมไปแสดงใน side drawer
          ตอนกด "เพิ่มบทบาท"/"แก้ไข" เหมือนฟอร์มพนักงาน (ห้ามลบ/ห้ามใส่ display:none
@@ -6021,16 +6176,1209 @@ function restoreLastTab(){
   if(cur&&cur.dataset.tab===want)return;   /* อยู่ถูกแท็บแล้ว ไม่ต้อง render ซ้ำ */
   switchTab(want);
 }
+/* ===== Location Master (Rack/Bin) — S.locations ===== */
+var editingLoc = null;
+var locCodeOverride = false; /* tracks if user manually overrode the auto code */
+
+/* ── auto-generate location code from zone+rack+shelf+slot ── */
+function locBuildCode(zone, rack, shelf, slot) {
+  var parts = [zone, rack, shelf && pad(Number(shelf)||0,1), slot && pad(Number(slot)||0,2)].filter(Boolean);
+  return parts.join('-').toUpperCase();
+}
+function locAutoCode() {
+  if (locCodeOverride) return; /* user manually typed → don't overwrite */
+  var code = locBuildCode(locTypeValue('locZone','locZoneOther'), locTypeValue('locRack','locRackOther'), val('locShelf'), val('locSlot'));
+  var inp = $('#locCode');
+  if (inp) { inp.value = code; inp.style.opacity = code ? '1' : ''; }
+}
+window.locAutoCode = locAutoCode;
+
+/* ประเภทแร็ค: เลือก "อื่นๆ" แล้วโชว์ช่องกรอกเองแทน — ให้เพิ่มประเภทที่ไม่มีใน list ได้ */
+function toggleLocTypeOther(selId, otherId) {
+  var sel = $('#'+selId), inp = $('#'+otherId); if (!sel || !inp) return;
+  inp.style.display = sel.value === '__other__' ? '' : 'none';
+  if (sel.value === '__other__') inp.focus();
+}
+window.toggleLocTypeOther = toggleLocTypeOther;
+function locTypeValue(selId, otherId) {
+  var sel = $('#'+selId), inp = $('#'+otherId);
+  if (sel && sel.value === '__other__') return (inp && inp.value.trim()) || '';
+  return sel ? sel.value : '';
+}
+window.locTypeValue = locTypeValue;
+
+/* ชั้น/ช่อง เป็น input + datalist อยู่แล้ว (พิมพ์ค่าใหม่ได้อิสระ ไม่ใช่ select
+   ปิดตายแบบโซน/แร็ค) — ปุ่ม "+" นี้แค่ล้างค่าเดิม โฟกัส และเปิด picker ให้เห็นตัวเลือก
+   ที่มีอยู่ทันที ให้ชัดเจนว่าเพิ่มค่าใหม่ได้ตรงนี้เลย ไม่ต้องเดา */
+function addLocFieldValue(inputId) {
+  var el = $('#'+inputId); if (!el) return;
+  el.value = '';
+  el.focus();
+  if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (e) {} }
+  locAutoCode();
+}
+window.addLocFieldValue = addLocFieldValue;
+
+/* ── heal Location Master rows that boxes reference but were never registered ──
+   The 3D warehouse view and box records themselves fall back to a box's own
+   `location` field, so a rack can look fully populated there while Location
+   Master (which only ever reads S.locations) shows 0 — e.g. seedDemo() used
+   to stamp boxes straight into random zone/rack/shelf/slot without ever
+   creating the matching master row. Called at boot (for data already in this
+   state) and from seedDemo() (so freshly-seeded data never regresses). */
+function backfillLocationsFromBoxes() {
+  var added = 0;
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'warehouse') return;
+    var l = b.location; if (!l || (!l.zone && !l.rack)) return;
+    var code = locBuildCode(l.zone, l.rack, l.shelf, l.slot); if (!code) return;
+    if (!S.locations[code]) {
+      S.locations[code] = { code: code, wh: l.wh||'', zone: l.zone||'', rack: l.rack||'',
+        shelf: String(l.shelf||''), slot: l.slot ? pad(Number(l.slot)||0,2) : '', type: '', note: '' };
+      added++;
+    }
+  });
+  return added;
+}
+window.backfillLocationsFromBoxes = backfillLocationsFromBoxes;
+
+/* ── heal pre-existing "รอติดบาร์โค้ด" boxes stuck at loc-none ──
+   pendingStageLocation() only runs for *newly* created boxes — any box
+   registered before that fix shipped is still sitting on the old empty
+   location and needs the same one-time repair backfillLocationsFromBoxes()
+   already does for a different gap. Called at boot right alongside it. */
+function backfillStagingForPending() {
+  var fixed = 0;
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'pending' || b.labeled === true) return;
+    if (isStagingLoc(b.location||{})) return;
+    b.location = pendingStageLocation(b.location&&b.location.ts || b.regAt || iso());
+    fixed++;
+  });
+  return fixed;
+}
+window.backfillStagingForPending = backfillStagingForPending;
+
+/* ── occupancy: which location codes currently hold a box ──
+   Built from live S.boxes rather than a stored field, so it can never go
+   stale — a box's location is always the single source of truth. */
+function locOccupancyMap() {
+  var map = {};
+  Object.values(S.boxes||{}).forEach(function(b){
+    if (b.status !== 'warehouse') return;
+    var l = b.location; if (!l || !l.zone && !l.rack) return;
+    var code = locBuildCode(l.zone, l.rack, l.shelf, l.slot);
+    if (!code) return;
+    map[code] = (map[code]||0) + 1;
+  });
+  return map;
+}
+
+/* ── view switcher: rack map vs table ── */
+var _locViewMode = 'map';
+(function(){
+  var sw = $('#locViewSw'); if (!sw) return;
+  sw.addEventListener('click', function(e){
+    var btn = e.target.closest('.ivs-btn'); if (!btn) return;
+    $all('#locViewSw .ivs-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    _locViewMode = btn.dataset.lview;
+    var map = $('#locMapView'), tbl = $('#locTableView');
+    if (map) map.style.display = _locViewMode === 'map' ? '' : 'none';
+    if (tbl) tbl.style.display = _locViewMode === 'table' ? '' : 'none';
+  });
+})();
+
+/* ── rack map: elevation-style visual grid grouped Zone > Rack > Shelf ── */
+function renderLocRackMap(locs, occ) {
+  var el = $('#locMapView'); if (!el) return;
+  if (!locs.length) { el.innerHTML = '<div class="locmap-empty">ไม่พบตำแหน่งที่ตรงเงื่อนไข</div>'; return; }
+  var delIco = DEL_BADGE_SVG;
+  var jsq = function(s){ return esc(s).replace(/'/g,"\\'"); }; /* safe to embed inside a single-quoted onclick string */
+  /* Warehouse is the top grouping level — two warehouses can each have a "Zone A" with
+     an "R-01", so grouping starts at wh or racks/zones from different sites would visually
+     merge together (and a "delete zone" action could wipe out both by mistake). */
+  var whTree = {}, whOrder = [];
+  locs.forEach(function(l){
+    var wh = l.wh || '';
+    if (!whTree[wh]) { whTree[wh] = { zones:{}, order:[], n:0 }; whOrder.push(wh); }
+    var z = l.zone || '—';
+    if (!whTree[wh].zones[z]) { whTree[wh].zones[z] = { racks:{}, order:[], n:0 }; whTree[wh].order.push(z); }
+    var r = l.rack || '—';
+    if (!whTree[wh].zones[z].racks[r]) { whTree[wh].zones[z].racks[r] = []; whTree[wh].zones[z].order.push(r); }
+    whTree[wh].zones[z].racks[r].push(l); whTree[wh].zones[z].n++; whTree[wh].n++;
+  });
+  el.innerHTML = whOrder.map(function(wh){
+    var whd = whTree[wh];
+    var whLabel = wh ? whName(wh) : 'ไม่ระบุคลัง';
+    var whOccCount = whd.order.reduce(function(sum,z){
+      return sum + whd.zones[z].order.reduce(function(s2,r){ return s2 + whd.zones[z].racks[r].filter(function(l){return occ[l.code];}).length; },0);
+    },0);
+    return '<div class="locmap-whgroup">'
+      + '<div class="locmap-whhead"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13M3 21h18M9 21v-6h6v6"/></svg></span>'
+        + '<h4>'+esc(whLabel)+'</h4><span class="locmap-whmeta">'+whd.order.length+' โซน · '+whd.n+' ตำแหน่ง · มีของ '+whOccCount+'/'+whd.n+'</span>'
+        + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\')" title="ลบทั้งคลังนี้">'+delIco+'</button></div>'
+      + whd.order.map(function(z){
+        var zd = whd.zones[z];
+        var occCount = zd.n ? zd.order.reduce(function(sum,r){
+          return sum + zd.racks[r].filter(function(l){ return occ[l.code]; }).length;
+        }, 0) : 0;
+        var pct = zd.n ? Math.round(occCount/zd.n*100) : 0;
+        return '<div class="locmap-zone">'
+          + '<div class="locmap-zonehead">'
+            + '<div class="locmap-zbadge">'+esc(z)+'</div>'
+            + '<div><h5>โซน '+esc(z)+'</h5><div class="locmap-zmeta">'+zd.order.length+' แร็ค · '+zd.n+' ตำแหน่ง</div></div>'
+            + '<div class="locmap-zfill">มีของ '+occCount+'/'+zd.n+' &nbsp;·&nbsp; ใช้พื้นที่ '+pct+'%</div>'
+            + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\',\''+jsq(z)+'\')" title="ลบทั้งโซนนี้">'+delIco+'</button>'
+          + '</div>'
+          + '<div class="locmap-body">'
+            + zd.order.map(function(r){
+              var rackLocs = zd.racks[r];
+              var shelves = {}; var shOrder = [];
+              rackLocs.forEach(function(l){
+                var sh = l.shelf || '—';
+                if (!shelves[sh]) { shelves[sh] = []; shOrder.push(sh); }
+                shelves[sh].push(l);
+              });
+              shOrder.sort(function(a,b){ return (parseInt(b)||0) - (parseInt(a)||0); }); /* top shelf first */
+              return '<div class="locmap-rack">'
+                + '<div class="locmap-racklabel">'+esc(r)+' <span class="n">('+rackLocs.length+')</span>'
+                  + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\')" title="ลบทั้งแร็คนี้">'+delIco+'</button>'
+                + '</div>'
+                + shOrder.map(function(sh){
+                  var slots = shelves[sh].slice().sort(function(a,b){ return (a.slot||'').localeCompare(b.slot||''); });
+                  return '<div class="locmap-shelfrow">'
+                    + '<div class="locmap-shelftag-wrap">'
+                      + '<div class="locmap-shelftag">ช'+esc(sh)+'</div>'
+                      + '<button class="locmap-del" onclick="confirmDeleteLocScope(\''+jsq(wh)+'\',\''+jsq(z)+'\',\''+jsq(r)+'\',\''+jsq(sh)+'\')" title="ลบทั้งชั้นนี้">'+delIco+'</button>'
+                    + '</div>'
+                    + slots.map(function(l){
+                      var isOcc = !!occ[l.code];
+                      var count = occ[l.code]||0;
+                      var isFull = !!l.reportedFullAt;
+                      var badge = isOcc ? '<span class="locmap-slot-badge">'+count+'</span>' : '';
+                      var statusTxt = (isOcc?('มีของ '+count+' กล่อง'):'ว่าง') + (isFull?' · แจ้งเต็มแล้ว':'');
+                      return '<div class="locmap-slot'+(isOcc?' occ':'')+(isFull?' full':'')+'" data-loc-code="'+esc(l.code)+'" '
+                        + 'onclick="locSlotClick(this)" '
+                        + 'title="'+esc(l.code)+' · '+statusTxt+' — คลิกเพื่อสแกนจัดเก็บ (Putaway)">'+esc(l.slot||'')+badge
+                        + '</div>';
+                    }).join('')
+                    + '</div>';
+                }).join('')
+                + '</div>';
+            }).join('')
+          + '</div>'
+        + '</div>';
+      }).join('')
+    + '</div>';
+  }).join('');
+}
+
+/* ── mode switcher: single vs bulk ── */
+(function(){
+  var sw = $('#locModeSw'); if (!sw) return;
+  sw.addEventListener('click', function(e) {
+    var btn = e.target.closest('.ivs-btn'); if (!btn) return;
+    $all('#locModeSw .ivs-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var mode = btn.dataset.lmode;
+    var single = $('#locSingleMode'), bulk = $('#locBulkMode');
+    if (single) single.style.display = mode === 'single' ? '' : 'none';
+    if (bulk)   bulk.style.display   = mode === 'bulk'   ? '' : 'none';
+    if (mode === 'bulk') { populateBulkCountSelects(val('bulkLocWh')); suggestBulkZone(); suggestBulkRack(); suggestBulkStarts(); }
+  });
+})();
+/* Bulk Generate: auto-fill shelf-start & slot-start (both are hidden — the user
+   never types these). When the chosen rack already holds locations, continue
+   right after the highest existing shelf/slot number so re-generating extends
+   the rack instead of colliding with or skipping over what's already there.
+   A brand-new rack simply starts both at 1. */
+function suggestBulkStarts() {
+  var wh = val('bulkLocWh'), zone = locTypeValue('bulkLocZone','bulkLocZoneOther'), rack = locTypeValue('bulkLocRack','bulkLocRackOther').toUpperCase();
+  var shEl = $('#bulkLocShelfStart'), slEl = $('#bulkLocSlotStart'); if (!shEl || !slEl || !rack) return;
+  var maxShelf = 0, maxSlot = 0, has = false;
+  Object.values(S.locations).forEach(function(l){
+    if ((l.wh||'') !== wh) return;
+    if (zone && (l.zone||'') !== zone) return;
+    if ((l.rack||'').toUpperCase() !== rack) return;
+    has = true;
+    var sh = parseInt(l.shelf, 10); if (!isNaN(sh) && sh > maxShelf) maxShelf = sh;
+    var sl = parseInt(l.slot, 10); if (!isNaN(sl) && sl > maxSlot) maxSlot = sl;
+  });
+  shEl.value = has ? String(maxShelf + 1) : '1';
+  slEl.value = has ? String(maxSlot + 1) : '1';
+  locBulkPreview();
+}
+window.suggestBulkStarts = suggestBulkStarts;
+(function(){
+  var wh = $('#bulkLocWh'); if (wh) wh.addEventListener('change', function(){ populateBulkCountSelects(val('bulkLocWh')); suggestBulkZone(); suggestBulkRack(); suggestBulkStarts(); });
+  var rack = $('#bulkLocRack'); if (rack) rack.addEventListener('input', function(){ suggestBulkStarts(); locBulkPreview(); });
+  var zone = $('#bulkLocZone'); if (zone) zone.addEventListener('input', suggestBulkStarts);
+})();
+
+/* ── override toggle for loc code ── */
+(function(){
+  var btn = $('#btnOverrideLocCode'); if (!btn) return;
+  btn.addEventListener('click', function(){
+    var inp = $('#locCode'); if (!inp) return;
+    if (!locCodeOverride) {
+      locCodeOverride = true;
+      inp.readOnly = false; inp.style.opacity = ''; inp.focus(); inp.select();
+      btn.textContent = 'ใช้ Auto';
+    } else {
+      locCodeOverride = false;
+      inp.readOnly = true;
+      btn.textContent = 'แก้เอง';
+      locAutoCode();
+    }
+  });
+})();
+(function(){
+  var rb = $('#btnRegenLocCode');
+  if (rb) rb.addEventListener('click', function(){
+    var inp = $('#locCode'); if (!inp) return;
+    locCodeOverride = false; inp.readOnly = true; inp.style.opacity = '';
+    var ob = $('#btnOverrideLocCode'); if (ob) ob.textContent = 'แก้เอง';
+    locAutoCode();
+    toast('สร้างรหัสใหม่แล้ว', val('locCode'), 'info');
+  });
+  var cb = $('#btnCopyLocCode');
+  if (cb) cb.addEventListener('click', function(){
+    var v = val('locCode'); if (!v) return;
+    navigator.clipboard.writeText(v).catch(function(){});
+    toast('คัดลอกแล้ว', v, 'info');
+  });
+})();
+
+/* ── bulk generate preview ── */
+/* rack names must be unique per warehouse — same rack code used under two different
+   zones in the same warehouse would make two physical racks indistinguishable */
+function rackConflictZone(wh, zone, rack) {
+  rack = (rack||'').trim(); if (!rack) return null;
+  /* normalize zone the same way rack already is (trim + case-insensitive) — otherwise
+     a rack that's actually in the SAME zone can look like a conflict just because of
+     stray whitespace or letter case, and fire a false "already used in another zone" error */
+  var zoneNorm = (zone||'').trim().toUpperCase();
+  var conflict = null;
+  Object.values(S.locations).forEach(function(l){
+    if ((l.wh||'') !== (wh||'')) return;
+    if ((l.rack||'').trim().toUpperCase() !== rack.toUpperCase()) return;
+    if ((l.zone||'').trim().toUpperCase() !== zoneNorm) conflict = l.zone || '(ไม่ระบุโซน)';
+  });
+  return conflict;
+}
+window.rackConflictZone = rackConflictZone;
+/* next free "R-NN" style rack code for a warehouse, so the field defaults to something
+   usable instead of an empty box the person has to invent a unique name for by hand */
+function suggestRackCode(wh) {
+  var max = 0;
+  Object.values(S.locations).forEach(function(l){
+    if (wh && l.wh !== wh) return;
+    var m = /^R-?(\d+)$/i.exec((l.rack||'').trim());
+    if (m) { var n = parseInt(m[1], 10); if (n > max) max = n; }
+  });
+  return 'R-' + pad(max+1, 2);
+}
+window.suggestRackCode = suggestRackCode;
+/* next zone to default to for a warehouse — reuses whatever zone already exists
+   in the master data (most-used zone first), so the field is never left blank
+   waiting on the user; only falls back to "A" for a warehouse with zero zones yet */
+function suggestZoneCode(wh) {
+  var counts = {};
+  Object.values(S.locations).forEach(function(l){
+    if (wh && l.wh !== wh) return;
+    var z = (l.zone||'').trim(); if (!z) return;
+    counts[z] = (counts[z]||0) + 1;
+  });
+  var best = '', bestN = 0;
+  Object.keys(counts).forEach(function(z){ if (counts[z] > bestN) { best = z; bestN = counts[z]; } });
+  return best || 'A';
+}
+window.suggestZoneCode = suggestZoneCode;
+/* distinct zones already registered for a warehouse — the whole point of listing
+   them in a <select> is that staff pick a real one instead of retyping/mistyping
+   a name that's already in use (e.g. "A" vs "a " vs "A ") */
+function zonesForWh(wh) {
+  var set = {};
+  Object.values(S.locations||{}).forEach(function(l){ if((!wh||l.wh===wh)&&(l.zone||'').trim())set[l.zone.trim()]=true; });
+  Object.values(S.boxes||{}).forEach(function(b){ var l=b.location||{}; if((!wh||l.wh===wh)&&(l.zone||'').trim())set[l.zone.trim()]=true; });
+  return Object.keys(set).sort();
+}
+window.zonesForWh = zonesForWh;
+/* distinct racks already registered for a warehouse, so an existing rack can be
+   picked to add more shelves/slots to it instead of only ever offering a new one */
+function racksForWh(wh) {
+  var set = {};
+  Object.values(S.locations||{}).forEach(function(l){ if((!wh||l.wh===wh)&&(l.rack||'').trim())set[l.rack.trim()]=true; });
+  return Object.keys(set).sort();
+}
+window.racksForWh = racksForWh;
+/* highest shelf/slot NUMBER ever registered for a warehouse — i.e. the tallest/
+   widest rack it has ever had — used to cap the จำนวนชั้น/จำนวนช่อง <select>
+   options so Bulk Generate can't be used to invent a rack profile the
+   warehouse has never actually had. Falls back to the old input maximums
+   (20/50) for a warehouse with no racks registered yet. */
+function maxShelvesForWh(wh) {
+  var max=0;
+  Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.shelf,10); if(n>max)max=n; });
+  return max||20;
+}
+window.maxShelvesForWh = maxShelvesForWh;
+function maxSlotsForWh(wh) {
+  var max=0;
+  Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.slot,10); if(n>max)max=n; });
+  return max||50;
+}
+window.maxSlotsForWh = maxSlotsForWh;
+function populateBulkCountSelects(wh) {
+  var shSel=$('#bulkLocShelves'), slSel=$('#bulkLocSlots'); if (!shSel||!slSel) return;
+  var shMax=maxShelvesForWh(wh), slMax=maxSlotsForWh(wh);
+  var keepSh=parseInt(shSel.value,10)||0, keepSl=parseInt(slSel.value,10)||0;
+  var opts=function(max){var h='';for(var i=1;i<=max;i++)h+='<option value="'+i+'">'+i+'</option>';return h;};
+  shSel.innerHTML=opts(shMax); slSel.innerHTML=opts(slMax);
+  shSel.value = (keepSh>=1&&keepSh<=shMax) ? keepSh : Math.min(4,shMax);
+  slSel.value = (keepSl>=1&&keepSl<=slMax) ? keepSl : Math.min(5,slMax);
+}
+window.populateBulkCountSelects = populateBulkCountSelects;
+/* Fill a zone <select> with every zone this warehouse already has, plus a
+   "+ เพิ่มโซนใหม่" option that reveals the free-text fallback input — mirrors
+   toggleLocTypeOther's select+other pattern used for ประเภทแร็ค. */
+function populateZoneSelect(selId, otherId, wh, currentVal) {
+  var sel=$('#'+selId); if(!sel) return;
+  var zones=zonesForWh(wh);
+  var html=zones.map(function(z){return '<option value="'+esc(z)+'">'+esc(z)+'</option>';}).join('');
+  html+='<option value="__other__">+ เพิ่มโซนใหม่</option>';
+  sel.innerHTML=html;
+  var inp=$('#'+otherId);
+  if (currentVal && zones.indexOf(currentVal)>=0) { sel.value=currentVal; if(inp){inp.style.display='none';inp.value='';} }
+  else if (currentVal) { sel.value='__other__'; if(inp){inp.style.display='';inp.value=currentVal;} }
+  else if (zones.length) { sel.value=zones[0]; if(inp){inp.style.display='none';inp.value='';} }
+  else { sel.value='__other__'; if(inp){inp.style.display='';inp.value=suggestZoneCode(wh);} }
+}
+window.populateZoneSelect = populateZoneSelect;
+/* Fill a rack <select> with every rack this warehouse already has (to add more
+   shelves/slots to it), plus a "+ สร้างแร็คใหม่" option whose fallback input is
+   readonly and auto-filled with the next free R-NN code — new racks are always
+   auto-named so two racks can never collide on the same name. */
+function populateRackSelect(selId, otherId, wh, currentVal) {
+  var sel=$('#'+selId); if(!sel) return;
+  var racks=racksForWh(wh);
+  var nextAuto=suggestRackCode(wh);
+  var html=racks.map(function(r){return '<option value="'+esc(r)+'">'+esc(r)+'</option>';}).join('');
+  html+='<option value="__other__">+ สร้างแร็คใหม่ (Auto: '+esc(nextAuto)+')</option>';
+  sel.innerHTML=html;
+  var inp=$('#'+otherId);
+  if (currentVal && racks.indexOf(currentVal)>=0) { sel.value=currentVal; if(inp){inp.style.display='none';} }
+  else { sel.value='__other__'; if(inp){inp.value=nextAuto;inp.style.display='';} }
+}
+window.populateRackSelect = populateRackSelect;
+function suggestSingleRack() {
+  if (editingLoc) return;
+  populateRackSelect('locRack','locRackOther', val('locWh'));
+  if (typeof locAutoCode === 'function') locAutoCode();
+}
+window.suggestSingleRack = suggestSingleRack;
+function suggestSingleZone() {
+  if (editingLoc) return;
+  populateZoneSelect('locZone','locZoneOther', val('locWh'));
+  if (typeof locAutoCode === 'function') locAutoCode();
+}
+window.suggestSingleZone = suggestSingleZone;
+function suggestBulkRack() {
+  populateRackSelect('bulkLocRack','bulkLocRackOther', val('bulkLocWh'));
+  locBulkPreview();
+}
+window.suggestBulkRack = suggestBulkRack;
+function suggestBulkZone() {
+  populateZoneSelect('bulkLocZone','bulkLocZoneOther', val('bulkLocWh'));
+  locBulkPreview();
+}
+/* Maintenance: remove location rows with no zone at all — these are leftover
+   from a fixed bug where the zone field could be saved empty (e.g. rack R-02
+   in the screenshot, orphaned under "โซน —"). Never touches a slot that
+   currently holds a box — those are reported and left alone so no live
+   inventory data is ever silently deleted. */
+function clearOrphanZoneLocations() {
+  var occ = locOccupancyMap();
+  var toDelete = [], occupied = [];
+  Object.values(S.locations||{}).forEach(function(l){
+    if ((l.zone||'').trim()) return; /* has a zone → not an orphan */
+    if (occ[l.code]) occupied.push(l.code); else toDelete.push(l.code);
+  });
+  if (!toDelete.length && !occupied.length) { toast('ไม่พบตำแหน่งที่ไม่มีโซน', null, 'ok'); return; }
+  toDelete.forEach(function(c){ delete S.locations[c]; });
+  save(); renderLocDatalist(); renderLocMaster();
+  var msg = 'ลบไปแล้ว '+toDelete.length+' ตำแหน่ง';
+  if (occupied.length) msg += ' · ข้าม '+occupied.length+' ตำแหน่งที่ยังมีกล่องอยู่ (แก้โซนแทนการลบ): '+occupied.slice(0,5).join(', ')+(occupied.length>5?'…':'');
+  toast('ล้างตำแหน่งไม่มีโซนแล้ว', msg, occupied.length ? 'warn' : 'ok');
+}
+window.clearOrphanZoneLocations = clearOrphanZoneLocations;
+(function(){
+  var b = $('#btnClearOrphanLoc'); if (b) b.addEventListener('click', clearOrphanZoneLocations);
+})();
+
+/* ── delete controls on the rack map (คลัง / zone / rack / shelf / single slot) ──
+   Warehouse is always the outermost match — two sites can share a zone/rack name
+   (e.g. both have "Zone A" / "R-01"), so without matching on wh too, "delete zone A"
+   could silently wipe out the same-named zone in a completely different warehouse. */
+function scopeLocCodes(wh, z, r, sh) {
+  return Object.keys(S.locations).filter(function(c){
+    var l = S.locations[c];
+    if ((l.wh||'') !== (wh||'')) return false;
+    if (z  != null && (l.zone ||'—') !== z)  return false;
+    if (r  != null && (l.rack ||'—') !== r)  return false;
+    if (sh != null && (l.shelf||'—') !== sh) return false;
+    return true;
+  });
+}
+function confirmDeleteLocScope(wh, z, r, sh) {
+  wh = wh || '';
+  z = (z===undefined||z==='') ? null : z;
+  r = (r===undefined||r==='') ? null : r;
+  sh = (sh===undefined||sh==='') ? null : sh;
+  var codes = scopeLocCodes(wh, z, r, sh);
+  if (!codes.length) return toast('ไม่พบตำแหน่งในขอบเขตนี้', null, 'err');
+  var occ = locOccupancyMap();
+  var occCodes = codes.filter(function(c){ return occ[c]; });
+  var freeCodes = codes.filter(function(c){ return !occ[c]; });
+  var whLabel = wh ? whName(wh) : 'ไม่ระบุคลัง';
+  var label = sh!=null ? ('ชั้น '+sh+' ของแร็ค '+r+' โซน '+z+' · '+whLabel)
+            : r!=null ? ('แร็ค '+r+' โซน '+z+' · '+whLabel)
+            : z!=null ? ('โซน '+z+' · '+whLabel)
+            : whLabel;
+  var h = '<div class="mhead"><h3>ยืนยันการลบตำแหน่ง</h3><button class="x" onclick="closeModal()" aria-label="ปิด">✕</button></div>'
+    + '<div class="mbody">'
+    + '<p>ต้องการลบตำแหน่งใน <b>'+esc(label)+'</b> — ทั้งหมด '+codes.length+' ตำแหน่ง</p>'
+    + (freeCodes.length ? '<p class="muted small">จะลบตำแหน่งว่าง '+freeCodes.length+' ช่อง</p>' : '')
+    + (occCodes.length ? '<div class="banner warn" style="margin-top:10px;"><span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></span><div>มี <b>'+occCodes.length+'</b> ตำแหน่งที่ยังมีกล่องอยู่ — ระบบจะ<b>ข้ามไม่ลบ</b>ตำแหน่งเหล่านี้ ต้องย้ายกล่องออกก่อนจึงจะลบได้</div></div>' : '')
+    + (!freeCodes.length ? '<p class="muted small" style="margin-top:10px;">ไม่มีตำแหน่งว่างให้ลบในขอบเขตนี้ — ทุกช่องยังมีกล่องอยู่</p>' : '')
+    + '</div>'
+    + '<div class="mfoot"><button class="btn ghost" onclick="closeModal()">ยกเลิก</button>'
+    + (freeCodes.length ? '<button class="btn" style="background:var(--neg);color:#fff;" onclick="doDeleteLocScope(\''+esc(wh).replace(/'/g,"\\'")+'\',\''+(z!=null?esc(z).replace(/'/g,"\\'"):'')+'\',\''+(r!=null?esc(r).replace(/'/g,"\\'"):'')+'\',\''+(sh!=null?esc(sh).replace(/'/g,"\\'"):'')+'\')">ลบ '+freeCodes.length+' ตำแหน่ง</button>' : '')
+    + '</div>';
+  openModal(h);
+}
+window.confirmDeleteLocScope = confirmDeleteLocScope;
+function doDeleteLocScope(wh, z, r, sh) {
+  z = z || null; r = r || null; sh = sh || null;
+  var codes = scopeLocCodes(wh, z, r, sh);
+  var occ = locOccupancyMap();
+  var deleted = 0, skipped = 0;
+  codes.forEach(function(c){ if (occ[c]) { skipped++; } else { delete S.locations[c]; deleted++; } });
+  save(); renderLocDatalist(); renderLocMaster(); closeModal();
+  toast('ลบตำแหน่งแล้ว', deleted+' ตำแหน่ง'+(skipped?(' · ข้าม '+skipped+' (มีกล่องอยู่)'):''), skipped?'warn':'ok');
+}
+window.doDeleteLocScope = doDeleteLocScope;
+/* single-slot delete straight from the grid — no confirm dialog needed since the
+   delete icon is only ever rendered on an empty slot (hidden via CSS on .occ) */
+function delLocSlot(code) {
+  var occ = locOccupancyMap();
+  if (occ[code]) { toast('ลบไม่ได้', code+' ยังมีกล่องอยู่ — ย้ายกล่องออกก่อน', 'err'); return false; }
+  delete S.locations[code];
+  save(); renderLocDatalist(); renderLocMaster();
+  toast('ลบตำแหน่งแล้ว', code, 'ok');
+  return true;
+}
+window.delLocSlot = delLocSlot;
+function locBulkPreview() {
+  var wh = val('bulkLocWh');
+  var zone = locTypeValue('bulkLocZone','bulkLocZoneOther'), rack = locTypeValue('bulkLocRack','bulkLocRackOther');
+  var shelves = parseInt(val('bulkLocShelves'))||0;
+  var slots   = parseInt(val('bulkLocSlots'))||0;
+  var shStart = parseInt(val('bulkLocShelfStart'))||1;
+  var slStart = parseInt(val('bulkLocSlotStart'))||1;
+  var box = $('#locBulkPreviewBox'); if (!box) return;
+  if (!rack || !shelves || !slots) { box.style.display = 'none'; return; }
+  var conflictZone = rackConflictZone(wh, zone, rack);
+  if (conflictZone) {
+    box.style.display = 'flex';
+    box.className = 'banner warn';
+    box.innerHTML = '<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span></span>'
+      + '<div>ชื่อแร็ค <b class="mono">'+esc(rack)+'</b> ถูกใช้แล้วในโซน <b>'+esc(conflictZone)+'</b> ของคลังนี้ — กรุณาตั้งชื่อแร็คอื่นที่ยังไม่ซ้ำ</div>';
+    return;
+  }
+  var total = shelves * slots;
+  var first = locBuildCode(zone, rack, shStart, slStart);
+  var last  = locBuildCode(zone, rack, shStart+shelves-1, slStart+slots-1);
+  var exists = Object.keys(S.locations).filter(function(c){
+    return c.toUpperCase().indexOf(rack.toUpperCase()) >= 0;
+  }).length;
+  box.style.display = 'flex';
+  box.className = 'banner ' + (exists ? 'warn' : 'info');
+  box.innerHTML = '<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span></span>'
+    + '<div>จะสร้าง <b>'+total+' ตำแหน่ง</b> — รหัส <b class="mono">'+esc(first)+'</b> ถึง <b class="mono">'+esc(last)+'</b>'
+    + (exists ? ' <span class="pill warn" style="font-size:11px;">แร็คนี้มีข้อมูลอยู่แล้ว '+exists+' ตำแหน่ง (จะ skip รหัสซ้ำ)</span>' : '')
+    + '</div>';
+}
+window.locBulkPreview = locBulkPreview;
+
+/* ── bulk generate execute ── */
+(function(){
+  var btn = $('#btnBulkGenLoc'); if (!btn) return;
+  btn.addEventListener('click', function(){
+    var wh   = val('bulkLocWh');
+    var zone = locTypeValue('bulkLocZone','bulkLocZoneOther');
+    var rack = locTypeValue('bulkLocRack','bulkLocRackOther').toUpperCase();
+    var type = locTypeValue('bulkLocType','bulkLocTypeOther');
+    var shelves  = parseInt(val('bulkLocShelves'))||0;
+    var slots    = parseInt(val('bulkLocSlots'))||0;
+    var shStart  = parseInt(val('bulkLocShelfStart'))||1;
+    var slStart  = parseInt(val('bulkLocSlotStart'))||1;
+    if (!zone)    return toast('ยังไม่ได้ระบุโซน', 'กรุณาเลือกหรือกรอกโซนก่อน Generate — ตำแหน่งต้องมีโซนเสมอ', 'err');
+    if (!rack)    return toast('กรอกรหัสแร็ค', null, 'err');
+    if (!shelves) return toast('กรอกจำนวนชั้น', null, 'err');
+    if (!slots)   return toast('กรอกจำนวนช่อง/ชั้น', null, 'err');
+    var conflictZone = rackConflictZone(wh, zone, rack);
+    if (conflictZone) return toast('ชื่อแร็คซ้ำ', 'แร็ค '+rack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
+    var created = 0, skipped = 0;
+    for (var sh = shStart; sh < shStart + shelves; sh++) {
+      for (var sl = slStart; sl < slStart + slots; sl++) {
+        var code = locBuildCode(zone, rack, sh, sl);
+        if (S.locations[code]) { skipped++; continue; }
+        S.locations[code] = { code: code, wh: wh, zone: zone, rack: rack,
+          shelf: String(sh), slot: String(pad(sl,2)), type: type, note: '' };
+        created++;
+      }
+    }
+    save(); renderLocDatalist(); renderLocMaster();
+    suggestBulkStarts(); /* re-derive shelf/slot start from the rack we just filled, so the next batch continues numbering */
+    toast('Generate สำเร็จ', 'สร้าง '+created+' ตำแหน่ง'+(skipped?' · ข้าม '+skipped+' ซ้ำ':''), 'ok');
+  });
+})();
+
+/* ── location master: filter/sort/group state ──
+   Rebuilt on native <select> elements after 3 rounds of bugs with a custom
+   popover implementation (stuck-open state, listener-binding races, z-index/
+   display conflicts). A native <select> hands ALL of that — open/close,
+   positioning, outside-click, keyboard nav, mobile behavior — to the
+   browser itself, so this entire bug class becomes structurally impossible.
+   Styling still reads as pills (see .loc-select CSS) so it doesn't look like
+   a step down, but the interaction model underneath is bulletproof. */
+/* group:'hier' is the standing default — the table always reads as Zone > Rack > ชั้น
+   broken out as indented text, not a flat list you have to opt into grouping to get. */
+var _locChipState = { wh:'', zone:'', rack:'', type:'', group:'hier', sort:'natural' };
+
+function setLocChip(key, val_) {
+  _locChipState[key] = val_;
+  renderLocMaster();
+}
+window.setLocChip = setLocChip;
+
+function buildLocChips() {
+  var row = $('#locChipsRow'); if (!row) return;
+  var allLocs = Object.values(S.locations||{});
+  var st = _locChipState;
+
+  function unique(arr) {
+    var seen = {}; return arr.filter(function(v){ return v&&(seen[v]?false:(seen[v]=true)); }).sort();
+  }
+  var zones = unique(allLocs.map(function(l){ return l.zone||''; }));
+  var racks = unique(allLocs.map(function(l){ return l.rack||''; }));
+  var types = unique(allLocs.map(function(l){ return l.type||''; }));
+  var whs   = Object.values(S.warehouses);
+
+  /* one filter as a native <select>, styled as a pill via CSS (.loc-select) */
+  function sel(key, label, curVal, opts) {
+    var active = curVal !== '' && !(key==='sort' && curVal==='natural');
+    var optsHtml = opts.map(function(o){
+      return '<option value="'+esc(o[1])+'"'+(o[1]===curVal?' selected':'')+'>'+esc(o[0])+'</option>';
+    }).join('');
+    return '<label class="loc-select-wrap' + (active?' active':'') + '">'
+      + '<span class="loc-select-lbl">' + esc(label) + '</span>'
+      + '<select class="loc-select" data-lp-key="' + key + '">' + optsHtml + '</select>'
+      + '</label>';
+  }
+
+  var html = '';
+  if (whs.length > 1) {
+    var whOpts = [['ทั้งหมด','']].concat(whs.map(function(w){ return [w.name, w.id]; }));
+    html += sel('wh','คลัง', st.wh, whOpts);
+  }
+  if (zones.length > 1) html += sel('zone','โซน', st.zone, [['ทั้งหมด','']].concat(zones.map(function(z){return [z,z];})));
+  if (racks.length > 1) html += sel('rack','แร็ค', st.rack, [['ทั้งหมด','']].concat(racks.map(function(r){return [r,r];})));
+  if (types.length > 1) html += sel('type','ประเภท', st.type, [['ทั้งหมด','']].concat(types.map(function(t){return [t,t];})));
+
+  html += '<div class="loc-chip-divider"></div>';
+
+  var groupOpts = [['ลำดับชั้น (คลัง > โซน > แร็ค > ชั้น)','hier'],['ไม่จัดกลุ่ม (รายการเดี่ยว)',''],['คลัง','wh'],['โซน','zone'],['แร็ค','rack'],['ชั้น','shelf'],['ประเภท','type']];
+  html += sel('group','จัดกลุ่ม', st.group, groupOpts);
+
+  var sortOpts = [
+    ['คลัง > Zone > Rack > ชั้น (แนะนำ)','natural'], ['รหัส A-Z','code_asc'], ['รหัส Z-A','code_desc'],
+    ['แร็ค A-Z','rack_asc'], ['แร็ค Z-A','rack_desc'],
+    ['ชั้น น้อย-มาก','shelf_asc'], ['ชั้น มาก-น้อย','shelf_desc'],
+    ['ช่อง น้อย-มาก','slot_asc'], ['ช่อง มาก-น้อย','slot_desc']
+  ];
+  html += sel('sort','เรียง', st.sort||'natural', sortOpts);
+
+  var hasFilter = st.wh||st.zone||st.rack||st.type||(st.group&&st.group!=='hier')||(st.sort&&st.sort!=='natural')||val('schLoc');
+  if (hasFilter) html += '<button type="button" class="lp-clear" data-lp-clear="1">&#10005; ล้าง</button>';
+
+  row.innerHTML = html;
+}
+window.buildLocChips = buildLocChips;
+
+/* delegated events — native <select> fires 'change', not 'click' on options,
+   so this listens for both change (selects) and click (the clear button) */
+document.addEventListener('change', function(e){
+  var s = e.target.closest && e.target.closest('[data-lp-key]');
+  if (s && e.target.closest('#locChipsRow')) setLocChip(s.getAttribute('data-lp-key'), s.value);
+});
+document.addEventListener('click', function(e){
+  var clr = e.target.closest && e.target.closest('[data-lp-clear]');
+  if (clr && e.target.closest('#locChipsRow')) clearLocFilters();
+});
+
+function _getLocFiltered() {
+  var sb  = (val('schLoc')||'').toLowerCase();
+  var st  = _locChipState;
+  return Object.values(S.locations||{}).filter(function(l){
+    if (st.wh   && l.wh            !== st.wh)   return false;
+    if (st.zone && (l.zone||'')    !== st.zone)  return false;
+    if (st.rack && (l.rack||'')    !== st.rack)  return false;
+    if (st.type && (l.type||'')    !== st.type)  return false;
+    if (!sb) return true;
+    return (l.code+l.zone+l.rack+l.shelf+l.slot+l.type+l.note).toLowerCase().indexOf(sb) >= 0;
+  });
+}
+
+function _sortLocs(locs) {
+  var key = _locChipState.sort || 'natural';
+  return locs.slice().sort(function(a,b){
+    switch(key) {
+      case 'code_asc':  return (a.code||'').localeCompare(b.code||'');
+      case 'code_desc': return (b.code||'').localeCompare(a.code||'');
+      case 'rack_asc':  return (a.rack||'').localeCompare(b.rack||'');
+      case 'rack_desc': return (b.rack||'').localeCompare(a.rack||'');
+      case 'shelf_asc': return (parseInt(a.shelf)||0) - (parseInt(b.shelf)||0);
+      case 'shelf_desc':return (parseInt(b.shelf)||0) - (parseInt(a.shelf)||0);
+      case 'slot_asc':  return (a.slot||'').localeCompare(b.slot||'');
+      case 'slot_desc': return (b.slot||'').localeCompare(a.slot||'');
+      default: /* natural: คลัง → zone → rack → shelf → slot */
+        if ((a.wh||'') !== (b.wh||'')) return whName(a.wh||'').localeCompare(whName(b.wh||''));
+        if ((a.zone||'') !== (b.zone||'')) return (a.zone||'').localeCompare(b.zone||'');
+        if ((a.rack||'') !== (b.rack||'')) return (a.rack||'').localeCompare(b.rack||'');
+        var sa=parseInt(a.shelf)||0, sb2=parseInt(b.shelf)||0;
+        if (sa !== sb2) return sa - sb2;
+        return (a.slot||'').localeCompare(b.slot||'');
+    }
+  });
+}
+
+var _locOcc = {}; /* code -> box count, refreshed each renderLocMaster() */
+function _locStatusPill(code) {
+  var n = _locOcc[code]||0;
+  return n
+    ? '<span class="status-pill" style="background:var(--accentSoft);color:var(--accentInk);"><span class="loc-dot o" style="width:7px;height:7px;"></span> มีของ '+n+'</span>'
+    : '<span class="status-pill" style="background:var(--posSoft);color:var(--ink2);"><span class="loc-dot e" style="width:7px;height:7px;"></span> ว่าง</span>';
+}
+/* PDA's "ช่องเก็บเต็ม" report — flags a Location Master row (backend/src/
+   routes/reports.ts) so suggest-location stops recommending it. This pill
+   is the only place that flag surfaces to a human, and clearLocFull() the
+   only way it comes back off — otherwise a shelf reported full stays
+   excluded forever with no way to know why. */
+function _locFullPill(l) {
+  if (!l.reportedFullAt) return '';
+  var who = l.reportedFullBy ? ' โดย '+esc(l.reportedFullBy) : '';
+  var note = l.reportedFullNote ? ' — '+esc(l.reportedFullNote) : '';
+  return '<div style="margin-top:4px;">'
+    +'<span class="status-pill" style="background:var(--negSoft,#fde2e2);color:var(--neg,#b42318);" title="'+esc(fmtTs(l.reportedFullAt))+who+note+'">'
+    +'<span class="loc-dot" style="width:7px;height:7px;background:currentColor;border-radius:50%;display:inline-block;"></span> เต็ม (แจ้งจาก PDA'+who+')</span> '
+    +'<button class="btn ghost sm" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation();clearLocFull(\''+esc(l.code)+'\')" title="เคลียร์สถานะเต็ม — suggest-location จะแนะนำช่องนี้ได้อีกครั้ง">เคลียร์</button>'
+    +'</div>';
+}
+function clearLocFull(code) {
+  var l = S.locations[code]; if (!l || !l.reportedFullAt) return;
+  var before = {reportedFullAt:l.reportedFullAt};
+  l.reportedFullAt = null; l.reportedFullBy = null; l.reportedFullNote = null;
+  auditEntry('เคลียร์ช่องเก็บเต็ม', USER, code, code, before, {reportedFullAt:null});
+  renderLocMaster();
+  toast('เคลียร์สถานะเต็มแล้ว', code+' — suggest-location แนะนำช่องนี้ได้อีกครั้ง', 'ok');
+}
+window.clearLocFull = clearLocFull;
+/* Web's counterpart to the PDA's "ช่องเก็บเต็ม" button — same effect
+   (suggest-location excludes this location until clearLocFull runs), same
+   event/audit shape as POST /api/reports so a report from either channel
+   lands in the same feed. */
+function reportLocFull(code) {
+  var l = S.locations[code]; if (!l || l.reportedFullAt) return Promise.resolve(false);
+  // Returns the confirm promise so callers that need to re-render *after*
+  // the flag actually lands (e.g. the Putaway modal re-opening itself to
+  // show the "เต็ม" banner) don't fire before the operator has even
+  // answered the confirm dialog.
+  return confirmA('แจ้งช่อง '+code+' เต็ม?','ระบบจะไม่แนะนำช่องนี้ให้จัดเก็บอีก จนกว่าจะกด "เคลียร์"','ยืนยันแจ้งเต็ม',false)
+    .then(function(ok){if(!ok)return false;
+      l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
+      S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
+      auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
+      renderLocMaster();
+      toast('แจ้งเต็มแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
+      return true;
+    });
+}
+window.reportLocFull = reportLocFull;
+
+
+function _locRowHtml(l) {
+  return '<tr style="cursor:pointer;" data-loc-code="'+esc(l.code)+'" onclick="if(event.target.type!==\'checkbox\')locRowClick(this)">'
+    +'<td class="cb-td"><input type="checkbox" class="row-cb loc-cb" data-tag="'+esc(l.code)+'"></td>'
+    +'<td class="mono"><b>'+esc(l.code)+'</b></td>'
+    +'<td>'+_locStatusPill(l.code)+_locFullPill(l)+'</td>'
+    +'<td>'+esc(whName(l.wh))+'</td><td>'+esc(l.zone||'-')+'</td><td>'+esc(l.rack||'-')+'</td>'
+    +'<td>'+esc(l.shelf||'-')+'</td><td>'+esc(l.slot||'-')+'</td>'
+    +'<td class="small">'+esc(l.type||'-')+'</td><td class="small muted">'+esc(l.note||'-')+'</td>'
+    +'<td class="c">'
+    +(l.reportedFullAt?'':'<button class="btn sm ghost" onclick="event.stopPropagation();reportLocFull(\''+esc(l.code)+'\')" style="padding:4px 10px;font-size:12px;margin-right:4px;" title="แจ้งช่องนี้เต็ม — เหมือนปุ่ม &quot;ช่องเก็บเต็ม&quot; บน PDA"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span></button>')
+    +'<button class="btn sm ghost" data-loc-print="'+esc(l.code)+'" onclick="locPrintClick(event,this)" style="padding:4px 10px;font-size:12px;" title="พิมพ์บาร์โค้ดป้ายตำแหน่งนี้"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span></button></td>'
+    +'<td class="c"><button class="del-badge" data-loc-del="'+esc(l.code)+'" onclick="locDelClick(event,this)" title="ลบตำแหน่งนี้">'+DEL_BADGE_SVG+'</button></td></tr>';
+}
+
+function renderLocMaster() {
+  /* populate warehouse selects */
+  var whs = Object.values(S.warehouses);
+  var whOpts = whs.length
+    ? whs.map(function(w){ return '<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>'; }).join('')
+    : '<option value="">— ยังไม่มีคลัง —</option>';
+  ['locWh','bulkLocWh'].forEach(function(id){ var s=$('#'+id); if(s) s.innerHTML=whOpts; });
+
+  /* build chip row from live data (also refreshes filter options) */
+  buildLocChips();
+  var allLocs = Object.values(S.locations||{});
+  var orphanBtn = $('#btnClearOrphanLoc');
+  if (orphanBtn) orphanBtn.style.display = allLocs.some(function(l){ return !(l.zone||'').trim(); }) ? '' : 'none';
+
+  /* refresh occupancy from live box data */
+  _locOcc = locOccupancyMap();
+  var occCountAll = allLocs.filter(function(l){ return _locOcc[l.code]; }).length;
+  var mini = $('#locOccMini');
+  if (mini) mini.innerHTML = allLocs.length
+    ? '<b>'+(allLocs.length-occCountAll)+'</b>&nbsp;ว่าง&nbsp;·&nbsp;<b>'+occCountAll+'</b>&nbsp;มีของ'
+    : '';
+
+  /* filter + sort */
+  var locs = _sortLocs(_getLocFiltered());
+  var body = $('#locBody'); if (!body) return;
+  if ($('#cntLoc')) $('#cntLoc').textContent = locs.length + ' / ' + allLocs.length + ' ตำแหน่ง';
+  setupBulkTable('locBody','loc-cb','cbAllLoc','bulkLoc','bulkLocCnt');
+
+  /* rack map view (always kept in sync, visibility toggled by CSS) */
+  renderLocRackMap(locs, _locOcc);
+
+  /* group by */
+  var groupBy = _locChipState.group || '';
+  if (!groupBy) {
+    body.innerHTML = locs.length ? locs.map(_locRowHtml).join('') : emptyRow(12, 'ไม่พบตำแหน่งที่ตรงเงื่อนไข');
+  } else if (groupBy === 'hier') {
+    /* ── hierarchical: คลัง > โซน > แร็ค > ชั้น, each level collapsible ──
+       Warehouse comes first: two sites can each have a "Zone A" / "R-01", so grouping
+       has to start at wh or their racks would visually merge and a "delete zone" click
+       could wipe out both by mistake. Every row is already one ช่อง (slot). */
+    var tree = {}, whOrder = [];
+    locs.forEach(function(l){
+      var wh = l.wh||'', z = l.zone||'—', r = l.rack||'—', sh = l.shelf||'—';
+      if (!tree[wh]) { tree[wh] = { zones:{}, order:[], n:0 }; whOrder.push(wh); }
+      if (!tree[wh].zones[z]) { tree[wh].zones[z] = { racks:{}, order:[], n:0 }; tree[wh].order.push(z); }
+      if (!tree[wh].zones[z].racks[r]) { tree[wh].zones[z].racks[r] = { shelves:{}, order:[], n:0 }; tree[wh].zones[z].order.push(r); }
+      if (!tree[wh].zones[z].racks[r].shelves[sh]) { tree[wh].zones[z].racks[r].shelves[sh] = []; tree[wh].zones[z].racks[r].order.push(sh); }
+      tree[wh].zones[z].racks[r].shelves[sh].push(l);
+      tree[wh].zones[z].racks[r].n++; tree[wh].zones[z].n++; tree[wh].n++;
+    });
+    var h = '';
+    var delIco = DEL_BADGE_SVG;
+    whOrder.forEach(function(wh){
+      var whObj = tree[wh];
+      var whKey = 'W|'+wh, whCol = !!_locCollapsed[whKey];
+      var whLabel = wh ? whName(wh) : 'ไม่ระบุคลัง';
+      h += '<tr class="loc-grp-h'+(whCol?' collapsed':'')+'" data-grp-toggle="'+esc(whKey)+'" style="background:color-mix(in srgb,var(--ink) 9%,var(--surface));">'
+        +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> <b>'+esc(whLabel)+'</b>'
+        +' <span class="tag" style="margin-left:6px;">'+whObj.n+' ตำแหน่ง</span>'
+        +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" title="ลบทั้งคลังนี้">'+delIco+'</button>'
+        +'</td></tr>';
+      if (whCol) return;
+      whObj.order.forEach(function(z){
+        var zKey = 'W|'+wh+'|Z|'+z, zCol = !!_locCollapsed[zKey];
+        var zd = whObj.zones[z];
+        h += '<tr class="loc-grp-h lvl1'+(zCol?' collapsed':'')+'" data-grp-toggle="'+esc(zKey)+'" style="background:color-mix(in srgb,var(--ink) 6%,var(--surface));">'
+          +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> โซน '+esc(z)
+          +' <span class="tag" style="margin-left:6px;">'+zd.n+' ตำแหน่ง</span>'
+          +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" data-hier-del-z="'+esc(z)+'" title="ลบทั้งโซนนี้">'+delIco+'</button>'
+          +'</td></tr>';
+        if (zCol) return;
+        zd.order.forEach(function(r){
+          var rObj = zd.racks[r];
+          var rKey = 'W|'+wh+'|Z|'+z+'|R|'+r, rCol = !!_locCollapsed[rKey];
+          h += '<tr class="loc-grp-h lvl2'+(rCol?' collapsed':'')+'" data-grp-toggle="'+esc(rKey)+'" style="background:color-mix(in srgb,var(--ink) 3%,var(--surface));">'
+            +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> แร็ค '+esc(r)
+            +' <span class="tag" style="margin-left:6px;">'+rObj.n+'</span>'
+            +' <button class="btn ghost sm" style="padding:2px 9px;font-size:11px;margin-left:8px;" data-hier-print-z="'+esc(z)+'" data-hier-print-r="'+esc(r)+'"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์แร็คนี้</button>'
+            +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" data-hier-del-z="'+esc(z)+'" data-hier-del-r="'+esc(r)+'" title="ลบทั้งแร็คนี้">'+delIco+'</button>'
+            +'</td></tr>';
+          if (rCol) return;
+          var shOrder = rObj.order.slice().sort(function(a,b){ return (parseInt(b)||0)-(parseInt(a)||0); }); /* top shelf first, matches rack map */
+          shOrder.forEach(function(sh){
+            var slots = rObj.shelves[sh].slice().sort(function(a,b){ return (a.slot||'').localeCompare(b.slot||'',undefined,{numeric:true}); });
+            var shKey = 'W|'+wh+'|Z|'+z+'|R|'+r+'|S|'+sh, shCol = !!_locCollapsed[shKey];
+            h += '<tr class="loc-grp-h lvl3'+(shCol?' collapsed':'')+'" data-grp-toggle="'+esc(shKey)+'" style="background:color-mix(in srgb,var(--ink) 1.5%,var(--surface));">'
+              +'<td colspan="12"><span class="loc-grp-chev">&#9662;</span> ชั้น '+esc(sh)
+              +' <span class="tag" style="margin-left:6px;">'+slots.length+' ช่อง</span>'
+              +' <button class="del-badge" data-hier-del-wh="'+esc(wh)+'" data-hier-del-z="'+esc(z)+'" data-hier-del-r="'+esc(r)+'" data-hier-del-sh="'+esc(sh)+'" title="ลบทั้งชั้นนี้">'+delIco+'</button>'
+              +'</td></tr>';
+            if (!shCol) h += slots.map(_locRowHtml).join('');
+          });
+        });
+      });
+    });
+    body.innerHTML = whOrder.length ? h : emptyRow(12, 'ไม่พบตำแหน่งที่ตรงเงื่อนไข');
+  } else {
+    var groupLabel = { zone:'โซน', rack:'แร็ค', shelf:'ชั้น', type:'ประเภทแร็ค', wh:'คลัง' };
+    var groups = {}; var groupOrder = [];
+    locs.forEach(function(l){
+      var key = groupBy==='wh' ? whName(l.wh) : (l[groupBy]||'—');
+      if (!groups[key]) { groups[key]=[]; groupOrder.push(key); }
+      groups[key].push(l);
+    });
+    body.innerHTML = groupOrder.length ? groupOrder.map(function(key){
+      var rows = groups[key];
+      return '<tr style="background:color-mix(in srgb,var(--ink) 5%,var(--surface));pointer-events:none;">'
+        +'<td colspan="12" style="padding:8px 16px;font-weight:700;font-size:12px;color:var(--ink2);letter-spacing:.02em;">'
+        + esc(groupLabel[groupBy]||groupBy) + ': ' + esc(key)
+        + ' <span class="tag" style="margin-left:6px;">' + rows.length + ' ตำแหน่ง</span>'
+        + ' <button class="btn ghost sm" style="padding:3px 10px;font-size:11px;margin-left:8px;" '
+        + 'data-grp-key="'+esc(key)+'" onclick="locGrpPrint(event,this)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์กลุ่มนี้</button>'
+        + '</td></tr>'
+        + rows.map(_locRowHtml).join('');
+    }).join('') : emptyRow(9, 'ไม่พบตำแหน่งที่ตรงเงื่อนไข');
+  }
+}
+
+/* print only filtered (or all if no filter) */
+function printFilteredLocLabels() {
+  var locs = _getLocFiltered();
+  if (!locs.length) return toast('ไม่มีตำแหน่งที่ตรงเงื่อนไข', null, 'err');
+  printLocationLabels(locs.map(function(l){ return { code: l.code, sub: whName(l.wh) }; }));
+}
+window.printFilteredLocLabels = printFilteredLocLabels;
+
+/* collapse state for hierarchical grouping (session-only, not persisted) */
+var _locCollapsed = {};
+(function(){
+  var body = $('#locBody'); if(!body) return;
+  body.addEventListener('click', function(e){
+    var pr = e.target.closest('[data-hier-print-z]');
+    if (pr) {
+      e.stopPropagation();
+      var z = pr.getAttribute('data-hier-print-z'), r = pr.getAttribute('data-hier-print-r');
+      var locs = _getLocFiltered().filter(function(l){ return (l.zone||'—')===z && (l.rack||'—')===r; });
+      if (locs.length) printLocationLabels(locs.map(function(l){ return { code:l.code, sub:whName(l.wh) }; }));
+      return;
+    }
+    var del = e.target.closest('[data-hier-del-wh]');
+    if (del) {
+      e.stopPropagation();
+      var dwh = del.getAttribute('data-hier-del-wh') || '';
+      var dz = del.getAttribute('data-hier-del-z') || null;
+      var dr = del.getAttribute('data-hier-del-r') || null;
+      var dsh = del.getAttribute('data-hier-del-sh') || null;
+      confirmDeleteLocScope(dwh, dz, dr, dsh);
+      return;
+    }
+    var hd = e.target.closest('[data-grp-toggle]');
+    if (hd) { var k = hd.getAttribute('data-grp-toggle'); _locCollapsed[k] = !_locCollapsed[k]; renderLocMaster(); }
+  });
+})();
+
+/* print a whole group from the group header button */
+function locGrpPrint(ev, el) {
+  ev.stopPropagation();
+  var key = el.getAttribute('data-grp-key');
+  var groupBy = _locChipState.group || '';
+  var locs = _getLocFiltered().filter(function(l){
+    var k = groupBy==='wh' ? whName(l.wh) : (l[groupBy]||'—');
+    return k === key;
+  });
+  if (!locs.length) return;
+  printLocationLabels(locs.map(function(l){ return { code: l.code, sub: whName(l.wh) }; }));
+}
+window.locGrpPrint = locGrpPrint;
+
+function clearLocFilters() {
+  setv('schLoc','');
+  _locChipState = { wh:'', zone:'', rack:'', type:'', group:'hier', sort:'natural' };
+  _locCollapsed={};
+  renderLocMaster();
+}
+window.clearLocFilters = clearLocFilters;
+
+$('#btnAddLoc').onclick = function() {
+  var code = val('locCode').trim().toUpperCase();
+  if (!code) return toast('ยังไม่มีรหัสตำแหน่ง — กรอกข้อมูลหรือกด "แก้เอง"', null, 'err');
+  var renamingLoc = editingLoc && code !== editingLoc;
+  /* editing an existing row into a code that belongs to ANOTHER location used to silently
+     clobber that other row's data (only new-row creation was ever checked for collision). */
+  if ((!editingLoc || renamingLoc) && S.locations[code]) return toast('รหัสนี้มีอยู่แล้ว', code, 'err');
+  if (renamingLoc) {
+    /* changing a location's identity while a box still sits there used to leave that box
+       pointing at a code that no longer exists in Location Master (the same orphan class
+       backfillLocationsFromBoxes() heals at boot — better to just not allow it to happen). */
+    var occOld = locOccupancyMap()[editingLoc] || 0;
+    if (occOld) return toast('เปลี่ยนรหัสไม่ได้', 'มีกล่องอยู่ในตำแหน่ง '+editingLoc+' อยู่ '+occOld+' ใบ — ย้ายกล่องออกก่อนจึงจะเปลี่ยนรหัสได้', 'err');
+  }
+  var wh = val('locWh'), locZone = locTypeValue('locZone','locZoneOther'), locRack = locTypeValue('locRack','locRackOther');
+  if (!locZone) return toast('ยังไม่ได้ระบุโซน', 'กรุณาเลือกหรือกรอกโซนก่อนบันทึก — ตำแหน่งต้องมีโซนเสมอ', 'err');
+  var conflictZone = rackConflictZone(wh, locZone, locRack);
+  if (conflictZone && !(editingLoc && S.locations[editingLoc] && (S.locations[editingLoc].zone||'')===locZone))
+    return toast('ชื่อแร็คซ้ำ', 'แร็ค '+locRack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
+  // Editing a location used to rebuild its object from the form fields alone,
+  // silently dropping reportedFullAt/By/Note (set by reportLocFull()/the
+  // PDA's ช่องเก็บเต็ม report, neither of which this form knows about) the
+  // next time anyone re-saved that row for an unrelated reason like a typo
+  // fix. Carry those three over from whatever was there before, same code
+  // or renamed — it's still the same physical shelf.
+  var prevLoc = editingLoc ? S.locations[editingLoc] : null;
+  if (renamingLoc) delete S.locations[editingLoc];
+  S.locations[code] = { code: code, wh: wh, zone: locZone, rack: locRack,
+    shelf: val('locShelf').trim(), slot: val('locSlot').trim(), type: locTypeValue('locType','locTypeOther'), note: val('locNote').trim(),
+    reportedFullAt: prevLoc ? (prevLoc.reportedFullAt||null) : null,
+    reportedFullBy: prevLoc ? (prevLoc.reportedFullBy||null) : null,
+    reportedFullNote: prevLoc ? (prevLoc.reportedFullNote||null) : null };
+  save();
+  ['locShelf','locSlot','locNote','locTypeOther','locZoneOther','locRackOther'].forEach(function(i){setv(i,'');});
+  var lt0=$('#locType'); if(lt0)lt0.selectedIndex=0;
+  var lo0=$('#locTypeOther'); if(lo0)lo0.style.display='none';
+  var zo0=$('#locZoneOther'); if(zo0)zo0.style.display='none';
+  var ro0=$('#locRackOther'); if(ro0)ro0.style.display='none';
+  setv('locCode',''); locCodeOverride=false;
+  var oc=$('#btnOverrideLocCode'); if(oc){oc.textContent='แก้เอง';}
+  var ci=$('#locCode'); if(ci){ci.readOnly=true;}
+  editingLoc = null; $('#btnAddLoc').textContent = 'บันทึกตำแหน่ง'; $('#btnCancelLoc').style.display = 'none';
+  renderLocDatalist(); renderLocMaster(); suggestSingleZone(); suggestSingleRack();
+  toast('บันทึกตำแหน่งแล้ว', code, 'ok');
+};
+
+$('#btnCancelLoc').onclick = function() {
+  editingLoc = null; locCodeOverride=false;
+  $('#btnAddLoc').textContent = 'บันทึกตำแหน่ง'; $('#btnCancelLoc').style.display = 'none';
+  var oc=$('#btnOverrideLocCode'); if(oc){oc.textContent='แก้เอง';}
+  var ci=$('#locCode'); if(ci){ci.readOnly=true;}
+  ['locCode','locShelf','locSlot','locNote','locTypeOther','locZoneOther','locRackOther'].forEach(function(i){setv(i,'');});
+  var lt0=$('#locType'); if(lt0)lt0.selectedIndex=0;
+  var lo0=$('#locTypeOther'); if(lo0)lo0.style.display='none';
+  var zo0=$('#locZoneOther'); if(zo0)zo0.style.display='none';
+  var ro0=$('#locRackOther'); if(ro0)ro0.style.display='none';
+  suggestSingleZone(); suggestSingleRack();
+};
+
+function editLocRow(code) {
+  var l = S.locations[code]; if (!l) return;
+  /* switch to single mode */
+  var sw=$('#locModeSw');
+  if(sw){var b=sw.querySelector('[data-lmode=single]');if(b)b.click();}
+  editingLoc = code; locCodeOverride = true;
+  var ci=$('#locCode'); if(ci){ci.readOnly=false;ci.value=l.code;}
+  var oc=$('#btnOverrideLocCode'); if(oc){oc.textContent='ใช้ Auto';}
+  var w = $('#locWh'); if (w) w.value = l.wh || '';
+  populateZoneSelect('locZone','locZoneOther', l.wh||'', l.zone||'');
+  populateRackSelect('locRack','locRackOther', l.wh||'', l.rack||'');
+  setv('locShelf', l.shelf||''); setv('locSlot', l.slot||'');
+  var lt=$('#locType'), ltOther=$('#locTypeOther');
+  if (lt) {
+    var knownType = l.type && [].slice.call(lt.options).some(function(o){return o.value===l.type;});
+    if (l.type && !knownType) { lt.value='__other__'; if(ltOther){ltOther.value=l.type;ltOther.style.display='';} }
+    else { lt.value=l.type||''; if(ltOther){ltOther.value='';ltOther.style.display='none';} }
+  }
+  setv('locNote', l.note||'');
+  $('#btnAddLoc').textContent = 'อัปเดตตำแหน่ง'; $('#btnCancelLoc').style.display = 'inline-flex';
+  var card = document.getElementById('ssec-loc'); if (card) card.querySelector('.card').scrollIntoView({behavior:'smooth', block:'start'});
+}
+window.editLocRow = editLocRow;
+
+function delLoc(code) {
+  /* bulk-delete already skips occupied codes (see below) — single-row delete
+     used to have no such guard, so it could delete a location a box is
+     currently sitting in and leave that box pointing at nothing. */
+  var occ = locOccupancyMap()[code] || 0;
+  if (occ) return toast('ลบไม่ได้', 'มีกล่องอยู่ในตำแหน่งนี้ '+occ+' ใบ — ย้ายกล่องออกก่อนจึงจะลบได้', 'err');
+  confirmA('ลบตำแหน่ง '+code+'?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
+    if (!ok) return;
+    delete S.locations[code]; save(); renderLocMaster();
+    toast('ลบแล้ว', code);
+  });
+}
+window.delLoc = delLoc;
+function locRowClick(el) { editLocRow(el.getAttribute('data-loc-code')); }
+function locDelClick(ev, el) { ev.stopPropagation(); delLoc(el.getAttribute('data-loc-del')); }
+function locPrintClick(ev, el) {
+  ev.stopPropagation();
+  var code = el.getAttribute('data-loc-print');
+  var loc = S.locations[code]; if (!loc) return;
+  printLocationLabels([{ code: code, sub: whName(loc.wh) }]);
+}
+function printAllLocLabels() {
+  var locs = Object.values(S.locations);
+  if (!locs.length) return toast('ยังไม่มีตำแหน่งแร็ค', 'เพิ่มตำแหน่งใน Setup ก่อน', 'err');
+  printLocationLabels(locs.map(function(l){ return { code: l.code, sub: whName(l.wh) }; }));
+}
+window.locRowClick = locRowClick; window.locDelClick = locDelClick;
+window.locPrintClick = locPrintClick; window.printAllLocLabels = printAllLocLabels;
+
+/* ===== Rack Map: click a slot → scan RFID/barcode straight into that exact location =====
+   The map is meant to be worked from the floor: pick the physical bin you're standing at,
+   then scan whatever box goes in it — instead of typing zone/rack/shelf/slot by hand. */
+var slotPutawayQueue = [];
+function openSlotPutawayModal(code){
+  var loc = S.locations[code]; if(!loc){toast('ไม่พบตำแหน่งนี้',code,'err');return;}
+  slotPutawayQueue = [];
+  var occBoxes = Object.values(S.boxes).filter(function(b){
+    return b.status==='warehouse' && locationCode(b.location||{}) === code;
+  });
+  var locLabel = [loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
+  var occLabel = occBoxes.length ? ('มีของอยู่แล้ว '+occBoxes.length+' กล่อง: '+occBoxes.map(function(b){return b.tag;}).join(', ')) : 'ว่าง — พร้อมวางกล่อง';
+  openModal(
+    '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 3.5 3H6.5L10 9 9 3Z"/><path d="M12 15v6"/></svg></span> Putaway → '+esc(code)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+      +(loc.reportedFullAt
+        ? '<div class="banner bad" style="margin:0 0 12px;">'
+          +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span></span>'
+          +'<div><b>ช่องนี้ถูกแจ้งว่าเต็ม</b>'+(loc.reportedFullBy?' โดย '+esc(loc.reportedFullBy):'')+(loc.reportedFullAt?' · '+esc(fmtTs(loc.reportedFullAt)):'')
+            +'<div class="small" style="margin-top:2px;">suggest-location จะข้ามช่องนี้จนกว่าจะกดเคลียร์ — <a href="javascript:void 0" onclick="clearLocFull(\''+esc(code)+'\');openSlotPutawayModal(\''+esc(code)+'\');">เคลียร์เลย</a></div></div>'
+        +'</div>'
+        : '')
+      +'<div class="banner '+(occBoxes.length?'warn':'info')+'" style="margin:0 0 16px;">'
+        +'<span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span>'
+        +'<div><b>'+esc(whName(loc.wh))+'</b>'+(locLabel?' · '+esc(locLabel):'')+'<div class="small" style="margin-top:2px;">'+esc(occLabel)+'</div></div>'
+      +'</div>'
+      +'<div class="rfid-fin-card" style="margin:0 auto 10px;max-width:460px;">'
+        +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>ป้ายตำแหน่งนี้ — สำหรับพิมพ์ติดหน้างาน</div>'
+        +'<div class="rfid-fin-wrap"><div class="finlabel" style="padding:12px 14px 8px;">'
+          +'<div class="fl-head"><div><div class="fl-brand" style="font-size:15px;">LOCATION</div></div>'
+            +'<div style="width:42px;height:42px;flex:0 0 auto;" title="QR ของตำแหน่งนี้">'+qrCodeSVG(code,42)+'</div>'
+          +'</div>'
+          +'<div style="text-align:center;font-weight:800;font-size:30px;letter-spacing:.03em;margin:4px 0 2px;color:#000;">'+esc(code)+'</div>'
+          +'<div class="fl-div" style="margin:8px 0 10px;"></div>'
+          // Was capped to a 280px card (barcode ~250px wide) — too narrow for
+          // a handheld scanner's imager to resolve the bar widths reliably at
+          // arm's length. Widened the card and made the bars themselves
+          // taller so the same physical label prints and scans cleanly.
+          +'<div class="fl-bc">'+code128SVG(code,88)+'</div>'
+        +'</div></div>'
+      +'</div>'
+      +'<div class="row" style="justify-content:center;gap:8px;margin:0 0 16px;flex-wrap:wrap;">'
+        +'<button type="button" class="btn ghost sm" onclick="downloadSlotLabelPNG(\''+esc(code)+'\',\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ดาวน์โหลด PNG</button>'
+        +'<button type="button" class="btn ghost sm" onclick="printLocationLabels([{code:\''+esc(code)+'\',sub:\''+esc(whName(loc.wh)).replace(/'/g,"\\'")+'\'}])"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 15h10v6H7Z"/></svg></span> พิมพ์ป้ายช่องนี้</button>'
+        +(loc.reportedFullAt ? '' : '<button type="button" class="btn ghost sm" style="color:var(--neg);" onclick="reportLocFull(\''+esc(code)+'\').then(function(done){if(done)openSlotPutawayModal(\''+esc(code)+'\');})" title="เหมือนปุ่ม &quot;ช่องเก็บเต็ม&quot; บน PDA — suggest-location จะข้ามช่องนี้จนกว่าจะเคลียร์"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span> แจ้งช่องนี้เต็ม</button>')
+      +'</div>'
+      +'<div class="inv-scan-bar" style="margin-bottom:10px;"><span class="iss-ic">⊟</span>'
+        +'<input id="slotPaScan" placeholder="ยิงบาร์โค้ด / บาร์โค้ดกล่องที่จะจัดเก็บ" autocomplete="off">'
+        +'<button class="btn pos sm" id="btnSlotPaAdd">เพิ่ม</button></div>'
+      +'<div id="slotPaResult"></div>'
+    +'</div>'
+    +'<div class="mfoot">'
+      +'<span class="muted small" id="slotPaCount" style="margin-right:auto;"></span>'
+      +(occBoxes.length ? '' : '<button class="btn ghost sm" style="color:var(--neg);" onclick="if(delLocSlot(\''+esc(code)+'\'))closeModal();" title="ลบตำแหน่งนี้ออกจากผัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ลบตำแหน่งนี้</button>')
+      +'<button class="btn gray" data-close>ยกเลิก</button>'
+      +'<button class="btn pos" onclick="commitSlotPutaway(\''+esc(code)+'\')">ยืนยันจัดเก็บ</button>'
+    +'</div>'
+  );
+  $('#btnSlotPaAdd').onclick = slotPaAdd;
+  $('#slotPaScan').addEventListener('keydown', function(e){ if(e.key==='Enter') slotPaAdd(); });
+  autoScanBind($('#slotPaScan'), slotPaAdd);
+  renderSlotPaQueue();
+  setTimeout(function(){var f=$('#slotPaScan'); if(f) f.focus();},60);
+}
+window.openSlotPutawayModal = openSlotPutawayModal;
+/* quick PNG grab of this one slot's label — no modal navigation, so an in-progress scan queue isn't disturbed */
+function downloadSlotLabelPNG(code,sub){
+  var a=document.createElement('a');a.href=locationLabelToPNG(code,sub);a.download='location-'+code+'.png';a.click();
+  toast('ดาวน์โหลดป้ายแล้ว',code,'info');
+}
+window.downloadSlotLabelPNG=downloadSlotLabelPNG;
+function slotPaAdd(tag){
+  var raw = (typeof tag==='string'?tag:val('slotPaScan')).trim();
+  tag = resolveTag(raw); if(!tag) return;
+  var b = S.boxes[tag];
+  if(!b){ toast('ไม่พบกล่อง', looksThaiGarbled(raw)?tag+' — คีย์บอร์ดอาจอยู่ในโหมดภาษาไทย':tag, 'err'); setv('slotPaScan',''); return; }
+  if(b.status==='out'){ toast(tag+' ยังอยู่นอกคลัง (ที่ลูกค้า)', 'ต้องรับเข้าที่ Gate ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
+  if(b.status==='lost'){ toast(tag+' ถูกตีเป็นสูญหาย', 'กู้คืนสถานะก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
+  if(b.status==='hold'){ toast(tag+' ถูกกันไว้ (Hold)', 'ปลด Hold ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
+  if(b.status==='damage'){ toast(tag+' สถานะชำรุด (Damage)', null, 'err'); setv('slotPaScan',''); return; }
+  if(slotPutawayQueue.indexOf(tag) < 0) slotPutawayQueue.push(tag);
+  setv('slotPaScan','');
+  renderSlotPaQueue();
+  var f = $('#slotPaScan'); if(f) f.focus();
+}
+window.slotPaAdd = slotPaAdd;
+function renderSlotPaQueue(){
+  var res = $('#slotPaResult'); if(!res) return;
+  var cnt = $('#slotPaCount'); if(cnt) cnt.textContent = slotPutawayQueue.length ? ('คิวจัดเก็บ '+slotPutawayQueue.length+' ใบ') : '';
+  res.innerHTML = slotPutawayQueue.length ? '<div class="chiplist">'+slotPutawayQueue.map(function(t){
+    var b=S.boxes[t]||{};
+    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span><b onclick="slotPaRemove(\''+esc(t)+'\')" title="เอาออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';
+  }).join('')+'</div>' : '<div class="muted small">ยังไม่มีกล่องในคิว</div>';
+}
+function slotPaRemove(t){ slotPutawayQueue = slotPutawayQueue.filter(function(x){return x!==t;}); renderSlotPaQueue(); }
+window.slotPaRemove = slotPaRemove;
+function commitSlotPutaway(code){
+  if(!slotPutawayQueue.length) return toast('ยังไม่มีกล่องในคิว', null, 'err');
+  var loc = S.locations[code]; if(!loc) return;
+  var recorder = USER, ts = iso();
+  var locObj = {wh:loc.wh, zone:loc.zone||'', rack:loc.rack||'', shelf:loc.shelf||'', slot:loc.slot||'', gate:null, ts:ts};
+  var locStr = [locObj.zone, locObj.rack, locObj.shelf, locObj.slot].filter(Boolean).join(' · ');
+  var typesIn = {}, n = 0;
+  slotPutawayQueue.forEach(function(t){
+    var b = S.boxes[t]; if(!b) return;
+    var isPutaway = b.status === 'warehouse';
+    if(isPutaway){
+      var before = {wh:whName((b.location||{}).wh), loc:locShort(b.location)};
+      b.history.push({dir:'putaway', ts:ts, wh:locObj.wh, loc:locObj, recorder:recorder, note:'จัดเก็บเข้าตำแหน่ง '+code+' จากผังชั้นวาง'});
+      b.location = locObj; b.lastSeenAt = ts;
+      auditEntry('RELOCATE', recorder, t, typeName(b.type), before, {wh:whName(locObj.wh), loc:locStr});
+    } else {
+      var isNewBox = !(b.history||[]).some(function(h){return h.dir==='out';});
+      b.history.push({dir:'in', ts:ts, do:isNewBox?'':b.do, po:isNewBox?'':b.po, customer:isNewBox?'':b.customer, wh:locObj.wh, loc:locObj, recorder:recorder, note:(isNewBox?'Initial Inbound':'รับเข้า')+' → จัดเก็บที่ '+code});
+      S.events.push({ts:ts, dir:isNewBox?'in-new':'in', tag:t, type:b.type, do:isNewBox?'':b.do, customer:isNewBox?'':b.customer, customerName:isNewBox?'':custName(b.customer), wh:locObj.wh, recorder:recorder});
+      b.status='warehouse'; if(!isNewBox) b.cycles=(b.cycles||0)+1;
+      b.customer=''; b.do=''; b.po=''; b.outGate=null; b.outWh=''; b.outAt=null; b.dueAt=null;
+      b.location = locObj; b.lastSeenAt = ts;
+      auditEntry('GATE_IN', recorder, t, typeName(b.type), null, {wh:whName(locObj.wh), loc:locStr});
+    }
+    typesIn[b.type]=true; n++;
+  });
+  Object.keys(typesIn).forEach(function(ty){ S.putaway[ty] = {wh:locObj.wh, zone:locObj.zone, rack:locObj.rack, shelf:locObj.shelf, slot:locObj.slot}; });
+  saveLastInvLoc(locObj.wh, locStr);
+  save(); closeModal();
+  toast('จัดเก็บสำเร็จ', n+' ใบ → '+code, 'ok');
+  slotPutawayQueue = [];
+  renderAll();
+}
+window.commitSlotPutaway = commitSlotPutaway;
+function locSlotClick(el){ openSlotPutawayModal(el.getAttribute('data-loc-code')); }
+window.locSlotClick = locSlotClick;
+
+/* ── bulk select actions for location table (mirrors ลงทะเบียนกล่อง) ── */
+$('#bulkLocClear').addEventListener('click', function(){ clearBulk('loc-cb','bulkLoc','cbAllLoc'); });
+$('#bulkLocLabel').addEventListener('click', function(){
+  var codes = getChecked('loc-cb'); if (!codes.length) return;
+  var locs = codes.map(function(code){ return S.locations[code]; }).filter(Boolean);
+  if (!locs.length) return;
+  printLocationLabels(locs.map(function(l){ return { code: l.code, sub: whName(l.wh) }; }));
+});
+$('#bulkLocDel').addEventListener('click', function(){
+  var codes = getChecked('loc-cb'); if (!codes.length) return;
+  confirmA('ลบ '+codes.length+' ตำแหน่งที่เลือก?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
+    if (!ok) return;
+    codes.forEach(function(c){ delete S.locations[c]; });
+    save(); clearBulk('loc-cb','bulkLoc','cbAllLoc'); renderLocMaster();
+    toast('ลบแล้ว', codes.length+' ตำแหน่ง');
+  });
+});
+
+
 function renderOptionalLocation(){
   var tab=$('#stabLoc');if(tab)tab.style.display=S.cfg&&S.cfg.putawayEnabled?'':'none';
   var sec=$('#ssec-loc');if(sec&&!(S.cfg&&S.cfg.putawayEnabled))sec.style.display='none';
-  var sel=$('#locWh');if(sel)sel.innerHTML=Object.values(S.warehouses||{}).map(function(w){return '<option value="'+esc(w.id)+'">'+esc(w.name||w.id)+'</option>';}).join('');
-  var rows=Object.values(S.locations||{}),body=$('#locBody');if(body)body.innerHTML=rows.length?rows.map(function(l){return '<tr><td class="mono"><b>'+esc(l.code)+'</b></td><td>'+esc(l.wh||'-')+'</td><td>'+esc(l.zone||'-')+'</td><td>'+esc(l.rack||'-')+'</td><td>'+esc(l.shelf||'-')+'</td><td>'+esc(l.slot||'-')+'</td><td><button class="btn sm red" onclick="deleteOptionalLocation(\''+esc(l.code)+'\')">ลบ</button></td></tr>';}).join(''):emptyRow(7,'ยังไม่มีตำแหน่ง');var cnt=$('#cntLoc');if(cnt)cnt.textContent=rows.length+' ตำแหน่ง';
+  if(S.cfg&&S.cfg.putawayEnabled)renderLocMaster();
 }
-function saveOptionalLocation(){if(!(S.cfg&&S.cfg.putawayEnabled))return toast('Putaway ปิดอยู่','','err');var code=val('locCode').trim().toUpperCase();if(!code)return toast('กรุณาระบุรหัสตำแหน่ง','','err');S.locations=S.locations||{};S.locations[code]={code:code,wh:val('locWh'),zone:val('locZone'),rack:val('locRack'),shelf:val('locShelf'),slot:val('locSlot'),type:'',note:''};save().then(function(){renderAll();toast('บันทึกตำแหน่งแล้ว','','ok');});}
-function clearOptionalLocationForm(){['locCode','locZone','locRack','locShelf','locSlot'].forEach(function(id){var e=$('#'+id);if(e)e.value='';});}
-function deleteOptionalLocation(code){if(!S.locations||!S.locations[code])return;delete S.locations[code];save().then(function(){renderAll();toast('ลบตำแหน่งแล้ว','','ok');});}
-window.renderOptionalLocation=renderOptionalLocation;window.saveOptionalLocation=saveOptionalLocation;window.clearOptionalLocationForm=clearOptionalLocationForm;window.deleteOptionalLocation=deleteOptionalLocation;
+window.renderOptionalLocation=renderOptionalLocation;
 function goSetup(stab){
   switchTab('setup');
   setTimeout(function(){
