@@ -14,6 +14,10 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 let activeController = null;
 let generation = 0;
 
+// Code 128-B modules. This is the same symbology emitted by Zebra ZPL ^BC,
+// so the 3D label is a faithful model of the physical location sticker.
+const CODE128_PATTERNS = ["212222","222122","222221","121223","121322","131222","122213","122312","132212","221213","221312","231212","112232","122132","122231","113222","123122","123221","223211","221132","221231","213212","223112","312131","311222","321122","321221","312212","322112","322211","212123","212321","232121","111323","131123","131321","112313","132113","132311","211313","231113","231311","112133","112331","132131","113123","113321","133121","313121","211331","231131","213113","213311","213131","311123","311321","331121","312113","312311","332111","314111","221411","431111","111224","111422","121124","121421","141122","141221","112214","112412","122114","122411","142112","142211","241211","221114","413111","241112","134111","111242","121142","121241","114212","124112","124211","411212","421112","421211","212141","214121","412121","111143","111341","131141","114113","114311","411113","411311","113141","114131","311141","411131","211412","211214","211232","2331112"];
+
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const positive = (value, fallback) => num(value, fallback) > 0 ? num(value, fallback) : fallback;
@@ -122,6 +126,52 @@ function concreteTexture() {
   texture.repeat.set(10, 10);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
+  return texture;
+}
+
+function code128LabelTexture(value) {
+  const code = String(value ?? '');
+  const codes = [104]; // Start Code B — matches ZPL ^BC for our ASCII location IDs.
+  let checksum = 104;
+  for (let index = 0; index < code.length; index += 1) {
+    const raw = code.charCodeAt(index) - 32;
+    const item = raw >= 0 && raw <= 94 ? raw : 0;
+    codes.push(item);
+    checksum += item * (index + 1);
+  }
+  codes.push(checksum % 103, 106);
+  const modules = [10];
+  codes.forEach((item) => CODE128_PATTERNS[item].split('').forEach((width) => modules.push(Number(width))));
+  modules.push(10);
+  const moduleTotal = modules.reduce((sum, width) => sum + width, 0);
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 210;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const left = 30;
+  const top = 18;
+  const barHeight = 145;
+  const unit = (canvas.width - left * 2) / moduleTotal;
+  let x = left;
+  let isBar = false;
+  modules.forEach((width) => {
+    if (isBar) {
+      context.fillStyle = '#050505';
+      context.fillRect(Math.round(x), top, Math.ceil(width * unit), barHeight);
+    }
+    x += width * unit;
+    isBar = !isBar;
+  });
+  context.fillStyle = '#111111';
+  context.font = '700 21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  context.textAlign = 'center';
+  context.fillText(code, canvas.width / 2, 193);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.NearestFilter;
   return texture;
 }
 
@@ -306,20 +356,24 @@ async function createScene(canvas, model, onSelect) {
   }
 
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
-  // These are the same printable/scannable Location Master barcodes used by
-  // Putaway. CSS2D keeps the code facing the operator as they orbit the rack.
-  // Large warehouses keep the interaction label only to avoid thousands of DOM
-  // nodes; normal rack views show every slot code.
+  const labelTextures = [];
+  // Model the actual ZPL/Code128 sticker as a plane fixed to the FRONT shelf
+  // beam. It is part of the rack, never a floating screen-space caption.
   if (slotEntries.length <= 250) {
     slotEntries.forEach((entry) => {
-      const element = document.createElement('div');
-      element.className = 'loc3d-slot-code';
-      element.textContent = entry.slot.barcode || entry.slot.id;
-      const label = new CSS2DObject(element);
-      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.07, entry.scale.z / 2 + 0.025)
+      const texture = code128LabelTexture(entry.slot.barcode || entry.slot.id);
+      labelTextures.push(texture);
+      const width = Math.max(0.32, entry.scale.x * 0.82);
+      const height = Math.min(0.19, width / 3.65);
+      const sticker = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, height),
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
+      );
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + height / 2 + 0.055, entry.scale.z / 2 + 0.042)
         .applyQuaternion(entry.quaternion);
-      label.position.copy(entry.position).add(frontOffset);
-      scene.add(label);
+      sticker.position.copy(entry.position).add(frontOffset);
+      sticker.quaternion.copy(entry.quaternion);
+      scene.add(sticker);
     });
   }
   const materialColors = {
@@ -499,6 +553,7 @@ async function createScene(canvas, model, onSelect) {
         materials.forEach((material) => material.dispose?.());
       });
       floorTexture.dispose();
+      labelTextures.forEach((texture) => texture.dispose());
       renderer.dispose();
     },
   };
