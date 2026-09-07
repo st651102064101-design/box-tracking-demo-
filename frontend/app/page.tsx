@@ -61,10 +61,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!ready || appReady) return;
-    /* legacy.html is a large, independently booted app. A runtime exception
-       inside it must never leave the outer application masked by a permanent
-       loading screen. The iframe's load event handles the normal path; this
-       timeout is the last-resort escape hatch for a future boot regression. */
+    /* A broken legacy boot must not mask the working application forever. */
     const timer = window.setTimeout(() => setAppReady(true), 5000);
     return () => window.clearTimeout(timer);
   }, [ready, appReady]);
@@ -73,9 +70,16 @@ export default function Home() {
     const applyTabBranding = (branding: SystemBranding) => {
       const name = branding.systemName?.trim() || 'Smart Tracking';
       document.title = `${name} — ระบบติดตามสินทรัพย์หมุนเวียน`;
-      /* The favicon link is owned by Next's Metadata tree in app/layout.tsx.
-         Removing/replacing it here makes React later unmount an already
-         detached node when navigating to /login (removeChild on null). */
+      /* Keep the browser tab icon in sync with the same Branding record that
+         drives the legacy application. Change the existing link's href rather
+         than removing a node owned by Next's metadata tree. */
+      let favicon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+      if (!favicon) {
+        favicon = document.createElement('link');
+        favicon.rel = 'icon';
+        document.head.appendChild(favicon);
+      }
+      favicon.href = branding.logoData || '/api/branding/favicon';
     };
     const onBranding = (event: MessageEvent) => {
       const frame = document.querySelector('iframe');
@@ -94,8 +98,6 @@ export default function Home() {
         src="/legacy.html"
         title={t('app.frameTitle')}
         allowFullScreen
-        /* The document itself has loaded, so it is safe to reveal it. Its own
-           smarttrace-ready message remains useful for the slower boot path. */
         onLoad={() => setAppReady(true)}
         className={`app-frame${appReady ? ' is-ready' : ''}`}
       />}

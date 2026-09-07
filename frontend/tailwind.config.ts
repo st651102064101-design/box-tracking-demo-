@@ -1,5 +1,11 @@
 import type { Config } from 'tailwindcss';
 
+/**
+ * Tailwind is set up for the NEW React surfaces you build (login, and future
+ * dashboards/components as you migrate the legacy UI). The legacy app keeps its
+ * own hand-written CSS untouched. The palette mirrors the app's lime accent so
+ * new screens feel native.
+ */
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   darkMode: 'class',
@@ -17,5 +23,4 @@ const config: Config = {
   },
   plugins: [],
 };
-
 export default config;
