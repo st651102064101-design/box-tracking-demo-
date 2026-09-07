@@ -168,6 +168,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
         .update(boxes)
         .set({
           status: 'out',
+          slotId: null,
           customer,
           doNo,
           po,

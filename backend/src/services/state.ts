@@ -21,6 +21,8 @@ import {
   gateWebhookStatus,
   rfidReaders,
   locations,
+  racks,
+  slots,
   employees,
   vehicles,
   doRecords,
@@ -41,6 +43,7 @@ import {
   type GateOutLineInput,
 } from './autoLineNotifications.js';
 import { isEmployeeCrudAuditEntry } from './audit.js';
+import { deriveWarehouseGeometry } from './warehouseGeometry.js';
 
 // A full audit reset must not be undone by an already-open browser posting its
 // cached pre-reset audit array back through the legacy whole-state endpoint.
@@ -132,11 +135,18 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
 
   const cfgRow = cfgRows[0];
   const cfg = cfgRow
-    ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode }
-    : { agingDays: 15, boxValue: 450, lostMode: 'manual' };
+    ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode, putawayEnabled: cfgRow.putawayEnabled }
+    : { agingDays: 15, boxValue: 450, lostMode: 'manual', putawayEnabled: false };
 
   return {
-    boxes: mapBy(boxRows, (r) => r.tag),
+    boxes: Object.fromEntries(boxRows.map((r) => [r.tag, {
+      ...(r.data as Record<string, unknown>),
+      slotId: r.slotId,
+      widthCm: r.widthCm,
+      heightCm: r.heightCm,
+      depthCm: r.depthCm,
+      materialType: r.materialType,
+    }])),
     customers: Object.fromEntries(custRows.map((r) => [r.id, {
       ...(r.data as Record<string, unknown>),
       lineUserId: r.lineUserId ?? (r.data as Record<string, unknown>).lineUserId ?? '',
@@ -349,6 +359,7 @@ export async function replaceState(
         agingDays: toInt(cfg.agingDays) ?? 15,
         boxValue: toNumStr(cfg.boxValue) ?? '450',
         lostMode: (cfg.lostMode as string) ?? 'manual',
+        putawayEnabled: Boolean(cfg.putawayEnabled),
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -357,6 +368,7 @@ export async function replaceState(
           agingDays: toInt(cfg.agingDays) ?? 15,
           boxValue: toNumStr(cfg.boxValue) ?? '450',
           lostMode: (cfg.lostMode as string) ?? 'manual',
+          putawayEnabled: Boolean(cfg.putawayEnabled),
           updatedAt: new Date(),
         },
       });
@@ -367,6 +379,24 @@ export async function replaceState(
       value: toInt(value) ?? 0,
     }));
     await syncKeyed(tx, sequences, 'name', seqRows);
+
+    // Build the normalized centimetre-based 3D model from the Location Master
+    // before syncing boxes, so a box can safely reference a newly-created slot
+    // in this same state transaction. Existing coordinates/dimensions are fed
+    // back into the derivation and therefore survive ordinary legacy saves.
+    const [existingRacks, existingSlots] = await Promise.all([
+      tx.select().from(racks),
+      tx.select().from(slots),
+    ]);
+    const geometry = deriveWarehouseGeometry(
+      s.locations ?? {},
+      s.boxes ?? {},
+      s.boxtypes ?? {},
+      existingRacks,
+      existingSlots,
+    );
+    await syncKeyed(tx, racks, 'id', geometry.rackRows);
+    await syncKeyed(tx, slots, 'id', geometry.slotRows);
 
     // 4) boxes
     // Preserve webhook-owned LPR evidence when an already-open legacy page
@@ -384,6 +414,7 @@ export async function replaceState(
     const boxRows = Object.entries(s.boxes ?? {}).map(([tag, raw]) => {
       const b = raw as Record<string, unknown>;
       const history = mergeLprHistory(b.history, persistedBoxes.get(tag)?.history);
+      const model = geometry.boxesByTag.get(tag)!;
       return {
         tag,
         type: (b.type as string) ?? null,
@@ -407,12 +438,25 @@ export async function replaceState(
         // by RFID again despite `data.rfidTid` still being right there.
         rfidTid: (b.rfidTid as string) ?? null,
         rfidEpc: (b.rfidEpc as string) ?? null,
+        slotId: model.slotId,
+        widthCm: model.widthCm,
+        heightCm: model.heightCm,
+        depthCm: model.depthCm,
+        materialType: model.materialType,
         location: (b.location as object) ?? {},
         history,
         // composeState returns this blob to the browser. Keeping its history
         // aligned with the typed column is what makes the LPR panel update on
         // the next SSE-triggered state refresh.
-        data: { ...b, history },
+        data: {
+          ...b,
+          history,
+          slotId: model.slotId,
+          widthCm: model.widthCm,
+          heightCm: model.heightCm,
+          depthCm: model.depthCm,
+          materialType: model.materialType,
+        },
         updatedAt: new Date(),
       };
     });
@@ -603,11 +647,13 @@ export async function replaceState(
       'code',
       Object.entries(s.locations ?? {}).map(([code, raw]) => {
         const l = raw as Record<string, unknown>;
+        const rack = typeof l.rack === 'string' ? l.rack.trim() : '';
+        if (!rack) throw new Error(`Location ${code} requires a rack`);
         return {
           code,
           wh: (l.wh as string) ?? null,
           zone: (l.zone as string) ?? null,
-          rack: (l.rack as string) ?? null,
+          rack,
           shelf: (l.shelf as string) ?? null,
           slot: (l.slot as string) ?? null,
           type: (l.type as string) ?? null,

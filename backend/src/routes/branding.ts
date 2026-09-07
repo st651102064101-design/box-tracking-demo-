@@ -15,12 +15,16 @@ const DEFAULT_BRANDING = {
   systemName: 'Smart Tracking',
   subtitle: 'WMS · เฟส 1 · Returnable Asset Tracking',
   logoData: null as string | null,
+  returnNoteCompany: 'ABSS', returnNoteDepartment: 'ฝ่ายทรัพยากรบุคคล', returnNotePhone: '0xx-xxx-xxxx',
 };
 
 const brandingSchema = z.object({
   systemName: z.string().trim().min(1).max(80),
   subtitle: z.string().trim().max(180).default(''),
   logoData: z.string().max(3_000_000).nullable().optional(),
+  returnNoteCompany: z.string().trim().max(120).default('ABSS'),
+  returnNoteDepartment: z.string().trim().max(120).default('ฝ่ายทรัพยากรบุคคล'),
+  returnNotePhone: z.string().trim().max(80).default('0xx-xxx-xxxx'),
 });
 
 /** Public because the login/onboarding shell needs branding before auth. */
@@ -33,6 +37,7 @@ brandingRouter.get(
       systemName: row.systemName,
       subtitle: row.subtitle,
       logoData: row.logoData,
+      returnNoteCompany: row.returnNoteCompany, returnNoteDepartment: row.returnNoteDepartment, returnNotePhone: row.returnNotePhone,
     } : DEFAULT_BRANDING);
   }),
 );
@@ -69,6 +74,7 @@ brandingRouter.put(
       systemName: input.systemName,
       subtitle: input.subtitle,
       logoData: input.logoData ?? null,
+      returnNoteCompany: input.returnNoteCompany, returnNoteDepartment: input.returnNoteDepartment, returnNotePhone: input.returnNotePhone,
       updatedAt: new Date(),
     };
     await getDb().insert(config).values({ id: 1, ...values }).onConflictDoUpdate({
@@ -76,7 +82,7 @@ brandingRouter.put(
       set: values,
     });
     bump(req.get('X-Client-Id'));
-    res.json({ systemName: values.systemName, subtitle: values.subtitle, logoData: values.logoData });
+    res.json({ systemName: values.systemName, subtitle: values.subtitle, logoData: values.logoData, returnNoteCompany: values.returnNoteCompany, returnNoteDepartment: values.returnNoteDepartment, returnNotePhone: values.returnNotePhone });
   }),
 );
 

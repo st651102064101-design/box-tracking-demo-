@@ -8,6 +8,7 @@ import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
+import { boxGeometryValues } from '../services/warehouseGeometry.js';
 import { bump } from '../lib/bus.js';
 
 /** Read-only box queries (real reporting API alongside the state bridge). */
@@ -149,6 +150,14 @@ boxesRouter.post(
 
     const now = new Date();
     const ts = now.toISOString();
+    // `dim`/`name` are typed Box Type columns. Older rows usually mirror
+    // them in `data`, but API-created/imported rows are not required to, so
+    // pass the authoritative columns explicitly when sizing a new box.
+    const geometry = boxGeometryValues({}, {
+      ...(bt.data as Record<string, unknown>),
+      dim: bt.dim,
+      name: bt.name,
+    }, null);
     const location = { wh: '', zone: '', rack: '', shelf: '', slot: '', gate: null, ts };
     const history = [{ dir: 'reg', ts, recorder: req.user!.username }];
     const data = {
@@ -167,6 +176,11 @@ boxesRouter.post(
       location,
       lastSeenAt: ts,
       labeled: false,
+      slotId: null,
+      widthCm: geometry.widthCm,
+      heightCm: geometry.heightCm,
+      depthCm: geometry.depthCm,
+      materialType: geometry.materialType,
       history,
     };
     await db.insert(boxes).values({
@@ -176,6 +190,11 @@ boxesRouter.post(
       status: 'pending',
       cycles: 0,
       labeled: false,
+      slotId: null,
+      widthCm: geometry.widthCm,
+      heightCm: geometry.heightCm,
+      depthCm: geometry.depthCm,
+      materialType: geometry.materialType,
       location,
       history,
       data,

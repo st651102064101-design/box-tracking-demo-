@@ -20,9 +20,11 @@ import {
   text,
   boolean,
   numeric,
+  doublePrecision,
   jsonb,
   timestamp,
   index,
+  uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core';
 
@@ -91,9 +93,13 @@ export const config = pgTable('config', {
   agingDays: integer('aging_days').notNull().default(15),
   boxValue: numeric('box_value').notNull().default('450'),
   lostMode: text('lost_mode').notNull().default('manual'),
+  putawayEnabled: boolean('putaway_enabled').notNull().default(false),
   systemName: text('system_name').notNull().default('Smart Tracking'),
   subtitle: text('subtitle').notNull().default('WMS · เฟส 1 · Returnable Asset Tracking'),
   logoData: text('logo_data'),
+  returnNoteCompany: text('return_note_company').notNull().default('ABSS'),
+  returnNoteDepartment: text('return_note_department').notNull().default('ฝ่ายทรัพยากรบุคคล'),
+  returnNotePhone: text('return_note_phone').notNull().default('0xx-xxx-xxxx'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -265,7 +271,7 @@ export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),
   zone: text('zone'),
-  rack: text('rack'),
+  rack: text('rack').notNull(),
   shelf: text('shelf'),
   slot: text('slot'),
   type: text('type'),
@@ -273,6 +279,56 @@ export const locations = pgTable('locations', {
   data: jsonb('data').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Real-scale warehouse geometry. Values are stored in centimetres and only
+ * converted to metres at the Three.js boundary (1 world unit = 1 metre).
+ * These tables complement — and never replace — the legacy Location Master. */
+export const racks = pgTable(
+  'racks',
+  {
+    id: text('id').primaryKey(),
+    warehouseId: text('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+    zone: text('zone').notNull().default(''),
+    code: text('code').notNull(),
+    positionXCm: doublePrecision('position_x_cm').notNull().default(0),
+    positionYCm: doublePrecision('position_y_cm').notNull().default(0),
+    positionZCm: doublePrecision('position_z_cm').notNull().default(0),
+    rotationYDeg: doublePrecision('rotation_y_deg').notNull().default(0),
+    widthCm: doublePrecision('width_cm').notNull().default(140),
+    heightCm: doublePrecision('height_cm').notNull().default(110),
+    depthCm: doublePrecision('depth_cm').notNull().default(110),
+    materialType: text('material_type').notNull().default('powder_coated_steel'),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    identityUnique: uniqueIndex('racks_identity_unique').on(table.warehouseId, table.zone, table.code),
+    warehouseIdx: index('racks_warehouse_idx').on(table.warehouseId, table.zone, table.code),
+  }),
+);
+
+export const slots = pgTable(
+  'slots',
+  {
+    id: text('id').primaryKey(),
+    rackId: text('rack_id').notNull().references(() => racks.id, { onDelete: 'cascade' }),
+    shelfCode: text('shelf_code').notNull().default(''),
+    slotCode: text('slot_code').notNull().default(''),
+    localXCm: doublePrecision('local_x_cm').notNull().default(0),
+    localYCm: doublePrecision('local_y_cm').notNull().default(0),
+    localZCm: doublePrecision('local_z_cm').notNull().default(0),
+    widthCm: doublePrecision('width_cm').notNull().default(120),
+    heightCm: doublePrecision('height_cm').notNull().default(80),
+    depthCm: doublePrecision('depth_cm').notNull().default(100),
+    status: text('status').notNull().default('empty'),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    positionUnique: uniqueIndex('slots_rack_position_unique').on(table.rackId, table.shelfCode, table.slotCode),
+    rackIdx: index('slots_rack_idx').on(table.rackId, table.shelfCode, table.slotCode),
+  }),
+);
 
 export const employees = pgTable('employees', {
   id: text('id').primaryKey(),
@@ -353,6 +409,11 @@ export const boxes = pgTable(
      */
     rfidTid: text('rfid_tid').unique(),
     rfidEpc: text('rfid_epc'),
+    slotId: text('slot_id').references(() => slots.id, { onDelete: 'set null' }),
+    widthCm: doublePrecision('width_cm').notNull().default(60),
+    heightCm: doublePrecision('height_cm').notNull().default(40),
+    depthCm: doublePrecision('depth_cm').notNull().default(40),
+    materialType: text('material_type').notNull().default('generic'),
     location: jsonb('location').notNull().default({}),
     history: jsonb('history').notNull().default([]),
     data: jsonb('data').notNull().default({}),
@@ -491,6 +552,8 @@ export type Schema = {
   gatePendingReads: typeof gatePendingReads;
   gatePrefs: typeof gatePrefs;
   locations: typeof locations;
+  racks: typeof racks;
+  slots: typeof slots;
   employees: typeof employees;
   boxes: typeof boxes;
   vehicles: typeof vehicles;
@@ -520,6 +583,8 @@ export const schema = {
   gatePendingReads,
   gatePrefs,
   locations,
+  racks,
+  slots,
   employees,
   boxes,
   vehicles,
