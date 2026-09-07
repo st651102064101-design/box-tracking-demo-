@@ -572,14 +572,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const height = Math.min(0.09, width / 4.7);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
-        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false }),
       );
-      // Align to the front face of the shelf beam, centred on the shelf floor.
-      // It sits below the usable slot opening, so it never covers a box.
-      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.006, entry.scale.z / 2 + 0.052)
+      // Keep the small barcode above the beam's front edge and in front of
+      // the rack so it remains readable at close and medium zoom levels.
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.085, entry.scale.z / 2 + 0.014)
         .applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
+      sticker.renderOrder = 6;
       scene.add(sticker);
       barcodeStickers.push(sticker);
     });
@@ -804,10 +805,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     rackActionObject.visible = false;
     hoverRackCode = '';
   };
-  const showRackAction = (rack, position) => {
-    if (!rack || !position) return hideRackAction();
+  const showRackAction = (rack) => {
+    if (!rack) return hideRackAction();
     hoverRackCode = String(rack.code || rack.id || 'rack');
-    actionAnchor.copy(position).add(new THREE.Vector3(0, 0.22, 0));
+    const rackEntry = rackEntries.find((entry) => entry.rack === rack);
+    if (!rackEntry) return hideRackAction();
+    // One stable affordance per rack: always float at the centre of the top
+    // beam, never beside every individual slot or box.
+    actionAnchor.set(rackEntry.base.x, rackEntry.base.y + rackEntry.height + 0.18, rackEntry.base.z);
     rackActionObject.position.copy(actionAnchor);
     rackActionObject.visible = true;
   };
@@ -875,12 +880,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
-    const actionPosition = nextBox >= 0
-      ? boxEntries[nextBox].position.clone().add(new THREE.Vector3(0, boxEntries[nextBox].scale.y / 2, 0))
-      : next >= 0
-        ? slotEntries[next].position.clone().add(new THREE.Vector3(0, slotEntries[next].scale.y / 2, 0))
-        : rackHit?.point;
-    showRackAction(nextRack, actionPosition);
+    showRackAction(nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
