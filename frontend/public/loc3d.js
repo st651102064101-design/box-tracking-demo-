@@ -905,7 +905,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Dashed forklift crossings run perpendicular to the rack length. The
   // repeated marks therefore travel across the rack face instead of tracking
   // alongside its beams.
-  const crossLaneX = aisleStartX + aisleLength * 0.52;
+  // Anchor the transverse markings directly in front of the safety posts at
+  // the rack head, rather than halfway down the long aisle.
+  const safetyLineX = center.x - rackBoundaryWidth / 2 - 0.55;
+  const crossLaneX = safetyLineX;
   const crossLaneStartZ = center.z - halfWarehouseDepth + 1.2;
   const crossLaneEndZ = center.z + halfWarehouseDepth - 1.2;
   for (let index = 0; index < 12; index += 1) {
@@ -915,7 +918,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // A compact staging bay at the aisle end, clear of the travel centreline.
   const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
   const stagingDepth = 2.25;
-  const stagingCenter = new THREE.Vector3(aisleStartX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
+  const stagingCenter = new THREE.Vector3(safetyLineX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
   floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
