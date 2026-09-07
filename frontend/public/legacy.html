@@ -6522,7 +6522,7 @@ function renderLoc3D(){
   if(!whs.length){root.innerHTML='<div class="locmap-empty">ยังไม่มีข้อมูลแร็กสำหรับแสดงผล 3D</div>';return;}
   var chips=whs.map(function(w){return '<button class="btn sm '+(w===_loc3dWh?'accent':'ghost')+'" onclick="selectLoc3DWarehouse(\''+esc(w)+'\')">'+esc(whName(w))+'</button>';}).join('');
   root.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากเพื่อหมุน · เลื่อนเพื่อซูม · คลิกช่องเพื่อแก้ไข</span></div><div class="row">'+chips+'</div></div><div class="loc3d-stage"><canvas id="loc3dCanvas"></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
-  if(window.LocationWarehouse3D)window.LocationWarehouse3D.mount($('#loc3dCanvas'),all.filter(function(l){return l.wh===_loc3dWh;}),locOccupancyMap(),function(code){editLocRow(code);});
+  if(window.LocationWarehouse3D)window.LocationWarehouse3D.mount($('#loc3dCanvas'),all.filter(function(l){return l.wh===_loc3dWh;}),locOccupancyMap(),function(code){editLocRow(code);},function(tag){if(window.openBoxActionModal)window.openBoxActionModal(tag);});
   else setTimeout(function(){if(_locViewMode==='3d')renderLoc3D();},250);
 }
 window.renderLoc3D=renderLoc3D;

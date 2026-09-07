@@ -215,7 +215,7 @@ function rendererName(renderer) {
   return navigator.gpu ? 'WebGPU' : 'WebGL 2 fallback';
 }
 
-async function createScene(canvas, model, onSelect) {
+async function createScene(canvas, model, onSelect, onBoxSelect) {
   const stage = canvas.parentElement;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101419);
@@ -314,7 +314,8 @@ async function createScene(canvas, model, onSelect) {
       const y = num(slot.localPositionCm?.y) - positive(slot.dimensionsCm?.height, 70) / 2;
       shelfBottoms.set(String(slot.shelfCode), y * CM_TO_M);
     });
-    [...shelfBottoms.values()].forEach((y) => addPart(0, y, 0, width, 0.075, depth));
+    const shelfLevels = [...shelfBottoms.entries()].sort((a, b) => a[1] - b[1]);
+    shelfLevels.forEach(([, y]) => addPart(0, y, 0, width, 0.075, depth));
     addPart(0, height - 0.04, 0, width, 0.08, depth);
     // Uprights between bins are structural steel, not decoration. Generate a
     // divider for every adjacent pair on each shelf so the real rack layout is
@@ -326,18 +327,24 @@ async function createScene(canvas, model, onSelect) {
       list.push(slot);
       shelfSlots.set(key, list);
     });
-    shelfSlots.forEach((items) => {
+    shelfSlots.forEach((items, shelfCode) => {
       items.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
+      const levelIndex = shelfLevels.findIndex(([code]) => code === shelfCode);
+      const floorY = shelfLevels[levelIndex]?.[1] ?? 0;
+      // Make every internal upright meet both steel cross-members. Formerly it
+      // was only as high as the slot volume, leaving visible gaps between
+      // shelves when a rack's pitch exceeded the nominal slot height.
+      const nextFloorY = levelIndex >= 0 && levelIndex < shelfLevels.length - 1
+        ? shelfLevels[levelIndex + 1][1]
+        : height - 0.04;
+      const dividerBottom = floorY + 0.0375;
+      const dividerTop = Math.max(dividerBottom + 0.03, nextFloorY - 0.04);
       for (let index = 1; index < items.length; index += 1) {
         const left = items[index - 1];
         const right = items[index];
         const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
-        const dividerY = (num(left.localPositionCm?.y) + num(right.localPositionCm?.y)) * CM_TO_M / 2;
-        const dividerHeight = Math.min(
-          positive(left.dimensionsCm?.height, 70),
-          positive(right.dimensionsCm?.height, 70),
-        ) * CM_TO_M;
-        addPart(dividerX, dividerY, 0, Math.max(0.045, frame * 0.7), dividerHeight, depth);
+        addPart(dividerX, (dividerBottom + dividerTop) / 2, 0,
+          Math.max(0.045, frame * 0.7), dividerTop - dividerBottom, depth);
       }
     });
     rackEntries.push({ rack, quaternion, width, height, depth });
@@ -561,6 +568,7 @@ async function createScene(canvas, model, onSelect) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let hoverIndex = -1;
+  let hoverBoxIndex = -1;
   let pointerFrame = 0;
   let down = null;
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
@@ -569,12 +577,28 @@ async function createScene(canvas, model, onSelect) {
     const rect = canvas.getBoundingClientRect();
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObject(slotMesh, false)[0];
-    const next = Number.isInteger(hit?.instanceId) ? hit.instanceId : -1;
-    if (next === hoverIndex) return;
+    // Slots are translucent volumes and their front face is naturally closer
+    // than a box inside. Test boxes independently and give them click/hover
+    // priority so operators can open the actual box record.
+    const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
+    const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
+    const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
+    const next = nextBox >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
+    if (next === hoverIndex && nextBox === hoverBoxIndex) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
+    if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
-    if (hoverIndex >= 0) {
+    hoverBoxIndex = nextBox;
+    if (hoverBoxIndex >= 0) {
+      const entry = boxEntries[hoverBoxIndex];
+      boxMesh.setColorAt(hoverBoxIndex, HOVER_COLOR);
+      boxMesh.instanceColor.needsUpdate = true;
+      labelElement.textContent = `กล่อง ${entry.box.id}`;
+      labelElement.className = 'loc3d-slot-label occupied';
+      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
+    } else if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
       slotMesh.setColorAt(hoverIndex, HOVER_COLOR);
       const state = slotState(entry);
@@ -587,7 +611,7 @@ async function createScene(canvas, model, onSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
-    slotMesh.instanceColor.needsUpdate = true;
+    if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
@@ -595,8 +619,9 @@ async function createScene(canvas, model, onSelect) {
   };
   const onPointerDown = (event) => { down = { x: event.clientX, y: event.clientY }; };
   const onPointerUp = (event) => {
-    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5 && hoverIndex >= 0) {
-      onSelect?.(slotEntries[hoverIndex].slot.id);
+    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
+      if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
+      else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
     }
     down = null;
   };
@@ -605,7 +630,12 @@ async function createScene(canvas, model, onSelect) {
       slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
       slotMesh.instanceColor.needsUpdate = true;
     }
+    if (hoverBoxIndex >= 0 && boxMesh) {
+      boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
+      boxMesh.instanceColor.needsUpdate = true;
+    }
     hoverIndex = -1;
+    hoverBoxIndex = -1;
     labelObject.visible = false;
     canvas.style.cursor = 'grab';
   };
@@ -675,7 +705,7 @@ async function createScene(canvas, model, onSelect) {
   };
 }
 
-async function mount(canvas, locations, occupancy, onSelect) {
+async function mount(canvas, locations, occupancy, onSelect, onBoxSelect) {
   if (!canvas) return null;
   const currentGeneration = ++generation;
   activeController?.dispose();
@@ -684,7 +714,7 @@ async function mount(canvas, locations, occupancy, onSelect) {
   try {
     const model = await loadModel(locations || [], occupancy || {});
     if (currentGeneration !== generation || !canvas.isConnected) return null;
-    const controller = await createScene(canvas, model, onSelect);
+    const controller = await createScene(canvas, model, onSelect, onBoxSelect);
     if (currentGeneration !== generation || !canvas.isConnected) {
       controller.dispose();
       return null;
