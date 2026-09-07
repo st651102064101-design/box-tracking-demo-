@@ -294,6 +294,30 @@ async function createScene(canvas, model, onSelect) {
     });
     [...shelfBottoms.values()].forEach((y) => addPart(0, y, 0, width, 0.075, depth));
     addPart(0, height - 0.04, 0, width, 0.08, depth);
+    // Uprights between bins are structural steel, not decoration. Generate a
+    // divider for every adjacent pair on each shelf so the real rack layout is
+    // legible even when translucent slot volumes overlap.
+    const shelfSlots = new Map();
+    (rack.slots || []).forEach((slot) => {
+      const key = String(slot.shelfCode || '1');
+      const list = shelfSlots.get(key) || [];
+      list.push(slot);
+      shelfSlots.set(key, list);
+    });
+    shelfSlots.forEach((items) => {
+      items.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
+      for (let index = 1; index < items.length; index += 1) {
+        const left = items[index - 1];
+        const right = items[index];
+        const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
+        const dividerY = (num(left.localPositionCm?.y) + num(right.localPositionCm?.y)) * CM_TO_M / 2;
+        const dividerHeight = Math.min(
+          positive(left.dimensionsCm?.height, 70),
+          positive(right.dimensionsCm?.height, 70),
+        ) * CM_TO_M;
+        addPart(dividerX, dividerY, 0, Math.max(0.045, frame * 0.7), dividerHeight, depth);
+      }
+    });
     rackEntries.push({ rack, quaternion, width, height, depth });
     // All eight rotated corners are required here. Using only a diagonal pair
     // underestimates a 90-degree rack and can clip the floor/camera framing.
@@ -357,6 +381,8 @@ async function createScene(canvas, model, onSelect) {
 
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
   const labelTextures = [];
+  const barcodeStickers = [];
+  const rackNameLabels = [];
   // Model the actual ZPL/Code128 sticker as a plane fixed to the FRONT shelf
   // beam. It is part of the rack, never a floating screen-space caption.
   if (slotEntries.length <= 250) {
@@ -374,8 +400,24 @@ async function createScene(canvas, model, onSelect) {
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
       scene.add(sticker);
+      barcodeStickers.push(sticker);
     });
   }
+  rackEntries.forEach((entry) => {
+    const element = document.createElement('div');
+    element.className = 'loc3d-rack-name';
+    element.textContent = `แร็ค ${entry.rack.code}`;
+    const label = new CSS2DObject(element);
+    label.position.copy(worldPoint(
+      entry.rack,
+      0,
+      entry.height / CM_TO_M - 18,
+      entry.depth / CM_TO_M / 2 + 8,
+    ));
+    label.visible = false;
+    scene.add(label);
+    rackNameLabels.push(label);
+  });
   const materialColors = {
     carton: 0xb7804f,
     plastic_crate: 0x2f83d0,
@@ -438,9 +480,19 @@ async function createScene(canvas, model, onSelect) {
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
+  const barcodeZoomDistance = Math.max(7, span * 1.15);
+  let barcodeMode = null;
+  const updateRackLabelMode = () => {
+    const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
+    if (showBarcodes === barcodeMode) return;
+    barcodeMode = showBarcodes;
+    barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+    rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
+  };
   camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
   controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
   controls.update();
+  updateRackLabelMode();
   sun.position.set(center.x - span * 0.65, Math.max(16, span * 1.1), center.z + span * 0.55);
   const shadowExtent = Math.max(12, span * 0.85);
   Object.assign(sun.shadow.camera, { left: -shadowExtent, right: shadowExtent, top: shadowExtent, bottom: -shadowExtent, near: 0.5, far: Math.max(60, span * 4) });
@@ -519,6 +571,7 @@ async function createScene(canvas, model, onSelect) {
   let lastFpsAt = performance.now();
   const animate = () => {
     controls.update();
+    updateRackLabelMode();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frames += 1;
