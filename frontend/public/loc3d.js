@@ -746,9 +746,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // room around the rack when zooming out instead of making the camera limit
   // feel artificially tight.
   const warehouseMargin = Math.max(12, Math.max(size.x, size.z, 5) * 2.4);
-  const warehouseWidth = size.x + warehouseMargin * 2;
-  const warehouseDepth = size.z + warehouseMargin * 2;
-  const warehouseWallHeight = Math.max(7.2, size.y + 4.6);
+  const warehouseScale = 2;
+  const warehouseWidth = (size.x + warehouseMargin * 2) * warehouseScale;
+  const warehouseDepth = (size.z + warehouseMargin * 2) * warehouseScale;
+  const warehouseWallHeight = Math.max(9.5, (size.y + 4.6) * 1.35);
   // Keep the gable shallow, as in a standard metal-sheet warehouse rather
   // than using a semi-circular hangar roof.
   const warehouseRoofRise = Math.max(1.8, warehouseWidth * 0.085);
@@ -847,7 +848,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   };
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
   // following upper chord and repeated triangular webs across the full span.
-  const frameCount = Math.max(7, Math.ceil(warehouseDepth / 3.2));
+  const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
   const trussSegments = 12;
   const trussBottomY = roofEaveY - 0.34;
   for (let index = 0; index < frameCount; index += 1) {
@@ -897,7 +898,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   ));
   // Blue-grey columns and upper-wall X bracing continue the roof structure
   // down the metal-sheet side walls as in the reference factory.
-  const wallFrameCount = Math.max(7, Math.ceil(warehouseDepth / 4));
+  const wallFrameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
   [-1, 1].forEach((side) => {
     const wallX = center.x + side * (halfWarehouseWidth - 0.08);
     for (let index = 0; index < wallFrameCount; index += 1) {
@@ -927,15 +928,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const sprinklerHeadMaterial = new THREE.MeshStandardMaterial({ color: 0xc8d0d4, metalness: 0.82, roughness: 0.2 });
   [-0.56, 0, 0.56].forEach((xRatio) => {
     const pipeX = center.x + halfWarehouseWidth * xRatio;
-    const pipeY = roofEaveY + warehouseRoofRise * (1 - Math.abs(xRatio)) - 0.5;
+    // All services sit below the straight truss chord, not against the roof.
+    const pipeY = trussBottomY - 0.16;
     steelBetween(
       new THREE.Vector3(pipeX, pipeY, center.z - halfWarehouseDepth + 0.4),
       new THREE.Vector3(pipeX, pipeY, center.z + halfWarehouseDepth - 0.4),
       0.035,
       sprinklerPipeMaterial,
     );
-    for (let index = 1; index < frameCount; index += 1) {
-      const headZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / frameCount;
+    for (let index = 1; index < frameCount - 1; index += 1) {
+      const headZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / (frameCount - 1);
+      // Short hanger physically connects the main to the truss above.
+      steelBetween(
+        new THREE.Vector3(pipeX, trussBottomY, headZ),
+        new THREE.Vector3(pipeX, pipeY, headZ),
+        0.014,
+        trussMaterial,
+      );
       const dropStart = new THREE.Vector3(pipeX, pipeY, headZ);
       const dropEnd = dropStart.clone().add(new THREE.Vector3(0, -0.18, 0));
       steelBetween(dropStart, dropEnd, 0.018, sprinklerPipeMaterial);
@@ -974,12 +983,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.add(line);
   }
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
-  const fixtureCount = Math.max(6, Math.ceil(warehouseDepth / 4));
+  const fixtureCount = Math.min(8, frameCount - 2);
   [-0.24, 0.24].forEach((xRatio) => {
     const lightX = center.x + halfWarehouseWidth * xRatio;
-    const lightY = roofEaveY + warehouseRoofRise * (1 - Math.abs(xRatio)) - 0.72;
-    for (let index = 1; index < fixtureCount; index += 1) {
-      const lightZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / fixtureCount;
+    const lightY = trussBottomY - 0.24;
+    for (let index = 1; index <= fixtureCount; index += 1) {
+      const frameIndex = Math.round(index * (frameCount - 1) / (fixtureCount + 1));
+      const lightZ = center.z - halfWarehouseDepth + (warehouseDepth * frameIndex) / (frameCount - 1);
+      steelBetween(
+        new THREE.Vector3(lightX, trussBottomY, lightZ),
+        new THREE.Vector3(lightX, lightY + 0.04, lightZ),
+        0.014,
+        trussMaterial,
+      );
       // Flat rectangular high-bay fixture like the reference photograph.
       const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.07, 0.28), lightMaterial);
       fixture.position.set(lightX, lightY, lightZ);
