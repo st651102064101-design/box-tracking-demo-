@@ -1,0 +1,28 @@
+name: Deploy frontend to Windows Docker Desktop
+
+on:
+  push:
+    branches:
+      - WEB_APP_DEMO
+    paths:
+      - 'frontend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy-frontend-self-hosted.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-frontend:
+    name: Rebuild frontend
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify Docker Desktop is available
+        shell: powershell
+        run: docker info
+      - name: Rebuild and recreate frontend
+        shell: powershell
+        run: docker compose up -d --build --no-deps frontend
