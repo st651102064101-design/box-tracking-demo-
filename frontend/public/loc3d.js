@@ -313,7 +313,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const rackEntries = [];
   const slotEntries = [];
-  const rackParts = [];
+  const uprightParts = [];
+  const beamParts = [];
+  const deckParts = [];
+  const braceParts = [];
   const bounds = new THREE.Box3();
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
@@ -326,12 +329,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const depth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
     const frame = Math.min(0.1, width * 0.08, depth * 0.08);
     const base = worldPoint(rack, 0, 0, 0);
-    const addPart = (x, y, z, sx, sy, sz) => {
+    const addPart = (parts, x, y, z, sx, sy, sz) => {
       const position = new THREE.Vector3(x, y, z).applyQuaternion(quaternion).add(base);
-      rackParts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz) });
+      parts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz) });
+    };
+    const addBrace = (x1, y1, z1, x2, y2, z2) => {
+      const start = new THREE.Vector3(x1, y1, z1), end = new THREE.Vector3(x2, y2, z2);
+      const delta = end.clone().sub(start), length = delta.length();
+      if (length < 0.03) return;
+      const localRotation = new THREE.Quaternion().setFromUnitVectors(up, delta.normalize());
+      const partQuaternion = quaternion.clone().multiply(localRotation);
+      const position = start.add(end).multiplyScalar(0.5).applyQuaternion(quaternion).add(base);
+      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.52, length, frame * 0.52) });
     };
     [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
-      addPart(sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
+      addPart(uprightParts, sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
     }));
     const shelfBottoms = new Map();
     (rack.slots || []).forEach((slot) => {
@@ -339,8 +351,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       shelfBottoms.set(String(slot.shelfCode), y * CM_TO_M);
     });
     const shelfLevels = [...shelfBottoms.entries()].sort((a, b) => a[1] - b[1]);
-    shelfLevels.forEach(([, y]) => addPart(0, y, 0, width, 0.075, depth));
-    addPart(0, height - 0.04, 0, width, 0.08, depth);
+    shelfLevels.forEach(([, y]) => {
+      // Pale steel deck with yellow load beams front and rear, matching a
+      // real selective pallet rack rather than a single grey solid shelf.
+      addPart(deckParts, 0, y + 0.018, 0, width - frame * 1.4, 0.035, depth - frame * 1.4);
+      [-1, 1].forEach((sideZ) => addPart(beamParts, 0, y, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
+    });
+    [-1, 1].forEach((sideZ) => addPart(beamParts, 0, height - 0.04, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
     // Uprights between bins are structural steel, not decoration. Generate a
     // divider for every adjacent pair on each shelf so the real rack layout is
     // legible even when translucent slot volumes overlap.
@@ -367,10 +384,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         const left = items[index - 1];
         const right = items[index];
         const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
-        addPart(dividerX, (dividerBottom + dividerTop) / 2, 0,
+        addPart(uprightParts, dividerX, (dividerBottom + dividerTop) / 2, 0,
           Math.max(0.045, frame * 0.7), dividerTop - dividerBottom, depth);
       }
     });
+    // Black cross bracing on both end frames. It is structural, not merely a
+    // decoration, and keeps the visual language aligned with pallet racks.
+    const braceLevels = shelfLevels.map(([, y]) => y).concat([height - 0.04]);
+    for (let index = 0; index < braceLevels.length - 1; index += 1) {
+      const low = braceLevels[index] + 0.07, high = braceLevels[index + 1] - 0.07;
+      [-1, 1].forEach((sideX) => {
+        const x = sideX * (width - frame) / 2;
+        const z = (depth - frame) / 2;
+        addBrace(x, low, -z, x, high, z);
+        addBrace(x, low, z, x, high, -z);
+      });
+    }
     rackEntries.push({ rack, quaternion, width, height, depth, base });
     // All eight rotated corners are required here. Using only a diagonal pair
     // underestimates a 90-degree rack and can clip the floor/camera framing.
@@ -400,16 +429,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
   });
 
-  const rackMaterial = new THREE.MeshStandardMaterial({ color: 0x66717c, metalness: 0.76, roughness: 0.3 });
-  const rackMesh = rackParts.length ? new THREE.InstancedMesh(UNIT_BOX, rackMaterial, rackParts.length) : null;
-  if (rackMesh) {
-    rackParts.forEach((part, index) => rackMesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
-    rackMesh.instanceMatrix.needsUpdate = true;
-    rackMesh.castShadow = rackMesh.receiveShadow = true;
-    rackMesh.computeBoundingBox();
-    rackMesh.computeBoundingSphere();
-    scene.add(rackMesh);
-  }
+  const addRackBatch = (parts, material) => {
+    if (!parts.length) return null;
+    const mesh = new THREE.InstancedMesh(UNIT_BOX, material, parts.length);
+    parts.forEach((part, index) => mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
+    return mesh;
+  };
+  // Industrial palette from the reference: perforated-style dark uprights,
+  // safety yellow load beams, light shelf decks and dark X bracing.
+  addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x202327, metalness: 0.82, roughness: 0.28 }));
+  addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf2bf24, metalness: 0.62, roughness: 0.32 }));
+  addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xe7ebed, metalness: 0.3, roughness: 0.56 }));
+  addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x171a1e, metalness: 0.86, roughness: 0.25 }));
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const slotState = (entry) => entry.slot.status === 'full'
