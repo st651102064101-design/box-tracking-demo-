@@ -531,13 +531,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // GTA-style selection marker: one reusable animated ring (not one mesh per
   // box), keeping the hover interaction constant-cost even with many boxes.
   const hoverRingMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffd34e, transparent: true, opacity: 0.88, depthWrite: false,
+    color: 0xffd34e, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false,
   });
-  const hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.78, 1, 48), hoverRingMaterial);
+  const hoverRing = new THREE.Mesh(new THREE.TorusGeometry(1, 0.055, 8, 56), hoverRingMaterial);
   hoverRing.rotation.x = -Math.PI / 2;
   hoverRing.visible = false;
-  hoverRing.renderOrder = 2;
+  hoverRing.renderOrder = 10;
   scene.add(hoverRing);
+  const hoverOutlineMaterial = new THREE.LineBasicMaterial({
+    color: 0xffef73, transparent: true, opacity: 0.95, depthTest: false,
+  });
+  const hoverOutline = new THREE.LineSegments(new THREE.EdgesGeometry(UNIT_BOX), hoverOutlineMaterial);
+  hoverOutline.visible = false;
+  hoverOutline.renderOrder = 11;
+  scene.add(hoverOutline);
   // Every stored box gets its own physical RFID/barcode sticker. The tag is
   // the same identifier the backend exposes for scanners, and the label size
   // is constrained by BOTH the box width and height so it never overhangs.
@@ -666,16 +673,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
     hoverBoxIndex = nextBox;
-    if (hoverBoxIndex < 0) hoverRing.visible = false;
+    if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; }
     if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
-      const ringScale = Math.max(entry.scale.x, entry.scale.z) * 0.98;
-      hoverRing.position.set(entry.position.x, entry.position.y - entry.scale.y / 2 + 0.012, entry.position.z);
+      const ringScale = Math.max(entry.scale.x, entry.scale.z) * 0.84;
+      hoverRing.position.set(entry.position.x, entry.position.y - entry.scale.y / 2 + 0.022, entry.position.z);
       hoverRing.userData.baseScale = ringScale;
       hoverRing.scale.setScalar(ringScale);
       hoverRing.visible = true;
+      hoverOutline.position.copy(entry.position);
+      hoverOutline.quaternion.copy(entry.quaternion);
+      hoverOutline.scale.copy(entry.scale).multiplyScalar(1.12);
+      hoverOutline.visible = true;
       labelElement.textContent = `กล่อง ${entry.box.id}`;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
@@ -692,6 +703,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.style.cursor = 'pointer';
     } else {
       hoverRing.visible = false;
+      hoverOutline.visible = false;
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
@@ -719,6 +731,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       boxMesh.instanceColor.needsUpdate = true;
     }
     hoverRing.visible = false;
+    hoverOutline.visible = false;
     hoverIndex = -1;
     hoverBoxIndex = -1;
     labelObject.visible = false;
@@ -751,7 +764,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (hoverRing.visible) {
       const pulse = 1 + Math.sin(performance.now() * 0.008) * 0.12;
       hoverRing.scale.setScalar((hoverRing.userData.baseScale || 1) * pulse);
-      hoverRingMaterial.opacity = 0.62 + Math.sin(performance.now() * 0.008) * 0.22;
+      hoverRingMaterial.opacity = 0.74 + Math.sin(performance.now() * 0.008) * 0.22;
+      hoverOutlineMaterial.opacity = 0.7 + Math.sin(performance.now() * 0.012) * 0.25;
     }
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
