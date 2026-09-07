@@ -764,12 +764,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let hoverIndex = -1;
   let hoverBoxIndex = -1;
   const updateRackLabelMode = () => {
-    const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
-    if (showBarcodes === barcodeMode) return;
-    barcodeMode = showBarcodes;
-    barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
+    const showRackNames = controls.getDistance() > barcodeZoomDistance;
+    if (showRackNames === barcodeMode) return;
+    barcodeMode = showRackNames;
+    // Slot labels are real shelf-edge barcodes, so they must remain visible
+    // in the normal overview as well as when an operator zooms in.
+    barcodeStickers.forEach((sticker) => { sticker.visible = true; });
+    boxBarcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
+    rackNameLabels.forEach((label) => { label.visible = showRackNames; });
   };
   const updateOccupancyOverlay = () => {
     const revealOccupied = controls.getDistance() >= occupancyOverviewZoomDistance;
