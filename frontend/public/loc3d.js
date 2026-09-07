@@ -742,14 +742,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // A deliberately generous, enclosed new-build warehouse. It leaves real
-  // room around the rack when zooming out instead of making the camera limit
-  // feel artificially tight.
-  const warehouseMargin = Math.max(12, Math.max(size.x, size.z, 5) * 2.4);
-  const warehouseScale = 2;
-  const warehouseWidth = (size.x + warehouseMargin * 2) * warehouseScale;
-  const warehouseDepth = (size.z + warehouseMargin * 2) * warehouseScale;
-  const warehouseWallHeight = Math.max(9.5, (size.y + 4.6) * 1.35);
+  // Size the enclosure once from the real rack footprint. The previous
+  // scale-plus-margin calculation enlarged the building twice, making a
+  // full-size selective rack look like a miniature in an empty hangar.
+  const warehouseMarginX = Math.max(5.5, Math.min(8, size.x * 0.48));
+  const warehouseMarginZ = Math.max(7.5, Math.min(10, size.z * 2.8));
+  const warehouseWidth = Math.max(24, size.x + warehouseMarginX * 2);
+  const warehouseDepth = Math.max(18, size.z + warehouseMarginZ * 2);
+  const warehouseWallHeight = Math.max(9.5, size.y + 3.3);
   // Keep the gable shallow, as in a standard metal-sheet warehouse rather
   // than using a semi-circular hangar roof.
   const warehouseRoofRise = Math.max(1.8, warehouseWidth * 0.085);
@@ -859,18 +859,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.add(strip);
     return strip;
   };
-  const laneOffset = warehouseWidth * 0.22;
-  [-1, 1].forEach((side) => {
-    floorStrip(center.x + side * laneOffset, center.z, 0.075, warehouseDepth - 2.6);
-    for (let index = 0; index < 9; index += 1) {
-      const z = center.z - halfWarehouseDepth + 1.7 + index * ((warehouseDepth - 3.4) / 9);
-      floorStrip(center.x + side * (laneOffset + 0.42), z, 0.075, 0.65);
-    }
-  });
-  // A rectangular keep-clear/staging zone beside the rack face.
-  const stagingCenter = new THREE.Vector3(center.x - warehouseWidth * 0.28, warehouseFloorY + 0.025, center.z + warehouseDepth * 0.23);
-  const stagingWidth = Math.min(7.2, warehouseWidth * 0.2);
-  const stagingDepth = Math.min(5.2, warehouseDepth * 0.12);
+  // Outline the actual rack footprint, then place a 3.5 m forklift aisle in
+  // front of it. This keeps every marking spatially related to the rack.
+  const rackBoundaryWidth = Math.min(warehouseWidth - 2.4, size.x + 1.2);
+  const rackBoundaryDepth = Math.min(warehouseDepth - 2.4, size.z + 1.2);
+  floorStrip(center.x, center.z - rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
+  floorStrip(center.x, center.z + rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
+  floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
+  floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
+  const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
+  const aisleLength = Math.min(warehouseWidth - 2.8, rackBoundaryWidth + 5.2);
+  floorStrip(center.x, aisleCenterZ - 1.75, aisleLength, 0.09);
+  floorStrip(center.x, aisleCenterZ + 1.75, aisleLength, 0.09);
+  for (let index = 0; index < 12; index += 1) {
+    const x = center.x - aisleLength / 2 + 0.55 + index * ((aisleLength - 1.1) / 11);
+    floorStrip(x, aisleCenterZ, 0.72, 0.075);
+  }
+  // A rectangular keep-clear/staging zone beside the forklift aisle.
+  const stagingCenter = new THREE.Vector3(center.x - rackBoundaryWidth * 0.27, warehouseFloorY + 0.025, aisleCenterZ);
+  const stagingWidth = Math.min(4.8, rackBoundaryWidth * 0.32);
+  const stagingDepth = 2.65;
   floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
