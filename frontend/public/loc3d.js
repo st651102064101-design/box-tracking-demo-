@@ -1491,6 +1491,40 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   resize();
 
   const assets = assetPipeline(renderer);
+  let disposed = false;
+  // CC BY model: "Forklift" by brezineman. Keep the original attribution
+  // alongside the asset rather than baking it into an unrelated warehouse mesh.
+  assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
+    if (disposed) return;
+    forklift.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+    const rawBounds = new THREE.Box3().setFromObject(forklift);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    // Normalize downloaded assets to a real warehouse forklift footprint,
+    // without depending on the arbitrary authoring unit of the GLB file.
+    const scale = 3.8 / Math.max(rawSize.x, rawSize.z, 0.01);
+    forklift.scale.setScalar(scale);
+    const scaledBounds = new THREE.Box3().setFromObject(forklift);
+    const scaledSize = scaledBounds.getSize(new THREE.Vector3());
+    forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
+    forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
+    forklift.position.y -= scaledBounds.min.y;
+
+    const forkliftRoot = new THREE.Group();
+    forkliftRoot.name = 'forklift';
+    forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
+    forkliftRoot.add(forklift);
+    forkliftRoot.position.set(
+      center.x + halfWarehouseWidth - Math.max(4.2, scaledSize.x * 1.25),
+      warehouseFloorY + 0.012,
+      center.z + halfWarehouseDepth - Math.max(4.6, scaledSize.z * 1.25),
+    );
+    forkliftRoot.rotation.y = -Math.PI * 0.32;
+    scene.add(forkliftRoot);
+  }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
   let frames = 0;
   let lastFpsAt = performance.now();
@@ -1524,6 +1558,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   return {
     assets,
     dispose() {
+      disposed = true;
       renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
       if (pointerFrame) cancelAnimationFrame(pointerFrame);
