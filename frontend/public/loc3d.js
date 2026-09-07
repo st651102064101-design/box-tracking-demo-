@@ -157,6 +157,30 @@ function floorMarkTexture(text) {
   return texture;
 }
 
+function rackNameTexture(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1400;
+  canvas.height = 260;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  // The white type and black outline stay legible over a yellow beam or a
+  // light shelf without needing an opaque sign background.
+  context.font = '900 148px system-ui, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.lineJoin = 'round';
+  context.lineWidth = 24;
+  context.strokeStyle = '#050505';
+  context.fillStyle = '#ffffff';
+  context.strokeText(text, canvas.width / 2, canvas.height / 2);
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
 function code128LabelTexture(value) {
   const code = String(value ?? '');
   const codes = [104]; // Start Code B — matches ZPL ^BC for our ASCII location IDs.
@@ -527,18 +551,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
   }
   rackEntries.forEach((entry) => {
-    // Rack identity is a physical horizontal mark on the top beam, never a
-    // billboard. It therefore stays parallel to the rack/floor while orbiting.
-    const texture = floorMarkTexture(`แร็ค ${entry.rack.code}`);
+    // Mount the rack name upright on its front top beam. It follows the rack
+    // while remaining readable instead of lying flat on top of the beam.
+    const texture = rackNameTexture(`แร็ค ${entry.rack.code}`);
     labelTextures.push(texture);
     const labelWidth = Math.min(entry.width * 0.72, Math.max(0.7, entry.depth * 2.5));
     const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
+      new THREE.PlaneGeometry(labelWidth, labelWidth * (260 / 1400)),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
     );
-    const horizontal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-    label.quaternion.copy(entry.quaternion).multiply(horizontal);
-    label.position.copy(worldPoint(entry.rack, 0, entry.height / CM_TO_M + 0.012, 0));
+    label.quaternion.copy(entry.quaternion);
+    label.position.copy(worldPoint(entry.rack, 0, entry.height / CM_TO_M - 5.5, entry.depth / CM_TO_M / 2 + 7));
     label.visible = false;
     scene.add(label);
     rackNameLabels.push(label);
