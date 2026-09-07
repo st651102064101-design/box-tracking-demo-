@@ -389,13 +389,17 @@ async function createScene(canvas, model, onSelect) {
     slotEntries.forEach((entry) => {
       const texture = code128LabelTexture(entry.slot.barcode || entry.slot.id);
       labelTextures.push(texture);
-      const width = Math.max(0.32, entry.scale.x * 0.82);
-      const height = Math.min(0.19, width / 3.65);
+      // Shelf-edge ticket: intentionally smaller than the box opening (and a
+      // typical tote), like a 7-Eleven price label rather than a hanging sign.
+      const width = Math.min(0.42, Math.max(0.24, entry.scale.x * 0.38));
+      const height = Math.min(0.09, width / 4.7);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
         new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
       );
-      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + height / 2 + 0.055, entry.scale.z / 2 + 0.042)
+      // Align to the front face of the shelf beam, centred on the shelf floor.
+      // It sits below the usable slot opening, so it never covers a box.
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.006, entry.scale.z / 2 + 0.052)
         .applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
