@@ -1092,13 +1092,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       new THREE.PlaneGeometry(doorWidth, doorHeight),
       new THREE.MeshStandardMaterial({ color: warehouseDoor.type === 'out' ? 0x64727a : 0xd6dee2, metalness: 0.78, roughness: 0.3, side: THREE.DoubleSide }),
     );
-    door.position.set(doorX, warehouseFloorY + doorHeight / 2 + 0.04, center.z - warehouseDepth / 2 + 0.075);
+    // Doors belong on the single designated front elevation; the opposite
+    // elevation remains a continuous metal-sheet wall.
+    door.position.set(doorX, warehouseFloorY + doorHeight / 2 + 0.04, center.z + warehouseDepth / 2 - 0.075);
     door.userData.gateNo = warehouseDoor.gateNo;
     door.userData.gateType = warehouseDoor.type;
     for (let y = -doorHeight / 2 + 0.22; y < doorHeight / 2; y += 0.22) {
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(doorX - doorWidth / 2, door.position.y + y, door.position.z - 0.006),
-        new THREE.Vector3(doorX + doorWidth / 2, door.position.y + y, door.position.z - 0.006),
+        new THREE.Vector3(doorX - doorWidth / 2, door.position.y + y, door.position.z + 0.006),
+        new THREE.Vector3(doorX + doorWidth / 2, door.position.y + y, door.position.z + 0.006),
       ]), doorLineMaterial);
       scene.add(line);
     }
