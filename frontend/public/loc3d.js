@@ -840,13 +840,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Warehouse circulation details: yellow traffic lanes, a staging box,
   // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
   // These remain independent of rack geometry and of the optional forklift.
-  const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffd400, toneMapped: false });
+  const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffc400, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0x392b00, emissiveIntensity: 0.18, metalness: 0.48, roughness: 0.38 });
   const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
   const floorStrip = (x, z, width, depth, rotationY = 0) => {
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(width, 0.022, depth), safetyYellow);
-    strip.position.set(x, warehouseFloorY + 0.018, z);
-    strip.rotation.y = rotationY;
+    // Floor safety markings are paint: a zero-thickness decal immediately
+    // above the epoxy, not a raised BoxGeometry that catches light/shadows.
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), safetyYellow);
+    strip.position.set(x, warehouseFloorY + 0.0015, z);
+    strip.quaternion
+      .setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2));
+    strip.receiveShadow = false;
     scene.add(strip);
     return strip;
   };
@@ -1572,6 +1577,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       if (object.name !== 'Pallet_2_Pallet_2_0') {
         object.removeFromParent();
         return;
+      }
+      // Preserve the source wood grain but warm the albedo to match a real
+      // timber pallet rather than the washed-out grey seen under warehouse LEDs.
+      object.material = object.material.clone();
+      object.material.color.setHex(0xc08a57);
+      object.material.roughness = 0.78;
+      object.material.metalness = 0;
+      if ('emissive' in object.material) {
+        object.material.emissive.setHex(0x1c0d05);
+        object.material.emissiveIntensity = 0.08;
       }
       object.castShadow = true;
       object.receiveShadow = true;
