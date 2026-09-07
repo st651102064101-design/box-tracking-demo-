@@ -398,6 +398,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   fullscreenButton.addEventListener('click', toggleFullscreen);
   stage.appendChild(fullscreenButton);
 
+  // Fullscreen only renders descendants of the fullscreen element. Portal
+  // the app's existing modal/drawer layers into the 3D stage while fullscreen
+  // is active so slot and box clicks still open the normal system UI.
+  const fullscreenPortals = ['modal', 'alertM', 'drawer']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean)
+    .map((element) => ({ element, parent: element.parentElement, nextSibling: element.nextSibling }));
+  const syncFullscreenPortals = () => {
+    const isThisStageFullscreen = document.fullscreenElement === stage;
+    fullscreenPortals.forEach(({ element, parent, nextSibling }) => {
+      if (isThisStageFullscreen) {
+        if (!stage.contains(element)) stage.appendChild(element);
+      } else if (element.parentElement !== parent) {
+        if (nextSibling && nextSibling.parentElement === parent) parent.insertBefore(element, nextSibling);
+        else parent.appendChild(element);
+      }
+    });
+  };
+  document.addEventListener('fullscreenchange', syncFullscreenPortals);
+  syncFullscreenPortals();
+
   const rackEntries = [];
   const slotEntries = [];
   const uprightParts = [];
@@ -995,6 +1016,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerleave', onPointerLeave);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
+      document.removeEventListener('fullscreenchange', syncFullscreenPortals);
+      syncFullscreenPortals();
       rackActionButton.remove();
       warehouseTitle.remove();
       controls.dispose();
