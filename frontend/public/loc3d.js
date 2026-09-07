@@ -1566,9 +1566,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (disposed) return;
     palletTemplate.traverse((object) => {
       if (!object.isMesh) return;
-      // This GLB contains two pallet variants. Pallet_1 is the open slatted
-      // deck requested for the warehouse; discard the solid-deck alternative.
-      if (object.name !== 'Pallet_1_Pallet_1_0') {
+      // This GLB contains two pallet variants. Pallet_2 has the solid,
+      // close-boarded top deck requested for the warehouse; discard the open
+      // slatted alternative so every displayed pallet uses the same type.
+      if (object.name !== 'Pallet_2_Pallet_2_0') {
         object.removeFromParent();
         return;
       }
@@ -1580,15 +1581,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const rawCenter = rawBounds.getCenter(new THREE.Vector3());
     const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
       const pallet = palletTemplate.clone(true);
+      // Keep the imported pallet's real proportions. Scaling Y independently
+      // stretched its blocks into tall legs; one uniform scale preserves the
+      // close-boarded deck and forklift-entry openings from the source model.
+      const scale = Math.min(
+        width / Math.max(rawSize.x, 0.01),
+        depth / Math.max(rawSize.z, 0.01),
+      );
       pallet.position.copy(position);
       pallet.position.y += yOffset;
       pallet.quaternion.copy(quaternion);
-      pallet.scale.set(
-        width / Math.max(rawSize.x, 0.01),
-        Math.min(width, depth) / Math.max(rawSize.y, 0.01),
-        depth / Math.max(rawSize.z, 0.01),
-      );
-      pallet.position.sub(rawCenter.clone().multiply(pallet.scale).applyQuaternion(quaternion));
+      pallet.scale.setScalar(scale);
+      const baseOffset = new THREE.Vector3(
+        -rawCenter.x * scale,
+        -rawBounds.min.y * scale,
+        -rawCenter.z * scale,
+      ).applyQuaternion(quaternion);
+      pallet.position.add(baseOffset);
       scene.add(pallet);
     };
     boxEntries.forEach((entry) => {
