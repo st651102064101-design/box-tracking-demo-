@@ -15925,6 +15925,13 @@ loadFromServer().then(function(){
      ซึ่งตอนนี้อ่านจาก UIP ที่โหลดมาจาก /api/ui-prefs ไม่ใช่จาก S อีกแล้ว */
   return uiPrefsLoad();
 }).then(function(){
+  /* Tell the outer Next.js shell which DB-backed tab is about to render, so
+     its temporary skeleton matches the restored page while boot continues. */
+  try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'smarttrace-loading-tab',tab:uiPrefGet('tab','overview')},window.location.origin);}catch(_){ }
+  /* Gate preferences are account settings and must be available before the
+     first render, otherwise the default gate may overwrite a saved choice. */
+  return loadFixedGates();
+}).then(function(){
   /* สิทธิ์ของบัญชีนี้ต้องรู้ก่อนวาดหน้าแรก ไม่งั้นเมนูที่ไม่มีสิทธิ์จะโผล่มาแวบหนึ่ง
      แล้วค่อยหายไป — และ restoreLastTab() อาจพาไปแท็บที่บัญชีนี้เข้าไม่ได้ */
   return rbacBoot();
@@ -15934,6 +15941,14 @@ loadFromServer().then(function(){
   restoreUiPrefs();
   restoreLastTab();
   renderAll();
+  /* The iframe is now fully painted. This message is the only signal the
+     parent shell uses to dismiss its loading skeleton. */
+  requestAnimationFrame(function(){requestAnimationFrame(function(){
+    document.documentElement.classList.add('app-ready');
+    requestAnimationFrame(function(){
+      try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'smarttrace-ready'},window.location.origin);}catch(_){ }
+    });
+  });});
   loadRfidGateBindings();
   hydrateIcons(document);
   /* พนักงาน = null → บังคับลงทะเบียนผู้ใช้งานคนแรกทันที (เพิ่มได้แค่คนเดียวผ่านช่องทางนี้) */
