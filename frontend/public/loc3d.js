@@ -939,7 +939,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // electrical boxes complete the service-wall rhythm from the reference.
   const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x465158, metalness: 0.68, roughness: 0.38 });
   const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x333b40, metalness: 0.84, roughness: 0.25 });
-  const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4b565d, metalness: 0.58, roughness: 0.43, side: THREE.DoubleSide });
   const wallLightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeaf8ff, emissiveIntensity: 2.8, roughness: 0.25 });
   const electricalMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca8ae, metalness: 0.64, roughness: 0.38 });
   const wallDetailTextures = [];
@@ -966,6 +965,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   [-1, 1].forEach((side) => {
     const wallX = center.x + side * (halfWarehouseWidth - 0.15);
     const innerX = wallX - side * 0.16;
+    const sideRotation = side > 0 ? -Math.PI / 2 : Math.PI / 2;
     const lowerBand = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, warehouseDepth - 0.3), lowerBandMaterial);
     lowerBand.position.set(innerX, warehouseFloorY + 0.32, center.z);
     scene.add(lowerBand);
@@ -997,31 +997,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     ));
     for (let bay = 1; bay < wallFrameCount - 1; bay += 2) {
       const doorZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
-      const doorWidth = Math.min(2.1, wallBayDepth * 0.48);
-      const accessDoor = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, 2.25), doorMaterial);
-      accessDoor.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-      accessDoor.position.set(innerX - side * 0.012, warehouseFloorY + 1.13, doorZ);
-      scene.add(accessDoor);
       const numberTexture = wallMarkerTexture(String(9 + bay), '#3d464c', '#ffd84d');
       const numberSign = new THREE.Mesh(
         new THREE.PlaneGeometry(0.52, 0.26),
         new THREE.MeshBasicMaterial({ map: numberTexture, toneMapped: false, side: THREE.DoubleSide }),
       );
-      numberSign.rotation.y = accessDoor.rotation.y;
+      numberSign.rotation.y = sideRotation;
       numberSign.position.set(innerX - side * 0.025, warehouseFloorY + 2.62, doorZ);
       scene.add(numberSign);
       const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
       wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, doorZ);
       scene.add(wallLight);
       const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
-      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, doorZ + doorWidth * 0.68);
+      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, doorZ + Math.min(2.1, wallBayDepth * 0.48) * 0.68);
       scene.add(equipmentBox);
       const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
       const safetySign = new THREE.Mesh(
         new THREE.PlaneGeometry(0.28, 0.28),
         new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
       );
-      safetySign.rotation.y = accessDoor.rotation.y;
+      safetySign.rotation.y = sideRotation;
       safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, doorZ);
       scene.add(safetySign);
     }
@@ -1084,20 +1079,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     elbow.position.set(riserX, wallPipeY, riserZ);
     scene.add(elbow);
   });
-  // Front roller shutter, set into the metal-sheet wall.
+  // The warehouse has one roller shutter only, on the front wall.
   const doorWidth = Math.min(4.2, warehouseWidth * 0.36);
   const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
   const door = new THREE.Mesh(
     new THREE.PlaneGeometry(doorWidth, doorHeight),
     new THREE.MeshStandardMaterial({ color: 0xd6dee2, metalness: 0.78, roughness: 0.3, side: THREE.DoubleSide }),
   );
-  door.position.set(center.x, warehouseFloorY + doorHeight / 2 + 0.04, center.z + warehouseDepth / 2 - 0.075);
+  door.position.set(center.x, warehouseFloorY + doorHeight / 2 + 0.04, center.z - warehouseDepth / 2 + 0.075);
   scene.add(door);
   const doorLineMaterial = new THREE.LineBasicMaterial({ color: 0x8c979d });
   for (let y = -doorHeight / 2 + 0.22; y < doorHeight / 2; y += 0.22) {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(center.x - doorWidth / 2, door.position.y + y, door.position.z + 0.006),
-      new THREE.Vector3(center.x + doorWidth / 2, door.position.y + y, door.position.z + 0.006),
+      new THREE.Vector3(center.x - doorWidth / 2, door.position.y + y, door.position.z - 0.006),
+      new THREE.Vector3(center.x + doorWidth / 2, door.position.y + y, door.position.z - 0.006),
     ]), doorLineMaterial);
     scene.add(line);
   }
@@ -1176,7 +1171,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     label.position.set(labelPosition.x, floor.position.y + 0.025, labelPosition.z);
     scene.add(label);
   });
-  const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
+  // One grid division represents one metre across the complete warehouse floor.
+  const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
+  const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
   scene.add(grid);
 
