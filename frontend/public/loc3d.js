@@ -935,9 +935,84 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       0.038,
     ));
   });
-  // Lower wall band, cable trays, access doors, bay numbers, wall lights and
-  // electrical boxes complete the service-wall rhythm from the reference.
-  const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x465158, metalness: 0.68, roughness: 0.38 });
+  // Reproduce the reference's wall build-up: a smooth light lower panel,
+  // corrugated cladding above, teal portal framing, and a continuous louvre
+  // strip on the service elevation. These are wall details, not configured
+  // warehouse gates, so the previously removed 3D doors stay absent.
+  const lowerWallMaterial = new THREE.MeshStandardMaterial({ color: 0xe4e8e8, metalness: 0.18, roughness: 0.62 });
+  const louvreMaterial = new THREE.MeshStandardMaterial({ color: 0xd7e0e2, metalness: 0.62, roughness: 0.38 });
+  const louvreFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x426f7b, metalness: 0.76, roughness: 0.3 });
+  const lowerWallHeight = Math.min(3.25, warehouseWallHeight * 0.31);
+  [-1, 1].forEach((side) => {
+    const wallX = center.x + side * (halfWarehouseWidth - 0.072);
+    const innerX = wallX - side * 0.075;
+    const lowerPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(0.035, lowerWallHeight, warehouseDepth - 0.22),
+      lowerWallMaterial,
+    );
+    lowerPanel.position.set(innerX, warehouseFloorY + lowerWallHeight / 2, center.z);
+    scene.add(lowerPanel);
+  });
+  // The photographed long wall has broad horizontal louvres between portal
+  // columns. Put them on the visible service elevation only; the opposite
+  // elevation remains continuous metal sheet as requested.
+  const louvreSide = -1;
+  const louvreX = center.x + louvreSide * (halfWarehouseWidth - 0.105);
+  const louvreStartY = warehouseFloorY + lowerWallHeight + 0.46;
+  const louvreHeight = Math.min(2.05, warehouseWallHeight * 0.22);
+  for (let bay = 1; bay < wallFrameCount - 2; bay += 2) {
+    const bayStartZ = center.z - halfWarehouseDepth + wallBayDepth * bay + 0.22;
+    const bayLength = wallBayDepth * 2 - 0.44;
+    const bayCenterZ = bayStartZ + bayLength / 2;
+    steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY, bayStartZ),
+      new THREE.Vector3(louvreX, louvreStartY, bayStartZ + bayLength),
+      0.042,
+      louvreFrameMaterial,
+    );
+    steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, bayStartZ),
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, bayStartZ + bayLength),
+      0.042,
+      louvreFrameMaterial,
+    );
+    [bayStartZ, bayStartZ + bayLength].forEach((z) => steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY, z),
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, z),
+      0.04,
+      louvreFrameMaterial,
+    ));
+    for (let slatIndex = 0; slatIndex < 8; slatIndex += 1) {
+      const slatY = louvreStartY + 0.16 + slatIndex * ((louvreHeight - 0.3) / 7);
+      const louvreSlat = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.075, bayLength - 0.08), louvreMaterial);
+      louvreSlat.position.set(louvreX + 0.025, slatY, bayCenterZ);
+      louvreSlat.rotation.z = -0.16;
+      scene.add(louvreSlat);
+    }
+  }
+  // Give both gable walls their portal-frame rhythm, horizontal girts and the
+  // same lower white panel seen where the photographed walls meet.
+  [-1, 1].forEach((side) => {
+    const endZ = center.z + side * (halfWarehouseDepth - 0.075);
+    for (let column = 0; column <= 4; column += 1) {
+      const x = center.x - halfWarehouseWidth + (warehouseWidth * column) / 4;
+      steelBetween(
+        new THREE.Vector3(x, warehouseFloorY + 0.08, endZ),
+        new THREE.Vector3(x, roofEaveY, endZ),
+        0.052,
+        louvreFrameMaterial,
+      );
+    }
+    [0.31, 0.61, 0.83].forEach((ratio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, endZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, endZ),
+      0.038,
+      louvreFrameMaterial,
+    ));
+  });
+  // Lower wall band, cable trays, bay numbers, wall lights and electrical
+  // boxes complete the service-wall rhythm from the reference.
+  const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x7c888d, metalness: 0.68, roughness: 0.38 });
   const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x333b40, metalness: 0.84, roughness: 0.25 });
   const wallLightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeaf8ff, emissiveIntensity: 2.8, roughness: 0.25 });
   const electricalMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca8ae, metalness: 0.64, roughness: 0.38 });
