@@ -449,9 +449,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const slotState = (entry) => entry.slot.status === 'full'
     ? 'full'
     : occupiedSlotIds.has(String(entry.slot.id)) ? 'occupied' : 'empty';
-  const slotColor = (entry) => {
+  let showOccupiedSlots = true;
+  const slotColor = (entry, revealOccupied = showOccupiedSlots) => {
     const state = slotState(entry);
-    return state === 'full' ? FULL_COLOR : state === 'occupied' ? OCCUPIED_COLOR : EMPTY_COLOR;
+    return state === 'full' ? FULL_COLOR : state === 'occupied' && revealOccupied ? OCCUPIED_COLOR : EMPTY_COLOR;
   };
   const slotMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -566,8 +567,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // box), keeping the hover interaction constant-cost even with many boxes.
   const hoverRingMaterial = new THREE.MeshBasicMaterial({
     color: 0xffd34e, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false,
+    side: THREE.DoubleSide,
   });
-  const hoverRing = new THREE.Mesh(new THREE.TorusGeometry(1, 0.055, 8, 56), hoverRingMaterial);
+  const hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.56, 1, 64), hoverRingMaterial);
   hoverRing.rotation.x = -Math.PI / 2;
   hoverRing.visible = false;
   hoverRing.renderOrder = 10;
@@ -579,6 +581,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   hoverOutline.visible = false;
   hoverOutline.renderOrder = 11;
   scene.add(hoverOutline);
+  const hoverShell = new THREE.Mesh(
+    UNIT_BOX,
+    new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.22, depthWrite: false, depthTest: false, side: THREE.BackSide }),
+  );
+  hoverShell.visible = false;
+  hoverShell.renderOrder = 9;
+  scene.add(hoverShell);
   // Every stored box gets its own physical RFID/barcode sticker. The tag is
   // the same identifier the backend exposes for scanners, and the label size
   // is constrained by BOTH the box width and height so it never overhangs.
@@ -665,7 +674,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const span = Math.max(size.x, size.z, 5);
   const barcodeZoomDistance = Math.max(7, span * 1.15);
+  const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
+  let occupancyOverviewMode = null;
   const updateRackLabelMode = () => {
     const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
     if (showBarcodes === barcodeMode) return;
@@ -674,10 +685,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
     rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
   };
+  const updateOccupancyOverlay = () => {
+    const revealOccupied = controls.getDistance() >= occupancyOverviewZoomDistance;
+    if (revealOccupied === occupancyOverviewMode) return;
+    occupancyOverviewMode = revealOccupied;
+    showOccupiedSlots = revealOccupied;
+    if (!slotMesh) return;
+    slotEntries.forEach((entry, index) => {
+      if (index !== hoverIndex) slotMesh.setColorAt(index, slotColor(entry));
+    });
+    slotMesh.instanceColor.needsUpdate = true;
+  };
   camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
   controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
   controls.update();
   updateRackLabelMode();
+  updateOccupancyOverlay();
   sun.position.set(center.x - span * 0.65, Math.max(16, span * 1.1), center.z + span * 0.55);
   const shadowExtent = Math.max(12, span * 0.85);
   Object.assign(sun.shadow.camera, { left: -shadowExtent, right: shadowExtent, top: shadowExtent, bottom: -shadowExtent, near: 0.5, far: Math.max(60, span * 4) });
@@ -707,12 +730,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
     hoverBoxIndex = nextBox;
-    if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; }
+    if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
     if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
-      const ringScale = Math.max(entry.scale.x, entry.scale.z) * 0.84;
+      const ringScale = Math.max(entry.scale.x, entry.scale.z) * 1.5;
       hoverRing.position.set(entry.position.x, entry.position.y - entry.scale.y / 2 + 0.022, entry.position.z);
       hoverRing.userData.baseScale = ringScale;
       hoverRing.scale.setScalar(ringScale);
@@ -721,6 +744,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       hoverOutline.quaternion.copy(entry.quaternion);
       hoverOutline.scale.copy(entry.scale).multiplyScalar(1.12);
       hoverOutline.visible = true;
+      hoverShell.position.copy(entry.position);
+      hoverShell.quaternion.copy(entry.quaternion);
+      hoverShell.scale.copy(entry.scale).multiplyScalar(1.16);
+      hoverShell.visible = true;
       labelElement.textContent = `กล่อง ${entry.box.id}`;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
@@ -729,15 +756,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     } else if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
       const state = slotState(entry);
-      slotMesh.setColorAt(hoverIndex, state === 'empty' ? EMPTY_HOVER_COLOR : HOVER_COLOR);
-      labelElement.textContent = state === 'full' ? 'เต็ม' : state === 'occupied' ? 'มีของ' : 'ว่าง';
-      labelElement.className = `loc3d-slot-label ${state}`;
+      const hiddenOccupied = state === 'occupied' && !showOccupiedSlots;
+      slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
+      labelElement.textContent = state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+      labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
     } else {
       hoverRing.visible = false;
       hoverOutline.visible = false;
+      hoverShell.visible = false;
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
@@ -766,6 +795,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     hoverRing.visible = false;
     hoverOutline.visible = false;
+    hoverShell.visible = false;
     hoverIndex = -1;
     hoverBoxIndex = -1;
     labelObject.visible = false;
@@ -795,6 +825,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const animate = () => {
     controls.update();
     updateRackLabelMode();
+    updateOccupancyOverlay();
     if (hoverRing.visible) {
       const pulse = 1 + Math.sin(performance.now() * 0.008) * 0.12;
       hoverRing.scale.setScalar((hoverRing.userData.baseScale || 1) * pulse);
