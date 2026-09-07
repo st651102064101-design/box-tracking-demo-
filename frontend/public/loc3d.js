@@ -1653,7 +1653,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       palletCenter.y -= entry.scale.y / 2 + 0.085;
       addPallet(palletCenter, entry.quaternion, palletWidth, palletDepth);
     });
-    addPallet(new THREE.Vector3(stagingCenter.x, warehouseFloorY, stagingCenter.z), new THREE.Quaternion(), 1.0, 1.2, 0.02);
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
   // CC BY model: "Forklift" by brezineman. Keep the original attribution
   // alongside the asset rather than baking it into an unrelated warehouse mesh.
