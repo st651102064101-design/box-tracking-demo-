@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, gates, racks, slots, warehouses } from '../db/schema.js';
+import { boxes, racks, slots, warehouses } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -86,16 +86,17 @@ warehouse3dRouter.get(
         materialType: boxes.materialType,
       }).from(boxes).where(inArray(boxes.slotId, slotIds))
       : [];
+    // The warehouse master is the sole source for its physical door count.
+    // Do not infer doors from operational gate rows: a warehouse with no
+    // configured gates intentionally has no doors in the 3D elevation.
     const configuredGateNumbers = Array.isArray(warehouse?.gates)
       ? (warehouse.gates as unknown[]).map((gate) => Number(gate)).filter(Number.isFinite)
-      : (warehouseId
-        ? (await db.select({ gateNo: gates.gateNo }).from(gates).where(eq(gates.warehouseId, warehouseId))).map((row) => row.gateNo)
-        : []);
+      : [];
     const gateTypes = warehouse?.gateTypes && typeof warehouse.gateTypes === 'object'
       ? warehouse.gateTypes as Record<string, unknown>
       : {};
     const doors = configuredGateNumbers.map((gateNo, index) => {
-      const rawType = String(gateTypes[String(gateNo)] ?? warehouse?.gateType ?? 'both');
+      const rawType = String(gateTypes[String(gateNo)] ?? 'both');
       return { gateNo, type: ['in', 'out', 'both'].includes(rawType) ? rawType : 'both', index };
     });
 

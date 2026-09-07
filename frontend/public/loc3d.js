@@ -1079,9 +1079,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     elbow.position.set(riserX, wallPipeY, riserZ);
     scene.add(elbow);
   });
-  // Restore the real number of front doors from the warehouse master.
+  // Render exactly the doors configured by the current warehouse master.
   // Gate direction is retained on the mesh for future styling/interaction.
-  const warehouseDoors = Array.isArray(model.doors) && model.doors.length ? model.doors : [{ gateNo: 1, type: 'both', index: 0 }];
+  const warehouseDoors = Array.isArray(model.doors) ? model.doors : [];
   const doorWidth = Math.min(4.2, warehouseWidth * 0.24);
   const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
   const doorLineMaterial = new THREE.LineBasicMaterial({ color: 0x8c979d });
@@ -1097,6 +1097,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     door.position.set(doorX, warehouseFloorY + doorHeight / 2 + 0.04, center.z + warehouseDepth / 2 - 0.075);
     door.userData.gateNo = warehouseDoor.gateNo;
     door.userData.gateType = warehouseDoor.type;
+    scene.add(door);
     for (let y = -doorHeight / 2 + 0.22; y < doorHeight / 2; y += 0.22) {
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(doorX - doorWidth / 2, door.position.y + y, door.position.z + 0.006),
