@@ -1562,10 +1562,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let disposed = false;
   // Use the supplied manufacturer pallet model for both stored cartons and
   // the staging bay. The placement list is still derived only from DB boxes.
-  assets.load('/models/woodenpallet.glb').then(({ scene: palletTemplate }) => {
+  assets.load('/models/wooden_pallets.glb').then(({ scene: palletTemplate }) => {
     if (disposed) return;
     palletTemplate.traverse((object) => {
       if (!object.isMesh) return;
+      // This GLB contains two pallet variants. Pallet_1 is the open slatted
+      // deck requested for the warehouse; discard the solid-deck alternative.
+      if (object.name !== 'Pallet_1_Pallet_1_0') {
+        object.removeFromParent();
+        return;
+      }
       object.castShadow = true;
       object.receiveShadow = true;
     });
