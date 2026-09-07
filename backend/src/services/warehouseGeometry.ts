@@ -5,7 +5,9 @@ type ExistingRack = typeof racks.$inferSelect;
 type ExistingSlot = typeof slots.$inferSelect;
 
 export const CENTIMETRES_PER_METRE = 100;
-export const DEFAULT_SLOT_CM = Object.freeze({ width: 110, height: 70, depth: 100 });
+// A three-metre clear bay accommodates two standard pallets side by side
+// with operating clearance. Rack width is derived from the number of bays.
+export const DEFAULT_SLOT_CM = Object.freeze({ width: 300, height: 70, depth: 100 });
 export const DEFAULT_BOX_CM = Object.freeze({ width: 60, height: 40, depth: 40 });
 
 export interface RackGeometryRow extends Record<string, unknown> {
@@ -189,7 +191,7 @@ export function deriveWarehouseGeometry(
     const widestShelf = Math.max(1, ...[...slotsPerShelf.values()].map((items) => items.length));
     const warehouseIndex = indexByWarehouse.get(first.wh) ?? 0;
     indexByWarehouse.set(first.wh, warehouseIndex + 1);
-    const defaultWidth = Math.max(140, widestShelf * 120 + 20);
+    const defaultWidth = Math.max(320, widestShelf * DEFAULT_SLOT_CM.width + 20);
     const defaultHeight = Math.max(110, shelves.length * 80 + 30);
 
     const rackRow: RackGeometryRow = {
@@ -218,7 +220,7 @@ export function deriveWarehouseGeometry(
       const size = recordOf(slot3d.dimensionsCm ?? slot3d.sizeCm ?? slot3d.size);
       const slotCodes = slotsPerShelf.get(location.shelf) ?? [location.slot];
       const slotIndex = Math.max(0, slotCodes.indexOf(location.slot));
-      const defaultLocalX = (slotIndex - (slotCodes.length - 1) / 2) * 120;
+      const defaultLocalX = (slotIndex - (slotCodes.length - 1) / 2) * DEFAULT_SLOT_CM.width;
       const defaultLocalY = 10 + ((shelfIndex.get(location.shelf) ?? 0) + 0.5) * 80;
       const row: SlotGeometryRow = {
         id: location.code,

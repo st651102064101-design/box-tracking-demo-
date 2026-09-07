@@ -50,7 +50,7 @@ function legacyModel(locations, occupancy) {
     .map(([id, rows], rackIndex) => {
       const shelves = [...new Set(rows.map((row) => String(row.shelf || '1')))].sort(natural);
       const slotCodes = [...new Set(rows.map((row) => String(row.slot || '1')))].sort(natural);
-      const width = Math.max(140, slotCodes.length * 120 + 20);
+      const width = Math.max(320, slotCodes.length * 300 + 20);
       const height = Math.max(110, shelves.length * 80 + 30);
       return {
         id,
@@ -69,11 +69,11 @@ function legacyModel(locations, occupancy) {
             shelfCode: String(row.shelf || '1'),
             slotCode: String(row.slot || '1'),
             localPositionCm: {
-              x: (slotIndex - (slotCodes.length - 1) / 2) * 120,
+              x: (slotIndex - (slotCodes.length - 1) / 2) * 300,
               y: 10 + (shelfIndex + 0.5) * 80,
               z: 0,
             },
-            dimensionsCm: { width: 110, height: 70, depth: 100 },
+              dimensionsCm: { width: 300, height: 70, depth: 100 },
             // A stored box is rendered as a box, not as a red "full" warning.
             // Red is reserved for an explicit full report from PDA/web.
             barcode: row.barcode || row.code,
