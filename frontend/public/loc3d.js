@@ -1079,33 +1079,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     elbow.position.set(riserX, wallPipeY, riserZ);
     scene.add(elbow);
   });
-  // Render exactly the doors configured by the current warehouse master.
-  // Gate direction is retained on the mesh for future styling/interaction.
-  const warehouseDoors = Array.isArray(model.doors) ? model.doors : [];
-  const doorWidth = Math.min(4.2, warehouseWidth * 0.24);
-  const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
-  const doorLineMaterial = new THREE.LineBasicMaterial({ color: 0x8c979d });
-  warehouseDoors.forEach((warehouseDoor, doorIndex) => {
-    const spacing = Math.min(doorWidth * 1.45, warehouseWidth / Math.max(warehouseDoors.length, 2));
-    const doorX = center.x + (doorIndex - (warehouseDoors.length - 1) / 2) * spacing;
-    const door = new THREE.Mesh(
-      new THREE.PlaneGeometry(doorWidth, doorHeight),
-      new THREE.MeshStandardMaterial({ color: warehouseDoor.type === 'out' ? 0x64727a : 0xd6dee2, metalness: 0.78, roughness: 0.3, side: THREE.DoubleSide }),
-    );
-    // Doors belong on the single designated front elevation; the opposite
-    // elevation remains a continuous metal-sheet wall.
-    door.position.set(doorX, warehouseFloorY + doorHeight / 2 + 0.04, center.z + warehouseDepth / 2 - 0.075);
-    door.userData.gateNo = warehouseDoor.gateNo;
-    door.userData.gateType = warehouseDoor.type;
-    scene.add(door);
-    for (let y = -doorHeight / 2 + 0.22; y < doorHeight / 2; y += 0.22) {
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(doorX - doorWidth / 2, door.position.y + y, door.position.z + 0.006),
-        new THREE.Vector3(doorX + doorWidth / 2, door.position.y + y, door.position.z + 0.006),
-      ]), doorLineMaterial);
-      scene.add(line);
-    }
-  });
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
   const fixtureCount = serviceFrameIndices.length;
   [-0.24, 0.24].forEach((xRatio) => {
