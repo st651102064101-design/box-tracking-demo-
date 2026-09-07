@@ -926,26 +926,31 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Fire-sprinkler mains run beneath the trusses. Heads are placed directly
   // below the visible red pipe instead of floating independently in space.
   const sprinklerHeadMaterial = new THREE.MeshStandardMaterial({ color: 0xc8d0d4, metalness: 0.82, roughness: 0.2 });
-  [-0.56, 0, 0.56].forEach((xRatio) => {
-    const pipeX = center.x + halfWarehouseWidth * xRatio;
-    // All services sit below the straight truss chord, not against the roof.
+  const serviceRowCount = Math.min(7, Math.max(5, frameCount - 2));
+  const serviceFrameIndices = Array.from({ length: serviceRowCount }, (_, index) => (
+    Math.round((index + 1) * (frameCount - 1) / (serviceRowCount + 1))
+  ));
+  // Each red main runs across the warehouse width, parallel to the long side
+  // of each rectangular light. Both are fixed below the same straight truss.
+  serviceFrameIndices.forEach((frameIndex) => {
+    const pipeZ = center.z - halfWarehouseDepth + (warehouseDepth * frameIndex) / (frameCount - 1);
     const pipeY = trussBottomY - 0.16;
     steelBetween(
-      new THREE.Vector3(pipeX, pipeY, center.z - halfWarehouseDepth + 0.4),
-      new THREE.Vector3(pipeX, pipeY, center.z + halfWarehouseDepth - 0.4),
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.4, pipeY, pipeZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.4, pipeY, pipeZ),
       0.035,
       sprinklerPipeMaterial,
     );
-    for (let index = 1; index < frameCount - 1; index += 1) {
-      const headZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / (frameCount - 1);
+    for (let index = 1; index < 8; index += 1) {
+      const headX = center.x - halfWarehouseWidth + (warehouseWidth * index) / 8;
       // Short hanger physically connects the main to the truss above.
       steelBetween(
-        new THREE.Vector3(pipeX, trussBottomY, headZ),
-        new THREE.Vector3(pipeX, pipeY, headZ),
+        new THREE.Vector3(headX, trussBottomY, pipeZ),
+        new THREE.Vector3(headX, pipeY, pipeZ),
         0.014,
         trussMaterial,
       );
-      const dropStart = new THREE.Vector3(pipeX, pipeY, headZ);
+      const dropStart = new THREE.Vector3(headX, pipeY, pipeZ);
       const dropEnd = dropStart.clone().add(new THREE.Vector3(0, -0.18, 0));
       steelBetween(dropStart, dropEnd, 0.018, sprinklerPipeMaterial);
       const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.09, 8), sprinklerHeadMaterial);
@@ -983,12 +988,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.add(line);
   }
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
-  const fixtureCount = Math.min(8, frameCount - 2);
+  const fixtureCount = serviceFrameIndices.length;
   [-0.24, 0.24].forEach((xRatio) => {
     const lightX = center.x + halfWarehouseWidth * xRatio;
     const lightY = trussBottomY - 0.24;
     for (let index = 1; index <= fixtureCount; index += 1) {
-      const frameIndex = Math.round(index * (frameCount - 1) / (fixtureCount + 1));
+      const frameIndex = serviceFrameIndices[index - 1];
       const lightZ = center.z - halfWarehouseDepth + (warehouseDepth * frameIndex) / (frameCount - 1);
       steelBetween(
         new THREE.Vector3(lightX, trussBottomY, lightZ),
