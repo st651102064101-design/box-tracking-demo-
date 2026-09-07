@@ -846,6 +846,71 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     member.castShadow = false;
     scene.add(member);
   };
+  // Warehouse circulation details: yellow traffic lanes, a staging box,
+  // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
+  // These remain independent of rack geometry and of the optional forklift.
+  const safetyYellow = new THREE.MeshStandardMaterial({ color: 0xf2c62e, emissive: 0x3a2a00, emissiveIntensity: 0.18, roughness: 0.48 });
+  const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xf0bd22, metalness: 0.55, roughness: 0.35 });
+  const palletMaterial = new THREE.MeshStandardMaterial({ color: 0x9a6938, metalness: 0.05, roughness: 0.8 });
+  const floorStrip = (x, z, width, depth, rotationY = 0) => {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(width, 0.022, depth), safetyYellow);
+    strip.position.set(x, warehouseFloorY + 0.018, z);
+    strip.rotation.y = rotationY;
+    scene.add(strip);
+    return strip;
+  };
+  const laneOffset = warehouseWidth * 0.22;
+  [-1, 1].forEach((side) => {
+    floorStrip(center.x + side * laneOffset, center.z, 0.075, warehouseDepth - 2.6);
+    for (let index = 0; index < 9; index += 1) {
+      const z = center.z - halfWarehouseDepth + 1.7 + index * ((warehouseDepth - 3.4) / 9);
+      floorStrip(center.x + side * (laneOffset + 0.42), z, 0.075, 0.65);
+    }
+  });
+  // A rectangular keep-clear/staging zone beside the rack face.
+  const stagingCenter = new THREE.Vector3(center.x - warehouseWidth * 0.28, warehouseFloorY + 0.025, center.z + warehouseDepth * 0.23);
+  const stagingWidth = Math.min(7.2, warehouseWidth * 0.2);
+  const stagingDepth = Math.min(5.2, warehouseDepth * 0.12);
+  floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
+  floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
+  floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
+  floorStrip(stagingCenter.x + stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
+  const arrowGeometry = new THREE.BufferGeometry();
+  arrowGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.6, 0.024, -0.8, 0.6, 0.024, -0.8, 0, 0.024, 0.8,
+  ], 3));
+  arrowGeometry.computeVertexNormals();
+  const arrow = new THREE.Mesh(arrowGeometry, safetyYellow);
+  arrow.position.set(stagingCenter.x, warehouseFloorY, stagingCenter.z);
+  scene.add(arrow);
+  // Guardrail at the staging edge: two rails, four posts and black/yellow
+  // protective foot plates, matching the reference warehouse safety layout.
+  const railZ = stagingCenter.z - stagingDepth / 2 - 0.28;
+  [0, stagingWidth / 2 - 0.18, -stagingWidth / 2 + 0.18].forEach((offset) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
+    post.position.set(stagingCenter.x + offset, warehouseFloorY + 0.575, railZ);
+    scene.add(post);
+  });
+  [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(stagingCenter.x - stagingWidth / 2, warehouseFloorY + height, railZ),
+    new THREE.Vector3(stagingCenter.x + stagingWidth / 2, warehouseFloorY + height, railZ),
+    0.045,
+    guardrailMaterial,
+  ));
+  // One empty timber pallet in the staging area; stored cartons remain driven
+  // by the database and are not duplicated by this visual prop.
+  const pallet = new THREE.Group();
+  const palletX = stagingCenter.x - stagingWidth * 0.18;
+  const palletZ = stagingCenter.z + stagingDepth * 0.08;
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 1.1), palletMaterial);
+  deck.position.set(palletX, warehouseFloorY + 0.09, palletZ);
+  pallet.add(deck);
+  [-0.38, 0, 0.38].forEach((x) => {
+    const runner = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 1.05), palletMaterial);
+    runner.position.set(palletX + x, warehouseFloorY + 0.02, palletZ);
+    pallet.add(runner);
+  });
+  scene.add(pallet);
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
   // following upper chord and repeated triangular webs across the full span.
   const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
