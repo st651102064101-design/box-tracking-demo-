@@ -5581,6 +5581,11 @@ function confirmA(title,body,okLabel,danger){return new Promise(function(res){va
     '<div class="afoot"><button class="'+(danger?'danger':'')+'" id="aOk">'+esc(okLabel||'ยืนยัน')+'</button><button id="aCancel">ยกเลิก</button></div>';
   m.classList.add('show');$('#aOk').onclick=function(){m.classList.remove('show');res(true);};
   $('#aCancel').onclick=function(){m.classList.remove('show');res(false);};});}
+function alertA(title,body){return new Promise(function(res){var m=$('#alertM');
+  $('#alertSheet').innerHTML='<div class="abody"><h3>'+esc(title)+'</h3><p>'+esc(body||'')+'</p></div>'+
+    '<div class="afoot"><button id="aOk">ปิด</button></div>';
+  m.classList.add('show');$('#aOk').onclick=function(){m.classList.remove('show');res();};});}
+window.confirmA=confirmA;window.systemAlert=alertA;
 /* ══ SIDE DRAWER ที่ยืม "การ์ดฟอร์มตัวจริง" มาเป็นเนื้อหา ═══════════════════════
    ประเภทกล่อง/คลัง & ประตู/ลูกค้า/พนักงาน ใช้การ์ดใบเดียวทั้งเพิ่มและแก้ไข — ตรรกะ
    validate/save/สิทธิ์/ตัวสร้างรหัสอัตโนมัติ ผูกกับ id ฟิลด์ในการ์ดนั้นทั้งหมด สร้าง

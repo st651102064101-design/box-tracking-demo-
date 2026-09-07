@@ -354,7 +354,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    window.alert('เครื่องมือแร็กยังไม่พร้อมใช้งาน');
+    const alertModal = document.getElementById('alertM');
+    const fullscreenHost = document.fullscreenElement;
+    const movedIntoFullscreen = Boolean(fullscreenHost && alertModal && !fullscreenHost.contains(alertModal));
+    if (movedIntoFullscreen) fullscreenHost.appendChild(alertModal);
+    const result = window.systemAlert?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน');
+    if (movedIntoFullscreen && result?.finally) {
+      result.finally(() => { if (alertModal.parentElement === fullscreenHost) document.body.appendChild(alertModal); });
+    }
   });
 
   const hud = document.createElement('div');
