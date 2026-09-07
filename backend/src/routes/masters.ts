@@ -366,7 +366,10 @@ mastersRouter.post(
       code: input.code,
       wh: input.wh ?? null,
       zone: input.zone ?? null,
-      rack: input.rack ?? null,
+      // Location Master rows keep rack non-null so the Putaway hierarchy can
+      // always resolve a location to a rack. The API still accepts an omitted
+      // value for backward compatibility, storing the empty string.
+      rack: input.rack ?? '',
       shelf: input.shelf ?? null,
       slot: input.slot ?? null,
       type: input.type ?? null,
