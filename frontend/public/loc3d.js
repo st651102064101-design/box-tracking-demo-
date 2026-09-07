@@ -418,9 +418,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       items.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
       const levelIndex = shelfLevels.findIndex(([code]) => code === shelfCode);
       const floorY = shelfLevels[levelIndex]?.[1] ?? 0;
-      // Make every internal upright meet both steel cross-members. Formerly it
-      // was only as high as the slot volume, leaving visible gaps between
-      // shelves when a rack's pitch exceeded the nominal slot height.
       const nextFloorY = levelIndex >= 0 && levelIndex < shelfLevels.length - 1
         ? shelfLevels[levelIndex + 1][1]
         : height - 0.04;
@@ -430,8 +427,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         const left = items[index - 1];
         const right = items[index];
         const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
-        addPart(uprightParts, dividerX, (dividerBottom + dividerTop) / 2, 0,
-          Math.max(0.045, frame * 0.7), dividerTop - dividerBottom, depth);
+        // Inner bay separators use the same X cross bracing as the end frames,
+        // rather than a solid black partition that blocks the rack interior.
+        const braceZ = Math.max(0.03, (depth - frame) / 2);
+        addBrace(dividerX, dividerBottom, -braceZ, dividerX, dividerTop, braceZ);
+        addBrace(dividerX, dividerBottom, braceZ, dividerX, dividerTop, -braceZ);
       }
     });
     // Black cross bracing on both end frames. It is structural, not merely a
@@ -710,7 +710,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
     );
     label.rotation.x = -Math.PI / 2;
-    label.position.set(areaCenter.x, floor.position.y + 0.025, areaCenter.z - areaDepth * 0.32);
+    // Place the zone label beyond the front of the rack footprint.
+    const labelOffset = Math.max(0.5, Math.min(1.1, areaDepth * 0.22));
+    label.position.set(areaCenter.x, floor.position.y + 0.025, area.minZ - labelOffset);
     scene.add(label);
   });
   const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
