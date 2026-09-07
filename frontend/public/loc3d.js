@@ -791,9 +791,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const showRackNames = controls.getDistance() > barcodeZoomDistance;
     if (showRackNames === barcodeMode) return;
     barcodeMode = showRackNames;
-    // Slot labels are real shelf-edge barcodes, so they must remain visible
-    // in the normal overview as well as when an operator zooms in.
-    barcodeStickers.forEach((sticker) => { sticker.visible = true; });
+    // Match the box barcode behavior: hide shelf-edge barcodes in overview
+    // and reveal them only when the operator zooms in close enough to read.
+    barcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
     boxBarcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
     rackNameLabels.forEach((label) => { label.visible = showRackNames; });
   };
