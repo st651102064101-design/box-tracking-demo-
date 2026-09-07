@@ -902,9 +902,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const aisleCenterX = (aisleStartX + aisleEndX) / 2;
   floorStrip(aisleCenterX, aisleCenterZ - 1.75, aisleLength, 0.09);
   floorStrip(aisleCenterX, aisleCenterZ + 1.75, aisleLength, 0.09);
+  // Dashed forklift crossings run perpendicular to the rack length. The
+  // repeated marks therefore travel across the rack face instead of tracking
+  // alongside its beams.
+  const crossLaneX = aisleStartX + aisleLength * 0.52;
+  const crossLaneStartZ = center.z - halfWarehouseDepth + 1.2;
+  const crossLaneEndZ = center.z + halfWarehouseDepth - 1.2;
   for (let index = 0; index < 12; index += 1) {
-    const x = aisleStartX + 0.55 + index * ((aisleLength - 1.1) / 11);
-    floorStrip(x, aisleCenterZ, 0.72, 0.075);
+    const z = crossLaneStartZ + 0.55 + index * ((crossLaneEndZ - crossLaneStartZ - 1.1) / 11);
+    floorStrip(crossLaneX, z, 0.075, 0.72);
   }
   // A compact staging bay at the aisle end, clear of the travel centreline.
   const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
@@ -914,19 +920,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
   floorStrip(stagingCenter.x + stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
-  // Open triangular direction marker like the painted symbol in the photo.
-  const floorSegment = (x1, z1, x2, z2) => {
-    const dx = x2 - x1, dz = z2 - z1;
-    return floorStrip((x1 + x2) / 2, (z1 + z2) / 2, Math.hypot(dx, dz), 0.1, -Math.atan2(dz, dx));
-  };
-  // Put the direction triangle beside the safety posts, outside the vehicle
-  // lane, with its point facing right toward the forklift route.
-  const arrowBaseX = aisleStartX - 0.7;
-  const arrowTipX = aisleStartX + 0.62;
-  const arrowZ = aisleCenterZ - 2.25;
-  floorSegment(arrowTipX, arrowZ, arrowBaseX, arrowZ - 0.68);
-  floorSegment(arrowBaseX, arrowZ - 0.68, arrowBaseX, arrowZ + 0.68);
-  floorSegment(arrowBaseX, arrowZ + 0.68, arrowTipX, arrowZ);
   // Guardrail belongs at the exposed rack end, clear of the staging box and
   // vehicle aisle. Its posts carry alternating black impact bands.
   const railX = center.x - rackBoundaryWidth / 2 - 0.28;
