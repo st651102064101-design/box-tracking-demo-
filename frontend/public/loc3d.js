@@ -157,28 +157,22 @@ function floorMarkTexture(text) {
   return texture;
 }
 
-function safetyZoneSignTexture(warehouse, zone) {
+function safetyZoneSignTexture(zone) {
   const canvas = document.createElement('canvas');
-  canvas.width = 480;
-  canvas.height = 900;
+  canvas.width = 600;
+  canvas.height = 1000;
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = '#101714';
-  context.strokeStyle = '#91d438';
-  context.lineWidth = 20;
-  context.roundRect(22, 22, canvas.width - 44, canvas.height - 44, 38);
-  context.fill();
-  context.stroke();
   context.textAlign = 'center';
-  context.fillStyle = '#b8ee59';
-  context.font = '800 72px system-ui, sans-serif';
-  context.fillText(warehouse, canvas.width / 2, 260);
+  context.textBaseline = 'middle';
+  // Match rack names exactly: white type with a black industrial outline.
+  context.lineJoin = 'round';
+  context.lineWidth = 28;
+  context.strokeStyle = '#050505';
   context.fillStyle = '#ffffff';
-  context.font = '900 112px system-ui, sans-serif';
-  context.fillText(`โซน ${zone}`, canvas.width / 2, 490);
-  context.fillStyle = '#d3e0d3';
-  context.font = '700 48px system-ui, sans-serif';
-  context.fillText('SAFETY AREA', canvas.width / 2, 690);
+  context.font = '900 126px system-ui, sans-serif';
+  context.strokeText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
+  context.fillText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.minFilter = THREE.LinearFilter;
@@ -356,12 +350,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(labelObject);
 
   const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
+  const primaryZoneLabel = String(model.racks?.[0]?.zone || 'A');
   const warehouseTitle = document.createElement('div');
   warehouseTitle.className = 'loc3d-warehouse-title';
   const warehouseTitleCaption = document.createElement('span');
-  warehouseTitleCaption.textContent = 'กำลังดูคลังสินค้า';
+  warehouseTitleCaption.textContent = 'กำลังดูพื้นที่จัดเก็บ';
   const warehouseTitleName = document.createElement('strong');
-  warehouseTitleName.textContent = warehouseLabel;
+  warehouseTitleName.textContent = `โซน ${primaryZoneLabel}`;
   warehouseTitle.append(warehouseTitleCaption, warehouseTitleName);
   stage.appendChild(warehouseTitle);
 
@@ -765,10 +760,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Size the enclosure once from the real rack footprint. The previous
   // scale-plus-margin calculation enlarged the building twice, making a
   // full-size selective rack look like a miniature in an empty hangar.
-  const warehouseMarginX = Math.max(5.5, Math.min(8, size.x * 0.48));
-  const warehouseMarginZ = Math.max(7.5, Math.min(10, size.z * 2.8));
-  const warehouseWidth = Math.max(24, size.x + warehouseMarginX * 2);
-  const warehouseDepth = Math.max(18, size.z + warehouseMarginZ * 2);
+  const warehouseMarginX = Math.max(11, Math.min(16, size.x * 0.9));
+  const warehouseMarginZ = Math.max(13, Math.min(20, size.z * 4));
+  const warehouseWidth = Math.max(36, size.x + warehouseMarginX * 2);
+  const warehouseDepth = Math.max(28, size.z + warehouseMarginZ * 2);
   const warehouseWallHeight = Math.max(9.5, size.y + 3.3);
   // Keep the gable shallow, as in a standard metal-sheet warehouse rather
   // than using a semi-circular hangar roof.
@@ -893,17 +888,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  const aisleLength = Math.min(warehouseWidth - 2.8, rackBoundaryWidth + 5.2);
-  floorStrip(center.x, aisleCenterZ - 1.75, aisleLength, 0.09);
-  floorStrip(center.x, aisleCenterZ + 1.75, aisleLength, 0.09);
+  // The forklift route begins immediately to the right of the safety rail and
+  // runs across the front of the rack rather than cutting through its guard.
+  const aisleStartX = center.x - rackBoundaryWidth / 2 - 0.28 + 0.95;
+  const aisleEndX = center.x + warehouseWidth / 2 - 1.35;
+  const aisleLength = Math.max(5, aisleEndX - aisleStartX);
+  const aisleCenterX = (aisleStartX + aisleEndX) / 2;
+  floorStrip(aisleCenterX, aisleCenterZ - 1.75, aisleLength, 0.09);
+  floorStrip(aisleCenterX, aisleCenterZ + 1.75, aisleLength, 0.09);
   for (let index = 0; index < 12; index += 1) {
-    const x = center.x - aisleLength / 2 + 0.55 + index * ((aisleLength - 1.1) / 11);
+    const x = aisleStartX + 0.55 + index * ((aisleLength - 1.1) / 11);
     floorStrip(x, aisleCenterZ, 0.72, 0.075);
   }
   // A compact staging bay at the aisle end, clear of the travel centreline.
   const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
   const stagingDepth = 2.25;
-  const stagingCenter = new THREE.Vector3(center.x - aisleLength / 2 + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
+  const stagingCenter = new THREE.Vector3(aisleStartX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
   floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
@@ -913,12 +913,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const dx = x2 - x1, dz = z2 - z1;
     return floorStrip((x1 + x2) / 2, (z1 + z2) / 2, Math.hypot(dx, dz), 0.1, -Math.atan2(dz, dx));
   };
-  const arrowX = center.x + aisleLength * 0.08;
-  const arrowTipZ = aisleCenterZ + 0.72;
-  const arrowBaseZ = aisleCenterZ - 0.52;
-  floorSegment(arrowX, arrowTipZ, arrowX - 0.68, arrowBaseZ);
-  floorSegment(arrowX - 0.68, arrowBaseZ, arrowX + 0.68, arrowBaseZ);
-  floorSegment(arrowX + 0.68, arrowBaseZ, arrowX, arrowTipZ);
+  // Put the direction triangle beside the safety posts, outside the vehicle
+  // lane, with its point facing right toward the forklift route.
+  const arrowBaseX = aisleStartX - 0.7;
+  const arrowTipX = aisleStartX + 0.62;
+  const arrowZ = aisleCenterZ - 2.25;
+  floorSegment(arrowTipX, arrowZ, arrowBaseX, arrowZ - 0.68);
+  floorSegment(arrowBaseX, arrowZ - 0.68, arrowBaseX, arrowZ + 0.68);
+  floorSegment(arrowBaseX, arrowZ + 0.68, arrowTipX, arrowZ);
   // Guardrail belongs at the exposed rack end, clear of the staging box and
   // vehicle aisle. Its posts carry alternating black impact bands.
   const railX = center.x - rackBoundaryWidth / 2 - 0.28;
@@ -951,7 +953,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   ));
   // Move the warehouse/zone label off the floor and mount it vertically above
   // the safety rail, parallel to the rail direction and higher than its posts.
-  const safetySignTexture = safetyZoneSignTexture(warehouseLabel, String(rackEntries[0]?.rack.zone || 'A'));
+  const safetySignTexture = safetyZoneSignTexture(primaryZoneLabel);
   const safetyZoneSign = new THREE.Mesh(
     new THREE.PlaneGeometry(0.82, 1.54),
     new THREE.MeshBasicMaterial({ map: safetySignTexture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
@@ -1199,6 +1201,61 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     wallDetailTextures.push(texture);
     return texture;
   };
+  // Loading-dock elevation: door count and flow type come solely from the
+  // warehouse master API. The opposite wall remains unbroken metal sheet.
+  const configuredDoors = Array.isArray(model.doors) ? model.doors : [];
+  if (configuredDoors.length) {
+    const doorSide = -1;
+    const wallX = center.x + doorSide * (halfWarehouseWidth - 0.15);
+    const innerX = wallX - doorSide * 0.16;
+    const rotationY = Math.PI / 2;
+    const doorSpan = (warehouseDepth - 3.6) / (configuredDoors.length + 1);
+    const doorWidth = Math.min(3.1, Math.max(2.1, doorSpan * 0.58));
+    const doorHeight = Math.min(4.15, Math.max(3.25, warehouseWallHeight * 0.39));
+    const dockDoorMaterial = new THREE.MeshStandardMaterial({ color: 0xe8ecec, metalness: 0.58, roughness: 0.36 });
+    const dockFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x445c63, metalness: 0.78, roughness: 0.28 });
+    configuredDoors.forEach((door, index) => {
+      const doorZ = center.z - halfWarehouseDepth + 1.8 + doorSpan * (index + 1);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.13, doorHeight, doorWidth), dockDoorMaterial);
+      panel.position.set(innerX, warehouseFloorY + doorHeight / 2, doorZ);
+      scene.add(panel);
+      [-1, 1].forEach((edge) => steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY, doorZ + edge * doorWidth / 2),
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + edge * doorWidth / 2),
+        0.06,
+        dockFrameMaterial,
+      ));
+      steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ - doorWidth / 2),
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + doorWidth / 2),
+        0.06,
+        dockFrameMaterial,
+      );
+      for (let row = 1; row < 6; row += 1) {
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.025, doorWidth - 0.08), dockFrameMaterial);
+        seam.position.set(innerX - doorSide * 0.01, warehouseFloorY + (doorHeight * row) / 6, doorZ);
+        scene.add(seam);
+      }
+      const numberSign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.62, 0.34),
+        new THREE.MeshBasicMaterial({ map: wallMarkerTexture(String(door.gateNo), '#3d464c', '#ffd84d'), toneMapped: false, side: THREE.DoubleSide }),
+      );
+      numberSign.rotation.y = rotationY;
+      numberSign.position.set(innerX - doorSide * 0.09, warehouseFloorY + doorHeight + 0.58, doorZ);
+      scene.add(numberSign);
+      const typeColor = door.type === 'in' ? 0x58c7ff : door.type === 'out' ? 0xff8b59 : 0xb8ee59;
+      const statusLamp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.42), new THREE.MeshStandardMaterial({ color: typeColor, emissive: typeColor, emissiveIntensity: 0.55 }));
+      statusLamp.position.set(innerX - doorSide * 0.15, warehouseFloorY + doorHeight + 0.34, doorZ);
+      scene.add(statusLamp);
+      const pipeZ = doorZ + doorWidth / 2 + 0.23;
+      steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + 0.12, pipeZ),
+        new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + doorHeight + 0.56, pipeZ),
+        0.035,
+        sprinklerPipeMaterial,
+      );
+    });
+  }
   [-1, 1].forEach((side) => {
     const wallX = center.x + side * (halfWarehouseWidth - 0.15);
     const innerX = wallX - side * 0.16;
@@ -1233,20 +1290,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       sprinklerPipeMaterial,
     ));
     for (let bay = 1; bay < wallFrameCount - 1; bay += 2) {
-      const doorZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
-      const numberTexture = wallMarkerTexture(String(9 + bay), '#3d464c', '#ffd84d');
-      const numberSign = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.52, 0.26),
-        new THREE.MeshBasicMaterial({ map: numberTexture, toneMapped: false, side: THREE.DoubleSide }),
-      );
-      numberSign.rotation.y = sideRotation;
-      numberSign.position.set(innerX - side * 0.025, warehouseFloorY + 2.62, doorZ);
-      scene.add(numberSign);
+      const serviceZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
       const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
-      wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, doorZ);
+      wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, serviceZ);
       scene.add(wallLight);
       const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
-      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, doorZ + Math.min(2.1, wallBayDepth * 0.48) * 0.68);
+      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, serviceZ + Math.min(2.1, wallBayDepth * 0.48) * 0.68);
       scene.add(equipmentBox);
       const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
       const safetySign = new THREE.Mesh(
@@ -1254,7 +1303,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
       );
       safetySign.rotation.y = sideRotation;
-      safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, doorZ);
+      safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, serviceZ);
       scene.add(safetySign);
     }
   });
