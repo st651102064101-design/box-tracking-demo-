@@ -343,7 +343,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.className = 'loc3d-rack-action';
   rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
   rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
-  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"/><path d="m19.3 13.55 1.04.6-1.8 3.12-1.05-.61a7.78 7.78 0 0 1-1.85 1.08v1.2h-3.6v-1.2a7.78 7.78 0 0 1-1.85-1.08l-1.05.61-1.8-3.12 1.04-.6a7.95 7.95 0 0 1 0-2.1l-1.04-.6 1.8-3.12 1.05.61a7.78 7.78 0 0 1 1.85-1.08v-1.2h3.6v1.2a7.78 7.78 0 0 1 1.85 1.08l1.05-.61 1.8 3.12-1.04.6a7.95 7.95 0 0 1 0 2.1Z"/></svg>';
+  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 6.8l2 1.2M17.8 16l2 1.2M4.2 17.2l2-1.2M17.8 8l2-1.2"/></svg>';
   const rackActionObject = new CSS2DObject(rackActionButton);
   rackActionObject.visible = false;
   scene.add(rackActionObject);
@@ -354,13 +354,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const alertModal = document.getElementById('alertM');
+    const toastZone = document.getElementById('toastZone');
     const fullscreenHost = document.fullscreenElement;
-    const movedIntoFullscreen = Boolean(fullscreenHost && alertModal && !fullscreenHost.contains(alertModal));
-    if (movedIntoFullscreen) fullscreenHost.appendChild(alertModal);
-    const result = window.systemAlert?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน');
-    if (movedIntoFullscreen && result?.finally) {
-      result.finally(() => { if (alertModal.parentElement === fullscreenHost) document.body.appendChild(alertModal); });
+    const originalToastParent = toastZone?.parentElement;
+    const movedToastIntoFullscreen = Boolean(fullscreenHost && toastZone && !fullscreenHost.contains(toastZone));
+    if (movedToastIntoFullscreen) fullscreenHost.appendChild(toastZone);
+    window.toast?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน', '', 'ok');
+    if (movedToastIntoFullscreen) {
+      window.setTimeout(() => {
+        if (toastZone.parentElement === fullscreenHost && originalToastParent) originalToastParent.appendChild(toastZone);
+      }, 3200);
     }
   });
 
@@ -832,7 +835,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (!rackEntry) return hideRackAction();
     // One stable affordance per rack: always float at the centre of the top
     // beam, never beside every individual slot or box.
-    actionAnchor.set(rackEntry.base.x, rackEntry.base.y + rackEntry.height + 0.18, rackEntry.base.z);
+    actionAnchor.set(rackEntry.base.x, rackEntry.base.y + rackEntry.height + 0.55, rackEntry.base.z);
     rackActionObject.position.copy(actionAnchor);
     rackActionObject.visible = true;
   };

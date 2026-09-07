@@ -5523,7 +5523,7 @@ function toastAction(title,sub,kind,actionLabel,onAction,persistent,duration,sec
   var closed=false,close=function(){if(closed)return;closed=true;t.classList.add('out');setTimeout(function(){t.remove();},420);};
   var actions=t.querySelectorAll('.toast-action'),secondary=secondaryLabel?actions[0]:null,action=actionLabel?actions[actions.length-1]:null;if(secondary)secondary.onclick=function(){close();if(typeof onSecondaryAction==='function')onSecondaryAction();};if(action)action.onclick=function(){close();if(typeof onAction==='function')onAction();};
   z.appendChild(t);if(window.WMSMotion)window.WMSMotion.toast(t);playToastSound(kind);if(!persistent)setTimeout(close,actionLabel?(duration||8000):2600);return {el:t,close:close};}
-function toast(title,sub,kind){toastAction(title,sub,kind,null,null);}
+function toast(title,sub,kind){return toastAction(title,sub,kind,null,null);}
 window.toastAction=toastAction;
 var outboundCustomerAlert=null,outboundCustomerAlertKey='';
 function requestBrowserNotificationPermission(){
