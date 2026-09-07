@@ -10,8 +10,8 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 const CM_TO_M = 0.01;
 const THREE_VERSION = '0.184.0';
-// Empty bays deliberately have no status colour. Their neutral, faint volume
-// remains raycastable; green is reserved for the explicit hover affordance.
+// Slot volumes are invisible hit targets. The rack is read from its steel
+// members: empty bays must never look like dark glass partitions.
 const EMPTY_COLOR = new THREE.Color(0x253039);
 const FULL_COLOR = new THREE.Color(0xd63d48);
 const OCCUPIED_COLOR = new THREE.Color(0xf59e0b);
@@ -567,13 +567,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // treatment is applied only by updatePointer to the slot under the cursor.
     return state === 'full' ? FULL_COLOR : EMPTY_COLOR;
   };
-  const slotMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
+  const slotMaterial = new THREE.MeshBasicMaterial({
     transparent: true,
-    opacity: 0.12,
+    opacity: 0,
+    colorWrite: false,
     depthWrite: false,
-    roughness: 0.55,
-    metalness: 0.05,
   });
   const slotMesh = slotEntries.length ? new THREE.InstancedMesh(UNIT_BOX, slotMaterial, slotEntries.length) : null;
   if (slotMesh) {
@@ -1164,6 +1162,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       lastFpsAt = now;
     }
   };
+  // Browser-synchronized rendering follows the active display's refresh rate
+  // (60/120/144 Hz, etc.). Do not introduce a fixed 60 FPS throttle here.
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
 
