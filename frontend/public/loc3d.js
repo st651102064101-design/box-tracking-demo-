@@ -326,6 +326,37 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   labelObject.visible = false;
   scene.add(labelObject);
 
+  const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
+  const warehouseTitle = document.createElement('div');
+  warehouseTitle.className = 'loc3d-warehouse-title';
+  const warehouseTitleCaption = document.createElement('span');
+  warehouseTitleCaption.textContent = 'กำลังดูคลังสินค้า';
+  const warehouseTitleName = document.createElement('strong');
+  warehouseTitleName.textContent = warehouseLabel;
+  warehouseTitle.append(warehouseTitleCaption, warehouseTitleName);
+  stage.appendChild(warehouseTitle);
+
+  // A small contextual action that follows the currently hovered rack. It is
+  // deliberately a CSS2D button so it feels attached to the physical model.
+  const rackActionButton = document.createElement('button');
+  rackActionButton.type = 'button';
+  rackActionButton.className = 'loc3d-rack-action';
+  rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
+  rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
+  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"/><path d="m19.3 13.55 1.04.6-1.8 3.12-1.05-.61a7.78 7.78 0 0 1-1.85 1.08v1.2h-3.6v-1.2a7.78 7.78 0 0 1-1.85-1.08l-1.05.61-1.8-3.12 1.04-.6a7.95 7.95 0 0 1 0-2.1l-1.04-.6 1.8-3.12 1.05.61a7.78 7.78 0 0 1 1.85-1.08v-1.2h3.6v1.2a7.78 7.78 0 0 1 1.85 1.08l1.05-.61 1.8 3.12-1.04.6a7.95 7.95 0 0 1 0 2.1Z"/></svg><span>เครื่องมือ</span>';
+  const rackActionObject = new CSS2DObject(rackActionButton);
+  rackActionObject.visible = false;
+  scene.add(rackActionObject);
+  let actionPointerOver = false;
+  rackActionButton.addEventListener('pointerenter', () => { actionPointerOver = true; });
+  rackActionButton.addEventListener('pointerleave', () => { actionPointerOver = false; });
+  rackActionButton.addEventListener('pointerdown', (event) => event.stopPropagation());
+  rackActionButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    window.alert('เครื่องมือแร็กยังไม่พร้อมใช้งาน');
+  });
+
   const hud = document.createElement('div');
   hud.className = 'loc3d-hud';
   hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span><span class="loc3d-perf">กำลังวัด FPS…</span>`;
@@ -377,7 +408,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const base = worldPoint(rack, 0, 0, 0);
     const addPart = (parts, x, y, z, sx, sy, sz) => {
       const position = new THREE.Vector3(x, y, z).applyQuaternion(quaternion).add(base);
-      parts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz) });
+      parts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz), rack });
     };
     const addBrace = (x1, y1, z1, x2, y2, z2) => {
       const start = new THREE.Vector3(x1, y1, z1), end = new THREE.Vector3(x2, y2, z2);
@@ -386,7 +417,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const localRotation = new THREE.Quaternion().setFromUnitVectors(up, delta.normalize());
       const partQuaternion = quaternion.clone().multiply(localRotation);
       const position = start.add(end).multiplyScalar(0.5).applyQuaternion(quaternion).add(base);
-      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.52, length, frame * 0.52) });
+      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.52, length, frame * 0.52), rack });
     };
     [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
       addPart(uprightParts, sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
@@ -480,16 +511,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const mesh = new THREE.InstancedMesh(UNIT_BOX, material, parts.length);
     parts.forEach((part, index) => mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.userData.rackByInstance = parts.map((part) => part.rack);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
     return mesh;
   };
   // Industrial palette from the reference: perforated-style dark uprights,
   // safety yellow load beams, light shelf decks and dark X bracing.
-  addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x202327, metalness: 0.82, roughness: 0.28 }));
-  addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf2bf24, metalness: 0.62, roughness: 0.32 }));
-  addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xe7ebed, metalness: 0.3, roughness: 0.56 }));
-  addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x171a1e, metalness: 0.86, roughness: 0.25 }));
+  const rackPickMeshes = [
+    addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x202327, metalness: 0.82, roughness: 0.28 })),
+    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf2bf24, metalness: 0.62, roughness: 0.32 })),
+    addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xe7ebed, metalness: 0.3, roughness: 0.56 })),
+    addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x171a1e, metalness: 0.86, roughness: 0.25 })),
+  ].filter(Boolean);
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const slotState = (entry) => entry.slot.status === 'full'
@@ -588,6 +622,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const oversized = width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z;
     return [{
       box,
+      slotEntry,
       position,
       quaternion: slotEntry.quaternion,
       scale: new THREE.Vector3(width, height, depth),
@@ -689,7 +724,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     area.maxZ = Math.max(area.maxZ, entry.base.z + halfZ);
     zoneAreas.set(zone, area);
   });
-  const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
   [...zoneAreas.entries()].forEach(([zone, area], index) => {
     const areaWidth = Math.max(1.5, area.maxX - area.minX);
     const areaDepth = Math.max(1.5, area.maxZ - area.minZ);
@@ -762,9 +796,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const pointer = new THREE.Vector2();
   let pointerFrame = 0;
   let down = null;
+  let hoverRackCode = '';
+  const actionAnchor = new THREE.Vector3();
+  const hideRackAction = () => {
+    rackActionObject.visible = false;
+    hoverRackCode = '';
+  };
+  const showRackAction = (rack, position) => {
+    if (!rack || !position) return hideRackAction();
+    hoverRackCode = String(rack.code || rack.id || 'rack');
+    actionAnchor.copy(position).add(new THREE.Vector3(0, 0.22, 0));
+    rackActionObject.position.copy(actionAnchor);
+    rackActionObject.visible = true;
+  };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const updatePointer = (event) => {
-    if (!slotMesh) return;
     const rect = canvas.getBoundingClientRect();
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
@@ -773,9 +819,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // priority so operators can open the actual box record.
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
+    const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const next = nextBox >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
-    if (next === hoverIndex && nextBox === hoverBoxIndex) return;
+    const nextRack = nextBox >= 0
+      ? boxEntries[nextBox].slotEntry?.rack
+      : next >= 0
+        ? slotEntries[next].rack
+        : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
+    const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -820,6 +873,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
+    const actionPosition = nextBox >= 0
+      ? boxEntries[nextBox].position.clone().add(new THREE.Vector3(0, boxEntries[nextBox].scale.y / 2, 0))
+      : next >= 0
+        ? slotEntries[next].position.clone().add(new THREE.Vector3(0, slotEntries[next].scale.y / 2, 0))
+        : rackHit?.point;
+    showRackAction(nextRack, actionPosition);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -850,6 +909,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverBoxIndex = -1;
     labelObject.visible = false;
     canvas.style.cursor = 'grab';
+    window.setTimeout(() => {
+      if (!actionPointerOver) hideRackAction();
+    }, 0);
   };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
@@ -908,6 +970,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerleave', onPointerLeave);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
+      rackActionButton.remove();
+      warehouseTitle.remove();
       controls.dispose();
       assets.dispose();
       labelRenderer.domElement.remove();
