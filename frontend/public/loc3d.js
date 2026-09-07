@@ -896,33 +896,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
   // The forklift route begins immediately to the right of the safety rail and
   // runs across the front of the rack rather than cutting through its guard.
-  const aisleStartX = center.x - rackBoundaryWidth / 2 - 0.28 + 0.95;
-  const aisleEndX = center.x + warehouseWidth / 2 - 1.35;
-  const aisleLength = Math.max(5, aisleEndX - aisleStartX);
-  const aisleCenterX = (aisleStartX + aisleEndX) / 2;
-  floorStrip(aisleCenterX, aisleCenterZ - 1.75, aisleLength, 0.09);
-  floorStrip(aisleCenterX, aisleCenterZ + 1.75, aisleLength, 0.09);
-  // Dashed forklift crossings run perpendicular to the rack length. The
-  // repeated marks therefore travel across the rack face instead of tracking
-  // alongside its beams.
-  // Anchor the transverse markings directly in front of the safety posts at
-  // the rack head, rather than halfway down the long aisle.
+  // Keep the pallet staging position beside the safety posts, but leave the
+  // forklift route itself unpainted.
   const safetyLineX = center.x - rackBoundaryWidth / 2 - 0.55;
-  const crossLaneX = safetyLineX;
-  const crossLaneStartZ = center.z - halfWarehouseDepth + 1.2;
-  const crossLaneEndZ = center.z + halfWarehouseDepth - 1.2;
-  for (let index = 0; index < 12; index += 1) {
-    const z = crossLaneStartZ + 0.55 + index * ((crossLaneEndZ - crossLaneStartZ - 1.1) / 11);
-    floorStrip(crossLaneX, z, 0.075, 0.72);
-  }
-  // A compact staging bay at the aisle end, clear of the travel centreline.
+  // A compact staging position at the aisle end, clear of the travel centreline.
   const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
   const stagingDepth = 2.25;
   const stagingCenter = new THREE.Vector3(safetyLineX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
-  floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
-  floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
-  floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
-  floorStrip(stagingCenter.x + stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
   // Guardrail belongs at the exposed rack end, clear of the staging box and
   // vehicle aisle. Its posts carry alternating black impact bands.
   const railX = center.x - rackBoundaryWidth / 2 - 0.28;
