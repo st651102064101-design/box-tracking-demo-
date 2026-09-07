@@ -33,14 +33,22 @@ const rackJson = (rack: typeof racks.$inferSelect, rackSlots: typeof slots.$infe
   rotationYDeg: rack.rotationYDeg,
   dimensionsCm: { width: rack.widthCm, height: rack.heightCm, depth: rack.depthCm },
   materialType: rack.materialType,
-  slots: rackSlots.map((slot) => ({
-    id: slot.id,
-    shelfCode: slot.shelfCode,
-    slotCode: slot.slotCode,
-    localPositionCm: { x: slot.localXCm, y: slot.localYCm, z: slot.localZCm },
-    dimensionsCm: { width: slot.widthCm, height: slot.heightCm, depth: slot.depthCm },
-    status: slot.status,
-  })),
+  slots: rackSlots.map((slot) => {
+    const data = (slot.data ?? {}) as Record<string, unknown>;
+    /* Occupancy and "reported full" are different facts. A box in a slot must
+       not turn the 3D slot red; only an explicit PDA/web full report does. */
+    const reportedFull = typeof data.reportedFullAt === 'string' && data.reportedFullAt.trim() !== '';
+    return {
+      id: slot.id,
+      // The Location Master code is the barcode printed and scanned on a slot.
+      barcode: String(data.barcode ?? data.locationCode ?? slot.id),
+      shelfCode: slot.shelfCode,
+      slotCode: slot.slotCode,
+      localPositionCm: { x: slot.localXCm, y: slot.localYCm, z: slot.localZCm },
+      dimensionsCm: { width: slot.widthCm, height: slot.heightCm, depth: slot.depthCm },
+      status: reportedFull ? 'full' : 'empty',
+    };
+  }),
 });
 
 /**

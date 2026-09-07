@@ -62,7 +62,10 @@ function legacyModel(locations, occupancy) {
               z: 0,
             },
             dimensionsCm: { width: 110, height: 70, depth: 100 },
-            status: occupancy[row.code] ? 'full' : 'empty',
+            // A stored box is rendered as a box, not as a red "full" warning.
+            // Red is reserved for an explicit full report from PDA/web.
+            barcode: row.barcode || row.code,
+            status: row.reportedFullAt ? 'full' : 'empty',
           };
         }),
       };
@@ -303,6 +306,22 @@ async function createScene(canvas, model, onSelect) {
   }
 
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
+  // These are the same printable/scannable Location Master barcodes used by
+  // Putaway. CSS2D keeps the code facing the operator as they orbit the rack.
+  // Large warehouses keep the interaction label only to avoid thousands of DOM
+  // nodes; normal rack views show every slot code.
+  if (slotEntries.length <= 250) {
+    slotEntries.forEach((entry) => {
+      const element = document.createElement('div');
+      element.className = 'loc3d-slot-code';
+      element.textContent = entry.slot.barcode || entry.slot.id;
+      const label = new CSS2DObject(element);
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.07, entry.scale.z / 2 + 0.025)
+        .applyQuaternion(entry.quaternion);
+      label.position.copy(entry.position).add(frontOffset);
+      scene.add(label);
+    });
+  }
   const materialColors = {
     carton: 0xb7804f,
     plastic_crate: 0x2f83d0,

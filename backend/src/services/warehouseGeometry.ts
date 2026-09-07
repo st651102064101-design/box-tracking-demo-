@@ -231,8 +231,11 @@ export function deriveWarehouseGeometry(
         widthCm: pickNumber([size, slot3d], ['width', 'widthCm'], existingSlot?.widthCm ?? DEFAULT_SLOT_CM.width, true),
         heightCm: pickNumber([size, slot3d], ['height', 'heightCm'], existingSlot?.heightCm ?? DEFAULT_SLOT_CM.height, true),
         depthCm: pickNumber([size, slot3d], ['depth', 'depthCm'], existingSlot?.depthCm ?? DEFAULT_SLOT_CM.depth, true),
-        status: 'empty',
-        data: { ...recordOf(existingSlot?.data), locationCode: location.code },
+        /* A physical box occupying a slot is intentionally not a "full"
+           report. Keep this state only for the explicit PDA/web action. */
+        status: text(location.raw.reportedFullAt) ? 'full' : 'empty',
+        data: { ...recordOf(existingSlot?.data), locationCode: location.code,
+          barcode: location.code, reportedFullAt: location.raw.reportedFullAt ?? null },
         updatedAt: now,
       };
       slotRows.push(row);
@@ -260,7 +263,6 @@ export function deriveWarehouseGeometry(
     boxesByTag.set(tag, boxGeometryValues(box, boxType, slotId || null));
   }
 
-  for (const slot of slotRows) slot.status = occupied.has(slot.id) ? 'full' : 'empty';
   return { rackRows, slotRows, boxesByTag };
 }
 
