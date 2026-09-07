@@ -668,24 +668,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
   }
-  // A real stored carton sits on a pallet; generate these one-to-one from DB
-  // boxes so the scene never implies inventory that does not exist.
-  const boxPalletParts = [];
-  boxEntries.forEach((entry) => {
-    const palletWidth = Math.min(entry.slotEntry.scale.x * 0.88, Math.max(0.8, entry.scale.x + 0.16));
-    const palletDepth = Math.min(entry.slotEntry.scale.z * 0.9, Math.max(0.7, entry.scale.z + 0.16));
-    const palletCenter = entry.position.clone();
-    palletCenter.y -= entry.scale.y / 2 + 0.085;
-    for (let index = 0; index < 7; index += 1) {
-      const local = new THREE.Vector3(0, 0.055, -palletDepth / 2 + (index + 0.5) * palletDepth / 7).applyQuaternion(entry.quaternion);
-      boxPalletParts.push({ position: palletCenter.clone().add(local), quaternion: entry.quaternion, scale: new THREE.Vector3(palletWidth, 0.07, palletDepth / 9), rack: entry.slotEntry.rack });
-    }
-    [-0.34, 0, 0.34].forEach((ratio) => {
-      const local = new THREE.Vector3(palletWidth * ratio, -0.015, 0).applyQuaternion(entry.quaternion);
-      boxPalletParts.push({ position: palletCenter.clone().add(local), quaternion: entry.quaternion, scale: new THREE.Vector3(0.11, 0.1, palletDepth), rack: entry.slotEntry.rack });
-    });
-  });
-  addRackBatch(boxPalletParts, new THREE.MeshStandardMaterial({ color: 0xa77642, roughness: 0.82, metalness: 0.02 }));
   // GTA-style selection marker: one reusable animated ring (not one mesh per
   // box), keeping the hover interaction constant-cost even with many boxes.
   const hoverRingMaterial = new THREE.MeshBasicMaterial({
@@ -861,7 +843,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffd400, toneMapped: false });
   const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0x392b00, emissiveIntensity: 0.18, metalness: 0.48, roughness: 0.38 });
   const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
-  const palletMaterial = new THREE.MeshStandardMaterial({ color: 0x9a6938, metalness: 0.05, roughness: 0.8 });
   const floorStrip = (x, z, width, depth, rotationY = 0) => {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(width, 0.022, depth), safetyYellow);
     strip.position.set(x, warehouseFloorY + 0.018, z);
@@ -939,22 +920,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   )));
-  // One empty timber pallet in the staging area; stored cartons remain driven
-  // by the database and are not duplicated by this visual prop.
-  const pallet = new THREE.Group();
-  const palletX = stagingCenter.x;
-  const palletZ = stagingCenter.z;
-  for (let slatIndex = 0; slatIndex < 7; slatIndex += 1) {
-    const slat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.105), palletMaterial);
-    slat.position.set(palletX, warehouseFloorY + 0.19, palletZ - 0.48 + slatIndex * 0.16);
-    pallet.add(slat);
-  }
-  [-0.38, 0, 0.38].forEach((x) => {
-    const runner = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 1.05), palletMaterial);
-    runner.position.set(palletX + x, warehouseFloorY + 0.08, palletZ);
-    pallet.add(runner);
-  });
-  scene.add(pallet);
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
   // following upper chord and repeated triangular webs across the full span.
   const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
@@ -1595,6 +1560,40 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const assets = assetPipeline(renderer);
   let disposed = false;
+  // Use the supplied manufacturer pallet model for both stored cartons and
+  // the staging bay. The placement list is still derived only from DB boxes.
+  assets.load('/models/woodenpallet.glb').then(({ scene: palletTemplate }) => {
+    if (disposed) return;
+    palletTemplate.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+    const rawBounds = new THREE.Box3().setFromObject(palletTemplate);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    const rawCenter = rawBounds.getCenter(new THREE.Vector3());
+    const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
+      const pallet = palletTemplate.clone(true);
+      pallet.position.copy(position);
+      pallet.position.y += yOffset;
+      pallet.quaternion.copy(quaternion);
+      pallet.scale.set(
+        width / Math.max(rawSize.x, 0.01),
+        Math.min(width, depth) / Math.max(rawSize.y, 0.01),
+        depth / Math.max(rawSize.z, 0.01),
+      );
+      pallet.position.sub(rawCenter.clone().multiply(pallet.scale).applyQuaternion(quaternion));
+      scene.add(pallet);
+    };
+    boxEntries.forEach((entry) => {
+      const palletWidth = Math.min(entry.slotEntry.scale.x * 0.88, Math.max(0.8, entry.scale.x + 0.16));
+      const palletDepth = Math.min(entry.slotEntry.scale.z * 0.9, Math.max(0.7, entry.scale.z + 0.16));
+      const palletCenter = entry.position.clone();
+      palletCenter.y -= entry.scale.y / 2 + 0.085;
+      addPallet(palletCenter, entry.quaternion, palletWidth, palletDepth);
+    });
+    addPallet(new THREE.Vector3(stagingCenter.x, warehouseFloorY, stagingCenter.z), new THREE.Quaternion(), Math.min(1.1, stagingWidth - 0.25), Math.min(1.1, stagingDepth - 0.25), 0.02);
+  }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
   // CC BY model: "Forklift" by brezineman. Keep the original attribution
   // alongside the asset rather than baking it into an unrelated warehouse mesh.
   assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
