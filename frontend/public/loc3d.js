@@ -532,7 +532,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let showOccupiedSlots = true;
   const slotColor = (entry, revealOccupied = showOccupiedSlots) => {
     const state = slotState(entry);
-    return state === 'full' ? FULL_COLOR : state === 'occupied' && revealOccupied ? OCCUPIED_COLOR : EMPTY_COLOR;
+    // Occupancy is intentionally quiet in the overview. The orange hover
+    // treatment is applied only by updatePointer to the slot under the cursor.
+    return state === 'full' ? FULL_COLOR : EMPTY_COLOR;
   };
   const slotMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
