@@ -6480,19 +6480,29 @@ function locOccupancyMap() {
 
 /* ── view switcher: rack map vs table ── */
 var _locViewMode = 'map', _loc3dWh = '';
+function persistLocUi(){
+  uiPrefSet('locMaster',{
+    view:_locViewMode, warehouse:_loc3dWh,
+    filters:{wh:_locChipState.wh,zone:_locChipState.zone,rack:_locChipState.rack,type:_locChipState.type,group:_locChipState.group,sort:_locChipState.sort},
+    collapsed:Object.keys(_locCollapsed||{}).filter(function(k){return _locCollapsed[k];})
+  });
+}
+function applyLocView(view){
+  _locViewMode=['map','table','3d'].indexOf(view)>=0?view:'map';
+  $all('#locViewSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.lview===_locViewMode);});
+  var map=$('#locMapView'),tbl=$('#locTableView'),three=$('#loc3dView');
+  if(map)map.style.display=_locViewMode==='map'?'':'none';
+  if(tbl)tbl.style.display=_locViewMode==='table'?'':'none';
+  if(three)three.style.display=_locViewMode==='3d'?'':'none';
+  if(_locViewMode==='3d')renderLoc3D();
+  else if(window.LocationWarehouse3D)window.LocationWarehouse3D.unmount();
+}
 (function(){
   var sw = $('#locViewSw'); if (!sw) return;
   sw.addEventListener('click', function(e){
     var btn = e.target.closest('.ivs-btn'); if (!btn) return;
-    $all('#locViewSw .ivs-btn').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-    _locViewMode = btn.dataset.lview;
-    var map = $('#locMapView'), tbl = $('#locTableView'), three = $('#loc3dView');
-    if (map) map.style.display = _locViewMode === 'map' ? '' : 'none';
-    if (tbl) tbl.style.display = _locViewMode === 'table' ? '' : 'none';
-    if (three) three.style.display = _locViewMode === '3d' ? '' : 'none';
-    if (_locViewMode === '3d') renderLoc3D();
-    else if(window.LocationWarehouse3D)window.LocationWarehouse3D.unmount();
+    applyLocView(btn.dataset.lview);
+    persistLocUi();
   });
 })();
 
@@ -6510,12 +6520,14 @@ function renderLoc3D(){
   var whs=[];all.forEach(function(l){if(whs.indexOf(l.wh)<0)whs.push(l.wh);});
   if(!_loc3dWh||whs.indexOf(_loc3dWh)<0)_loc3dWh=whs[0]||'';
   if(!whs.length){root.innerHTML='<div class="locmap-empty">ยังไม่มีข้อมูลแร็กสำหรับแสดงผล 3D</div>';return;}
-  var chips=whs.map(function(w){return '<button class="btn sm '+(w===_loc3dWh?'accent':'ghost')+'" onclick="_loc3dWh=\''+esc(w)+'\';renderLoc3D()">'+esc(whName(w))+'</button>';}).join('');
+  var chips=whs.map(function(w){return '<button class="btn sm '+(w===_loc3dWh?'accent':'ghost')+'" onclick="selectLoc3DWarehouse(\''+esc(w)+'\')">'+esc(whName(w))+'</button>';}).join('');
   root.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากเพื่อหมุน · เลื่อนเพื่อซูม · คลิกช่องเพื่อแก้ไข</span></div><div class="row">'+chips+'</div></div><div class="loc3d-stage"><canvas id="loc3dCanvas"></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
   if(window.LocationWarehouse3D)window.LocationWarehouse3D.mount($('#loc3dCanvas'),all.filter(function(l){return l.wh===_loc3dWh;}),locOccupancyMap(),function(code){editLocRow(code);});
   else setTimeout(function(){if(_locViewMode==='3d')renderLoc3D();},250);
 }
 window.renderLoc3D=renderLoc3D;
+function selectLoc3DWarehouse(warehouseId){_loc3dWh=warehouseId||'';persistLocUi();renderLoc3D();}
+window.selectLoc3DWarehouse=selectLoc3DWarehouse;
 
 /* Edit a physical scope without forcing the operator to modify every slot row.
    Renaming a rack/shelf rewrites all child Location Master keys atomically and
@@ -7031,6 +7043,7 @@ var _locChipState = { wh:'', zone:'', rack:'', type:'', group:'hier', sort:'natu
 
 function setLocChip(key, val_) {
   _locChipState[key] = val_;
+  persistLocUi();
   renderLocMaster();
 }
 window.setLocChip = setLocChip;
@@ -7160,11 +7173,11 @@ function _locFullPill(l) {
 }
 function clearLocFull(code) {
   var l = S.locations[code]; if (!l || !l.reportedFullAt) return;
-  var before = {reportedFullAt:l.reportedFullAt};
+  var before = {reportedFullAt:l.reportedFullAt,reportedFullBy:l.reportedFullBy,reportedFullNote:l.reportedFullNote};
   l.reportedFullAt = null; l.reportedFullBy = null; l.reportedFullNote = null;
   auditEntry('เคลียร์ช่องเก็บเต็ม', USER, code, code, before, {reportedFullAt:null});
-  renderLocMaster();
-  toast('เคลียร์สถานะเต็มแล้ว', code+' — suggest-location แนะนำช่องนี้ได้อีกครั้ง', 'ok');
+  save().then(function(){renderLocMaster();toast('เคลียร์สถานะเต็มแล้ว', code+' — suggest-location แนะนำช่องนี้ได้อีกครั้ง', 'ok');})
+    .catch(function(e){Object.assign(l,before);renderLocMaster();toast('บันทึกการเคลียร์สถานะไม่สำเร็จ',e.message||'', 'err');});
 }
 window.clearLocFull = clearLocFull;
 /* Web's counterpart to the PDA's "ช่องเก็บเต็ม" button — same effect
@@ -7182,9 +7195,14 @@ function reportLocFull(code) {
       l.reportedFullAt = iso(); l.reportedFullBy = USER; l.reportedFullNote = '';
       S.events.push({dir:'bin_full',tag:null,location:{wh:l.wh,zone:l.zone,rack:l.rack,shelf:l.shelf,slot:l.slot},note:'',ts:iso(),recorder:USER});
       auditEntry('แจ้งช่องเก็บเต็ม', USER, code, code, null, {reportedFullAt:l.reportedFullAt});
-      renderLocMaster();
-      toast('แจ้งเต็มแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
-      return true;
+      return save().then(function(){
+        renderLocMaster();
+        toast('แจ้งเต็มแล้ว', code+' — suggest-location จะข้ามช่องนี้', 'warn');
+        return true;
+      }).catch(function(e){
+        l.reportedFullAt=null;l.reportedFullBy=null;l.reportedFullNote=null;
+        renderLocMaster();toast('บันทึกสถานะเต็มไม่สำเร็จ',e.message||'', 'err');return false;
+      });
     });
 }
 window.reportLocFull = reportLocFull;
@@ -7332,7 +7350,7 @@ function printFilteredLocLabels() {
 }
 window.printFilteredLocLabels = printFilteredLocLabels;
 
-/* collapse state for hierarchical grouping (session-only, not persisted) */
+/* Collapse state is a per-account display preference, restored from ui_prefs. */
 var _locCollapsed = {};
 (function(){
   var body = $('#locBody'); if(!body) return;
@@ -7362,7 +7380,7 @@ var _locCollapsed = {};
       return;
     }
     var hd = e.target.closest('[data-grp-toggle]');
-    if (hd) { var k = hd.getAttribute('data-grp-toggle'); _locCollapsed[k] = !_locCollapsed[k]; renderLocMaster(); }
+    if (hd) { var k = hd.getAttribute('data-grp-toggle'); _locCollapsed[k] = !_locCollapsed[k]; persistLocUi(); renderLocMaster(); }
   });
 })();
 
@@ -7384,6 +7402,7 @@ function clearLocFilters() {
   setv('schLoc','');
   _locChipState = { wh:'', zone:'', rack:'', type:'', group:'hier', sort:'natural' };
   _locCollapsed={};
+  persistLocUi();
   renderLocMaster();
 }
 window.clearLocFilters = clearLocFilters;
@@ -17888,6 +17907,18 @@ function restoreUiPrefs(){
   if(typeof setInGateMode==='function')setInGateMode(uiPrefGet('inGateMode','return'),false);
 
   if(typeof setTrackSearchMode==='function')setTrackSearchMode(uiPrefGet('trackMode','multi'));
+  /* Master Rack keeps the operator's current working context per account:
+     selected presentation, warehouse, filters/sort, and expanded tree nodes. */
+  var locUi=uiPrefGet('locMaster',null);
+  if(locUi&&typeof locUi==='object'){
+    var lf=locUi.filters;
+    if(lf&&typeof lf==='object')_locChipState={wh:lf.wh||'',zone:lf.zone||'',rack:lf.rack||'',type:lf.type||'',group:lf.group===undefined?'hier':lf.group,sort:lf.sort||'natural'};
+    _loc3dWh=typeof locUi.warehouse==='string'?locUi.warehouse:'';
+    _locCollapsed={};
+    if(Array.isArray(locUi.collapsed))locUi.collapsed.forEach(function(k){if(typeof k==='string')_locCollapsed[k]=true;});
+    _locViewMode=['map','table','3d'].indexOf(locUi.view)>=0?locUi.view:'map';
+    applyLocView(_locViewMode);
+  }
   /* หน้าตั้งค่า: กลับมาที่ชุดข้อมูลเดิมที่กำลังดูอยู่ (ประเภทกล่อง/ลูกค้า/คลัง/พนักงาน/กล่อง)
      ถ้าค่าที่จำไว้ชี้ไปยัง sub-tab ที่ไม่มีแล้ว showSetupSub() จะคืน false แล้วปล่อยให้
      sub-tab แรกใน HTML ทำหน้าที่ค่าเริ่มต้นตามเดิม */
