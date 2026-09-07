@@ -60,6 +60,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!ready || appReady) return;
+    /* legacy.html is a large, independently booted app. A runtime exception
+       inside it must never leave the outer application masked by a permanent
+       loading screen. The iframe's load event handles the normal path; this
+       timeout is the last-resort escape hatch for a future boot regression. */
+    const timer = window.setTimeout(() => setAppReady(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [ready, appReady]);
+
+  useEffect(() => {
     const applyTabBranding = (branding: SystemBranding) => {
       const name = branding.systemName?.trim() || 'Smart Tracking';
       document.title = `${name} — ระบบติดตามสินทรัพย์หมุนเวียน`;
@@ -80,7 +90,15 @@ export default function Home() {
   return (
     <main className="app-shell">
       {!appReady && <AppSkeleton tab={loadingTab} />}
-      {ready && <iframe src="/legacy.html" title={t('app.frameTitle')} allowFullScreen className={`app-frame${appReady ? ' is-ready' : ''}`} />}
+      {ready && <iframe
+        src="/legacy.html"
+        title={t('app.frameTitle')}
+        allowFullScreen
+        /* The document itself has loaded, so it is safe to reveal it. Its own
+           smarttrace-ready message remains useful for the slower boot path. */
+        onLoad={() => setAppReady(true)}
+        className={`app-frame${appReady ? ' is-ready' : ''}`}
+      />}
     </main>
   );
 }
