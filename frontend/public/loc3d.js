@@ -899,14 +899,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Blue-grey columns and upper-wall X bracing continue the roof structure
   // down the metal-sheet side walls as in the reference factory.
   const wallFrameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
+  const wallBayDepth = warehouseDepth / (wallFrameCount - 1);
   [-1, 1].forEach((side) => {
     const wallX = center.x + side * (halfWarehouseWidth - 0.08);
     for (let index = 0; index < wallFrameCount; index += 1) {
       const z = center.z - halfWarehouseDepth + (warehouseDepth * index) / (wallFrameCount - 1);
       steelBetween(
-        new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * 0.42, z),
+        new THREE.Vector3(wallX, warehouseFloorY + 0.12, z),
         new THREE.Vector3(wallX, roofEaveY, z),
-        0.045,
+        0.052,
       );
       if (index < wallFrameCount - 1) {
         const nextZ = center.z - halfWarehouseDepth + (warehouseDepth * (index + 1)) / (wallFrameCount - 1);
@@ -921,6 +922,108 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
           0.027,
         );
       }
+      // Knee brace transfers the eave load from each truss into the column.
+      steelBetween(
+        new THREE.Vector3(wallX, roofEaveY - 0.72, z),
+        new THREE.Vector3(wallX - side * 0.92, trussBottomY, z),
+        0.035,
+      );
+    }
+    [0.43, 0.68, 0.86].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth),
+      new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth),
+      0.038,
+    ));
+  });
+  // Lower wall band, cable trays, access doors, bay numbers, wall lights and
+  // electrical boxes complete the service-wall rhythm from the reference.
+  const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x465158, metalness: 0.68, roughness: 0.38 });
+  const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x333b40, metalness: 0.84, roughness: 0.25 });
+  const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4b565d, metalness: 0.58, roughness: 0.43, side: THREE.DoubleSide });
+  const wallLightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeaf8ff, emissiveIntensity: 2.8, roughness: 0.25 });
+  const electricalMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca8ae, metalness: 0.64, roughness: 0.38 });
+  const wallDetailTextures = [];
+  const wallMarkerTexture = (text, background, foreground) => {
+    const markerCanvas = document.createElement('canvas');
+    markerCanvas.width = 256;
+    markerCanvas.height = 128;
+    const context = markerCanvas.getContext('2d');
+    context.fillStyle = background;
+    context.fillRect(0, 0, markerCanvas.width, markerCanvas.height);
+    context.strokeStyle = foreground;
+    context.lineWidth = 8;
+    context.strokeRect(6, 6, markerCanvas.width - 12, markerCanvas.height - 12);
+    context.fillStyle = foreground;
+    context.font = '700 72px sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, markerCanvas.width / 2, markerCanvas.height / 2 + 3);
+    const texture = new THREE.CanvasTexture(markerCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    wallDetailTextures.push(texture);
+    return texture;
+  };
+  [-1, 1].forEach((side) => {
+    const wallX = center.x + side * (halfWarehouseWidth - 0.15);
+    const innerX = wallX - side * 0.16;
+    const lowerBand = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, warehouseDepth - 0.3), lowerBandMaterial);
+    lowerBand.position.set(innerX, warehouseFloorY + 0.32, center.z);
+    scene.add(lowerBand);
+    // Three-tier service tray with regular cantilever brackets.
+    [0.34, 0.39, 0.44].forEach((heightRatio) => {
+      const trayY = warehouseFloorY + warehouseWallHeight * heightRatio;
+      steelBetween(
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z - halfWarehouseDepth + 0.4),
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z + halfWarehouseDepth - 0.4),
+        0.026,
+        cableMaterial,
+      );
+      for (let index = 0; index < wallFrameCount; index += 1) {
+        const bracketZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / (wallFrameCount - 1);
+        steelBetween(
+          new THREE.Vector3(innerX, trayY, bracketZ),
+          new THREE.Vector3(innerX - side * 0.52, trayY, bracketZ),
+          0.018,
+          cableMaterial,
+        );
+      }
+    });
+    // Parallel red wall mains beneath the eave.
+    [0.78, 0.83].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth + 0.35),
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth - 0.35),
+      0.032,
+      sprinklerPipeMaterial,
+    ));
+    for (let bay = 1; bay < wallFrameCount - 1; bay += 2) {
+      const doorZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
+      const doorWidth = Math.min(2.1, wallBayDepth * 0.48);
+      const accessDoor = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth, 2.25), doorMaterial);
+      accessDoor.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+      accessDoor.position.set(innerX - side * 0.012, warehouseFloorY + 1.13, doorZ);
+      scene.add(accessDoor);
+      const numberTexture = wallMarkerTexture(String(9 + bay), '#3d464c', '#ffd84d');
+      const numberSign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.52, 0.26),
+        new THREE.MeshBasicMaterial({ map: numberTexture, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      numberSign.rotation.y = accessDoor.rotation.y;
+      numberSign.position.set(innerX - side * 0.025, warehouseFloorY + 2.62, doorZ);
+      scene.add(numberSign);
+      const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
+      wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, doorZ);
+      scene.add(wallLight);
+      const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
+      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, doorZ + doorWidth * 0.68);
+      scene.add(equipmentBox);
+      const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
+      const safetySign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.28, 0.28),
+        new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      safetySign.rotation.y = accessDoor.rotation.y;
+      safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, doorZ);
+      scene.add(safetySign);
     }
   });
   // Fire-sprinkler mains run beneath the trusses. Heads are placed directly
@@ -962,13 +1065,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Red vertical fire risers join the overhead mains at both side walls.
   [-1, 1].forEach((side) => {
     const riserX = center.x + side * (halfWarehouseWidth - 0.3);
+    const wallPipeX = center.x + side * (halfWarehouseWidth - 0.51);
+    const wallPipeY = warehouseFloorY + warehouseWallHeight * 0.83;
     const riserZ = center.z - halfWarehouseDepth * 0.72;
     steelBetween(
       new THREE.Vector3(riserX, warehouseFloorY + 0.35, riserZ),
-      new THREE.Vector3(riserX, roofEaveY - 0.35, riserZ),
+      new THREE.Vector3(riserX, wallPipeY, riserZ),
       0.042,
       sprinklerPipeMaterial,
     );
+    steelBetween(
+      new THREE.Vector3(riserX, wallPipeY, riserZ),
+      new THREE.Vector3(wallPipeX, wallPipeY, riserZ),
+      0.042,
+      sprinklerPipeMaterial,
+    );
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), sprinklerPipeMaterial);
+    elbow.position.set(riserX, wallPipeY, riserZ);
+    scene.add(elbow);
   });
   // Front roller shutter, set into the metal-sheet wall.
   const doorWidth = Math.min(4.2, warehouseWidth * 0.36);
@@ -1319,6 +1433,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       });
       floorTexture.dispose();
       floorMarkTextures.forEach((texture) => texture.dispose());
+      wallDetailTextures.forEach((texture) => texture.dispose());
       labelTextures.forEach((texture) => texture.dispose());
       renderer.dispose();
     },
