@@ -815,7 +815,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   };
   [center.x - halfWarehouseWidth, center.x + halfWarehouseWidth].forEach((eaveX) => {
     const roofPanel = makeRoofPanel(eaveX);
-    roofPanel.receiveShadow = true;
+    // The metal roof is a visual enclosure, not a source of hard rectangular
+    // shadows on the floor. Rack and box shadows remain enabled separately.
+    roofPanel.castShadow = false;
+    roofPanel.receiveShadow = false;
     scene.add(roofPanel);
   });
   // Close both gable ends with matching white metal sheet.
@@ -836,10 +839,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const member = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, direction.length(), 8), steelMaterial);
     member.position.copy(from).add(to).multiplyScalar(0.5);
     member.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-    member.castShadow = true;
+    // Roof members should read structurally, but their repeated shadow grid
+    // looks artificial in the compact warehouse view.
+    member.castShadow = false;
     scene.add(member);
   };
-  // Steel portal frames support the shallow gable roof at regular bays.
+  // Black roof trusses support the shallow gable roof at regular bays. Each
+  // includes upper chords, a bottom chord, centre post and web members rather
+  // than only two diagonal beams.
   const frameCount = Math.max(6, Math.ceil(warehouseDepth / 4));
   for (let index = 0; index < frameCount; index += 1) {
     const z = center.z - halfWarehouseDepth + (warehouseDepth * index) / (frameCount - 1);
@@ -848,6 +855,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const rightEave = new THREE.Vector3(center.x + halfWarehouseWidth, roofEaveY, z);
     steelBetween(leftEave, ridge);
     steelBetween(ridge, rightEave);
+    steelBetween(leftEave, rightEave, 0.052);
+    steelBetween(new THREE.Vector3(center.x, roofEaveY, z), ridge, 0.048);
+    steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth * 0.72, roofEaveY, z),
+      new THREE.Vector3(center.x - halfWarehouseWidth * 0.18, roofEaveY + warehouseRoofRise * 0.82, z),
+      0.04,
+    );
+    steelBetween(
+      new THREE.Vector3(center.x + halfWarehouseWidth * 0.72, roofEaveY, z),
+      new THREE.Vector3(center.x + halfWarehouseWidth * 0.18, roofEaveY + warehouseRoofRise * 0.82, z),
+      0.04,
+    );
   }
   // Longitudinal purlins tie portal frames together under the metal sheets.
   [-1, 1].forEach((side) => [0.32, 0.68].forEach((ratio) => {
@@ -877,13 +896,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.add(line);
   }
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
+  const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf0fbff, emissiveIntensity: 3.5, roughness: 0.2 });
   [-0.28, 0, 0.28].forEach((zRatio) => {
     const lightZ = center.z + warehouseDepth * zRatio;
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.18), lightMaterial);
     fixture.position.set(center.x, roofRidgeY - 0.55, lightZ);
     scene.add(fixture);
+    // The visible bulb is the exact source position for its scene light.
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), bulbMaterial);
+    bulb.position.copy(fixture.position).add(new THREE.Vector3(0, -0.13, 0));
+    scene.add(bulb);
     const light = new THREE.PointLight(0xe8f6ff, 16, Math.max(8, warehouseWidth * 0.8), 2);
-    light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.12, 0));
+    light.position.copy(bulb.position);
     scene.add(light);
   });
   // Paint each Zone directly onto the floor. Text is a horizontal textured
