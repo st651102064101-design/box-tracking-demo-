@@ -929,7 +929,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         0.035,
       );
     }
-    [0.43, 0.68, 0.86].forEach((heightRatio) => steelBetween(
+    [0.31, 0.56, 0.78].forEach((heightRatio) => steelBetween(
       new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth),
       new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth),
       0.038,
@@ -1049,6 +1049,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       endLouvreSlat.rotation.z = -0.13;
       scene.add(endLouvreSlat);
     }
+    // Fire mains turn the corner at this elevation, matching the red runs on
+    // the two long walls instead of ending visibly before the gable.
+    [0.78, 0.83].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.51, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + side * (halfWarehouseDepth - 0.51)),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.51, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + side * (halfWarehouseDepth - 0.51)),
+      0.032,
+      sprinklerPipeMaterial,
+    ));
   });
   // Lower wall band, cable trays, bay numbers, wall lights and electrical
   // boxes complete the service-wall rhythm from the reference.
@@ -1088,8 +1096,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     [0.34, 0.39, 0.44].forEach((heightRatio) => {
       const trayY = warehouseFloorY + warehouseWallHeight * heightRatio;
       steelBetween(
-        new THREE.Vector3(innerX - side * 0.34, trayY, center.z - halfWarehouseDepth + 0.4),
-        new THREE.Vector3(innerX - side * 0.34, trayY, center.z + halfWarehouseDepth - 0.4),
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z - halfWarehouseDepth + 0.65),
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z + halfWarehouseDepth - 0.65),
         0.026,
         cableMaterial,
       );
@@ -1105,8 +1113,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
     // Parallel red wall mains beneath the eave.
     [0.78, 0.83].forEach((heightRatio) => steelBetween(
-      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth + 0.35),
-      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth - 0.35),
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth + 0.51),
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth - 0.51),
       0.032,
       sprinklerPipeMaterial,
     ));
@@ -1135,6 +1143,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, doorZ);
       scene.add(safetySign);
     }
+  });
+  // Cable trays use the same three heights on every elevation and turn each
+  // corner at the same inset as their long-wall runs.
+  [-1, 1].forEach((side) => {
+    const endTrayZ = center.z + side * (halfWarehouseDepth - 0.65);
+    [0.34, 0.39, 0.44].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.65, warehouseFloorY + warehouseWallHeight * heightRatio, endTrayZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.65, warehouseFloorY + warehouseWallHeight * heightRatio, endTrayZ),
+      0.026,
+      cableMaterial,
+    ));
   });
   // Fire-sprinkler mains run beneath the trusses. Heads are placed directly
   // below the visible red pipe instead of floating independently in space.
