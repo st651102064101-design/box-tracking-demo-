@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -245,16 +246,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.background = new THREE.Color(0x101419);
   scene.fog = new THREE.FogExp2(0x101419, 0.012);
 
-  // WebGPURenderer selects WebGPU when available and its own WebGL 2 backend
-  // otherwise. InstancedMesh keeps draw calls constant as rack/box counts grow.
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false });
+  // Prefer WebGPU, but do not let a browser/driver with partial WebGPU support
+  // leave the whole warehouse view on a blank error state.
+  let renderer;
+  if (navigator.gpu) {
+    try {
+      renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false });
+      await renderer.init();
+    } catch (error) {
+      console.warn('[Warehouse3D] WebGPU init failed; falling back to WebGL 2.', error);
+      try { renderer?.dispose?.(); } catch (_) { /* best effort */ }
+      renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
+    }
+  } else {
+    renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
+  }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  await renderer.init();
+  if (renderer.init) await renderer.init();
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 1000);
   const controls = new OrbitControls(camera, canvas);
@@ -303,9 +316,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement === stage) await document.exitFullscreen();
-      else await stage.requestFullscreen?.();
+      else {
+        const target = stage.requestFullscreen || stage.webkitRequestFullscreen ? stage : canvas;
+        const request = target.requestFullscreen || target.webkitRequestFullscreen;
+        if (!request) throw new Error('Browser ไม่รองรับ Fullscreen API');
+        await request.call(target);
+      }
+      canvas.focus?.();
     } catch (error) {
       console.warn('[Warehouse3D] fullscreen unavailable', error);
+      window.toast?.('เปิดเต็มจอไม่ได้', error.message || 'เบราว์เซอร์ไม่อนุญาต', 'err');
     }
   };
   fullscreenButton.addEventListener('click', toggleFullscreen);
