@@ -343,7 +343,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.className = 'loc3d-rack-action';
   rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
   rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
-  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"/><path d="m19.3 13.55 1.04.6-1.8 3.12-1.05-.61a7.78 7.78 0 0 1-1.85 1.08v1.2h-3.6v-1.2a7.78 7.78 0 0 1-1.85-1.08l-1.05.61-1.8-3.12 1.04-.6a7.95 7.95 0 0 1 0-2.1l-1.04-.6 1.8-3.12 1.05.61a7.78 7.78 0 0 1 1.85-1.08v-1.2h3.6v1.2a7.78 7.78 0 0 1 1.85 1.08l1.05-.61 1.8 3.12-1.04.6a7.95 7.95 0 0 1 0 2.1Z"/></svg><span>เครื่องมือ</span>';
+  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"/><path d="m19.3 13.55 1.04.6-1.8 3.12-1.05-.61a7.78 7.78 0 0 1-1.85 1.08v1.2h-3.6v-1.2a7.78 7.78 0 0 1-1.85-1.08l-1.05.61-1.8-3.12 1.04-.6a7.95 7.95 0 0 1 0-2.1l-1.04-.6 1.8-3.12 1.05.61a7.78 7.78 0 0 1 1.85-1.08v-1.2h3.6v1.2a7.78 7.78 0 0 1 1.85 1.08l1.05-.61 1.8 3.12-1.04.6a7.95 7.95 0 0 1 0 2.1Z"/></svg>';
   const rackActionObject = new CSS2DObject(rackActionButton);
   rackActionObject.visible = false;
   scene.add(rackActionObject);
@@ -758,7 +758,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     label.rotation.x = -Math.PI / 2;
     // Place the zone label beyond the front of the rack footprint.
     const labelOffset = Math.max(0.5, Math.min(1.1, areaDepth * 0.22));
-    label.position.set(areaCenter.x, floor.position.y + 0.025, area.minZ - labelOffset);
+    const zoneRackEntries = rackEntries.filter((entry) => String(entry.rack.zone || 'ไม่ระบุโซน') === zone);
+    const frontDirection = new THREE.Vector3(0, 0, 1);
+    if (zoneRackEntries[0]) frontDirection.applyQuaternion(zoneRackEntries[0].quaternion).setY(0).normalize();
+    const areaCorners = [
+      new THREE.Vector3(area.minX, 0, area.minZ), new THREE.Vector3(area.minX, 0, area.maxZ),
+      new THREE.Vector3(area.maxX, 0, area.minZ), new THREE.Vector3(area.maxX, 0, area.maxZ),
+    ];
+    const frontExtent = Math.max(...areaCorners.map((corner) => corner.clone().sub(areaCenter).dot(frontDirection)));
+    const labelPosition = areaCenter.clone().add(frontDirection.multiplyScalar(frontExtent + labelOffset));
+    label.position.set(labelPosition.x, floor.position.y + 0.025, labelPosition.z);
     scene.add(label);
   });
   const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
