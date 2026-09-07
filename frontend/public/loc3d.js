@@ -951,6 +951,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   ));
+  // Close both ends of the guardrail so the exposed rack head remains
+  // protected even when another rack is not connected beside it.
+  [railStartZ, railEndZ].forEach((z) => [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(railX, warehouseFloorY + height, z),
+    new THREE.Vector3(railX + 0.72, warehouseFloorY + height, z),
+    0.045,
+    guardrailMaterial,
+  )));
   // Move the warehouse/zone label off the floor and mount it vertically above
   // the safety rail, parallel to the rail direction and higher than its posts.
   const safetySignTexture = safetyZoneSignTexture(primaryZoneLabel);
@@ -960,6 +968,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   );
   safetyZoneSign.position.set(railX - 0.075, warehouseFloorY + 1.98, (railStartZ + railEndZ) / 2);
   safetyZoneSign.rotation.y = Math.PI / 2;
+  // Flip the inside-facing canvas so the lettering reads normally from the aisle.
+  safetyZoneSign.scale.x = -1;
   safetyZoneSign.renderOrder = 4;
   scene.add(safetyZoneSign);
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
@@ -1102,7 +1112,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const slatY = louvreStartY + 0.16 + slatIndex * ((louvreHeight - 0.3) / 7);
       const louvreSlat = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.075, bayLength - 0.08), louvreMaterial);
       louvreSlat.position.set(louvreX + 0.025, slatY, bayCenterZ);
-      louvreSlat.rotation.z = -0.16;
       scene.add(louvreSlat);
     }
   }
