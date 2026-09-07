@@ -1,61 +1,518 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
-let disposeCurrent = null;
-const natural = (a,b) => String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
+const CM_TO_M = 0.01;
+const THREE_VERSION = '0.184.0';
+const EMPTY_COLOR = new THREE.Color(0x78b928);
+const FULL_COLOR = new THREE.Color(0xd63d48);
+const HOVER_COLOR = new THREE.Color(0xffc857);
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+let activeController = null;
+let generation = 0;
 
-function mount(canvas, locations, occupancy, onSelect){
-  if(!canvas)return;
-  if(disposeCurrent)disposeCurrent();
-  const stage=canvas.parentElement, scene=new THREE.Scene();
-  scene.background=new THREE.Color(0x111316);
-  scene.fog=new THREE.Fog(0x111316,28,72);
-  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.shadowMap.enabled=true;
-  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace=THREE.SRGBColorSpace;
-  const camera=new THREE.PerspectiveCamera(48,1,.1,160);
-  const controls=new OrbitControls(camera,canvas);
-  controls.enableDamping=true;controls.dampingFactor=.07;controls.maxPolarAngle=Math.PI*.49;controls.minDistance=5;controls.maxDistance=65;
-  scene.add(new THREE.HemisphereLight(0xdbe8ff,0x20242a,2.2));
-  const sun=new THREE.DirectionalLight(0xffffff,3.4);sun.position.set(-12,18,8);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
-  const root=new THREE.Group();scene.add(root);
-  const grouped=new Map();
-  locations.forEach(l=>{const key=`${l.zone}\0${l.rack}`;if(!grouped.has(key))grouped.set(key,{zone:l.zone,rack:l.rack,rows:[]});grouped.get(key).rows.push(l);});
-  const racks=[...grouped.values()].sort((a,b)=>natural(a.zone,b.zone)||natural(a.rack,b.rack));
-  const rackDepth=1.25,slotW=1.05,shelfH=.9,aisle=3.8,zoneGap=4;
-  const zones=[...new Set(racks.map(r=>r.zone))];let cursorX=0,maxDepth=8;
-  const clickable=[];
-  const matSteel=new THREE.MeshStandardMaterial({color:0x67717d,metalness:.72,roughness:.34});
-  const matShelf=new THREE.MeshStandardMaterial({color:0x343a42,metalness:.55,roughness:.5});
-  const matEmpty=new THREE.MeshStandardMaterial({color:0x9cff1f,transparent:true,opacity:.16,roughness:.55});
-  const matOccupied=new THREE.MeshStandardMaterial({color:0x9cff1f,emissive:0x294c00,emissiveIntensity:.7,roughness:.42});
-  const box=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;};
-  zones.forEach((zone,zi)=>{
-    const zr=racks.filter(r=>r.zone===zone);const cols=Math.max(1,Math.ceil(Math.sqrt(zr.length)));
-    zr.forEach((rk,i)=>{
-      const shelves=[...new Set(rk.rows.map(l=>String(l.shelf||'1')))].sort(natural),slots=[...new Set(rk.rows.map(l=>String(l.slot||'1')))].sort(natural);
-      const width=Math.max(1,slots.length)*slotW,x=cursorX+(i%cols)*(width+aisle),z=Math.floor(i/cols)*(rackDepth+aisle);
-      maxDepth=Math.max(maxDepth,z+rackDepth+4);const height=Math.max(1,shelves.length)*shelfH+.35;
-      [-width/2,width/2].forEach(px=>box(.1,height,rackDepth,matSteel,x+px,height/2,z));
-      shelves.forEach((sh,sy)=>{const y=.18+(sy+1)*shelfH;box(width+.12,.09,rackDepth+.08,matShelf,x,y,z);
-        slots.forEach((sl,sx)=>{const l=rk.rows.find(v=>String(v.shelf||'1')===sh&&String(v.slot||'1')===sl);if(!l)return;const cell=box(slotW-.12,shelfH-.18,rackDepth-.18,occupancy[l.code]?matOccupied:matEmpty,x-width/2+slotW*(sx+.5),y-shelfH/2+.03,z);cell.userData.code=l.code;clickable.push(cell);});});
-    });
-    const widest=zr.reduce((n,r)=>Math.max(n,new Set(r.rows.map(l=>l.slot)).size*slotW),1);cursorX+=Math.max(cols*(widest+aisle),8)+zoneGap;
-  });
-  const floorW=Math.max(cursorX+5,18),floorD=Math.max(maxDepth,16);box(floorW,.18,floorD,new THREE.MeshStandardMaterial({color:0x252a30,roughness:.86}),floorW/2-3,-.1,floorD/2-3);
-  const grid=new THREE.GridHelper(Math.max(floorW,floorD),Math.ceil(Math.max(floorW,floorD)),0x53606d,0x343b43);grid.position.set(floorW/2-3,.01,floorD/2-3);root.add(grid);
-  camera.position.set(floorW*.48,Math.max(8,floorW*.28),floorD*1.05);controls.target.set(floorW*.42,1.5,floorD*.32);controls.update();
-  const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
-  function pick(e){const r=canvas.getBoundingClientRect();pointer.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(pointer,camera);const hit=ray.intersectObjects(clickable,false)[0];if(hit&&onSelect)onSelect(hit.object.userData.code);}
-  let down=null;function pointerDown(e){down={x:e.clientX,y:e.clientY};}function pointerUp(e){if(down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)pick(e);down=null;}
-  canvas.addEventListener('pointerdown',pointerDown);canvas.addEventListener('pointerup',pointerUp);
-  function resize(){const w=Math.max(stage.clientWidth,320),h=Math.max(stage.clientHeight,520);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
-  const ro=new ResizeObserver(resize);ro.observe(stage);resize();let raf=0,live=true;
-  function frame(){if(!live)return;controls.update();renderer.render(scene,camera);raf=requestAnimationFrame(frame);}frame();
-  stage.querySelector('.loc3d-loading')?.remove();
-  disposeCurrent=()=>{live=false;cancelAnimationFrame(raf);ro.disconnect();canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointerup',pointerUp);controls.dispose();renderer.dispose();scene.traverse(o=>{o.geometry?.dispose();if(o.material&&!Array.isArray(o.material))o.material.dispose();});};
+const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const positive = (value, fallback) => num(value, fallback) > 0 ? num(value, fallback) : fallback;
+const token = () => {
+  try { return localStorage.getItem('smarttrace_jwt') || ''; } catch (_) { return ''; }
+};
+
+function rackId(wh, zone, rack) {
+  return `${wh}::${zone || ''}::${rack}`;
 }
 
-window.LocationWarehouse3D={mount};
+function legacyModel(locations, occupancy) {
+  const grouped = new Map();
+  locations.forEach((location) => {
+    if (!location || !location.wh || !location.rack) return;
+    const id = rackId(location.wh, location.zone || '', location.rack);
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(location);
+  });
+  const racks = [...grouped.entries()]
+    .sort(([, a], [, b]) => natural(a[0].zone, b[0].zone) || natural(a[0].rack, b[0].rack))
+    .map(([id, rows], rackIndex) => {
+      const shelves = [...new Set(rows.map((row) => String(row.shelf || '1')))].sort(natural);
+      const slotCodes = [...new Set(rows.map((row) => String(row.slot || '1')))].sort(natural);
+      const width = Math.max(140, slotCodes.length * 120 + 20);
+      const height = Math.max(110, shelves.length * 80 + 30);
+      return {
+        id,
+        warehouseId: rows[0].wh,
+        zone: rows[0].zone || '',
+        code: rows[0].rack,
+        positionCm: { x: (rackIndex % 4) * 1000, y: 0, z: Math.floor(rackIndex / 4) * 600 },
+        rotationYDeg: 0,
+        dimensionsCm: { width, height, depth: 110 },
+        materialType: 'powder_coated_steel',
+        slots: rows.map((row) => {
+          const shelfIndex = Math.max(0, shelves.indexOf(String(row.shelf || '1')));
+          const slotIndex = Math.max(0, slotCodes.indexOf(String(row.slot || '1')));
+          return {
+            id: row.code,
+            shelfCode: String(row.shelf || '1'),
+            slotCode: String(row.slot || '1'),
+            localPositionCm: {
+              x: (slotIndex - (slotCodes.length - 1) / 2) * 120,
+              y: 10 + (shelfIndex + 0.5) * 80,
+              z: 0,
+            },
+            dimensionsCm: { width: 110, height: 70, depth: 100 },
+            status: occupancy[row.code] ? 'full' : 'empty',
+          };
+        }),
+      };
+    });
+  return {
+    schemaVersion: 1,
+    sourceUnit: 'cm',
+    worldUnit: 'm',
+    scaleToWorldUnit: CM_TO_M,
+    warehouseId: locations[0]?.wh || null,
+    racks,
+    boxes: [],
+    stats: { racks: racks.length, slots: racks.reduce((sum, rack) => sum + rack.slots.length, 0), boxes: 0 },
+    fallback: true,
+  };
+}
+
+async function loadModel(locations, occupancy) {
+  const warehouseId = locations.find((location) => location?.wh)?.wh || '';
+  if (!warehouseId) return legacyModel(locations, occupancy);
+  try {
+    const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(warehouseId)}`, {
+      headers: { Authorization: `Bearer ${token()}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const model = await response.json();
+    if (!Array.isArray(model.racks) || !model.racks.length) return legacyModel(locations, occupancy);
+    return model;
+  } catch (error) {
+    console.warn('[Warehouse3D] geometry API unavailable; using Location Master defaults.', error);
+    return legacyModel(locations, occupancy);
+  }
+}
+
+function concreteTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#343a42';
+  context.fillRect(0, 0, 128, 128);
+  let seed = 7319;
+  for (let i = 0; i < 2600; i += 1) {
+    seed = (seed * 16807) % 2147483647;
+    const x = seed % 128;
+    seed = (seed * 16807) % 2147483647;
+    const y = seed % 128;
+    const alpha = 0.025 + (seed % 7) * 0.006;
+    context.fillStyle = `rgba(255,255,255,${alpha})`;
+    context.fillRect(x, y, 1, 1);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(10, 10);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function assetPipeline(renderer) {
+  const draco = new DRACOLoader();
+  draco.setDecoderPath(`https://unpkg.com/three@${THREE_VERSION}/examples/jsm/libs/draco/`);
+  const ktx2 = new KTX2Loader();
+  ktx2.setTranscoderPath(`https://unpkg.com/three@${THREE_VERSION}/examples/jsm/libs/basis/`);
+  ktx2.detectSupport(renderer);
+  const gltf = new GLTFLoader();
+  gltf.setDRACOLoader(draco);
+  gltf.setKTX2Loader(ktx2);
+  return {
+    load: (url) => gltf.loadAsync(url),
+    dispose() { draco.dispose(); ktx2.dispose(); },
+  };
+}
+
+function matrixAt(position, quaternion, scale) {
+  return new THREE.Matrix4().compose(position, quaternion, scale);
+}
+
+function worldPoint(rack, localX, localY, localZ) {
+  const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const x = num(localX) * CM_TO_M;
+  const z = num(localZ) * CM_TO_M;
+  return new THREE.Vector3(
+    num(rack.positionCm?.x) * CM_TO_M + x * cos + z * sin,
+    num(rack.positionCm?.y) * CM_TO_M + num(localY) * CM_TO_M,
+    num(rack.positionCm?.z) * CM_TO_M - x * sin + z * cos,
+  );
+}
+
+function rendererName(renderer) {
+  const backend = String(renderer?.backend?.constructor?.name || '');
+  if (/webgpu/i.test(backend)) return 'WebGPU';
+  if (/webgl/i.test(backend)) return 'WebGL 2 fallback';
+  return navigator.gpu ? 'WebGPU' : 'WebGL 2 fallback';
+}
+
+async function createScene(canvas, model, onSelect) {
+  const stage = canvas.parentElement;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x101419);
+  scene.fog = new THREE.FogExp2(0x101419, 0.012);
+
+  // WebGPURenderer selects WebGPU when available and its own WebGL 2 backend
+  // otherwise. InstancedMesh keeps draw calls constant as rack/box counts grow.
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  await renderer.init();
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 1000);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.075;
+  controls.screenSpacePanning = true;
+  controls.maxPolarAngle = Math.PI * 0.495;
+  controls.minDistance = 1.5;
+  controls.maxDistance = 260;
+
+  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.55));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
+  const sun = new THREE.DirectionalLight(0xfff3de, 3.15);
+  sun.position.set(-18, 28, 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.025;
+  scene.add(sun);
+
+  const labelRenderer = new CSS2DRenderer();
+  labelRenderer.domElement.className = 'loc3d-label-layer';
+  stage.appendChild(labelRenderer.domElement);
+  const labelElement = document.createElement('div');
+  labelElement.className = 'loc3d-slot-label empty';
+  labelElement.textContent = 'ว่าง';
+  const labelObject = new CSS2DObject(labelElement);
+  labelObject.visible = false;
+  scene.add(labelObject);
+
+  const hud = document.createElement('div');
+  hud.className = 'loc3d-hud';
+  hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span><span class="loc3d-perf">กำลังวัด FPS…</span>`;
+  stage.appendChild(hud);
+
+  const rackEntries = [];
+  const slotEntries = [];
+  const rackParts = [];
+  const bounds = new THREE.Box3();
+  const boundPoint = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+
+  model.racks.forEach((rack) => {
+    const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
+    const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
+    const height = positive(rack.dimensionsCm?.height, 110) * CM_TO_M;
+    const depth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
+    const frame = Math.min(0.1, width * 0.08, depth * 0.08);
+    const base = worldPoint(rack, 0, 0, 0);
+    const addPart = (x, y, z, sx, sy, sz) => {
+      const position = new THREE.Vector3(x, y, z).applyQuaternion(quaternion).add(base);
+      rackParts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz) });
+    };
+    [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
+      addPart(sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
+    }));
+    const shelfBottoms = new Map();
+    (rack.slots || []).forEach((slot) => {
+      const y = num(slot.localPositionCm?.y) - positive(slot.dimensionsCm?.height, 70) / 2;
+      shelfBottoms.set(String(slot.shelfCode), y * CM_TO_M);
+    });
+    [...shelfBottoms.values()].forEach((y) => addPart(0, y, 0, width, 0.075, depth));
+    addPart(0, height - 0.04, 0, width, 0.08, depth);
+    rackEntries.push({ rack, quaternion, width, height, depth });
+    // All eight rotated corners are required here. Using only a diagonal pair
+    // underestimates a 90-degree rack and can clip the floor/camera framing.
+    const corners = [-1, 1].flatMap((sideX) => [-1, 1].flatMap((sideZ) => [0, 1].map((sideY) =>
+      worldPoint(
+        rack,
+        sideX * width / CM_TO_M / 2,
+        sideY * height / CM_TO_M,
+        sideZ * depth / CM_TO_M / 2,
+      ))));
+    corners.forEach((point) => bounds.expandByPoint(point));
+
+    (rack.slots || []).forEach((slot) => {
+      const position = worldPoint(rack, slot.localPositionCm?.x, slot.localPositionCm?.y, slot.localPositionCm?.z);
+      slotEntries.push({
+        rack,
+        slot,
+        position,
+        quaternion,
+        scale: new THREE.Vector3(
+          positive(slot.dimensionsCm?.width, 110) * CM_TO_M,
+          positive(slot.dimensionsCm?.height, 70) * CM_TO_M,
+          positive(slot.dimensionsCm?.depth, 100) * CM_TO_M,
+        ),
+      });
+      bounds.expandByPoint(boundPoint.copy(position));
+    });
+  });
+
+  const rackMaterial = new THREE.MeshStandardMaterial({ color: 0x66717c, metalness: 0.76, roughness: 0.3 });
+  const rackMesh = rackParts.length ? new THREE.InstancedMesh(UNIT_BOX, rackMaterial, rackParts.length) : null;
+  if (rackMesh) {
+    rackParts.forEach((part, index) => rackMesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
+    rackMesh.instanceMatrix.needsUpdate = true;
+    rackMesh.castShadow = rackMesh.receiveShadow = true;
+    rackMesh.computeBoundingBox();
+    rackMesh.computeBoundingSphere();
+    scene.add(rackMesh);
+  }
+
+  const slotMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.17,
+    depthWrite: false,
+    roughness: 0.55,
+    metalness: 0.05,
+  });
+  const slotMesh = slotEntries.length ? new THREE.InstancedMesh(UNIT_BOX, slotMaterial, slotEntries.length) : null;
+  if (slotMesh) {
+    slotEntries.forEach((entry, index) => {
+      slotMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
+      slotMesh.setColorAt(index, entry.slot.status === 'full' ? FULL_COLOR : EMPTY_COLOR);
+    });
+    slotMesh.instanceMatrix.needsUpdate = true;
+    slotMesh.instanceColor.needsUpdate = true;
+    slotMesh.computeBoundingBox();
+    slotMesh.computeBoundingSphere();
+    scene.add(slotMesh);
+  }
+
+  const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
+  const materialColors = {
+    carton: 0xb7804f,
+    plastic_crate: 0x2f83d0,
+    metal_box: 0x8d98a5,
+    generic: 0xd6a65b,
+  };
+  const boxEntries = (model.boxes || []).flatMap((box) => {
+    const slotEntry = slotById.get(box.slotId);
+    if (!slotEntry) return [];
+    const width = positive(box.dimensionsCm?.width, 60) * CM_TO_M;
+    const height = positive(box.dimensionsCm?.height, 40) * CM_TO_M;
+    const depth = positive(box.dimensionsCm?.depth, 40) * CM_TO_M;
+    const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
+    const position = worldPoint(
+      slotEntry.rack,
+      slotEntry.slot.localPositionCm?.x,
+      slotBottomCm + height / CM_TO_M / 2,
+      slotEntry.slot.localPositionCm?.z,
+    );
+    const oversized = width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z;
+    return [{
+      box,
+      position,
+      quaternion: slotEntry.quaternion,
+      scale: new THREE.Vector3(width, height, depth),
+      color: new THREE.Color(oversized ? 0xff3bd4 : (materialColors[box.materialType] || materialColors.generic)),
+    }];
+  });
+  const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.69, metalness: 0.04 });
+  const boxMesh = boxEntries.length ? new THREE.InstancedMesh(UNIT_BOX, boxMaterial, boxEntries.length) : null;
+  if (boxMesh) {
+    boxEntries.forEach((entry, index) => {
+      boxMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
+      boxMesh.setColorAt(index, entry.color);
+    });
+    boxMesh.instanceMatrix.needsUpdate = true;
+    boxMesh.instanceColor.needsUpdate = true;
+    boxMesh.castShadow = boxMesh.receiveShadow = true;
+    boxMesh.computeBoundingBox();
+    boxMesh.computeBoundingSphere();
+    scene.add(boxMesh);
+  }
+
+  if (bounds.isEmpty()) bounds.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(12, 4, 12));
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const floorMargin = Math.max(2.5, Math.min(7, Math.max(size.x, size.z) * 0.18));
+  const floorTexture = concreteTexture();
+  floorTexture.repeat.set(Math.max(2, (size.x + floorMargin * 2) / 2), Math.max(2, (size.z + floorMargin * 2) / 2));
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(Math.max(8, size.x + floorMargin * 2), Math.max(8, size.z + floorMargin * 2)),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, map: floorTexture, roughness: 0.92, metalness: 0 }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(center.x, Math.min(0, bounds.min.y) - 0.015, center.z);
+  floor.receiveShadow = true;
+  scene.add(floor);
+  const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
+  grid.position.set(center.x, floor.position.y + 0.012, center.z);
+  scene.add(grid);
+
+  const span = Math.max(size.x, size.z, 5);
+  camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
+  controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
+  controls.update();
+  sun.position.set(center.x - span * 0.65, Math.max(16, span * 1.1), center.z + span * 0.55);
+  const shadowExtent = Math.max(12, span * 0.85);
+  Object.assign(sun.shadow.camera, { left: -shadowExtent, right: shadowExtent, top: shadowExtent, bottom: -shadowExtent, near: 0.5, far: Math.max(60, span * 4) });
+  sun.shadow.camera.updateProjectionMatrix();
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let hoverIndex = -1;
+  let pointerFrame = 0;
+  let down = null;
+  const baseColor = (index) => slotEntries[index]?.slot.status === 'full' ? FULL_COLOR : EMPTY_COLOR;
+  const updatePointer = (event) => {
+    if (!slotMesh) return;
+    const rect = canvas.getBoundingClientRect();
+    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObject(slotMesh, false)[0];
+    const next = Number.isInteger(hit?.instanceId) ? hit.instanceId : -1;
+    if (next === hoverIndex) return;
+    if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
+    hoverIndex = next;
+    if (hoverIndex >= 0) {
+      const entry = slotEntries[hoverIndex];
+      slotMesh.setColorAt(hoverIndex, HOVER_COLOR);
+      labelElement.textContent = entry.slot.status === 'full' ? 'เต็ม' : 'ว่าง';
+      labelElement.className = `loc3d-slot-label ${entry.slot.status === 'full' ? 'full' : 'empty'}`;
+      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
+    } else {
+      labelObject.visible = false;
+      canvas.style.cursor = 'grab';
+    }
+    slotMesh.instanceColor.needsUpdate = true;
+  };
+  const onPointerMove = (event) => {
+    if (pointerFrame) cancelAnimationFrame(pointerFrame);
+    pointerFrame = requestAnimationFrame(() => updatePointer(event));
+  };
+  const onPointerDown = (event) => { down = { x: event.clientX, y: event.clientY }; };
+  const onPointerUp = (event) => {
+    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5 && hoverIndex >= 0) {
+      onSelect?.(slotEntries[hoverIndex].slot.id);
+    }
+    down = null;
+  };
+  const onPointerLeave = () => {
+    if (hoverIndex >= 0 && slotMesh) {
+      slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
+      slotMesh.instanceColor.needsUpdate = true;
+    }
+    hoverIndex = -1;
+    labelObject.visible = false;
+    canvas.style.cursor = 'grab';
+  };
+  canvas.addEventListener('pointermove', onPointerMove, { passive: true });
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+  canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+  canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
+
+  const resize = () => {
+    const width = Math.max(320, stage.clientWidth);
+    const height = Math.max(320, stage.clientHeight);
+    renderer.setSize(width, height, false);
+    labelRenderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  };
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(stage);
+  resize();
+
+  const assets = assetPipeline(renderer);
+  const perf = hud.querySelector('.loc3d-perf');
+  let frames = 0;
+  let lastFpsAt = performance.now();
+  const animate = () => {
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    frames += 1;
+    const now = performance.now();
+    if (now - lastFpsAt >= 1000) {
+      const fps = Math.round(frames * 1000 / (now - lastFpsAt));
+      if (perf) perf.textContent = `${fps} FPS · ${renderer.info.render.calls} draw calls`;
+      frames = 0;
+      lastFpsAt = now;
+    }
+  };
+  renderer.setAnimationLoop(animate);
+  stage.querySelector('.loc3d-loading')?.remove();
+
+  return {
+    assets,
+    dispose() {
+      renderer.setAnimationLoop(null);
+      resizeObserver.disconnect();
+      if (pointerFrame) cancelAnimationFrame(pointerFrame);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      controls.dispose();
+      assets.dispose();
+      labelRenderer.domElement.remove();
+      hud.remove();
+      scene.traverse((object) => {
+        if (object.geometry && object.geometry !== UNIT_BOX) object.geometry.dispose?.();
+        const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
+        materials.forEach((material) => material.dispose?.());
+      });
+      floorTexture.dispose();
+      renderer.dispose();
+    },
+  };
+}
+
+async function mount(canvas, locations, occupancy, onSelect) {
+  if (!canvas) return null;
+  const currentGeneration = ++generation;
+  activeController?.dispose();
+  activeController = null;
+  const stage = canvas.parentElement;
+  try {
+    const model = await loadModel(locations || [], occupancy || {});
+    if (currentGeneration !== generation || !canvas.isConnected) return null;
+    const controller = await createScene(canvas, model, onSelect);
+    if (currentGeneration !== generation || !canvas.isConnected) {
+      controller.dispose();
+      return null;
+    }
+    activeController = controller;
+    return controller;
+  } catch (error) {
+    console.error('[Warehouse3D] scene initialization failed.', error);
+    const loading = stage?.querySelector('.loc3d-loading');
+    if (loading) loading.textContent = 'เปิดมุมมอง 3D ไม่สำเร็จ';
+    return null;
+  }
+}
+
+function unmount() {
+  generation += 1;
+  activeController?.dispose();
+  activeController = null;
+}
+
+window.LocationWarehouse3D = { mount, unmount, scaleToMetres: CM_TO_M };

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script type="importmap">
-{"imports":{"three":"https://unpkg.com/three@0.184.0/build/three.module.js","three/addons/controls/OrbitControls.js":"https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js"}}
+{"imports":{"three":"https://unpkg.com/three@0.184.0/build/three.webgpu.js","three/webgpu":"https://unpkg.com/three@0.184.0/build/three.webgpu.js","three/tsl":"https://unpkg.com/three@0.184.0/build/three.tsl.js","three/addons/":"https://unpkg.com/three@0.184.0/examples/jsm/"}}
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
@@ -2110,7 +2110,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 #locMapView{padding:16px 18px 20px;}
 .locmap-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;}
 .loc3d-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:.5px solid var(--line);background:var(--surface2)}
-.loc3d-stage{position:relative;height:min(68vh,720px);min-height:520px;overflow:hidden;background:#111316}.loc3d-stage canvas{display:block;width:100%;height:100%;cursor:grab}.loc3d-stage canvas:active{cursor:grabbing}.loc3d-loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);pointer-events:none}
+.loc3d-stage{position:relative;height:min(68vh,720px);min-height:520px;overflow:hidden;background:#111316}.loc3d-stage canvas{display:block;width:100%;height:100%;cursor:grab}.loc3d-stage canvas:active{cursor:grabbing}.loc3d-loading{position:absolute;inset:0;display:grid;place-items:center;color:#aeb6bf;pointer-events:none}.loc3d-label-layer{position:absolute!important;inset:0;z-index:2;overflow:hidden;pointer-events:none}.loc3d-slot-label{padding:7px 11px;border:1px solid currentColor;border-radius:9px;background:rgba(8,10,12,.88);font:800 18px/1 var(--font);white-space:nowrap;box-shadow:0 7px 20px rgba(0,0,0,.32);transform:translate(-50%,-125%);will-change:transform}.loc3d-slot-label.empty{color:#96ff32}.loc3d-slot-label.full{color:#ff4b56}.loc3d-hud{position:absolute;left:14px;top:14px;z-index:3;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100% - 28px);pointer-events:none}.loc3d-hud span{padding:6px 10px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(9,11,13,.78);color:#e7ebef;font:600 11px/1.2 var(--mono);backdrop-filter:blur(10px)}.loc3d-hud .ok{color:#a8f931}.loc3d-hud .warn{color:#ffcc66}
 .loc3d-toolbar>div:first-child{display:grid;gap:3px}.loc3d-scene{min-height:520px;padding:28px;overflow:auto;background:radial-gradient(circle at 50% 0,var(--surface3),var(--surface) 68%);perspective:1200px}
 .loc3d-zone{min-width:max-content;margin:0 0 34px;transform:rotateX(4deg);transform-origin:top center}.loc3d-zone>h4{margin:0 0 14px;color:var(--accent);font-size:14px}
 .loc3d-floor{display:flex;align-items:flex-end;gap:32px;padding:26px 30px 36px;border:1px solid var(--line2);border-radius:18px;background:linear-gradient(135deg,var(--surface2),var(--surface));box-shadow:0 22px 40px rgba(0,0,0,.16);transform:rotateY(-3deg);transform-origin:left center}
@@ -2118,7 +2118,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 .loc3d-frame{padding:10px;border:4px solid color-mix(in srgb,var(--ink) 38%,transparent);border-top-width:7px;background:color-mix(in srgb,var(--surface) 82%,transparent);box-shadow:12px 12px 0 color-mix(in srgb,var(--ink) 9%,transparent)}
 .loc3d-shelf{display:grid;grid-template-columns:22px 1fr;align-items:center;gap:7px;padding:6px 0;border-bottom:4px solid color-mix(in srgb,var(--ink) 34%,transparent)}.loc3d-shelf:last-child{border-bottom:0}.loc3d-shelf>b{font:10px var(--mono);color:var(--muted);text-align:center}.loc3d-shelf>div{display:flex;gap:5px}
 .loc3d-slot{width:34px;height:38px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:4px;background:var(--surface3);color:var(--muted);cursor:pointer;box-shadow:inset -4px -4px 0 rgba(0,0,0,.08);transition:.18s ease}.loc3d-slot:hover{transform:translateY(-4px) scale(1.05);border-color:var(--accent);color:var(--accent)}.loc3d-slot.occupied{background:var(--accent);color:var(--accentContrast);border-color:var(--accent)}.loc3d-slot span{font:10px var(--mono)}
-@media(max-width:760px){.loc3d-toolbar{align-items:flex-start;flex-direction:column}.loc3d-scene{padding:18px 10px}.loc3d-floor{padding:20px;gap:22px}}
+@media(max-width:760px){.loc3d-toolbar{align-items:flex-start;flex-direction:column}.loc3d-scene{padding:18px 10px}.loc3d-floor{padding:20px;gap:22px}.loc3d-hud{top:10px;left:10px}.loc3d-hud span{font-size:9px}}
 .locmap-whgroup{margin-bottom:26px;}
 .locmap-whgroup:last-child{margin-bottom:0;}
 .locmap-whhead{display:flex;align-items:center;gap:10px;padding:4px 2px 12px;border-bottom:1.5px solid var(--line2);margin-bottom:14px;color:var(--ink);}
@@ -3214,7 +3214,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <div class="field"><label>ชื่อประเภท <span class="req">*</span></label><input id="btName" placeholder="ลังพลาสติก 60L"></div>
         <div class="field"><label>หน่วยนับ <span class="req">*</span></label><input id="btUnit" placeholder="ใบ / กล่อง / แผ่น" list="btUnitList"><datalist id="btUnitList"><option value="ใบ"><option value="กล่อง"><option value="แผ่น"><option value="ลัง"><option value="พาเลท"></datalist></div>
         <div class="field"><label>มูลค่าต่อใบ (บาท)</label><input id="btValue" type="number" min="0" placeholder="450"></div>
-        <div class="field"><label>ขนาด (มม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label>
+        <div class="field"><label>ขนาด (ซม.) <span class="tag" style="font-weight:400;">(กว้างxยาวxสูง)</span></label>
           <div style="display:flex;align-items:center;gap:6px;">
             <input id="btDimW" type="number" min="0" placeholder="กว้าง" style="min-width:0;">
             <span class="muted">×</span>
@@ -6482,6 +6482,7 @@ var _locViewMode = 'map', _loc3dWh = '';
     if (tbl) tbl.style.display = _locViewMode === 'table' ? '' : 'none';
     if (three) three.style.display = _locViewMode === '3d' ? '' : 'none';
     if (_locViewMode === '3d') renderLoc3D();
+    else if(window.LocationWarehouse3D)window.LocationWarehouse3D.unmount();
   });
 })();
 
@@ -20289,7 +20290,7 @@ window.exportEmpExcel = exportEmpExcel;
 
 function exportBtypeExcel() {
   var types = Object.values(S.boxtypes).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var headers = ['รหัสประเภท', 'ชื่อประเภท', 'หน่วยนับ', 'มูลค่าต่อใบ', 'ขนาด (มม.)', 'กล่องที่ใช้ประเภทนี้'];
+  var headers = ['รหัสประเภท', 'ชื่อประเภท', 'หน่วยนับ', 'มูลค่าต่อใบ', 'ขนาด (ซม.)', 'กล่องที่ใช้ประเภทนี้'];
   var rows = types.map(function(t) {
     var used = Object.values(S.boxes).filter(function(b) { return b.type === t.id; }).length;
     return [t.id, t.name, t.unit || '', t.value == null ? '' : t.value, t.dim || '', used];
@@ -20371,7 +20372,7 @@ function exportAllMastersExcelWithReaders(mode,readers) {
   });
 
   var types = Object.values(S.boxtypes).sort(function(a, b) { return a.id < b.id ? -1 : 1; });
-  var btypeHeaders = ['รหัสประเภท', 'ชื่อประเภท', 'หน่วยนับ', 'มูลค่าต่อใบ', 'ขนาด (มม.)', 'กล่องที่ใช้ประเภทนี้'];
+  var btypeHeaders = ['รหัสประเภท', 'ชื่อประเภท', 'หน่วยนับ', 'มูลค่าต่อใบ', 'ขนาด (ซม.)', 'กล่องที่ใช้ประเภทนี้'];
   var btypeRows = types.map(function(t) {
     var used = boxes.filter(function(b) { return b.type === t.id; }).length;
     return [t.id, t.name, t.unit || '', t.value == null ? '' : t.value, t.dim || '', used];
@@ -20674,7 +20675,7 @@ function openColumnMapModal(opts){
         {key:'name', label:'ชื่อประเภท', required:true, aliases:['name','ชื่อ','ชื่อประเภท']},
         {key:'unit', label:'หน่วยนับ', required:true, aliases:['unit','หน่วย','หน่วยนับ']},
         {key:'value',label:'มูลค่าต่อใบ (บาท)', required:false, aliases:['value','มูลค่า','ราคา']},
-        {key:'dim',  label:'ขนาด (มม.)', required:false, aliases:['dim','ขนาด','size']}
+        {key:'dim',  label:'ขนาด (ซม.)', required:false, aliases:['dim','ขนาด','size']}
       ],
       validateRow:function(m){
         var e=[];
@@ -22764,7 +22765,7 @@ document.addEventListener('change',function(e){
     "ที่อยู่/สาขา":"Address/Branch","บันทึกลูกค้า":"Save customer","รายการลูกค้า":"Customer list","คืนภายใน":"Return within",
     "ติดต่อ":"Contact","ถืออยู่":"Holding",
     "รหัสประเภท (สร้างอัตโนมัติ)":"Type code (auto-generated)","ชื่อประเภท":"Type name","หน่วยนับ":"Unit",
-    "มูลค่าต่อใบ (บาท)":"Value per unit (THB)","ขนาด (มม.)":"Size (mm)","บันทึกประเภท":"Save type",
+    "มูลค่าต่อใบ (บาท)":"Value per unit (THB)","ขนาด (ซม.)":"Size (cm)","บันทึกประเภท":"Save type",
     "รายการประเภทกล่อง":"Box type list","รหัส":"Code","หน่วย":"Unit","ขนาด":"Size","กล่องที่ใช้":"Boxes using",
     "รหัสคลัง (สร้างอัตโนมัติ)":"Warehouse code (auto-generated)","ชื่อคลัง":"Warehouse name","ประตูเริ่ม":"Gate from",
     "ประตูสิ้นสุด":"Gate to","บันทึกคลัง":"Save warehouse",
