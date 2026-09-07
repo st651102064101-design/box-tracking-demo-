@@ -400,7 +400,17 @@ button[disabled],input[type="button"][disabled],input[type="submit"][disabled]{p
 
 /* ============================================================ GATE (signature dark panel) ============================================================ */
 /* ============================================================ INVENTORY (Apple-style CRUD) ============================================================ */
-/* .inv-scan-bar / .iss-ic are gone — that bar is now .wg-scan.slim */
+/* Putaway's slot assignment dialog still uses this compact scan bar.  Keep its
+   input and action in one flex row; without these rules the generic input and
+   button styles make the action wrap onto a second line. */
+.inv-scan-bar{display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:7px 8px;
+  background:var(--panelInputBg);border:1px solid var(--panelInputBorder);border-radius:12px;
+  transition:border-color .2s,box-shadow .2s;}
+.inv-scan-bar:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px var(--accentSoft);}
+.inv-scan-bar .iss-ic{display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;color:var(--muted);font-size:17px;line-height:1;}
+.inv-scan-bar input{flex:1 1 auto;min-width:0;width:auto;padding:5px 0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;}
+.inv-scan-bar input::placeholder{color:var(--faint);}
+.inv-scan-bar .btn{flex:0 0 auto;min-width:max-content;margin:0;white-space:nowrap;}
 .invtoolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
 .invsearch{position:relative;flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--panelInputBg);
   border:1px solid var(--panelInputBorder);border-radius:12px;padding:0 14px;transition:box-shadow .2s,border-color .2s;}
