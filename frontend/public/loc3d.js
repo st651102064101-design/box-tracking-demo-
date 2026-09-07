@@ -412,6 +412,7 @@ async function createScene(canvas, model, onSelect) {
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
   const labelTextures = [];
   const barcodeStickers = [];
+  const boxBarcodeStickers = [];
   const rackNameLabels = [];
   // Model the actual ZPL/Code128 sticker as a plane fixed to the FRONT shelf
   // beam. It is part of the rack, never a floating screen-space caption.
@@ -494,6 +495,30 @@ async function createScene(canvas, model, onSelect) {
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
   }
+  // Every stored box gets its own physical RFID/barcode sticker. The tag is
+  // the same identifier the backend exposes for scanners, and the label size
+  // is constrained by BOTH the box width and height so it never overhangs.
+  if (boxEntries.length <= 250) {
+    boxEntries.forEach((entry) => {
+      const labelWidth = Math.min(entry.scale.x * 0.84, entry.scale.y * 3.15);
+      if (labelWidth < 0.025) return;
+      const labelHeight = labelWidth / 3.65;
+      const texture = code128LabelTexture(entry.box.id);
+      labelTextures.push(texture);
+      const sticker = new THREE.Mesh(
+        new THREE.PlaneGeometry(labelWidth, labelHeight),
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      // Slightly proud of the front carton face: a real applied RFID/ZPL
+      // label, not a floating caption and never outside the box silhouette.
+      const frontOffset = new THREE.Vector3(0, 0, entry.scale.z / 2 + 0.003)
+        .applyQuaternion(entry.quaternion);
+      sticker.position.copy(entry.position).add(frontOffset);
+      sticker.quaternion.copy(entry.quaternion);
+      scene.add(sticker);
+      boxBarcodeStickers.push(sticker);
+    });
+  }
 
   if (bounds.isEmpty()) bounds.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(12, 4, 12));
   const size = bounds.getSize(new THREE.Vector3());
@@ -521,6 +546,7 @@ async function createScene(canvas, model, onSelect) {
     if (showBarcodes === barcodeMode) return;
     barcodeMode = showBarcodes;
     barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+    boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
     rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
   };
   camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
