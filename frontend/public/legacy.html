@@ -13401,7 +13401,7 @@ window.uiPrefGet=uiPrefGet;window.uiPrefSet=uiPrefSet;
 var DF_APPLY={};
 function dfGet(id){
   var k='df:'+id;
-  if(!UIP[k]||typeof UIP[k]!=='object')UIP[k]={mode:'all',day:1,month:1,year:1,from:'',to:''};
+  if(!UIP[k]||typeof UIP[k]!=='object')UIP[k]=id==='ovRetainers'?{mode:'day',day:3,month:1,year:1,from:'',to:''}:{mode:'all',day:1,month:1,year:1,from:'',to:''};
   return UIP[k];
 }
 function dfSave(id){uiPrefTouch('df:'+id);}
@@ -13410,6 +13410,10 @@ function dfSave(id){uiPrefTouch('df:'+id);}
    dfBarHtml('ovMove'); keeps the markup (and any future report that wants
    the same filter) in one place instead of copy-pasted per report. */
 function dfBarHtml(id){
+  /* Retainers has a different date meaning and tooltips from the ordinary
+     report filters. Keep these locals inside the renderer so every mounted
+     filter can initialise independently without relying on globals. */
+  var retainer=id==='ovRetainers',labels=retainer?{all:'กล่องที่เกินกำหนดคืนทั้งหมด',day:'เกินกำหนดคืนตามจำนวนวัน',month:'เกินกำหนดคืนตามจำนวนเดือน',year:'เกินกำหนดคืนตามจำนวนปี',custom:'เลือกวันครบกำหนดคืน'}:{all:'ไม่จำกัดช่วงเวลา',day:'แสดงข้อมูลย้อนหลังตามจำนวนวัน รวมวันนี้',month:'แสดงข้อมูลย้อนหลังตามจำนวนเดือน',year:'แสดงข้อมูลย้อนหลังตามจำนวนปี',custom:'กำหนดช่วงวันที่เริ่มต้นและสิ้นสุด'};
   return '<div class="row no-print reveal" id="df-'+id+'" style="margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:10px;">'
     /* data-no-drag: ตัวกรองวันที่เป็นกลุ่ม toggle เดียวในระบบที่ layout ยุบ/กางเองได้
        ระหว่างใช้งาน (.df-collapsible ตอน hover) และมีช่อง input ตัวเลขซ้อนอยู่ในปุ่ม —
