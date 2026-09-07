@@ -699,6 +699,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
   let occupancyOverviewMode = null;
+  // These values are read during the initial overlay calculation below, before
+  // the pointer handlers are attached. Declare them here to avoid a temporal
+  // dead-zone error on first render.
+  let hoverIndex = -1;
+  let hoverBoxIndex = -1;
   const updateRackLabelMode = () => {
     const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
     if (showBarcodes === barcodeMode) return;
@@ -730,8 +735,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  let hoverIndex = -1;
-  let hoverBoxIndex = -1;
   let pointerFrame = 0;
   let down = null;
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
