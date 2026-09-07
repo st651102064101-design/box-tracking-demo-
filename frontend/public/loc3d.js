@@ -744,14 +744,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // A new enclosed warehouse: white metal-sheet walls, a translucent
-  // half-round roof and black structural steel arches. The enclosure is much
-  // larger than the rack footprint, keeping the orbit camera inside the room.
-  const warehouseMargin = Math.max(5, Math.max(size.x, size.z, 5) * 1.35);
+  // A deliberately generous, enclosed new-build warehouse. It leaves real
+  // room around the rack when zooming out instead of making the camera limit
+  // feel artificially tight.
+  const warehouseMargin = Math.max(12, Math.max(size.x, size.z, 5) * 2.4);
   const warehouseWidth = size.x + warehouseMargin * 2;
   const warehouseDepth = size.z + warehouseMargin * 2;
-  const warehouseWallHeight = Math.max(4.8, size.y + 2.35);
-  const warehouseRoofRadius = warehouseWidth / 2;
+  const warehouseWallHeight = Math.max(7.2, size.y + 4.6);
+  // Keep the gable shallow, as in a standard metal-sheet warehouse rather
+  // than using a semi-circular hangar roof.
+  const warehouseRoofRise = Math.max(2.5, warehouseWidth * 0.14);
   const warehouseFloorY = floor.position.y;
   const warehouseCenterY = warehouseFloorY + warehouseWallHeight / 2;
   const wallThickness = 0.12;
@@ -760,8 +762,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.geometry.dispose();
   floor.geometry = new THREE.PlaneGeometry(warehouseWidth + 1.5, warehouseDepth + 1.5);
   floorTexture.repeat.set(Math.max(2, (warehouseWidth + 1.5) / 2), Math.max(2, (warehouseDepth + 1.5) / 2));
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xe9eef0, metalness: 0.68, roughness: 0.44, side: THREE.DoubleSide });
-  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xe8f4f7, transparent: true, opacity: 0.34, metalness: 0.25, roughness: 0.3, side: THREE.DoubleSide, depthWrite: false });
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf3f6f7, metalness: 0.68, roughness: 0.36, side: THREE.DoubleSide });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xf6fbfd, metalness: 0.62, roughness: 0.32, side: THREE.DoubleSide });
   const steelMaterial = new THREE.MeshStandardMaterial({ color: 0x171d22, metalness: 0.86, roughness: 0.25 });
   const wallSpecs = [
     [wallThickness, warehouseWallHeight, warehouseDepth, center.x - warehouseWidth / 2, warehouseCenterY, center.z],
@@ -797,41 +799,68 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   });
   seamMesh.instanceMatrix.needsUpdate = true;
   scene.add(seamMesh);
-  const roof = new THREE.Mesh(
-    new THREE.CylinderGeometry(warehouseRoofRadius, warehouseRoofRadius, warehouseDepth, 48, 1, true, -Math.PI / 2, Math.PI),
-    roofMaterial,
-  );
-  roof.rotation.x = -Math.PI / 2;
-  roof.position.set(center.x, warehouseFloorY + warehouseWallHeight, center.z);
-  roof.renderOrder = -1;
-  scene.add(roof);
-  const archCount = Math.max(5, Math.ceil(warehouseDepth / 3));
-  const archTubeRadius = 0.06;
-  for (let index = 0; index < archCount; index += 1) {
-    const z = center.z - warehouseDepth / 2 + (warehouseDepth * index) / (archCount - 1);
-    const points = Array.from({ length: 25 }, (_, pointIndex) => {
-      const angle = (Math.PI * pointIndex) / 24;
-      return new THREE.Vector3(
-        center.x + warehouseRoofRadius * Math.cos(angle),
-        warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * Math.sin(angle),
-        z,
-      );
-    });
-    const arch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 32, archTubeRadius, 8, false), steelMaterial);
-    arch.castShadow = true;
-    scene.add(arch);
-  }
-  // Longitudinal purlins tie the curved roof frames together like a standard
-  // steel portal-frame warehouse.
-  [0.2, 0.5, 0.8].forEach((ratio) => {
-    const angle = Math.PI * ratio;
-    const x = center.x + warehouseRoofRadius * Math.cos(angle);
-    const y = warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * Math.sin(angle);
-    const purlin = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, warehouseDepth, 8), steelMaterial);
-    purlin.rotation.x = Math.PI / 2;
-    purlin.position.set(x, y, center.z);
-    scene.add(purlin);
+  const halfWarehouseWidth = warehouseWidth / 2;
+  const halfWarehouseDepth = warehouseDepth / 2;
+  const roofEaveY = warehouseFloorY + warehouseWallHeight;
+  const roofRidgeY = roofEaveY + warehouseRoofRise;
+  const makeRoofPanel = (eaveX) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+      eaveX, roofEaveY, center.z - halfWarehouseDepth,
+      center.x, roofRidgeY, center.z - halfWarehouseDepth,
+      center.x, roofRidgeY, center.z + halfWarehouseDepth,
+      eaveX, roofEaveY, center.z + halfWarehouseDepth,
+    ], 3));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, roofMaterial);
+  };
+  [center.x - halfWarehouseWidth, center.x + halfWarehouseWidth].forEach((eaveX) => {
+    const roofPanel = makeRoofPanel(eaveX);
+    roofPanel.receiveShadow = true;
+    scene.add(roofPanel);
   });
+  // Close both gable ends with matching white metal sheet.
+  [-1, 1].forEach((side) => {
+    const endZ = center.z + side * halfWarehouseDepth;
+    const gable = new THREE.BufferGeometry();
+    gable.setAttribute('position', new THREE.Float32BufferAttribute([
+      center.x - halfWarehouseWidth, roofEaveY, endZ,
+      center.x + halfWarehouseWidth, roofEaveY, endZ,
+      center.x, roofRidgeY, endZ,
+    ], 3));
+    gable.setIndex([0, 1, 2]);
+    gable.computeVertexNormals();
+    scene.add(new THREE.Mesh(gable, roofMaterial));
+  });
+  const steelBetween = (from, to, radius = 0.065) => {
+    const direction = to.clone().sub(from);
+    const member = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, direction.length(), 8), steelMaterial);
+    member.position.copy(from).add(to).multiplyScalar(0.5);
+    member.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    member.castShadow = true;
+    scene.add(member);
+  };
+  // Steel portal frames support the shallow gable roof at regular bays.
+  const frameCount = Math.max(6, Math.ceil(warehouseDepth / 4));
+  for (let index = 0; index < frameCount; index += 1) {
+    const z = center.z - halfWarehouseDepth + (warehouseDepth * index) / (frameCount - 1);
+    const leftEave = new THREE.Vector3(center.x - halfWarehouseWidth, roofEaveY, z);
+    const ridge = new THREE.Vector3(center.x, roofRidgeY, z);
+    const rightEave = new THREE.Vector3(center.x + halfWarehouseWidth, roofEaveY, z);
+    steelBetween(leftEave, ridge);
+    steelBetween(ridge, rightEave);
+  }
+  // Longitudinal purlins tie portal frames together under the metal sheets.
+  [-1, 1].forEach((side) => [0.32, 0.68].forEach((ratio) => {
+    const x = center.x + side * halfWarehouseWidth * (1 - ratio);
+    const y = roofEaveY + warehouseRoofRise * ratio;
+    steelBetween(
+      new THREE.Vector3(x, y, center.z - halfWarehouseDepth),
+      new THREE.Vector3(x, y, center.z + halfWarehouseDepth),
+      0.042,
+    );
+  }));
   // Front roller shutter, set into the metal-sheet wall.
   const doorWidth = Math.min(4.2, warehouseWidth * 0.36);
   const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
@@ -853,7 +882,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   [-0.28, 0, 0.28].forEach((zRatio) => {
     const lightZ = center.z + warehouseDepth * zRatio;
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.18), lightMaterial);
-    fixture.position.set(center.x, warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * 0.76, lightZ);
+    fixture.position.set(center.x, roofRidgeY - 0.55, lightZ);
     scene.add(fixture);
     const light = new THREE.PointLight(0xe8f6ff, 16, Math.max(8, warehouseWidth * 0.8), 2);
     light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.12, 0));
@@ -915,9 +944,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
-  // Keep the orbit camera comfortably inside the enclosed building. This
-  // avoids clipping through a wall/roof when operators zoom out.
-  controls.maxDistance = Math.max(4.5, Math.min(warehouseWidth, warehouseDepth) / 2 - 0.85);
+  // Let users zoom out to inspect the much larger warehouse, while clamping
+  // the actual orbit position to its walls and shallow gable roof.
+  controls.maxDistance = Math.max(14, Math.min(warehouseWidth, warehouseDepth) * 0.72);
+  const keepCameraInsideWarehouse = () => {
+    const wallClearance = 0.38;
+    const xLimit = halfWarehouseWidth - wallClearance;
+    const zLimit = halfWarehouseDepth - wallClearance;
+    controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - xLimit * 0.68, center.x + xLimit * 0.68);
+    controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - zLimit * 0.68, center.z + zLimit * 0.68);
+    controls.target.y = THREE.MathUtils.clamp(controls.target.y, warehouseFloorY + 0.35, roofRidgeY - 0.7);
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, center.x - xLimit, center.x + xLimit);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, center.z - zLimit, center.z + zLimit);
+    const normalizedX = Math.abs(camera.position.x - center.x) / xLimit;
+    const roofY = roofEaveY + warehouseRoofRise * (1 - normalizedX);
+    camera.position.y = THREE.MathUtils.clamp(camera.position.y, warehouseFloorY + 0.35, roofY - wallClearance);
+  };
   const barcodeZoomDistance = Math.max(7, span * 1.15);
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
@@ -951,6 +993,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
   controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
   controls.update();
+  keepCameraInsideWarehouse();
   updateRackLabelMode();
   updateOccupancyOverlay();
   sun.position.set(center.x - span * 0.65, Math.max(16, span * 1.1), center.z + span * 0.55);
@@ -1101,6 +1144,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let lastFpsAt = performance.now();
   const animate = () => {
     controls.update();
+    keepCameraInsideWarehouse();
     updateRackLabelMode();
     updateOccupancyOverlay();
     if (hoverRing.visible) {
