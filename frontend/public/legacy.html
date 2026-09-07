@@ -8390,6 +8390,10 @@ $('#btnAddWh').onclick=function(){
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
   var gt=val('whGateType')||'both';
   if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ','ต้องมีรหัสและชื่อคลัง','err');
+  /* รหัสเป็น key สำหรับระบบ ส่วนชื่อคือข้อความที่พนักงานเห็นในทุกหน้าจอ
+     ห้ามปล่อยให้ทั้งสองค่าเท่ากัน เพราะตารางตำแหน่งจะเหลือแต่ WH-001 ซึ่ง
+     ไม่บอกความหมายของคลังจริงเลย. */
+  if(nm.trim().toLowerCase()===id.trim().toLowerCase())return fieldError('whName','กรุณาระบุชื่อคลังที่สื่อความหมาย เช่น คลังหลัก — บางปู');
   if(to<from)return fieldError('whGateTo','ประตูสิ้นสุดต้องมากกว่าหรือเท่ากับประตูเริ่ม');
   if(!editingWh&&S.warehouses[id])return toast('มีรหัสคลังนี้แล้ว',id,'err');
   /* #whId is readonly today (this rename path can't fire via the UI yet), but it was
