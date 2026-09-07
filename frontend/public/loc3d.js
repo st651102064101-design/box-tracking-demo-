@@ -454,7 +454,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  model.racks.forEach((rack) => {
+  model.racks.forEach((sourceRack) => {
+    // Zone B is the rear-facing row of the same rack block. Keep its DB
+    // position and dimensions, but turn the frame around so its back sits
+    // against Zone A instead of presenting the same face twice.
+    const rack = sourceRack.zone === 'B'
+      ? { ...sourceRack, rotationYDeg: num(sourceRack.rotationYDeg) + 180 }
+      : sourceRack;
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
     const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
