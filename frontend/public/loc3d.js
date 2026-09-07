@@ -306,9 +306,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   controls.minDistance = 0.28;
   controls.maxDistance = 260;
 
-  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.55));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
-  const sun = new THREE.DirectionalLight(0xfff3de, 3.15);
+  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.75));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.48));
+  const sun = new THREE.DirectionalLight(0xfff3de, 2.25);
   sun.position.set(-18, 28, 14);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -448,7 +448,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const localRotation = new THREE.Quaternion().setFromUnitVectors(up, delta.normalize());
       const partQuaternion = quaternion.clone().multiply(localRotation);
       const position = start.add(end).multiplyScalar(0.5).applyQuaternion(quaternion).add(base);
-      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.52, length, frame * 0.52), rack });
+      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.34, length, frame * 0.34), rack });
     };
     [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
       addPart(uprightParts, sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
@@ -460,9 +460,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
     const shelfLevels = [...shelfBottoms.entries()].sort((a, b) => a[1] - b[1]);
     shelfLevels.forEach(([, y]) => {
-      // Pale steel deck with yellow load beams front and rear, matching a
-      // real selective pallet rack rather than a single grey solid shelf.
-      addPart(deckParts, 0, y + 0.018, 0, width - frame * 1.4, 0.035, depth - frame * 1.4);
+      // Selective pallet racks expose their orange load beams; pallets rest
+      // on the beams instead of a continuous opaque white shelf.
       [-1, 1].forEach((sideZ) => addPart(beamParts, 0, y, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
     });
     [-1, 1].forEach((sideZ) => addPart(beamParts, 0, height - 0.04, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
@@ -547,13 +546,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
     return mesh;
   };
-  // Industrial palette from the reference: perforated-style dark uprights,
-  // safety yellow load beams, light shelf decks and dark X bracing.
+  // Industrial palette from the reference: blue uprights/bracing and orange
+  // load beams. No continuous white shelf deck is rendered.
   const rackPickMeshes = [
-    addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x202327, metalness: 0.82, roughness: 0.28 })),
-    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf2bf24, metalness: 0.62, roughness: 0.32 })),
-    addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xe7ebed, metalness: 0.3, roughness: 0.56 })),
-    addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x171a1e, metalness: 0.86, roughness: 0.25 })),
+    addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
+    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xe98218, metalness: 0.52, roughness: 0.34 })),
+    addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xd8dde0, metalness: 0.3, roughness: 0.56 })),
+    addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x1680d8, metalness: 0.7, roughness: 0.3 })),
   ].filter(Boolean);
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
@@ -849,8 +848,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Warehouse circulation details: yellow traffic lanes, a staging box,
   // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
   // These remain independent of rack geometry and of the optional forklift.
-  const safetyYellow = new THREE.MeshStandardMaterial({ color: 0xf2c62e, emissive: 0x3a2a00, emissiveIntensity: 0.18, roughness: 0.48 });
+  const safetyYellow = new THREE.MeshStandardMaterial({ color: 0xffd600, emissive: 0x594500, emissiveIntensity: 0.22, roughness: 0.42 });
   const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xf0bd22, metalness: 0.55, roughness: 0.35 });
+  const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
   const palletMaterial = new THREE.MeshStandardMaterial({ color: 0x9a6938, metalness: 0.05, roughness: 0.8 });
   const floorStrip = (x, z, width, depth, rotationY = 0) => {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(width, 0.022, depth), safetyYellow);
@@ -883,25 +883,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
   floorStrip(stagingCenter.x + stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
-  const arrowGeometry = new THREE.BufferGeometry();
-  arrowGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-    -0.6, 0.024, -0.8, 0.6, 0.024, -0.8, 0, 0.024, 0.8,
-  ], 3));
-  arrowGeometry.computeVertexNormals();
-  const arrow = new THREE.Mesh(arrowGeometry, safetyYellow);
-  arrow.position.set(stagingCenter.x, warehouseFloorY, stagingCenter.z);
-  scene.add(arrow);
-  // Guardrail at the staging edge: two rails, four posts and black/yellow
-  // protective foot plates, matching the reference warehouse safety layout.
-  const railZ = stagingCenter.z - stagingDepth / 2 - 0.28;
-  [0, stagingWidth / 2 - 0.18, -stagingWidth / 2 + 0.18].forEach((offset) => {
+  // Open triangular direction marker like the painted symbol in the photo.
+  floorStrip(center.x, aisleCenterZ - 0.56, 1.25, 0.1);
+  floorStrip(center.x - 0.31, aisleCenterZ, 1.25, 0.1, Math.PI / 3);
+  floorStrip(center.x + 0.31, aisleCenterZ, 1.25, 0.1, -Math.PI / 3);
+  // Guardrail belongs at the exposed rack end, clear of the staging box and
+  // vehicle aisle. Its posts carry alternating black impact bands.
+  const railX = center.x - rackBoundaryWidth / 2 - 0.22;
+  const railStartZ = center.z - rackBoundaryDepth / 2 - 0.35;
+  const railEndZ = center.z + rackBoundaryDepth / 2 + 0.35;
+  [railStartZ, (railStartZ + railEndZ) / 2, railEndZ].forEach((z) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
-    post.position.set(stagingCenter.x + offset, warehouseFloorY + 0.575, railZ);
+    post.position.set(railX, warehouseFloorY + 0.575, z);
     scene.add(post);
+    [0.2, 0.52, 0.84].forEach((height) => {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
+      band.position.set(railX, warehouseFloorY + height, z);
+      scene.add(band);
+    });
   });
   [0.62, 1.02].forEach((height) => steelBetween(
-    new THREE.Vector3(stagingCenter.x - stagingWidth / 2, warehouseFloorY + height, railZ),
-    new THREE.Vector3(stagingCenter.x + stagingWidth / 2, warehouseFloorY + height, railZ),
+    new THREE.Vector3(railX, warehouseFloorY + height, railStartZ),
+    new THREE.Vector3(railX, warehouseFloorY + height, railEndZ),
     0.045,
     guardrailMaterial,
   ));
@@ -910,12 +913,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const pallet = new THREE.Group();
   const palletX = stagingCenter.x - stagingWidth * 0.18;
   const palletZ = stagingCenter.z + stagingDepth * 0.08;
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 1.1), palletMaterial);
-  deck.position.set(palletX, warehouseFloorY + 0.09, palletZ);
-  pallet.add(deck);
+  for (let slatIndex = 0; slatIndex < 7; slatIndex += 1) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.105), palletMaterial);
+    slat.position.set(palletX, warehouseFloorY + 0.19, palletZ - 0.48 + slatIndex * 0.16);
+    pallet.add(slat);
+  }
   [-0.38, 0, 0.38].forEach((x) => {
-    const runner = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 1.05), palletMaterial);
-    runner.position.set(palletX + x, warehouseFloorY + 0.02, palletZ);
+    const runner = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 1.05), palletMaterial);
+    runner.position.set(palletX + x, warehouseFloorY + 0.08, palletZ);
     pallet.add(runner);
   });
   scene.add(pallet);
@@ -1331,14 +1336,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const areaWidth = Math.max(1.5, area.maxX - area.minX);
     const areaDepth = Math.max(1.5, area.maxZ - area.minZ);
     const areaCenter = new THREE.Vector3((area.minX + area.maxX) / 2, floor.position.y + 0.018, (area.minZ + area.maxZ) / 2);
-    const zoneColor = new THREE.Color().setHSL((0.28 + index * 0.16) % 1, 0.52, 0.34);
-    const zoneFloor = new THREE.Mesh(
-      new THREE.PlaneGeometry(areaWidth, areaDepth),
-      new THREE.MeshBasicMaterial({ color: zoneColor, transparent: true, opacity: 0.28, depthWrite: false }),
-    );
-    zoneFloor.rotation.x = -Math.PI / 2;
-    zoneFloor.position.copy(areaCenter);
-    scene.add(zoneFloor);
     const texture = floorMarkTexture(`${warehouseLabel} · โซน ${zone}`);
     floorMarkTextures.push(texture);
     const labelWidth = Math.min(areaWidth * 0.86, Math.max(1.25, areaDepth * 2.8));
@@ -1365,6 +1362,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
   const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.22;
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
@@ -1414,8 +1413,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
     slotMesh.instanceColor.needsUpdate = true;
   };
-  camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
-  controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
+  camera.position.set(center.x + span * 0.72, Math.max(5.6, size.y * 0.95), center.z + Math.min(warehouseDepth * 0.34, 6.2));
+  controls.target.set(center.x, Math.max(1.2, size.y * 0.46), center.z);
   controls.update();
   keepCameraInsideWarehouse();
   updateRackLabelMode();
@@ -1578,7 +1577,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const rawSize = rawBounds.getSize(new THREE.Vector3());
     // Normalize downloaded assets to a real warehouse forklift footprint,
     // without depending on the arbitrary authoring unit of the GLB file.
-    const scale = 3.8 / Math.max(rawSize.x, rawSize.z, 0.01);
+    const scale = 3.25 / Math.max(rawSize.x, rawSize.z, 0.01);
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
@@ -1591,11 +1590,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
     forkliftRoot.position.set(
-      center.x + halfWarehouseWidth - Math.max(4.2, scaledSize.x * 1.25),
+      center.x + rackBoundaryWidth * 0.31,
       warehouseFloorY + 0.012,
-      center.z + halfWarehouseDepth - Math.max(4.6, scaledSize.z * 1.25),
+      aisleCenterZ,
     );
-    forkliftRoot.rotation.y = -Math.PI * 0.32;
+    forkliftRoot.rotation.y = -Math.PI * 0.5;
     scene.add(forkliftRoot);
   }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
