@@ -15786,13 +15786,21 @@ function loadRoleBadge(){
   }).finally(function(){roleBadgeLoadBusy=false;});
 }
 function refreshStabBadges(){
+  /* Master Rack groups slot rows by warehouse + zone + rack.  Showing the
+     number of rows here would report slots and make the tab label misleading;
+     count unique physical racks instead. */
+  var rackKeys={};
+  Object.values(S.locations||{}).forEach(function(l){
+    if(!l||!(l.rack||'').trim())return;
+    rackKeys[(l.wh||'').trim()+'\u0000'+(l.zone||'').trim()+'\u0000'+l.rack.trim()]=true;
+  });
   var counts={btype:Object.keys(S.boxtypes||{}).length,wh:Object.keys(S.warehouses||{}).length,
     box:Object.keys(S.boxes||{}).length,cust:Object.keys(S.customers||{}).length,
-    emp:Object.keys(S.employees||{}).length,
+    emp:Object.keys(S.employees||{}).length,loc:Object.keys(rackKeys).length,
     /* บทบาทอยู่ฝั่งเซิร์ฟเวอร์ ไม่ได้อยู่ใน S — นับจากสิ่งที่โหลดมาแล้ว */
     role:(window.RBAC&&RBAC.roles?(RBAC.roles.length||RBAC.roleTotal||0):0),
     audit:(S.auditLog||[]).length};
-  var suffix={btype:' ประเภท',box:' กล่อง'};
+  var suffix={btype:' ประเภท',box:' กล่อง',loc:' แร็ค'};
   Object.keys(counts).forEach(function(k){
     var el=document.querySelector('[data-stab-badge="'+k+'"]');
     if(el)el.textContent=counts[k]?(nf(counts[k])+(suffix[k]||'')):'';
