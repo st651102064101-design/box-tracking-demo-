@@ -9,6 +9,7 @@ const CM_TO_M = 0.01;
 const THREE_VERSION = '0.184.0';
 const EMPTY_COLOR = new THREE.Color(0x78b928);
 const FULL_COLOR = new THREE.Color(0xd63d48);
+const OCCUPIED_COLOR = new THREE.Color(0xf59e0b);
 const HOVER_COLOR = new THREE.Color(0xffc857);
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 let activeController = null;
@@ -265,6 +266,25 @@ async function createScene(canvas, model, onSelect) {
   hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span><span class="loc3d-perf">กำลังวัด FPS…</span>`;
   stage.appendChild(hud);
 
+  // Keep the scene controls inside the 3D stage, so fullscreen expands only
+  // the warehouse view instead of the whole application shell.
+  const fullscreenButton = document.createElement('button');
+  fullscreenButton.type = 'button';
+  fullscreenButton.className = 'loc3d-fullscreen';
+  fullscreenButton.setAttribute('aria-label', 'ขยายมุมมอง 3D เต็มจอ');
+  fullscreenButton.title = 'เต็มจอ';
+  fullscreenButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M21 16v4a1 1 0 0 1-1 1h-4M3 16v4a1 1 0 0 0 1 1h4"/><path d="M8 8 3 3m13 5 5-5M8 16l-5 5m13-5 5 5"/></svg>';
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === stage) await document.exitFullscreen();
+      else await stage.requestFullscreen?.();
+    } catch (error) {
+      console.warn('[Warehouse3D] fullscreen unavailable', error);
+    }
+  };
+  fullscreenButton.addEventListener('click', toggleFullscreen);
+  stage.appendChild(fullscreenButton);
+
   const rackEntries = [];
   const slotEntries = [];
   const rackParts = [];
@@ -358,6 +378,14 @@ async function createScene(canvas, model, onSelect) {
     scene.add(rackMesh);
   }
 
+  const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
+  const slotState = (entry) => entry.slot.status === 'full'
+    ? 'full'
+    : occupiedSlotIds.has(String(entry.slot.id)) ? 'occupied' : 'empty';
+  const slotColor = (entry) => {
+    const state = slotState(entry);
+    return state === 'full' ? FULL_COLOR : state === 'occupied' ? OCCUPIED_COLOR : EMPTY_COLOR;
+  };
   const slotMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     transparent: true,
@@ -370,7 +398,7 @@ async function createScene(canvas, model, onSelect) {
   if (slotMesh) {
     slotEntries.forEach((entry, index) => {
       slotMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
-      slotMesh.setColorAt(index, entry.slot.status === 'full' ? FULL_COLOR : EMPTY_COLOR);
+      slotMesh.setColorAt(index, slotColor(entry));
     });
     slotMesh.instanceMatrix.needsUpdate = true;
     slotMesh.instanceColor.needsUpdate = true;
@@ -507,7 +535,7 @@ async function createScene(canvas, model, onSelect) {
   let hoverIndex = -1;
   let pointerFrame = 0;
   let down = null;
-  const baseColor = (index) => slotEntries[index]?.slot.status === 'full' ? FULL_COLOR : EMPTY_COLOR;
+  const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const updatePointer = (event) => {
     if (!slotMesh) return;
     const rect = canvas.getBoundingClientRect();
@@ -521,8 +549,9 @@ async function createScene(canvas, model, onSelect) {
     if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
       slotMesh.setColorAt(hoverIndex, HOVER_COLOR);
-      labelElement.textContent = entry.slot.status === 'full' ? 'เต็ม' : 'ว่าง';
-      labelElement.className = `loc3d-slot-label ${entry.slot.status === 'full' ? 'full' : 'empty'}`;
+      const state = slotState(entry);
+      labelElement.textContent = state === 'full' ? 'เต็ม' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+      labelElement.className = `loc3d-slot-label ${state}`;
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
@@ -600,6 +629,8 @@ async function createScene(canvas, model, onSelect) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
+      fullscreenButton.removeEventListener('click', toggleFullscreen);
+      fullscreenButton.remove();
       controls.dispose();
       assets.dispose();
       labelRenderer.domElement.remove();
