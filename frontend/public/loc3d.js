@@ -743,6 +743,113 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.position.set(center.x, Math.min(0, bounds.min.y) - 0.015, center.z);
   floor.receiveShadow = true;
   scene.add(floor);
+
+  // A new enclosed warehouse: white metal-sheet walls, a translucent
+  // half-round roof and black structural steel arches. The enclosure is much
+  // larger than the rack footprint, keeping the orbit camera inside the room.
+  const warehouseMargin = Math.max(5, Math.max(size.x, size.z, 5) * 1.35);
+  const warehouseWidth = size.x + warehouseMargin * 2;
+  const warehouseDepth = size.z + warehouseMargin * 2;
+  const warehouseWallHeight = Math.max(4.8, size.y + 2.35);
+  const warehouseRoofRadius = warehouseWidth / 2;
+  const warehouseFloorY = floor.position.y;
+  const warehouseCenterY = warehouseFloorY + warehouseWallHeight / 2;
+  const wallThickness = 0.12;
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xe9eef0, metalness: 0.68, roughness: 0.44, side: THREE.DoubleSide });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xe8f4f7, transparent: true, opacity: 0.34, metalness: 0.25, roughness: 0.3, side: THREE.DoubleSide, depthWrite: false });
+  const steelMaterial = new THREE.MeshStandardMaterial({ color: 0x171d22, metalness: 0.86, roughness: 0.25 });
+  const wallSpecs = [
+    [wallThickness, warehouseWallHeight, warehouseDepth, center.x - warehouseWidth / 2, warehouseCenterY, center.z],
+    [wallThickness, warehouseWallHeight, warehouseDepth, center.x + warehouseWidth / 2, warehouseCenterY, center.z],
+    [warehouseWidth, warehouseWallHeight, wallThickness, center.x, warehouseCenterY, center.z - warehouseDepth / 2],
+    [warehouseWidth, warehouseWallHeight, wallThickness, center.x, warehouseCenterY, center.z + warehouseDepth / 2],
+  ];
+  wallSpecs.forEach(([width, height, depth, x, y, z]) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMaterial);
+    wall.position.set(x, y, z);
+    wall.receiveShadow = true;
+    scene.add(wall);
+  });
+  // Corrugated metal-sheet seams make the enclosure read as a real new build.
+  const seamMaterial = new THREE.MeshStandardMaterial({ color: 0xb9c3c8, metalness: 0.72, roughness: 0.4 });
+  for (let x = center.x - warehouseWidth / 2 + 0.65; x < center.x + warehouseWidth / 2; x += 0.65) {
+    [-1, 1].forEach((side) => {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.022, warehouseWallHeight, 0.028), seamMaterial);
+      seam.position.set(x, warehouseCenterY, center.z + side * (warehouseDepth / 2 - 0.068));
+      scene.add(seam);
+    });
+  }
+  for (let z = center.z - warehouseDepth / 2 + 0.65; z < center.z + warehouseDepth / 2; z += 0.65) {
+    [-1, 1].forEach((side) => {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.028, warehouseWallHeight, 0.022), seamMaterial);
+      seam.position.set(center.x + side * (warehouseWidth / 2 - 0.068), warehouseCenterY, z);
+      scene.add(seam);
+    });
+  }
+  const roof = new THREE.Mesh(
+    new THREE.CylinderGeometry(warehouseRoofRadius, warehouseRoofRadius, warehouseDepth, 48, 1, true, 0, Math.PI),
+    roofMaterial,
+  );
+  roof.rotation.x = -Math.PI / 2;
+  roof.position.set(center.x, warehouseFloorY + warehouseWallHeight, center.z);
+  roof.renderOrder = -1;
+  scene.add(roof);
+  const archCount = Math.max(5, Math.ceil(warehouseDepth / 3));
+  const archTubeRadius = 0.06;
+  for (let index = 0; index < archCount; index += 1) {
+    const z = center.z - warehouseDepth / 2 + (warehouseDepth * index) / (archCount - 1);
+    const points = Array.from({ length: 25 }, (_, pointIndex) => {
+      const angle = (Math.PI * pointIndex) / 24;
+      return new THREE.Vector3(
+        center.x + warehouseRoofRadius * Math.cos(angle),
+        warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * Math.sin(angle),
+        z,
+      );
+    });
+    const arch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 32, archTubeRadius, 8, false), steelMaterial);
+    arch.castShadow = true;
+    scene.add(arch);
+  }
+  // Longitudinal purlins tie the curved roof frames together like a standard
+  // steel portal-frame warehouse.
+  [0.2, 0.48, 0.76].forEach((ratio) => {
+    const angle = Math.PI * ratio;
+    [-1, 1].forEach((side) => {
+      const x = center.x + side * warehouseRoofRadius * Math.cos(angle);
+      const y = warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * Math.sin(angle);
+      const purlin = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, warehouseDepth, 8), steelMaterial);
+      purlin.rotation.x = Math.PI / 2;
+      purlin.position.set(x, y, center.z);
+      scene.add(purlin);
+    });
+  });
+  // Front roller shutter, set into the metal-sheet wall.
+  const doorWidth = Math.min(4.2, warehouseWidth * 0.36);
+  const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
+  const door = new THREE.Mesh(
+    new THREE.PlaneGeometry(doorWidth, doorHeight),
+    new THREE.MeshStandardMaterial({ color: 0xd6dee2, metalness: 0.78, roughness: 0.3, side: THREE.DoubleSide }),
+  );
+  door.position.set(center.x, warehouseFloorY + doorHeight / 2 + 0.04, center.z + warehouseDepth / 2 - 0.075);
+  scene.add(door);
+  const doorLineMaterial = new THREE.LineBasicMaterial({ color: 0x8c979d });
+  for (let y = -doorHeight / 2 + 0.22; y < doorHeight / 2; y += 0.22) {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(center.x - doorWidth / 2, door.position.y + y, door.position.z + 0.006),
+      new THREE.Vector3(center.x + doorWidth / 2, door.position.y + y, door.position.z + 0.006),
+    ]), doorLineMaterial);
+    scene.add(line);
+  }
+  const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
+  [-0.28, 0, 0.28].forEach((zRatio) => {
+    const lightZ = center.z + warehouseDepth * zRatio;
+    const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.18), lightMaterial);
+    fixture.position.set(center.x, warehouseFloorY + warehouseWallHeight + warehouseRoofRadius * 0.76, lightZ);
+    scene.add(fixture);
+    const light = new THREE.PointLight(0xe8f6ff, 16, Math.max(8, warehouseWidth * 0.8), 2);
+    light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.12, 0));
+    scene.add(light);
+  });
   // Paint each Zone directly onto the floor. Text is a horizontal textured
   // plane (not CSS2D), so it belongs to the warehouse floor when orbiting.
   const floorMarkTextures = [];
@@ -799,6 +906,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
+  // Keep the orbit camera comfortably inside the enclosed building. This
+  // avoids clipping through a wall/roof when operators zoom out.
+  controls.maxDistance = Math.max(6, Math.min(warehouseWidth * 0.72, warehouseDepth * 0.72));
   const barcodeZoomDistance = Math.max(7, span * 1.15);
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
