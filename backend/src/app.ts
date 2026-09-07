@@ -25,6 +25,7 @@ import { notificationsRouter } from './routes/notifications.js';
 import { lineWebhookRouter } from './routes/lineWebhook.js';
 import { lineLinkRouter } from './routes/lineLink.js';
 import { devicesRouter } from './routes/devices.js';
+import { warehouse3dRouter } from './routes/warehouse3d.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -127,6 +128,7 @@ export function createApp() {
   app.use('/api/cycle-counts', cycleCountsRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/devices', devicesRouter);
+  app.use('/api/warehouse-3d', warehouse3dRouter);
   app.use('/api/notify-customer', notificationsRouter);
   app.use('/api/line/webhook', lineWebhookRouter);
   app.use('/api/line/link', lineLinkRouter);

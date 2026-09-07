@@ -308,7 +308,7 @@ cycleCountsRouter.post(
       };
       await db
         .update(boxes)
-        .set({ status: 'lost', history, data, updatedAt: ts })
+        .set({ status: 'lost', slotId: null, history, data, updatedAt: ts })
         .where(eq(boxes.tag, box.tag));
       await writeAuditLog(db, {
         action: 'ตีเป็นสูญหาย (ตรวจนับ)',

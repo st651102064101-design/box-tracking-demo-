@@ -267,6 +267,116 @@ CREATE TABLE IF NOT EXISTS locations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Physical warehouse geometry for the 3D rack view.  All persisted values are
+-- centimetres; the renderer converts them to metres at the API boundary
+-- (1 Three.js unit = 1 metre).  `locations` remains the operational/location
+-- master used by the legacy UI, while these two tables provide a normalized,
+-- queryable geometry model without changing the existing Putaway workflow.
+CREATE TABLE IF NOT EXISTS racks (
+  id                 TEXT PRIMARY KEY,
+  warehouse_id       TEXT NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+  zone               TEXT NOT NULL DEFAULT '',
+  code               TEXT NOT NULL,
+  position_x_cm      DOUBLE PRECISION NOT NULL DEFAULT 0,
+  position_y_cm      DOUBLE PRECISION NOT NULL DEFAULT 0,
+  position_z_cm      DOUBLE PRECISION NOT NULL DEFAULT 0,
+  rotation_y_deg     DOUBLE PRECISION NOT NULL DEFAULT 0,
+  width_cm           DOUBLE PRECISION NOT NULL DEFAULT 140,
+  height_cm          DOUBLE PRECISION NOT NULL DEFAULT 110,
+  depth_cm           DOUBLE PRECISION NOT NULL DEFAULT 110,
+  material_type      TEXT NOT NULL DEFAULT 'powder_coated_steel',
+  data               JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT racks_identity_unique UNIQUE (warehouse_id, zone, code),
+  CONSTRAINT racks_positive_dimensions CHECK (width_cm > 0 AND height_cm > 0 AND depth_cm > 0)
+);
+CREATE INDEX IF NOT EXISTS racks_warehouse_idx ON racks (warehouse_id, zone, code);
+
+CREATE TABLE IF NOT EXISTS slots (
+  id                 TEXT PRIMARY KEY,
+  rack_id            TEXT NOT NULL REFERENCES racks(id) ON DELETE CASCADE,
+  shelf_code         TEXT NOT NULL DEFAULT '',
+  slot_code          TEXT NOT NULL DEFAULT '',
+  local_x_cm         DOUBLE PRECISION NOT NULL DEFAULT 0,
+  local_y_cm         DOUBLE PRECISION NOT NULL DEFAULT 0,
+  local_z_cm         DOUBLE PRECISION NOT NULL DEFAULT 0,
+  width_cm           DOUBLE PRECISION NOT NULL DEFAULT 120,
+  height_cm          DOUBLE PRECISION NOT NULL DEFAULT 80,
+  depth_cm           DOUBLE PRECISION NOT NULL DEFAULT 100,
+  status             TEXT NOT NULL DEFAULT 'empty',
+  data               JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT slots_rack_position_unique UNIQUE (rack_id, shelf_code, slot_code),
+  CONSTRAINT slots_status_check CHECK (status IN ('empty', 'full')),
+  CONSTRAINT slots_positive_dimensions CHECK (width_cm > 0 AND height_cm > 0 AND depth_cm > 0)
+);
+CREATE INDEX IF NOT EXISTS slots_rack_idx ON slots (rack_id, shelf_code, slot_code);
+
+-- Existing Location Master rows receive deterministic real-scale defaults on
+-- first migration.  ON CONFLICT DO NOTHING is intentional: operator-adjusted
+-- coordinates and dimensions are never overwritten on a later restart.
+WITH rack_source AS (
+  SELECT
+    wh,
+    COALESCE(zone, '') AS zone,
+    rack,
+    COUNT(DISTINCT COALESCE(NULLIF(shelf, ''), '1'))::INTEGER AS shelf_count,
+    COUNT(DISTINCT COALESCE(NULLIF(slot, ''), '1'))::INTEGER AS slot_count,
+    ROW_NUMBER() OVER (PARTITION BY wh ORDER BY COALESCE(zone, ''), rack) - 1 AS rack_index
+  FROM locations
+  WHERE COALESCE(wh, '') <> '' AND COALESCE(rack, '') <> ''
+  GROUP BY wh, COALESCE(zone, ''), rack
+)
+INSERT INTO racks (
+  id, warehouse_id, zone, code,
+  position_x_cm, position_y_cm, position_z_cm, rotation_y_deg,
+  width_cm, height_cm, depth_cm
+)
+SELECT
+  CONCAT(wh, '::', zone, '::', rack), wh, zone, rack,
+  MOD(rack_index, 4) * 1000.0, 0,
+  FLOOR(rack_index / 4.0) * 600.0, 0,
+  GREATEST(slot_count * 120.0 + 20.0, 140.0),
+  GREATEST(shelf_count * 80.0 + 30.0, 110.0),
+  110.0
+FROM rack_source
+ON CONFLICT (id) DO NOTHING;
+
+WITH slot_source AS (
+  SELECT
+    l.*,
+    COALESCE(l.zone, '') AS normalized_zone,
+    DENSE_RANK() OVER (
+      PARTITION BY l.wh, COALESCE(l.zone, ''), l.rack
+      ORDER BY COALESCE(NULLIF(l.slot, ''), '1')
+    ) AS slot_index,
+    DENSE_RANK() OVER (
+      PARTITION BY l.wh, COALESCE(l.zone, ''), l.rack
+      ORDER BY COALESCE(NULLIF(l.shelf, ''), '1')
+    ) AS shelf_index,
+    COUNT(*) OVER (
+      PARTITION BY l.wh, COALESCE(l.zone, ''), l.rack, COALESCE(NULLIF(l.shelf, ''), '1')
+    ) AS slots_on_shelf
+  FROM locations l
+  WHERE COALESCE(l.wh, '') <> '' AND COALESCE(l.rack, '') <> ''
+)
+INSERT INTO slots (
+  id, rack_id, shelf_code, slot_code,
+  local_x_cm, local_y_cm, local_z_cm,
+  width_cm, height_cm, depth_cm, status
+)
+SELECT
+  code,
+  CONCAT(wh, '::', normalized_zone, '::', rack),
+  COALESCE(NULLIF(shelf, ''), '1'),
+  COALESCE(NULLIF(slot, ''), '1'),
+  (slot_index - (slots_on_shelf + 1) / 2.0) * 120.0,
+  10.0 + (shelf_index - 0.5) * 80.0,
+  0,
+  110.0, 70.0, 100.0, 'empty'
+FROM slot_source
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS employees (
   id                    TEXT PRIMARY KEY,
   name                  TEXT,
@@ -319,6 +429,11 @@ CREATE TABLE IF NOT EXISTS boxes (
   labeled      BOOLEAN NOT NULL DEFAULT false,
   rfid_tid     TEXT UNIQUE,
   rfid_epc     TEXT,
+  slot_id      TEXT REFERENCES slots(id) ON DELETE SET NULL,
+  width_cm     DOUBLE PRECISION NOT NULL DEFAULT 60,
+  height_cm    DOUBLE PRECISION NOT NULL DEFAULT 40,
+  depth_cm     DOUBLE PRECISION NOT NULL DEFAULT 40,
+  material_type TEXT NOT NULL DEFAULT 'generic',
   location     JSONB NOT NULL DEFAULT '{}'::jsonb,
   history      JSONB NOT NULL DEFAULT '[]'::jsonb,
   data         JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -331,12 +446,125 @@ CREATE INDEX IF NOT EXISTS boxes_due_idx      ON boxes (due_at);
 -- Additive migrations for databases created before RFID columns existed.
 ALTER TABLE boxes ADD COLUMN IF NOT EXISTS rfid_tid TEXT;
 ALTER TABLE boxes ADD COLUMN IF NOT EXISTS rfid_epc TEXT;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS slot_id TEXT REFERENCES slots(id) ON DELETE SET NULL;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS width_cm DOUBLE PRECISION NOT NULL DEFAULT 60;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS height_cm DOUBLE PRECISION NOT NULL DEFAULT 40;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS depth_cm DOUBLE PRECISION NOT NULL DEFAULT 40;
+ALTER TABLE boxes ADD COLUMN IF NOT EXISTS material_type TEXT NOT NULL DEFAULT 'generic';
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'boxes_rfid_tid_unique') THEN
     ALTER TABLE boxes ADD CONSTRAINT boxes_rfid_tid_unique UNIQUE (rfid_tid);
   END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS boxes_rfid_epc_idx ON boxes (rfid_epc);
+CREATE INDEX IF NOT EXISTS boxes_slot_idx ON boxes (slot_id);
+
+-- Resolve the normalized slot whenever an operational flow changes a box's
+-- legacy JSON location.  Gate-out/lost flows explicitly clear slot_id; a later
+-- Putaway/Gate-in with a real rack location resolves it here in one place.
+CREATE OR REPLACE FUNCTION boxtrace_resolve_box_slot()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(NEW.location->>'wh', '') = ''
+     OR COALESCE(NEW.location->>'rack', '') = ''
+     OR COALESCE(NEW.location->>'shelf', '') = ''
+     OR COALESCE(NEW.location->>'slot', '') = '' THEN
+    NEW.slot_id := NULL;
+  ELSE
+    SELECT s.id INTO NEW.slot_id
+    FROM slots s
+    JOIN racks r ON r.id = s.rack_id
+    WHERE r.warehouse_id = NEW.location->>'wh'
+      AND r.zone = COALESCE(NEW.location->>'zone', '')
+      AND r.code = NEW.location->>'rack'
+      AND s.shelf_code = NEW.location->>'shelf'
+      AND s.slot_code = NEW.location->>'slot'
+    LIMIT 1;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS boxes_resolve_slot_trigger ON boxes;
+CREATE TRIGGER boxes_resolve_slot_trigger
+BEFORE INSERT OR UPDATE OF location ON boxes
+FOR EACH ROW EXECUTE FUNCTION boxtrace_resolve_box_slot();
+
+CREATE OR REPLACE FUNCTION boxtrace_refresh_slot_status()
+RETURNS TRIGGER AS $$
+DECLARE
+  old_slot TEXT;
+  new_slot TEXT;
+BEGIN
+  old_slot := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.slot_id END;
+  new_slot := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE NEW.slot_id END;
+
+  IF old_slot IS NOT NULL THEN
+    UPDATE slots SET status = CASE WHEN EXISTS (
+      SELECT 1 FROM boxes b
+      WHERE b.slot_id = old_slot AND b.status IN ('warehouse', 'hold', 'damage')
+    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    WHERE id = old_slot;
+  END IF;
+  IF new_slot IS NOT NULL AND new_slot IS DISTINCT FROM old_slot THEN
+    UPDATE slots SET status = CASE WHEN EXISTS (
+      SELECT 1 FROM boxes b
+      WHERE b.slot_id = new_slot AND b.status IN ('warehouse', 'hold', 'damage')
+    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    WHERE id = new_slot;
+  ELSIF new_slot IS NOT NULL THEN
+    UPDATE slots SET status = CASE WHEN EXISTS (
+      SELECT 1 FROM boxes b
+      WHERE b.slot_id = new_slot AND b.status IN ('warehouse', 'hold', 'damage')
+    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    WHERE id = new_slot;
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS boxes_slot_status_trigger ON boxes;
+CREATE TRIGGER boxes_slot_status_trigger
+AFTER INSERT OR DELETE OR UPDATE OF slot_id, status ON boxes
+FOR EACH ROW EXECUTE FUNCTION boxtrace_refresh_slot_status();
+
+-- One-time/backward-compatible enrichment of existing boxes from Box Type
+-- dimensions.  Explicit per-box dimensions stored in JSON always win.
+UPDATE boxes b
+SET
+  width_cm = SPLIT_PART(REPLACE(REPLACE(LOWER(bt.dim), '×', 'x'), '*', 'x'), 'x', 1)::DOUBLE PRECISION,
+  depth_cm = SPLIT_PART(REPLACE(REPLACE(LOWER(bt.dim), '×', 'x'), '*', 'x'), 'x', 2)::DOUBLE PRECISION,
+  height_cm = SPLIT_PART(REPLACE(REPLACE(LOWER(bt.dim), '×', 'x'), '*', 'x'), 'x', 3)::DOUBLE PRECISION,
+  material_type = CASE
+    WHEN COALESCE(bt.name, '') ILIKE '%กระดาษ%' OR COALESCE(bt.name, '') ILIKE '%carton%' THEN 'carton'
+    WHEN COALESCE(bt.name, '') ILIKE '%พลาสติก%' OR COALESCE(bt.name, '') ILIKE '%plastic%' THEN 'plastic_crate'
+    WHEN COALESCE(bt.name, '') ILIKE '%โลหะ%' OR COALESCE(bt.name, '') ILIKE '%metal%' THEN 'metal_box'
+    ELSE b.material_type
+  END
+FROM box_types bt
+WHERE b.type = bt.id
+  AND COALESCE(bt.dim, '') ~ '^[[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*[xX×*][[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*[xX×*][[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*$'
+  AND b.width_cm = 60
+  AND b.height_cm = 40
+  AND b.depth_cm = 40
+  AND b.material_type = 'generic'
+  AND NOT (b.data ? 'widthCm')
+  AND NOT (b.data ? 'dimensionsCm');
+
+UPDATE boxes b
+SET slot_id = l.code
+FROM locations l
+WHERE b.slot_id IS NULL
+  AND COALESCE(b.location->>'wh', '') = COALESCE(l.wh, '')
+  AND COALESCE(b.location->>'zone', '') = COALESCE(l.zone, '')
+  AND COALESCE(b.location->>'rack', '') = COALESCE(l.rack, '')
+  AND COALESCE(b.location->>'shelf', '') = COALESCE(l.shelf, '')
+  AND COALESCE(b.location->>'slot', '') = COALESCE(l.slot, '')
+  AND COALESCE(l.rack, '') <> '';
+
+UPDATE slots s
+SET status = CASE WHEN EXISTS (
+  SELECT 1 FROM boxes b
+  WHERE b.slot_id = s.id AND b.status IN ('warehouse', 'hold', 'damage')
+) THEN 'full' ELSE 'empty' END;
 
 CREATE TABLE IF NOT EXISTS vehicles (
   id         TEXT PRIMARY KEY,
