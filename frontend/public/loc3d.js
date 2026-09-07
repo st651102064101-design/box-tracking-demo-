@@ -1010,61 +1010,45 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         louvreFrameMaterial,
       );
     }
-    [0.31, 0.61, 0.83].forEach((ratio) => steelBetween(
+    // The reference has clean horizontal girts, not a large X across the
+    // cladding. Keep the lower panel joint and two upper structural rails.
+    [0.31, 0.56, 0.78].forEach((ratio) => steelBetween(
       new THREE.Vector3(center.x - halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, innerZ),
       new THREE.Vector3(center.x + halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, innerZ),
       0.038,
       louvreFrameMaterial,
     ));
-    // A bank of louvres fills the otherwise blank gable elevation while
-    // retaining solid cladding around it and leaving the floor clear of doors.
-    const endLouvreWidth = Math.min(5.2, warehouseWidth * 0.19);
-    const endLouvreHeight = Math.min(1.85, warehouseWallHeight * 0.2);
-    const endLouvreY = warehouseFloorY + lowerWallHeight + 0.5;
-    [-1, 0, 1].forEach((position) => {
-      const x = center.x + position * endLouvreWidth * 1.28;
-      steelBetween(
-        new THREE.Vector3(x - endLouvreWidth / 2, endLouvreY, innerZ),
-        new THREE.Vector3(x + endLouvreWidth / 2, endLouvreY, innerZ),
-        0.04,
-        louvreFrameMaterial,
-      );
-      steelBetween(
-        new THREE.Vector3(x - endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
-        new THREE.Vector3(x + endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
-        0.04,
-        louvreFrameMaterial,
-      );
-      [x - endLouvreWidth / 2, x + endLouvreWidth / 2].forEach((edgeX) => steelBetween(
-        new THREE.Vector3(edgeX, endLouvreY, innerZ),
-        new THREE.Vector3(edgeX, endLouvreY + endLouvreHeight, innerZ),
-        0.04,
-        louvreFrameMaterial,
-      ));
-      for (let slatIndex = 0; slatIndex < 7; slatIndex += 1) {
-        const slatY = endLouvreY + 0.15 + slatIndex * ((endLouvreHeight - 0.28) / 6);
-        const endLouvreSlat = new THREE.Mesh(new THREE.BoxGeometry(endLouvreWidth - 0.08, 0.07, 0.09), louvreMaterial);
-        endLouvreSlat.position.set(x, slatY, innerZ + side * 0.02);
-        endLouvreSlat.rotation.z = -0.16;
-        scene.add(endLouvreSlat);
-      }
-    });
-    // Upper X bracing mirrors the cross-bracing visible on the factory wall.
-    [-1, 1].forEach((half) => {
-      const startX = center.x + half * halfWarehouseWidth * 0.92;
-      steelBetween(
-        new THREE.Vector3(startX, warehouseFloorY + warehouseWallHeight * 0.58, innerZ),
-        new THREE.Vector3(center.x, roofEaveY - 0.22, innerZ),
-        0.026,
-        louvreFrameMaterial,
-      );
-      steelBetween(
-        new THREE.Vector3(startX, roofEaveY - 0.22, innerZ),
-        new THREE.Vector3(center.x, warehouseFloorY + warehouseWallHeight * 0.58, innerZ),
-        0.026,
-        louvreFrameMaterial,
-      );
-    });
+    // Match the photo: one long louvre bank at the right-hand bays, rather
+    // than several small vents distributed across the elevation.
+    const endLouvreWidth = Math.min(10.4, warehouseWidth * 0.38);
+    const endLouvreHeight = Math.min(1.62, warehouseWallHeight * 0.17);
+    const endLouvreY = warehouseFloorY + lowerWallHeight + 0.64;
+    const endLouvreX = center.x + warehouseWidth * 0.2;
+    steelBetween(
+      new THREE.Vector3(endLouvreX - endLouvreWidth / 2, endLouvreY, innerZ),
+      new THREE.Vector3(endLouvreX + endLouvreWidth / 2, endLouvreY, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    );
+    steelBetween(
+      new THREE.Vector3(endLouvreX - endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
+      new THREE.Vector3(endLouvreX + endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    );
+    [endLouvreX - endLouvreWidth / 2, endLouvreX + endLouvreWidth / 2].forEach((edgeX) => steelBetween(
+      new THREE.Vector3(edgeX, endLouvreY, innerZ),
+      new THREE.Vector3(edgeX, endLouvreY + endLouvreHeight, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    ));
+    for (let slatIndex = 0; slatIndex < 11; slatIndex += 1) {
+      const slatY = endLouvreY + 0.12 + slatIndex * ((endLouvreHeight - 0.24) / 10);
+      const endLouvreSlat = new THREE.Mesh(new THREE.BoxGeometry(endLouvreWidth - 0.1, 0.065, 0.1), louvreMaterial);
+      endLouvreSlat.position.set(endLouvreX, slatY, innerZ + side * 0.02);
+      endLouvreSlat.rotation.z = -0.13;
+      scene.add(endLouvreSlat);
+    }
   });
   // Lower wall band, cable trays, bay numbers, wall lights and electrical
   // boxes complete the service-wall rhythm from the reference.
