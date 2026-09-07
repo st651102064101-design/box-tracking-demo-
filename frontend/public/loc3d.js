@@ -761,8 +761,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.geometry = new THREE.PlaneGeometry(warehouseWidth + 1.5, warehouseDepth + 1.5);
   floorTexture.repeat.set(Math.max(2, (warehouseWidth + 1.5) / 2), Math.max(2, (warehouseDepth + 1.5) / 2));
   const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf3f6f7, metalness: 0.68, roughness: 0.36, side: THREE.DoubleSide });
-  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xf6fbfd, metalness: 0.62, roughness: 0.32, side: THREE.DoubleSide });
-  const steelMaterial = new THREE.MeshStandardMaterial({ color: 0x171d22, metalness: 0.86, roughness: 0.25 });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x56636b, metalness: 0.72, roughness: 0.42, side: THREE.DoubleSide });
+  const trussMaterial = new THREE.MeshStandardMaterial({ color: 0x252f35, metalness: 0.88, roughness: 0.24 });
+  const sprinklerPipeMaterial = new THREE.MeshStandardMaterial({ color: 0xbd2730, metalness: 0.5, roughness: 0.32 });
   const wallSpecs = [
     [wallThickness, warehouseWallHeight, warehouseDepth, center.x - warehouseWidth / 2, warehouseCenterY, center.z],
     [wallThickness, warehouseWallHeight, warehouseDepth, center.x + warehouseWidth / 2, warehouseCenterY, center.z],
@@ -834,9 +835,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     gable.computeVertexNormals();
     scene.add(new THREE.Mesh(gable, roofMaterial));
   });
-  const steelBetween = (from, to, radius = 0.065) => {
+  const steelBetween = (from, to, radius = 0.065, material = trussMaterial) => {
     const direction = to.clone().sub(from);
-    const member = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, direction.length(), 8), steelMaterial);
+    const member = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, direction.length(), 8), material);
     member.position.copy(from).add(to).multiplyScalar(0.5);
     member.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
     // Roof members should read structurally, but their repeated shadow grid
@@ -878,6 +879,41 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       0.042,
     );
   }));
+  // Ridge and eave purlins give the roof the repeated longitudinal members
+  // visible in a real metal-sheet warehouse.
+  steelBetween(
+    new THREE.Vector3(center.x, roofRidgeY, center.z - halfWarehouseDepth),
+    new THREE.Vector3(center.x, roofRidgeY, center.z + halfWarehouseDepth),
+    0.05,
+  );
+  [-1, 1].forEach((side) => steelBetween(
+    new THREE.Vector3(center.x + side * halfWarehouseWidth, roofEaveY, center.z - halfWarehouseDepth),
+    new THREE.Vector3(center.x + side * halfWarehouseWidth, roofEaveY, center.z + halfWarehouseDepth),
+    0.045,
+  ));
+  // Fire-sprinkler mains run beneath the trusses. Heads are placed directly
+  // below the visible red pipe instead of floating independently in space.
+  const sprinklerHeadMaterial = new THREE.MeshStandardMaterial({ color: 0xc8d0d4, metalness: 0.82, roughness: 0.2 });
+  [-0.56, 0, 0.56].forEach((xRatio) => {
+    const pipeX = center.x + halfWarehouseWidth * xRatio;
+    const pipeY = roofRidgeY - 0.42 - Math.abs(xRatio) * 0.28;
+    steelBetween(
+      new THREE.Vector3(pipeX, pipeY, center.z - halfWarehouseDepth + 0.4),
+      new THREE.Vector3(pipeX, pipeY, center.z + halfWarehouseDepth - 0.4),
+      0.035,
+      sprinklerPipeMaterial,
+    );
+    for (let index = 1; index < frameCount; index += 1) {
+      const headZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / frameCount;
+      const dropStart = new THREE.Vector3(pipeX, pipeY, headZ);
+      const dropEnd = dropStart.clone().add(new THREE.Vector3(0, -0.18, 0));
+      steelBetween(dropStart, dropEnd, 0.018, sprinklerPipeMaterial);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.09, 8), sprinklerHeadMaterial);
+      head.position.copy(dropEnd).add(new THREE.Vector3(0, -0.05, 0));
+      head.rotation.x = Math.PI;
+      scene.add(head);
+    }
+  });
   // Front roller shutter, set into the metal-sheet wall.
   const doorWidth = Math.min(4.2, warehouseWidth * 0.36);
   const doorHeight = Math.min(3.6, warehouseWallHeight * 0.68);
@@ -897,8 +933,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   }
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
   const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf0fbff, emissiveIntensity: 3.5, roughness: 0.2 });
-  [-0.28, 0, 0.28].forEach((zRatio) => {
-    const lightZ = center.z + warehouseDepth * zRatio;
+  const fixtureCount = Math.max(5, Math.ceil(warehouseDepth / 5));
+  for (let index = 1; index < fixtureCount; index += 1) {
+    const lightZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / fixtureCount;
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.18), lightMaterial);
     fixture.position.set(center.x, roofRidgeY - 0.55, lightZ);
     scene.add(fixture);
@@ -909,7 +946,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const light = new THREE.PointLight(0xe8f6ff, 16, Math.max(8, warehouseWidth * 0.8), 2);
     light.position.copy(bulb.position);
     scene.add(light);
-  });
+  }
   // Paint each Zone directly onto the floor. Text is a horizontal textured
   // plane (not CSS2D), so it belongs to the warehouse floor when orbiting.
   const floorMarkTextures = [];
