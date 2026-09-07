@@ -295,7 +295,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   if (renderer.init) await renderer.init();
 
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 1000);
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.02, 1000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
@@ -425,6 +425,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const beamParts = [];
   const deckParts = [];
   const braceParts = [];
+  const basePlateParts = [];
   const bounds = new THREE.Box3();
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
@@ -450,21 +451,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const position = start.add(end).multiplyScalar(0.5).applyQuaternion(quaternion).add(base);
       braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.34, length, frame * 0.34), rack });
     };
-    [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
-      addPart(uprightParts, sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
-    }));
     const shelfBottoms = new Map();
     (rack.slots || []).forEach((slot) => {
       const y = num(slot.localPositionCm?.y) - positive(slot.dimensionsCm?.height, 70) / 2;
       shelfBottoms.set(String(slot.shelfCode), y * CM_TO_M);
     });
     const shelfLevels = [...shelfBottoms.entries()].sort((a, b) => a[1] - b[1]);
-    shelfLevels.forEach(([, y]) => {
-      // Selective pallet racks expose their orange load beams; pallets rest
-      // on the beams instead of a continuous opaque white shelf.
-      [-1, 1].forEach((sideZ) => addPart(beamParts, 0, y, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
-    });
-    [-1, 1].forEach((sideZ) => addPart(beamParts, 0, height - 0.04, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
     // Uprights between bins are structural steel, not decoration. Generate a
     // divider for every adjacent pair on each shelf so the real rack layout is
     // legible even when translucent slot volumes overlap.
@@ -475,33 +467,32 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       list.push(slot);
       shelfSlots.set(key, list);
     });
-    shelfSlots.forEach((items, shelfCode) => {
-      items.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
-      const levelIndex = shelfLevels.findIndex(([code]) => code === shelfCode);
-      const floorY = shelfLevels[levelIndex]?.[1] ?? 0;
-      const nextFloorY = levelIndex >= 0 && levelIndex < shelfLevels.length - 1
-        ? shelfLevels[levelIndex + 1][1]
-        : height - 0.04;
-      const dividerBottom = floorY + 0.0375;
-      const dividerTop = Math.max(dividerBottom + 0.03, nextFloorY - 0.04);
-      for (let index = 1; index < items.length; index += 1) {
-        const left = items[index - 1];
-        const right = items[index];
-        const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
-        // Inner bay separators use the same X cross bracing as the end frames,
-        // rather than a solid black partition that blocks the rack interior.
-        const braceZ = Math.max(0.03, (depth - frame) / 2);
-        addBrace(dividerX, dividerBottom, -braceZ, dividerX, dividerTop, braceZ);
-        addBrace(dividerX, dividerBottom, braceZ, dividerX, dividerTop, -braceZ);
+    const widestShelf = [...shelfSlots.values()].sort((a, b) => b.length - a.length)[0] || [];
+    widestShelf.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
+    // Each DB slot column is one selective-rack bay. Deriving every frame from
+    // those columns keeps the 2.7 m bays accurate without inventing inventory.
+    const frameXs = [-(width - frame) / 2];
+    for (let index = 1; index < widestShelf.length; index += 1) {
+      frameXs.push((num(widestShelf[index - 1].localPositionCm?.x) + num(widestShelf[index].localPositionCm?.x)) * CM_TO_M / 2);
+    }
+    frameXs.push((width - frame) / 2);
+    const uniqueFrameXs = [...new Set(frameXs.map((x) => x.toFixed(4)))].map(Number).sort((a, b) => a - b);
+    uniqueFrameXs.forEach((x) => [-1, 1].forEach((sideZ) => {
+      addPart(uprightParts, x, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
+      addPart(basePlateParts, x, 0.025, sideZ * (depth - frame) / 2, frame * 2.3, 0.05, frame * 2.3);
+    }));
+    const beamLevels = shelfLevels.map(([, y]) => y).concat([height - 0.04]);
+    beamLevels.forEach((y) => {
+      for (let index = 0; index < uniqueFrameXs.length - 1; index += 1) {
+        const left = uniqueFrameXs[index], right = uniqueFrameXs[index + 1];
+        [-1, 1].forEach((sideZ) => addPart(beamParts, (left + right) / 2, y, sideZ * (depth - frame) / 2, right - left, 0.105, frame * 1.28));
       }
     });
-    // Black cross bracing on both end frames. It is structural, not merely a
-    // decoration, and keeps the visual language aligned with pallet racks.
+    // Braces sit in every depth frame, leaving each bay front unobstructed.
     const braceLevels = shelfLevels.map(([, y]) => y).concat([height - 0.04]);
     for (let index = 0; index < braceLevels.length - 1; index += 1) {
       const low = braceLevels[index] + 0.07, high = braceLevels[index + 1] - 0.07;
-      [-1, 1].forEach((sideX) => {
-        const x = sideX * (width - frame) / 2;
+      uniqueFrameXs.forEach((x) => {
         const z = (depth - frame) / 2;
         addBrace(x, low, -z, x, high, z);
         addBrace(x, low, z, x, high, -z);
@@ -550,9 +541,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // load beams. No continuous white shelf deck is rendered.
   const rackPickMeshes = [
     addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
-    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xe98218, metalness: 0.52, roughness: 0.34 })),
+    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf28a12, metalness: 0.45, roughness: 0.38 })),
     addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xd8dde0, metalness: 0.3, roughness: 0.56 })),
     addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x1680d8, metalness: 0.7, roughness: 0.3 })),
+    addRackBatch(basePlateParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
   ].filter(Boolean);
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
@@ -598,7 +590,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelTextures.push(texture);
       // Shelf-edge ticket: intentionally smaller than the box opening (and a
       // typical tote), like a 7-Eleven price label rather than a hanging sign.
-      const width = Math.min(0.42, Math.max(0.24, entry.scale.x * 0.38));
+      const width = Math.min(0.3, Math.max(0.2, entry.scale.x * 0.12));
       const height = Math.min(0.09, width / 4.7);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
@@ -649,7 +641,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const position = worldPoint(
       slotEntry.rack,
       slotEntry.slot.localPositionCm?.x,
-      slotBottomCm + height / CM_TO_M / 2,
+      slotBottomCm + 16 + height / CM_TO_M / 2,
       slotEntry.slot.localPositionCm?.z,
     );
     const oversized = width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z;
@@ -676,6 +668,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
   }
+  // A real stored carton sits on a pallet; generate these one-to-one from DB
+  // boxes so the scene never implies inventory that does not exist.
+  const boxPalletParts = [];
+  boxEntries.forEach((entry) => {
+    const palletWidth = Math.min(entry.slotEntry.scale.x * 0.88, Math.max(0.8, entry.scale.x + 0.16));
+    const palletDepth = Math.min(entry.slotEntry.scale.z * 0.9, Math.max(0.7, entry.scale.z + 0.16));
+    const palletCenter = entry.position.clone();
+    palletCenter.y -= entry.scale.y / 2 + 0.085;
+    for (let index = 0; index < 7; index += 1) {
+      const local = new THREE.Vector3(0, 0.055, -palletDepth / 2 + (index + 0.5) * palletDepth / 7).applyQuaternion(entry.quaternion);
+      boxPalletParts.push({ position: palletCenter.clone().add(local), quaternion: entry.quaternion, scale: new THREE.Vector3(palletWidth, 0.07, palletDepth / 9), rack: entry.slotEntry.rack });
+    }
+    [-0.34, 0, 0.34].forEach((ratio) => {
+      const local = new THREE.Vector3(palletWidth * ratio, -0.015, 0).applyQuaternion(entry.quaternion);
+      boxPalletParts.push({ position: palletCenter.clone().add(local), quaternion: entry.quaternion, scale: new THREE.Vector3(0.11, 0.1, palletDepth), rack: entry.slotEntry.rack });
+    });
+  });
+  addRackBatch(boxPalletParts, new THREE.MeshStandardMaterial({ color: 0xa77642, roughness: 0.82, metalness: 0.02 }));
   // GTA-style selection marker: one reusable animated ring (not one mesh per
   // box), keeping the hover interaction constant-cost even with many boxes.
   const hoverRingMaterial = new THREE.MeshBasicMaterial({
@@ -848,8 +858,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Warehouse circulation details: yellow traffic lanes, a staging box,
   // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
   // These remain independent of rack geometry and of the optional forklift.
-  const safetyYellow = new THREE.MeshStandardMaterial({ color: 0xffd600, emissive: 0x594500, emissiveIntensity: 0.22, roughness: 0.42 });
-  const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xf0bd22, metalness: 0.55, roughness: 0.35 });
+  const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffd400, toneMapped: false });
+  const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0x392b00, emissiveIntensity: 0.18, metalness: 0.48, roughness: 0.38 });
   const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
   const palletMaterial = new THREE.MeshStandardMaterial({ color: 0x9a6938, metalness: 0.05, roughness: 0.8 });
   const floorStrip = (x, z, width, depth, rotationY = 0) => {
@@ -875,30 +885,45 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const x = center.x - aisleLength / 2 + 0.55 + index * ((aisleLength - 1.1) / 11);
     floorStrip(x, aisleCenterZ, 0.72, 0.075);
   }
-  // A rectangular keep-clear/staging zone beside the forklift aisle.
-  const stagingCenter = new THREE.Vector3(center.x - rackBoundaryWidth * 0.27, warehouseFloorY + 0.025, aisleCenterZ);
-  const stagingWidth = Math.min(4.8, rackBoundaryWidth * 0.32);
-  const stagingDepth = 2.65;
+  // A compact staging bay at the aisle end, clear of the travel centreline.
+  const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
+  const stagingDepth = 2.25;
+  const stagingCenter = new THREE.Vector3(center.x - aisleLength / 2 + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
   floorStrip(stagingCenter.x, stagingCenter.z - stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x, stagingCenter.z + stagingDepth / 2, stagingWidth, 0.09);
   floorStrip(stagingCenter.x - stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
   floorStrip(stagingCenter.x + stagingWidth / 2, stagingCenter.z, 0.09, stagingDepth);
   // Open triangular direction marker like the painted symbol in the photo.
-  floorStrip(center.x, aisleCenterZ - 0.56, 1.25, 0.1);
-  floorStrip(center.x - 0.31, aisleCenterZ, 1.25, 0.1, Math.PI / 3);
-  floorStrip(center.x + 0.31, aisleCenterZ, 1.25, 0.1, -Math.PI / 3);
+  const floorSegment = (x1, z1, x2, z2) => {
+    const dx = x2 - x1, dz = z2 - z1;
+    return floorStrip((x1 + x2) / 2, (z1 + z2) / 2, Math.hypot(dx, dz), 0.1, -Math.atan2(dz, dx));
+  };
+  const arrowX = center.x + aisleLength * 0.08;
+  const arrowTipZ = aisleCenterZ + 0.72;
+  const arrowBaseZ = aisleCenterZ - 0.52;
+  floorSegment(arrowX, arrowTipZ, arrowX - 0.68, arrowBaseZ);
+  floorSegment(arrowX - 0.68, arrowBaseZ, arrowX + 0.68, arrowBaseZ);
+  floorSegment(arrowX + 0.68, arrowBaseZ, arrowX, arrowTipZ);
   // Guardrail belongs at the exposed rack end, clear of the staging box and
   // vehicle aisle. Its posts carry alternating black impact bands.
-  const railX = center.x - rackBoundaryWidth / 2 - 0.22;
+  const railX = center.x - rackBoundaryWidth / 2 - 0.28;
   const railStartZ = center.z - rackBoundaryDepth / 2 - 0.35;
   const railEndZ = center.z + rackBoundaryDepth / 2 + 0.35;
-  [railStartZ, (railStartZ + railEndZ) / 2, railEndZ].forEach((z) => {
+  const guardPosts = [
+    [railX - 0.65, railStartZ], [railX, railStartZ],
+    [railX, (railStartZ + railEndZ) / 2],
+    [railX, railEndZ], [railX - 0.65, railEndZ],
+  ];
+  guardPosts.forEach(([x, z]) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
-    post.position.set(railX, warehouseFloorY + 0.575, z);
+    post.position.set(x, warehouseFloorY + 0.575, z);
     scene.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
+    foot.position.set(x, warehouseFloorY + 0.018, z);
+    scene.add(foot);
     [0.2, 0.52, 0.84].forEach((height) => {
       const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
-      band.position.set(railX, warehouseFloorY + height, z);
+      band.position.set(x, warehouseFloorY + height, z);
       scene.add(band);
     });
   });
@@ -908,11 +933,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   ));
+  [railStartZ, railEndZ].forEach((z) => [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(railX - 0.65, warehouseFloorY + height, z),
+    new THREE.Vector3(railX, warehouseFloorY + height, z),
+    0.045,
+    guardrailMaterial,
+  )));
   // One empty timber pallet in the staging area; stored cartons remain driven
   // by the database and are not duplicated by this visual prop.
   const pallet = new THREE.Group();
-  const palletX = stagingCenter.x - stagingWidth * 0.18;
-  const palletZ = stagingCenter.z + stagingDepth * 0.08;
+  const palletX = stagingCenter.x;
+  const palletZ = stagingCenter.z;
   for (let slatIndex = 0; slatIndex < 7; slatIndex += 1) {
     const slat = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.105), palletMaterial);
     slat.position.set(palletX, warehouseFloorY + 0.19, palletZ - 0.48 + slatIndex * 0.16);
@@ -1363,13 +1394,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
   grid.material.transparent = true;
-  grid.material.opacity = 0.22;
+  grid.material.opacity = 0.11;
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
   // Let users zoom out to inspect the much larger warehouse, while clamping
   // the actual orbit position to its walls and shallow gable roof.
-  controls.maxDistance = Math.max(14, Math.min(warehouseWidth, warehouseDepth) * 0.72);
+  controls.maxDistance = Math.max(18, Math.min(warehouseWidth, warehouseDepth) * 0.9);
   const keepCameraInsideWarehouse = () => {
     const wallClearance = 0.38;
     const xLimit = halfWarehouseWidth - wallClearance;
@@ -1413,8 +1444,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
     slotMesh.instanceColor.needsUpdate = true;
   };
-  camera.position.set(center.x + span * 0.72, Math.max(5.6, size.y * 0.95), center.z + Math.min(warehouseDepth * 0.34, 6.2));
-  controls.target.set(center.x, Math.max(1.2, size.y * 0.46), center.z);
+  camera.position.set(center.x + span * 0.82, Math.max(5.8, size.y * 0.82), center.z + Math.min(warehouseDepth * 0.4, 7.4));
+  controls.target.set(center.x, Math.max(1.2, size.y * 0.4), center.z);
   controls.update();
   keepCameraInsideWarehouse();
   updateRackLabelMode();
@@ -1590,7 +1621,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
     forkliftRoot.position.set(
-      center.x + rackBoundaryWidth * 0.31,
+      center.x + rackBoundaryWidth * 0.34,
       warehouseFloorY + 0.012,
       aisleCenterZ,
     );
@@ -1617,7 +1648,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const now = performance.now();
     if (now - lastFpsAt >= 1000) {
       const fps = Math.round(frames * 1000 / (now - lastFpsAt));
-      if (perf) perf.textContent = `${fps} FPS · ${renderer.info.render.calls} draw calls`;
+      // WebGPU accumulates this counter until info.reset(); WebGL normally
+      // resets it every frame. Normalize the HUD so both report calls/frame.
+      const renderedCalls = renderer.info.render.calls;
+      const drawCalls = renderer.isWebGPURenderer
+        ? Math.round(renderedCalls / Math.max(frames, 1))
+        : renderedCalls;
+      if (perf) perf.textContent = `${fps} FPS · ${drawCalls} draw calls/frame`;
+      if (renderer.isWebGPURenderer) renderer.info.reset?.();
       frames = 0;
       lastFpsAt = now;
     }
