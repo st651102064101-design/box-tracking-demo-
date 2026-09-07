@@ -1,6 +1,7 @@
 name: Deploy frontend to Windows Docker Desktop
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - WEB_APP_DEMO
