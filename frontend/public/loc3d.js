@@ -578,7 +578,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       );
       // Keep the small barcode above the beam's front edge and in front of
       // the rack so it remains readable at close and medium zoom levels.
-      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.085, entry.scale.z / 2 + 0.014)
+      // Centre the location barcode on the yellow shelf beam, like a real
+      // shelf-edge label, instead of floating above the beam.
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.005, entry.scale.z / 2 + 0.014)
         .applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
