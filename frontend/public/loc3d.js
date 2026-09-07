@@ -7,10 +7,13 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 const CM_TO_M = 0.01;
 const THREE_VERSION = '0.184.0';
-const EMPTY_COLOR = new THREE.Color(0x78b928);
+// Empty bays deliberately have no status colour. Their neutral, faint volume
+// remains raycastable; green is reserved for the explicit hover affordance.
+const EMPTY_COLOR = new THREE.Color(0x253039);
 const FULL_COLOR = new THREE.Color(0xd63d48);
 const OCCUPIED_COLOR = new THREE.Color(0xf59e0b);
 const HOVER_COLOR = new THREE.Color(0xffc857);
+const EMPTY_HOVER_COLOR = new THREE.Color(0x98f83e);
 const BOX_HOVER_COLOR = new THREE.Color(0xffef73);
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
 let activeController = null;
@@ -419,7 +422,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const slotMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.17,
+    opacity: 0.12,
     depthWrite: false,
     roughness: 0.55,
     metalness: 0.05,
@@ -467,16 +470,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
   }
   rackEntries.forEach((entry) => {
-    const element = document.createElement('div');
-    element.className = 'loc3d-rack-name';
-    element.textContent = `แร็ค ${entry.rack.code}`;
-    const label = new CSS2DObject(element);
-    label.position.copy(worldPoint(
-      entry.rack,
-      0,
-      entry.height / CM_TO_M - 18,
-      entry.depth / CM_TO_M / 2 + 8,
-    ));
+    // Rack identity is a physical horizontal mark on the top beam, never a
+    // billboard. It therefore stays parallel to the rack/floor while orbiting.
+    const texture = floorMarkTexture(`แร็ค ${entry.rack.code}`);
+    labelTextures.push(texture);
+    const labelWidth = Math.min(entry.width * 0.72, Math.max(0.7, entry.depth * 2.5));
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
+    );
+    const horizontal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    label.quaternion.copy(entry.quaternion).multiply(horizontal);
+    label.position.copy(worldPoint(entry.rack, 0, entry.height / CM_TO_M + 0.012, 0));
     label.visible = false;
     scene.add(label);
     rackNameLabels.push(label);
@@ -678,8 +683,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.style.cursor = 'pointer';
     } else if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
-      slotMesh.setColorAt(hoverIndex, HOVER_COLOR);
       const state = slotState(entry);
+      slotMesh.setColorAt(hoverIndex, state === 'empty' ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       labelElement.textContent = state === 'full' ? 'เต็ม' : state === 'occupied' ? 'มีของ' : 'ว่าง';
       labelElement.className = `loc3d-slot-label ${state}`;
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
