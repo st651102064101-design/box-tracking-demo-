@@ -232,13 +232,15 @@ async function createScene(canvas, model, onSelect) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   await renderer.init();
 
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 1000);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 1000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
   controls.screenSpacePanning = true;
   controls.maxPolarAngle = Math.PI * 0.495;
-  controls.minDistance = 1.5;
+  // Rack bays are sub-metre objects. Keep the near plane and orbit limit low
+  // enough to inspect an individual tote/box, not merely the whole rack.
+  controls.minDistance = 0.28;
   controls.maxDistance = 260;
 
   scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.55));
