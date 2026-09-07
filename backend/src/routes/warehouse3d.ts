@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, racks, slots } from '../db/schema.js';
+import { boxes, gates, racks, slots, warehouses } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -64,6 +64,9 @@ warehouse3dRouter.get(
   asyncHandler(async (req, res) => {
     const warehouseId = String(req.query.warehouseId ?? '').trim();
     const db = getDb();
+    const [warehouse] = warehouseId
+      ? await db.select().from(warehouses).where(eq(warehouses.id, warehouseId))
+      : [];
     const rackRows = warehouseId
       ? await db.select().from(racks).where(eq(racks.warehouseId, warehouseId))
       : await db.select().from(racks);
@@ -83,6 +86,18 @@ warehouse3dRouter.get(
         materialType: boxes.materialType,
       }).from(boxes).where(inArray(boxes.slotId, slotIds))
       : [];
+    const configuredGateNumbers = Array.isArray(warehouse?.gates)
+      ? (warehouse.gates as unknown[]).map((gate) => Number(gate)).filter(Number.isFinite)
+      : (warehouseId
+        ? (await db.select({ gateNo: gates.gateNo }).from(gates).where(eq(gates.warehouseId, warehouseId))).map((row) => row.gateNo)
+        : []);
+    const gateTypes = warehouse?.gateTypes && typeof warehouse.gateTypes === 'object'
+      ? warehouse.gateTypes as Record<string, unknown>
+      : {};
+    const doors = configuredGateNumbers.map((gateNo, index) => {
+      const rawType = String(gateTypes[String(gateNo)] ?? warehouse?.gateType ?? 'both');
+      return { gateNo, type: ['in', 'out', 'both'].includes(rawType) ? rawType : 'both', index };
+    });
 
     const slotsByRack = new Map<string, typeof slots.$inferSelect[]>();
     for (const slot of slotRows) {
@@ -103,6 +118,8 @@ warehouse3dRouter.get(
       worldUnit: 'm',
       scaleToWorldUnit: 0.01,
       warehouseId: warehouseId || null,
+      warehouseName: warehouse?.name ?? warehouseId ?? null,
+      doors,
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [])),
       boxes: boxRows.map((box) => ({
         id: box.tag,
