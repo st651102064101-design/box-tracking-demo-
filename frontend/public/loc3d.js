@@ -157,6 +157,35 @@ function floorMarkTexture(text) {
   return texture;
 }
 
+function safetyZoneSignTexture(warehouse, zone) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 480;
+  canvas.height = 900;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#101714';
+  context.strokeStyle = '#91d438';
+  context.lineWidth = 20;
+  context.roundRect(22, 22, canvas.width - 44, canvas.height - 44, 38);
+  context.fill();
+  context.stroke();
+  context.textAlign = 'center';
+  context.fillStyle = '#b8ee59';
+  context.font = '800 72px system-ui, sans-serif';
+  context.fillText(warehouse, canvas.width / 2, 260);
+  context.fillStyle = '#ffffff';
+  context.font = '900 112px system-ui, sans-serif';
+  context.fillText(`โซน ${zone}`, canvas.width / 2, 490);
+  context.fillStyle = '#d3e0d3';
+  context.font = '700 48px system-ui, sans-serif';
+  context.fillText('SAFETY AREA', canvas.width / 2, 690);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
 function rackNameTexture(text) {
   const canvas = document.createElement('canvas');
   canvas.width = 1400;
@@ -895,10 +924,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const railX = center.x - rackBoundaryWidth / 2 - 0.28;
   const railStartZ = center.z - rackBoundaryDepth / 2 - 0.35;
   const railEndZ = center.z + rackBoundaryDepth / 2 + 0.35;
+  // One straight, three-post safety rail at the rack head.
   const guardPosts = [
-    [railX - 0.65, railStartZ], [railX, railStartZ],
+    [railX, railStartZ],
     [railX, (railStartZ + railEndZ) / 2],
-    [railX, railEndZ], [railX - 0.65, railEndZ],
+    [railX, railEndZ],
   ];
   guardPosts.forEach(([x, z]) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
@@ -919,12 +949,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   ));
-  [railStartZ, railEndZ].forEach((z) => [0.62, 1.02].forEach((height) => steelBetween(
-    new THREE.Vector3(railX - 0.65, warehouseFloorY + height, z),
-    new THREE.Vector3(railX, warehouseFloorY + height, z),
-    0.045,
-    guardrailMaterial,
-  )));
+  // Move the warehouse/zone label off the floor and mount it vertically above
+  // the safety rail, parallel to the rail direction and higher than its posts.
+  const safetySignTexture = safetyZoneSignTexture(warehouseLabel, String(rackEntries[0]?.rack.zone || 'A'));
+  const safetyZoneSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.82, 1.54),
+    new THREE.MeshBasicMaterial({ map: safetySignTexture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
+  );
+  safetyZoneSign.position.set(railX - 0.075, warehouseFloorY + 1.98, (railStartZ + railEndZ) / 2);
+  safetyZoneSign.rotation.y = Math.PI / 2;
+  safetyZoneSign.renderOrder = 4;
+  scene.add(safetyZoneSign);
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
   // following upper chord and repeated triangular webs across the full span.
   const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
@@ -1316,49 +1351,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       scene.add(light);
     }
   });
-  // Paint each Zone directly onto the floor. Text is a horizontal textured
-  // plane (not CSS2D), so it belongs to the warehouse floor when orbiting.
-  const floorMarkTextures = [];
-  const zoneAreas = new Map();
-  rackEntries.forEach((entry) => {
-    const zone = String(entry.rack.zone || 'ไม่ระบุโซน');
-    const area = zoneAreas.get(zone) || { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
-    // Use the footprint envelope. This remains legible with the normal 0/90°
-    // rack rotations and gives each zone some coloured aisle space.
-    const halfX = entry.width / 2 + 0.35;
-    const halfZ = entry.depth / 2 + 0.45;
-    area.minX = Math.min(area.minX, entry.base.x - halfX);
-    area.maxX = Math.max(area.maxX, entry.base.x + halfX);
-    area.minZ = Math.min(area.minZ, entry.base.z - halfZ);
-    area.maxZ = Math.max(area.maxZ, entry.base.z + halfZ);
-    zoneAreas.set(zone, area);
-  });
-  [...zoneAreas.entries()].forEach(([zone, area], index) => {
-    const areaWidth = Math.max(1.5, area.maxX - area.minX);
-    const areaDepth = Math.max(1.5, area.maxZ - area.minZ);
-    const areaCenter = new THREE.Vector3((area.minX + area.maxX) / 2, floor.position.y + 0.018, (area.minZ + area.maxZ) / 2);
-    const texture = floorMarkTexture(`${warehouseLabel} · โซน ${zone}`);
-    floorMarkTextures.push(texture);
-    const labelWidth = Math.min(areaWidth * 0.86, Math.max(1.25, areaDepth * 2.8));
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
-    );
-    label.rotation.x = -Math.PI / 2;
-    // Place the zone label beyond the front of the rack footprint.
-    const labelOffset = Math.max(0.5, Math.min(1.1, areaDepth * 0.22));
-    const zoneRackEntries = rackEntries.filter((entry) => String(entry.rack.zone || 'ไม่ระบุโซน') === zone);
-    const frontDirection = new THREE.Vector3(0, 0, 1);
-    if (zoneRackEntries[0]) frontDirection.applyQuaternion(zoneRackEntries[0].quaternion).setY(0).normalize();
-    const areaCorners = [
-      new THREE.Vector3(area.minX, 0, area.minZ), new THREE.Vector3(area.minX, 0, area.maxZ),
-      new THREE.Vector3(area.maxX, 0, area.minZ), new THREE.Vector3(area.maxX, 0, area.maxZ),
-    ];
-    const frontExtent = Math.max(...areaCorners.map((corner) => corner.clone().sub(areaCenter).dot(frontDirection)));
-    const labelPosition = areaCenter.clone().add(frontDirection.multiplyScalar(frontExtent + labelOffset));
-    label.position.set(labelPosition.x, floor.position.y + 0.025, labelPosition.z);
-    scene.add(label);
-  });
+  const floorMarkTextures = [safetySignTexture];
   // One grid division represents one metre across the complete warehouse floor.
   const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
   const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
@@ -1596,33 +1589,31 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const rawCenter = rawBounds.getCenter(new THREE.Vector3());
     const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
       const pallet = palletTemplate.clone(true);
-      // Keep the imported pallet's real proportions. Scaling Y independently
-      // stretched its blocks into tall legs; one uniform scale preserves the
-      // close-boarded deck and forklift-entry openings from the source model.
-      const scale = Math.min(
-        width / Math.max(rawSize.x, 0.01),
-        depth / Math.max(rawSize.z, 0.01),
-      );
+      // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
+      // smaller horizontal scale so the source model's feet remain realistic.
+      const scaleX = width / Math.max(rawSize.x, 0.01);
+      const scaleZ = depth / Math.max(rawSize.z, 0.01);
+      const scaleY = Math.min(scaleX, scaleZ);
       pallet.position.copy(position);
       pallet.position.y += yOffset;
       pallet.quaternion.copy(quaternion);
-      pallet.scale.setScalar(scale);
+      pallet.scale.set(scaleX, scaleY, scaleZ);
       const baseOffset = new THREE.Vector3(
-        -rawCenter.x * scale,
-        -rawBounds.min.y * scale,
-        -rawCenter.z * scale,
+        -rawCenter.x * scaleX,
+        -rawBounds.min.y * scaleY,
+        -rawCenter.z * scaleZ,
       ).applyQuaternion(quaternion);
       pallet.position.add(baseOffset);
       scene.add(pallet);
     };
     boxEntries.forEach((entry) => {
-      const palletWidth = Math.min(entry.slotEntry.scale.x * 0.88, Math.max(0.8, entry.scale.x + 0.16));
-      const palletDepth = Math.min(entry.slotEntry.scale.z * 0.9, Math.max(0.7, entry.scale.z + 0.16));
+      const palletWidth = 1.0;
+      const palletDepth = 1.2;
       const palletCenter = entry.position.clone();
       palletCenter.y -= entry.scale.y / 2 + 0.085;
       addPallet(palletCenter, entry.quaternion, palletWidth, palletDepth);
     });
-    addPallet(new THREE.Vector3(stagingCenter.x, warehouseFloorY, stagingCenter.z), new THREE.Quaternion(), Math.min(1.1, stagingWidth - 0.25), Math.min(1.1, stagingDepth - 0.25), 0.02);
+    addPallet(new THREE.Vector3(stagingCenter.x, warehouseFloorY, stagingCenter.z), new THREE.Quaternion(), 1.0, 1.2, 0.02);
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
   // CC BY model: "Forklift" by brezineman. Keep the original attribution
   // alongside the asset rather than baking it into an unrelated warehouse mesh.
