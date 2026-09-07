@@ -130,6 +130,26 @@ function concreteTexture() {
   return texture;
 }
 
+function floorMarkTexture(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1400;
+  canvas.height = 180;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = 'rgba(219,255,150,.96)';
+  context.font = '800 96px system-ui, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.shadowColor = 'rgba(0,0,0,.85)';
+  context.shadowBlur = 8;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
 function code128LabelTexture(value) {
   const code = String(value ?? '');
   const codes = [104]; // Start Code B — matches ZPL ^BC for our ASCII location IDs.
@@ -347,7 +367,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
           Math.max(0.045, frame * 0.7), dividerTop - dividerBottom, depth);
       }
     });
-    rackEntries.push({ rack, quaternion, width, height, depth });
+    rackEntries.push({ rack, quaternion, width, height, depth, base });
     // All eight rotated corners are required here. Using only a diagonal pair
     // underestimates a 90-degree rack and can clip the floor/camera framing.
     const corners = [-1, 1].flatMap((sideX) => [-1, 1].flatMap((sideZ) => [0, 1].map((sideY) =>
@@ -541,6 +561,47 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.position.set(center.x, Math.min(0, bounds.min.y) - 0.015, center.z);
   floor.receiveShadow = true;
   scene.add(floor);
+  // Paint each Zone directly onto the floor. Text is a horizontal textured
+  // plane (not CSS2D), so it belongs to the warehouse floor when orbiting.
+  const floorMarkTextures = [];
+  const zoneAreas = new Map();
+  rackEntries.forEach((entry) => {
+    const zone = String(entry.rack.zone || 'ไม่ระบุโซน');
+    const area = zoneAreas.get(zone) || { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    // Use the footprint envelope. This remains legible with the normal 0/90°
+    // rack rotations and gives each zone some coloured aisle space.
+    const halfX = entry.width / 2 + 0.35;
+    const halfZ = entry.depth / 2 + 0.45;
+    area.minX = Math.min(area.minX, entry.base.x - halfX);
+    area.maxX = Math.max(area.maxX, entry.base.x + halfX);
+    area.minZ = Math.min(area.minZ, entry.base.z - halfZ);
+    area.maxZ = Math.max(area.maxZ, entry.base.z + halfZ);
+    zoneAreas.set(zone, area);
+  });
+  const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
+  [...zoneAreas.entries()].forEach(([zone, area], index) => {
+    const areaWidth = Math.max(1.5, area.maxX - area.minX);
+    const areaDepth = Math.max(1.5, area.maxZ - area.minZ);
+    const areaCenter = new THREE.Vector3((area.minX + area.maxX) / 2, floor.position.y + 0.018, (area.minZ + area.maxZ) / 2);
+    const zoneColor = new THREE.Color().setHSL((0.28 + index * 0.16) % 1, 0.52, 0.34);
+    const zoneFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(areaWidth, areaDepth),
+      new THREE.MeshBasicMaterial({ color: zoneColor, transparent: true, opacity: 0.28, depthWrite: false }),
+    );
+    zoneFloor.rotation.x = -Math.PI / 2;
+    zoneFloor.position.copy(areaCenter);
+    scene.add(zoneFloor);
+    const texture = floorMarkTexture(`${warehouseLabel} · โซน ${zone}`);
+    floorMarkTextures.push(texture);
+    const labelWidth = Math.min(areaWidth * 0.86, Math.max(1.25, areaDepth * 2.8));
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
+    );
+    label.rotation.x = -Math.PI / 2;
+    label.position.set(areaCenter.x, floor.position.y + 0.025, areaCenter.z - areaDepth * 0.32);
+    scene.add(label);
+  });
   const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
   scene.add(grid);
@@ -699,13 +760,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         materials.forEach((material) => material.dispose?.());
       });
       floorTexture.dispose();
+      floorMarkTextures.forEach((texture) => texture.dispose());
       labelTextures.forEach((texture) => texture.dispose());
       renderer.dispose();
     },
   };
 }
 
-async function mount(canvas, locations, occupancy, onSelect, onBoxSelect) {
+async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, warehouseName) {
   if (!canvas) return null;
   const currentGeneration = ++generation;
   activeController?.dispose();
@@ -713,6 +775,7 @@ async function mount(canvas, locations, occupancy, onSelect, onBoxSelect) {
   const stage = canvas.parentElement;
   try {
     const model = await loadModel(locations || [], occupancy || {});
+    if (!model.warehouseName && warehouseName) model.warehouseName = warehouseName;
     if (currentGeneration !== generation || !canvas.isConnected) return null;
     const controller = await createScene(canvas, model, onSelect, onBoxSelect);
     if (currentGeneration !== generation || !canvas.isConnected) {
