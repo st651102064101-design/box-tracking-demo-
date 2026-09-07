@@ -1310,7 +1310,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       labelElement.textContent = state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
       labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
-      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
+      // Keep the slot-status label inside the bay instead of floating above its beam.
+      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, 0.05, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
     } else {
