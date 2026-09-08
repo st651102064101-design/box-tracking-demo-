@@ -469,6 +469,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const zoneKeys = [...racksByZone.keys()].sort(natural);
   const displayTransformByRackId = new Map();
   const innerBackToBackRackIds = new Set();
+  const outerRackIds = new Set();
   zoneKeys.forEach((zone, zoneIndex) => {
     const side = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneIndex % 2 ? -1 : 1);
     const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
@@ -501,6 +502,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
           rotationYDeg,
         });
         if (rowIndex === 0) innerBackToBackRackIds.add(rack.id);
+        else outerRackIds.add(rack.id);
       });
     }
   });
@@ -958,9 +960,29 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  // Protect only the short ends of the central back-to-back rack pair. The
-  // side aisles stay completely open for forklifts and no guard is generated
-  // along a rack's long picking face.
+  const createRackEndGuard = (railMinX, railMaxX, railZ) => {
+    const points = [0, 0.5, 1].map((ratio) => new THREE.Vector3(
+      THREE.MathUtils.lerp(railMinX, railMaxX, ratio), warehouseFloorY, railZ,
+    ));
+    points.forEach((point) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
+      post.position.set(point.x, warehouseFloorY + 0.575, point.z);
+      scene.add(post);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
+      foot.position.set(point.x, warehouseFloorY + 0.018, point.z);
+      scene.add(foot);
+      [0.2, 0.52, 0.84].forEach((height) => {
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
+        band.position.set(point.x, warehouseFloorY + height, point.z);
+        scene.add(band);
+      });
+    });
+    [0.62, 1.02].forEach((height) => {
+      steelBetween(new THREE.Vector3(points[0].x, warehouseFloorY + height, railZ), new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ), 0.045, guardrailMaterial);
+      steelBetween(new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ), new THREE.Vector3(points[2].x, warehouseFloorY + height, railZ), 0.045, guardrailMaterial);
+    });
+  };
+  // Protect the short ends of the central back-to-back rack pair.
   const innerBankBounds = new THREE.Box3();
   rackEntries
     .filter((entry) => innerBackToBackRackIds.has(entry.rack.id))
@@ -968,37 +990,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   if (!innerBankBounds.isEmpty()) {
     const railMinX = innerBankBounds.min.x - 0.28;
     const railMaxX = innerBankBounds.max.x + 0.28;
-    [innerBankBounds.min.z - 0.28, innerBankBounds.max.z + 0.28].forEach((railZ) => {
-      const points = [0, 0.5, 1].map((ratio) => new THREE.Vector3(
-        THREE.MathUtils.lerp(railMinX, railMaxX, ratio), warehouseFloorY, railZ,
-      ));
-      points.forEach((point) => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
-        post.position.set(point.x, warehouseFloorY + 0.575, point.z);
-        scene.add(post);
-        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
-        foot.position.set(point.x, warehouseFloorY + 0.018, point.z);
-        scene.add(foot);
-        [0.2, 0.52, 0.84].forEach((height) => {
-          const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
-          band.position.set(point.x, warehouseFloorY + height, point.z);
-          scene.add(band);
-        });
-      });
-      [0.62, 1.02].forEach((height) => {
-        steelBetween(
-          new THREE.Vector3(points[0].x, warehouseFloorY + height, railZ),
-          new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ),
-          0.045, guardrailMaterial,
-        );
-        steelBetween(
-          new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ),
-          new THREE.Vector3(points[2].x, warehouseFloorY + height, railZ),
-          0.045, guardrailMaterial,
-        );
-      });
-    });
+    [innerBankBounds.min.z - 0.28, innerBankBounds.max.z + 0.28]
+      .forEach((railZ) => createRackEndGuard(railMinX, railMaxX, railZ));
   }
+  // Add the matching three-post guard to the exposed outer racks on the left
+  // and right, at both short ends shown in the warehouse plan.
+  rackEntries
+    .filter((entry) => outerRackIds.has(entry.rack.id))
+    .forEach((entry) => {
+      const rackBox = entry.collisionBox;
+      [rackBox.min.z - 0.28, rackBox.max.z + 0.28].forEach((railZ) =>
+        createRackEndGuard(rackBox.min.x - 0.28, rackBox.max.x + 0.28, railZ));
+    });
   // Zone labels sit on the inner side of each zone, in the aisle marked by the
   // floor, rather than outside the rack block where they get hidden behind the
   // end frames. A is on the right and B on the left, so both labels face the
