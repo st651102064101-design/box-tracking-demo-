@@ -516,23 +516,42 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   });
 
   // Every zone is a face-to-face rack pair with a forklift aisle between it.
-  // Complete zone blocks then continue end-to-end in A, B, C... order.
+  // Different zones continue side-by-side along X, so the outside backs of
+  // neighbouring zones meet; no rack ends are joined along the aisle axis.
   const aisleWidth = 3.2;
-  const zoneJoinGap = 0.12;
-  const totalBlockLength = zoneBlocks.reduce((sum, block) => sum + block.length, 0)
-    + Math.max(0, zoneBlocks.length - 1) * zoneJoinGap;
-  let blockCursor = -totalBlockLength / 2;
+  const backToBackGap = 0.12;
+  let xCursor = 0;
+  const zoneTransforms = [];
   zoneBlocks.forEach(({ pair, length }) => {
-    const centerZ = blockCursor + length / 2;
-    blockCursor += length + zoneJoinGap;
+    const firstDepth = positive(pair[0].dimensionsCm?.depth, 110) * CM_TO_M;
+    const secondDepth = pair[1]
+      ? positive(pair[1].dimensionsCm?.depth, 110) * CM_TO_M
+      : firstDepth;
+    const firstX = xCursor - firstDepth / 2 - aisleWidth / 2;
+    const secondX = pair[1]
+      ? xCursor + secondDepth / 2 + aisleWidth / 2
+      : null;
+    zoneTransforms.push({ pair, length, firstX, secondX, firstDepth, secondDepth });
+    xCursor = pair[1]
+      ? secondX + secondDepth / 2 + backToBackGap
+      : firstX + firstDepth / 2 + backToBackGap;
+  });
+  const layoutMinX = zoneTransforms.length ? Math.min(...zoneTransforms.map(({ firstX, firstDepth }) => firstX - firstDepth / 2)) : 0;
+  const layoutMaxX = zoneTransforms.length
+    ? Math.max(...zoneTransforms.map(({ secondX, secondDepth, firstX, firstDepth }) =>
+      (secondX ?? firstX) + (secondX == null ? firstDepth : secondDepth) / 2))
+    : 0;
+  const layoutOffsetX = (layoutMinX + layoutMaxX) / 2;
+  zoneTransforms.forEach(({ pair, length, firstX, secondX }) => {
+    const rackPositions = [firstX - layoutOffsetX, secondX == null ? null : secondX - layoutOffsetX];
     pair.forEach((rack, sideIndex) => {
-      const rackDepth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
-      const direction = sideIndex === 0 ? -1 : 1;
+      const rackX = rackPositions[sideIndex];
+      if (rackX == null) return;
       displayTransformByRackId.set(rack.id, {
         positionCm: {
-          x: direction * (aisleWidth / 2 + rackDepth / 2) * 100,
+          x: rackX * 100,
           y: num(rack.positionCm?.y),
-          z: centerZ * 100,
+          z: 0,
         },
         rotationYDeg: sideIndex === 0 ? 90 : -90,
       });
