@@ -476,6 +476,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const deckParts = [];
   const braceParts = [];
   const basePlateParts = [];
+  const consumerUnitPickMeshes = [];
+  const warehousePowerFixtures = [];
+  const warehousePowerLights = [];
   const bounds = new THREE.Box3();
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
@@ -531,6 +534,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       });
     }
   });
+
+  // This small control is a CSS2D object so it stays attached to the physical
+  // consumer unit while still behaving like a normal accessible switch.
+  const consumerPanel = document.createElement('div');
+  consumerPanel.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #9be92d;border-radius:10px;background:rgba(8,16,11,.94);box-shadow:0 8px 22px rgba(0,0,0,.45);color:#f7fff2;font:700 12px system-ui,sans-serif;white-space:nowrap;pointer-events:auto;transform:translate(-50%,-125%);';
+  const consumerPanelText = document.createElement('span');
+  consumerPanelText.textContent = 'ไฟคลัง: เปิด';
+  const consumerPowerButton = document.createElement('button');
+  consumerPowerButton.type = 'button';
+  consumerPowerButton.textContent = 'ปิดไฟ';
+  consumerPowerButton.style.cssText = 'border:0;border-radius:7px;padding:5px 8px;background:#a8ff2b;color:#142100;font:800 12px system-ui,sans-serif;cursor:pointer;';
+  consumerPanel.append(consumerPanelText, consumerPowerButton);
+  const consumerPanelObject = new CSS2DObject(consumerPanel);
+  consumerPanelObject.visible = false;
+  scene.add(consumerPanelObject);
+  let consumerPanelPointerOver = false;
+  consumerPanel.addEventListener('pointerenter', () => { consumerPanelPointerOver = true; });
+  consumerPanel.addEventListener('pointerleave', () => { consumerPanelPointerOver = false; });
+  consumerPanel.addEventListener('pointerdown', (event) => event.stopPropagation());
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
@@ -1479,15 +1501,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const referenceDoorZ = configuredDoors.length
       ? center.z - halfWarehouseDepth + 1.8 + ((warehouseDepth - 3.6) / (configuredDoors.length + 1))
       : center.z;
+    // Keep the wall light clear of the door frame on the right, while the
+    // consumer unit below moves to the clear wall bay on the left.
+    const serviceOffset = side === -1 ? 1.12 : 0;
     const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
-    wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, referenceDoorZ);
+    wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, referenceDoorZ + serviceOffset);
     scene.add(wallLight);
     // One realistic consumer unit is mounted beside the operating door. It is
     // intentionally wall-fixed (not a loose floor prop) and faces the aisle.
     if (side === -1) {
       const consumerX = innerX - side * 0.14;
       const consumerY = warehouseFloorY + 1.56;
-      const consumerZ = referenceDoorZ + 0.88;
+      const consumerZ = referenceDoorZ - 1.12;
       const consumerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f1ee, roughness: 0.42, metalness: 0.12 });
       const consumerLidMaterial = new THREE.MeshStandardMaterial({ color: 0xfafaf7, roughness: 0.32, metalness: 0.08 });
       const consumerTrimMaterial = new THREE.MeshStandardMaterial({ color: 0xc6c9c7, roughness: 0.4, metalness: 0.32 });
@@ -1497,14 +1522,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       consumerBody.position.set(consumerX, consumerY, consumerZ);
       consumerBody.castShadow = consumerBody.receiveShadow = true;
       scene.add(consumerBody);
+      consumerUnitPickMeshes.push(consumerBody);
       // Hinged weather cover, raised above the breaker row like the reference.
       const lid = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.44, 1.58), consumerLidMaterial);
       lid.position.set(consumerX - side * 0.05, consumerY + 0.24, consumerZ);
       lid.castShadow = lid.receiveShadow = true;
       scene.add(lid);
+      consumerUnitPickMeshes.push(lid);
       const breakerPanel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.3, 1.22), consumerTrimMaterial);
       breakerPanel.position.set(consumerX - side * 0.115, consumerY - 0.19, consumerZ);
       scene.add(breakerPanel);
+      consumerUnitPickMeshes.push(breakerPanel);
       // The main isolator plus eight modular MCBs are individual solids, so
       // their levers remain legible when the user moves close to the wall.
       for (let breaker = 0; breaker < 9; breaker += 1) {
@@ -1517,6 +1545,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         const lever = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.09, width * 0.58), isMain ? mainBreakerMaterial : breakerMaterial);
         lever.position.set(consumerX - side * 0.215, consumerY - 0.205, z);
         scene.add(lever);
+        consumerUnitPickMeshes.push(breakerBody, lever);
       }
       [-1, 1].forEach((zSide) => [-1, 1].forEach((ySide) => {
         const screw = new THREE.Mesh(new THREE.SphereGeometry(0.027, 12, 8), consumerTrimMaterial);
@@ -1530,6 +1559,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       consumerLabel.rotation.y = sideRotation;
       consumerLabel.position.set(consumerX - side * 0.242, consumerY - 0.38, consumerZ);
       scene.add(consumerLabel);
+      consumerPanelObject.position.set(consumerX - side * 0.3, consumerY + 0.72, consumerZ);
     }
     const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
     const safetySign = new THREE.Mesh(
@@ -1627,11 +1657,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.07, 0.28), lightMaterial);
       fixture.position.set(lightX, lightY, lightZ);
       scene.add(fixture);
+      warehousePowerFixtures.push(fixture);
       // The emitting panel itself is the exact source anchor for this light.
       const light = new THREE.PointLight(0xe8f6ff, 8, Math.max(7, warehouseWidth * 0.42), 2);
       light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.08, 0));
       scene.add(light);
+      warehousePowerLights.push(light);
     }
+  });
+  let warehousePowerOn = true;
+  const setWarehousePower = (on) => {
+    warehousePowerOn = Boolean(on);
+    warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0.04; });
+    warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
+    consumerPanelText.textContent = `ไฟคลัง: ${warehousePowerOn ? 'เปิด' : 'ปิด'}`;
+    consumerPowerButton.textContent = warehousePowerOn ? 'ปิดไฟ' : 'เปิดไฟ';
+    consumerPowerButton.style.background = warehousePowerOn ? '#a8ff2b' : '#ff9d2b';
+    consumerPowerButton.style.color = warehousePowerOn ? '#142100' : '#2a1600';
+  };
+  consumerPowerButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setWarehousePower(!warehousePowerOn);
   });
   const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
@@ -1715,8 +1762,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
+  const consumerHoverMaterial = new THREE.LineBasicMaterial({ color: 0xb6ff3b, transparent: true, opacity: 0.96, depthTest: false });
+  const consumerHoverOutline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(0.32, 1.02, 1.68)),
+    consumerHoverMaterial,
+  );
+  consumerHoverOutline.visible = false;
+  consumerHoverOutline.renderOrder = 12;
+  scene.add(consumerHoverOutline);
+  const consumerHoverShell = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 1, 1.66),
+    new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.14, depthWrite: false, depthTest: false, side: THREE.BackSide }),
+  );
+  consumerHoverShell.visible = false;
+  consumerHoverShell.renderOrder = 11;
+  scene.add(consumerHoverShell);
   let pointerFrame = 0;
   let down = null;
+  let hoverConsumerUnit = false;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
   const hideRackAction = () => {
@@ -1744,20 +1807,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // priority so operators can open the actual box record.
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
+    const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
-    const next = nextBox >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
+    const nextConsumerUnit = nextBox < 0 && Boolean(consumerHit) && (!slotHit || consumerHit.distance < slotHit.distance);
+    const next = nextBox >= 0 || nextConsumerUnit ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
     const nextRack = nextBox >= 0
       ? boxEntries[nextBox].slotEntry?.rack
       : next >= 0
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextRackCode === hoverRackCode) return;
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
     hoverBoxIndex = nextBox;
+    hoverConsumerUnit = nextConsumerUnit;
+    if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
     if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
     if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
@@ -1781,6 +1848,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
+    } else if (hoverConsumerUnit) {
+      const consumerBody = consumerUnitPickMeshes[0];
+      consumerHoverOutline.position.copy(consumerBody.position);
+      consumerHoverShell.position.copy(consumerBody.position);
+      consumerHoverOutline.visible = true;
+      consumerHoverShell.visible = true;
+      labelElement.textContent = 'Consumer Unit · คลิกเพื่อควบคุมไฟ';
+      labelElement.className = 'loc3d-slot-label occupied';
+      labelObject.position.copy(consumerBody.position).add(new THREE.Vector3(0, 0.72, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
     } else if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
       const state = slotState(entry);
@@ -1799,7 +1877,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
-    showRackAction(nextRack);
+    showRackAction(hoverConsumerUnit ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -1811,6 +1889,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
+      else if (hoverConsumerUnit) consumerPanelObject.visible = !consumerPanelObject.visible;
     }
     down = null;
   };
@@ -1826,8 +1905,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverRing.visible = false;
     hoverOutline.visible = false;
     hoverShell.visible = false;
+    consumerHoverOutline.visible = false;
+    consumerHoverShell.visible = false;
     hoverIndex = -1;
     hoverBoxIndex = -1;
+    hoverConsumerUnit = false;
     labelObject.visible = false;
     canvas.style.cursor = 'grab';
     window.setTimeout(() => {
@@ -1956,6 +2038,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       hoverRingMaterial.opacity = 0.74 + Math.sin(performance.now() * 0.008) * 0.22;
       hoverOutlineMaterial.opacity = 0.7 + Math.sin(performance.now() * 0.012) * 0.25;
     }
+    if (consumerHoverOutline.visible) {
+      const pulse = 1 + Math.sin(performance.now() * 0.009) * 0.045;
+      consumerHoverOutline.scale.setScalar(pulse);
+      consumerHoverShell.scale.setScalar(pulse);
+      consumerHoverMaterial.opacity = 0.72 + Math.sin(performance.now() * 0.009) * 0.24;
+    }
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frames += 1;
@@ -1995,6 +2083,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
       syncFullscreenPortals();
       rackActionButton.remove();
+      consumerPanel.remove();
       warehouseTitle.remove();
       controls.dispose();
       assets.dispose();
