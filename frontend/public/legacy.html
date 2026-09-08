@@ -3732,8 +3732,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 
       <!-- Mode switcher -->
       <div class="inv-view-sw" id="locModeSw" style="margin-bottom:18px;">
-        <button class="ivs-btn active" data-lmode="single"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มทีละตำแหน่ง</button>
         <button class="ivs-btn" data-lmode="bulk"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> Bulk Generate (ซื้อแร็คใหม่)</button>
+        <button class="ivs-btn active" data-lmode="single"><span class="svgi"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span> เพิ่มทีละตำแหน่ง</button>
       </div>
 
       <!-- Single mode -->
@@ -3741,22 +3741,22 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <div class="grid g4" style="margin-bottom:14px;">
           <div class="field"><label>คลัง <span class="req">*</span></label><select id="locWh" onchange="suggestSingleZone();suggestSingleRack();locAutoCode()"></select></div>
           <div class="field"><label>โซน</label>
-            <select id="locZone" onchange="toggleLocTypeOther('locZone','locZoneOther');locAutoCode();"></select>
+            <select id="locZone" onchange="toggleLocTypeOther('locZone','locZoneOther');suggestSingleRack();locRememberForm();locAutoCode();"></select>
             <input id="locZoneOther" placeholder="ระบุโซนใหม่ เช่น A" autocomplete="off" style="display:none;margin-top:8px;" oninput="locAutoCode()">
           </div>
           <div class="field"><label>แร็ค</label>
-            <select id="locRack" onchange="toggleLocTypeOther('locRack','locRackOther');locAutoCode();"></select>
+            <select id="locRack" onchange="toggleLocTypeOther('locRack','locRackOther');populateLocShelfSlotSelects(val('locWh'),locTypeValue('locZone','locZoneOther'),locTypeValue('locRack','locRackOther'),'', '');locRememberForm();locAutoCode();"></select>
             <input id="locRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locAutoCode()">
           </div>
           <div class="field"><label>ชั้น (Shelf)</label>
             <div class="auto-tag-row">
-              <input id="locShelf" list="dl-shelf" placeholder="1" autocomplete="off" oninput="locAutoCode()">
+              <select id="locShelf" onchange="locRememberForm();locAutoCode()"></select>
               <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="addLocFieldValue('locShelf')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
           <div class="field"><label>ช่อง (Slot)</label>
             <div class="auto-tag-row">
-              <input id="locSlot" list="dl-slot" placeholder="01" autocomplete="off" oninput="locAutoCode()">
+              <select id="locSlot" onchange="locRememberForm();locAutoCode()"></select>
               <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="addLocFieldValue('locSlot')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
@@ -6431,12 +6431,34 @@ window.locTypeValue = locTypeValue;
    ที่มีอยู่ทันที ให้ชัดเจนว่าเพิ่มค่าใหม่ได้ตรงนี้เลย ไม่ต้องเดา */
 function addLocFieldValue(inputId) {
   var el = $('#'+inputId); if (!el) return;
-  el.value = '';
+  var values = Array.prototype.map.call(el.options||[], function(o){ return o.value; }).filter(Boolean);
+  var max = values.reduce(function(n,v){ var x=parseInt(v,10); return Number.isFinite(x)?Math.max(n,x):n; },0);
+  el.value = inputId === 'locSlot' ? pad(max+1,2) : String(max+1);
+  locRememberForm();
   el.focus();
-  if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (e) {} }
   locAutoCode();
 }
 window.addLocFieldValue = addLocFieldValue;
+
+function populateLocShelfSlotSelects(wh, zone, rack, shelf, slot) {
+  var sh=$('#locShelf'), sl=$('#locSlot'); if(!sh||!sl)return;
+  var rows=Object.values(S.locations||{}).filter(function(l){return (!wh||l.wh===wh)&&(!zone||l.zone===zone)&&(!rack||l.rack===rack);});
+  var shelves={}, slots={}; rows.forEach(function(l){if(l.shelf)shelves[String(l.shelf)]=1;if(l.slot)slots[String(l.slot)]=1;});
+  var shVals=Object.keys(shelves).sort(function(a,b){return (+a)-(+b);});
+  var slVals=Object.keys(slots).sort(function(a,b){return (+a)-(+b);});
+  if(shelf&&!shVals.includes(String(shelf)))shVals.push(String(shelf));
+  if(slot&&!slVals.includes(String(slot)))slVals.push(String(slot));
+  if(!shVals.length)shVals=['1']; if(!slVals.length)slVals=['01'];
+  shVals.sort(function(a,b){return (+a)-(+b);}); slVals.sort(function(a,b){return (+a)-(+b);});
+  sh.innerHTML=shVals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('');
+  sl.innerHTML=slVals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('');
+  sh.value=String(shelf||shVals[0]); sl.value=String(slot||slVals[0]);
+}
+function locRememberForm(){
+  if(typeof uiPrefSet!=='function')return;
+  uiPrefSet('locForm',{wh:val('locWh'),zone:locTypeValue('locZone','locZoneOther'),rack:locTypeValue('locRack','locRackOther'),shelf:val('locShelf'),slot:val('locSlot')});
+}
+window.locRememberForm=locRememberForm;
 
 /* ── heal Location Master rows that boxes reference but were never registered ──
    The 3D warehouse view and box records themselves fall back to a box's own
@@ -6524,6 +6546,10 @@ function applyLocView(view){
 function openLocDrawer(mode){
   openCardDrawer('locFormCard',mode==='bulk'?'สร้างแร็กหลายตำแหน่ง':'เพิ่มตำแหน่ง / สร้างแร็ก','จัดการโซน แร็ก ชั้น และช่องภายในคลัง');
   var sw=$('#locModeSw');if(sw){var b=sw.querySelector('[data-lmode="'+(mode||'single')+'"]');if(b)b.click();}
+  if((mode||'single')==='single' && typeof uiPrefGet==='function'){
+    var p=uiPrefGet('locForm',{});
+    if(p.wh){setv('locWh',p.wh);populateZoneSelect('locZone','locZoneOther',p.wh,p.zone);populateRackSelect('locRack','locRackOther',p.wh,p.rack);populateLocShelfSlotSelects(p.wh,p.zone,p.rack,p.shelf,p.slot);locAutoCode();}
+  }
 }
 window.openLocDrawer=openLocDrawer;
 
@@ -6878,18 +6904,20 @@ function populateRackSelect(selId, otherId, wh, currentVal) {
   sel.innerHTML=html;
   var inp=$('#'+otherId);
   if (currentVal && racks.indexOf(currentVal)>=0) { sel.value=currentVal; if(inp){inp.style.display='none';} }
-  else { sel.value='__other__'; if(inp){inp.value=nextAuto;inp.style.display='';} }
+  else { sel.value='__other__'; if(inp){inp.value=nextAuto;inp.style.display='none';} }
 }
 window.populateRackSelect = populateRackSelect;
 function suggestSingleRack() {
   if (editingLoc) return;
   populateRackSelect('locRack','locRackOther', val('locWh'));
+  populateLocShelfSlotSelects(val('locWh'),locTypeValue('locZone','locZoneOther'),locTypeValue('locRack','locRackOther'),val('locShelf'),val('locSlot'));
   if (typeof locAutoCode === 'function') locAutoCode();
 }
 window.suggestSingleRack = suggestSingleRack;
 function suggestSingleZone() {
   if (editingLoc) return;
   populateZoneSelect('locZone','locZoneOther', val('locWh'));
+  populateLocShelfSlotSelects(val('locWh'),locTypeValue('locZone','locZoneOther'),locTypeValue('locRack','locRackOther'),val('locShelf'),val('locSlot'));
   if (typeof locAutoCode === 'function') locAutoCode();
 }
 window.suggestSingleZone = suggestSingleZone;
