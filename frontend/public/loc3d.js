@@ -951,14 +951,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.add(strip);
     return strip;
   };
-  // Outline the actual rack footprint, then place a 3.5 m forklift aisle in
-  // front of it. This keeps every marking spatially related to the rack.
+  // Outline each rack individually. A single outline around the whole cluster
+  // is misleading: it crosses the aisles and does not show the actual rack
+  // footprints used for safe storage zoning.
   const rackBoundaryWidth = Math.min(warehouseWidth - 2.4, size.x + 1.2);
   const rackBoundaryDepth = Math.min(warehouseDepth - 2.4, size.z + 1.2);
-  floorStrip(center.x, center.z - rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
-  floorStrip(center.x, center.z + rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
-  floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
-  floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
+  rackEntries.forEach((entry) => {
+    const clearance = 0.16;
+    const outlineWidth = entry.width + clearance * 2;
+    const outlineDepth = entry.depth + clearance * 2;
+    const rotationY = THREE.MathUtils.degToRad(num(entry.rack.rotationYDeg));
+    const localPoint = (x, z) => worldPoint(entry.rack, x * 100, 0, z * 100);
+    const north = localPoint(0, -outlineDepth / 2);
+    const south = localPoint(0, outlineDepth / 2);
+    const west = localPoint(-outlineWidth / 2, 0);
+    const east = localPoint(outlineWidth / 2, 0);
+    floorStrip(north.x, north.z, outlineWidth, 0.085, rotationY);
+    floorStrip(south.x, south.z, outlineWidth, 0.085, rotationY);
+    floorStrip(west.x, west.z, 0.085, outlineDepth, rotationY);
+    floorStrip(east.x, east.z, 0.085, outlineDepth, rotationY);
+  });
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
   const createRackEndGuard = (railMinX, railMaxX, railZ) => {
     const points = [0, 0.5, 1].map((ratio) => new THREE.Vector3(
