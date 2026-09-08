@@ -1094,9 +1094,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const direction = to.clone().sub(from);
     const length = direction.length();
     if (length < 0.05) return;
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(width, height, length), guardrailMaterial);
+    // Safety rails are round steel tubes, not rectangular box sections.
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(width, height) / 2, Math.max(width, height) / 2, length, 24), guardrailMaterial);
     beam.position.copy(from).add(to).multiplyScalar(0.5);
-    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
     beam.castShadow = false;
     scene.add(beam);
   };
