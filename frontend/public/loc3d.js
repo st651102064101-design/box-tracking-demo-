@@ -1799,7 +1799,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       camera.position[nearest.axis] = nearest.value + nearest.direction * clearance;
     });
   };
-  const barcodeZoomDistance = Math.max(7, span * 1.15);
+  // Barcode labels are a close-inspection aid, not overview decoration. The
+  // small cap ensures a large warehouse still requires an intentional zoom-in
+  // before hundreds of shelf labels are rendered into the view.
+  const barcodeZoomDistance = Math.max(5.5, Math.min(10, span * 0.32));
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
   let occupancyOverviewMode = null;
@@ -1809,14 +1812,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let hoverIndex = -1;
   let hoverBoxIndex = -1;
   const updateRackLabelMode = () => {
-    const showRackNames = controls.getDistance() > barcodeZoomDistance;
-    if (showRackNames === barcodeMode) return;
-    barcodeMode = showRackNames;
-    // Match the box barcode behavior: hide shelf-edge barcodes in overview
-    // and reveal them only when the operator zooms in close enough to read.
-    barcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
-    boxBarcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
-    rackNameLabels.forEach((label) => { label.visible = showRackNames; });
+    const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
+    if (showBarcodes === barcodeMode) return;
+    barcodeMode = showBarcodes;
+    // Hide shelf-edge labels in normal/overview mode. They appear only after
+    // the operator deliberately zooms close enough to scan or read one.
+    barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+    boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+    rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
   };
   const updateOccupancyOverlay = () => {
     const revealOccupied = controls.getDistance() >= occupancyOverviewZoomDistance;
