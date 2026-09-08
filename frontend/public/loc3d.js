@@ -350,13 +350,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(labelObject);
 
   const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
-  const primaryZoneLabel = String(model.racks?.[0]?.zone || 'A');
   const warehouseTitle = document.createElement('div');
   warehouseTitle.className = 'loc3d-warehouse-title';
   const warehouseTitleCaption = document.createElement('span');
   warehouseTitleCaption.textContent = 'กำลังดูพื้นที่จัดเก็บ';
   const warehouseTitleName = document.createElement('strong');
-  warehouseTitleName.textContent = `โซน ${primaryZoneLabel}`;
+  // This header describes the whole scene. Zone labels belong on their
+  // physical safety markers below, never in place of the warehouse name.
+  warehouseTitleName.textContent = warehouseLabel;
   warehouseTitle.append(warehouseTitleCaption, warehouseTitleName);
   stage.appendChild(warehouseTitle);
 
@@ -454,13 +455,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
+  // Layout convention: paired rows in one zone face each other; the first
+  // row of each adjacent zone faces away from the preceding zone, so the two
+  // zones meet back-to-back.  The rack coordinates remain DB-owned; this only
+  // defines which physical face of each selective rack is presented in 3D.
+  const racksByZone = new Map();
+  model.racks.forEach((rack) => {
+    const key = String(rack.zone || '—');
+    const list = racksByZone.get(key) || [];
+    list.push(rack);
+    racksByZone.set(key, list);
+  });
+  const zoneKeys = [...racksByZone.keys()].sort(natural);
+  const displayRotationByRackId = new Map();
+  zoneKeys.forEach((zone, zoneIndex) => {
+    const baseRotation = zoneIndex % 2 ? 180 : 0;
+    (racksByZone.get(zone) || []).sort((a, b) =>
+      num(a.positionCm?.z) - num(b.positionCm?.z) || natural(a.code, b.code),
+    ).forEach((rack, rowIndex) => {
+      displayRotationByRackId.set(rack.id, num(rack.rotationYDeg) + baseRotation + (rowIndex % 2 ? 180 : 0));
+    });
+  });
+  const zoneBounds = new Map();
+
   model.racks.forEach((sourceRack) => {
-    // Zone B is the rear-facing row of the same rack block. Keep its DB
-    // position and dimensions, but turn the frame around so its back sits
-    // against Zone A instead of presenting the same face twice.
-    const rack = sourceRack.zone === 'B'
-      ? { ...sourceRack, rotationYDeg: num(sourceRack.rotationYDeg) + 180 }
-      : sourceRack;
+    const rack = {
+      ...sourceRack,
+      rotationYDeg: displayRotationByRackId.get(sourceRack.id) ?? num(sourceRack.rotationYDeg),
+    };
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
     const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
@@ -538,7 +560,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         sideY * height / CM_TO_M,
         sideZ * depth / CM_TO_M / 2,
       ))));
-    corners.forEach((point) => bounds.expandByPoint(point));
+    corners.forEach((point) => {
+      bounds.expandByPoint(point);
+      const zone = String(rack.zone || '—');
+      const zoneBox = zoneBounds.get(zone) || new THREE.Box3();
+      zoneBox.expandByPoint(point);
+      zoneBounds.set(zone, zoneBox);
+    });
 
     (rack.slots || []).forEach((slot) => {
       const position = worldPoint(rack, slot.localPositionCm?.x, slot.localPositionCm?.y, slot.localPositionCm?.z);
@@ -941,19 +969,42 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   )));
-  // Move the warehouse/zone label off the floor and mount it vertically above
-  // the safety rail, parallel to the rail direction and higher than its posts.
-  const safetySignTexture = safetyZoneSignTexture(primaryZoneLabel);
-  const safetyZoneSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.82, 1.54),
-    new THREE.MeshBasicMaterial({ map: safetySignTexture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
-  );
-  safetyZoneSign.position.set(railX - 0.075, warehouseFloorY + 1.98, (railStartZ + railEndZ) / 2);
-  safetyZoneSign.rotation.y = Math.PI / 2;
-  // Flip the inside-facing canvas so the lettering reads normally from the aisle.
-  safetyZoneSign.scale.x = -1;
-  safetyZoneSign.renderOrder = 4;
-  scene.add(safetyZoneSign);
+  // Zone safety signs sit beside the forklift aisle, not over the rack block.
+  // A is intentionally on the right (forklift side) and B on the left, so the
+  // two work areas remain visible even when their racks touch back-to-back.
+  const safetySignTextures = [];
+  const zoneSignX = (zone, fallbackX) => {
+    if (zone === 'A') return center.x + rackBoundaryWidth * 0.34;
+    if (zone === 'B') return center.x - rackBoundaryWidth * 0.34;
+    return fallbackX;
+  };
+  zoneKeys.forEach((zone) => {
+    const zoneBox = zoneBounds.get(zone);
+    const zoneCenter = zoneBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3(center.x, 0, center.z);
+    const texture = safetyZoneSignTexture(zone);
+    safetySignTextures.push(texture);
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.82, 1.54),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    sign.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 1.98, aisleCenterZ + 0.08);
+    // Face the aisle/camera; the text is physically aligned with the traffic
+    // side rather than floating above either rack row.
+    sign.rotation.y = Math.PI;
+    sign.renderOrder = 4;
+    scene.add(sign);
+
+    const floorTexture = floorMarkTexture(`โซน ${zone}`);
+    safetySignTextures.push(floorTexture);
+    const floorLabel = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.2, 0.42),
+      new THREE.MeshBasicMaterial({ map: floorTexture, transparent: true, depthWrite: false, toneMapped: false }),
+    );
+    floorLabel.rotation.x = -Math.PI / 2;
+    floorLabel.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 0.003, aisleCenterZ + 1.12);
+    floorLabel.renderOrder = 3;
+    scene.add(floorLabel);
+  });
   // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
   // following upper chord and repeated triangular webs across the full span.
   const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
@@ -1391,7 +1442,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       scene.add(light);
     }
   });
-  const floorMarkTextures = [safetySignTexture];
+  const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
   const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
   const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
