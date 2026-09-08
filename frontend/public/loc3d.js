@@ -456,6 +456,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   fullscreenButton.setAttribute('aria-label', 'ขยายมุมมอง 3D เต็มจอ');
   fullscreenButton.title = 'เต็มจอ';
   fullscreenButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M21 16v4a1 1 0 0 1-1 1h-4M3 16v4a1 1 0 0 0 1 1h4"/><path d="M8 8 3 3m13 5 5-5M8 16l-5 5m13-5 5 5"/></svg>';
+  const firstPersonButton = document.createElement('button');
+  firstPersonButton.type = 'button';
+  firstPersonButton.className = 'loc3d-first-person';
+  firstPersonButton.setAttribute('aria-label', 'มุมมองบุคคลที่หนึ่ง');
+  firstPersonButton.title = 'มุมมองคนเดิน · ใช้ W A S D';
+  firstPersonButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M7.5 21 9 13l3-3 3 3 1.5 8M9 13 5 16m10-3 4 3M12 10V7.5"/></svg>';
+  let firstPerson = false;
+  const walkKeys = new Set();
+  const toggleFirstPerson = () => {
+    firstPerson = !firstPerson;
+    firstPersonButton.classList.toggle('active', firstPerson);
+    firstPersonButton.setAttribute('aria-pressed', String(firstPerson));
+    controls.enabled = !firstPerson;
+    if (firstPerson) {
+      camera.position.y = Math.max(camera.position.y, 1.7);
+      window.toast?.('มุมมองคนเดิน · ใช้ W A S D และกดปุ่มเดิมเพื่อออก', '', 'ok');
+    }
+  };
+  firstPersonButton.addEventListener('click', toggleFirstPerson);
+  const onWalkKey = (event) => {
+    if (!firstPerson || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
+    if (event.type === 'keydown') walkKeys.add(event.code);
+    else walkKeys.delete(event.code);
+    event.preventDefault();
+  };
+  window.addEventListener('keydown', onWalkKey, { passive: false });
+  window.addEventListener('keyup', onWalkKey, { passive: false });
   let fallbackFullscreen = false;
   const setFallbackFullscreen = (enabled) => {
     fallbackFullscreen = enabled;
@@ -488,6 +516,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   fullscreenButton.addEventListener('click', toggleFullscreen);
   stage.appendChild(fullscreenButton);
+  stage.appendChild(firstPersonButton);
 
   // Fullscreen only renders descendants of the fullscreen element. Portal
   // the app's existing modal/drawer layers into the 3D stage while fullscreen
@@ -2355,6 +2384,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const movementDirection = new THREE.Vector3();
   const movementQuaternion = new THREE.Quaternion();
   const movementEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const walkForward = new THREE.Vector3();
+  const walkRight = new THREE.Vector3();
+  const walkCandidate = new THREE.Vector3();
   const animate = () => {
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
@@ -2394,7 +2426,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       targetRippleMaterial.opacity = (1 - elapsed) * 0.98;
       if (elapsed >= 1) targetRipple.visible = false;
     }
-    controls.update();
+    if (firstPerson) {
+      camera.getWorldDirection(walkForward);
+      walkForward.y = 0;
+      walkForward.normalize();
+      walkRight.crossVectors(walkForward, up).normalize();
+      walkCandidate.set(0, 0, 0);
+      if (walkKeys.has('KeyW')) walkCandidate.add(walkForward);
+      if (walkKeys.has('KeyS')) walkCandidate.sub(walkForward);
+      if (walkKeys.has('KeyD')) walkCandidate.add(walkRight);
+      if (walkKeys.has('KeyA')) walkCandidate.sub(walkRight);
+      if (walkCandidate.lengthSq() > 0) {
+        walkCandidate.normalize().multiplyScalar(2.15 * deltaSeconds).add(camera.position);
+        walkCandidate.y = 1.7;
+        const blockedWalk = rackEntries.some(({ collisionBox }) => collisionBox?.clone().expandByScalar(0.3).containsPoint(walkCandidate));
+        if (!blockedWalk) camera.position.copy(walkCandidate);
+      }
+    } else controls.update();
     keepCameraInsideWarehouse();
     updateRackLabelMode();
     updateOccupancyOverlay();
