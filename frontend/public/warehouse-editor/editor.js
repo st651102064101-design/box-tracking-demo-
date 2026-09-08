@@ -64,7 +64,9 @@ $('#refresh-racks').click(loadRacks);loadRacks();
 $('#done').click(()=>view(false));$('#add-tab').click(()=>{view(false);document.getElementById('catalog').scrollIntoView({block:'nearest'});});
 app.floorplanner.modeResetCallbacks.add(mode=>{$('[data-mode]').each(function(){$(this).toggleClass('active',app.floorplanner.modes[this.dataset.mode]===mode);});});
 $('#home-view').click(()=>app.three.centerCamera());
-$('#zoom-in').click(()=>app.three.controls.dollyIn(1.1));$('#zoom-out').click(()=>app.three.controls.dollyOut(1.1));
+function zoomCamera(factor){app.three.controls.dollyIn(factor);app.three.controls.update();}
+function zoomOutCamera(factor){app.three.controls.dollyOut(factor);app.three.controls.update();}
+$('#zoom-in').click(()=>zoomCamera(1.18));$('#zoom-out').click(()=>zoomOutCamera(1.18));
 app.three.itemSelectedCallbacks.add(item=>{selected=item;$('#selection').prop('hidden',false);$('#name').text(item.metadata.itemName);$('#fixed').prop('checked',item.fixed);});
 app.three.itemUnselectedCallbacks.add(()=>{selected=null;$('#selection').prop('hidden',true);});
 app.three.itemSelectedCallbacks.add(item=>{const asset=item.metadata.warehouseAsset;const dims=asset?.dimensionsCm;$('#dimensions').text((asset?.id?'รหัส '+asset.id+' • ':'')+'กว้าง '+((dims?.width??item.getWidth())/100).toFixed(2)+' × สูง '+((dims?.height??item.getHeight())/100).toFixed(2)+' × ลึก '+((dims?.depth??item.getDepth())/100).toFixed(2)+' เมตร');$('#angle').val(Math.round(item.rotation.y*180/Math.PI));});
