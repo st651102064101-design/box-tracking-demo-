@@ -994,15 +994,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       steelBetween(new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ), new THREE.Vector3(points[2].x, warehouseFloorY + height, railZ), 0.045, guardrailMaterial);
     });
   };
+  // Keep the guard flush with the real steel footprint. `collisionBox` is
+  // deliberately enlarged for raycasting, so it must never drive safety size.
+  const rackFootprintBounds = (entry) => {
+    const footprint = new THREE.Box3();
+    [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => footprint.expandByPoint(
+      worldPoint(entry.rack, sideX * entry.width * 50, 0, sideZ * entry.depth * 50),
+    )));
+    return footprint;
+  };
+  const safetyClearance = 0.08;
   // Protect the short ends of the central back-to-back rack pair.
   const innerBankBounds = new THREE.Box3();
   rackEntries
     .filter((entry) => innerBackToBackRackIds.has(entry.rack.id))
-    .forEach((entry) => innerBankBounds.union(entry.collisionBox));
+    .forEach((entry) => innerBankBounds.union(rackFootprintBounds(entry)));
   if (!innerBankBounds.isEmpty()) {
-    const railMinX = innerBankBounds.min.x - 0.28;
-    const railMaxX = innerBankBounds.max.x + 0.28;
-    [innerBankBounds.min.z - 0.28, innerBankBounds.max.z + 0.28]
+    const railMinX = innerBankBounds.min.x;
+    const railMaxX = innerBankBounds.max.x;
+    [innerBankBounds.min.z - safetyClearance, innerBankBounds.max.z + safetyClearance]
       .forEach((railZ) => createRackEndGuard(railMinX, railMaxX, railZ));
   }
   // Add the matching three-post guard to the exposed outer racks on the left
@@ -1010,9 +1020,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackEntries
     .filter((entry) => outerRackIds.has(entry.rack.id))
     .forEach((entry) => {
-      const rackBox = entry.collisionBox;
-      [rackBox.min.z - 0.28, rackBox.max.z + 0.28].forEach((railZ) =>
-        createRackEndGuard(rackBox.min.x - 0.28, rackBox.max.x + 0.28, railZ));
+      const rackBox = rackFootprintBounds(entry);
+      [rackBox.min.z - safetyClearance, rackBox.max.z + safetyClearance].forEach((railZ) =>
+        createRackEndGuard(rackBox.min.x, rackBox.max.x, railZ));
     });
   // Zone labels sit on the inner side of each zone, in the aisle marked by the
   // floor, rather than outside the rack block where they get hidden behind the
