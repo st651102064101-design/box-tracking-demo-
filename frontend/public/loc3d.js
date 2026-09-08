@@ -432,19 +432,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   fullscreenButton.setAttribute('aria-label', 'ขยายมุมมอง 3D เต็มจอ');
   fullscreenButton.title = 'เต็มจอ';
   fullscreenButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M21 16v4a1 1 0 0 1-1 1h-4M3 16v4a1 1 0 0 0 1 1h4"/><path d="M8 8 3 3m13 5 5-5M8 16l-5 5m13-5 5 5"/></svg>';
+  let fallbackFullscreen = false;
+  const setFallbackFullscreen = (enabled) => {
+    fallbackFullscreen = enabled;
+    stage.classList.toggle('loc3d-mobile-fullscreen', enabled);
+    document.body.classList.toggle('loc3d-body-fullscreen', enabled);
+    syncFullscreenPortals();
+    renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+    camera.aspect = stage.clientWidth / Math.max(1, stage.clientHeight);
+    camera.updateProjectionMatrix();
+  };
   const toggleFullscreen = async () => {
     try {
-      if (document.fullscreenElement === stage) await document.exitFullscreen();
+      if (document.fullscreenElement === stage || fallbackFullscreen) {
+        if (document.fullscreenElement === stage) await document.exitFullscreen();
+        setFallbackFullscreen(false);
+      }
       else {
         const target = stage.requestFullscreen || stage.webkitRequestFullscreen ? stage : canvas;
         const request = target.requestFullscreen || target.webkitRequestFullscreen;
-        if (!request) throw new Error('Browser ไม่รองรับ Fullscreen API');
-        await request.call(target);
+        if (request) await request.call(target);
+        else setFallbackFullscreen(true);
       }
       canvas.focus?.();
     } catch (error) {
       console.warn('[Warehouse3D] fullscreen unavailable', error);
-      window.toast?.('เปิดเต็มจอไม่ได้', error.message || 'เบราว์เซอร์ไม่อนุญาต', 'err');
+      // iOS Safari may expose the method but reject it; use a fixed viewport
+      // fallback so iPhone and Android still get a true edge-to-edge canvas.
+      setFallbackFullscreen(true);
     }
   };
   fullscreenButton.addEventListener('click', toggleFullscreen);
@@ -458,7 +473,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     .filter(Boolean)
     .map((element) => ({ element, parent: element.parentElement, nextSibling: element.nextSibling }));
   const syncFullscreenPortals = () => {
-    const isThisStageFullscreen = document.fullscreenElement === stage;
+    const isThisStageFullscreen = document.fullscreenElement === stage || fallbackFullscreen;
     fullscreenPortals.forEach(({ element, parent, nextSibling }) => {
       if (isThisStageFullscreen) {
         if (!stage.contains(element)) stage.appendChild(element);
@@ -2192,6 +2207,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
+      if (fallbackFullscreen) setFallbackFullscreen(false);
       syncFullscreenPortals();
       rackActionButton.remove();
       warehouseTitle.remove();
