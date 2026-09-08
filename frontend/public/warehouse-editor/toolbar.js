@@ -3,6 +3,9 @@
  const tools=document.getElementById('tools');document.getElementById('floorplanner').append(tools);
  const loadDb=document.createElement('button');loadDb.id='load-db';loadDb.textContent='โหลดผัง DB';document.getElementById('save').after(loadDb);
  const saveDb=document.createElement('button');saveDb.id='save-db';saveDb.textContent='บันทึก DB';loadDb.after(saveDb);
+ const imported=document.createElement('button');imported.id='import-model';imported.textContent='นำเข้าโมเดล';saveDb.after(imported);
+ const modelFile=document.createElement('input');modelFile.id='model-file';modelFile.type='file';modelFile.accept='.glb,model/gltf-binary';modelFile.hidden=true;document.body.append(modelFile);
+ const feedback=document.createElement('span');feedback.id='save-feedback';feedback.setAttribute('role','status');saveDb.after(feedback);
  const done=document.createElement('button');done.id='done';done.textContent='เสร็จแล้ว »';tools.append(done);
  const nav=document.createElement('div');nav.id='nav';
  [['แก้ไขผัง 2D','view2'],['จัดวาง 3D','view3']].forEach(([label,id])=>{const b=document.createElement('button');b.textContent=label;b.onclick=()=>document.getElementById(id).click();nav.append(b);});

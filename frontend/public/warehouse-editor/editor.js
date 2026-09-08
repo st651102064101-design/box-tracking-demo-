@@ -4,11 +4,12 @@ const catalogue = {rack:'แร็กตัวอย่าง', safety:'เส�
 window.warehouseGeometry = function(url, T) {
   window.warehouseThree=T;
   const [type,encoded] = url.slice(10).split('?');
+  if (type==='import') return import('./assets.js').then(m=>m.convertImportedAsset(window.warehouseImportedModels?.get(encoded),T));
   if (!catalogue[type]) throw new Error('อุปกรณ์ไม่รองรับ');
-  if(['forklift','door','exit','pallet'].includes(type))return import('./assets.js').then(m=>m.convertAsset(type,T));
+  if(['forklift','door','exit'].includes(type))return import('./assets.js').then(m=>m.convertAsset(type,T));
   const rack=encoded?JSON.parse(decodeURIComponent(encoded)):null;
   const geometry = new T.Geometry();
-  const materials = [0x185c9b,0xe6a338,0x222428].map(color=>new T.MeshPhongMaterial({color}));
+  const materials = [0x1268cf,0xf28a12,0x222428].map(color=>new T.MeshPhongMaterial({color}));
   function box(x,y,z,w,h,d,m) {
     const part = new T.BoxGeometry(w,h,d);
     const matrix = new T.Matrix4().makeTranslation(x,y,z);
@@ -32,6 +33,13 @@ window.warehouseGeometry = function(url, T) {
     for(let i=0;i<levels.length-1;i++){const low=levels[i]+7,high=levels[i+1]-7;xs.forEach(x=>{const z=(d-frame)/2;const a=new T.Vector3(x,low,-z),b=new T.Vector3(x,high,z),delta=b.clone().sub(a);let part=new T.BoxGeometry(frame*.34,delta.length(),frame*.34),q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());geometry.merge(part,new T.Matrix4().compose(a.add(b).multiplyScalar(.5),q,new T.Vector3(1,1,1)));const c=new T.Vector3(x,low,z),e=new T.Vector3(x,high,-z),other=e.clone().sub(c);part=new T.BoxGeometry(frame*.34,other.length(),frame*.34);q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),other.normalize());geometry.merge(part,new T.Matrix4().compose(c.add(e).multiplyScalar(.5),q,new T.Vector3(1,1,1)));});}
     const boxesBySlot=new Map();(rack?.boxes||[]).forEach(b=>{const list=boxesBySlot.get(b.slotId)||[];list.push(b);boxesBySlot.set(b.slotId,list);});
     (rack?.slots||[]).forEach(slot=>{const placed=boxesBySlot.get(slot.id)||[];placed.forEach((b,i)=>{const bd=b.dimensionsCm||{width:60,height:40,depth:40};const isPallet=/pallet/i.test(b.materialType||'');box(slot.localPositionCm.x+(i-(placed.length-1)/2)*(bd.width+8),slot.localPositionCm.y,0,bd.width,bd.height,bd.depth,isPallet?5:4);});});
+  } else if(type==='pallet') {
+    // Only the open-deck pallet is available: gaps between the boards are real
+    // openings, so the closed plastic pallet from the source asset cannot be added.
+    materials.push(new T.MeshPhongMaterial({color:0x9b6236}));
+    [-48,-24,0,24,48].forEach(x=>box(x,15,0,18,9,120,3));
+    [-48,0,48].forEach(x=>box(x,6,0,22,12,120,3));
+    [-42,0,42].forEach(z=>box(0,3,z,120,6,16,3));
   } else if(type==='safety'||type==='rail') {
     (type==='rail'?[-60,60]:[0]).forEach(x=>{box(x,1.8,0,20,3.5,20,1);const post=new T.CylinderGeometry(5.5,5.5,115,10);post.faces.forEach(f=>{f.materialIndex=1;});geometry.merge(post,new T.Matrix4().makeTranslation(x,57.5,0));[20,52,84].forEach(y=>{const band=new T.CylinderGeometry(5.9,5.9,14,10);band.faces.forEach(f=>{f.materialIndex=2;});geometry.merge(band,new T.Matrix4().makeTranslation(x,y,0));});});
     if(type==='rail') [55,100].forEach(y=>box(0,y,0,120,7,7,1));
@@ -61,7 +69,7 @@ window.addEventListener('warehouse-model-error',e=>{status.textContent='โห�
 function view(is2d){$('#viewer').toggle(!is2d);$('#floorplanner,#tools').toggle(is2d);$('#view2').toggleClass('active',is2d);$('#view3').toggleClass('active',!is2d);if(is2d)app.floorplanner.reset();else app.three.updateWindowSize();}
 $('#view2').click(()=>view(true));$('#view3').click(()=>view(false));
 $('[data-mode]').click(function(){app.floorplanner.setMode(app.floorplanner.modes[this.dataset.mode]);});
-let warehouseData=null;
+let warehouseData=null;window.warehouseImportedModels=new Map();
 function rackLabel(asset){return [asset.warehouseId,asset.zone,asset.code].filter(Boolean).join(' / ');}
 function addWarehouseItem(label,url,warehouseAsset=null,position=null){view(false);app.model.scene.addItem(1,url,{itemName:label,itemType:1,modelUrl:url,resizable:false,warehouseAsset,placeAtDb:Boolean(position)},position,warehouseAsset?.rotationYDeg*Math.PI/180||0);}
 function addButton(label,url,target='catalog',warehouseAsset=null){const button=document.createElement('button');button.textContent='+ '+label;button.onclick=()=>{status.textContent='กำลังโหลด '+label;addWarehouseItem(label,url,warehouseAsset);};document.getElementById(target).append(button);}
@@ -70,9 +78,12 @@ app.model.scene.itemLoadedCallbacks.add(()=>{status.textContent='เพิ่ม
 function attachBoxes(data){const bySlot=new Map();(data.boxes||[]).forEach(box=>{const list=bySlot.get(box.slotId)||[];list.push(box);bySlot.set(box.slotId,list);});data.racks.forEach(rack=>{rack.boxes=rack.slots.flatMap(slot=>(bySlot.get(slot.id)||[]).map(box=>({...box,slotId:slot.id})));});return data;}
 async function loadRacks(){try{const token=localStorage.getItem('smarttrace_jwt');if(!token)throw Error('เข้าสู่ระบบหลักก่อนเพื่อเลือกแร็กจาก DB');const r=await fetch('/api/warehouse-3d',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('โหลดแร็กไม่ได้ ('+r.status+')');const data=attachBoxes(await r.json());warehouseData=data;document.getElementById('db-racks').replaceChildren();data.racks.forEach(rack=>addButton(rackLabel(rack),'warehouse:rack?'+encodeURIComponent(JSON.stringify(rack)),'db-racks',rack));status.textContent=`โหลด DB แล้ว: ${data.stats.racks} แร็ก • ${data.stats.slots} ช่อง • ${data.stats.boxes} กล่อง`;return data;}catch(e){status.textContent=e.message;return null;}}
 async function loadDbLayout(){const data=warehouseData||await loadRacks();if(!data)return;app.model.scene.clearItems();data.racks.forEach(rack=>addWarehouseItem(rackLabel(rack),'warehouse:rack?'+encodeURIComponent(JSON.stringify(rack)),rack,{x:rack.positionCm.x,y:0,z:rack.positionCm.z}));status.textContent='กำลังแสดงผังจริงจาก DB';}
-async function saveDbLayout(){try{const token=localStorage.getItem('smarttrace_jwt');if(!token)throw Error('เข้าสู่ระบบหลักก่อนเพื่อบันทึก');const items=app.model.scene.getItems().filter(item=>item.metadata.warehouseAsset?.id);if(!items.length)throw Error('ยังไม่มีแร็กจาก DB ในผัง');$('#save-db').prop('disabled',true);await Promise.all(items.map(item=>fetch('/api/warehouse-3d/racks/'+encodeURIComponent(item.metadata.warehouseAsset.id),{method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({positionCm:{x:item.position.x,y:0,z:item.position.z},rotationYDeg:item.rotation.y*180/Math.PI})}).then(r=>{if(!r.ok)throw Error('บันทึกแร็กไม่สำเร็จ ('+r.status+')');})));status.textContent=`บันทึกตำแหน่ง ${items.length} แร็กลง DB แล้ว`;await loadRacks();}catch(e){status.textContent=e.message;}finally{$('#save-db').prop('disabled',false);}}
+function saveFeedback(text,error=false){const feedback=document.getElementById('save-feedback');feedback.textContent=text;feedback.classList.toggle('error',error);}
+async function saveDbLayout(){try{const token=localStorage.getItem('smarttrace_jwt');if(!token)throw Error('เข้าสู่ระบบหลักก่อนเพื่อบันทึก');const items=app.model.scene.getItems().filter(item=>item.metadata.warehouseAsset?.id);if(!items.length)throw Error('ยังไม่มีแร็กจาก DB ในผัง');$('#save-db').prop('disabled',true);saveFeedback('กำลังบันทึก…');const results=await Promise.all(items.map(async item=>{const r=await fetch('/api/warehouse-3d/racks/'+encodeURIComponent(item.metadata.warehouseAsset.id),{method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({positionCm:{x:item.position.x,y:0,z:item.position.z},rotationYDeg:item.rotation.y*180/Math.PI})});if(!r.ok)throw Error(`${item.metadata.itemName}: ${await r.text()||r.status}`);}));status.textContent=`บันทึกตำแหน่ง ${results.length} แร็กลง DB แล้ว`;saveFeedback(`✓ บันทึก ${results.length} แร็กแล้ว`);await loadRacks();}catch(e){status.textContent=e.message;saveFeedback('บันทึกไม่สำเร็จ: '+e.message,true);}finally{$('#save-db').prop('disabled',false);}}
 $('#refresh-racks').click(loadRacks);loadRacks();
 $('#load-db').click(loadDbLayout);$('#save-db').click(saveDbLayout);
+$('#import-model').click(()=>document.getElementById('model-file').click());
+$('#model-file').change(function(){const file=this.files?.[0];if(!file)return;const id=(crypto.randomUUID?.()||Date.now().toString());window.warehouseImportedModels.set(id,file);status.textContent='กำลังนำเข้า '+file.name;addWarehouseItem(file.name,'warehouse:import?'+id);this.value='';});
 $('#done').click(()=>view(false));$('#add-tab').click(()=>{view(false);document.getElementById('catalog').scrollIntoView({block:'nearest'});});
 app.floorplanner.modeResetCallbacks.add(mode=>{$('[data-mode]').each(function(){$(this).toggleClass('active',app.floorplanner.modes[this.dataset.mode]===mode);});});
 $('#home-view').click(()=>app.three.centerCamera());
