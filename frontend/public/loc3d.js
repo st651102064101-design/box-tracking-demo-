@@ -986,9 +986,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     0.045,
     guardrailMaterial,
   ));
-  // Zone safety signs sit beside the forklift aisle, not over the rack block.
-  // A is intentionally on the right (forklift side) and B on the left, so the
-  // two work areas remain visible even when their racks touch back-to-back.
+  // Zone labels sit on the inner side of each zone, in the aisle marked by the
+  // floor, rather than outside the rack block where they get hidden behind the
+  // end frames. A is on the right and B on the left, so both labels face the
+  // shared forklift aisle as shown in the warehouse layout.
   const safetySignTextures = [];
   const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6 };
   zoneKeys.forEach((zone) => {
@@ -1006,10 +1007,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     zoneFloor.renderOrder = 1;
     scene.add(zoneFloor);
     const zoneSide = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneCenter.x >= center.x ? 1 : -1);
-    const zoneOuterX = zoneBox
-      ? (zoneSide > 0 ? zoneBox.max.x : zoneBox.min.x)
+    const zoneInnerX = zoneBox
+      ? (zoneSide > 0 ? zoneBox.min.x : zoneBox.max.x)
       : zoneCenter.x;
-    const signX = zoneOuterX + zoneSide * 1.3;
+    const signX = zoneInnerX + zoneSide * 1.3;
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
     safetySignTextures.push(floorTexture);
     const floorLabel = new THREE.Mesh(
