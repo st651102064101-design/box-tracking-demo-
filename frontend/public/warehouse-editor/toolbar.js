@@ -1,6 +1,8 @@
 'use strict';
 (() => {
  const tools=document.getElementById('tools');document.getElementById('floorplanner').append(tools);
+ const loadDb=document.createElement('button');loadDb.id='load-db';loadDb.textContent='โหลดผัง DB';document.getElementById('save').after(loadDb);
+ const saveDb=document.createElement('button');saveDb.id='save-db';saveDb.textContent='บันทึก DB';loadDb.after(saveDb);
  const done=document.createElement('button');done.id='done';done.textContent='เสร็จแล้ว »';tools.append(done);
  const nav=document.createElement('div');nav.id='nav';
  [['แก้ไขผัง 2D','view2'],['จัดวาง 3D','view3']].forEach(([label,id])=>{const b=document.createElement('button');b.textContent=label;b.onclick=()=>document.getElementById(id).click();nav.append(b);});
@@ -11,5 +13,6 @@
  const camera=document.createElement('div');camera.id='camera';[['zoom-in','＋'],['home-view','จัดมุมกล้อง'],['zoom-out','−']].forEach(([id,text])=>{const b=document.createElement('button');b.id=id;b.textContent=text;camera.append(b);});document.body.append(camera);
  const dims=document.createElement('p');dims.id='dimensions';document.getElementById('selection').append(dims);
  const label=document.createElement('label');label.textContent='มุมหมุน (องศา) ';const angle=document.createElement('input');angle.id='angle';angle.type='number';angle.step='15';label.append(angle);document.getElementById('selection').append(label);
+ const slots=document.createElement('div');slots.id='slot-list';document.getElementById('selection').append(slots);
  const credit=document.createElement('a');credit.href='/models/ATTRIBUTION.md';credit.textContent='เครดิตโมเดล';document.querySelector('aside').append(credit);
 })();
