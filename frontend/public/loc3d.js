@@ -555,6 +555,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   consumerPanel.addEventListener('pointerenter', () => { consumerPanelPointerOver = true; });
   consumerPanel.addEventListener('pointerleave', () => { consumerPanelPointerOver = false; });
   consumerPanel.addEventListener('pointerdown', (event) => event.stopPropagation());
+  const dismissConsumerPanel = (event) => {
+    if (!consumerPanel.contains(event.target)) consumerPanelObject.visible = false;
+  };
+  // The switch popover behaves like a conventional menu: any interaction
+  // outside it dismisses it, while the switch itself remains clickable.
+  document.addEventListener('pointerdown', dismissConsumerPanel, true);
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
@@ -2094,6 +2100,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
+      document.removeEventListener('pointerdown', dismissConsumerPanel, true);
       syncFullscreenPortals();
       rackActionButton.remove();
       consumerPanel.remove();
