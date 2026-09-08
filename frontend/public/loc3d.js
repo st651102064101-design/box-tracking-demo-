@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+// The app maps `three` to the WebGPU build. WebGLRenderer lives only in the
+// standard build, so the fallback needs its own import-map alias.
 import { WebGLRenderer } from 'three/webgl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
@@ -8,8 +10,8 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 const CM_TO_M = 0.01;
 const THREE_VERSION = '0.184.0';
-// Empty bays deliberately have no status colour. Their neutral, faint volume
-// remains raycastable; green is reserved for the explicit hover affordance.
+// Slot volumes are invisible hit targets. The rack is read from its steel
+// members: empty bays must never look like dark glass partitions.
 const EMPTY_COLOR = new THREE.Color(0x253039);
 const FULL_COLOR = new THREE.Color(0xd63d48);
 const OCCUPIED_COLOR = new THREE.Color(0xf59e0b);
@@ -48,7 +50,7 @@ function legacyModel(locations, occupancy) {
     .map(([id, rows], rackIndex) => {
       const shelves = [...new Set(rows.map((row) => String(row.shelf || '1')))].sort(natural);
       const slotCodes = [...new Set(rows.map((row) => String(row.slot || '1')))].sort(natural);
-      const width = Math.max(140, slotCodes.length * 120 + 20);
+      const width = Math.max(290, slotCodes.length * 270 + 20);
       const height = Math.max(110, shelves.length * 80 + 30);
       return {
         id,
@@ -67,11 +69,11 @@ function legacyModel(locations, occupancy) {
             shelfCode: String(row.shelf || '1'),
             slotCode: String(row.slot || '1'),
             localPositionCm: {
-              x: (slotIndex - (slotCodes.length - 1) / 2) * 120,
-              y: 10 + (shelfIndex + 0.5) * 80,
+              x: (slotIndex - (slotCodes.length - 1) / 2) * 270,
+              y: 75 + shelfIndex * 150,
               z: 0,
             },
-            dimensionsCm: { width: 110, height: 70, depth: 100 },
+              dimensionsCm: { width: 270, height: 140, depth: 110 },
             // A stored box is rendered as a box, not as a red "full" warning.
             // Red is reserved for an explicit full report from PDA/web.
             barcode: row.barcode || row.code,
@@ -147,6 +149,53 @@ function floorMarkTexture(text) {
   context.textBaseline = 'middle';
   context.shadowColor = 'rgba(0,0,0,.85)';
   context.shadowBlur = 8;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
+function safetyZoneSignTexture(zone) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 600;
+  canvas.height = 1000;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  // Match rack names exactly: white type with a black industrial outline.
+  context.lineJoin = 'round';
+  context.lineWidth = 28;
+  context.strokeStyle = '#050505';
+  context.fillStyle = '#ffffff';
+  context.font = '900 126px system-ui, sans-serif';
+  context.strokeText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
+  context.fillText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
+function rackNameTexture(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1400;
+  canvas.height = 260;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  // The white type and black outline stay legible over a yellow beam or a
+  // light shelf without needing an opaque sign background.
+  context.font = '900 148px system-ui, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.lineJoin = 'round';
+  context.lineWidth = 24;
+  context.strokeStyle = '#050505';
+  context.fillStyle = '#ffffff';
+  context.strokeText(text, canvas.width / 2, canvas.height / 2);
   context.fillText(text, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -269,7 +318,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   if (renderer.init) await renderer.init();
 
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 1000);
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.02, 1000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
@@ -280,9 +329,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   controls.minDistance = 0.28;
   controls.maxDistance = 260;
 
-  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.55));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
-  const sun = new THREE.DirectionalLight(0xfff3de, 3.15);
+  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.75));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.48));
+  const sun = new THREE.DirectionalLight(0xfff3de, 2.25);
   sun.position.set(-18, 28, 14);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -299,6 +348,48 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const labelObject = new CSS2DObject(labelElement);
   labelObject.visible = false;
   scene.add(labelObject);
+
+  const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
+  const primaryZoneLabel = String(model.racks?.[0]?.zone || 'A');
+  const warehouseTitle = document.createElement('div');
+  warehouseTitle.className = 'loc3d-warehouse-title';
+  const warehouseTitleCaption = document.createElement('span');
+  warehouseTitleCaption.textContent = 'กำลังดูพื้นที่จัดเก็บ';
+  const warehouseTitleName = document.createElement('strong');
+  warehouseTitleName.textContent = `โซน ${primaryZoneLabel}`;
+  warehouseTitle.append(warehouseTitleCaption, warehouseTitleName);
+  stage.appendChild(warehouseTitle);
+
+  // A small contextual action that follows the currently hovered rack. It is
+  // deliberately a CSS2D button so it feels attached to the physical model.
+  const rackActionButton = document.createElement('button');
+  rackActionButton.type = 'button';
+  rackActionButton.className = 'loc3d-rack-action';
+  rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
+  rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
+  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.6 7.6 0 0 0-1.7-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.61.25-1.18.58-1.7.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.09.73 1.7.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.61-.25 1.18-.58 1.7-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>';
+  const rackActionObject = new CSS2DObject(rackActionButton);
+  rackActionObject.visible = false;
+  scene.add(rackActionObject);
+  let actionPointerOver = false;
+  rackActionButton.addEventListener('pointerenter', () => { actionPointerOver = true; });
+  rackActionButton.addEventListener('pointerleave', () => { actionPointerOver = false; });
+  rackActionButton.addEventListener('pointerdown', (event) => event.stopPropagation());
+  rackActionButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const toastZone = document.getElementById('toastZone');
+    const fullscreenHost = document.fullscreenElement;
+    const originalToastParent = toastZone?.parentElement;
+    const movedToastIntoFullscreen = Boolean(fullscreenHost && toastZone && !fullscreenHost.contains(toastZone));
+    if (movedToastIntoFullscreen) fullscreenHost.appendChild(toastZone);
+    window.toast?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน', '', 'ok');
+    if (movedToastIntoFullscreen) {
+      window.setTimeout(() => {
+        if (toastZone.parentElement === fullscreenHost && originalToastParent) originalToastParent.appendChild(toastZone);
+      }, 3200);
+    }
+  });
 
   const hud = document.createElement('div');
   hud.className = 'loc3d-hud';
@@ -331,17 +422,45 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   fullscreenButton.addEventListener('click', toggleFullscreen);
   stage.appendChild(fullscreenButton);
 
+  // Fullscreen only renders descendants of the fullscreen element. Portal
+  // the app's existing modal/drawer layers into the 3D stage while fullscreen
+  // is active so slot and box clicks still open the normal system UI.
+  const fullscreenPortals = ['modal', 'alertM', 'drawer']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean)
+    .map((element) => ({ element, parent: element.parentElement, nextSibling: element.nextSibling }));
+  const syncFullscreenPortals = () => {
+    const isThisStageFullscreen = document.fullscreenElement === stage;
+    fullscreenPortals.forEach(({ element, parent, nextSibling }) => {
+      if (isThisStageFullscreen) {
+        if (!stage.contains(element)) stage.appendChild(element);
+      } else if (element.parentElement !== parent) {
+        if (nextSibling && nextSibling.parentElement === parent) parent.insertBefore(element, nextSibling);
+        else parent.appendChild(element);
+      }
+    });
+  };
+  document.addEventListener('fullscreenchange', syncFullscreenPortals);
+  syncFullscreenPortals();
+
   const rackEntries = [];
   const slotEntries = [];
   const uprightParts = [];
   const beamParts = [];
   const deckParts = [];
   const braceParts = [];
+  const basePlateParts = [];
   const bounds = new THREE.Box3();
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  model.racks.forEach((rack) => {
+  model.racks.forEach((sourceRack) => {
+    // Zone B is the rear-facing row of the same rack block. Keep its DB
+    // position and dimensions, but turn the frame around so its back sits
+    // against Zone A instead of presenting the same face twice.
+    const rack = sourceRack.zone === 'B'
+      ? { ...sourceRack, rotationYDeg: num(sourceRack.rotationYDeg) + 180 }
+      : sourceRack;
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
     const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
@@ -351,7 +470,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const base = worldPoint(rack, 0, 0, 0);
     const addPart = (parts, x, y, z, sx, sy, sz) => {
       const position = new THREE.Vector3(x, y, z).applyQuaternion(quaternion).add(base);
-      parts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz) });
+      parts.push({ position, quaternion, scale: new THREE.Vector3(sx, sy, sz), rack });
     };
     const addBrace = (x1, y1, z1, x2, y2, z2) => {
       const start = new THREE.Vector3(x1, y1, z1), end = new THREE.Vector3(x2, y2, z2);
@@ -360,24 +479,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const localRotation = new THREE.Quaternion().setFromUnitVectors(up, delta.normalize());
       const partQuaternion = quaternion.clone().multiply(localRotation);
       const position = start.add(end).multiplyScalar(0.5).applyQuaternion(quaternion).add(base);
-      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.52, length, frame * 0.52) });
+      braceParts.push({ position, quaternion: partQuaternion, scale: new THREE.Vector3(frame * 0.34, length, frame * 0.34), rack });
     };
-    [-1, 1].forEach((sideX) => [-1, 1].forEach((sideZ) => {
-      addPart(uprightParts, sideX * (width - frame) / 2, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
-    }));
     const shelfBottoms = new Map();
     (rack.slots || []).forEach((slot) => {
       const y = num(slot.localPositionCm?.y) - positive(slot.dimensionsCm?.height, 70) / 2;
       shelfBottoms.set(String(slot.shelfCode), y * CM_TO_M);
     });
     const shelfLevels = [...shelfBottoms.entries()].sort((a, b) => a[1] - b[1]);
-    shelfLevels.forEach(([, y]) => {
-      // Pale steel deck with yellow load beams front and rear, matching a
-      // real selective pallet rack rather than a single grey solid shelf.
-      addPart(deckParts, 0, y + 0.018, 0, width - frame * 1.4, 0.035, depth - frame * 1.4);
-      [-1, 1].forEach((sideZ) => addPart(beamParts, 0, y, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
-    });
-    [-1, 1].forEach((sideZ) => addPart(beamParts, 0, height - 0.04, sideZ * (depth - frame) / 2, width, 0.115, frame * 1.45));
     // Uprights between bins are structural steel, not decoration. Generate a
     // divider for every adjacent pair on each shelf so the real rack layout is
     // legible even when translucent slot volumes overlap.
@@ -388,33 +497,32 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       list.push(slot);
       shelfSlots.set(key, list);
     });
-    shelfSlots.forEach((items, shelfCode) => {
-      items.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
-      const levelIndex = shelfLevels.findIndex(([code]) => code === shelfCode);
-      const floorY = shelfLevels[levelIndex]?.[1] ?? 0;
-      // Make every internal upright meet both steel cross-members. Formerly it
-      // was only as high as the slot volume, leaving visible gaps between
-      // shelves when a rack's pitch exceeded the nominal slot height.
-      const nextFloorY = levelIndex >= 0 && levelIndex < shelfLevels.length - 1
-        ? shelfLevels[levelIndex + 1][1]
-        : height - 0.04;
-      const dividerBottom = floorY + 0.0375;
-      const dividerTop = Math.max(dividerBottom + 0.03, nextFloorY - 0.04);
-      for (let index = 1; index < items.length; index += 1) {
-        const left = items[index - 1];
-        const right = items[index];
-        const dividerX = (num(left.localPositionCm?.x) + num(right.localPositionCm?.x)) * CM_TO_M / 2;
-        addPart(uprightParts, dividerX, (dividerBottom + dividerTop) / 2, 0,
-          Math.max(0.045, frame * 0.7), dividerTop - dividerBottom, depth);
+    const widestShelf = [...shelfSlots.values()].sort((a, b) => b.length - a.length)[0] || [];
+    widestShelf.sort((a, b) => num(a.localPositionCm?.x) - num(b.localPositionCm?.x));
+    // Each DB slot column is one selective-rack bay. Deriving every frame from
+    // those columns keeps the 2.7 m bays accurate without inventing inventory.
+    const frameXs = [-(width - frame) / 2];
+    for (let index = 1; index < widestShelf.length; index += 1) {
+      frameXs.push((num(widestShelf[index - 1].localPositionCm?.x) + num(widestShelf[index].localPositionCm?.x)) * CM_TO_M / 2);
+    }
+    frameXs.push((width - frame) / 2);
+    const uniqueFrameXs = [...new Set(frameXs.map((x) => x.toFixed(4)))].map(Number).sort((a, b) => a - b);
+    uniqueFrameXs.forEach((x) => [-1, 1].forEach((sideZ) => {
+      addPart(uprightParts, x, height / 2, sideZ * (depth - frame) / 2, frame, height, frame);
+      addPart(basePlateParts, x, 0.025, sideZ * (depth - frame) / 2, frame * 2.3, 0.05, frame * 2.3);
+    }));
+    const beamLevels = shelfLevels.map(([, y]) => y).concat([height - 0.04]);
+    beamLevels.forEach((y) => {
+      for (let index = 0; index < uniqueFrameXs.length - 1; index += 1) {
+        const left = uniqueFrameXs[index], right = uniqueFrameXs[index + 1];
+        [-1, 1].forEach((sideZ) => addPart(beamParts, (left + right) / 2, y, sideZ * (depth - frame) / 2, right - left, 0.105, frame * 1.28));
       }
     });
-    // Black cross bracing on both end frames. It is structural, not merely a
-    // decoration, and keeps the visual language aligned with pallet racks.
+    // Braces sit in every depth frame, leaving each bay front unobstructed.
     const braceLevels = shelfLevels.map(([, y]) => y).concat([height - 0.04]);
     for (let index = 0; index < braceLevels.length - 1; index += 1) {
       const low = braceLevels[index] + 0.07, high = braceLevels[index + 1] - 0.07;
-      [-1, 1].forEach((sideX) => {
-        const x = sideX * (width - frame) / 2;
+      uniqueFrameXs.forEach((x) => {
         const z = (depth - frame) / 2;
         addBrace(x, low, -z, x, high, z);
         addBrace(x, low, z, x, high, -z);
@@ -454,16 +562,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const mesh = new THREE.InstancedMesh(UNIT_BOX, material, parts.length);
     parts.forEach((part, index) => mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.userData.rackByInstance = parts.map((part) => part.rack);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
     return mesh;
   };
-  // Industrial palette from the reference: perforated-style dark uprights,
-  // safety yellow load beams, light shelf decks and dark X bracing.
-  addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x202327, metalness: 0.82, roughness: 0.28 }));
-  addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf2bf24, metalness: 0.62, roughness: 0.32 }));
-  addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xe7ebed, metalness: 0.3, roughness: 0.56 }));
-  addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x171a1e, metalness: 0.86, roughness: 0.25 }));
+  // Industrial palette from the reference: blue uprights/bracing and orange
+  // load beams. No continuous white shelf deck is rendered.
+  const rackPickMeshes = [
+    addRackBatch(uprightParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
+    addRackBatch(beamParts, new THREE.MeshStandardMaterial({ color: 0xf28a12, metalness: 0.45, roughness: 0.38 })),
+    addRackBatch(deckParts, new THREE.MeshStandardMaterial({ color: 0xd8dde0, metalness: 0.3, roughness: 0.56 })),
+    addRackBatch(braceParts, new THREE.MeshStandardMaterial({ color: 0x1680d8, metalness: 0.7, roughness: 0.3 })),
+    addRackBatch(basePlateParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
+  ].filter(Boolean);
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const slotState = (entry) => entry.slot.status === 'full'
@@ -472,15 +584,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let showOccupiedSlots = true;
   const slotColor = (entry, revealOccupied = showOccupiedSlots) => {
     const state = slotState(entry);
-    return state === 'full' ? FULL_COLOR : state === 'occupied' && revealOccupied ? OCCUPIED_COLOR : EMPTY_COLOR;
+    // Occupancy is intentionally quiet in the overview. The orange hover
+    // treatment is applied only by updatePointer to the slot under the cursor.
+    return state === 'full' ? FULL_COLOR : EMPTY_COLOR;
   };
-  const slotMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
+  const slotMaterial = new THREE.MeshBasicMaterial({
     transparent: true,
-    opacity: 0.12,
+    opacity: 0,
+    colorWrite: false,
     depthWrite: false,
-    roughness: 0.55,
-    metalness: 0.05,
   });
   const slotMesh = slotEntries.length ? new THREE.InstancedMesh(UNIT_BOX, slotMaterial, slotEntries.length) : null;
   if (slotMesh) {
@@ -508,35 +620,37 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelTextures.push(texture);
       // Shelf-edge ticket: intentionally smaller than the box opening (and a
       // typical tote), like a 7-Eleven price label rather than a hanging sign.
-      const width = Math.min(0.42, Math.max(0.24, entry.scale.x * 0.38));
+      const width = Math.min(0.3, Math.max(0.2, entry.scale.x * 0.12));
       const height = Math.min(0.09, width / 4.7);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
-        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false }),
       );
-      // Align to the front face of the shelf beam, centred on the shelf floor.
-      // It sits below the usable slot opening, so it never covers a box.
-      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.006, entry.scale.z / 2 + 0.052)
+      // Keep the small barcode above the beam's front edge and in front of
+      // the rack so it remains readable at close and medium zoom levels.
+      // Centre the location barcode on the yellow shelf beam, like a real
+      // shelf-edge label, instead of floating above the beam.
+      const frontOffset = new THREE.Vector3(0, -entry.scale.y / 2 + 0.005, entry.scale.z / 2 + 0.014)
         .applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
+      sticker.renderOrder = 6;
       scene.add(sticker);
       barcodeStickers.push(sticker);
     });
   }
   rackEntries.forEach((entry) => {
-    // Rack identity is a physical horizontal mark on the top beam, never a
-    // billboard. It therefore stays parallel to the rack/floor while orbiting.
-    const texture = floorMarkTexture(`แร็ค ${entry.rack.code}`);
+    // Mount the rack name upright on its front top beam. It follows the rack
+    // while remaining readable instead of lying flat on top of the beam.
+    const texture = rackNameTexture(`แร็ค ${entry.rack.code}`);
     labelTextures.push(texture);
     const labelWidth = Math.min(entry.width * 0.72, Math.max(0.7, entry.depth * 2.5));
     const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
+      new THREE.PlaneGeometry(labelWidth, labelWidth * (260 / 1400)),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
     );
-    const horizontal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-    label.quaternion.copy(entry.quaternion).multiply(horizontal);
-    label.position.copy(worldPoint(entry.rack, 0, entry.height / CM_TO_M + 0.012, 0));
+    label.quaternion.copy(entry.quaternion);
+    label.position.copy(worldPoint(entry.rack, 0, entry.height / CM_TO_M - 5.5, entry.depth / CM_TO_M / 2 + 7));
     label.visible = false;
     scene.add(label);
     rackNameLabels.push(label);
@@ -557,12 +671,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const position = worldPoint(
       slotEntry.rack,
       slotEntry.slot.localPositionCm?.x,
-      slotBottomCm + height / CM_TO_M / 2,
+      slotBottomCm + 16 + height / CM_TO_M / 2,
       slotEntry.slot.localPositionCm?.z,
     );
     const oversized = width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z;
     return [{
       box,
+      slotEntry,
       position,
       quaternion: slotEntry.quaternion,
       scale: new THREE.Vector3(width, height, depth),
@@ -647,63 +762,679 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floor.position.set(center.x, Math.min(0, bounds.min.y) - 0.015, center.z);
   floor.receiveShadow = true;
   scene.add(floor);
-  // Paint each Zone directly onto the floor. Text is a horizontal textured
-  // plane (not CSS2D), so it belongs to the warehouse floor when orbiting.
-  const floorMarkTextures = [];
-  const zoneAreas = new Map();
-  rackEntries.forEach((entry) => {
-    const zone = String(entry.rack.zone || 'ไม่ระบุโซน');
-    const area = zoneAreas.get(zone) || { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
-    // Use the footprint envelope. This remains legible with the normal 0/90°
-    // rack rotations and gives each zone some coloured aisle space.
-    const halfX = entry.width / 2 + 0.35;
-    const halfZ = entry.depth / 2 + 0.45;
-    area.minX = Math.min(area.minX, entry.base.x - halfX);
-    area.maxX = Math.max(area.maxX, entry.base.x + halfX);
-    area.minZ = Math.min(area.minZ, entry.base.z - halfZ);
-    area.maxZ = Math.max(area.maxZ, entry.base.z + halfZ);
-    zoneAreas.set(zone, area);
+
+  // Size the enclosure once from the real rack footprint. The previous
+  // scale-plus-margin calculation enlarged the building twice, making a
+  // full-size selective rack look like a miniature in an empty hangar.
+  const warehouseMarginX = Math.max(11, Math.min(16, size.x * 0.9));
+  const warehouseMarginZ = Math.max(13, Math.min(20, size.z * 4));
+  const warehouseWidth = Math.max(36, size.x + warehouseMarginX * 2);
+  const warehouseDepth = Math.max(28, size.z + warehouseMarginZ * 2);
+  const warehouseWallHeight = Math.max(9.5, size.y + 3.3);
+  // Keep the gable shallow, as in a standard metal-sheet warehouse rather
+  // than using a semi-circular hangar roof.
+  const warehouseRoofRise = Math.max(1.8, warehouseWidth * 0.085);
+  const warehouseFloorY = floor.position.y;
+  const warehouseCenterY = warehouseFloorY + warehouseWallHeight / 2;
+  const wallThickness = 0.12;
+  // The concrete floor must extend under the complete building, not merely
+  // the rack footprint, otherwise roof/wall geometry looks detached below it.
+  floor.geometry.dispose();
+  floor.geometry = new THREE.PlaneGeometry(warehouseWidth + 1.5, warehouseDepth + 1.5);
+  floorTexture.repeat.set(Math.max(2, (warehouseWidth + 1.5) / 2), Math.max(2, (warehouseDepth + 1.5) / 2));
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf3f6f7, metalness: 0.68, roughness: 0.36, side: THREE.DoubleSide });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x38434a, metalness: 0.72, roughness: 0.5, side: THREE.DoubleSide });
+  const trussMaterial = new THREE.MeshStandardMaterial({ color: 0x58788a, metalness: 0.82, roughness: 0.28 });
+  const sprinklerPipeMaterial = new THREE.MeshStandardMaterial({ color: 0xbd2730, metalness: 0.5, roughness: 0.32 });
+  const wallSpecs = [
+    [wallThickness, warehouseWallHeight, warehouseDepth, center.x - warehouseWidth / 2, warehouseCenterY, center.z],
+    [wallThickness, warehouseWallHeight, warehouseDepth, center.x + warehouseWidth / 2, warehouseCenterY, center.z],
+    [warehouseWidth, warehouseWallHeight, wallThickness, center.x, warehouseCenterY, center.z - warehouseDepth / 2],
+    [warehouseWidth, warehouseWallHeight, wallThickness, center.x, warehouseCenterY, center.z + warehouseDepth / 2],
+  ];
+  wallSpecs.forEach(([width, height, depth, x, y, z]) => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMaterial);
+    wall.position.set(x, y, z);
+    wall.receiveShadow = true;
+    scene.add(wall);
   });
-  const warehouseLabel = String(model.warehouseName || model.warehouseId || 'คลังสินค้า');
-  [...zoneAreas.entries()].forEach(([zone, area], index) => {
-    const areaWidth = Math.max(1.5, area.maxX - area.minX);
-    const areaDepth = Math.max(1.5, area.maxZ - area.minZ);
-    const areaCenter = new THREE.Vector3((area.minX + area.maxX) / 2, floor.position.y + 0.018, (area.minZ + area.maxZ) / 2);
-    const zoneColor = new THREE.Color().setHSL((0.28 + index * 0.16) % 1, 0.52, 0.34);
-    const zoneFloor = new THREE.Mesh(
-      new THREE.PlaneGeometry(areaWidth, areaDepth),
-      new THREE.MeshBasicMaterial({ color: zoneColor, transparent: true, opacity: 0.28, depthWrite: false }),
-    );
-    zoneFloor.rotation.x = -Math.PI / 2;
-    zoneFloor.position.copy(areaCenter);
-    scene.add(zoneFloor);
-    const texture = floorMarkTexture(`${warehouseLabel} · โซน ${zone}`);
-    floorMarkTextures.push(texture);
-    const labelWidth = Math.min(areaWidth * 0.86, Math.max(1.25, areaDepth * 2.8));
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(labelWidth, labelWidth * (180 / 1400)),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }),
-    );
-    label.rotation.x = -Math.PI / 2;
-    label.position.set(areaCenter.x, floor.position.y + 0.025, areaCenter.z - areaDepth * 0.32);
-    scene.add(label);
+  // Corrugated metal-sheet seams make the enclosure read as a real new build.
+  const seamMaterial = new THREE.MeshStandardMaterial({ color: 0xb9c3c8, metalness: 0.72, roughness: 0.4 });
+  const seamPositions = [];
+  for (let x = center.x - warehouseWidth / 2 + 0.65; x < center.x + warehouseWidth / 2; x += 0.65) {
+    [-1, 1].forEach((side) => {
+      seamPositions.push({ x, y: warehouseCenterY, z: center.z + side * (warehouseDepth / 2 - 0.068), axis: 'z' });
+    });
+  }
+  for (let z = center.z - warehouseDepth / 2 + 0.65; z < center.z + warehouseDepth / 2; z += 0.65) {
+    [-1, 1].forEach((side) => {
+      seamPositions.push({ x: center.x + side * (warehouseWidth / 2 - 0.068), y: warehouseCenterY, z, axis: 'x' });
+    });
+  }
+  const seamMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), seamMaterial, seamPositions.length);
+  seamPositions.forEach((seam, index) => {
+    const seamScale = seam.axis === 'z'
+      ? new THREE.Vector3(0.022, warehouseWallHeight, 0.028)
+      : new THREE.Vector3(0.028, warehouseWallHeight, 0.022);
+    seamMesh.setMatrixAt(index, matrixAt(new THREE.Vector3(seam.x, seam.y, seam.z), new THREE.Quaternion(), seamScale));
   });
-  const grid = new THREE.GridHelper(Math.max(8, size.x + floorMargin * 2, size.z + floorMargin * 2), 24, 0x52606e, 0x303841);
+  seamMesh.instanceMatrix.needsUpdate = true;
+  scene.add(seamMesh);
+  const halfWarehouseWidth = warehouseWidth / 2;
+  const halfWarehouseDepth = warehouseDepth / 2;
+  const roofEaveY = warehouseFloorY + warehouseWallHeight;
+  const roofRidgeY = roofEaveY + warehouseRoofRise;
+  const makeRoofPanel = (eaveX) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+      eaveX, roofEaveY, center.z - halfWarehouseDepth,
+      center.x, roofRidgeY, center.z - halfWarehouseDepth,
+      center.x, roofRidgeY, center.z + halfWarehouseDepth,
+      eaveX, roofEaveY, center.z + halfWarehouseDepth,
+    ], 3));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, roofMaterial);
+  };
+  [center.x - halfWarehouseWidth, center.x + halfWarehouseWidth].forEach((eaveX) => {
+    const roofPanel = makeRoofPanel(eaveX);
+    // The metal roof is a visual enclosure, not a source of hard rectangular
+    // shadows on the floor. Rack and box shadows remain enabled separately.
+    roofPanel.castShadow = false;
+    roofPanel.receiveShadow = false;
+    scene.add(roofPanel);
+  });
+  // Close both gable ends with matching white metal sheet.
+  [-1, 1].forEach((side) => {
+    const endZ = center.z + side * halfWarehouseDepth;
+    const gable = new THREE.BufferGeometry();
+    gable.setAttribute('position', new THREE.Float32BufferAttribute([
+      center.x - halfWarehouseWidth, roofEaveY, endZ,
+      center.x + halfWarehouseWidth, roofEaveY, endZ,
+      center.x, roofRidgeY, endZ,
+    ], 3));
+    gable.setIndex([0, 1, 2]);
+    gable.computeVertexNormals();
+    scene.add(new THREE.Mesh(gable, roofMaterial));
+  });
+  const steelBetween = (from, to, radius = 0.065, material = trussMaterial) => {
+    const direction = to.clone().sub(from);
+    const member = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, direction.length(), 8), material);
+    member.position.copy(from).add(to).multiplyScalar(0.5);
+    member.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    // Roof members should read structurally, but their repeated shadow grid
+    // looks artificial in the compact warehouse view.
+    member.castShadow = false;
+    scene.add(member);
+  };
+  // Warehouse circulation details: yellow traffic lanes, a staging box,
+  // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
+  // These remain independent of rack geometry and of the optional forklift.
+  const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffc400, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0x392b00, emissiveIntensity: 0.18, metalness: 0.48, roughness: 0.38 });
+  const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
+  const floorStrip = (x, z, width, depth, rotationY = 0) => {
+    // Floor safety markings are paint: a zero-thickness decal immediately
+    // above the epoxy, not a raised BoxGeometry that catches light/shadows.
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), safetyYellow);
+    strip.position.set(x, warehouseFloorY + 0.0015, z);
+    strip.quaternion
+      .setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2));
+    strip.receiveShadow = false;
+    scene.add(strip);
+    return strip;
+  };
+  // Outline the actual rack footprint, then place a 3.5 m forklift aisle in
+  // front of it. This keeps every marking spatially related to the rack.
+  const rackBoundaryWidth = Math.min(warehouseWidth - 2.4, size.x + 1.2);
+  const rackBoundaryDepth = Math.min(warehouseDepth - 2.4, size.z + 1.2);
+  floorStrip(center.x, center.z - rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
+  floorStrip(center.x, center.z + rackBoundaryDepth / 2, rackBoundaryWidth, 0.085);
+  floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
+  floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
+  const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
+  // The forklift route begins immediately to the right of the safety rail and
+  // runs across the front of the rack rather than cutting through its guard.
+  // Keep the pallet staging position beside the safety posts, but leave the
+  // forklift route itself unpainted.
+  const safetyLineX = center.x - rackBoundaryWidth / 2 - 0.55;
+  // A compact staging position at the aisle end, clear of the travel centreline.
+  const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
+  const stagingDepth = 2.25;
+  const stagingCenter = new THREE.Vector3(safetyLineX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
+  // Guardrail belongs at the exposed rack end, clear of the staging box and
+  // vehicle aisle. Its posts carry alternating black impact bands.
+  const railX = center.x - rackBoundaryWidth / 2 - 0.28;
+  const railStartZ = center.z - rackBoundaryDepth / 2 - 0.35;
+  const railEndZ = center.z + rackBoundaryDepth / 2 + 0.35;
+  // One straight, three-post safety rail at the rack head.
+  const guardPosts = [
+    [railX, railStartZ],
+    [railX, (railStartZ + railEndZ) / 2],
+    [railX, railEndZ],
+  ];
+  guardPosts.forEach(([x, z]) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
+    post.position.set(x, warehouseFloorY + 0.575, z);
+    scene.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
+    foot.position.set(x, warehouseFloorY + 0.018, z);
+    scene.add(foot);
+    [0.2, 0.52, 0.84].forEach((height) => {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
+      band.position.set(x, warehouseFloorY + height, z);
+      scene.add(band);
+    });
+  });
+  [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(railX, warehouseFloorY + height, railStartZ),
+    new THREE.Vector3(railX, warehouseFloorY + height, railEndZ),
+    0.045,
+    guardrailMaterial,
+  ));
+  // Close both ends of the guardrail so the exposed rack head remains
+  // protected even when another rack is not connected beside it.
+  [railStartZ, railEndZ].forEach((z) => [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(railX, warehouseFloorY + height, z),
+    new THREE.Vector3(railX + 0.72, warehouseFloorY + height, z),
+    0.045,
+    guardrailMaterial,
+  )));
+  // Move the warehouse/zone label off the floor and mount it vertically above
+  // the safety rail, parallel to the rail direction and higher than its posts.
+  const safetySignTexture = safetyZoneSignTexture(primaryZoneLabel);
+  const safetyZoneSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.82, 1.54),
+    new THREE.MeshBasicMaterial({ map: safetySignTexture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
+  );
+  safetyZoneSign.position.set(railX - 0.075, warehouseFloorY + 1.98, (railStartZ + railEndZ) / 2);
+  safetyZoneSign.rotation.y = Math.PI / 2;
+  // Flip the inside-facing canvas so the lettering reads normally from the aisle.
+  safetyZoneSign.scale.x = -1;
+  safetyZoneSign.renderOrder = 4;
+  scene.add(safetyZoneSign);
+  // Closely spaced blue-grey factory trusses: a straight lower chord, a roof-
+  // following upper chord and repeated triangular webs across the full span.
+  const frameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
+  const trussSegments = 12;
+  const trussBottomY = roofEaveY - 0.34;
+  for (let index = 0; index < frameCount; index += 1) {
+    const z = center.z - halfWarehouseDepth + (warehouseDepth * index) / (frameCount - 1);
+    const bottomNodes = [];
+    const topNodes = [];
+    for (let segment = 0; segment <= trussSegments; segment += 1) {
+      const ratio = segment / trussSegments;
+      const x = center.x - halfWarehouseWidth + warehouseWidth * ratio;
+      const roofRatio = 1 - Math.abs((x - center.x) / halfWarehouseWidth);
+      bottomNodes.push(new THREE.Vector3(x, trussBottomY, z));
+      topNodes.push(new THREE.Vector3(x, roofEaveY + warehouseRoofRise * roofRatio - 0.12, z));
+    }
+    for (let segment = 0; segment < trussSegments; segment += 1) {
+      steelBetween(bottomNodes[segment], bottomNodes[segment + 1], 0.026);
+      steelBetween(topNodes[segment], topNodes[segment + 1], 0.03);
+      steelBetween(
+        segment % 2 === 0 ? bottomNodes[segment] : topNodes[segment],
+        segment % 2 === 0 ? topNodes[segment + 1] : bottomNodes[segment + 1],
+        0.022,
+      );
+    }
+    steelBetween(bottomNodes[0], topNodes[0], 0.026);
+    steelBetween(bottomNodes[trussSegments], topNodes[trussSegments], 0.026);
+  }
+  // Longitudinal purlins tie portal frames together under the metal sheets.
+  [-1, 1].forEach((side) => [0.32, 0.68].forEach((ratio) => {
+    const x = center.x + side * halfWarehouseWidth * (1 - ratio);
+    const y = roofEaveY + warehouseRoofRise * ratio;
+    steelBetween(
+      new THREE.Vector3(x, y, center.z - halfWarehouseDepth),
+      new THREE.Vector3(x, y, center.z + halfWarehouseDepth),
+      0.042,
+    );
+  }));
+  // Ridge and eave purlins give the roof the repeated longitudinal members
+  // visible in a real metal-sheet warehouse.
+  steelBetween(
+    new THREE.Vector3(center.x, roofRidgeY, center.z - halfWarehouseDepth),
+    new THREE.Vector3(center.x, roofRidgeY, center.z + halfWarehouseDepth),
+    0.05,
+  );
+  [-1, 1].forEach((side) => steelBetween(
+    new THREE.Vector3(center.x + side * halfWarehouseWidth, roofEaveY, center.z - halfWarehouseDepth),
+    new THREE.Vector3(center.x + side * halfWarehouseWidth, roofEaveY, center.z + halfWarehouseDepth),
+    0.045,
+  ));
+  // Blue-grey columns and upper-wall X bracing continue the roof structure
+  // down the metal-sheet side walls as in the reference factory.
+  const wallFrameCount = Math.max(8, Math.min(12, Math.ceil(warehouseDepth / 5.8)));
+  const wallBayDepth = warehouseDepth / (wallFrameCount - 1);
+  [-1, 1].forEach((side) => {
+    const wallX = center.x + side * (halfWarehouseWidth - 0.08);
+    for (let index = 0; index < wallFrameCount; index += 1) {
+      const z = center.z - halfWarehouseDepth + (warehouseDepth * index) / (wallFrameCount - 1);
+      steelBetween(
+        new THREE.Vector3(wallX, warehouseFloorY + 0.12, z),
+        new THREE.Vector3(wallX, roofEaveY, z),
+        0.052,
+      );
+      if (index < wallFrameCount - 1) {
+        const nextZ = center.z - halfWarehouseDepth + (warehouseDepth * (index + 1)) / (wallFrameCount - 1);
+        steelBetween(
+          new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * 0.5, z),
+          new THREE.Vector3(wallX, roofEaveY - 0.2, nextZ),
+          0.027,
+        );
+        steelBetween(
+          new THREE.Vector3(wallX, roofEaveY - 0.2, z),
+          new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * 0.5, nextZ),
+          0.027,
+        );
+      }
+      // Knee brace transfers the eave load from each truss into the column.
+      steelBetween(
+        new THREE.Vector3(wallX, roofEaveY - 0.72, z),
+        new THREE.Vector3(wallX - side * 0.92, trussBottomY, z),
+        0.035,
+      );
+    }
+    [0.31, 0.56, 0.78].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth),
+      new THREE.Vector3(wallX, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth),
+      0.038,
+    ));
+  });
+  // Reproduce the reference's wall build-up: a smooth light lower panel,
+  // corrugated cladding above, teal portal framing, and a continuous louvre
+  // strip on the service elevation. These are wall details, not configured
+  // warehouse gates, so the previously removed 3D doors stay absent.
+  const lowerWallMaterial = new THREE.MeshStandardMaterial({ color: 0xe4e8e8, metalness: 0.18, roughness: 0.62 });
+  const louvreMaterial = new THREE.MeshStandardMaterial({ color: 0xd7e0e2, metalness: 0.62, roughness: 0.38 });
+  const louvreFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x426f7b, metalness: 0.76, roughness: 0.3 });
+  const lowerWallHeight = Math.min(3.25, warehouseWallHeight * 0.31);
+  [-1, 1].forEach((side) => {
+    const wallX = center.x + side * (halfWarehouseWidth - 0.072);
+    const innerX = wallX - side * 0.075;
+    const lowerPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(0.035, lowerWallHeight, warehouseDepth - 0.22),
+      lowerWallMaterial,
+    );
+    lowerPanel.position.set(innerX, warehouseFloorY + lowerWallHeight / 2, center.z);
+    scene.add(lowerPanel);
+  });
+  // The photographed long wall has broad horizontal louvres between portal
+  // columns. Put them on the visible service elevation only; the opposite
+  // elevation remains continuous metal sheet as requested.
+  const louvreSide = -1;
+  const louvreX = center.x + louvreSide * (halfWarehouseWidth - 0.105);
+  const louvreStartY = warehouseFloorY + lowerWallHeight + 0.46;
+  const louvreHeight = Math.min(2.05, warehouseWallHeight * 0.22);
+  for (let bay = 1; bay < wallFrameCount - 2; bay += 2) {
+    const bayStartZ = center.z - halfWarehouseDepth + wallBayDepth * bay + 0.22;
+    const bayLength = wallBayDepth * 2 - 0.44;
+    const bayCenterZ = bayStartZ + bayLength / 2;
+    steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY, bayStartZ),
+      new THREE.Vector3(louvreX, louvreStartY, bayStartZ + bayLength),
+      0.042,
+      louvreFrameMaterial,
+    );
+    steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, bayStartZ),
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, bayStartZ + bayLength),
+      0.042,
+      louvreFrameMaterial,
+    );
+    [bayStartZ, bayStartZ + bayLength].forEach((z) => steelBetween(
+      new THREE.Vector3(louvreX, louvreStartY, z),
+      new THREE.Vector3(louvreX, louvreStartY + louvreHeight, z),
+      0.04,
+      louvreFrameMaterial,
+    ));
+    for (let slatIndex = 0; slatIndex < 8; slatIndex += 1) {
+      const slatY = louvreStartY + 0.16 + slatIndex * ((louvreHeight - 0.3) / 7);
+      const louvreSlat = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.075, bayLength - 0.08), louvreMaterial);
+      louvreSlat.position.set(louvreX + 0.025, slatY, bayCenterZ);
+      scene.add(louvreSlat);
+    }
+  }
+  // Detail both gable walls as well. Offset every feature toward the interior
+  // so it reads in the camera view rather than being hidden inside the sheet.
+  [-1, 1].forEach((side) => {
+    const endZ = center.z + side * (halfWarehouseDepth - 0.075);
+    const innerZ = endZ - side * 0.095;
+    const endLowerPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(warehouseWidth - 0.18, lowerWallHeight, 0.035),
+      lowerWallMaterial,
+    );
+    endLowerPanel.position.set(center.x, warehouseFloorY + lowerWallHeight / 2, innerZ);
+    scene.add(endLowerPanel);
+    for (let column = 0; column <= 4; column += 1) {
+      const x = center.x - halfWarehouseWidth + (warehouseWidth * column) / 4;
+      steelBetween(
+        new THREE.Vector3(x, warehouseFloorY + 0.08, innerZ),
+        new THREE.Vector3(x, roofEaveY, innerZ),
+        0.052,
+        louvreFrameMaterial,
+      );
+    }
+    // The reference has clean horizontal girts, not a large X across the
+    // cladding. Keep the lower panel joint and two upper structural rails.
+    [0.31, 0.56, 0.78].forEach((ratio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, innerZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth, warehouseFloorY + warehouseWallHeight * ratio, innerZ),
+      0.038,
+      louvreFrameMaterial,
+    ));
+    // Match the photo: one long louvre bank at the right-hand bays, rather
+    // than several small vents distributed across the elevation.
+    const endLouvreWidth = Math.min(10.4, warehouseWidth * 0.38);
+    const endLouvreHeight = Math.min(1.62, warehouseWallHeight * 0.17);
+    const endLouvreY = warehouseFloorY + lowerWallHeight + 0.64;
+    const endLouvreX = center.x + warehouseWidth * 0.2;
+    steelBetween(
+      new THREE.Vector3(endLouvreX - endLouvreWidth / 2, endLouvreY, innerZ),
+      new THREE.Vector3(endLouvreX + endLouvreWidth / 2, endLouvreY, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    );
+    steelBetween(
+      new THREE.Vector3(endLouvreX - endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
+      new THREE.Vector3(endLouvreX + endLouvreWidth / 2, endLouvreY + endLouvreHeight, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    );
+    [endLouvreX - endLouvreWidth / 2, endLouvreX + endLouvreWidth / 2].forEach((edgeX) => steelBetween(
+      new THREE.Vector3(edgeX, endLouvreY, innerZ),
+      new THREE.Vector3(edgeX, endLouvreY + endLouvreHeight, innerZ),
+      0.045,
+      louvreFrameMaterial,
+    ));
+    for (let slatIndex = 0; slatIndex < 11; slatIndex += 1) {
+      const slatY = endLouvreY + 0.12 + slatIndex * ((endLouvreHeight - 0.24) / 10);
+      const endLouvreSlat = new THREE.Mesh(new THREE.BoxGeometry(endLouvreWidth - 0.1, 0.065, 0.1), louvreMaterial);
+      endLouvreSlat.position.set(endLouvreX, slatY, innerZ + side * 0.02);
+      endLouvreSlat.rotation.z = -0.13;
+      scene.add(endLouvreSlat);
+    }
+    // Fire mains turn the corner at this elevation, matching the red runs on
+    // the two long walls instead of ending visibly before the gable.
+    [0.78, 0.83].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.51, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + side * (halfWarehouseDepth - 0.51)),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.51, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + side * (halfWarehouseDepth - 0.51)),
+      0.032,
+      sprinklerPipeMaterial,
+    ));
+  });
+  // Lower wall band, cable trays, bay numbers, wall lights and electrical
+  // boxes complete the service-wall rhythm from the reference.
+  const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x7c888d, metalness: 0.68, roughness: 0.38 });
+  const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x333b40, metalness: 0.84, roughness: 0.25 });
+  const wallLightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeaf8ff, emissiveIntensity: 2.8, roughness: 0.25 });
+  const electricalMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca8ae, metalness: 0.64, roughness: 0.38 });
+  const wallDetailTextures = [];
+  const wallMarkerTexture = (text, background, foreground) => {
+    const markerCanvas = document.createElement('canvas');
+    markerCanvas.width = 256;
+    markerCanvas.height = 128;
+    const context = markerCanvas.getContext('2d');
+    context.fillStyle = background;
+    context.fillRect(0, 0, markerCanvas.width, markerCanvas.height);
+    context.strokeStyle = foreground;
+    context.lineWidth = 8;
+    context.strokeRect(6, 6, markerCanvas.width - 12, markerCanvas.height - 12);
+    context.fillStyle = foreground;
+    context.font = '700 72px sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, markerCanvas.width / 2, markerCanvas.height / 2 + 3);
+    const texture = new THREE.CanvasTexture(markerCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    wallDetailTextures.push(texture);
+    return texture;
+  };
+  // Loading-dock elevation: door count and flow type come solely from the
+  // warehouse master API. The opposite wall remains unbroken metal sheet.
+  const configuredDoors = Array.isArray(model.doors) ? model.doors : [];
+  if (configuredDoors.length) {
+    const doorSide = -1;
+    const wallX = center.x + doorSide * (halfWarehouseWidth - 0.15);
+    const innerX = wallX - doorSide * 0.16;
+    const rotationY = Math.PI / 2;
+    const doorSpan = (warehouseDepth - 3.6) / (configuredDoors.length + 1);
+    const doorWidth = Math.min(3.1, Math.max(2.1, doorSpan * 0.58));
+    const doorHeight = Math.min(4.15, Math.max(3.25, warehouseWallHeight * 0.39));
+    const dockDoorMaterial = new THREE.MeshStandardMaterial({ color: 0xe8ecec, metalness: 0.58, roughness: 0.36 });
+    const dockFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x445c63, metalness: 0.78, roughness: 0.28 });
+    configuredDoors.forEach((door, index) => {
+      const doorZ = center.z - halfWarehouseDepth + 1.8 + doorSpan * (index + 1);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.13, doorHeight, doorWidth), dockDoorMaterial);
+      panel.position.set(innerX, warehouseFloorY + doorHeight / 2, doorZ);
+      scene.add(panel);
+      [-1, 1].forEach((edge) => steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY, doorZ + edge * doorWidth / 2),
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + edge * doorWidth / 2),
+        0.06,
+        dockFrameMaterial,
+      ));
+      steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ - doorWidth / 2),
+        new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + doorWidth / 2),
+        0.06,
+        dockFrameMaterial,
+      );
+      for (let row = 1; row < 6; row += 1) {
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.025, doorWidth - 0.08), dockFrameMaterial);
+        seam.position.set(innerX - doorSide * 0.01, warehouseFloorY + (doorHeight * row) / 6, doorZ);
+        scene.add(seam);
+      }
+      const numberSign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.62, 0.34),
+        new THREE.MeshBasicMaterial({ map: wallMarkerTexture(String(door.gateNo), '#3d464c', '#ffd84d'), toneMapped: false, side: THREE.DoubleSide }),
+      );
+      numberSign.rotation.y = rotationY;
+      numberSign.position.set(innerX - doorSide * 0.09, warehouseFloorY + doorHeight + 0.58, doorZ);
+      scene.add(numberSign);
+      const typeColor = door.type === 'in' ? 0x58c7ff : door.type === 'out' ? 0xff8b59 : 0xb8ee59;
+      const statusLamp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.42), new THREE.MeshStandardMaterial({ color: typeColor, emissive: typeColor, emissiveIntensity: 0.55 }));
+      statusLamp.position.set(innerX - doorSide * 0.15, warehouseFloorY + doorHeight + 0.34, doorZ);
+      scene.add(statusLamp);
+      const pipeZ = doorZ + doorWidth / 2 + 0.23;
+      steelBetween(
+        new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + 0.12, pipeZ),
+        new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + doorHeight + 0.56, pipeZ),
+        0.035,
+        sprinklerPipeMaterial,
+      );
+    });
+  }
+  [-1, 1].forEach((side) => {
+    const wallX = center.x + side * (halfWarehouseWidth - 0.15);
+    const innerX = wallX - side * 0.16;
+    const sideRotation = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+    const lowerBand = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, warehouseDepth - 0.3), lowerBandMaterial);
+    lowerBand.position.set(innerX, warehouseFloorY + 0.32, center.z);
+    scene.add(lowerBand);
+    // Three-tier service tray with regular cantilever brackets.
+    [0.34, 0.39, 0.44].forEach((heightRatio) => {
+      const trayY = warehouseFloorY + warehouseWallHeight * heightRatio;
+      steelBetween(
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z - halfWarehouseDepth + 0.65),
+        new THREE.Vector3(innerX - side * 0.34, trayY, center.z + halfWarehouseDepth - 0.65),
+        0.026,
+        cableMaterial,
+      );
+      for (let index = 0; index < wallFrameCount; index += 1) {
+        const bracketZ = center.z - halfWarehouseDepth + (warehouseDepth * index) / (wallFrameCount - 1);
+        steelBetween(
+          new THREE.Vector3(innerX, trayY, bracketZ),
+          new THREE.Vector3(innerX - side * 0.52, trayY, bracketZ),
+          0.018,
+          cableMaterial,
+        );
+      }
+    });
+    // Parallel red wall mains beneath the eave.
+    [0.78, 0.83].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z - halfWarehouseDepth + 0.51),
+      new THREE.Vector3(innerX - side * 0.2, warehouseFloorY + warehouseWallHeight * heightRatio, center.z + halfWarehouseDepth - 0.51),
+      0.032,
+      sprinklerPipeMaterial,
+    ));
+    for (let bay = 1; bay < wallFrameCount - 1; bay += 2) {
+      const serviceZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
+      const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
+      wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, serviceZ);
+      scene.add(wallLight);
+      const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
+      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, serviceZ + Math.min(2.1, wallBayDepth * 0.48) * 0.68);
+      scene.add(equipmentBox);
+      const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
+      const safetySign = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.28, 0.28),
+        new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      safetySign.rotation.y = sideRotation;
+      safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, serviceZ);
+      scene.add(safetySign);
+    }
+  });
+  // Cable trays use the same three heights on every elevation and turn each
+  // corner at the same inset as their long-wall runs.
+  [-1, 1].forEach((side) => {
+    const endTrayZ = center.z + side * (halfWarehouseDepth - 0.65);
+    [0.34, 0.39, 0.44].forEach((heightRatio) => steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.65, warehouseFloorY + warehouseWallHeight * heightRatio, endTrayZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.65, warehouseFloorY + warehouseWallHeight * heightRatio, endTrayZ),
+      0.026,
+      cableMaterial,
+    ));
+  });
+  // Fire-sprinkler mains run beneath the trusses. Heads are placed directly
+  // below the visible red pipe instead of floating independently in space.
+  const sprinklerHeadMaterial = new THREE.MeshStandardMaterial({ color: 0xc8d0d4, metalness: 0.82, roughness: 0.2 });
+  const serviceRowCount = Math.min(7, Math.max(5, frameCount - 2));
+  const serviceFrameIndices = Array.from({ length: serviceRowCount }, (_, index) => (
+    Math.round((index + 1) * (frameCount - 1) / (serviceRowCount + 1))
+  ));
+  // Each red main runs across the warehouse width, parallel to the long side
+  // of each rectangular light. Both are fixed below the same straight truss.
+  serviceFrameIndices.forEach((frameIndex) => {
+    const pipeZ = center.z - halfWarehouseDepth + (warehouseDepth * frameIndex) / (frameCount - 1);
+    const pipeY = trussBottomY - 0.16;
+    steelBetween(
+      new THREE.Vector3(center.x - halfWarehouseWidth + 0.4, pipeY, pipeZ),
+      new THREE.Vector3(center.x + halfWarehouseWidth - 0.4, pipeY, pipeZ),
+      0.035,
+      sprinklerPipeMaterial,
+    );
+    for (let index = 1; index < 8; index += 1) {
+      const headX = center.x - halfWarehouseWidth + (warehouseWidth * index) / 8;
+      // Short hanger physically connects the main to the truss above.
+      steelBetween(
+        new THREE.Vector3(headX, trussBottomY, pipeZ),
+        new THREE.Vector3(headX, pipeY, pipeZ),
+        0.014,
+        trussMaterial,
+      );
+      const dropStart = new THREE.Vector3(headX, pipeY, pipeZ);
+      const dropEnd = dropStart.clone().add(new THREE.Vector3(0, -0.18, 0));
+      steelBetween(dropStart, dropEnd, 0.018, sprinklerPipeMaterial);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.09, 8), sprinklerHeadMaterial);
+      head.position.copy(dropEnd).add(new THREE.Vector3(0, -0.05, 0));
+      head.rotation.x = Math.PI;
+      scene.add(head);
+    }
+  });
+  // Red vertical fire risers join the overhead mains at both side walls.
+  [-1, 1].forEach((side) => {
+    const riserX = center.x + side * (halfWarehouseWidth - 0.3);
+    const wallPipeX = center.x + side * (halfWarehouseWidth - 0.51);
+    const wallPipeY = warehouseFloorY + warehouseWallHeight * 0.83;
+    const riserZ = center.z - halfWarehouseDepth * 0.72;
+    steelBetween(
+      new THREE.Vector3(riserX, warehouseFloorY + 0.35, riserZ),
+      new THREE.Vector3(riserX, wallPipeY, riserZ),
+      0.042,
+      sprinklerPipeMaterial,
+    );
+    steelBetween(
+      new THREE.Vector3(riserX, wallPipeY, riserZ),
+      new THREE.Vector3(wallPipeX, wallPipeY, riserZ),
+      0.042,
+      sprinklerPipeMaterial,
+    );
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), sprinklerPipeMaterial);
+    elbow.position.set(riserX, wallPipeY, riserZ);
+    scene.add(elbow);
+  });
+  const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
+  const fixtureCount = serviceFrameIndices.length;
+  [-0.24, 0.24].forEach((xRatio) => {
+    const lightX = center.x + halfWarehouseWidth * xRatio;
+    const lightY = trussBottomY - 0.24;
+    for (let index = 1; index <= fixtureCount; index += 1) {
+      const frameIndex = serviceFrameIndices[index - 1];
+      const lightZ = center.z - halfWarehouseDepth + (warehouseDepth * frameIndex) / (frameCount - 1);
+      steelBetween(
+        new THREE.Vector3(lightX, trussBottomY, lightZ),
+        new THREE.Vector3(lightX, lightY + 0.04, lightZ),
+        0.014,
+        trussMaterial,
+      );
+      // Flat rectangular high-bay fixture like the reference photograph.
+      const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.07, 0.28), lightMaterial);
+      fixture.position.set(lightX, lightY, lightZ);
+      scene.add(fixture);
+      // The emitting panel itself is the exact source anchor for this light.
+      const light = new THREE.PointLight(0xe8f6ff, 8, Math.max(7, warehouseWidth * 0.42), 2);
+      light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.08, 0));
+      scene.add(light);
+    }
+  });
+  const floorMarkTextures = [safetySignTexture];
+  // One grid division represents one metre across the complete warehouse floor.
+  const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
+  const grid = new THREE.GridHelper(gridSize, gridSize, 0x52606e, 0x303841);
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.11;
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
+  // Let users zoom out to inspect the much larger warehouse, while clamping
+  // the actual orbit position to its walls and shallow gable roof.
+  controls.maxDistance = Math.max(18, Math.min(warehouseWidth, warehouseDepth) * 0.9);
+  const keepCameraInsideWarehouse = () => {
+    const wallClearance = 0.38;
+    const xLimit = halfWarehouseWidth - wallClearance;
+    const zLimit = halfWarehouseDepth - wallClearance;
+    controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - xLimit * 0.68, center.x + xLimit * 0.68);
+    controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - zLimit * 0.68, center.z + zLimit * 0.68);
+    controls.target.y = THREE.MathUtils.clamp(controls.target.y, warehouseFloorY + 0.35, roofRidgeY - 0.7);
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, center.x - xLimit, center.x + xLimit);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, center.z - zLimit, center.z + zLimit);
+    const normalizedX = Math.abs(camera.position.x - center.x) / xLimit;
+    const roofY = roofEaveY + warehouseRoofRise * (1 - normalizedX);
+    camera.position.y = THREE.MathUtils.clamp(camera.position.y, warehouseFloorY + 0.35, roofY - wallClearance);
+  };
   const barcodeZoomDistance = Math.max(7, span * 1.15);
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
   let barcodeMode = null;
   let occupancyOverviewMode = null;
+  // These values are read during the initial overlay calculation below, before
+  // the pointer handlers are attached. Declare them here to avoid a temporal
+  // dead-zone error on first render.
+  let hoverIndex = -1;
+  let hoverBoxIndex = -1;
   const updateRackLabelMode = () => {
-    const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
-    if (showBarcodes === barcodeMode) return;
-    barcodeMode = showBarcodes;
-    barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
+    const showRackNames = controls.getDistance() > barcodeZoomDistance;
+    if (showRackNames === barcodeMode) return;
+    barcodeMode = showRackNames;
+    // Match the box barcode behavior: hide shelf-edge barcodes in overview
+    // and reveal them only when the operator zooms in close enough to read.
+    barcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
+    boxBarcodeStickers.forEach((sticker) => { sticker.visible = !showRackNames; });
+    rackNameLabels.forEach((label) => { label.visible = showRackNames; });
   };
   const updateOccupancyOverlay = () => {
     const revealOccupied = controls.getDistance() >= occupancyOverviewZoomDistance;
@@ -716,9 +1447,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
     slotMesh.instanceColor.needsUpdate = true;
   };
-  camera.position.set(center.x + span * 0.82, Math.max(4.8, size.y + span * 0.52), center.z + span * 0.92);
-  controls.target.set(center.x, Math.max(0.8, size.y * 0.42), center.z);
+  camera.position.set(center.x + span * 0.82, Math.max(5.8, size.y * 0.82), center.z + Math.min(warehouseDepth * 0.4, 7.4));
+  controls.target.set(center.x, Math.max(1.2, size.y * 0.4), center.z);
   controls.update();
+  keepCameraInsideWarehouse();
   updateRackLabelMode();
   updateOccupancyOverlay();
   sun.position.set(center.x - span * 0.65, Math.max(16, span * 1.1), center.z + span * 0.55);
@@ -728,13 +1460,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  let hoverIndex = -1;
-  let hoverBoxIndex = -1;
   let pointerFrame = 0;
   let down = null;
+  let hoverRackCode = '';
+  const actionAnchor = new THREE.Vector3();
+  const hideRackAction = () => {
+    rackActionObject.visible = false;
+    hoverRackCode = '';
+  };
+  const showRackAction = (rack) => {
+    if (!rack) return hideRackAction();
+    hoverRackCode = String(rack.code || rack.id || 'rack');
+    const rackEntry = rackEntries.find((entry) => entry.rack === rack);
+    if (!rackEntry) return hideRackAction();
+    // One stable affordance per rack: always float at the centre of the top
+    // beam, never beside every individual slot or box.
+    actionAnchor.set(rackEntry.base.x, rackEntry.base.y + rackEntry.height + 0.55, rackEntry.base.z);
+    rackActionObject.position.copy(actionAnchor);
+    rackActionObject.visible = true;
+  };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const updatePointer = (event) => {
-    if (!slotMesh) return;
     const rect = canvas.getBoundingClientRect();
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
@@ -743,9 +1489,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // priority so operators can open the actual box record.
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
+    const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const next = nextBox >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
-    if (next === hoverIndex && nextBox === hoverBoxIndex) return;
+    const nextRack = nextBox >= 0
+      ? boxEntries[nextBox].slotEntry?.rack
+      : next >= 0
+        ? slotEntries[next].rack
+        : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
+    const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -780,7 +1533,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       labelElement.textContent = state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
       labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
-      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
+      // Keep the slot-status label inside the bay instead of floating above its beam.
+      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, 0.05, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
     } else {
@@ -790,6 +1544,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
+    showRackAction(nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -820,6 +1575,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverBoxIndex = -1;
     labelObject.visible = false;
     canvas.style.cursor = 'grab';
+    window.setTimeout(() => {
+      if (!actionPointerOver) hideRackAction();
+    }, 0);
   };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
@@ -839,11 +1597,102 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   resize();
 
   const assets = assetPipeline(renderer);
+  let disposed = false;
+  // Use the supplied manufacturer pallet model for both stored cartons and
+  // the staging bay. The placement list is still derived only from DB boxes.
+  assets.load('/models/wooden_pallets.glb').then(({ scene: palletTemplate }) => {
+    if (disposed) return;
+    palletTemplate.traverse((object) => {
+      if (!object.isMesh) return;
+      // This GLB contains two pallet variants. Pallet_2 has the solid,
+      // close-boarded top deck requested for the warehouse; discard the open
+      // slatted alternative so every displayed pallet uses the same type.
+      if (object.name !== 'Pallet_2_Pallet_2_0') {
+        object.removeFromParent();
+        return;
+      }
+      // Preserve the source wood grain but warm the albedo to match a real
+      // timber pallet rather than the washed-out grey seen under warehouse LEDs.
+      object.material = object.material.clone();
+      object.material.color.setHex(0xc08a57);
+      object.material.roughness = 0.78;
+      object.material.metalness = 0;
+      if ('emissive' in object.material) {
+        object.material.emissive.setHex(0x1c0d05);
+        object.material.emissiveIntensity = 0.08;
+      }
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+    const rawBounds = new THREE.Box3().setFromObject(palletTemplate);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    const rawCenter = rawBounds.getCenter(new THREE.Vector3());
+    const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
+      const pallet = palletTemplate.clone(true);
+      // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
+      // smaller horizontal scale so the source model's feet remain realistic.
+      const scaleX = width / Math.max(rawSize.x, 0.01);
+      const scaleZ = depth / Math.max(rawSize.z, 0.01);
+      const scaleY = Math.min(scaleX, scaleZ);
+      pallet.position.copy(position);
+      pallet.position.y += yOffset;
+      pallet.quaternion.copy(quaternion);
+      pallet.scale.set(scaleX, scaleY, scaleZ);
+      const baseOffset = new THREE.Vector3(
+        -rawCenter.x * scaleX,
+        -rawBounds.min.y * scaleY,
+        -rawCenter.z * scaleZ,
+      ).applyQuaternion(quaternion);
+      pallet.position.add(baseOffset);
+      scene.add(pallet);
+    };
+    boxEntries.forEach((entry) => {
+      const palletWidth = 1.0;
+      const palletDepth = 1.2;
+      const palletCenter = entry.position.clone();
+      palletCenter.y -= entry.scale.y / 2 + 0.085;
+      addPallet(palletCenter, entry.quaternion, palletWidth, palletDepth);
+    });
+  }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
+  // CC BY model: "Forklift" by brezineman. Keep the original attribution
+  // alongside the asset rather than baking it into an unrelated warehouse mesh.
+  assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
+    if (disposed) return;
+    forklift.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+    const rawBounds = new THREE.Box3().setFromObject(forklift);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    // Normalize downloaded assets to a real warehouse forklift footprint,
+    // without depending on the arbitrary authoring unit of the GLB file.
+    const scale = 3.25 / Math.max(rawSize.x, rawSize.z, 0.01);
+    forklift.scale.setScalar(scale);
+    const scaledBounds = new THREE.Box3().setFromObject(forklift);
+    const scaledSize = scaledBounds.getSize(new THREE.Vector3());
+    forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
+    forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
+    forklift.position.y -= scaledBounds.min.y;
+
+    const forkliftRoot = new THREE.Group();
+    forkliftRoot.name = 'forklift';
+    forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
+    forkliftRoot.add(forklift);
+    forkliftRoot.position.set(
+      center.x + rackBoundaryWidth * 0.34,
+      warehouseFloorY + 0.012,
+      aisleCenterZ,
+    );
+    forkliftRoot.rotation.y = -Math.PI * 0.5;
+    scene.add(forkliftRoot);
+  }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
   let frames = 0;
   let lastFpsAt = performance.now();
   const animate = () => {
     controls.update();
+    keepCameraInsideWarehouse();
     updateRackLabelMode();
     updateOccupancyOverlay();
     if (hoverRing.visible) {
@@ -858,17 +1707,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const now = performance.now();
     if (now - lastFpsAt >= 1000) {
       const fps = Math.round(frames * 1000 / (now - lastFpsAt));
-      if (perf) perf.textContent = `${fps} FPS · ${renderer.info.render.calls} draw calls`;
+      // WebGPU accumulates this counter until info.reset(); WebGL normally
+      // resets it every frame. Normalize the HUD so both report calls/frame.
+      const renderedCalls = renderer.info.render.calls;
+      const drawCalls = renderer.isWebGPURenderer
+        ? Math.round(renderedCalls / Math.max(frames, 1))
+        : renderedCalls;
+      if (perf) perf.textContent = `${fps} FPS · ${drawCalls} draw calls/frame`;
+      if (renderer.isWebGPURenderer) renderer.info.reset?.();
       frames = 0;
       lastFpsAt = now;
     }
   };
+  // Browser-synchronized rendering follows the active display's refresh rate
+  // (60/120/144 Hz, etc.). Do not introduce a fixed 60 FPS throttle here.
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
 
   return {
     assets,
     dispose() {
+      disposed = true;
       renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
       if (pointerFrame) cancelAnimationFrame(pointerFrame);
@@ -878,6 +1737,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerleave', onPointerLeave);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
+      document.removeEventListener('fullscreenchange', syncFullscreenPortals);
+      syncFullscreenPortals();
+      rackActionButton.remove();
+      warehouseTitle.remove();
       controls.dispose();
       assets.dispose();
       labelRenderer.domElement.remove();
@@ -889,6 +1752,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       });
       floorTexture.dispose();
       floorMarkTextures.forEach((texture) => texture.dispose());
+      wallDetailTextures.forEach((texture) => texture.dispose());
       labelTextures.forEach((texture) => texture.dispose());
       renderer.dispose();
     },
