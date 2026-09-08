@@ -6459,6 +6459,23 @@ function locRememberForm(){
   uiPrefSet('locForm',{wh:val('locWh'),zone:locTypeValue('locZone','locZoneOther'),rack:locTypeValue('locRack','locRackOther'),shelf:val('locShelf'),slot:val('locSlot')});
 }
 window.locRememberForm=locRememberForm;
+function syncLocSingleForm(preferred){
+  var whEl=$('#locWh'); if(!whEl)return;
+  preferred=preferred||{};
+  var wh=preferred.wh||val('locWh')||whEl.value||'';
+  if(wh && Array.prototype.some.call(whEl.options,function(o){return o.value===wh;}))whEl.value=wh;
+  else wh=whEl.value||'';
+  if(!wh)return;
+  var zone=preferred.zone||locTypeValue('locZone','locZoneOther');
+  populateZoneSelect('locZone','locZoneOther',wh,zone);
+  zone=locTypeValue('locZone','locZoneOther');
+  var rack=preferred.rack||locTypeValue('locRack','locRackOther');
+  populateRackSelect('locRack','locRackOther',wh,rack);
+  rack=locTypeValue('locRack','locRackOther');
+  populateLocShelfSlotSelects(wh,zone,rack,preferred.shelf||val('locShelf'),preferred.slot||val('locSlot'));
+  locAutoCode();
+}
+window.syncLocSingleForm=syncLocSingleForm;
 
 /* ── heal Location Master rows that boxes reference but were never registered ──
    The 3D warehouse view and box records themselves fall back to a box's own
@@ -6546,10 +6563,7 @@ function applyLocView(view){
 function openLocDrawer(mode){
   openCardDrawer('locFormCard',mode==='bulk'?'สร้างแร็กหลายตำแหน่ง':'เพิ่มตำแหน่ง / สร้างแร็ก','จัดการโซน แร็ก ชั้น และช่องภายในคลัง');
   var sw=$('#locModeSw');if(sw){var b=sw.querySelector('[data-lmode="'+(mode||'single')+'"]');if(b)b.click();}
-  if((mode||'single')==='single' && typeof uiPrefGet==='function'){
-    var p=uiPrefGet('locForm',{});
-    if(p.wh){setv('locWh',p.wh);populateZoneSelect('locZone','locZoneOther',p.wh,p.zone);populateRackSelect('locRack','locRackOther',p.wh,p.rack);populateLocShelfSlotSelects(p.wh,p.zone,p.rack,p.shelf,p.slot);locAutoCode();}
-  }
+  if((mode||'single')==='single')syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
 }
 window.openLocDrawer=openLocDrawer;
 
@@ -7283,6 +7297,10 @@ function renderLocMaster() {
     ? whs.map(function(w){ return '<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>'; }).join('')
     : '<option value="">— ยังไม่มีคลัง —</option>';
   ['locWh','bulkLocWh'].forEach(function(id){ var s=$('#'+id); if(s) s.innerHTML=whOpts; });
+  /* renderLocMaster rebuilds warehouse options after state loads. Rebuild the
+     dependent form options in the same pass so opening the drawer can never
+     show blank zone/rack/shelf/slot fields while the rack map has data. */
+  syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
 
   /* build chip row from live data (also refreshes filter options) */
   buildLocChips();
