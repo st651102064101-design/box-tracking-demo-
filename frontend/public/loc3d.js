@@ -515,10 +515,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
   });
 
-  // Every zone is a face-to-face rack pair with a forklift aisle between it.
+  // Every zone is a face-to-face rack pair with a two-forklift aisle between it.
   // Different zones continue side-by-side along X, so the outside backs of
   // neighbouring zones meet; no rack ends are joined along the aisle axis.
-  const aisleWidth = 3.2;
+  // The displayed forklift is normalized to a 3.25 m footprint. Allow two
+  // forklifts to pass with a small safety margin between the rack faces.
+  const aisleWidth = 8;
   const backToBackGap = 0.12;
   let xCursor = 0;
   const zoneTransforms = [];
