@@ -956,8 +956,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  // The forklift route begins immediately to the right of the safety rail and
-  // runs across the front of the rack rather than cutting through its guard.
+  // The forklift route begins immediately in front of the rack head and does
+  // not cut through its guard.
   // Keep the pallet staging position beside the safety posts, but leave the
   // forklift route itself unpainted.
   const safetyLineX = center.x - rackBoundaryWidth / 2 - 0.55;
@@ -965,16 +965,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const stagingWidth = Math.min(2.7, rackBoundaryWidth * 0.22);
   const stagingDepth = 2.25;
   const stagingCenter = new THREE.Vector3(safetyLineX + stagingWidth / 2 + 0.3, warehouseFloorY + 0.025, aisleCenterZ);
-  // Guardrail belongs at the exposed rack end, clear of the staging box and
-  // vehicle aisle. Its posts carry alternating black impact bands.
-  const railX = center.x - rackBoundaryWidth / 2 - 0.28;
-  const railStartZ = center.z - rackBoundaryDepth / 2 - 0.35;
-  const railEndZ = center.z + rackBoundaryDepth / 2 + 0.35;
-  // One straight, three-post safety rail at the rack head.
+  // The safety guard belongs across the exposed rack head. It must not run
+  // along the whole left side of the rack, which blocks a pick aisle.
+  const railZ = center.z + rackBoundaryDepth / 2 + 0.28;
+  const railStartX = center.x - rackBoundaryWidth / 2 - 0.3;
+  const railEndX = center.x + rackBoundaryWidth / 2 + 0.3;
+  // One straight, three-post safety rail across the rack head.
   const guardPosts = [
-    [railX, railStartZ],
-    [railX, (railStartZ + railEndZ) / 2],
-    [railX, railEndZ],
+    [railStartX, railZ],
+    [(railStartX + railEndX) / 2, railZ],
+    [railEndX, railZ],
   ];
   guardPosts.forEach(([x, z]) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
@@ -990,16 +990,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     });
   });
   [0.62, 1.02].forEach((height) => steelBetween(
-    new THREE.Vector3(railX, warehouseFloorY + height, railStartZ),
-    new THREE.Vector3(railX, warehouseFloorY + height, railEndZ),
+    new THREE.Vector3(railStartX, warehouseFloorY + height, railZ),
+    new THREE.Vector3(railEndX, warehouseFloorY + height, railZ),
     0.045,
     guardrailMaterial,
   ));
-  // Close both ends of the guardrail so the exposed rack head remains
-  // protected even when another rack is not connected beside it.
-  [railStartZ, railEndZ].forEach((z) => [0.62, 1.02].forEach((height) => steelBetween(
-    new THREE.Vector3(railX, warehouseFloorY + height, z),
-    new THREE.Vector3(railX + 0.72, warehouseFloorY + height, z),
+  // Close both ends of the guardrail with short returns facing the rack.
+  [railStartX, railEndX].forEach((x) => [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(x, warehouseFloorY + height, railZ),
+    new THREE.Vector3(x, warehouseFloorY + height, railZ - 0.72),
     0.045,
     guardrailMaterial,
   )));
@@ -1008,11 +1007,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // two work areas remain visible even when their racks touch back-to-back.
   const safetySignTextures = [];
   const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6 };
-  const zoneSignX = (zone, fallbackX) => {
-    if (zone === 'A') return center.x + rackBoundaryWidth * 0.34;
-    if (zone === 'B') return center.x - rackBoundaryWidth * 0.34;
-    return fallbackX;
-  };
   zoneKeys.forEach((zone) => {
     const zoneBox = zoneBounds.get(zone);
     const zoneCenter = zoneBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3(center.x, 0, center.z);
@@ -1033,9 +1027,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       new THREE.PlaneGeometry(3.7, 1.1),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
     );
-    sign.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 2.15, aisleCenterZ + 0.35);
-    // Face the aisle/camera; the text is physically aligned with the traffic
-    // side rather than floating above either rack row.
+    const zoneSide = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneCenter.x >= center.x ? 1 : -1);
+    const zoneOuterX = zoneBox
+      ? (zoneSide > 0 ? zoneBox.max.x : zoneBox.min.x)
+      : zoneCenter.x;
+    const signX = zoneOuterX + zoneSide * 1.3;
+    // Keep both labels beside their own rack face, at the two green positions,
+    // instead of placing them in front of the forklift.
+    sign.position.set(signX, warehouseFloorY + 2.15, zoneCenter.z);
+    // Face the aisle/camera; the text is physically aligned with its zone.
     sign.rotation.y = Math.PI;
     sign.renderOrder = 4;
     scene.add(sign);
@@ -1047,7 +1047,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       new THREE.MeshBasicMaterial({ map: floorTexture, transparent: true, depthWrite: false, toneMapped: false }),
     );
     floorLabel.rotation.x = -Math.PI / 2;
-    floorLabel.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 0.004, aisleCenterZ + 1.35);
+    floorLabel.position.set(signX, warehouseFloorY + 0.004, zoneCenter.z);
     floorLabel.renderOrder = 3;
     scene.add(floorLabel);
   });
