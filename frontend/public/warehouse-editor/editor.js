@@ -17,19 +17,19 @@ window.warehouseGeometry = function(url, T) {
   }
   if(type==='rack') {
     const {width:w,height:h,depth:d}=rack?.dimensionsCm||{width:270,height:300,depth:110};
-    // A rack is mostly empty space between thin beams. The invisible box makes
-    // the entire visible silhouette a reliable mouse target instead of letting
-    // clicks through the gaps rotate the camera.
+    // This is deliberately the same selective-rack construction used by the
+    // production 3D viewer (loc3d.js), ported to Blueprint3D's legacy Geometry
+    // API. Rack bays, frames and braces come from the real slot layout.
     materials.push(new T.MeshPhongMaterial({transparent:true,opacity:0,depthWrite:false}));
     box(0,h/2,0,w,h,d,3);
-    materials.push(new T.MeshPhongMaterial({color:0xb66b32}),new T.MeshPhongMaterial({color:0x9a6637}));
+    const frame=Math.min(10,w*.08,d*.08);
     const shelves=new Map();(rack?.slots||[]).forEach(s=>{const list=shelves.get(s.shelfCode)||[];list.push(s);shelves.set(s.shelfCode,list);});
     const widest=[...shelves.values()].sort((a,b)=>b.length-a.length)[0]||[];widest.sort((a,b)=>a.localPositionCm.x-b.localPositionCm.x);
-    const xs=[-(w-7)/2,...widest.slice(1).map((s,i)=>(s.localPositionCm.x+widest[i].localPositionCm.x)/2),(w-7)/2];
+    const xs=[-(w-frame)/2,...widest.slice(1).map((s,i)=>(s.localPositionCm.x+widest[i].localPositionCm.x)/2),(w-frame)/2];
     const levels=[...new Set([...shelves.values()].map(s=>s[0].localPositionCm.y-s[0].dimensionsCm.height/2))];if(!levels.length)levels.push(15,100,190);levels.push(h-4);levels.sort((a,b)=>a-b);
-    xs.forEach(x=>[-1,1].forEach(s=>{box(x,h/2,s*(d-7)/2,7,h,7,0);box(x,2.5,s*(d-7)/2,16,5,16,0);}));
-    levels.forEach(y=>[-1,1].forEach(s=>box(0,y,s*(d-7)/2,w,10.5,9,1)));
-    xs.forEach(x=>levels.slice(1).forEach((high,i)=>[-1,1].forEach(sign=>{const a=new T.Vector3(x,levels[i]+7,sign*(d-7)/2),b=new T.Vector3(x,high-7,-sign*(d-7)/2),delta=b.clone().sub(a);const part=new T.BoxGeometry(2.4,delta.length(),2.4);const q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());geometry.merge(part,new T.Matrix4().compose(a.add(b).multiplyScalar(0.5),q,new T.Vector3(1,1,1)));})));
+    xs.forEach(x=>[-1,1].forEach(side=>{box(x,h/2,side*(d-frame)/2,frame,h,frame,0);box(x,2.5,side*(d-frame)/2,frame*2.3,5,frame*2.3,0);}));
+    levels.forEach(y=>{for(let i=0;i<xs.length-1;i++)[-1,1].forEach(side=>box((xs[i]+xs[i+1])/2,y,side*(d-frame)/2,xs[i+1]-xs[i],10.5,frame*1.28,1));});
+    for(let i=0;i<levels.length-1;i++){const low=levels[i]+7,high=levels[i+1]-7;xs.forEach(x=>{const z=(d-frame)/2;const a=new T.Vector3(x,low,-z),b=new T.Vector3(x,high,z),delta=b.clone().sub(a);let part=new T.BoxGeometry(frame*.34,delta.length(),frame*.34),q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());geometry.merge(part,new T.Matrix4().compose(a.add(b).multiplyScalar(.5),q,new T.Vector3(1,1,1)));const c=new T.Vector3(x,low,z),e=new T.Vector3(x,high,-z),other=e.clone().sub(c);part=new T.BoxGeometry(frame*.34,other.length(),frame*.34);q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),other.normalize());geometry.merge(part,new T.Matrix4().compose(c.add(e).multiplyScalar(.5),q,new T.Vector3(1,1,1)));});}
     const boxesBySlot=new Map();(rack?.boxes||[]).forEach(b=>{const list=boxesBySlot.get(b.slotId)||[];list.push(b);boxesBySlot.set(b.slotId,list);});
     (rack?.slots||[]).forEach(slot=>{const placed=boxesBySlot.get(slot.id)||[];placed.forEach((b,i)=>{const bd=b.dimensionsCm||{width:60,height:40,depth:40};const isPallet=/pallet/i.test(b.materialType||'');box(slot.localPositionCm.x+(i-(placed.length-1)/2)*(bd.width+8),slot.localPositionCm.y,0,bd.width,bd.height,bd.depth,isPallet?5:4);});});
   } else if(type==='safety'||type==='rail') {
@@ -55,9 +55,7 @@ let pendingModels=0;
 function finishModel(){pendingModels=Math.max(0,pendingModels-1);$('#save').prop('disabled',pendingModels>0);}
 app.model.scene.itemLoadingCallbacks.add(()=>{pendingModels++;$('#save').prop('disabled',true);});
 app.model.scene.itemLoadedCallbacks.add(finishModel);
-function makeLabel(T,text,width,height,color){const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const c=canvas.getContext('2d');c.fillStyle='rgba(12,18,24,.9)';c.fillRect(0,0,512,128);c.strokeStyle=color;c.lineWidth=8;c.strokeRect(4,4,504,120);c.fillStyle='#fff';c.font='bold 46px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(text,256,64);const texture=new T.Texture(canvas);texture.needsUpdate=true;const sprite=new T.Sprite(new T.SpriteMaterial({map:texture,depthTest:false,transparent:true}));sprite.scale.set(width,height,1);sprite.raycast=function(){};return sprite;}
-function decorateRack(item,asset){if(!asset||item._warehouseDecorated||!window.warehouseThree)return;item._warehouseDecorated=true;const Engine=window.warehouseThree,h=asset.dimensionsCm.height,d=asset.dimensionsCm.depth;const title=makeLabel(Engine,rackLabel(asset),260,66,'#b1f52b');title.position.set(0,h/2+60,0);item.add(title);asset.slots.forEach(slot=>{const label=makeLabel(Engine,slot.barcode,150,34,(asset.boxes||[]).some(box=>box.slotId===slot.id)?'#ffc75f':'#749fc8');label.position.set(slot.localPositionCm.x,slot.localPositionCm.y-h/2,d/2+24);item.add(label);});}
-app.model.scene.itemLoadedCallbacks.add(item=>{const asset=item.metadata.warehouseAsset;if(item.metadata.placeAtDb)item.position.y=item.halfSize.y;decorateRack(item,asset);});
+app.model.scene.itemLoadedCallbacks.add(item=>{if(item.metadata.placeAtDb)item.position.y=item.halfSize.y;});
 window.addEventListener('warehouse-model-error',finishModel);
 window.addEventListener('warehouse-model-error',e=>{status.textContent='โหลดโมเดลไม่สำเร็จ: '+e.detail;});
 function view(is2d){$('#viewer').toggle(!is2d);$('#floorplanner,#tools').toggle(is2d);$('#view2').toggleClass('active',is2d);$('#view3').toggleClass('active',!is2d);if(is2d)app.floorplanner.reset();else app.three.updateWindowSize();}
