@@ -547,6 +547,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const braceParts = [];
   const basePlateParts = [];
   const consumerUnitPickMeshes = [];
+  const dockDoorPickMeshes = [];
+  const dockDoors = [];
   const consumerPowerIndicators = [];
   const consumerPowerIndicatorLights = [];
   const warehousePowerFixtures = [];
@@ -617,35 +619,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     });
   }
 
-  // Use the application's standard modal shell for power controls. Keeping
-  // the control out of the CSS2D layer means it cannot block camera orbit.
-  const openConsumerPowerModal = () => {
-    if (typeof window.openModal !== 'function') return;
-    window.openModal(`
-      <div class="mhead"><h3>ตู้ Consumer Unit · ควบคุมไฟคลัง</h3><button class="x" data-close aria-label="ปิด">×</button></div>
-      <div class="mbody">
-        <div class="banner info">สวิตช์หลักของไฟ High-bay ใน Warehouse</div>
-        <p id="loc3dConsumerPowerStatus" class="muted small">กำลังตรวจสอบสถานะไฟคลัง…</p>
-        <button type="button" class="btn accent" id="loc3dConsumerPowerButton">กำลังโหลด…</button>
-      </div>
-    `);
-    const powerButton = document.getElementById('loc3dConsumerPowerButton');
-    const status = document.getElementById('loc3dConsumerPowerStatus');
-    const syncPowerModal = () => {
-      const on = warehousePowerOn;
-      powerButton.textContent = on ? 'ปิดไฟคลัง' : 'เปิดไฟคลัง';
-      status.textContent = on ? 'สถานะปัจจุบัน: เปิดไฟคลัง' : 'สถานะปัจจุบัน: ปิดไฟ · เหลือไฟฉุกเฉินสีแดงอ่อน';
-    };
-    powerButton.addEventListener('click', () => {
-      setWarehousePower(!warehousePowerOn);
-      window.closeModal?.();
-      canvas.focus?.();
-      down = null;
-      isCameraDragging = false;
-      canvas.style.cursor = 'default';
-    });
-    syncPowerModal();
-  };
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
@@ -1527,9 +1500,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const dockFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x445c63, metalness: 0.78, roughness: 0.28 });
     configuredDoors.forEach((door, index) => {
       const doorZ = center.z - halfWarehouseDepth + 1.8 + doorSpan * (index + 1);
+      // The leaf is separated from the permanent frame so a click can raise
+      // and lower it like a real sectional loading door.
+      const leaf = new THREE.Group();
+      leaf.position.set(innerX, warehouseFloorY, doorZ);
       const panel = new THREE.Mesh(new THREE.BoxGeometry(0.13, doorHeight, doorWidth), dockDoorMaterial);
-      panel.position.set(innerX, warehouseFloorY + doorHeight / 2, doorZ);
-      scene.add(panel);
+      panel.position.set(0, doorHeight / 2, 0);
+      panel.userData.doorIndex = dockDoors.length;
+      leaf.add(panel);
+      scene.add(leaf);
+      dockDoorPickMeshes.push(panel);
       [-1, 1].forEach((edge) => steelBetween(
         new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY, doorZ + edge * doorWidth / 2),
         new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + edge * doorWidth / 2),
@@ -1544,8 +1524,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       );
       for (let row = 1; row < 6; row += 1) {
         const seam = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.025, doorWidth - 0.08), dockFrameMaterial);
-        seam.position.set(innerX - doorSide * 0.01, warehouseFloorY + (doorHeight * row) / 6, doorZ);
-        scene.add(seam);
+        seam.position.set(-doorSide * 0.01, (doorHeight * row) / 6, 0);
+        leaf.add(seam);
       }
       const numberSign = new THREE.Mesh(
         new THREE.PlaneGeometry(0.62, 0.34),
@@ -1558,6 +1538,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const statusLamp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.42), new THREE.MeshStandardMaterial({ color: typeColor, emissive: typeColor, emissiveIntensity: 0.55 }));
       statusLamp.position.set(innerX - doorSide * 0.15, warehouseFloorY + doorHeight + 0.34, doorZ);
       scene.add(statusLamp);
+      dockDoors.push({ door, leaf, statusLamp, typeColor, height: doorHeight, open: false, progress: 0 });
       const pipeZ = doorZ + doorWidth / 2 + 0.23;
       steelBetween(
         new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + 0.12, pipeZ),
@@ -1803,6 +1784,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
   };
+  const toggleDockDoor = (index) => {
+    const entry = dockDoors[index];
+    if (!entry) return;
+    entry.open = !entry.open;
+    const lampColor = entry.open ? 0x63e65d : entry.typeColor;
+    entry.statusLamp.material.color.set(lampColor);
+    entry.statusLamp.material.emissive.set(lampColor);
+  };
   const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
   const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
@@ -1946,6 +1935,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let down = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
+  let hoverDockDoorIndex = -1;
   let hoverForklift = false;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
@@ -2068,6 +2058,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverIndex = -1;
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
+    hoverDockDoorIndex = -1;
     hoverForklift = false;
     hideRackAction();
   };
@@ -2086,23 +2077,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
+    const doorHit = dockDoorPickMeshes.length ? raycaster.intersectObjects(dockDoorPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
     const nextForklift = isForkliftHit();
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
-    const nextConsumerUnit = nextBox < 0 && Boolean(consumerHit) && (!slotHit || consumerHit.distance < slotHit.distance);
-    const next = nextBox >= 0 || nextConsumerUnit ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
+    const consumerIsClosest = Boolean(consumerHit) && (!doorHit || consumerHit.distance <= doorHit.distance) && (!slotHit || consumerHit.distance < slotHit.distance);
+    const doorIndex = Number.isInteger(doorHit?.object?.userData?.doorIndex) ? doorHit.object.userData.doorIndex : -1;
+    const nextDoor = nextBox < 0 && !consumerIsClosest && doorIndex >= 0 && (!slotHit || doorHit.distance < slotHit.distance) ? doorIndex : -1;
+    const nextConsumerUnit = nextBox < 0 && consumerIsClosest;
+    const next = nextBox >= 0 || nextConsumerUnit || nextDoor >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
     const nextRack = nextBox >= 0
       ? boxEntries[nextBox].slotEntry?.rack
       : next >= 0
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
     hoverBoxIndex = nextBox;
     hoverConsumerUnit = nextConsumerUnit;
+    hoverDockDoorIndex = nextDoor;
     hoverForklift = nextForklift;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
     if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
@@ -2143,9 +2139,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       consumerHoverShell.position.copy(consumerBody.position);
       consumerHoverOutline.visible = true;
       consumerHoverShell.visible = true;
-      labelElement.textContent = 'Consumer Unit · คลิกเพื่อควบคุมไฟ';
+      labelElement.textContent = `Consumer Unit · คลิกเพื่อ${warehousePowerOn ? 'ปิด' : 'เปิด'}ไฟ`;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(consumerBody.position).add(new THREE.Vector3(0, 0.72, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
+    } else if (hoverDockDoorIndex >= 0) {
+      const door = dockDoors[hoverDockDoorIndex];
+      const doorPosition = new THREE.Vector3();
+      door.leaf.getWorldPosition(doorPosition);
+      labelElement.textContent = `ประตู ${door.door.gateNo} · ${door.open ? 'เปิดอยู่' : 'ปิดอยู่'} · คลิกเพื่อ${door.open ? 'ปิด' : 'เปิด'}`;
+      labelElement.className = 'loc3d-slot-label occupied';
+      labelObject.position.copy(doorPosition).add(new THREE.Vector3(0, 2.35, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
     } else if (hoverIndex >= 0) {
@@ -2166,7 +2171,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelObject.visible = false;
       canvas.style.cursor = 'default';
     }
-    showRackAction(hoverConsumerUnit || hoverForklift ? null : nextRack);
+    showRackAction(hoverConsumerUnit || hoverDockDoorIndex >= 0 || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -2185,7 +2190,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (isForkliftHit()) setForkliftSelected(true);
       else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
-      else if (hoverConsumerUnit) openConsumerPowerModal();
+      else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
+      else if (hoverDockDoorIndex >= 0) toggleDockDoor(hoverDockDoorIndex);
       else if (forkliftSelected) {
         // Give immediate feedback on the first click of a double-click. The
         // second click still owns the actual move command below.
@@ -2214,6 +2220,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverIndex = -1;
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
+    hoverDockDoorIndex = -1;
     hoverForklift = false;
     labelObject.visible = false;
     canvas.style.cursor = 'default';
@@ -2437,6 +2444,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       targetRippleMaterial.opacity = (1 - elapsed) * 0.98;
       if (elapsed >= 1) targetRipple.visible = false;
     }
+    dockDoors.forEach((door) => {
+      const target = door.open ? 1 : 0;
+      door.progress += (target - door.progress) * (1 - Math.exp(-8 * deltaSeconds));
+      // A sectional door retracts upward: preserve its top edge while the
+      // leaf compresses into the lintel, leaving the dock clear when open.
+      const scaleY = 1 - door.progress * 0.92;
+      door.leaf.scale.y = scaleY;
+      door.leaf.position.y = warehouseFloorY + (1 - scaleY) * door.height;
+    });
     if (firstPerson) {
       camera.getWorldDirection(walkForward);
       walkForward.y = 0;
