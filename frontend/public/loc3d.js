@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { WebGLRenderer } from 'three';
+import { WebGLRenderer } from 'three/webgl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
