@@ -956,37 +956,39 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  // Keep the main horizontal rails, but use closely spaced upright posts so the
-  // barrier reads as one continuous guard at every marked green position. The
-  // old diagonal/return pieces are intentionally not generated here.
-  const railZ = center.z + rackBoundaryDepth / 2 + 0.28;
+  // Put the safety barrier at both rack heads. Keep the main rails, but leave a
+  // forklift opening at the outer end of each barrier instead of closing the
+  // whole rack frontage with one continuous fence.
   const railStartX = center.x - rackBoundaryWidth / 2 - 0.3;
   const railEndX = center.x + rackBoundaryWidth / 2 + 0.3;
-  const safetyPostCount = 7;
-  Array.from({ length: safetyPostCount }, (_, index) => [
-    railStartX + (railEndX - railStartX) * index / (safetyPostCount - 1),
-    railZ,
-  ]).forEach(([x, z]) => {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
-    post.position.set(x, warehouseFloorY + 0.575, z);
-    scene.add(post);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
-    foot.position.set(x, warehouseFloorY + 0.018, z);
-    scene.add(foot);
-    [0.2, 0.52, 0.84].forEach((height) => {
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
-      band.position.set(x, warehouseFloorY + height, z);
-      scene.add(band);
+  const barrierZs = [
+    center.z - rackBoundaryDepth / 2 - 0.28,
+    center.z + rackBoundaryDepth / 2 + 0.28,
+  ];
+  barrierZs.forEach((railZ) => {
+    const midX = railStartX + (railEndX - railStartX) * 0.58;
+    [railStartX, midX, railEndX].forEach((x) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
+      post.position.set(x, warehouseFloorY + 0.575, railZ);
+      scene.add(post);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
+      foot.position.set(x, warehouseFloorY + 0.018, railZ);
+      scene.add(foot);
+      [0.2, 0.52, 0.84].forEach((height) => {
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
+        band.position.set(x, warehouseFloorY + height, railZ);
+        scene.add(band);
+      });
     });
+    // Rails protect the rack head, while the mid-to-end span remains open for
+    // forklift access.
+    [0.62, 1.02].forEach((height) => steelBetween(
+      new THREE.Vector3(railStartX, warehouseFloorY + height, railZ),
+      new THREE.Vector3(midX, warehouseFloorY + height, railZ),
+      0.045,
+      guardrailMaterial,
+    ));
   });
-  // Main beams connect the three posts; only the extra side returns were
-  // removed from the previous version.
-  [0.62, 1.02].forEach((height) => steelBetween(
-    new THREE.Vector3(railStartX, warehouseFloorY + height, railZ),
-    new THREE.Vector3(railEndX, warehouseFloorY + height, railZ),
-    0.045,
-    guardrailMaterial,
-  ));
   // Zone labels sit on the inner side of each zone, in the aisle marked by the
   // floor, rather than outside the rack block where they get hidden behind the
   // end frames. A is on the right and B on the left, so both labels face the
