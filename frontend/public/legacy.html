@@ -3793,17 +3793,17 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <div id="locBulkMode" style="display:none;">
         <div class="banner info" style="margin-bottom:14px;"><span class="bi"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><div>ระบุข้อมูลแร็ค 1 ชุด ระบบจะสร้างตำแหน่งทุก ชั้น × ช่อง ให้อัตโนมัติ<br><span class="muted small">เช่น โซน A · แร็ค R-03 · 4 ชั้น · 5 ช่อง/ชั้น → สร้าง 20 ตำแหน่ง (A-R03-1-01 ถึง A-R03-4-05)</span></div></div>
         <div class="grid g4" style="margin-bottom:14px;">
-          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bulkLocWh"></select></div>
+          <div class="field"><label>คลัง <span class="req">*</span></label><select id="bulkLocWh" onchange="bulkLocRemember()"></select></div>
           <div class="field"><label>โซน</label>
-            <select id="bulkLocZone" onchange="toggleLocTypeOther('bulkLocZone','bulkLocZoneOther');suggestBulkRack();locBulkPreview();"></select>
+            <select id="bulkLocZone" onchange="toggleLocTypeOther('bulkLocZone','bulkLocZoneOther');suggestBulkRack();bulkLocRemember();locBulkPreview();"></select>
             <input id="bulkLocZoneOther" placeholder="ระบุโซนใหม่ เช่น A" autocomplete="off" style="display:none;margin-top:8px;" oninput="locBulkPreview()">
           </div>
           <div class="field"><label>แร็ค <span class="req">*</span></label>
-            <select id="bulkLocRack" onchange="toggleLocTypeOther('bulkLocRack','bulkLocRackOther');locBulkPreview();"></select>
+            <select id="bulkLocRack" onchange="toggleLocTypeOther('bulkLocRack','bulkLocRackOther');bulkLocRemember();locBulkPreview();"></select>
             <input id="bulkLocRackOther" placeholder="R-03" autocomplete="off" readonly style="display:none;margin-top:8px;font-family:var(--mono);" oninput="locBulkPreview()">
           </div>
           <div class="field"><label>ประเภทแร็ค</label>
-            <select id="bulkLocType" onchange="toggleLocTypeOther('bulkLocType','bulkLocTypeOther')">
+            <select id="bulkLocType" onchange="toggleLocTypeOther('bulkLocType','bulkLocTypeOther');bulkLocRemember()">
               <option value="Selective">Selective (ทั่วไป)</option>
               <option value="Drive-in">Drive-in</option>
               <option value="Flow">Flow Rack</option>
@@ -3814,12 +3814,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <input id="bulkLocTypeOther" placeholder="ระบุประเภทแร็ค" autocomplete="off" style="display:none;margin-top:8px;">
           </div>
           <div class="field"><label>จำนวนชั้น <span class="req">*</span></label>
-            <div class="input-with-action"><input id="bulkLocShelves" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="locBulkPreview()">
+            <div class="input-with-action"><input id="bulkLocShelves" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="bulkLocRemember();locBulkPreview()">
               <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="bulkIncrementCount('bulkLocShelves')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
           <div class="field"><label>จำนวนช่อง/ชั้น <span class="req">*</span></label>
-            <div class="input-with-action"><input id="bulkLocSlots" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="locBulkPreview()">
+            <div class="input-with-action"><input id="bulkLocSlots" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="bulkLocRemember();locBulkPreview()">
               <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="bulkIncrementCount('bulkLocSlots')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
@@ -6476,6 +6476,30 @@ function syncLocSingleForm(preferred){
   locAutoCode();
 }
 window.syncLocSingleForm=syncLocSingleForm;
+function bulkLocRemember(){
+  if(typeof uiPrefSet!=='function')return;
+  uiPrefSet('bulkLocForm',{wh:val('bulkLocWh'),zone:locTypeValue('bulkLocZone','bulkLocZoneOther'),rack:locTypeValue('bulkLocRack','bulkLocRackOther'),type:locTypeValue('bulkLocType','bulkLocTypeOther'),shelves:Math.max(1,parseInt(val('bulkLocShelves'),10)||1),slots:Math.max(1,parseInt(val('bulkLocSlots'),10)||1)});
+}
+function syncBulkLocForm(preferred){
+  var whEl=$('#bulkLocWh'); if(!whEl)return;
+  preferred=preferred||{};
+  var wh=preferred.wh||val('bulkLocWh')||whEl.value||'';
+  if(wh&&Array.prototype.some.call(whEl.options,function(o){return o.value===wh;}))whEl.value=wh;
+  else wh=whEl.value||'';
+  if(!wh)return;
+  populateZoneSelect('bulkLocZone','bulkLocZoneOther',wh,preferred.zone||locTypeValue('bulkLocZone','bulkLocZoneOther'));
+  populateRackSelect('bulkLocRack','bulkLocRackOther',wh,preferred.rack||locTypeValue('bulkLocRack','bulkLocRackOther'));
+  var type=$('#bulkLocType'), typeOther=$('#bulkLocTypeOther'), wanted=preferred.type||val('bulkLocType')||'Selective';
+  if(type){
+    if(Array.prototype.some.call(type.options,function(o){return o.value===wanted;})){type.value=wanted;if(typeOther){typeOther.value='';typeOther.style.display='none';}}
+    else {type.value='__other__';if(typeOther){typeOther.value=wanted;typeOther.style.display='';}}
+  }
+  populateBulkCountSelects(wh);
+  setv('bulkLocShelves',String(Math.max(1,parseInt(preferred.shelves,10)||parseInt(val('bulkLocShelves'),10)||1)));
+  setv('bulkLocSlots',String(Math.max(1,parseInt(preferred.slots,10)||parseInt(val('bulkLocSlots'),10)||1)));
+  suggestBulkStarts();
+}
+window.bulkLocRemember=bulkLocRemember;window.syncBulkLocForm=syncBulkLocForm;
 
 /* ── heal Location Master rows that boxes reference but were never registered ──
    The 3D warehouse view and box records themselves fall back to a box's own
@@ -6566,6 +6590,7 @@ function openLocDrawer(mode){
   openCardDrawer('locFormCard',selectedMode==='bulk'?'สร้างแร็กหลายตำแหน่ง':'เพิ่มตำแหน่ง / สร้างแร็ก','จัดการโซน แร็ก ชั้น และช่องภายในคลัง');
   var sw=$('#locModeSw');if(sw){var b=sw.querySelector('[data-lmode="'+selectedMode+'"]');if(b)b.click();}
   if(selectedMode==='single')syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
+  else syncBulkLocForm(typeof uiPrefGet==='function'?uiPrefGet('bulkLocForm',{}):{});
 }
 window.openLocDrawer=openLocDrawer;
 
@@ -6752,9 +6777,9 @@ function suggestBulkStarts() {
 }
 window.suggestBulkStarts = suggestBulkStarts;
 (function(){
-  var wh = $('#bulkLocWh'); if (wh) wh.addEventListener('change', function(){ populateBulkCountSelects(val('bulkLocWh')); suggestBulkZone(); suggestBulkRack(); suggestBulkStarts(); });
-  var rack = $('#bulkLocRack'); if (rack) rack.addEventListener('input', function(){ suggestBulkStarts(); locBulkPreview(); });
-  var zone = $('#bulkLocZone'); if (zone) zone.addEventListener('input', suggestBulkStarts);
+  var wh = $('#bulkLocWh'); if (wh) wh.addEventListener('change', function(){ populateBulkCountSelects(val('bulkLocWh')); suggestBulkZone(); suggestBulkRack(); suggestBulkStarts(); bulkLocRemember(); });
+  var rack = $('#bulkLocRack'); if (rack) rack.addEventListener('input', function(){ suggestBulkStarts(); bulkLocRemember(); locBulkPreview(); });
+  var zone = $('#bulkLocZone'); if (zone) zone.addEventListener('input', function(){suggestBulkStarts();bulkLocRemember();});
 })();
 
 /* ── override toggle for loc code ── */
@@ -7304,6 +7329,7 @@ function renderLocMaster() {
      dependent form options in the same pass so opening the drawer can never
      show blank zone/rack/shelf/slot fields while the rack map has data. */
   syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
+  syncBulkLocForm(typeof uiPrefGet==='function'?uiPrefGet('bulkLocForm',{}):{});
 
   /* build chip row from live data (also refreshes filter options) */
   buildLocChips();
