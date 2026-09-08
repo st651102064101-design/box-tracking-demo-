@@ -2257,7 +2257,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const rect = canvas.getBoundingClientRect();
         updatePointer({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
       } else setPointerFromEvent(event);
-      if (isForkliftHit()) setForkliftSelected(true);
+      // The forklift is its own on/off control: clicking it again clears the
+      // selection (and any pending route) instead of leaving it stuck active.
+      if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
       else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
       else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
