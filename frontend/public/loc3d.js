@@ -1670,16 +1670,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let warehousePowerOn = true;
   const setWarehousePower = (on) => {
     warehousePowerOn = Boolean(on);
-    // The consumer unit is the source of every illumination layer in this
-    // isolated warehouse view. Off means a true blackout: no environment,
-    // sun, fixture emission, cast shadows or residual exposure remains.
-    hemisphereLight.intensity = warehousePowerOn ? 1.75 : 0;
-    ambientLight.intensity = warehousePowerOn ? 0.48 : 0;
+    // Power-off keeps only a faint, shadowless emergency/ambient spill. The
+    // high-bay circuit and sunlight are truly off, but operators can still
+    // distinguish the warehouse outline instead of seeing a pure black void.
+    hemisphereLight.intensity = warehousePowerOn ? 1.75 : 0.045;
+    ambientLight.intensity = warehousePowerOn ? 0.48 : 0.018;
     sun.intensity = warehousePowerOn ? 2.25 : 0;
     sun.castShadow = warehousePowerOn;
-    renderer.toneMappingExposure = warehousePowerOn ? 1.05 : 0.001;
-    scene.background.set(warehousePowerOn ? 0x101419 : 0x000000);
-    scene.fog.color.set(warehousePowerOn ? 0x101419 : 0x000000);
+    renderer.toneMappingExposure = warehousePowerOn ? 1.05 : 0.16;
+    scene.background.set(warehousePowerOn ? 0x101419 : 0x020508);
+    scene.fog.color.set(warehousePowerOn ? 0x101419 : 0x020508);
     wallLightMaterial.emissiveIntensity = warehousePowerOn ? 2.8 : 0;
     warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
