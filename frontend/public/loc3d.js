@@ -502,9 +502,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  // Visual plan only — rack/slot identity stays DB-owned.
-  // Pattern along X: face right → 2-forklift aisle → face left + face right
-  // (back-to-back) → 2-forklift aisle → repeat.
+  // Visual plan only — rack/slot identity stays DB-owned. Each zone is built
+  // as two independent left/right rows across an aisle. Consecutive racks
+  // continue at the row end (Z) rather than being placed back-to-back.
   const racksByZone = new Map();
   model.racks.forEach((rack) => {
     const key = String(rack.zone || '—');
@@ -514,44 +514,45 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   });
   const zoneKeys = [...racksByZone.keys()].sort(natural);
   const displayTransformByRackId = new Map();
-  const innerBackToBackRackIds = new Set();
   const outerRackIds = new Set();
   const backToBackPairs = [];
-  const allRacks = zoneKeys.flatMap((zone) =>
-    [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code)),
-  );
   const twoForkliftAisle = 4;
-  const backToBackGap = 0.12;
+  const zoneGap = 3.5;
+  const rowGap = 1.15;
   const placements = [];
-  let xCursor = 0;
-  allRacks.forEach((rack, index) => {
-    const depth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
-    const isPairStart = index > 0 && index % 2 === 1;
-    const isPairEnd = index > 0 && index % 2 === 0;
-    const faceRight = !isPairStart;
-    const gapAfter = isPairStart ? backToBackGap : twoForkliftAisle;
-    const centerX = xCursor + depth / 2;
-    placements.push({ rack, centerX, depth, faceRight });
-    xCursor = centerX + depth / 2 + gapAfter;
-    if (index === 0 || (isPairStart && !allRacks[index + 1])) outerRackIds.add(rack.id);
-    if (isPairStart && allRacks[index + 1]) {
-      innerBackToBackRackIds.add(rack.id);
-      innerBackToBackRackIds.add(allRacks[index + 1].id);
-      backToBackPairs.push([rack.id, allRacks[index + 1].id]);
-    }
-    if (isPairEnd && !innerBackToBackRackIds.has(rack.id)) outerRackIds.add(rack.id);
+  let zoneCursorX = 0;
+  zoneKeys.forEach((zone) => {
+    const zoneRacks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
+    const maxDepth = Math.max(...zoneRacks.map((rack) => positive(rack.dimensionsCm?.depth, 110) * CM_TO_M), 1.1);
+    const maxLength = Math.max(...zoneRacks.map((rack) => positive(rack.dimensionsCm?.width, 270) * CM_TO_M), 2.7);
+    const leftCenterX = zoneCursorX - twoForkliftAisle / 2 - maxDepth / 2;
+    const rightCenterX = zoneCursorX + twoForkliftAisle / 2 + maxDepth / 2;
+    zoneRacks.forEach((rack, index) => {
+      const isRightSide = index % 2 === 1;
+      const rowIndex = Math.floor(index / 2);
+      placements.push({
+        rack,
+        centerX: isRightSide ? rightCenterX : leftCenterX,
+        centerZ: rowIndex * (maxLength + rowGap),
+        faceRight: isRightSide,
+      });
+      outerRackIds.add(rack.id);
+    });
+    zoneCursorX += twoForkliftAisle + maxDepth * 2 + zoneGap;
   });
   if (placements.length) {
-    const minX = placements[0].centerX - placements[0].depth / 2;
-    const last = placements[placements.length - 1];
-    const maxX = last.centerX + last.depth / 2;
+    const minX = Math.min(...placements.map(({ centerX, rack }) => centerX - positive(rack.dimensionsCm?.depth, 110) * CM_TO_M / 2));
+    const maxX = Math.max(...placements.map(({ centerX, rack }) => centerX + positive(rack.dimensionsCm?.depth, 110) * CM_TO_M / 2));
+    const minZ = Math.min(...placements.map(({ centerZ, rack }) => centerZ - positive(rack.dimensionsCm?.width, 270) * CM_TO_M / 2));
+    const maxZ = Math.max(...placements.map(({ centerZ, rack }) => centerZ + positive(rack.dimensionsCm?.width, 270) * CM_TO_M / 2));
     const layoutOffsetX = (minX + maxX) / 2;
-    placements.forEach(({ rack, centerX, faceRight }) => {
+    const layoutOffsetZ = (minZ + maxZ) / 2;
+    placements.forEach(({ rack, centerX, centerZ, faceRight }) => {
       displayTransformByRackId.set(rack.id, {
         positionCm: {
           x: (centerX - layoutOffsetX) * 100,
           y: num(rack.positionCm?.y),
-          z: 0,
+          z: (centerZ - layoutOffsetZ) * 100,
         },
         rotationYDeg: faceRight ? 90 : -90,
       });
