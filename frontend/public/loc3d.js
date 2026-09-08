@@ -1896,7 +1896,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const updatePointer = (event) => {
     if (isCameraDragging) {
       clearHoverFeedback();
-      canvas.style.cursor = 'grabbing';
+      canvas.style.cursor = 'default';
       return;
     }
     const rect = canvas.getBoundingClientRect();
@@ -1975,7 +1975,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       hoverOutline.visible = false;
       hoverShell.visible = false;
       labelObject.visible = false;
-      canvas.style.cursor = 'grab';
+      // A four-way move cursor is unambiguous: the rack steel itself can be
+      // grabbed. Normal navigation stays an ordinary arrow, never a hand.
+      canvas.style.cursor = nextRack ? 'move' : (movableRootAt(event) ? 'move' : 'default');
     }
     showRackAction(hoverConsumerUnit ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
@@ -2053,10 +2055,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const entry = rackEntries.find((item) => item.rack === rack);
       if (entry && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) {
         rackDrag = { rack, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
-        controls.enabled = false; canvas.style.cursor = 'grabbing'; return;
+        controls.enabled = false; canvas.style.cursor = 'move'; return;
       }
       const movable = movableRootAt(event);
-      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'grabbing'; return; }
+      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'move'; return; }
     }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
@@ -2064,10 +2066,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const onPointerUp = (event) => {
     if (rackDrag) {
       const rack = rackDrag.rack;
-      rackDrag = null; controls.enabled = true; canvas.style.cursor = 'grab';
+      rackDrag = null; controls.enabled = true; canvas.style.cursor = 'default';
       saveDraggedRack(rack); return;
     }
-    if (objectDrag) { const name=objectDrag.target.name||'อุปกรณ์'; objectDrag=null; controls.enabled=true; canvas.style.cursor='grab'; window.toast?.(`ย้าย ${name} แล้ว`, '', 'ok'); return; }
+    if (objectDrag) { const name=objectDrag.target.name||'อุปกรณ์'; objectDrag=null; controls.enabled=true; canvas.style.cursor='default'; window.toast?.(`ย้าย ${name} แล้ว`, '', 'ok'); return; }
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
@@ -2076,7 +2078,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     down = null;
     isCameraDragging = false;
-    if (wasCameraDragging) canvas.style.cursor = 'grab';
+    if (wasCameraDragging) canvas.style.cursor = 'default';
   };
   const onPointerLeave = () => {
     if (hoverIndex >= 0 && slotMesh) {
@@ -2096,7 +2098,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
     labelObject.visible = false;
-    canvas.style.cursor = 'grab';
+    canvas.style.cursor = 'default';
     window.setTimeout(() => {
       if (!actionPointerOver) hideRackAction();
     }, 0);
