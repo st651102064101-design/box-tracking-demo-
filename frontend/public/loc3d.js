@@ -978,6 +978,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       scene.add(band);
     });
   });
+  // Main beams connect the three posts; only the extra side returns were
+  // removed from the previous version.
+  [0.62, 1.02].forEach((height) => steelBetween(
+    new THREE.Vector3(railStartX, warehouseFloorY + height, railZ),
+    new THREE.Vector3(railEndX, warehouseFloorY + height, railZ),
+    0.045,
+    guardrailMaterial,
+  ));
   // Zone safety signs sit beside the forklift aisle, not over the rack block.
   // A is intentionally on the right (forklift side) and B on the left, so the
   // two work areas remain visible even when their racks touch back-to-back.
@@ -997,25 +1005,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     zoneFloor.position.set(zoneCenter.x, warehouseFloorY + 0.002, zoneCenter.z);
     zoneFloor.renderOrder = 1;
     scene.add(zoneFloor);
-    const texture = safetyZoneSignTexture(zone);
-    safetySignTextures.push(texture);
-    const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.7, 1.1),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
-    );
     const zoneSide = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneCenter.x >= center.x ? 1 : -1);
     const zoneOuterX = zoneBox
       ? (zoneSide > 0 ? zoneBox.max.x : zoneBox.min.x)
       : zoneCenter.x;
     const signX = zoneOuterX + zoneSide * 1.3;
-    // Keep both labels beside their own rack face, at the two green positions,
-    // instead of placing them in front of the forklift.
-    sign.position.set(signX, warehouseFloorY + 2.15, zoneCenter.z);
-    // Face the aisle/camera; the text is physically aligned with its zone.
-    sign.rotation.y = Math.PI;
-    sign.renderOrder = 4;
-    scene.add(sign);
-
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
     safetySignTextures.push(floorTexture);
     const floorLabel = new THREE.Mesh(
@@ -1353,23 +1347,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       0.032,
       sprinklerPipeMaterial,
     ));
-    for (let bay = 1; bay < wallFrameCount - 1; bay += 2) {
-      const serviceZ = center.z - halfWarehouseDepth + wallBayDepth * (bay + 0.5);
-      const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
-      wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, serviceZ);
-      scene.add(wallLight);
-      const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
-      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, serviceZ + Math.min(2.1, wallBayDepth * 0.48) * 0.68);
-      scene.add(equipmentBox);
-      const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
-      const safetySign = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.28, 0.28),
-        new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
-      );
-      safetySign.rotation.y = sideRotation;
-      safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, serviceZ);
-      scene.add(safetySign);
-    }
+    // Keep one service marker beside the single loading door on each wall.
+    // Repeating the marker in every wall bay made the 3D view look like it had
+    // several doors; the opposite wall mirrors the same single-door position.
+    const referenceDoorZ = configuredDoors.length
+      ? center.z - halfWarehouseDepth + 1.8 + ((warehouseDepth - 3.6) / (configuredDoors.length + 1))
+      : center.z;
+    const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
+    wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, referenceDoorZ);
+    scene.add(wallLight);
+    const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
+    equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, referenceDoorZ + 0.55);
+    scene.add(equipmentBox);
+    const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
+    const safetySign = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.28, 0.28),
+      new THREE.MeshBasicMaterial({ map: safetyTexture, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    safetySign.rotation.y = sideRotation;
+    safetySign.position.set(innerX - side * 0.026, warehouseFloorY + 1.25, referenceDoorZ);
+    scene.add(safetySign);
   });
   // Cable trays use the same three heights on every elevation and turn each
   // corner at the same inset as their long-wall runs.
