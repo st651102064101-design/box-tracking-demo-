@@ -502,9 +502,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  // Visual plan only — rack/slot identity stays DB-owned. Each zone is built
-  // as two independent left/right rows across an aisle. Consecutive racks
-  // continue at the row end (Z) rather than being placed back-to-back.
+  // Visual plan only — rack/slot identity stays DB-owned. Racks in a zone are
+  // paired back-to-back: their rear frames are almost flush, while their
+  // loading faces point out to the two service aisles. Consecutive pairs
+  // continue at the row end (Z), preserving clear travel routes for forklifts.
   const racksByZone = new Map();
   model.racks.forEach((rack) => {
     const key = String(rack.zone || '—');
@@ -516,7 +517,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const displayTransformByRackId = new Map();
   const outerRackIds = new Set();
   const backToBackPairs = [];
-  const twoForkliftAisle = 4;
+  const rackBackClearance = 0.16;
   const zoneGap = 3.5;
   const rowGap = 1.15;
   const placements = [];
@@ -525,8 +526,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const zoneRacks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
     const maxDepth = Math.max(...zoneRacks.map((rack) => positive(rack.dimensionsCm?.depth, 110) * CM_TO_M), 1.1);
     const maxLength = Math.max(...zoneRacks.map((rack) => positive(rack.dimensionsCm?.width, 270) * CM_TO_M), 2.7);
-    const leftCenterX = zoneCursorX - twoForkliftAisle / 2 - maxDepth / 2;
-    const rightCenterX = zoneCursorX + twoForkliftAisle / 2 + maxDepth / 2;
+    // A small steel-frame clearance prevents mesh overlap, but does not form
+    // a fake aisle between the two rear faces.
+    const pairHalfWidth = (maxDepth + rackBackClearance) / 2;
+    const leftCenterX = zoneCursorX - pairHalfWidth;
+    const rightCenterX = zoneCursorX + pairHalfWidth;
     zoneRacks.forEach((rack, index) => {
       const isRightSide = index % 2 === 1;
       const rowIndex = Math.floor(index / 2);
@@ -536,9 +540,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         centerZ: rowIndex * (maxLength + rowGap),
         faceRight: isRightSide,
       });
-      outerRackIds.add(rack.id);
+      if (isRightSide) backToBackPairs.push([zoneRacks[index - 1].id, rack.id]);
+      else if (index === zoneRacks.length - 1) outerRackIds.add(rack.id);
     });
-    zoneCursorX += twoForkliftAisle + maxDepth * 2 + zoneGap;
+    zoneCursorX += maxDepth * 2 + rackBackClearance + zoneGap;
   });
   if (placements.length) {
     const minX = Math.min(...placements.map(({ centerX, rack }) => centerX - positive(rack.dimensionsCm?.depth, 110) * CM_TO_M / 2));
@@ -762,14 +767,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const rackNameLabels = [];
   // Model the actual ZPL/Code128 sticker as a plane fixed to the FRONT shelf
   // beam. It is part of the rack, never a floating screen-space caption.
-  if (slotEntries.length <= 250) {
-    slotEntries.forEach((entry) => {
+  // A location label is required for every DB slot. Do not silently omit
+  // labels in a real warehouse simply because it has more than 250 slots.
+  slotEntries.forEach((entry) => {
       const texture = code128LabelTexture(entry.slot.barcode || entry.slot.id);
       labelTextures.push(texture);
       // Shelf-edge ticket: intentionally smaller than the box opening (and a
       // typical tote), like a 7-Eleven price label rather than a hanging sign.
-      const width = Math.min(0.3, Math.max(0.2, entry.scale.x * 0.12));
-      const height = Math.min(0.09, width / 4.7);
+      const width = Math.min(0.46, Math.max(0.28, entry.scale.x * 0.18));
+      const height = Math.min(0.12, width / 4.2);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
         new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false }),
@@ -786,7 +792,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       scene.add(sticker);
       barcodeStickers.push(sticker);
     });
-  }
   rackEntries.forEach((entry) => {
     // Mount the rack name upright on its front top beam. It follows the rack
     // while remaining readable instead of lying flat on top of the beam.
@@ -1894,7 +1899,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     rackActionObject.visible = true;
   };
   const setPointerFromEvent = (event) => {
-    setPointerFromEvent(event);
+    const rect = canvas.getBoundingClientRect();
+    pointer.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    raycaster.setFromCamera(pointer, camera);
   };
   const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
   const setForkliftSelected = (selected) => {
