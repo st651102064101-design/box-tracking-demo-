@@ -540,20 +540,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // This small control is a CSS2D object so it stays attached to the physical
   // consumer unit while still behaving like a normal accessible switch.
   const consumerPanel = document.createElement('div');
-  consumerPanel.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #9be92d;border-radius:10px;background:rgba(8,16,11,.94);box-shadow:0 8px 22px rgba(0,0,0,.45);color:#f7fff2;font:700 12px system-ui,sans-serif;white-space:nowrap;pointer-events:auto;transform:translate(-50%,-125%);';
+  consumerPanel.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #9be92d;border-radius:10px;background:rgba(8,16,11,.94);box-shadow:0 8px 22px rgba(0,0,0,.45);color:#f7fff2;font:700 12px system-ui,sans-serif;white-space:nowrap;pointer-events:none;transform:translate(-50%,-125%);';
   const consumerPanelText = document.createElement('span');
   consumerPanelText.textContent = 'ไฟคลัง: เปิด';
   const consumerPowerButton = document.createElement('button');
   consumerPowerButton.type = 'button';
   consumerPowerButton.textContent = 'ปิดไฟ';
-  consumerPowerButton.style.cssText = 'border:0;border-radius:7px;padding:5px 8px;background:#a8ff2b;color:#142100;font:800 12px system-ui,sans-serif;cursor:pointer;';
+  consumerPowerButton.style.cssText = 'border:0;border-radius:7px;padding:5px 8px;background:#a8ff2b;color:#142100;font:800 12px system-ui,sans-serif;cursor:pointer;pointer-events:auto;';
   consumerPanel.append(consumerPanelText, consumerPowerButton);
   const consumerPanelObject = new CSS2DObject(consumerPanel);
   consumerPanelObject.visible = false;
   scene.add(consumerPanelObject);
-  let consumerPanelPointerOver = false;
-  consumerPanel.addEventListener('pointerenter', () => { consumerPanelPointerOver = true; });
-  consumerPanel.addEventListener('pointerleave', () => { consumerPanelPointerOver = false; });
   consumerPanel.addEventListener('pointerdown', (event) => event.stopPropagation());
   const dismissConsumerPanel = (event) => {
     if (!consumerPanel.contains(event.target)) consumerPanelObject.visible = false;
@@ -1798,6 +1795,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(consumerHoverShell);
   let pointerFrame = 0;
   let down = null;
+  let isCameraDragging = false;
   let hoverConsumerUnit = false;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
@@ -1817,7 +1815,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     rackActionObject.visible = true;
   };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
+  const clearHoverFeedback = () => {
+    if (hoverIndex >= 0 && slotMesh) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
+    if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
+    if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
+    hoverRing.visible = false;
+    hoverOutline.visible = false;
+    hoverShell.visible = false;
+    consumerHoverOutline.visible = false;
+    consumerHoverShell.visible = false;
+    labelObject.visible = false;
+    hoverIndex = -1;
+    hoverBoxIndex = -1;
+    hoverConsumerUnit = false;
+    hideRackAction();
+  };
   const updatePointer = (event) => {
+    if (isCameraDragging) {
+      clearHoverFeedback();
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
@@ -1900,17 +1918,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
+    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5) isCameraDragging = true;
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
-  const onPointerDown = (event) => { down = { x: event.clientX, y: event.clientY }; };
+  const onPointerDown = (event) => {
+    down = { x: event.clientX, y: event.clientY };
+    isCameraDragging = false;
+  };
   const onPointerUp = (event) => {
-    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
+    const wasCameraDragging = isCameraDragging;
+    if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
       else if (hoverConsumerUnit) consumerPanelObject.visible = !consumerPanelObject.visible;
     }
     down = null;
+    isCameraDragging = false;
+    if (wasCameraDragging) canvas.style.cursor = 'grab';
   };
   const onPointerLeave = () => {
     if (hoverIndex >= 0 && slotMesh) {
