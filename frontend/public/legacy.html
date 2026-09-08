@@ -188,6 +188,8 @@ html[data-layout="top"].topbar-hidden .navwrap{transform:translateY(calc(-100% -
   color:var(--ink);background:transparent;transition:background .2s,transform .2s var(--ease);}
 .iconbtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent);}
 .iconbtn:active{transform:scale(.9);}
+.input-with-action{display:flex;align-items:center;gap:8px;width:100%;}
+.input-with-action>input{flex:1;min-width:0;}
 
 .navwrap{position:sticky;top:var(--chrome-h,58px);z-index:80;
   background:color-mix(in srgb,var(--bg) 68%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
@@ -3811,8 +3813,16 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             </select>
             <input id="bulkLocTypeOther" placeholder="ระบุประเภทแร็ค" autocomplete="off" style="display:none;margin-top:8px;">
           </div>
-          <div class="field"><label>จำนวนชั้น <span class="req">*</span></label><select id="bulkLocShelves" onchange="locBulkPreview()"></select></div>
-          <div class="field"><label>จำนวนช่อง/ชั้น <span class="req">*</span></label><select id="bulkLocSlots" onchange="locBulkPreview()"></select></div>
+          <div class="field"><label>จำนวนชั้น <span class="req">*</span></label>
+            <div class="input-with-action"><input id="bulkLocShelves" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="locBulkPreview()">
+              <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="bulkIncrementCount('bulkLocShelves')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
+          <div class="field"><label>จำนวนช่อง/ชั้น <span class="req">*</span></label>
+            <div class="input-with-action"><input id="bulkLocSlots" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="locBulkPreview()">
+              <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="bulkIncrementCount('bulkLocSlots')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
+            </div>
+          </div>
           <!-- เลขเริ่มต้นชั้น/ช่อง คำนวณอัตโนมัติจากข้อมูลแร็คที่มีอยู่แล้ว (ต่อเลขให้เอง) — ไม่ให้ผู้ใช้กรอกเองเพื่อกันเลขชนหรือเว้นช่องว่างโดยไม่ตั้งใจ -->
           <input type="hidden" id="bulkLocShelfStart" value="1">
           <input type="hidden" id="bulkLocSlotStart" value="1">
@@ -6827,12 +6837,18 @@ function populateBulkCountSelects(wh) {
   var shSel=$('#bulkLocShelves'), slSel=$('#bulkLocSlots'); if (!shSel||!slSel) return;
   var shMax=maxShelvesForWh(wh), slMax=maxSlotsForWh(wh);
   var keepSh=parseInt(shSel.value,10)||0, keepSl=parseInt(slSel.value,10)||0;
-  var opts=function(max){var h='';for(var i=1;i<=max;i++)h+='<option value="'+i+'">'+i+'</option>';return h;};
-  shSel.innerHTML=opts(shMax); slSel.innerHTML=opts(slMax);
-  shSel.value = (keepSh>=1&&keepSh<=shMax) ? keepSh : Math.min(5,shMax);
-  slSel.value = (keepSl>=1&&keepSl<=slMax) ? keepSl : Math.min(5,slMax);
+  // These are number inputs with the same + affordance as the single-location
+  // form. Do not rebuild a dropdown here; preserve any value the user entered.
+  shSel.value = String(Math.max(1, keepSh || Math.min(5, shMax)));
+  slSel.value = String(Math.max(1, keepSl || Math.min(5, slMax)));
 }
 window.populateBulkCountSelects = populateBulkCountSelects;
+function bulkIncrementCount(id) {
+  var input = $('#'+id); if (!input) return;
+  input.value = String(Math.min(Number(input.max)||999, Math.max(1, parseInt(input.value,10)||0) + 1));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+window.bulkIncrementCount = bulkIncrementCount;
 /* Fill a zone <select> with every zone this warehouse already has, plus a
    "+ เพิ่มโซนใหม่" option that reveals the free-text fallback input — mirrors
    toggleLocTypeOther's select+other pattern used for ประเภทแร็ค. */
