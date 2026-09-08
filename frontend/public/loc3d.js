@@ -502,27 +502,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const displayTransformByRackId = new Map();
   const innerBackToBackRackIds = new Set();
   const outerRackIds = new Set();
-  zoneKeys.forEach((zone, zoneIndex) => {
-    const side = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneIndex % 2 ? -1 : 1);
+  const zonePairWidths = zoneKeys.map((zone) => {
     const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
-    const pairWidths = [];
+    const widths = [];
     for (let index = 0; index < racks.length; index += 2) {
-      pairWidths.push(Math.max(
+      widths.push(Math.max(
         positive(racks[index]?.dimensionsCm?.width, 140) * CM_TO_M,
         positive(racks[index + 1]?.dimensionsCm?.width, 140) * CM_TO_M,
       ));
     }
+    return widths;
+  });
+  const zoneLaneGap = 0.2;
+  const continuousLaneLength = zonePairWidths.reduce((sum, widths) => (
+    sum + widths.reduce((widthSum, width) => widthSum + width, 0) + Math.max(0, widths.length - 1) * 2.2
+  ), 0) + Math.max(0, zoneKeys.length - 1) * zoneLaneGap;
+  let continuousZCursor = -continuousLaneLength / 2;
+  zoneKeys.forEach((zone, zoneIndex) => {
+    const side = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneIndex % 2 ? -1 : 1);
+    const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
+    const pairWidths = zonePairWidths[zoneIndex];
     const laneGap = 2.2;
     const totalLength = pairWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, pairWidths.length - 1) * laneGap;
-    // Zone B and C form the requested back-to-back pair. Further zones are
-    // placed as successive pairs (D/E, F/G, ...), while A remains a standalone
-    // lane so no rack is silently drawn on top of another rack.
-    const zoneLaneGroup = zone === 'A' ? -1 : zone === 'B' || zone === 'C' ? 0 : Math.ceil((zoneIndex - 2) / 2);
-    const zoneLaneOffset = zoneLaneGroup * (Math.max(totalLength, 4.5) + 3.5);
-    let zCursor = -totalLength / 2;
+    // All zones share one continuous longitudinal lane. This keeps A → B → C
+    // physically connected instead of rendering later zones as floating rows.
+    let zCursor = continuousZCursor;
     for (let pairIndex = 0; pairIndex < pairWidths.length; pairIndex += 1) {
       const pair = racks.slice(pairIndex * 2, pairIndex * 2 + 2);
-      const laneZ = zCursor + pairWidths[pairIndex] / 2 + zoneLaneOffset;
+      const laneZ = zCursor + pairWidths[pairIndex] / 2;
       zCursor += pairWidths[pairIndex] + laneGap;
       let outerEdge = 0;
       pair.forEach((rack, rowIndex) => {
@@ -542,6 +549,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         else outerRackIds.add(rack.id);
       });
     }
+    continuousZCursor += totalLength + zoneLaneGap;
   });
 
   // Use the application's standard modal shell for power controls. Keeping
