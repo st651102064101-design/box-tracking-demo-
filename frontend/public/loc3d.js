@@ -933,6 +933,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // pedestrian/keep-clear markings, safety rails, bollards and empty pallets.
   // These remain independent of rack geometry and of the optional forklift.
   const safetyYellow = new THREE.MeshBasicMaterial({ color: 0xffc400, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const guardrailMaterial = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0x392b00, emissiveIntensity: 0.18, metalness: 0.48, roughness: 0.38 });
+  const impactBlackMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1c, metalness: 0.5, roughness: 0.42 });
   const floorStrip = (x, z, width, depth, rotationY = 0) => {
     // Floor safety markings are paint: a zero-thickness decal immediately
     // above the epoxy, not a raised BoxGeometry that catches light/shadows.
@@ -954,6 +956,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
+  // Keep the three safety posts at the rack head. The horizontal rails/returns
+  // are intentionally omitted: they were the extra bars marked for removal.
+  const railZ = center.z + rackBoundaryDepth / 2 + 0.28;
+  const railStartX = center.x - rackBoundaryWidth / 2 - 0.3;
+  const railEndX = center.x + rackBoundaryWidth / 2 + 0.3;
+  [
+    [railStartX, railZ],
+    [(railStartX + railEndX) / 2, railZ],
+    [railEndX, railZ],
+  ].forEach(([x, z]) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
+    post.position.set(x, warehouseFloorY + 0.575, z);
+    scene.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.2), guardrailMaterial);
+    foot.position.set(x, warehouseFloorY + 0.018, z);
+    scene.add(foot);
+    [0.2, 0.52, 0.84].forEach((height) => {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.059, 0.059, 0.14, 10), impactBlackMaterial);
+      band.position.set(x, warehouseFloorY + height, z);
+      scene.add(band);
+    });
+  });
   // Zone safety signs sit beside the forklift aisle, not over the rack block.
   // A is intentionally on the right (forklift side) and B on the left, so the
   // two work areas remain visible even when their racks touch back-to-back.
