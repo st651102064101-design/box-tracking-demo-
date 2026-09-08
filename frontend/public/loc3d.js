@@ -514,10 +514,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     const laneGap = 2.2;
     const totalLength = pairWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, pairWidths.length - 1) * laneGap;
-    // A/B intentionally share the same z lanes as a back-to-back pair. Any
-    // additional zone must receive its own lane; otherwise Zone C would be
-    // rendered at the exact same coordinates as Zone A and appear missing.
-    const zoneLaneOffset = zoneIndex > 1 ? (zoneIndex - 1) * (Math.max(totalLength, 4.5) + 3.5) : 0;
+    // Zone B and C form the requested back-to-back pair. Further zones are
+    // placed as successive pairs (D/E, F/G, ...), while A remains a standalone
+    // lane so no rack is silently drawn on top of another rack.
+    const zoneLaneGroup = zone === 'A' ? -1 : zone === 'B' || zone === 'C' ? 0 : Math.ceil((zoneIndex - 2) / 2);
+    const zoneLaneOffset = zoneLaneGroup * (Math.max(totalLength, 4.5) + 3.5);
     let zCursor = -totalLength / 2;
     for (let pairIndex = 0; pairIndex < pairWidths.length; pairIndex += 1) {
       const pair = racks.slice(pairIndex * 2, pairIndex * 2 + 2);
@@ -543,27 +544,32 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
   });
 
-  // This small control is a CSS2D object so it stays attached to the physical
-  // consumer unit while still behaving like a normal accessible switch.
-  const consumerPanel = document.createElement('div');
-  consumerPanel.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #9be92d;border-radius:10px;background:rgba(8,16,11,.94);box-shadow:0 8px 22px rgba(0,0,0,.45);color:#f7fff2;font:700 12px system-ui,sans-serif;white-space:nowrap;pointer-events:none;transform:translate(-50%,-125%);';
-  const consumerPanelText = document.createElement('span');
-  consumerPanelText.textContent = 'ไฟคลัง: เปิด';
-  const consumerPowerButton = document.createElement('button');
-  consumerPowerButton.type = 'button';
-  consumerPowerButton.textContent = 'ปิดไฟ';
-  consumerPowerButton.style.cssText = 'border:0;border-radius:7px;padding:5px 8px;background:#a8ff2b;color:#142100;font:800 12px system-ui,sans-serif;cursor:pointer;pointer-events:auto;';
-  consumerPanel.append(consumerPanelText, consumerPowerButton);
-  const consumerPanelObject = new CSS2DObject(consumerPanel);
-  consumerPanelObject.visible = false;
-  scene.add(consumerPanelObject);
-  consumerPanel.addEventListener('pointerdown', (event) => event.stopPropagation());
-  const dismissConsumerPanel = (event) => {
-    if (!consumerPanel.contains(event.target)) consumerPanelObject.visible = false;
+  // Use the application's standard modal shell for power controls. Keeping
+  // the control out of the CSS2D layer means it cannot block camera orbit.
+  const openConsumerPowerModal = () => {
+    if (typeof window.openModal !== 'function') return;
+    window.openModal(`
+      <div class="mhead"><h3>ตู้ Consumer Unit · ควบคุมไฟคลัง</h3><button class="x" data-close aria-label="ปิด">×</button></div>
+      <div class="mbody">
+        <div class="banner info">สวิตช์หลักของไฟ High-bay ใน Warehouse</div>
+        <p id="loc3dConsumerPowerStatus" class="muted small">กำลังตรวจสอบสถานะไฟคลัง…</p>
+        <button type="button" class="btn accent" id="loc3dConsumerPowerButton">กำลังโหลด…</button>
+      </div>
+      <div class="mfoot"><div class="spacer"></div><button type="button" class="btn ghost" data-close>ปิดหน้าต่าง</button></div>
+    `);
+    const powerButton = document.getElementById('loc3dConsumerPowerButton');
+    const status = document.getElementById('loc3dConsumerPowerStatus');
+    const syncPowerModal = () => {
+      const on = warehousePowerOn;
+      powerButton.textContent = on ? 'ปิดไฟคลัง' : 'เปิดไฟคลัง';
+      status.textContent = on ? 'สถานะปัจจุบัน: เปิดไฟคลัง' : 'สถานะปัจจุบัน: ปิดไฟ · เหลือไฟฉุกเฉินสีแดงอ่อน';
+    };
+    powerButton.addEventListener('click', () => {
+      setWarehousePower(!warehousePowerOn);
+      syncPowerModal();
+    });
+    syncPowerModal();
   };
-  // The switch popover behaves like a conventional menu: any interaction
-  // outside it dismisses it, while the switch itself remains clickable.
-  document.addEventListener('pointerdown', dismissConsumerPanel, true);
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
@@ -1581,7 +1587,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       consumerStatusLight.position.copy(consumerStatusLamp.position);
       scene.add(consumerStatusLight);
       consumerPowerIndicatorLights.push(consumerStatusLight);
-      consumerPanelObject.position.set(consumerX - side * 0.3, consumerY + 0.72, consumerZ);
     }
     const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
     const safetySign = new THREE.Mesh(
@@ -1709,16 +1714,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     consumerPowerIndicatorLights.forEach((light) => { light.intensity = warehousePowerOn ? 0 : 0.42; });
     warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
-    consumerPanelText.textContent = `ไฟคลัง: ${warehousePowerOn ? 'เปิด' : 'ปิด'}`;
-    consumerPowerButton.textContent = warehousePowerOn ? 'ปิดไฟ' : 'เปิดไฟ';
-    consumerPowerButton.style.background = warehousePowerOn ? '#a8ff2b' : '#ff9d2b';
-    consumerPowerButton.style.color = warehousePowerOn ? '#142100' : '#2a1600';
   };
-  consumerPowerButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setWarehousePower(!warehousePowerOn);
-  });
   const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
   const gridSize = Math.ceil(Math.max(warehouseWidth, warehouseDepth));
@@ -1954,7 +1950,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
-      else if (hoverConsumerUnit) consumerPanelObject.visible = !consumerPanelObject.visible;
+      else if (hoverConsumerUnit) openConsumerPowerModal();
     }
     down = null;
     isCameraDragging = false;
@@ -2188,10 +2184,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
-      document.removeEventListener('pointerdown', dismissConsumerPanel, true);
       syncFullscreenPortals();
       rackActionButton.remove();
-      consumerPanel.remove();
       warehouseTitle.remove();
       controls.dispose();
       assets.dispose();
