@@ -808,16 +808,32 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     metal_box: 0x8d98a5,
     generic: 0xd6a65b,
   };
+  const boxesBySlot = new Map();
+  (model.boxes || []).forEach((box) => {
+    const boxesInSlot = boxesBySlot.get(String(box.slotId)) || [];
+    boxesInSlot.push(box);
+    boxesBySlot.set(String(box.slotId), boxesInSlot);
+  });
+  boxesBySlot.forEach((boxesInSlot) => boxesInSlot.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true })));
   const boxEntries = (model.boxes || []).flatMap((box) => {
     const slotEntry = slotById.get(box.slotId);
     if (!slotEntry) return [];
     const width = positive(box.dimensionsCm?.width, 60) * CM_TO_M;
     const height = positive(box.dimensionsCm?.height, 40) * CM_TO_M;
     const depth = positive(box.dimensionsCm?.depth, 40) * CM_TO_M;
+    const boxesInSlot = boxesBySlot.get(String(box.slotId)) || [box];
+    const boxIndex = Math.max(0, boxesInSlot.indexOf(box));
+    // A slot carries two pallet positions. Spread every stored box across the
+    // DB-defined slot width so records do not render directly on top of each
+    // other, while retaining each box's own dimensions from the API.
+    const spread = boxesInSlot.length > 1
+      ? Math.min(width * 1.25, Math.max(0, (slotEntry.scale.x - width) / Math.max(1, boxesInSlot.length - 1)))
+      : 0;
+    const lateralOffsetCm = (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
     const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
     const position = worldPoint(
       slotEntry.rack,
-      slotEntry.slot.localPositionCm?.x,
+      num(slotEntry.slot.localPositionCm?.x) + lateralOffsetCm,
       slotBottomCm + 16 + height / CM_TO_M / 2,
       slotEntry.slot.localPositionCm?.z,
     );

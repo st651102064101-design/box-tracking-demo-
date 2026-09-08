@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, racks, slots, warehouses } from '../db/schema.js';
@@ -24,7 +24,13 @@ const slotGeometrySchema = z.object({
   dimensionsCm: z.object({ width: centimetres, height: centimetres, depth: centimetres }).partial().optional(),
 }).refine((value) => Object.keys(value).length > 0, 'ต้องมีข้อมูลที่ต้องการแก้ไข');
 
-const rackJson = (rack: typeof racks.$inferSelect, rackSlots: typeof slots.$inferSelect[]) => ({
+const SLOT_CAPACITY = 2;
+
+const rackJson = (
+  rack: typeof racks.$inferSelect,
+  rackSlots: typeof slots.$inferSelect[],
+  boxCountBySlot = new Map<string, number>(),
+) => ({
   id: rack.id,
   warehouseId: rack.warehouseId,
   zone: rack.zone,
@@ -35,8 +41,10 @@ const rackJson = (rack: typeof racks.$inferSelect, rackSlots: typeof slots.$infe
   materialType: rack.materialType,
   slots: rackSlots.map((slot) => {
     const data = (slot.data ?? {}) as Record<string, unknown>;
-    /* Occupancy and "reported full" are different facts. A box in a slot must
-       not turn the 3D slot red; only an explicit PDA/web full report does. */
+    const boxCount = boxCountBySlot.get(slot.id) ?? 0;
+    // Every selective-rack slot represents two pallet positions. A manual
+    // full report remains authoritative, while two stored boxes/pallets also
+    // make the slot full automatically for the 3D view.
     const reportedFull = typeof data.reportedFullAt === 'string' && data.reportedFullAt.trim() !== '';
     return {
       id: slot.id,
@@ -46,7 +54,9 @@ const rackJson = (rack: typeof racks.$inferSelect, rackSlots: typeof slots.$infe
       slotCode: slot.slotCode,
       localPositionCm: { x: slot.localXCm, y: slot.localYCm, z: slot.localZCm },
       dimensionsCm: { width: slot.widthCm, height: slot.heightCm, depth: slot.depthCm },
-      status: reportedFull ? 'full' : 'empty',
+      boxCount,
+      capacity: SLOT_CAPACITY,
+      status: reportedFull || boxCount >= SLOT_CAPACITY ? 'full' : 'empty',
     };
   }),
 });
@@ -84,8 +94,13 @@ warehouse3dRouter.get(
         heightCm: boxes.heightCm,
         depthCm: boxes.depthCm,
         materialType: boxes.materialType,
-      }).from(boxes).where(inArray(boxes.slotId, slotIds))
+      }).from(boxes).where(and(inArray(boxes.slotId, slotIds), eq(boxes.status, 'warehouse')))
       : [];
+    const boxCountBySlot = new Map<string, number>();
+    boxRows.forEach((box) => {
+      if (!box.slotId) return;
+      boxCountBySlot.set(box.slotId, (boxCountBySlot.get(box.slotId) ?? 0) + 1);
+    });
     // The warehouse master is the sole source for its physical door count.
     // Do not infer doors from operational gate rows: a warehouse with no
     // configured gates intentionally has no doors in the 3D elevation.
@@ -121,7 +136,7 @@ warehouse3dRouter.get(
       warehouseId: warehouseId || null,
       warehouseName: warehouse?.name ?? warehouseId ?? null,
       doors,
-      racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [])),
+      racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
       boxes: boxRows.map((box) => ({
         id: box.tag,
         slotId: box.slotId,
