@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, racks, slots, warehouses } from '../db/schema.js';
+import { boxes, boxTypes, racks, slots, warehouses } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -25,6 +25,14 @@ const slotGeometrySchema = z.object({
 }).refine((value) => Object.keys(value).length > 0, 'ต้องมีข้อมูลที่ต้องการแก้ไข');
 
 const SLOT_CAPACITY = 2;
+
+const parseBoxTypeDimensions = (value: string | null) => {
+  if (!value) return null;
+  const parts = value.trim().split(/\s*[xX×]\s*/).map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part) || part <= 0)) return null;
+  const [width, height, depth] = parts;
+  return { width, height, depth };
+};
 
 const rackJson = (
   rack: typeof racks.$inferSelect,
@@ -90,11 +98,16 @@ warehouse3dRouter.get(
         tag: boxes.tag,
         slotId: boxes.slotId,
         status: boxes.status,
+        type: boxes.type,
         widthCm: boxes.widthCm,
         heightCm: boxes.heightCm,
         depthCm: boxes.depthCm,
         materialType: boxes.materialType,
-      }).from(boxes).where(and(inArray(boxes.slotId, slotIds), eq(boxes.status, 'warehouse')))
+        boxTypeDimensions: boxTypes.dim,
+      })
+        .from(boxes)
+        .leftJoin(boxTypes, eq(boxes.type, boxTypes.id))
+        .where(and(inArray(boxes.slotId, slotIds), eq(boxes.status, 'warehouse')))
       : [];
     const boxCountBySlot = new Map<string, number>();
     boxRows.forEach((box) => {
@@ -137,13 +150,24 @@ warehouse3dRouter.get(
       warehouseName: warehouse?.name ?? warehouseId ?? null,
       doors,
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
-      boxes: boxRows.map((box) => ({
-        id: box.tag,
-        slotId: box.slotId,
-        status: box.status,
-        dimensionsCm: { width: box.widthCm, height: box.heightCm, depth: box.depthCm },
-        materialType: box.materialType,
-      })),
+      boxes: boxRows.map((box) => {
+        // A box type is the operator-managed product master and therefore the
+        // authoritative physical size. Older box rows can still contain the
+        // legacy 60x40x40 defaults, so only fall back to them when the type has
+        // no valid WxHxD value.
+        const typeDimensions = parseBoxTypeDimensions(box.boxTypeDimensions);
+        return {
+          id: box.tag,
+          slotId: box.slotId,
+          status: box.status,
+          dimensionsCm: typeDimensions ?? {
+            width: box.widthCm,
+            height: box.heightCm,
+            depth: box.depthCm,
+          },
+          materialType: box.materialType,
+        };
+      }),
       stats: { racks: rackRows.length, slots: slotRows.length, boxes: boxRows.length },
     });
   }),
