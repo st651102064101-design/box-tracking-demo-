@@ -6824,7 +6824,7 @@ function populateBulkCountSelects(wh) {
   var keepSh=parseInt(shSel.value,10)||0, keepSl=parseInt(slSel.value,10)||0;
   var opts=function(max){var h='';for(var i=1;i<=max;i++)h+='<option value="'+i+'">'+i+'</option>';return h;};
   shSel.innerHTML=opts(shMax); slSel.innerHTML=opts(slMax);
-  shSel.value = (keepSh>=1&&keepSh<=shMax) ? keepSh : Math.min(4,shMax);
+  shSel.value = (keepSh>=1&&keepSh<=shMax) ? keepSh : Math.min(5,shMax);
   slSel.value = (keepSl>=1&&keepSl<=slMax) ? keepSl : Math.min(5,slMax);
 }
 window.populateBulkCountSelects = populateBulkCountSelects;
