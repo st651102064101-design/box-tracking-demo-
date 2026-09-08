@@ -1049,8 +1049,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     floorStrip(east.x, east.z, 0.085, outlineDepth, rotationY);
   });
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  const createRackEndGuard = (railMinX, railMaxX, railZ) => {
-    const points = [0, 0.5, 1].map((ratio) => new THREE.Vector3(
+  const createRackEndGuard = (railMinX, railMaxX, railZ, postCount = 3) => {
+    // A paired, back-to-back rack has a wide shared end and needs a centre
+    // bollard. A standalone rack must have only its two corner bollards so
+    // the guard follows the actual rack head without inventing a middle post.
+    const ratios = postCount === 2 ? [0, 1] : [0, 0.5, 1];
+    const points = ratios.map((ratio) => new THREE.Vector3(
       THREE.MathUtils.lerp(railMinX, railMaxX, ratio), warehouseFloorY, railZ,
     ));
     points.forEach((point) => {
@@ -1066,10 +1070,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         scene.add(band);
       });
     });
-    [0.62, 1.02].forEach((height) => {
-      steelBetween(new THREE.Vector3(points[0].x, warehouseFloorY + height, railZ), new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ), 0.045, guardrailMaterial);
-      steelBetween(new THREE.Vector3(points[1].x, warehouseFloorY + height, railZ), new THREE.Vector3(points[2].x, warehouseFloorY + height, railZ), 0.045, guardrailMaterial);
-    });
+    [0.62, 1.02].forEach((height) => points.slice(0, -1).forEach((point, index) =>
+      steelBetween(
+        new THREE.Vector3(point.x, warehouseFloorY + height, railZ),
+        new THREE.Vector3(points[index + 1].x, warehouseFloorY + height, railZ),
+        0.045,
+        guardrailMaterial,
+      )));
   };
   // Keep the guard flush with the real steel footprint. `collisionBox` is
   // deliberately enlarged for raycasting, so it must never drive safety size.
@@ -1094,14 +1101,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     [innerBankBounds.min.z - safetyClearance, innerBankBounds.max.z + safetyClearance]
       .forEach((railZ) => createRackEndGuard(railMinX, railMaxX, railZ));
   }
-  // Add the matching three-post guard to the exposed outer racks on the left
-  // and right, at both short ends shown in the warehouse plan.
+  // A standalone outer rack is protected by two corner bollards only. The
+  // three-post shape belongs exclusively to the back-to-back rack bank above.
   rackEntries
     .filter((entry) => outerRackIds.has(entry.rack.id))
     .forEach((entry) => {
       const rackBox = rackFootprintBounds(entry);
       [rackBox.min.z - safetyClearance, rackBox.max.z + safetyClearance].forEach((railZ) =>
-        createRackEndGuard(rackBox.min.x, rackBox.max.x, railZ));
+        createRackEndGuard(rackBox.min.x, rackBox.max.x, railZ, 2));
     });
   // Zone labels sit on the inner side of each zone, in the aisle marked by the
   // floor, rather than outside the rack block where they get hidden behind the
