@@ -159,18 +159,18 @@ function floorMarkTexture(text) {
 
 function safetyZoneSignTexture(zone) {
   const canvas = document.createElement('canvas');
-  canvas.width = 600;
-  canvas.height = 1000;
+  canvas.width = 1200;
+  canvas.height = 360;
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   // Match rack names exactly: white type with a black industrial outline.
   context.lineJoin = 'round';
-  context.lineWidth = 28;
+  context.lineWidth = 22;
   context.strokeStyle = '#050505';
   context.fillStyle = '#ffffff';
-  context.font = '900 126px system-ui, sans-serif';
+  context.font = '900 142px system-ui, sans-serif';
   context.strokeText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
   context.fillText(`โซน ${zone}`, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
@@ -455,10 +455,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  // Layout convention: paired rows in one zone face each other; the first
-  // row of each adjacent zone faces away from the preceding zone, so the two
-  // zones meet back-to-back.  The rack coordinates remain DB-owned; this only
-  // defines which physical face of each selective rack is presented in 3D.
+  // Layout convention: Zone B is on the left and Zone A is on the right.
+  // The innermost rows meet back-to-back at the centre line; a second row in
+  // either zone turns around to face the first across that zone's aisle. This
+  // is a visual warehouse plan only — rack/slot identity remains DB-owned.
   const racksByZone = new Map();
   model.racks.forEach((rack) => {
     const key = String(rack.zone || '—');
@@ -467,21 +467,49 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     racksByZone.set(key, list);
   });
   const zoneKeys = [...racksByZone.keys()].sort(natural);
-  const displayRotationByRackId = new Map();
+  const displayTransformByRackId = new Map();
   zoneKeys.forEach((zone, zoneIndex) => {
-    const baseRotation = zoneIndex % 2 ? 180 : 0;
-    (racksByZone.get(zone) || []).sort((a, b) =>
-      num(a.positionCm?.z) - num(b.positionCm?.z) || natural(a.code, b.code),
-    ).forEach((rack, rowIndex) => {
-      displayRotationByRackId.set(rack.id, num(rack.rotationYDeg) + baseRotation + (rowIndex % 2 ? 180 : 0));
+    const side = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneIndex % 2 ? -1 : 1);
+    const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
+    const pairWidths = [];
+    for (let index = 0; index < racks.length; index += 2) {
+      pairWidths.push(Math.max(
+        positive(racks[index]?.dimensionsCm?.width, 140) * CM_TO_M,
+        positive(racks[index + 1]?.dimensionsCm?.width, 140) * CM_TO_M,
+      ));
+    }
+    const laneGap = 2.2;
+    const totalLength = pairWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, pairWidths.length - 1) * laneGap;
+    let zCursor = -totalLength / 2;
+    for (let pairIndex = 0; pairIndex < pairWidths.length; pairIndex += 1) {
+      const pair = racks.slice(pairIndex * 2, pairIndex * 2 + 2);
+      const laneZ = zCursor + pairWidths[pairIndex] / 2;
+      zCursor += pairWidths[pairIndex] + laneGap;
+      let outerEdge = 0;
+      pair.forEach((rack, rowIndex) => {
+        const depth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
+        const aisle = rowIndex ? 3.2 : 0.12;
+        const centerX = side * (outerEdge + aisle + depth / 2);
+        outerEdge += aisle + depth;
+        // The inner rack faces the outside of its zone. The paired rack flips
+        // to face it, giving a real pick aisle instead of two identical faces.
+        const innerRotation = side > 0 ? 90 : -90;
+        const rotationYDeg = innerRotation + (rowIndex ? 180 : 0);
+        displayTransformByRackId.set(rack.id, {
+          positionCm: { x: centerX * 100, y: num(rack.positionCm?.y), z: laneZ * 100 },
+          rotationYDeg,
+        });
+      });
     });
   });
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
+    const displayTransform = displayTransformByRackId.get(sourceRack.id);
     const rack = {
       ...sourceRack,
-      rotationYDeg: displayRotationByRackId.get(sourceRack.id) ?? num(sourceRack.rotationYDeg),
+      positionCm: displayTransform?.positionCm ?? sourceRack.positionCm,
+      rotationYDeg: displayTransform?.rotationYDeg ?? num(sourceRack.rotationYDeg),
     };
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
@@ -550,7 +578,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         addBrace(x, low, z, x, high, -z);
       });
     }
-    rackEntries.push({ rack, quaternion, width, height, depth, base });
+    const rackEntry = { rack, quaternion, width, height, depth, base, collisionBox: null };
+    rackEntries.push(rackEntry);
     // All eight rotated corners are required here. Using only a diagonal pair
     // underestimates a 90-degree rack and can clip the floor/camera framing.
     const corners = [-1, 1].flatMap((sideX) => [-1, 1].flatMap((sideZ) => [0, 1].map((sideY) =>
@@ -560,13 +589,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         sideY * height / CM_TO_M,
         sideZ * depth / CM_TO_M / 2,
       ))));
+    const collisionBox = new THREE.Box3();
     corners.forEach((point) => {
       bounds.expandByPoint(point);
+      collisionBox.expandByPoint(point);
       const zone = String(rack.zone || '—');
       const zoneBox = zoneBounds.get(zone) || new THREE.Box3();
       zoneBox.expandByPoint(point);
       zoneBounds.set(zone, zoneBox);
     });
+    // The camera may approach a bay closely, but never pass through its steel
+    // frame. Expand the physical footprint slightly for a natural clearance.
+    rackEntry.collisionBox = collisionBox.expandByScalar(0.24);
 
     (rack.slots || []).forEach((slot) => {
       const position = worldPoint(rack, slot.localPositionCm?.x, slot.localPositionCm?.y, slot.localPositionCm?.z);
@@ -973,6 +1007,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // A is intentionally on the right (forklift side) and B on the left, so the
   // two work areas remain visible even when their racks touch back-to-back.
   const safetySignTextures = [];
+  const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6 };
   const zoneSignX = (zone, fallbackX) => {
     if (zone === 'A') return center.x + rackBoundaryWidth * 0.34;
     if (zone === 'B') return center.x - rackBoundaryWidth * 0.34;
@@ -981,13 +1016,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   zoneKeys.forEach((zone) => {
     const zoneBox = zoneBounds.get(zone);
     const zoneCenter = zoneBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3(center.x, 0, center.z);
+    const zoneSize = zoneBox?.getSize(new THREE.Vector3()) || new THREE.Vector3(3.5, 0, 8);
+    // A transparent coloured floor block makes the zone boundary legible from
+    // every camera angle without hiding the concrete texture or rack feet.
+    const zoneFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(Math.max(2.6, zoneSize.x + 1.4), Math.max(4.5, zoneSize.z + 1.2)),
+      new THREE.MeshBasicMaterial({ color: zoneFloorColors[zone] || 0x94a3b8, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    zoneFloor.rotation.x = -Math.PI / 2;
+    zoneFloor.position.set(zoneCenter.x, warehouseFloorY + 0.002, zoneCenter.z);
+    zoneFloor.renderOrder = 1;
+    scene.add(zoneFloor);
     const texture = safetyZoneSignTexture(zone);
     safetySignTextures.push(texture);
     const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.82, 1.54),
+      new THREE.PlaneGeometry(3.7, 1.1),
       new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, side: THREE.DoubleSide }),
     );
-    sign.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 1.98, aisleCenterZ + 0.08);
+    sign.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 2.15, aisleCenterZ + 0.35);
     // Face the aisle/camera; the text is physically aligned with the traffic
     // side rather than floating above either rack row.
     sign.rotation.y = Math.PI;
@@ -997,11 +1043,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
     safetySignTextures.push(floorTexture);
     const floorLabel = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.2, 0.42),
+      new THREE.PlaneGeometry(5.2, 0.82),
       new THREE.MeshBasicMaterial({ map: floorTexture, transparent: true, depthWrite: false, toneMapped: false }),
     );
     floorLabel.rotation.x = -Math.PI / 2;
-    floorLabel.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 0.003, aisleCenterZ + 1.12);
+    floorLabel.position.set(zoneSignX(zone, zoneCenter.x), warehouseFloorY + 0.004, aisleCenterZ + 1.35);
     floorLabel.renderOrder = 3;
     scene.add(floorLabel);
   });
@@ -1467,6 +1513,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const normalizedX = Math.abs(camera.position.x - center.x) / xLimit;
     const roofY = roofEaveY + warehouseRoofRise * (1 - normalizedX);
     camera.position.y = THREE.MathUtils.clamp(camera.position.y, warehouseFloorY + 0.35, roofY - wallClearance);
+    rackEntries.forEach(({ collisionBox }) => {
+      if (!collisionBox?.containsPoint(camera.position)) return;
+      const clearance = 0.08;
+      const distances = [
+        { axis: 'x', value: collisionBox.min.x, delta: camera.position.x - collisionBox.min.x, direction: -1 },
+        { axis: 'x', value: collisionBox.max.x, delta: collisionBox.max.x - camera.position.x, direction: 1 },
+        { axis: 'z', value: collisionBox.min.z, delta: camera.position.z - collisionBox.min.z, direction: -1 },
+        { axis: 'z', value: collisionBox.max.z, delta: collisionBox.max.z - camera.position.z, direction: 1 },
+        { axis: 'y', value: collisionBox.max.y, delta: collisionBox.max.y - camera.position.y, direction: 1 },
+      ].sort((a, b) => a.delta - b.delta);
+      const nearest = distances[0];
+      camera.position[nearest.axis] = nearest.value + nearest.direction * clearance;
+    });
   };
   const barcodeZoomDistance = Math.max(7, span * 1.15);
   const occupancyOverviewZoomDistance = Math.max(8, span * 1.35);
