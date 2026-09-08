@@ -465,7 +465,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const firstPersonOverlay = document.createElement('div');
   firstPersonOverlay.className = 'loc3d-first-person-overlay';
   firstPersonOverlay.setAttribute('aria-hidden', 'true');
-  firstPersonOverlay.innerHTML = '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
+  const firstPersonHint = document.createElement('div');
+  firstPersonHint.className = 'loc3d-first-person-shortcut';
+  const isEnglish = () => {
+    try { return localStorage.getItem('smarttrace_lang') === 'en'; } catch { return false; }
+  };
+  const updateFirstPersonCopy = () => {
+    const english = isEnglish();
+    firstPersonButton.title = english ? 'First-person view · press F' : 'มุมมองคนเดิน · กด F';
+    firstPersonHint.innerHTML = english
+      ? '<kbd>F</kbd> First-person · <kbd>WASD</kbd> move'
+      : '<kbd>F</kbd> มุมมองคนเดิน · <kbd>WASD</kbd> เดิน';
+    firstPersonOverlay.innerHTML = english
+      ? '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>First-person mode</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse look · left click interact · <kbd>Esc</kbd> exit</span></div>'
+      : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
+  };
+  updateFirstPersonCopy();
   let firstPerson = false;
   const walkKeys = new Set();
   const exitFirstPerson = () => {
@@ -495,6 +510,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     else enterFirstPerson();
   };
   firstPersonButton.addEventListener('click', toggleFirstPerson);
+  const onFirstPersonShortcut = (event) => {
+    if (event.code !== 'KeyF' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
+    toggleFirstPerson();
+    event.preventDefault();
+  };
+  window.addEventListener('keydown', onFirstPersonShortcut, { passive: false });
   const onWalkKey = (event) => {
     if (!firstPerson || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.code === 'Escape' && event.type === 'keydown') {
@@ -548,6 +571,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   fullscreenButton.addEventListener('click', toggleFullscreen);
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
+  stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
   // Fullscreen only renders descendants of the fullscreen element. Portal
@@ -616,15 +640,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const maxLength = Math.max(...zoneRacks.map((rack) => positive(rack.dimensionsCm?.width, 270) * CM_TO_M), 2.7);
     // A small steel-frame clearance prevents mesh overlap, but does not form
     // a fake aisle between the two rear faces.
-    const pairHalfWidth = (maxDepth + rackBackClearance) / 2;
-    const leftCenterX = zoneCursorX - pairHalfWidth;
-    const rightCenterX = zoneCursorX + pairHalfWidth;
     zoneRacks.forEach((rack, index) => {
       const isRightSide = index % 2 === 1;
       const rowIndex = Math.floor(index / 2);
+      const rackDepth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
       placements.push({
         rack,
-        centerX: isRightSide ? rightCenterX : leftCenterX,
+        // Align each rack's rear frame to one shared seam. Using the largest
+        // rack depth for every centre left an artificial gap when dimensions
+        // differ, even though these two racks are meant to touch back-to-back.
+        centerX: zoneCursorX + (isRightSide ? 1 : -1) * rackDepth / 2,
         centerZ: rowIndex * (maxLength + rowGap),
         faceRight: isRightSide,
       });
@@ -1252,21 +1277,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     });
   // Zone labels sit on the aisle side of each zone, left-to-right A, B, C.
   const safetySignTextures = [];
-  const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6, C: 0xa855f7 };
   zoneKeys.forEach((zone) => {
     const zoneBox = zoneBounds.get(zone);
     const zoneCenter = zoneBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3(center.x, 0, center.z);
     const zoneSize = zoneBox?.getSize(new THREE.Vector3()) || new THREE.Vector3(3.5, 0, 8);
-    // A transparent coloured floor block makes the zone boundary legible from
-    // every camera angle without hiding the concrete texture or rack feet.
-    const zoneFloor = new THREE.Mesh(
-      new THREE.PlaneGeometry(Math.max(2.6, zoneSize.x + 1.4), Math.max(4.5, zoneSize.z + 1.2)),
-      new THREE.MeshBasicMaterial({ color: zoneFloorColors[zone] || 0x94a3b8, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
-    );
-    zoneFloor.rotation.x = -Math.PI / 2;
-    zoneFloor.position.set(zoneCenter.x, warehouseFloorY + 0.002, zoneCenter.z);
-    zoneFloor.renderOrder = 1;
-    scene.add(zoneFloor);
+    // Keep a single neutral concrete floor; zone membership belongs to rack
+    // labels and data, not a competing colour wash on the walking surface.
     const aisleDir = aisleCenterZ >= zoneCenter.z ? 1 : -1;
     const signZ = zoneCenter.z + aisleDir * (zoneSize.z / 2 + 0.85);
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
@@ -2587,6 +2603,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 
   return {
     assets,
+    setLanguage() {
+      updateFirstPersonCopy();
+    },
     dispose() {
       disposed = true;
       renderer.setAnimationLoop(null);
@@ -2602,6 +2621,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       fullscreenButton.remove();
       firstPersonButton.removeEventListener('click', toggleFirstPerson);
       firstPersonButton.remove();
+      window.removeEventListener('keydown', onFirstPersonShortcut);
+      firstPersonHint.remove();
       firstPersonOverlay.remove();
       window.removeEventListener('keydown', onWalkKey);
       window.removeEventListener('keyup', onWalkKey);
@@ -2661,3 +2682,8 @@ function unmount() {
 }
 
 window.LocationWarehouse3D = { mount, unmount, scaleToMetres: CM_TO_M };
+const previousLanguageHook = window.btLangChanged;
+window.btLangChanged = (language) => {
+  previousLanguageHook?.(language);
+  activeController?.setLanguage?.(language);
+};
