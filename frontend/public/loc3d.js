@@ -1856,6 +1856,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let down = null;
   let rackDrag = null;
   let objectDrag = null;
+  let lastEditable = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
   let hoverRackCode = '';
@@ -2056,11 +2057,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       const rack = rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
       const entry = rackEntries.find((item) => item.rack === rack);
       if (entry && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) {
+        lastEditable = { kind: 'rack', rack };
         rackDrag = { rack, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
         controls.enabled = false; canvas.style.cursor = 'move'; return;
       }
       const movable = movableRootAt(event);
-      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'move'; return; }
+      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { lastEditable = { kind: 'asset', target: movable }; objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'move'; return; }
     }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
@@ -2105,10 +2107,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       if (!actionPointerOver) hideRackAction();
     }, 0);
   };
+  const onKeyDown = (event) => {
+    if (event.key.toLowerCase() !== 'r' || event.ctrlKey || event.metaKey || event.altKey || /input|textarea|select/i.test(event.target?.tagName || '')) return;
+    if (!lastEditable) return;
+    event.preventDefault();
+    if (lastEditable.kind === 'asset') {
+      lastEditable.target.rotation.y += Math.PI / 2;
+      window.toast?.(`หมุน ${lastEditable.target.name || 'อุปกรณ์'} 90°`, '', 'ok');
+      return;
+    }
+    const rack = lastEditable.rack;
+    rack.rotationYDeg = (num(rack.rotationYDeg) + 90) % 360;
+    saveDraggedRack(rack).then(() => window.setTimeout(() => window.renderLoc3D?.(), 100));
+  };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
+  document.addEventListener('keydown', onKeyDown);
 
   const resize = () => {
     const width = Math.max(320, stage.clientWidth);
@@ -2310,6 +2326,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
+      document.removeEventListener('keydown', onKeyDown);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
