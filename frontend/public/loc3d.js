@@ -1851,19 +1851,39 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   const forkliftPickMeshes = [];
-  const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.8, depthTest: false });
+  const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
   routeLine.visible = false;
   scene.add(routeLine);
+  const targetMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthTest: false });
   const targetMarker = new THREE.Mesh(
     new THREE.RingGeometry(0.28, 0.42, 32),
-    new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthTest: false }),
+    targetMarkerMaterial,
   );
   targetMarker.rotation.x = -Math.PI / 2;
   targetMarker.renderOrder = 15;
   targetMarker.visible = false;
   scene.add(targetMarker);
+  // A short expanding ripple confirms a double-click immediately, similar to
+  // a move-command marker in a game. It deliberately uses the clicked floor
+  // coordinate; the smaller persistent ring then marks the safe NavMesh/grid
+  // endpoint chosen by the pathfinder.
+  const targetRippleMaterial = new THREE.MeshBasicMaterial({ color: 0xd7ff63, transparent: true, opacity: 0.98, side: THREE.DoubleSide, depthTest: false });
+  const targetRipple = new THREE.Mesh(new THREE.RingGeometry(0.38, 0.48, 40), targetRippleMaterial);
+  targetRipple.rotation.x = -Math.PI / 2;
+  targetRipple.renderOrder = 15;
+  targetRipple.visible = false;
+  scene.add(targetRipple);
+  let targetRippleStartedAt = 0;
+  const showTargetRipple = (point, valid = true) => {
+    targetRipple.position.copy(point).setY(warehouseFloorY + 0.058);
+    targetRipple.scale.setScalar(0.45);
+    targetRippleMaterial.color.setHex(valid ? 0xd7ff63 : 0xff6b5f);
+    targetRippleMaterial.opacity = 0.98;
+    targetRipple.visible = true;
+    targetRippleStartedAt = performance.now();
+  };
   const consumerHoverMaterial = new THREE.LineBasicMaterial({ color: 0xb6ff3b, transparent: true, opacity: 0.96, depthTest: false });
   const consumerHoverOutline = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(0.32, 1.02, 1.68)),
@@ -1917,6 +1937,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       forkliftMotion = null;
       routeLine.visible = false;
       targetMarker.visible = false;
+      targetRipple.visible = false;
     }
   };
   const findForkliftPath = (start, target) => {
@@ -1978,7 +1999,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const moveForkliftTo = (target) => {
     if (!forkliftSelected || !forkliftRoot) return;
     const path = findForkliftPath(forkliftRoot.position, target);
-    if (path.length < 2) return;
+    if (path.length < 2) {
+      showTargetRipple(target, false);
+      return;
+    }
+    showTargetRipple(target);
     forkliftMotion = { path, index: 1, speed: 2.1 };
     routeLine.geometry.dispose();
     routeLine.geometry = new THREE.BufferGeometry().setFromPoints(path.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
@@ -2350,6 +2375,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (targetMarker.visible) {
       const pulse = 1 + Math.sin(frameNow * 0.009) * 0.16;
       targetMarker.scale.setScalar(pulse);
+    }
+    if (targetRipple.visible) {
+      const elapsed = Math.min(1, (frameNow - targetRippleStartedAt) / 720);
+      targetRipple.scale.setScalar(0.45 + elapsed * 2.3);
+      targetRippleMaterial.opacity = (1 - elapsed) * 0.98;
+      if (elapsed >= 1) targetRipple.visible = false;
     }
     controls.update();
     keepCameraInsideWarehouse();
