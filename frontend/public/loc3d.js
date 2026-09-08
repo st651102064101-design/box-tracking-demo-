@@ -479,6 +479,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const braceParts = [];
   const basePlateParts = [];
   const consumerUnitPickMeshes = [];
+  const consumerPowerIndicators = [];
+  const consumerPowerIndicatorLights = [];
   const warehousePowerFixtures = [];
   const warehousePowerLights = [];
   const bounds = new THREE.Box3();
@@ -1564,6 +1566,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       consumerLabel.rotation.y = sideRotation;
       consumerLabel.position.set(consumerX - side * 0.242, consumerY - 0.38, consumerZ);
       scene.add(consumerLabel);
+      // Red pilot lamp: emergency/status indicator remains visible when the
+      // warehouse lighting circuit is switched off.
+      const consumerStatusMaterial = new THREE.MeshStandardMaterial({ color: 0x63e65d, emissive: 0x173b19, emissiveIntensity: 0.7, roughness: 0.24, metalness: 0.08 });
+      const consumerStatusLamp = new THREE.Mesh(new THREE.SphereGeometry(0.034, 14, 10), consumerStatusMaterial);
+      consumerStatusLamp.position.set(consumerX - side * 0.245, consumerY + 0.27, consumerZ + 0.57);
+      scene.add(consumerStatusLamp);
+      consumerPowerIndicators.push(consumerStatusLamp);
+      const consumerStatusLight = new THREE.PointLight(0xff2638, 0, 0.9, 2);
+      consumerStatusLight.position.copy(consumerStatusLamp.position);
+      scene.add(consumerStatusLight);
+      consumerPowerIndicatorLights.push(consumerStatusLight);
       consumerPanelObject.position.set(consumerX - side * 0.3, consumerY + 0.72, consumerZ);
     }
     const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
@@ -1684,6 +1697,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     scene.background.set(warehousePowerOn ? 0x101419 : 0x020508);
     scene.fog.color.set(warehousePowerOn ? 0x101419 : 0x020508);
     wallLightMaterial.emissiveIntensity = warehousePowerOn ? 2.8 : 0;
+    consumerPowerIndicators.forEach((indicator) => {
+      indicator.material.color.set(warehousePowerOn ? 0x63e65d : 0xff2638);
+      indicator.material.emissive.set(warehousePowerOn ? 0x173b19 : 0x6d0b13);
+      indicator.material.emissiveIntensity = warehousePowerOn ? 0.7 : 2.2;
+    });
+    consumerPowerIndicatorLights.forEach((light) => { light.intensity = warehousePowerOn ? 0 : 0.42; });
     warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
     consumerPanelText.textContent = `ไฟคลัง: ${warehousePowerOn ? 'เปิด' : 'ปิด'}`;
