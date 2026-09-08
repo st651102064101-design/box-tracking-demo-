@@ -563,7 +563,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         <p id="loc3dConsumerPowerStatus" class="muted small">กำลังตรวจสอบสถานะไฟคลัง…</p>
         <button type="button" class="btn accent" id="loc3dConsumerPowerButton">กำลังโหลด…</button>
       </div>
-      <div class="mfoot"><div class="spacer"></div><button type="button" class="btn ghost" data-close>ปิดหน้าต่าง</button></div>
     `);
     const powerButton = document.getElementById('loc3dConsumerPowerButton');
     const status = document.getElementById('loc3dConsumerPowerStatus');
@@ -574,7 +573,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     };
     powerButton.addEventListener('click', () => {
       setWarehousePower(!warehousePowerOn);
-      syncPowerModal();
+      window.closeModal?.();
+      canvas.focus?.();
+      down = null;
+      isCameraDragging = false;
+      canvas.style.cursor = 'grab';
     });
     syncPowerModal();
   };
