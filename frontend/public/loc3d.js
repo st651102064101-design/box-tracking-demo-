@@ -1837,6 +1837,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
+  let forkliftRoot = null;
+  let forkliftSelected = false;
+  let forkliftSelection = null;
+  let forkliftClearance = 1.15;
+  let forkliftMotion = null;
+  const forkliftPickMeshes = [];
+  const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.8, depthTest: false });
+  const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
+  routeLine.renderOrder = 14;
+  routeLine.visible = false;
+  scene.add(routeLine);
+  const targetMarker = new THREE.Mesh(
+    new THREE.RingGeometry(0.28, 0.42, 32),
+    new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthTest: false }),
+  );
+  targetMarker.rotation.x = -Math.PI / 2;
+  targetMarker.renderOrder = 15;
+  targetMarker.visible = false;
+  scene.add(targetMarker);
   const consumerHoverMaterial = new THREE.LineBasicMaterial({ color: 0xb6ff3b, transparent: true, opacity: 0.96, depthTest: false });
   const consumerHoverOutline = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(0.32, 1.02, 1.68)),
@@ -1856,6 +1875,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let down = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
+  let hoverForklift = false;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
   const hideRackAction = () => {
@@ -1873,6 +1893,86 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     rackActionObject.position.copy(actionAnchor);
     rackActionObject.visible = true;
   };
+  const setPointerFromEvent = (event) => {
+    setPointerFromEvent(event);
+  };
+  const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
+  const setForkliftSelected = (selected) => {
+    forkliftSelected = Boolean(selected && forkliftRoot);
+    if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
+    if (!forkliftSelected) {
+      forkliftMotion = null;
+      routeLine.visible = false;
+      targetMarker.visible = false;
+    }
+  };
+  const findForkliftPath = (start, target) => {
+    const cell = 0.5;
+    const minX = center.x - halfWarehouseWidth + forkliftClearance;
+    const maxX = center.x + halfWarehouseWidth - forkliftClearance;
+    const minZ = center.z - halfWarehouseDepth + forkliftClearance;
+    const maxZ = center.z + halfWarehouseDepth - forkliftClearance;
+    const cols = Math.max(1, Math.floor((maxX - minX) / cell) + 1);
+    const rows = Math.max(1, Math.floor((maxZ - minZ) / cell) + 1);
+    const blocked = rackEntries.map(({ collisionBox }) => collisionBox?.clone().expandByScalar(forkliftClearance)).filter(Boolean);
+    boxEntries.forEach((entry) => {
+      const half = entry.scale.clone().multiplyScalar(0.5 + forkliftClearance / Math.max(entry.scale.x, entry.scale.y, entry.scale.z, 0.01));
+      blocked.push(new THREE.Box3(entry.position.clone().sub(half), entry.position.clone().add(half)));
+    });
+    const key = (x, z) => z * cols + x;
+    const point = (x, z) => new THREE.Vector3(minX + x * cell, warehouseFloorY + 0.025, minZ + z * cell);
+    const walkable = (x, z) => x >= 0 && z >= 0 && x < cols && z < rows && !blocked.some((box) => box.containsPoint(point(x, z)));
+    const nearest = (world) => {
+      const sx = THREE.MathUtils.clamp(Math.round((world.x - minX) / cell), 0, cols - 1);
+      const sz = THREE.MathUtils.clamp(Math.round((world.z - minZ) / cell), 0, rows - 1);
+      if (walkable(sx, sz)) return [sx, sz];
+      for (let radius = 1; radius < Math.max(cols, rows); radius += 1) {
+        for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) === radius && walkable(sx + dx, sz + dz)) return [sx + dx, sz + dz];
+        }
+      }
+      return null;
+    };
+    const from = nearest(start), to = nearest(target);
+    if (!from || !to) return [];
+    const open = [{ x: from[0], z: from[1], g: 0, f: 0 }];
+    const best = new Map([[key(from[0], from[1]), 0]]), parent = new Map();
+    const directions = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+    let end = null;
+    while (open.length) {
+      open.sort((a, b) => a.f - b.f);
+      const current = open.shift();
+      if (current.x === to[0] && current.z === to[1]) { end = current; break; }
+      directions.forEach(([dx, dz]) => {
+        const nx = current.x + dx, nz = current.z + dz;
+        if (!walkable(nx, nz)) return;
+        if (dx && dz && (!walkable(current.x + dx, current.z) || !walkable(current.x, current.z + dz))) return;
+        const g = current.g + (dx && dz ? Math.SQRT2 : 1);
+        const nodeKey = key(nx, nz);
+        if (g >= (best.get(nodeKey) ?? Infinity)) return;
+        best.set(nodeKey, g); parent.set(nodeKey, [current.x, current.z]);
+        open.push({ x: nx, z: nz, g, f: g + Math.hypot(to[0] - nx, to[1] - nz) });
+      });
+    }
+    if (!end) return [];
+    const cells = [[end.x, end.z]];
+    while (cells[0][0] !== from[0] || cells[0][1] !== from[1]) cells.unshift(parent.get(key(cells[0][0], cells[0][1])));
+    const path = cells.map(([x, z]) => point(x, z));
+    path[0].set(start.x, warehouseFloorY + 0.025, start.z);
+    path[path.length - 1].copy(point(to[0], to[1]));
+    return path;
+  };
+  const moveForkliftTo = (target) => {
+    if (!forkliftSelected || !forkliftRoot) return;
+    const path = findForkliftPath(forkliftRoot.position, target);
+    if (path.length < 2) return;
+    forkliftMotion = { path, index: 1, speed: 2.1 };
+    routeLine.geometry.dispose();
+    routeLine.geometry = new THREE.BufferGeometry().setFromPoints(path.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
+    routeLine.visible = true;
+    targetMarker.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.055);
+    targetMarker.visible = true;
+  };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const clearHoverFeedback = () => {
     if (hoverIndex >= 0 && slotMesh) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
@@ -1887,6 +1987,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverIndex = -1;
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
+    hoverForklift = false;
     hideRackAction();
   };
   const updatePointer = (event) => {
@@ -1905,6 +2006,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
+    const nextForklift = isForkliftHit();
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const nextConsumerUnit = nextBox < 0 && Boolean(consumerHit) && (!slotHit || consumerHit.distance < slotHit.distance);
     const next = nextBox >= 0 || nextConsumerUnit ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
@@ -1914,15 +2016,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextRackCode === hoverRackCode) return;
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
     hoverBoxIndex = nextBox;
     hoverConsumerUnit = nextConsumerUnit;
+    hoverForklift = nextForklift;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
     if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
-    if (hoverBoxIndex >= 0) {
+    if (hoverForklift) {
+      hoverRing.visible = false;
+      hoverOutline.visible = false;
+      hoverShell.visible = false;
+      labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
+      labelElement.className = 'loc3d-slot-label occupied';
+      labelObject.position.copy(forkliftRoot.position).add(new THREE.Vector3(0, 2.5, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
+    } else if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
@@ -1973,7 +2085,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       labelObject.visible = false;
       canvas.style.cursor = 'grab';
     }
-    showRackAction(hoverConsumerUnit ? null : nextRack);
+    showRackAction(hoverConsumerUnit || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -1988,7 +2100,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const onPointerUp = (event) => {
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
-      if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
+      setPointerFromEvent(event);
+      if (isForkliftHit()) setForkliftSelected(true);
+      else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
       else if (hoverConsumerUnit) openConsumerPowerModal();
     }
@@ -2013,6 +2127,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverIndex = -1;
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
+    hoverForklift = false;
     labelObject.visible = false;
     canvas.style.cursor = 'grab';
     window.setTimeout(() => {
@@ -2023,6 +2138,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
+  const onDoubleClick = (event) => {
+    if (!forkliftSelected || !forkliftRoot) return;
+    setPointerFromEvent(event);
+    const hit = raycaster.intersectObject(floor, false)[0];
+    if (hit) moveForkliftTo(hit.point);
+  };
+  canvas.addEventListener('dblclick', onDoubleClick);
 
   const resize = () => {
     const width = Math.max(320, stage.clientWidth);
@@ -2142,6 +2264,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       if (!object.isMesh) return;
       object.castShadow = true;
       object.receiveShadow = true;
+      forkliftPickMeshes.push(object);
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
@@ -2151,11 +2274,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
+    forkliftClearance = Math.max(scaledSize.x, scaledSize.z) * 0.5 + 0.22;
     forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
     forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
     forklift.position.y -= scaledBounds.min.y;
 
-    const forkliftRoot = new THREE.Group();
+    forkliftRoot = new THREE.Group();
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
@@ -2166,11 +2290,54 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     );
     forkliftRoot.rotation.y = -Math.PI * 0.5;
     scene.add(forkliftRoot);
+    forkliftSelection = new THREE.BoxHelper(forkliftRoot, 0xa8ff2b);
+    forkliftSelection.material.depthTest = false;
+    forkliftSelection.material.transparent = true;
+    forkliftSelection.material.opacity = 0.95;
+    forkliftSelection.renderOrder = 16;
+    forkliftSelection.visible = false;
+    scene.add(forkliftSelection);
   }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
   let frames = 0;
   let lastFpsAt = performance.now();
+  let lastAnimateAt = performance.now();
+  const movementDirection = new THREE.Vector3();
+  const movementQuaternion = new THREE.Quaternion();
+  const movementEuler = new THREE.Euler(0, 0, 0, 'YXZ');
   const animate = () => {
+    const frameNow = performance.now();
+    const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
+    lastAnimateAt = frameNow;
+    if (forkliftMotion && forkliftRoot) {
+      const destination = forkliftMotion.path[forkliftMotion.index];
+      movementDirection.subVectors(destination, forkliftRoot.position);
+      movementDirection.y = 0;
+      const remaining = movementDirection.length();
+      if (remaining < 0.035) {
+        forkliftRoot.position.copy(destination);
+        forkliftMotion.index += 1;
+        if (forkliftMotion.index >= forkliftMotion.path.length) {
+          forkliftMotion = null;
+          routeLine.visible = false;
+        }
+      } else {
+        movementDirection.normalize();
+        forkliftRoot.position.addScaledVector(movementDirection, Math.min(remaining, forkliftMotion.speed * deltaSeconds));
+        movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
+        movementQuaternion.setFromEuler(movementEuler);
+        forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
+      }
+      forkliftSelection?.update();
+    }
+    if (forkliftSelection?.visible) {
+      forkliftSelection.material.opacity = 0.68 + Math.sin(frameNow * 0.01) * 0.25;
+      forkliftSelection.update();
+    }
+    if (targetMarker.visible) {
+      const pulse = 1 + Math.sin(frameNow * 0.009) * 0.16;
+      targetMarker.scale.setScalar(pulse);
+    }
     controls.update();
     keepCameraInsideWarehouse();
     updateRackLabelMode();
@@ -2221,6 +2388,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('dblclick', onDoubleClick);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
