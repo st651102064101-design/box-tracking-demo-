@@ -46123,7 +46123,9 @@ var Model = function(textureDir) {
         scale_x: object.scale.x,
         scale_y: object.scale.y,
         scale_z: object.scale.z,
-        fixed: object.fixed
+        fixed: object.fixed,
+        resizable: object.resizable,
+        warehouse_asset: object.metadata.warehouseAsset || null
       };
     }
 
@@ -46145,7 +46147,8 @@ var Model = function(textureDir) {
         itemName: item.item_name,
         resizable: item.resizable,
         itemType: item.item_type,
-        modelUrl: item.model_url
+        modelUrl: item.model_url,
+        warehouseAsset: item.warehouse_asset || null
       }
       var scale = {
         x: item.scale_x,

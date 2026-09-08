@@ -19,7 +19,7 @@ window.warehouseGeometry = function(url, T) {
     const shelves=new Map();(rack?.slots||[]).forEach(s=>{const list=shelves.get(s.shelfCode)||[];list.push(s);shelves.set(s.shelfCode,list);});
     const widest=[...shelves.values()].sort((a,b)=>b.length-a.length)[0]||[];widest.sort((a,b)=>a.localPositionCm.x-b.localPositionCm.x);
     const xs=[-(w-7)/2,...widest.slice(1).map((s,i)=>(s.localPositionCm.x+widest[i].localPositionCm.x)/2),(w-7)/2];
-    const levels=[...shelves.values()].map(s=>s[0].localPositionCm.y-s[0].dimensionsCm.height/2);if(!levels.length)levels.push(15,100,190);levels.push(h-4);levels.sort((a,b)=>a-b);
+    const levels=[...new Set([...shelves.values()].map(s=>s[0].localPositionCm.y-s[0].dimensionsCm.height/2))];if(!levels.length)levels.push(15,100,190);levels.push(h-4);levels.sort((a,b)=>a-b);
     xs.forEach(x=>[-1,1].forEach(s=>{box(x,h/2,s*(d-7)/2,7,h,7,0);box(x,2.5,s*(d-7)/2,16,5,16,0);}));
     levels.forEach(y=>[-1,1].forEach(s=>box(0,y,s*(d-7)/2,w,10.5,9,1)));
     xs.forEach(x=>levels.slice(1).forEach((high,i)=>[-1,1].forEach(sign=>{const a=new T.Vector3(x,levels[i]+7,sign*(d-7)/2),b=new T.Vector3(x,high-7,-sign*(d-7)/2),delta=b.clone().sub(a);const part=new T.BoxGeometry(2.4,delta.length(),2.4);const q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());geometry.merge(part,new T.Matrix4().compose(a.add(b).multiplyScalar(0.5),q,new T.Vector3(1,1,1)));})));
@@ -51,10 +51,10 @@ window.addEventListener('warehouse-model-error',e=>{status.textContent='โห�
 function view(is2d){$('#viewer').toggle(!is2d);$('#floorplanner,#tools').toggle(is2d);$('#view2').toggleClass('active',is2d);$('#view3').toggleClass('active',!is2d);if(is2d)app.floorplanner.reset();else app.three.updateWindowSize();}
 $('#view2').click(()=>view(true));$('#view3').click(()=>view(false));
 $('[data-mode]').click(function(){app.floorplanner.setMode(app.floorplanner.modes[this.dataset.mode]);});
-function addButton(label,url,target='catalog'){const button=document.createElement('button');button.textContent='+ '+label;button.onclick=()=>{view(false);status.textContent='กำลังโหลด '+label;app.model.scene.addItem(1,url,{itemName:label,itemType:1,modelUrl:url,resizable:false});};document.getElementById(target).append(button);}
+function addButton(label,url,target='catalog',warehouseAsset=null){const button=document.createElement('button');button.textContent='+ '+label;button.onclick=()=>{view(false);status.textContent='กำลังโหลด '+label;app.model.scene.addItem(1,url,{itemName:label,itemType:1,modelUrl:url,resizable:false,warehouseAsset},null,warehouseAsset?.rotationYDeg*Math.PI/180||0);};document.getElementById(target).append(button);}
 Object.entries(catalogue).forEach(([key,label])=>addButton(label,'warehouse:'+key));
 app.model.scene.itemLoadedCallbacks.add(()=>{status.textContent='เพิ่มอุปกรณ์แล้ว — ลากเพื่อจัดตำแหน่ง';});
-async function loadRacks(){try{const token=localStorage.getItem('smarttrace_jwt');if(!token)throw Error('เข้าสู่ระบบหลักก่อนเพื่อเลือกแร็กจาก DB');const r=await fetch('/api/warehouse-3d',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('โหลดแร็กไม่ได้ ('+r.status+')');const data=await r.json();document.getElementById('db-racks').replaceChildren();data.racks.forEach(rack=>addButton([rack.warehouseId,rack.zone,rack.code].join(' / '),'warehouse:rack?'+encodeURIComponent(JSON.stringify(rack)),'db-racks'));status.textContent='โหลดรายการแร็กจาก DB แล้ว';}catch(e){status.textContent=e.message;}}
+async function loadRacks(){try{const token=localStorage.getItem('smarttrace_jwt');if(!token)throw Error('เข้าสู่ระบบหลักก่อนเพื่อเลือกแร็กจาก DB');const r=await fetch('/api/warehouse-3d',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('โหลดแร็กไม่ได้ ('+r.status+')');const data=await r.json();document.getElementById('db-racks').replaceChildren();data.racks.forEach(rack=>addButton([rack.warehouseId,rack.zone,rack.code].join(' / '),'warehouse:rack?'+encodeURIComponent(JSON.stringify(rack)),'db-racks',rack));status.textContent='โหลดรายการแร็กจาก DB แล้ว';}catch(e){status.textContent=e.message;}}
 $('#refresh-racks').click(loadRacks);loadRacks();
 $('#done').click(()=>view(false));$('#add-tab').click(()=>{view(false);document.getElementById('catalog').scrollIntoView({block:'nearest'});});
 app.floorplanner.modeResetCallbacks.add(mode=>{$('[data-mode]').each(function(){$(this).toggleClass('active',app.floorplanner.modes[this.dataset.mode]===mode);});});
@@ -62,9 +62,9 @@ $('#home-view').click(()=>app.three.centerCamera());
 $('#zoom-in').click(()=>app.three.controls.dollyIn(1.1));$('#zoom-out').click(()=>app.three.controls.dollyOut(1.1));
 app.three.itemSelectedCallbacks.add(item=>{selected=item;$('#selection').prop('hidden',false);$('#name').text(item.metadata.itemName);$('#fixed').prop('checked',item.fixed);});
 app.three.itemUnselectedCallbacks.add(()=>{selected=null;$('#selection').prop('hidden',true);});
-app.three.itemSelectedCallbacks.add(item=>{$('#dimensions').text('กว้าง '+(item.getWidth()/100).toFixed(2)+' × สูง '+(item.getHeight()/100).toFixed(2)+' × ลึก '+(item.getDepth()/100).toFixed(2)+' เมตร');$('#angle').val(Math.round(item.rotation.y*180/Math.PI));});
+app.three.itemSelectedCallbacks.add(item=>{const asset=item.metadata.warehouseAsset;const dims=asset?.dimensionsCm;$('#dimensions').text((asset?.id?'รหัส '+asset.id+' • ':'')+'กว้าง '+((dims?.width??item.getWidth())/100).toFixed(2)+' × สูง '+((dims?.height??item.getHeight())/100).toFixed(2)+' × ลึก '+((dims?.depth??item.getDepth())/100).toFixed(2)+' เมตร');$('#angle').val(Math.round(item.rotation.y*180/Math.PI));});
 $('#angle').change(function(){if(selected&&!selected.fixed&&Number.isFinite(Number(this.value))){selected.rotation.y=Number(this.value)*Math.PI/180;app.model.scene.needsUpdate=true;}});
-$('#rotate').click(()=>{if(selected&&!selected.fixed){selected.rotation.y+=Math.PI/2;app.model.scene.needsUpdate=true;}});
+$('#rotate').click(()=>{if(selected&&!selected.fixed){selected.rotation.y=(selected.rotation.y+Math.PI/2)%(Math.PI*2);$('#angle').val(Math.round(selected.rotation.y*180/Math.PI));app.model.scene.needsUpdate=true;}});
 $('#remove').click(()=>{if(selected){selected.remove();selected=null;$('#selection').prop('hidden',true);}});
 $('#fixed').change(function(){if(selected)selected.setFixed(this.checked);});
 $('#save').click(()=>{const url=URL.createObjectURL(new Blob([app.model.exportSerialized()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='warehouse.blueprint3d';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status.textContent='ส่งออกผังเป็นไฟล์แล้ว';});
