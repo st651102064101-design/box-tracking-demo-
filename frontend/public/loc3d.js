@@ -514,10 +514,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     const laneGap = 2.2;
     const totalLength = pairWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, pairWidths.length - 1) * laneGap;
+    // A/B intentionally share the same z lanes as a back-to-back pair. Any
+    // additional zone must receive its own lane; otherwise Zone C would be
+    // rendered at the exact same coordinates as Zone A and appear missing.
+    const zoneLaneOffset = zoneIndex > 1 ? (zoneIndex - 1) * (Math.max(totalLength, 4.5) + 3.5) : 0;
     let zCursor = -totalLength / 2;
     for (let pairIndex = 0; pairIndex < pairWidths.length; pairIndex += 1) {
       const pair = racks.slice(pairIndex * 2, pairIndex * 2 + 2);
-      const laneZ = zCursor + pairWidths[pairIndex] / 2;
+      const laneZ = zCursor + pairWidths[pairIndex] / 2 + zoneLaneOffset;
       zCursor += pairWidths[pairIndex] + laneGap;
       let outerEdge = 0;
       pair.forEach((rack, rowIndex) => {
@@ -1144,7 +1148,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // end frames. A is on the right and B on the left, so both labels face the
   // shared forklift aisle as shown in the warehouse layout.
   const safetySignTextures = [];
-  const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6 };
+  const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6, C: 0xa855f7 };
   zoneKeys.forEach((zone) => {
     const zoneBox = zoneBounds.get(zone);
     const zoneCenter = zoneBox?.getCenter(new THREE.Vector3()) || new THREE.Vector3(center.x, 0, center.z);
