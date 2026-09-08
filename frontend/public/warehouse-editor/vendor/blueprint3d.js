@@ -44515,6 +44515,41 @@ FloorItem.prototype.resized = function() {
 }
 
 FloorItem.prototype.moveToPosition = function(vec3, intersection) {
+    var warehouseItem = this.metadata &&
+        typeof this.metadata.modelUrl === 'string' &&
+        this.metadata.modelUrl.indexOf('warehouse:') === 0;
+    if (warehouseItem) {
+        var rooms = this.model.floorplan.getRooms();
+        if (rooms.length && rooms[0].interiorCorners.length) {
+            // Warehouse build mode uses a rectangular floor plan. Clamp the
+            // asset centre to its usable floor bounds so a drag never becomes
+            // an invalid red ghost and can never be dropped outside.
+            var floorCorners = rooms[0].interiorCorners;
+            var minX = Math.min.apply(null, floorCorners.map(function(p) { return p.x; }));
+            var maxX = Math.max.apply(null, floorCorners.map(function(p) { return p.x; }));
+            var minZ = Math.min.apply(null, floorCorners.map(function(p) { return p.y; }));
+            var maxZ = Math.max.apply(null, floorCorners.map(function(p) { return p.y; }));
+            var margin = 1;
+            var cosine = Math.abs(Math.cos(this.rotation.y));
+            var sine = Math.abs(Math.sin(this.rotation.y));
+            var extentX = cosine * this.halfSize.x + sine * this.halfSize.z;
+            var extentZ = sine * this.halfSize.x + cosine * this.halfSize.z;
+            var lowX = minX + extentX + margin;
+            var highX = maxX - extentX - margin;
+            var lowZ = minZ + extentZ + margin;
+            var highZ = maxZ - extentZ - margin;
+            vec3.x = lowX <= highX
+                ? Math.max(lowX, Math.min(highX, vec3.x))
+                : (minX + maxX) / 2;
+            vec3.z = lowZ <= highZ
+                ? Math.max(lowZ, Math.min(highZ, vec3.z))
+                : (minZ + maxZ) / 2;
+        }
+        this.hideError();
+        vec3.y = this.position.y;
+        this.position.copy(vec3);
+        return;
+    }
     // keeps the position in the room and on the floor
     if (!this.isValidPosition(vec3)) {
         this.showError(vec3);

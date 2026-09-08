@@ -20,5 +20,7 @@ Procedural rack frames use DB shelf and bay dimensions. Consumer and safety
 geometry reproduce the warehouse dimensions. PBR rendering differs in r69.
 Warehouse catalogue items validate dragging by their centre point, allowing
 long racks to move throughout a room without Blueprint3D's red invalid ghost.
+Dragging also clamps warehouse assets to the floor-plan bounds, so they cannot
+be dropped outside the warehouse even when the pointer leaves the room.
 
 Pending production integration: shared DB layouts, zones, aisles and undo/redo.
