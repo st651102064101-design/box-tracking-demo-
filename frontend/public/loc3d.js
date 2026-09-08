@@ -29,6 +29,7 @@ const CODE128_PATTERNS = ["212222","222122","222221","121223","121322","131222",
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const positive = (value, fallback) => num(value, fallback) > 0 ? num(value, fallback) : fallback;
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 const token = () => {
   try { return localStorage.getItem('smarttrace_jwt') || ''; } catch (_) { return ''; }
 };
@@ -393,8 +394,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const rackActionButton = document.createElement('button');
   rackActionButton.type = 'button';
   rackActionButton.className = 'loc3d-rack-action';
-  rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
-  rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
+  rackActionButton.setAttribute('aria-label', 'จัดการแร็ก');
+  rackActionButton.title = 'จัดการแร็ก';
   rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.6 7.6 0 0 0-1.7-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.61.25-1.18.58-1.7.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.09.73 1.7.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.61-.25 1.18-.58 1.7-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>';
   const rackActionObject = new CSS2DObject(rackActionButton);
   rackActionObject.visible = false;
@@ -403,20 +404,47 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.addEventListener('pointerenter', () => { actionPointerOver = true; });
   rackActionButton.addEventListener('pointerleave', () => { actionPointerOver = false; });
   rackActionButton.addEventListener('pointerdown', (event) => event.stopPropagation());
+  let activeRackForEditor = null;
+  const openRackEditor = (rack) => {
+    if (!rack || typeof window.openModal !== 'function') return;
+    const dimensions = rack.dimensionsCm || {};
+    const position = rack.positionCm || {};
+    window.openModal(`
+      <div class="mhead"><h3>จัดการแร็ก ${escapeHtml(rack.code)}</h3><button class="x" data-close aria-label="ปิด">×</button></div>
+      <form id="loc3dRackForm">
+        <div class="mbody loc3d-rack-form">
+          <p class="muted small">${escapeHtml(rack.warehouseId)} / ${escapeHtml(rack.zone)} · ปรับขนาด modal ได้จากมุมล่างขวา</p>
+          <h4>ตำแหน่ง (เซนติเมตร)</h4><div class="loc3d-form-grid">
+            <label>X<input required type="number" step="1" name="x" value="${num(position.x)}"></label><label>Y<input required type="number" step="1" name="y" value="${num(position.y)}"></label><label>Z<input required type="number" step="1" name="z" value="${num(position.z)}"></label><label>หมุน Y (องศา)<input required type="number" step="1" name="rotation" value="${num(rack.rotationYDeg)}"></label>
+          </div><h4>ขนาดแร็ก (เซนติเมตร)</h4><div class="loc3d-form-grid">
+            <label>กว้าง<input required min="1" type="number" step="1" name="width" value="${num(dimensions.width)}"></label><label>สูง<input required min="1" type="number" step="1" name="height" value="${num(dimensions.height)}"></label><label>ลึก<input required min="1" type="number" step="1" name="depth" value="${num(dimensions.depth)}"></label>
+          </div><p id="loc3dRackSaveState" class="muted small" role="status"></p>
+        </div><div class="mfoot"><button type="button" class="btn ghost" data-close>ยกเลิก</button><button class="btn accent" type="submit">บันทึกแร็ก</button></div>
+      </form>`);
+    const form = document.getElementById('loc3dRackForm');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const state = document.getElementById('loc3dRackSaveState');
+      const submit = form.querySelector('[type="submit"]');
+      const fields = new FormData(form);
+      const value = (name) => Number(fields.get(name));
+      const payload = { positionCm: { x: value('x'), y: value('y'), z: value('z') }, rotationYDeg: value('rotation'), dimensionsCm: { width: value('width'), height: value('height'), depth: value('depth') } };
+      if (Object.values(payload.positionCm).concat([payload.rotationYDeg, ...Object.values(payload.dimensionsCm)]).some((item) => !Number.isFinite(item))) { if (state) state.textContent = 'กรอกตัวเลขให้ครบถ้วน'; return; }
+      try {
+        submit.disabled = true; if (state) state.textContent = 'กำลังบันทึก…';
+        const response = await fetch(`/api/warehouse-3d/racks/${encodeURIComponent(rack.id)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!response.ok) throw new Error((await response.json().catch(() => null))?.error?.message || `บันทึกไม่สำเร็จ (${response.status})`);
+        if (state) state.textContent = 'บันทึกแล้ว กำลังอัปเดตฉาก 3D…';
+        window.toast?.(`บันทึกแร็ก ${rack.code} แล้ว`, '', 'ok');
+        window.setTimeout(() => { window.closeModal?.(); window.renderLoc3D?.(); }, 250);
+      } catch (error) { if (state) state.textContent = error.message || 'บันทึกไม่สำเร็จ'; }
+      finally { submit.disabled = false; }
+    });
+  };
   rackActionButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const toastZone = document.getElementById('toastZone');
-    const fullscreenHost = document.fullscreenElement;
-    const originalToastParent = toastZone?.parentElement;
-    const movedToastIntoFullscreen = Boolean(fullscreenHost && toastZone && !fullscreenHost.contains(toastZone));
-    if (movedToastIntoFullscreen) fullscreenHost.appendChild(toastZone);
-    window.toast?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน', '', 'ok');
-    if (movedToastIntoFullscreen) {
-      window.setTimeout(() => {
-        if (toastZone.parentElement === fullscreenHost && originalToastParent) originalToastParent.appendChild(toastZone);
-      }, 3200);
-    }
+    openRackEditor(activeRackForEditor);
   });
 
   const hud = document.createElement('div');
@@ -1833,10 +1861,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const hideRackAction = () => {
     rackActionObject.visible = false;
     hoverRackCode = '';
+    activeRackForEditor = null;
   };
   const showRackAction = (rack) => {
     if (!rack) return hideRackAction();
     hoverRackCode = String(rack.code || rack.id || 'rack');
+    activeRackForEditor = rack;
     const rackEntry = rackEntries.find((entry) => entry.rack === rack);
     if (!rackEntry) return hideRackAction();
     // One stable affordance per rack: always float at the centre of the top
