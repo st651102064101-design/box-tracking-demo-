@@ -500,7 +500,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
           rotationYDeg,
         });
       });
-    });
+    }
   });
   const zoneBounds = new Map();
 
