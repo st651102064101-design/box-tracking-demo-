@@ -354,8 +354,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   controls.minDistance = 0.28;
   controls.maxDistance = 260;
 
-  scene.add(new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.75));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.48));
+  const hemisphereLight = new THREE.HemisphereLight(0xdcecff, 0x20252b, 1.75);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
+  scene.add(hemisphereLight);
+  scene.add(ambientLight);
   const sun = new THREE.DirectionalLight(0xfff3de, 2.25);
   sun.position.set(-18, 28, 14);
   sun.castShadow = true;
@@ -1512,7 +1514,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (side === -1) {
       const consumerX = innerX - side * 0.14;
       const consumerY = warehouseFloorY + 1.56;
-      const consumerZ = referenceDoorZ - 1.12;
+      const consumerZ = referenceDoorZ - 2.35;
       const consumerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f1ee, roughness: 0.42, metalness: 0.12 });
       const consumerLidMaterial = new THREE.MeshStandardMaterial({ color: 0xfafaf7, roughness: 0.32, metalness: 0.08 });
       const consumerTrimMaterial = new THREE.MeshStandardMaterial({ color: 0xc6c9c7, roughness: 0.4, metalness: 0.32 });
@@ -1668,7 +1670,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let warehousePowerOn = true;
   const setWarehousePower = (on) => {
     warehousePowerOn = Boolean(on);
-    warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0.04; });
+    // The consumer unit is the source of every illumination layer in this
+    // isolated warehouse view. Off means a true blackout: no environment,
+    // sun, fixture emission, cast shadows or residual exposure remains.
+    hemisphereLight.intensity = warehousePowerOn ? 1.75 : 0;
+    ambientLight.intensity = warehousePowerOn ? 0.48 : 0;
+    sun.intensity = warehousePowerOn ? 2.25 : 0;
+    sun.castShadow = warehousePowerOn;
+    renderer.toneMappingExposure = warehousePowerOn ? 1.05 : 0.001;
+    scene.background.set(warehousePowerOn ? 0x101419 : 0x000000);
+    scene.fog.color.set(warehousePowerOn ? 0x101419 : 0x000000);
+    wallLightMaterial.emissiveIntensity = warehousePowerOn ? 2.8 : 0;
+    warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
     consumerPanelText.textContent = `ไฟคลัง: ${warehousePowerOn ? 'เปิด' : 'ปิด'}`;
     consumerPowerButton.textContent = warehousePowerOn ? 'ปิดไฟ' : 'เปิดไฟ';
