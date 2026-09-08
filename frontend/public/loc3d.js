@@ -1003,7 +1003,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     )));
     return footprint;
   };
-  const safetyClearance = 0.08;
+  // Keep the guard clear of the rack face so it protects the uprights without
+  // touching the shelf beams or blocking the front label area.
+  const safetyClearance = 0.35;
   // Protect the short ends of the central back-to-back rack pair.
   const innerBankBounds = new THREE.Box3();
   rackEntries
