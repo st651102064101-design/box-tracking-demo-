@@ -44324,10 +44324,7 @@ var FloorplannerView = function(floorplan, viewmodel, canvas) {
   }
 
   function cmToFeet(cm) {
-    var realFeet = ((cm*0.393700) / 12);
-    var feet = Math.floor(realFeet);
-    var inches = Math.round((realFeet - feet) * 12);
-    return feet + "'" + inches + '"';
+    return (cm / 100).toFixed(2) + ' m';
   }
 
   function drawEdgeLabel(edge) {
@@ -46427,8 +46424,9 @@ var Scene = function(model, textureDir) {
     scope.itemLoadingCallbacks.fire();
     // Local warehouse catalogue adapter; upstream bundle otherwise unchanged.
     if (window.warehouseGeometry && fileName.indexOf('warehouse:') === 0) {
-      var generated = window.warehouseGeometry(fileName, THREE);
-      loaderCallback(generated.geometry, generated.materials);
+      Promise.resolve().then(function () { return window.warehouseGeometry(fileName, THREE); })
+        .then(function (generated) { loaderCallback(generated.geometry, generated.materials); })
+        .catch(function (error) { window.dispatchEvent(new CustomEvent('warehouse-model-error', {detail:error.message})); });
       return;
     }
     loader.load(
