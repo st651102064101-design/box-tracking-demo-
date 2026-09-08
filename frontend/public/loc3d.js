@@ -2107,24 +2107,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       if (!actionPointerOver) hideRackAction();
     }, 0);
   };
-  const onKeyDown = (event) => {
-    if (event.key.toLowerCase() !== 'r' || event.ctrlKey || event.metaKey || event.altKey || /input|textarea|select/i.test(event.target?.tagName || '')) return;
-    if (!lastEditable) return;
-    event.preventDefault();
-    if (lastEditable.kind === 'asset') {
-      lastEditable.target.rotation.y += Math.PI / 2;
-      window.toast?.(`หมุน ${lastEditable.target.name || 'อุปกรณ์'} 90°`, '', 'ok');
-      return;
-    }
-    const rack = lastEditable.rack;
-    rack.rotationYDeg = (num(rack.rotationYDeg) + 90) % 360;
-    saveDraggedRack(rack).then(() => window.setTimeout(() => window.renderLoc3D?.(), 100));
-  };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
-  document.addEventListener('keydown', onKeyDown);
 
   const resize = () => {
     const width = Math.max(320, stage.clientWidth);
@@ -2326,7 +2312,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
-      document.removeEventListener('keydown', onKeyDown);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);

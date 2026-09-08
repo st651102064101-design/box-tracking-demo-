@@ -6538,7 +6538,7 @@ function renderLoc3D(){
   if(!whs.length){root.innerHTML='<div class="locmap-empty">ยังไม่มีข้อมูลแร็กสำหรับแสดงผล 3D</div>';return;}
   var chips=whs.map(function(w){return '<button class="btn sm '+(w===_loc3dWh?'accent':'ghost')+'" onclick="selectLoc3DWarehouse(\''+esc(w)+'\')">'+esc(whName(w))+'</button>';}).join('');
   chips+='<a class="btn sm accent" href="/warehouse-editor/index.html" target="_blank" rel="noopener">จัดคลัง Blueprint3D (ทดลอง)</a>';
-  root.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากแร็ก/อุปกรณ์เพื่อย้าย · กด R เพื่อหมุน 90° · เลื่อนเพื่อซูม</span></div><div class="row">'+chips+'</div></div><div class="loc3d-stage"><canvas id="loc3dCanvas"></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
+  root.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากแร็ก/อุปกรณ์เพื่อย้าย · เลื่อนเพื่อซูม · เลือกเครื่องมือแร็กเพื่อปรับค่า</span></div><div class="row">'+chips+'</div></div><div class="loc3d-stage"><canvas id="loc3dCanvas"></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
   if(window.LocationWarehouse3D)window.LocationWarehouse3D.mount($('#loc3dCanvas'),all.filter(function(l){return l.wh===_loc3dWh;}),locOccupancyMap(),function(code){editLocRow(code);},function(tag){if(window.openBoxActionModal)window.openBoxActionModal(tag);},whName(_loc3dWh));
   else setTimeout(function(){if(_locViewMode==='3d')renderLoc3D();},250);
 }
