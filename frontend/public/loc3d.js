@@ -1364,7 +1364,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const lowerBandMaterial = new THREE.MeshStandardMaterial({ color: 0x7c888d, metalness: 0.68, roughness: 0.38 });
   const cableMaterial = new THREE.MeshStandardMaterial({ color: 0x333b40, metalness: 0.84, roughness: 0.25 });
   const wallLightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeaf8ff, emissiveIntensity: 2.8, roughness: 0.25 });
-  const electricalMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca8ae, metalness: 0.64, roughness: 0.38 });
   const wallDetailTextures = [];
   const wallMarkerTexture = (text, background, foreground) => {
     const markerCanvas = document.createElement('canvas');
@@ -1531,10 +1530,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       consumerLabel.rotation.y = sideRotation;
       consumerLabel.position.set(consumerX - side * 0.242, consumerY - 0.38, consumerZ);
       scene.add(consumerLabel);
-    } else {
-      const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
-      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, referenceDoorZ + 0.55);
-      scene.add(equipmentBox);
     }
     const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
     const safetySign = new THREE.Mesh(
