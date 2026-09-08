@@ -16,6 +16,11 @@ window.warehouseGeometry = function(url, T) {
   }
   if(type==='rack') {
     const {width:w,height:h,depth:d}=rack?.dimensionsCm||{width:270,height:300,depth:110};
+    // A rack is mostly empty space between thin beams. The invisible box makes
+    // the entire visible silhouette a reliable mouse target instead of letting
+    // clicks through the gaps rotate the camera.
+    materials.push(new T.MeshPhongMaterial({transparent:true,opacity:0,depthWrite:false}));
+    box(0,h/2,0,w,h,d,3);
     const shelves=new Map();(rack?.slots||[]).forEach(s=>{const list=shelves.get(s.shelfCode)||[];list.push(s);shelves.set(s.shelfCode,list);});
     const widest=[...shelves.values()].sort((a,b)=>b.length-a.length)[0]||[];widest.sort((a,b)=>a.localPositionCm.x-b.localPositionCm.x);
     const xs=[-(w-7)/2,...widest.slice(1).map((s,i)=>(s.localPositionCm.x+widest[i].localPositionCm.x)/2),(w-7)/2];

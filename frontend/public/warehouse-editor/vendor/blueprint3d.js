@@ -44529,13 +44529,21 @@ FloorItem.prototype.moveToPosition = function(vec3, intersection) {
 
 FloorItem.prototype.isValidPosition = function(vec3) {
     var corners = this.getCorners('x', 'z', vec3);
+    var warehouseItem = this.metadata &&
+        typeof this.metadata.modelUrl === 'string' &&
+        this.metadata.modelUrl.indexOf('warehouse:') === 0;
 
     // check if we are in a room
     var rooms = this.model.floorplan.getRooms();
     var isInARoom = false;
     for (var i = 0; i < rooms.length; i++) {
+        // Warehouse racks can be longer than half of the initial sample room.
+        // Requiring every corner to stay inside made almost every drag invalid
+        // (red ghost). Keep the object's centre inside the floor plan instead;
+        // walls remain an obvious visual guide while warehouse placement stays
+        // fluid like a build-mode editor.
         if(utils.pointInPolygon(vec3.x, vec3.z, rooms[i].interiorCorners) &&
-            !utils.polygonPolygonIntersect(corners, rooms[i].interiorCorners)) {
+            (warehouseItem || !utils.polygonPolygonIntersect(corners, rooms[i].interiorCorners))) {
             isInARoom = true;
         }
     }
@@ -46662,11 +46670,21 @@ var ThreeController = function(three, model, camera, element, controls, hud) {
   function itemLoaded(item) {
     if (!item.position_set) {
         scope.setSelectedObject(item);
-        switchState(states.DRAGGING);  
-        var pos = item.position.clone();
-        pos.y = 0;   
-        var vec = three.projectVector(pos); 
-        clickPressed(vec); 
+        var warehouseItem = item.metadata &&
+            typeof item.metadata.modelUrl === 'string' &&
+            item.metadata.modelUrl.indexOf('warehouse:') === 0;
+        // Upstream immediately enters a furniture-placement drag using the
+        // last mouse coordinate. Our Add buttons live outside the viewport,
+        // so that stale coordinate makes warehouse items jump or disappear.
+        // Place warehouse assets at the room centre, selected and ready for a
+        // normal click-drag with a fresh intersection instead.
+        if (!warehouseItem) {
+          switchState(states.DRAGGING);
+          var pos = item.position.clone();
+          pos.y = 0;
+          var vec = three.projectVector(pos);
+          clickPressed(vec);
+        }
     }
     item.position_set = true;
   }
@@ -46866,6 +46884,12 @@ var ThreeController = function(three, model, camera, element, controls, hud) {
         break;
       case states.DRAGGING:
         three.setCursorStyle("move");
+        // OrbitControls receives mousedown before this controller. Cancel its
+        // pending rotate gesture so dragging an item cannot also swing the
+        // camera (or leave the camera stuck rotating after mouseup).
+        if (controls.cancelInteraction) {
+          controls.cancelInteraction();
+        }
         clickPressed();
         controls.enabled = false;
         break;
@@ -47410,6 +47434,12 @@ var ThreeControls = function (object, domElement) {
 
 		state = STATE.NONE;
 	}
+
+	this.cancelInteraction = function() {
+		scope.domElement.removeEventListener( 'mousemove', onMouseMove, false );
+		scope.domElement.removeEventListener( 'mouseup', onMouseUp, false );
+		state = STATE.NONE;
+	};
 
 	function onMouseWheel( event ) {
 		if ( scope.enabled === false || scope.noZoom === true ) return;

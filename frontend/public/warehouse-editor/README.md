@@ -18,5 +18,7 @@ GLBs from /models are converted to legacy geometry on demand by assets.js;
 the converter uses Three.js 0.184.0 via the same CDN as the warehouse viewer.
 Procedural rack frames use DB shelf and bay dimensions. Consumer and safety
 geometry reproduce the warehouse dimensions. PBR rendering differs in r69.
+Warehouse catalogue items validate dragging by their centre point, allowing
+long racks to move throughout a room without Blueprint3D's red invalid ghost.
 
 Pending production integration: shared DB layouts, zones, aisles and undo/redo.
