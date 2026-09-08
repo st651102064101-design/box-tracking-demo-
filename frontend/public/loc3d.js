@@ -314,7 +314,7 @@ function rendererName(renderer) {
   return navigator.gpu ? 'WebGPU' : 'WebGL 2 fallback';
 }
 
-async function createScene(canvas, model, onSelect, onBoxSelect) {
+async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate) {
   const stage = canvas.parentElement;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101419);
@@ -381,11 +381,35 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   warehouseTitle.className = 'loc3d-warehouse-title';
   const warehouseTitleCaption = document.createElement('span');
   warehouseTitleCaption.textContent = 'กำลังดูพื้นที่จัดเก็บ';
+  const warehouseTitleRow = document.createElement('div');
+  warehouseTitleRow.className = 'loc3d-warehouse-title-row';
   const warehouseTitleName = document.createElement('strong');
   // This header describes the whole scene. Zone labels belong on their
   // physical safety markers below, never in place of the warehouse name.
   warehouseTitleName.textContent = warehouseLabel;
-  warehouseTitle.append(warehouseTitleCaption, warehouseTitleName);
+  if (typeof onWarehouseNavigate === 'function') {
+    warehouseTitle.classList.add('is-switchable');
+    const makeWarehouseArrow = (direction, label, icon) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'loc3d-warehouse-arrow';
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      button.textContent = icon;
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onWarehouseNavigate(direction);
+      });
+      return button;
+    };
+    warehouseTitleRow.append(
+      makeWarehouseArrow(-1, 'คลังก่อนหน้า', '‹'),
+      warehouseTitleName,
+      makeWarehouseArrow(1, 'คลังถัดไป', '›'),
+    );
+  } else warehouseTitleRow.append(warehouseTitleName);
+  warehouseTitle.append(warehouseTitleCaption, warehouseTitleRow);
   stage.appendChild(warehouseTitle);
 
   // A small contextual action that follows the currently hovered rack. It is
@@ -516,7 +540,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const zoneKeys = [...racksByZone.keys()].sort(natural);
   const displayTransformByRackId = new Map();
   const outerRackIds = new Set();
-  const backToBackPairs = [];
   const rackBackClearance = 0.16;
   const zoneGap = 3.5;
   const rowGap = 1.15;
@@ -540,8 +563,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         centerZ: rowIndex * (maxLength + rowGap),
         faceRight: isRightSide,
       });
-      if (isRightSide) backToBackPairs.push([zoneRacks[index - 1].id, rack.id]);
-      else if (index === zoneRacks.length - 1) outerRackIds.add(rack.id);
+      if (!isRightSide && index === zoneRacks.length - 1) outerRackIds.add(rack.id);
     });
     zoneCursorX += maxDepth * 2 + rackBackClearance + zoneGap;
   });
@@ -1183,18 +1205,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Keep the guard clear of the rack face so it protects the uprights without
   // touching the shelf beams or blocking the front label area.
   const safetyClearance = 0.35;
-  // Protect the short ends of each back-to-back pair, never spanning an aisle.
-  backToBackPairs.forEach((ids) => {
-    const pairBounds = new THREE.Box3();
-    rackEntries
-      .filter((entry) => ids.includes(entry.rack.id))
-      .forEach((entry) => pairBounds.union(rackFootprintBounds(entry)));
-    if (pairBounds.isEmpty()) return;
-    [pairBounds.min.z - safetyClearance, pairBounds.max.z + safetyClearance]
-      .forEach((railZ) => createRackEndGuard(pairBounds.min.x, pairBounds.max.x, railZ, 3));
-  });
-  // A standalone outer rack is protected by two corner bollards only. The
-  // three-post shape belongs exclusively to the back-to-back rack bank above.
+  // Back-to-back racks share a rear seam, so they deliberately have no safety
+  // rail or bollard in that join. Only a truly standalone rack needs guards.
   rackEntries
     .filter((entry) => outerRackIds.has(entry.rack.id))
     .forEach((entry) => {
@@ -2458,7 +2470,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   };
 }
 
-async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, warehouseName) {
+async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, warehouseName, onWarehouseNavigate) {
   if (!canvas) return null;
   const currentGeneration = ++generation;
   activeController?.dispose();
@@ -2468,7 +2480,7 @@ async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, wareho
     const model = await loadModel(locations || [], occupancy || {});
     if (!model.warehouseName && warehouseName) model.warehouseName = warehouseName;
     if (currentGeneration !== generation || !canvas.isConnected) return null;
-    const controller = await createScene(canvas, model, onSelect, onBoxSelect);
+    const controller = await createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate);
     if (currentGeneration !== generation || !canvas.isConnected) {
       controller.dispose();
       return null;
