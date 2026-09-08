@@ -1938,7 +1938,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   const forkliftPickMeshes = [];
-  const forkliftWheelVisuals = [];
+  // Each entry keeps the original forklift wheel geometry and its local axle.
+  // The source GLB ships all four wheels inside Object_0 rather than as nodes.
+  const forkliftWheelMeshes = [];
   const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
@@ -2432,6 +2434,38 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       object.castShadow = true;
       object.receiveShadow = true;
       forkliftPickMeshes.push(object);
+      // The real tyres are authored together in Object_0. Split their vertices
+      // into the four physical wheel regions so the original model—not added
+      // placeholder meshes—can roll around its own axle.
+      if (object.name !== 'Object_0') return;
+      const position = object.geometry.getAttribute('position');
+      const normal = object.geometry.getAttribute('normal');
+      if (!position) return;
+      const basePositions = position.array.slice();
+      const wheels = [
+        { centerX: -0.41, centerY: -0.785, centerZ: 0.265, vertices: [] },
+        { centerX: 0.41, centerY: -0.785, centerZ: 0.265, vertices: [] },
+        { centerX: -0.41, centerY: 0.615, centerZ: 0.215, vertices: [] },
+        { centerX: 0.41, centerY: 0.615, centerZ: 0.215, vertices: [] },
+      ];
+      for (let index = 0; index < position.count; index += 1) {
+        const offset = index * 3;
+        const x = basePositions[offset];
+        const y = basePositions[offset + 1];
+        const z = basePositions[offset + 2];
+        for (const wheel of wheels) {
+          if (Math.abs(x - wheel.centerX) <= 0.16
+            && Math.hypot(y - wheel.centerY, z - wheel.centerZ) <= 0.34) {
+            wheel.vertices.push(index);
+            break;
+          }
+        }
+      }
+      if (wheels.every((wheel) => wheel.vertices.length > 40)) {
+        forkliftWheelMeshes.push({ position, normal, wheels, radius: 0.265 });
+      } else {
+        console.warn('[Warehouse3D] Could not isolate all four forklift wheels from the source model.');
+      }
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
@@ -2460,25 +2494,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     );
     forkliftRoot.rotation.y = -Math.PI * 0.5;
     scene.add(forkliftRoot);
-    // The downloaded forklift merges its tyres into larger static meshes.
-    // Add slim wheel rims at the physical footprint so they visibly roll with
-    // every routed movement instead of leaving a parked-looking vehicle.
-    const wheelRadius = Math.min(0.32, Math.max(0.18, scaledSize.y * 0.16));
-    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x141517, roughness: 0.88, metalness: 0.08 });
-    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x74787c, roughness: 0.32, metalness: 0.76 });
-    [-1, 1].forEach((side) => [-0.32, 0.34].forEach((along) => {
-      const wheel = new THREE.Group();
-      wheel.position.set(side * (scaledSize.x * 0.5 + 0.018), wheelRadius, along * scaledSize.z);
-      const tyre = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.105, 20), wheelMaterial);
-      tyre.rotation.z = Math.PI / 2;
-      wheel.add(tyre);
-      const rim = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius * 0.48, wheelRadius * 0.48, 0.112, 16), rimMaterial);
-      rim.rotation.z = Math.PI / 2;
-      rim.position.x = side * 0.006;
-      wheel.add(rim);
-      forkliftRoot.add(wheel);
-      forkliftWheelVisuals.push({ wheel, radius: wheelRadius });
-    }));
+    forkliftWheelMeshes.forEach((wheelMesh) => {
+      wheelMesh.radius *= scale;
+    });
     forkliftSelection = new THREE.BoxHelper(forkliftRoot, 0xa8ff2b);
     forkliftSelection.material.depthTest = false;
     forkliftSelection.material.transparent = true;
@@ -2517,7 +2535,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
-        forkliftWheelVisuals.forEach(({ wheel, radius }) => { wheel.rotation.x -= distanceTravelled / radius; });
+        forkliftWheelMeshes.forEach((wheelMesh) => {
+          const rotation = -distanceTravelled / wheelMesh.radius;
+          wheelMesh.wheels.forEach((wheel) => {
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+            wheel.vertices.forEach((vertex) => {
+              const offset = vertex * 3;
+              const y = wheelMesh.position.array[offset] - wheel.centerY;
+              const z = wheelMesh.position.array[offset + 2] - wheel.centerZ;
+              wheelMesh.position.array[offset + 1] = wheel.centerY + y * cos - z * sin;
+              wheelMesh.position.array[offset + 2] = wheel.centerZ + y * sin + z * cos;
+              if (wheelMesh.normal) {
+                const normalY = wheelMesh.normal.array[offset + 1];
+                const normalZ = wheelMesh.normal.array[offset + 2];
+                wheelMesh.normal.array[offset + 1] = normalY * cos - normalZ * sin;
+                wheelMesh.normal.array[offset + 2] = normalY * sin + normalZ * cos;
+              }
+            });
+          });
+          wheelMesh.position.needsUpdate = true;
+          if (wheelMesh.normal) wheelMesh.normal.needsUpdate = true;
+        });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
         forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
