@@ -515,12 +515,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
   });
 
-  // Every zone is a face-to-face rack pair with a two-forklift aisle between it.
-  // Different zones continue side-by-side along X, so the outside backs of
-  // neighbouring zones meet; no rack ends are joined along the aisle axis.
-  // The displayed forklift is normalized to a 3.25 m footprint. Allow two
-  // forklifts to pass with a small safety margin between the rack faces.
-  const aisleWidth = 8;
+  // All racks are arranged back-to-back. A small structural gap keeps the
+  // steel frames from intersecting while preserving one continuous rack bank.
   const backToBackGap = 0.12;
   let xCursor = 0;
   const zoneTransforms = [];
@@ -529,9 +525,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const secondDepth = pair[1]
       ? positive(pair[1].dimensionsCm?.depth, 110) * CM_TO_M
       : firstDepth;
-    const firstX = xCursor - firstDepth / 2 - aisleWidth / 2;
+    const firstX = xCursor - firstDepth / 2;
     const secondX = pair[1]
-      ? xCursor + secondDepth / 2 + aisleWidth / 2
+      ? xCursor + secondDepth / 2 + backToBackGap
       : null;
     zoneTransforms.push({ pair, length, firstX, secondX, firstDepth, secondDepth });
     xCursor = pair[1]
@@ -555,7 +551,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
           y: num(rack.positionCm?.y),
           z: 0,
         },
-        rotationYDeg: sideIndex === 0 ? 90 : -90,
+      rotationYDeg: 90,
       });
     });
     if (pair.length === 2) pair.forEach((rack) => innerBackToBackRackIds.add(rack.id));
@@ -1130,13 +1126,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         scene.add(band);
       });
     });
-    [0.62, 1.02].forEach((height) => points.slice(0, -1).forEach((point, index) =>
-      steelBetween(
-        new THREE.Vector3(point.x, warehouseFloorY + height, railZ),
-        new THREE.Vector3(points[index + 1].x, warehouseFloorY + height, railZ),
-        0.045,
-        guardrailMaterial,
-      )));
+    // SAFETY is represented by the striped posts and feet at the rack head.
+    // Do not span the gate with horizontal rails: forklifts must pass through.
   };
   // Keep the guard flush with the real steel footprint. `collisionBox` is
   // deliberately enlarged for raycasting, so it must never drive safety size.
