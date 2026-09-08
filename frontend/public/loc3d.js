@@ -584,7 +584,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       canvas.focus?.();
       down = null;
       isCameraDragging = false;
-      canvas.style.cursor = 'grab';
+      canvas.style.cursor = 'default';
     });
     syncPowerModal();
   };
@@ -2083,7 +2083,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       hoverOutline.visible = false;
       hoverShell.visible = false;
       labelObject.visible = false;
-      canvas.style.cursor = 'grab';
+      canvas.style.cursor = 'default';
     }
     showRackAction(hoverConsumerUnit || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
@@ -2108,7 +2108,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     down = null;
     isCameraDragging = false;
-    if (wasCameraDragging) canvas.style.cursor = 'grab';
+    if (wasCameraDragging) canvas.style.cursor = 'default';
   };
   const onPointerLeave = () => {
     if (hoverIndex >= 0 && slotMesh) {
@@ -2129,7 +2129,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverConsumerUnit = false;
     hoverForklift = false;
     labelObject.visible = false;
-    canvas.style.cursor = 'grab';
+    canvas.style.cursor = 'default';
     window.setTimeout(() => {
       if (!actionPointerOver) hideRackAction();
     }, 0);
