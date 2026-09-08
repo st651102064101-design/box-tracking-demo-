@@ -473,22 +473,31 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const updateFirstPersonCopy = () => {
     const english = isEnglish();
     firstPersonButton.title = english ? 'First-person view · press F' : 'มุมมองคนเดิน · กด F';
+    fullscreenButton.title = english ? 'Fullscreen · press M' : 'เต็มจอ · กด M';
     firstPersonHint.innerHTML = english
-      ? '<kbd>F</kbd> First-person · <kbd>WASD</kbd> move'
-      : '<kbd>F</kbd> มุมมองคนเดิน · <kbd>WASD</kbd> เดิน';
+      ? '<kbd>F</kbd> First-person · <kbd>WASD</kbd> move · <kbd>M</kbd> fullscreen'
+      : '<kbd>F</kbd> มุมมองคนเดิน · <kbd>WASD</kbd> เดิน · <kbd>M</kbd> เต็มจอ';
     firstPersonOverlay.innerHTML = english
-      ? '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>First-person mode</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse look · left click interact · <kbd>Esc</kbd> exit</span></div>'
-      : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
+      ? '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>First-person mode</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · mouse look · left click interact · <kbd>Esc</kbd> exit</span></div>'
+      : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · <kbd>Shift</kbd> วิ่ง · <kbd>Space</kbd> กระโดด · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
   };
   updateFirstPersonCopy();
   let firstPerson = false;
   const walkKeys = new Set();
+  const walkEyeHeight = 1.7;
+  let walkVerticalVelocity = 0;
+  let walkJumpHeight = 0;
+  let walkHeadBobPhase = 0;
+  let walkHeadBobOffset = 0;
   const exitFirstPerson = () => {
     firstPerson = false;
     firstPersonButton.classList.toggle('active', firstPerson);
     firstPersonButton.setAttribute('aria-pressed', String(firstPerson));
     controls.enabled = true;
     walkKeys.clear();
+    walkVerticalVelocity = 0;
+    walkJumpHeight = 0;
+    walkHeadBobOffset = 0;
     stage.classList.remove('loc3d-first-person-active');
     firstPersonOverlay.classList.remove('show');
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
@@ -498,12 +507,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     firstPersonButton.classList.add('active');
     firstPersonButton.setAttribute('aria-pressed', 'true');
     controls.enabled = false;
-    camera.position.y = Math.max(camera.position.y, 1.7);
+    camera.position.y = Math.max(camera.position.y, warehouseFloorY + walkEyeHeight);
     camera.rotation.order = 'YXZ';
     stage.classList.add('loc3d-first-person-active');
     firstPersonOverlay.classList.add('show');
     canvas.requestPointerLock?.();
-    window.toast?.('โหมดคนเดิน · WASD เดิน, เมาส์มอง, คลิกซ้ายโต้ตอบ, Esc ออก', '', 'ok');
+    window.toast?.('โหมดคนเดิน · WASD เดิน, Shift วิ่ง, Space กระโดด, เมาส์มอง, Esc ออก', '', 'ok');
   };
   const toggleFirstPerson = () => {
     if (firstPerson) exitFirstPerson();
@@ -525,7 +534,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       event.preventDefault();
       return;
     }
-    if (!['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
+    if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space'].includes(event.code)) return;
+    if (event.code === 'Space' && event.type === 'keydown' && walkVerticalVelocity === 0) walkVerticalVelocity = 5.1;
     if (event.type === 'keydown') walkKeys.add(event.code);
     else walkKeys.delete(event.code);
     event.preventDefault();
@@ -569,6 +579,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
   };
   fullscreenButton.addEventListener('click', toggleFullscreen);
+  const onFullscreenShortcut = (event) => {
+    if (event.code !== 'KeyM' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
+    toggleFullscreen();
+    event.preventDefault();
+  };
+  window.addEventListener('keydown', onFullscreenShortcut, { passive: false });
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
   stage.appendChild(firstPersonHint);
@@ -594,6 +612,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   document.addEventListener('fullscreenchange', syncFullscreenPortals);
   syncFullscreenPortals();
+  const releasePointerForModal = () => {
+    if (firstPerson && document.pointerLockElement === canvas) document.exitPointerLock?.();
+  };
+  const modalPointerObserver = new MutationObserver(() => {
+    const hasOpenModal = fullscreenPortals.some(({ element }) => element.classList.contains('show'));
+    if (hasOpenModal) releasePointerForModal();
+  });
+  fullscreenPortals.forEach(({ element }) => modalPointerObserver.observe(element, { attributes: true, attributeFilter: ['class', 'style', 'aria-hidden'] }));
 
   const rackEntries = [];
   const slotEntries = [];
@@ -1825,7 +1851,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hemisphereLight.intensity = warehousePowerOn ? 1.75 : 0.045;
     ambientLight.intensity = warehousePowerOn ? 0.48 : 0.018;
     sun.intensity = warehousePowerOn ? 2.25 : 0;
-    sun.castShadow = warehousePowerOn;
+    // Changing castShadow forces expensive shadow-program work on some WebGL
+    // drivers and made the whole view hitch whenever this switch was pressed.
+    // Keep the shadow pipeline stable; intensity still turns the circuit off.
     renderer.toneMappingExposure = warehousePowerOn ? 1.05 : 0.16;
     scene.background.set(warehousePowerOn ? 0x101419 : 0x020508);
     scene.fog.color.set(warehousePowerOn ? 0x101419 : 0x020508);
@@ -2262,8 +2290,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
       if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
-      else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
-      else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
+      else if (hoverBoxIndex >= 0) {
+        releasePointerForModal();
+        onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
+      }
+      else if (hoverIndex >= 0) {
+        releasePointerForModal();
+        onSelect?.(slotEntries[hoverIndex].slot.id);
+      }
       else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
       else if (hoverDockDoorIndex >= 0) toggleDockDoor(hoverDockDoorIndex);
       else if (forkliftSelected) {
@@ -2597,12 +2631,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (walkKeys.has('KeyS')) walkCandidate.sub(walkForward);
       if (walkKeys.has('KeyD')) walkCandidate.add(walkRight);
       if (walkKeys.has('KeyA')) walkCandidate.sub(walkRight);
-      if (walkCandidate.lengthSq() > 0) {
-        walkCandidate.normalize().multiplyScalar(2.15 * deltaSeconds).add(camera.position);
-        walkCandidate.y = 1.7;
+      const isWalking = walkCandidate.lengthSq() > 0;
+      if (isWalking) {
+        const running = walkKeys.has('ShiftLeft') || walkKeys.has('ShiftRight');
+        const speed = running ? 4.3 : 2.15;
+        walkCandidate.normalize().multiplyScalar(speed * deltaSeconds).add(camera.position);
         const blockedWalk = rackEntries.some(({ collisionBox }) => collisionBox?.clone().expandByScalar(0.3).containsPoint(walkCandidate));
-        if (!blockedWalk) camera.position.copy(walkCandidate);
+        if (!blockedWalk) {
+          camera.position.x = walkCandidate.x;
+          camera.position.z = walkCandidate.z;
+        }
+        walkHeadBobPhase += deltaSeconds * (running ? 15 : 10);
+        walkHeadBobOffset = Math.sin(walkHeadBobPhase) * (running ? 0.045 : 0.028);
+      } else {
+        walkHeadBobOffset *= Math.exp(-14 * deltaSeconds);
       }
+      walkVerticalVelocity -= 15.5 * deltaSeconds;
+      walkJumpHeight += walkVerticalVelocity * deltaSeconds;
+      if (walkJumpHeight <= 0) {
+        walkJumpHeight = 0;
+        walkVerticalVelocity = 0;
+      }
+      camera.position.y = warehouseFloorY + walkEyeHeight + walkJumpHeight + walkHeadBobOffset;
     } else controls.update();
     keepCameraInsideWarehouse();
     updateRackLabelMode();
@@ -2660,6 +2710,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
+      window.removeEventListener('keydown', onFullscreenShortcut);
       firstPersonButton.removeEventListener('click', toggleFirstPerson);
       firstPersonButton.remove();
       window.removeEventListener('keydown', onFirstPersonShortcut);
@@ -2669,6 +2720,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       window.removeEventListener('keyup', onWalkKey);
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
+      modalPointerObserver.disconnect();
       if (fallbackFullscreen) setFallbackFullscreen(false);
       syncFullscreenPortals();
       rackActionButton.remove();
