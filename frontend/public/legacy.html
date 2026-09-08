@@ -6561,9 +6561,11 @@ function applyLocView(view){
 })();
 
 function openLocDrawer(mode){
-  openCardDrawer('locFormCard',mode==='bulk'?'สร้างแร็กหลายตำแหน่ง':'เพิ่มตำแหน่ง / สร้างแร็ก','จัดการโซน แร็ก ชั้น และช่องภายในคลัง');
-  var sw=$('#locModeSw');if(sw){var b=sw.querySelector('[data-lmode="'+(mode||'single')+'"]');if(b)b.click();}
-  if((mode||'single')==='single')syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
+  var savedMode=typeof uiPrefGet==='function'?uiPrefGet('locFormMode','single'):'single';
+  var selectedMode=mode||(['single','bulk'].indexOf(savedMode)>=0?savedMode:'single');
+  openCardDrawer('locFormCard',selectedMode==='bulk'?'สร้างแร็กหลายตำแหน่ง':'เพิ่มตำแหน่ง / สร้างแร็ก','จัดการโซน แร็ก ชั้น และช่องภายในคลัง');
+  var sw=$('#locModeSw');if(sw){var b=sw.querySelector('[data-lmode="'+selectedMode+'"]');if(b)b.click();}
+  if(selectedMode==='single')syncLocSingleForm(typeof uiPrefGet==='function'?uiPrefGet('locForm',{}):{});
 }
 window.openLocDrawer=openLocDrawer;
 
@@ -6723,6 +6725,7 @@ function renderLocRackMap(locs, occ) {
     var single = $('#locSingleMode'), bulk = $('#locBulkMode');
     if (single) single.style.display = mode === 'single' ? '' : 'none';
     if (bulk)   bulk.style.display   = mode === 'bulk'   ? '' : 'none';
+    if(typeof uiPrefSet==='function')uiPrefSet('locFormMode',mode);
     if (mode === 'bulk') { populateBulkCountSelects(val('bulkLocWh')); suggestBulkZone(); suggestBulkRack(); suggestBulkStarts(); }
   });
 })();
