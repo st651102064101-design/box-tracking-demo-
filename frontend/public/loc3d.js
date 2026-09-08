@@ -1011,7 +1011,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const zoneInnerX = zoneBox
       ? (zoneSide > 0 ? zoneBox.min.x : zoneBox.max.x)
       : zoneCenter.x;
-    const signX = zoneInnerX + zoneSide * 1.3;
+    // Step farther into the clear aisle so the rack uprights cannot cover the
+    // floor label when the camera is close to the rack face.
+    const signX = zoneInnerX + zoneSide * 3.0;
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
     safetySignTextures.push(floorTexture);
     const floorLabel = new THREE.Mesh(
