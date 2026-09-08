@@ -462,21 +462,46 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   firstPersonButton.setAttribute('aria-label', 'มุมมองบุคคลที่หนึ่ง');
   firstPersonButton.title = 'มุมมองคนเดิน · ใช้ W A S D';
   firstPersonButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M7.5 21 9 13l3-3 3 3 1.5 8M9 13 5 16m10-3 4 3M12 10V7.5"/></svg>';
+  const firstPersonOverlay = document.createElement('div');
+  firstPersonOverlay.className = 'loc3d-first-person-overlay';
+  firstPersonOverlay.setAttribute('aria-hidden', 'true');
+  firstPersonOverlay.innerHTML = '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
   let firstPerson = false;
   const walkKeys = new Set();
-  const toggleFirstPerson = () => {
-    firstPerson = !firstPerson;
+  const exitFirstPerson = () => {
+    firstPerson = false;
     firstPersonButton.classList.toggle('active', firstPerson);
     firstPersonButton.setAttribute('aria-pressed', String(firstPerson));
-    controls.enabled = !firstPerson;
-    if (firstPerson) {
-      camera.position.y = Math.max(camera.position.y, 1.7);
-      window.toast?.('มุมมองคนเดิน · ใช้ W A S D และกดปุ่มเดิมเพื่อออก', '', 'ok');
-    }
+    controls.enabled = true;
+    walkKeys.clear();
+    stage.classList.remove('loc3d-first-person-active');
+    firstPersonOverlay.classList.remove('show');
+    if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+  };
+  const enterFirstPerson = () => {
+    firstPerson = true;
+    firstPersonButton.classList.add('active');
+    firstPersonButton.setAttribute('aria-pressed', 'true');
+    controls.enabled = false;
+    camera.position.y = Math.max(camera.position.y, 1.7);
+    camera.rotation.order = 'YXZ';
+    stage.classList.add('loc3d-first-person-active');
+    firstPersonOverlay.classList.add('show');
+    canvas.requestPointerLock?.();
+    window.toast?.('โหมดคนเดิน · WASD เดิน, เมาส์มอง, คลิกซ้ายโต้ตอบ, Esc ออก', '', 'ok');
+  };
+  const toggleFirstPerson = () => {
+    if (firstPerson) exitFirstPerson();
+    else enterFirstPerson();
   };
   firstPersonButton.addEventListener('click', toggleFirstPerson);
   const onWalkKey = (event) => {
     if (!firstPerson || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.code === 'Escape' && event.type === 'keydown') {
+      exitFirstPerson();
+      event.preventDefault();
+      return;
+    }
     if (!['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
     if (event.type === 'keydown') walkKeys.add(event.code);
     else walkKeys.delete(event.code);
@@ -484,6 +509,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('keydown', onWalkKey, { passive: false });
   window.addEventListener('keyup', onWalkKey, { passive: false });
+  const onPointerLockChange = () => {
+    // Escape and browser chrome both release pointer lock. Treat that as
+    // leaving the walking mode so camera controls return predictably.
+    if (firstPerson && document.pointerLockElement !== canvas) exitFirstPerson();
+  };
+  document.addEventListener('pointerlockchange', onPointerLockChange);
   let fallbackFullscreen = false;
   const setFallbackFullscreen = (enabled) => {
     fallbackFullscreen = enabled;
@@ -517,6 +548,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   fullscreenButton.addEventListener('click', toggleFullscreen);
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
+  stage.appendChild(firstPersonOverlay);
 
   // Fullscreen only renders descendants of the fullscreen element. Portal
   // the app's existing modal/drawer layers into the 3D stage while fullscreen
@@ -1510,6 +1542,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       leaf.add(panel);
       scene.add(leaf);
       dockDoorPickMeshes.push(panel);
+      // The black interior remains hidden while the shutter is down, then
+      // becomes visible behind the raised door as a real unlit dock opening.
+      const openingMaterial = new THREE.MeshBasicMaterial({ color: 0x020304, transparent: true, opacity: 0, side: THREE.DoubleSide });
+      const openingBlack = new THREE.Mesh(new THREE.PlaneGeometry(doorWidth - 0.14, doorHeight - 0.12), openingMaterial);
+      openingBlack.rotation.y = rotationY;
+      openingBlack.position.set(innerX - doorSide * 0.075, warehouseFloorY + doorHeight / 2, doorZ);
+      scene.add(openingBlack);
       [-1, 1].forEach((edge) => steelBetween(
         new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY, doorZ + edge * doorWidth / 2),
         new THREE.Vector3(innerX - doorSide * 0.08, warehouseFloorY + doorHeight + 0.22, doorZ + edge * doorWidth / 2),
@@ -1538,7 +1577,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const statusLamp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.42), new THREE.MeshStandardMaterial({ color: typeColor, emissive: typeColor, emissiveIntensity: 0.55 }));
       statusLamp.position.set(innerX - doorSide * 0.15, warehouseFloorY + doorHeight + 0.34, doorZ);
       scene.add(statusLamp);
-      dockDoors.push({ door, leaf, statusLamp, typeColor, height: doorHeight, open: false, progress: 0 });
+      dockDoors.push({ door, leaf, openingBlack, openingMaterial, statusLamp, typeColor, height: doorHeight, open: false, progress: 0 });
       const pipeZ = doorZ + doorWidth / 2 + 0.23;
       steelBetween(
         new THREE.Vector3(innerX - doorSide * 0.27, warehouseFloorY + 0.12, pipeZ),
@@ -1883,6 +1922,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   const forkliftPickMeshes = [];
+  const forkliftWheelVisuals = [];
   const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
@@ -1960,6 +2000,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1,
     );
+    raycaster.setFromCamera(pointer, camera);
+  };
+  const setPointerAtReticle = () => {
+    pointer.set(0, 0);
     raycaster.setFromCamera(pointer, camera);
   };
   const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
@@ -2175,6 +2219,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
+    if (firstPerson && document.pointerLockElement === canvas) {
+      camera.rotation.y -= event.movementX * 0.0022;
+      camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x - event.movementY * 0.0022, -1.38, 1.38);
+      setPointerAtReticle();
+      updatePointer({ clientX: canvas.getBoundingClientRect().left + canvas.clientWidth / 2, clientY: canvas.getBoundingClientRect().top + canvas.clientHeight / 2 });
+      return;
+    }
     if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5) isCameraDragging = true;
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
@@ -2186,7 +2237,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const onPointerUp = (event) => {
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
-      setPointerFromEvent(event);
+      if (firstPerson && document.pointerLockElement === canvas) {
+        const rect = canvas.getBoundingClientRect();
+        updatePointer({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
+      } else setPointerFromEvent(event);
       if (isForkliftHit()) setForkliftSelected(true);
       else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
@@ -2233,6 +2287,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
   const onDoubleClick = (event) => {
+    if (firstPerson) return;
     if (!forkliftSelected || !forkliftRoot) return;
     setPointerFromEvent(event);
     const hit = raycaster.intersectObject(floor, false)[0];
@@ -2387,6 +2442,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     );
     forkliftRoot.rotation.y = -Math.PI * 0.5;
     scene.add(forkliftRoot);
+    // The downloaded forklift merges its tyres into larger static meshes.
+    // Add slim wheel rims at the physical footprint so they visibly roll with
+    // every routed movement instead of leaving a parked-looking vehicle.
+    const wheelRadius = Math.min(0.32, Math.max(0.18, scaledSize.y * 0.16));
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x141517, roughness: 0.88, metalness: 0.08 });
+    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x74787c, roughness: 0.32, metalness: 0.76 });
+    [-1, 1].forEach((side) => [-0.32, 0.34].forEach((along) => {
+      const wheel = new THREE.Group();
+      wheel.position.set(side * (scaledSize.x * 0.5 + 0.018), wheelRadius, along * scaledSize.z);
+      const tyre = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.105, 20), wheelMaterial);
+      tyre.rotation.z = Math.PI / 2;
+      wheel.add(tyre);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius * 0.48, wheelRadius * 0.48, 0.112, 16), rimMaterial);
+      rim.rotation.z = Math.PI / 2;
+      rim.position.x = side * 0.006;
+      wheel.add(rim);
+      forkliftRoot.add(wheel);
+      forkliftWheelVisuals.push({ wheel, radius: wheelRadius });
+    }));
     forkliftSelection = new THREE.BoxHelper(forkliftRoot, 0xa8ff2b);
     forkliftSelection.material.depthTest = false;
     forkliftSelection.material.transparent = true;
@@ -2423,7 +2497,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       } else {
         movementDirection.normalize();
-        forkliftRoot.position.addScaledVector(movementDirection, Math.min(remaining, forkliftMotion.speed * deltaSeconds));
+        const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
+        forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
+        forkliftWheelVisuals.forEach(({ wheel, radius }) => { wheel.rotation.x -= distanceTravelled / radius; });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
         forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
@@ -2452,6 +2528,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const scaleY = 1 - door.progress * 0.92;
       door.leaf.scale.y = scaleY;
       door.leaf.position.y = warehouseFloorY + (1 - scaleY) * door.height;
+      door.openingMaterial.opacity = door.progress;
     });
     if (firstPerson) {
       camera.getWorldDirection(walkForward);
@@ -2520,8 +2597,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('dblclick', onDoubleClick);
+      document.removeEventListener('pointerlockchange', onPointerLockChange);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
+      firstPersonButton.removeEventListener('click', toggleFirstPerson);
+      firstPersonButton.remove();
+      firstPersonOverlay.remove();
+      window.removeEventListener('keydown', onWalkKey);
+      window.removeEventListener('keyup', onWalkKey);
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
       if (fallbackFullscreen) setFallbackFullscreen(false);
       syncFullscreenPortals();
