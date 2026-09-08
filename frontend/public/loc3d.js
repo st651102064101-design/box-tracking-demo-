@@ -569,7 +569,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const zoneKeys = [...racksByZone.keys()].sort(natural);
   const displayTransformByRackId = new Map();
   const outerRackIds = new Set();
-  const rackBackClearance = 0.16;
+  // Back-to-back frames share their rear line. Keep only a 1 cm numerical
+  // tolerance so they look flush without z-fighting their steel meshes.
+  const rackBackClearance = 0.01;
   const zoneGap = 3.5;
   const rowGap = 1.15;
   const placements = [];
@@ -2184,6 +2186,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       else if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       else if (hoverIndex >= 0) onSelect?.(slotEntries[hoverIndex].slot.id);
       else if (hoverConsumerUnit) openConsumerPowerModal();
+      else if (forkliftSelected) {
+        // Give immediate feedback on the first click of a double-click. The
+        // second click still owns the actual move command below.
+        const floorHit = raycaster.intersectObject(floor, false)[0];
+        if (floorHit) showTargetRipple(floorHit.point);
+      }
     }
     down = null;
     isCameraDragging = false;
@@ -2353,7 +2361,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
-    forkliftClearance = Math.max(scaledSize.x, scaledSize.z) * 0.5 + 0.22;
+    // The path grid already respects the physical rack envelope. Keeping an
+    // extra 0.55–0.72 m buffer is enough for safe steering without closing a
+    // real 4 m forklift aisle completely.
+    forkliftClearance = Math.min(0.72, Math.max(0.55, Math.max(scaledSize.x, scaledSize.z) * 0.22));
     forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
     forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
     forklift.position.y -= scaledBounds.min.y;
