@@ -250,6 +250,31 @@ function code128LabelTexture(value) {
   return texture;
 }
 
+function cartonHandlingTexture(value) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 560;
+  canvas.height = 320;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#d8c48e';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = '#5b4028';
+  context.lineWidth = 14;
+  context.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+  context.fillStyle = '#5b4028';
+  context.textAlign = 'center';
+  context.font = '900 48px Arial, sans-serif';
+  context.fillText('THIS SIDE UP', canvas.width / 2, 88);
+  context.font = '900 42px Arial, sans-serif';
+  context.fillText('↑     ↑', canvas.width / 2, 150);
+  context.font = '700 31px ui-monospace, monospace';
+  context.fillText(String(value ?? ''), canvas.width / 2, 245);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
 function assetPipeline(renderer) {
   const draco = new DRACOLoader();
   draco.setDecoderPath(`https://unpkg.com/three@${THREE_VERSION}/examples/jsm/libs/draco/`);
@@ -763,6 +788,58 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     boxMesh.computeBoundingBox();
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
+  }
+  // Cartons are deliberately built as physical packages, rather than just a
+  // tinted cube: exposed folded seams, packing tape, softened ink markings,
+  // and a dark edge profile make their construction readable at close range.
+  // BOX-001 is included as a compatibility fallback for data created before
+  // material_type was added to the persisted boxes table.
+  const cartonEntries = boxEntries.filter((entry) => entry.box.materialType === 'carton' || entry.box.id === 'BOX-001');
+  if (cartonEntries.length <= 80) {
+    const cartonEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x68472e, transparent: true, opacity: 0.68 });
+    const cartonSeamMaterial = new THREE.MeshStandardMaterial({ color: 0x745037, roughness: 0.92, metalness: 0 });
+    const cartonTapeMaterial = new THREE.MeshStandardMaterial({ color: 0xd9bd77, roughness: 0.8, metalness: 0 });
+    cartonEntries.forEach((entry) => {
+      const placeLocal = (mesh, x, y, z) => {
+        mesh.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(entry.quaternion).add(entry.position));
+        mesh.quaternion.copy(entry.quaternion);
+        scene.add(mesh);
+        return mesh;
+      };
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(UNIT_BOX), cartonEdgeMaterial);
+      edges.position.copy(entry.position);
+      edges.quaternion.copy(entry.quaternion);
+      edges.scale.copy(entry.scale);
+      scene.add(edges);
+
+      const topY = entry.scale.y / 2 + 0.006;
+      const tape = new THREE.Mesh(
+        new THREE.BoxGeometry(Math.min(0.14, entry.scale.x * 0.16), 0.012, entry.scale.z * 0.94),
+        cartonTapeMaterial,
+      );
+      placeLocal(tape, 0, topY, 0);
+      [-0.25, 0.25].forEach((fraction) => {
+        const seam = new THREE.Mesh(
+          new THREE.BoxGeometry(0.014, 0.01, entry.scale.z * 0.94),
+          cartonSeamMaterial,
+        );
+        placeLocal(seam, entry.scale.x * fraction, topY + 0.002, 0);
+      });
+      const handlingTexture = cartonHandlingTexture(entry.box.id);
+      labelTextures.push(handlingTexture);
+      const handlingSize = Math.max(0.1, Math.min(entry.scale.x * 0.32, entry.scale.y * 0.34));
+      const handlingMark = new THREE.Mesh(
+        new THREE.PlaneGeometry(handlingSize, handlingSize * 0.56),
+        new THREE.MeshBasicMaterial({ map: handlingTexture, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      placeLocal(
+        handlingMark,
+        -entry.scale.x * 0.27,
+        entry.scale.y * 0.26,
+        entry.scale.z / 2 + 0.004,
+      );
+      boxBarcodeStickers.push(handlingMark);
+    });
   }
   // GTA-style selection marker: one reusable animated ring (not one mesh per
   // box), keeping the hover interaction constant-cost even with many boxes.
