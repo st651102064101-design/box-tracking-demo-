@@ -500,6 +500,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   syncFullscreenPortals();
 
   const rackEntries = [];
+  const movableAssets = [];
   const slotEntries = [];
   const uprightParts = [];
   const beamParts = [];
@@ -1854,6 +1855,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   let pointerFrame = 0;
   let down = null;
   let rackDrag = null;
+  let objectDrag = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
   let hoverRackCode = '';
@@ -2002,14 +2004,30 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       window.toast?.(`บันทึกตำแหน่ง ${rack.code} แล้ว`, '', 'ok');
     } catch (error) { window.toast?.(`บันทึกตำแหน่ง ${rack.code} ไม่สำเร็จ`, error.message || '', 'err'); }
   };
+  const movableRootAt = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(movableAssets, true)[0];
+    if (!hit) return null;
+    let root = hit.object;
+    while (root && !root.userData.movable) root = root.parent;
+    return root || null;
+  };
   const onPointerMove = (event) => {
-    if (rackDrag) {
+    if (rackDrag || objectDrag) {
       const rect = canvas.getBoundingClientRect();
       pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
       const point = new THREE.Vector3();
-      if (raycaster.ray.intersectPlane(rackDrag.plane, point)) {
-        const desired = point.sub(rackDrag.startPoint);
+      const drag = rackDrag || objectDrag;
+      if (raycaster.ray.intersectPlane(drag.plane, point)) {
+        const desired = point.sub(drag.startPoint);
+        if (objectDrag) {
+          const nextX = THREE.MathUtils.clamp(objectDrag.startBase.x + desired.x, center.x - halfWarehouseWidth + .35, center.x + halfWarehouseWidth - .35);
+          const nextZ = THREE.MathUtils.clamp(objectDrag.startBase.z + desired.z, center.z - halfWarehouseDepth + .35, center.z + halfWarehouseDepth - .35);
+          objectDrag.target.position.set(nextX, objectDrag.target.position.y, nextZ); objectDrag.currentBase.set(nextX, 0, nextZ); return;
+        }
         const rackEntry = rackEntries.find((entry) => entry.rack === rackDrag.rack);
         const xLimit = halfWarehouseWidth - (rackEntry?.width || 1) / 2 - 0.35;
         const zLimit = halfWarehouseDepth - (rackEntry?.depth || 1) / 2 - 0.35;
@@ -2025,16 +2043,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
   const onPointerDown = (event) => {
-    if (event.button === 0 && activeRackForEditor && hoverIndex < 0 && hoverBoxIndex < 0 && !hoverConsumerUnit) {
+    if (event.button === 0) {
       const rect = canvas.getBoundingClientRect();
       pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
       const startPoint = new THREE.Vector3();
-      const entry = rackEntries.find((item) => item.rack === activeRackForEditor);
+      const rackHit = raycaster.intersectObjects(rackPickMeshes, false)[0];
+      const rack = rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
+      const entry = rackEntries.find((item) => item.rack === rack);
       if (entry && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) {
-        rackDrag = { rack: activeRackForEditor, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
+        rackDrag = { rack, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
         controls.enabled = false; canvas.style.cursor = 'grabbing'; return;
       }
+      const movable = movableRootAt(event);
+      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'grabbing'; return; }
     }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
@@ -2045,6 +2067,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       rackDrag = null; controls.enabled = true; canvas.style.cursor = 'grab';
       saveDraggedRack(rack); return;
     }
+    if (objectDrag) { const name=objectDrag.target.name||'อุปกรณ์'; objectDrag=null; controls.enabled=true; canvas.style.cursor='grab'; window.toast?.(`ย้าย ${name} แล้ว`, '', 'ok'); return; }
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
@@ -2119,6 +2142,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // Face the warehouse aisle; double-sided GLB materials still read from
     // either camera direction if an asset was authored with reversed winding.
     root.rotation.y = Math.PI;
+    root.userData.movable = true;
+    movableAssets.push(root);
     scene.add(root);
   }).catch((error) => console.warn(`[Warehouse3D] ${name} asset could not be loaded.`, error));
   // The green mark in the reference is the clear back-wall bay, left of the
@@ -2143,10 +2168,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (disposed) return;
     palletTemplate.traverse((object) => {
       if (!object.isMesh) return;
-      // This GLB contains two pallet variants. Pallet_2 has the solid,
-      // close-boarded top deck requested for the warehouse; discard the open
-      // slatted alternative so every displayed pallet uses the same type.
-      if (object.name !== 'Pallet_2_Pallet_2_0') {
+      // Keep only the open slatted pallet. The closed-deck variant is not a
+      // valid warehouse pallet for this layout.
+      if (object.name === 'Pallet_2_Pallet_2_0') {
         object.removeFromParent();
         return;
       }
@@ -2183,6 +2207,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         -rawCenter.z * scaleZ,
       ).applyQuaternion(quaternion);
       pallet.position.add(baseOffset);
+      pallet.name = 'พาเลท'; pallet.userData.movable = true; movableAssets.push(pallet);
       scene.add(pallet);
     };
     boxEntries.forEach((entry) => {
@@ -2224,6 +2249,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       aisleCenterZ,
     );
     forkliftRoot.rotation.y = -Math.PI * 0.5;
+    forkliftRoot.userData.movable = true; movableAssets.push(forkliftRoot);
     scene.add(forkliftRoot);
   }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
