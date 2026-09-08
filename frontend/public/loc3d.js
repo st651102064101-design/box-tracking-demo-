@@ -2026,15 +2026,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       if (raycaster.ray.intersectPlane(drag.plane, point)) {
         const desired = point.sub(drag.startPoint);
         if (objectDrag) {
-          const nextX = THREE.MathUtils.clamp(objectDrag.startBase.x + desired.x, center.x - halfWarehouseWidth + .35, center.x + halfWarehouseWidth - .35);
-          const nextZ = THREE.MathUtils.clamp(objectDrag.startBase.z + desired.z, center.z - halfWarehouseDepth + .35, center.z + halfWarehouseDepth - .35);
+          const snap = (value) => Math.round(value / .25) * .25;
+          const nextX = snap(THREE.MathUtils.clamp(objectDrag.startBase.x + desired.x, center.x - halfWarehouseWidth + .35, center.x + halfWarehouseWidth - .35));
+          const nextZ = snap(THREE.MathUtils.clamp(objectDrag.startBase.z + desired.z, center.z - halfWarehouseDepth + .35, center.z + halfWarehouseDepth - .35));
           objectDrag.target.position.set(nextX, objectDrag.target.position.y, nextZ); objectDrag.currentBase.set(nextX, 0, nextZ); return;
         }
         const rackEntry = rackEntries.find((entry) => entry.rack === rackDrag.rack);
         const xLimit = halfWarehouseWidth - (rackEntry?.width || 1) / 2 - 0.35;
         const zLimit = halfWarehouseDepth - (rackEntry?.depth || 1) / 2 - 0.35;
-        const nextX = THREE.MathUtils.clamp(rackDrag.startBase.x + desired.x, center.x - xLimit, center.x + xLimit);
-        const nextZ = THREE.MathUtils.clamp(rackDrag.startBase.z + desired.z, center.z - zLimit, center.z + zLimit);
+        const snap = (value) => Math.round(value / .25) * .25;
+        const nextX = snap(THREE.MathUtils.clamp(rackDrag.startBase.x + desired.x, center.x - xLimit, center.x + xLimit));
+        const nextZ = snap(THREE.MathUtils.clamp(rackDrag.startBase.z + desired.z, center.z - zLimit, center.z + zLimit));
         const delta = new THREE.Vector3(nextX, 0, nextZ).sub(rackDrag.currentBase);
         if (delta.lengthSq() > 0) moveRack(rackDrag.rack, delta);
       }
