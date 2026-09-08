@@ -618,12 +618,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
-    const displayTransform = displayTransformByRackId.get(sourceRack.id);
-    const rack = {
-      ...sourceRack,
-      positionCm: displayTransform?.positionCm ?? sourceRack.positionCm,
-      rotationYDeg: displayTransform?.rotationYDeg ?? num(sourceRack.rotationYDeg),
-    };
+    // Management uses the persisted DB transform as the one and only source
+    // of truth. The old decorative back-to-back transform made a drag appear
+    // to work but changed again after reload.
+    const rack = { ...sourceRack, positionCm: { ...sourceRack.positionCm }, rotationYDeg: num(sourceRack.rotationYDeg) };
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
     const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
@@ -738,6 +736,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     parts.forEach((part, index) => mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.userData.rackByInstance = parts.map((part) => part.rack);
+    mesh.userData.parts = parts;
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
     return mesh;
@@ -1854,6 +1853,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(consumerHoverShell);
   let pointerFrame = 0;
   let down = null;
+  let rackDrag = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
   let hoverRackCode = '';
@@ -1978,16 +1978,73 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     showRackAction(hoverConsumerUnit ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
+  const moveRack = (rack, delta) => {
+    rackPickMeshes.forEach((mesh) => {
+      (mesh.userData.parts || []).forEach((part, index) => {
+        if (part.rack !== rack) return;
+        part.position.add(delta); mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale));
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    });
+    slotEntries.forEach((entry, index) => { if (entry.rack === rack) { entry.position.add(delta); slotMesh?.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)); } });
+    if (slotMesh) slotMesh.instanceMatrix.needsUpdate = true;
+    boxEntries.forEach((entry, index) => { if (entry.slotEntry.rack === rack) { entry.position.add(delta); boxMesh?.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)); } });
+    if (boxMesh) boxMesh.instanceMatrix.needsUpdate = true;
+    const rackEntry = rackEntries.find((entry) => entry.rack === rack);
+    if (rackEntry) { rackEntry.base.add(delta); rackEntry.collisionBox.translate(delta); if (rackDrag) rackDrag.currentBase.copy(rackEntry.base); }
+    rack.positionCm.x += delta.x / CM_TO_M; rack.positionCm.z += delta.z / CM_TO_M;
+    if (activeRackForEditor === rack) showRackAction(rack);
+  };
+  const saveDraggedRack = async (rack) => {
+    try {
+      const response = await fetch(`/api/warehouse-3d/racks/${encodeURIComponent(rack.id)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ positionCm: rack.positionCm, rotationYDeg: rack.rotationYDeg }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      window.toast?.(`บันทึกตำแหน่ง ${rack.code} แล้ว`, '', 'ok');
+    } catch (error) { window.toast?.(`บันทึกตำแหน่ง ${rack.code} ไม่สำเร็จ`, error.message || '', 'err'); }
+  };
   const onPointerMove = (event) => {
+    if (rackDrag) {
+      const rect = canvas.getBoundingClientRect();
+      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const point = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(rackDrag.plane, point)) {
+        const desired = point.sub(rackDrag.startPoint);
+        const rackEntry = rackEntries.find((entry) => entry.rack === rackDrag.rack);
+        const xLimit = halfWarehouseWidth - (rackEntry?.width || 1) / 2 - 0.35;
+        const zLimit = halfWarehouseDepth - (rackEntry?.depth || 1) / 2 - 0.35;
+        const nextX = THREE.MathUtils.clamp(rackDrag.startBase.x + desired.x, center.x - xLimit, center.x + xLimit);
+        const nextZ = THREE.MathUtils.clamp(rackDrag.startBase.z + desired.z, center.z - zLimit, center.z + zLimit);
+        const delta = new THREE.Vector3(nextX, 0, nextZ).sub(rackDrag.currentBase);
+        if (delta.lengthSq() > 0) moveRack(rackDrag.rack, delta);
+      }
+      return;
+    }
     if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5) isCameraDragging = true;
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
   const onPointerDown = (event) => {
+    if (event.button === 0 && activeRackForEditor && hoverIndex < 0 && hoverBoxIndex < 0 && !hoverConsumerUnit) {
+      const rect = canvas.getBoundingClientRect();
+      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const startPoint = new THREE.Vector3();
+      const entry = rackEntries.find((item) => item.rack === activeRackForEditor);
+      if (entry && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) {
+        rackDrag = { rack: activeRackForEditor, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
+        controls.enabled = false; canvas.style.cursor = 'grabbing'; return;
+      }
+    }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
   };
   const onPointerUp = (event) => {
+    if (rackDrag) {
+      const rack = rackDrag.rack;
+      rackDrag = null; controls.enabled = true; canvas.style.cursor = 'grab';
+      saveDraggedRack(rack); return;
+    }
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
