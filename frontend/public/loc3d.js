@@ -1483,9 +1483,59 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
     wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, referenceDoorZ);
     scene.add(wallLight);
-    const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
-    equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, referenceDoorZ + 0.55);
-    scene.add(equipmentBox);
+    // One realistic consumer unit is mounted beside the operating door. It is
+    // intentionally wall-fixed (not a loose floor prop) and faces the aisle.
+    if (side === -1) {
+      const consumerX = innerX - side * 0.14;
+      const consumerY = warehouseFloorY + 1.56;
+      const consumerZ = referenceDoorZ + 0.88;
+      const consumerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f1ee, roughness: 0.42, metalness: 0.12 });
+      const consumerLidMaterial = new THREE.MeshStandardMaterial({ color: 0xfafaf7, roughness: 0.32, metalness: 0.08 });
+      const consumerTrimMaterial = new THREE.MeshStandardMaterial({ color: 0xc6c9c7, roughness: 0.4, metalness: 0.32 });
+      const breakerMaterial = new THREE.MeshStandardMaterial({ color: 0x202326, roughness: 0.34, metalness: 0.25 });
+      const mainBreakerMaterial = new THREE.MeshStandardMaterial({ color: 0xb72024, roughness: 0.34, metalness: 0.2 });
+      const consumerBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.9, 1.52), consumerBodyMaterial);
+      consumerBody.position.set(consumerX, consumerY, consumerZ);
+      consumerBody.castShadow = consumerBody.receiveShadow = true;
+      scene.add(consumerBody);
+      // Hinged weather cover, raised above the breaker row like the reference.
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.44, 1.58), consumerLidMaterial);
+      lid.position.set(consumerX - side * 0.05, consumerY + 0.24, consumerZ);
+      lid.castShadow = lid.receiveShadow = true;
+      scene.add(lid);
+      const breakerPanel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.3, 1.22), consumerTrimMaterial);
+      breakerPanel.position.set(consumerX - side * 0.115, consumerY - 0.19, consumerZ);
+      scene.add(breakerPanel);
+      // The main isolator plus eight modular MCBs are individual solids, so
+      // their levers remain legible when the user moves close to the wall.
+      for (let breaker = 0; breaker < 9; breaker += 1) {
+        const isMain = breaker < 2;
+        const width = isMain ? 0.115 : 0.09;
+        const z = consumerZ - 0.5 + (breaker < 2 ? breaker * 0.13 : 0.29 + (breaker - 2) * 0.13);
+        const breakerBody = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.19, width), consumerBodyMaterial);
+        breakerBody.position.set(consumerX - side * 0.16, consumerY - 0.19, z);
+        scene.add(breakerBody);
+        const lever = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.09, width * 0.58), isMain ? mainBreakerMaterial : breakerMaterial);
+        lever.position.set(consumerX - side * 0.215, consumerY - 0.205, z);
+        scene.add(lever);
+      }
+      [-1, 1].forEach((zSide) => [-1, 1].forEach((ySide) => {
+        const screw = new THREE.Mesh(new THREE.SphereGeometry(0.027, 12, 8), consumerTrimMaterial);
+        screw.position.set(consumerX - side * 0.105, consumerY + ySide * 0.34, consumerZ + zSide * 0.64);
+        scene.add(screw);
+      }));
+      const consumerLabel = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.45, 0.11),
+        new THREE.MeshBasicMaterial({ map: wallMarkerTexture('MAIN CONSUMER UNIT', '#f7f7f3', '#27323a'), toneMapped: false, side: THREE.DoubleSide }),
+      );
+      consumerLabel.rotation.y = sideRotation;
+      consumerLabel.position.set(consumerX - side * 0.242, consumerY - 0.38, consumerZ);
+      scene.add(consumerLabel);
+    } else {
+      const equipmentBox = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.62, 0.48), electricalMaterial);
+      equipmentBox.position.set(innerX - side * 0.14, warehouseFloorY + 1.35, referenceDoorZ + 0.55);
+      scene.add(equipmentBox);
+    }
     const safetyTexture = wallMarkerTexture('!', '#f3f5f6', '#263238');
     const safetySign = new THREE.Mesh(
       new THREE.PlaneGeometry(0.28, 0.28),
