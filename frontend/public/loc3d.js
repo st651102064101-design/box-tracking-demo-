@@ -502,45 +502,43 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const displayTransformByRackId = new Map();
   const innerBackToBackRackIds = new Set();
   const outerRackIds = new Set();
-  const zoneRows = zoneKeys.map((zone) => {
+  const zoneBlocks = [];
+  zoneKeys.forEach((zone) => {
     const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
-    return {
-      zone,
-      racks,
-      depth: Math.max(...racks.map((rack) => positive(rack.dimensionsCm?.depth, 110) * CM_TO_M), 1.1),
-      length: racks.reduce((sum, rack) => sum + positive(rack.dimensionsCm?.width, 140) * CM_TO_M, 0)
-        + Math.max(0, racks.length - 1) * 0.08,
-    };
-  });
-  // Rack rows run parallel. A/B, C/D, E/F are back-to-back pairs with a
-  // narrow service gap; a forklift aisle separates each pair from the next.
-  const rowCenters = [0];
-  for (let index = 1; index < zoneRows.length; index += 1) {
-    const previous = zoneRows[index - 1];
-    const current = zoneRows[index];
-    const betweenRows = index % 2 === 1 ? 0.16 : 3.2;
-    rowCenters.push(rowCenters[index - 1] + previous.depth / 2 + current.depth / 2 + betweenRows);
-  }
-  if (zoneRows.length) {
-    const firstEdge = rowCenters[0] - zoneRows[0].depth / 2;
-    const lastEdge = rowCenters.at(-1) + zoneRows.at(-1).depth / 2;
-    const rowOffset = (firstEdge + lastEdge) / 2;
-    rowCenters.forEach((value, index) => { rowCenters[index] = value - rowOffset; });
-  }
-  zoneRows.forEach(({ racks, length }, zoneIndex) => {
-    const rotationYDeg = zoneIndex % 2 === 0 ? 90 : -90;
-    let zCursor = -length / 2;
-    racks.forEach((rack) => {
-      const rackLength = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
-      const centerZ = zCursor + rackLength / 2;
-      zCursor += rackLength + 0.08;
-      displayTransformByRackId.set(rack.id, {
-        positionCm: { x: rowCenters[zoneIndex] * 100, y: num(rack.positionCm?.y), z: centerZ * 100 },
-        rotationYDeg,
+    for (let index = 0; index < racks.length; index += 2) {
+      const pair = racks.slice(index, index + 2);
+      zoneBlocks.push({
+        zone,
+        pair,
+        length: Math.max(...pair.map((rack) => positive(rack.dimensionsCm?.width, 140) * CM_TO_M)),
       });
-      if (zoneIndex < 2) innerBackToBackRackIds.add(rack.id);
-      else outerRackIds.add(rack.id);
+    }
+  });
+
+  // Every zone is a face-to-face rack pair with a forklift aisle between it.
+  // Complete zone blocks then continue end-to-end in A, B, C... order.
+  const aisleWidth = 3.2;
+  const zoneJoinGap = 0.12;
+  const totalBlockLength = zoneBlocks.reduce((sum, block) => sum + block.length, 0)
+    + Math.max(0, zoneBlocks.length - 1) * zoneJoinGap;
+  let blockCursor = -totalBlockLength / 2;
+  zoneBlocks.forEach(({ pair, length }) => {
+    const centerZ = blockCursor + length / 2;
+    blockCursor += length + zoneJoinGap;
+    pair.forEach((rack, sideIndex) => {
+      const rackDepth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
+      const direction = sideIndex === 0 ? -1 : 1;
+      displayTransformByRackId.set(rack.id, {
+        positionCm: {
+          x: direction * (aisleWidth / 2 + rackDepth / 2) * 100,
+          y: num(rack.positionCm?.y),
+          z: centerZ * 100,
+        },
+        rotationYDeg: sideIndex === 0 ? 90 : -90,
+      });
     });
+    if (pair.length === 2) pair.forEach((rack) => innerBackToBackRackIds.add(rack.id));
+    else pair.forEach((rack) => outerRackIds.add(rack.id));
   });
 
   // Use the application's standard modal shell for power controls. Keeping
