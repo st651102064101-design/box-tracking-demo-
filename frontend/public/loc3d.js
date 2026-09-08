@@ -956,16 +956,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   floorStrip(center.x - rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   floorStrip(center.x + rackBoundaryWidth / 2, center.z, 0.085, rackBoundaryDepth);
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
-  // Keep the three safety posts at the rack head. The horizontal rails/returns
-  // are intentionally omitted: they were the extra bars marked for removal.
+  // Keep the main horizontal rails, but use closely spaced upright posts so the
+  // barrier reads as one continuous guard at every marked green position. The
+  // old diagonal/return pieces are intentionally not generated here.
   const railZ = center.z + rackBoundaryDepth / 2 + 0.28;
   const railStartX = center.x - rackBoundaryWidth / 2 - 0.3;
   const railEndX = center.x + rackBoundaryWidth / 2 + 0.3;
-  [
-    [railStartX, railZ],
-    [(railStartX + railEndX) / 2, railZ],
-    [railEndX, railZ],
-  ].forEach(([x, z]) => {
+  const safetyPostCount = 7;
+  Array.from({ length: safetyPostCount }, (_, index) => [
+    railStartX + (railEndX - railStartX) * index / (safetyPostCount - 1),
+    railZ,
+  ]).forEach(([x, z]) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.15, 10), guardrailMaterial);
     post.position.set(x, warehouseFloorY + 0.575, z);
     scene.add(post);
