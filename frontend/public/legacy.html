@@ -3814,12 +3814,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <input id="bulkLocTypeOther" placeholder="ระบุประเภทแร็ค" autocomplete="off" style="display:none;margin-top:8px;">
           </div>
           <div class="field"><label>จำนวนชั้น <span class="req">*</span></label>
-            <div class="input-with-action"><input id="bulkLocShelves" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="bulkLocRemember();locBulkPreview()">
+            <div class="input-with-action"><input id="bulkLocShelves" type="number" min="1" max="1" value="1" inputmode="numeric" oninput="bulkCountInput(this);">
               <button type="button" class="iconbtn" title="เพิ่มชั้นใหม่" onclick="bulkIncrementCount('bulkLocShelves')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
           <div class="field"><label>จำนวนช่อง/ชั้น <span class="req">*</span></label>
-            <div class="input-with-action"><input id="bulkLocSlots" type="number" min="1" max="999" value="1" inputmode="numeric" oninput="bulkLocRemember();locBulkPreview()">
+            <div class="input-with-action"><input id="bulkLocSlots" type="number" min="1" max="1" value="1" inputmode="numeric" oninput="bulkCountInput(this);">
               <button type="button" class="iconbtn" title="เพิ่มช่องใหม่" onclick="bulkIncrementCount('bulkLocSlots')"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button>
             </div>
           </div>
@@ -6495,8 +6495,8 @@ function syncBulkLocForm(preferred){
     else {type.value='__other__';if(typeOther){typeOther.value=wanted;typeOther.style.display='';}}
   }
   populateBulkCountSelects(wh);
-  setv('bulkLocShelves',String(Math.max(1,parseInt(preferred.shelves,10)||parseInt(val('bulkLocShelves'),10)||1)));
-  setv('bulkLocSlots',String(Math.max(1,parseInt(preferred.slots,10)||parseInt(val('bulkLocSlots'),10)||1)));
+  setv('bulkLocShelves',String(Math.min(maxShelvesForWh(wh),Math.max(1,parseInt(preferred.shelves,10)||parseInt(val('bulkLocShelves'),10)||1))));
+  setv('bulkLocSlots',String(Math.min(maxSlotsForWh(wh),Math.max(1,parseInt(preferred.slots,10)||parseInt(val('bulkLocSlots'),10)||1))));
   suggestBulkStarts();
 }
 window.bulkLocRemember=bulkLocRemember;window.syncBulkLocForm=syncBulkLocForm;
@@ -6879,38 +6879,38 @@ function racksForWh(wh) {
   return Object.keys(set).sort();
 }
 window.racksForWh = racksForWh;
-/* highest shelf/slot NUMBER ever registered for a warehouse — i.e. the tallest/
-   widest rack it has ever had — used to cap the จำนวนชั้น/จำนวนช่อง <select>
-   options so Bulk Generate can't be used to invent a rack profile the
-   warehouse has never actually had. Falls back to the old input maximums
-   (20/50) for a warehouse with no racks registered yet. */
+/* The physical rack profile already recorded in Location Master is the limit
+   for newly purchased racks in that warehouse. Do not invent a larger profile
+   from UI defaults: no data means the safe limit is one, not 20/50. */
 function maxShelvesForWh(wh) {
   var max=0;
   Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.shelf,10); if(n>max)max=n; });
-  // The existing rack size is not a ceiling: bulk generation must be able to
-  // extend a rack beyond its current shelf count. Keep a useful baseline even
-  // when the selected warehouse already has a smaller rack.
-  return Math.max(max, 20);
+  return Math.max(max, 1);
 }
 window.maxShelvesForWh = maxShelvesForWh;
 function maxSlotsForWh(wh) {
   var max=0;
   Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.slot,10); if(n>max)max=n; });
-  // The existing rack size is not a ceiling: allow adding more slots per shelf
-  // than the largest shelf currently registered in this warehouse.
-  return Math.max(max, 50);
+  return Math.max(max, 1);
 }
 window.maxSlotsForWh = maxSlotsForWh;
 function populateBulkCountSelects(wh) {
   var shSel=$('#bulkLocShelves'), slSel=$('#bulkLocSlots'); if (!shSel||!slSel) return;
   var shMax=maxShelvesForWh(wh), slMax=maxSlotsForWh(wh);
   var keepSh=parseInt(shSel.value,10)||0, keepSl=parseInt(slSel.value,10)||0;
-  // These are number inputs with the same + affordance as the single-location
-  // form. Do not rebuild a dropdown here; preserve any value the user entered.
-  shSel.value = String(Math.max(1, keepSh || Math.min(5, shMax)));
-  slSel.value = String(Math.max(1, keepSl || Math.min(5, slMax)));
+  shSel.max=String(shMax); slSel.max=String(slMax);
+  shSel.value = String(Math.min(shMax,Math.max(1, keepSh || shMax)));
+  slSel.value = String(Math.min(slMax,Math.max(1, keepSl || slMax)));
 }
 window.populateBulkCountSelects = populateBulkCountSelects;
+function bulkCountInput(input) {
+  if(!input)return;
+  var limit=Math.max(1,parseInt(input.max,10)||1);
+  var current=parseInt(input.value,10)||1;
+  input.value=String(Math.min(limit,Math.max(1,current)));
+  bulkLocRemember();locBulkPreview();
+}
+window.bulkCountInput=bulkCountInput;
 function bulkIncrementCount(id) {
   var input = $('#'+id); if (!input) return;
   input.value = String(Math.min(Number(input.max)||999, Math.max(1, parseInt(input.value,10)||0) + 1));
@@ -7107,6 +7107,9 @@ window.locBulkPreview = locBulkPreview;
     if (!rack)    return toast('กรอกรหัสแร็ค', null, 'err');
     if (!shelves) return toast('กรอกจำนวนชั้น', null, 'err');
     if (!slots)   return toast('กรอกจำนวนช่อง/ชั้น', null, 'err');
+    var shelfLimit=maxShelvesForWh(wh), slotLimit=maxSlotsForWh(wh);
+    if (shelves>shelfLimit) return toast('จำนวนชั้นเกินกำหนด', 'คลังนี้ตั้งค่าจาก DB ได้สูงสุด '+shelfLimit+' ชั้น', 'err');
+    if (slots>slotLimit) return toast('จำนวนช่องเกินกำหนด', 'คลังนี้ตั้งค่าจาก DB ได้สูงสุด '+slotLimit+' ช่อง/ชั้น', 'err');
     var conflictZone = rackConflictZone(wh, zone, rack);
     if (conflictZone) return toast('ชื่อแร็คซ้ำ', 'แร็ค '+rack+' ถูกใช้แล้วในโซน '+conflictZone+' ของคลังนี้ กรุณาตั้งชื่ออื่น', 'err');
     var created = 0, skipped = 0;
