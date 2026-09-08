@@ -29,7 +29,6 @@ const CODE128_PATTERNS = ["212222","222122","222221","121223","121322","131222",
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const positive = (value, fallback) => num(value, fallback) > 0 ? num(value, fallback) : fallback;
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 const token = () => {
   try { return localStorage.getItem('smarttrace_jwt') || ''; } catch (_) { return ''; }
 };
@@ -394,8 +393,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const rackActionButton = document.createElement('button');
   rackActionButton.type = 'button';
   rackActionButton.className = 'loc3d-rack-action';
-  rackActionButton.setAttribute('aria-label', 'จัดการแร็ก');
-  rackActionButton.title = 'จัดการแร็ก';
+  rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
+  rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
   rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.6 7.6 0 0 0-1.7-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.61.25-1.18.58-1.7.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.09.73 1.7.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.61-.25 1.18-.58 1.7-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>';
   const rackActionObject = new CSS2DObject(rackActionButton);
   rackActionObject.visible = false;
@@ -404,47 +403,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   rackActionButton.addEventListener('pointerenter', () => { actionPointerOver = true; });
   rackActionButton.addEventListener('pointerleave', () => { actionPointerOver = false; });
   rackActionButton.addEventListener('pointerdown', (event) => event.stopPropagation());
-  let activeRackForEditor = null;
-  const openRackEditor = (rack) => {
-    if (!rack || typeof window.openModal !== 'function') return;
-    const dimensions = rack.dimensionsCm || {};
-    const position = rack.positionCm || {};
-    window.openModal(`
-      <div class="mhead"><h3>จัดการแร็ก ${escapeHtml(rack.code)}</h3><button class="x" data-close aria-label="ปิด">×</button></div>
-      <form id="loc3dRackForm">
-        <div class="mbody loc3d-rack-form">
-          <p class="muted small">${escapeHtml(rack.warehouseId)} / ${escapeHtml(rack.zone)} · ปรับขนาด modal ได้จากมุมล่างขวา</p>
-          <h4>ตำแหน่ง (เซนติเมตร)</h4><div class="loc3d-form-grid">
-            <label>X<input required type="number" step="1" name="x" value="${num(position.x)}"></label><label>Y<input required type="number" step="1" name="y" value="${num(position.y)}"></label><label>Z<input required type="number" step="1" name="z" value="${num(position.z)}"></label><label>หมุน Y (องศา)<input required type="number" step="1" name="rotation" value="${num(rack.rotationYDeg)}"></label>
-          </div><h4>ขนาดแร็ก (เซนติเมตร)</h4><div class="loc3d-form-grid">
-            <label>กว้าง<input required min="1" type="number" step="1" name="width" value="${num(dimensions.width)}"></label><label>สูง<input required min="1" type="number" step="1" name="height" value="${num(dimensions.height)}"></label><label>ลึก<input required min="1" type="number" step="1" name="depth" value="${num(dimensions.depth)}"></label>
-          </div><p id="loc3dRackSaveState" class="muted small" role="status"></p>
-        </div><div class="mfoot"><button type="button" class="btn ghost" data-close>ยกเลิก</button><button class="btn accent" type="submit">บันทึกแร็ก</button></div>
-      </form>`);
-    const form = document.getElementById('loc3dRackForm');
-    form?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const state = document.getElementById('loc3dRackSaveState');
-      const submit = form.querySelector('[type="submit"]');
-      const fields = new FormData(form);
-      const value = (name) => Number(fields.get(name));
-      const payload = { positionCm: { x: value('x'), y: value('y'), z: value('z') }, rotationYDeg: value('rotation'), dimensionsCm: { width: value('width'), height: value('height'), depth: value('depth') } };
-      if (Object.values(payload.positionCm).concat([payload.rotationYDeg, ...Object.values(payload.dimensionsCm)]).some((item) => !Number.isFinite(item))) { if (state) state.textContent = 'กรอกตัวเลขให้ครบถ้วน'; return; }
-      try {
-        submit.disabled = true; if (state) state.textContent = 'กำลังบันทึก…';
-        const response = await fetch(`/api/warehouse-3d/racks/${encodeURIComponent(rack.id)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) throw new Error((await response.json().catch(() => null))?.error?.message || `บันทึกไม่สำเร็จ (${response.status})`);
-        if (state) state.textContent = 'บันทึกแล้ว กำลังอัปเดตฉาก 3D…';
-        window.toast?.(`บันทึกแร็ก ${rack.code} แล้ว`, '', 'ok');
-        window.setTimeout(() => { window.closeModal?.(); window.renderLoc3D?.(); }, 250);
-      } catch (error) { if (state) state.textContent = error.message || 'บันทึกไม่สำเร็จ'; }
-      finally { submit.disabled = false; }
-    });
-  };
   rackActionButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    openRackEditor(activeRackForEditor);
+    const toastZone = document.getElementById('toastZone');
+    const fullscreenHost = document.fullscreenElement;
+    const originalToastParent = toastZone?.parentElement;
+    const movedToastIntoFullscreen = Boolean(fullscreenHost && toastZone && !fullscreenHost.contains(toastZone));
+    if (movedToastIntoFullscreen) fullscreenHost.appendChild(toastZone);
+    window.toast?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน', '', 'ok');
+    if (movedToastIntoFullscreen) {
+      window.setTimeout(() => {
+        if (toastZone.parentElement === fullscreenHost && originalToastParent) originalToastParent.appendChild(toastZone);
+      }, 3200);
+    }
   });
 
   const hud = document.createElement('div');
@@ -500,7 +472,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   syncFullscreenPortals();
 
   const rackEntries = [];
-  const movableAssets = [];
   const slotEntries = [];
   const uprightParts = [];
   const beamParts = [];
@@ -516,10 +487,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const boundPoint = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
 
-  // Layout convention: Zone B is on the left and Zone A is on the right.
-  // The innermost rows meet back-to-back at the centre line; a second row in
-  // either zone turns around to face the first across that zone's aisle. This
-  // is a visual warehouse plan only — rack/slot identity remains DB-owned.
+  // Visual plan only — rack/slot identity stays DB-owned.
+  // Pattern along X: face right → 2-forklift aisle → face left + face right
+  // (back-to-back) → 2-forklift aisle → repeat.
   const racksByZone = new Map();
   model.racks.forEach((rack) => {
     const key = String(rack.zone || '—');
@@ -531,61 +501,47 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const displayTransformByRackId = new Map();
   const innerBackToBackRackIds = new Set();
   const outerRackIds = new Set();
-  const zoneBlocks = [];
-  zoneKeys.forEach((zone) => {
-    const racks = [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code));
-    for (let index = 0; index < racks.length; index += 2) {
-      const pair = racks.slice(index, index + 2);
-      zoneBlocks.push({
-        zone,
-        pair,
-        length: Math.max(...pair.map((rack) => positive(rack.dimensionsCm?.width, 140) * CM_TO_M)),
-      });
-    }
-  });
-
-  // All racks are arranged back-to-back. A small structural gap keeps the
-  // steel frames from intersecting while preserving one continuous rack bank.
+  const backToBackPairs = [];
+  const allRacks = zoneKeys.flatMap((zone) =>
+    [...(racksByZone.get(zone) || [])].sort((a, b) => natural(a.code, b.code)),
+  );
+  const twoForkliftAisle = 4;
   const backToBackGap = 0.12;
+  const placements = [];
   let xCursor = 0;
-  const zoneTransforms = [];
-  zoneBlocks.forEach(({ pair, length }) => {
-    const firstDepth = positive(pair[0].dimensionsCm?.depth, 110) * CM_TO_M;
-    const secondDepth = pair[1]
-      ? positive(pair[1].dimensionsCm?.depth, 110) * CM_TO_M
-      : firstDepth;
-    const firstX = xCursor - firstDepth / 2;
-    const secondX = pair[1]
-      ? xCursor + secondDepth / 2 + backToBackGap
-      : null;
-    zoneTransforms.push({ pair, length, firstX, secondX, firstDepth, secondDepth });
-    xCursor = pair[1]
-      ? secondX + secondDepth / 2 + backToBackGap
-      : firstX + firstDepth / 2 + backToBackGap;
+  allRacks.forEach((rack, index) => {
+    const depth = positive(rack.dimensionsCm?.depth, 110) * CM_TO_M;
+    const isPairStart = index > 0 && index % 2 === 1;
+    const isPairEnd = index > 0 && index % 2 === 0;
+    const faceRight = !isPairStart;
+    const gapAfter = isPairStart ? backToBackGap : twoForkliftAisle;
+    const centerX = xCursor + depth / 2;
+    placements.push({ rack, centerX, depth, faceRight });
+    xCursor = centerX + depth / 2 + gapAfter;
+    if (index === 0 || (isPairStart && !allRacks[index + 1])) outerRackIds.add(rack.id);
+    if (isPairStart && allRacks[index + 1]) {
+      innerBackToBackRackIds.add(rack.id);
+      innerBackToBackRackIds.add(allRacks[index + 1].id);
+      backToBackPairs.push([rack.id, allRacks[index + 1].id]);
+    }
+    if (isPairEnd && !innerBackToBackRackIds.has(rack.id)) outerRackIds.add(rack.id);
   });
-  const layoutMinX = zoneTransforms.length ? Math.min(...zoneTransforms.map(({ firstX, firstDepth }) => firstX - firstDepth / 2)) : 0;
-  const layoutMaxX = zoneTransforms.length
-    ? Math.max(...zoneTransforms.map(({ secondX, secondDepth, firstX, firstDepth }) =>
-      (secondX ?? firstX) + (secondX == null ? firstDepth : secondDepth) / 2))
-    : 0;
-  const layoutOffsetX = (layoutMinX + layoutMaxX) / 2;
-  zoneTransforms.forEach(({ pair, length, firstX, secondX }) => {
-    const rackPositions = [firstX - layoutOffsetX, secondX == null ? null : secondX - layoutOffsetX];
-    pair.forEach((rack, sideIndex) => {
-      const rackX = rackPositions[sideIndex];
-      if (rackX == null) return;
+  if (placements.length) {
+    const minX = placements[0].centerX - placements[0].depth / 2;
+    const last = placements[placements.length - 1];
+    const maxX = last.centerX + last.depth / 2;
+    const layoutOffsetX = (minX + maxX) / 2;
+    placements.forEach(({ rack, centerX, faceRight }) => {
       displayTransformByRackId.set(rack.id, {
         positionCm: {
-          x: rackX * 100,
+          x: (centerX - layoutOffsetX) * 100,
           y: num(rack.positionCm?.y),
           z: 0,
         },
-      rotationYDeg: 90,
+        rotationYDeg: faceRight ? 90 : -90,
       });
     });
-    if (pair.length === 2) pair.forEach((rack) => innerBackToBackRackIds.add(rack.id));
-    else pair.forEach((rack) => outerRackIds.add(rack.id));
-  });
+  }
 
   // Use the application's standard modal shell for power controls. Keeping
   // the control out of the CSS2D layer means it cannot block camera orbit.
@@ -619,10 +575,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const zoneBounds = new Map();
 
   model.racks.forEach((sourceRack) => {
-    // Management uses the persisted DB transform as the one and only source
-    // of truth. The old decorative back-to-back transform made a drag appear
-    // to work but changed again after reload.
-    const rack = { ...sourceRack, positionCm: { ...sourceRack.positionCm }, rotationYDeg: num(sourceRack.rotationYDeg) };
+    const displayTransform = displayTransformByRackId.get(sourceRack.id);
+    const rack = {
+      ...sourceRack,
+      positionCm: displayTransform?.positionCm ?? sourceRack.positionCm,
+      rotationYDeg: displayTransform?.rotationYDeg ?? num(sourceRack.rotationYDeg),
+    };
     const rotation = THREE.MathUtils.degToRad(num(rack.rotationYDeg));
     const quaternion = new THREE.Quaternion().setFromAxisAngle(up, rotation);
     const width = positive(rack.dimensionsCm?.width, 140) * CM_TO_M;
@@ -737,7 +695,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     parts.forEach((part, index) => mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale)));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.userData.rackByInstance = parts.map((part) => part.rack);
-    mesh.userData.parts = parts;
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.computeBoundingBox(); mesh.computeBoundingSphere(); scene.add(mesh);
     return mesh;
@@ -1133,6 +1090,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     floorStrip(east.x, east.z, 0.085, outlineDepth, rotationY);
   });
   const aisleCenterZ = center.z + rackBoundaryDepth / 2 + 2.15;
+  const steelBoxBeam = (from, to, width = 0.055, height = 0.09) => {
+    const direction = to.clone().sub(from);
+    const length = direction.length();
+    if (length < 0.05) return;
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(width, height, length), guardrailMaterial);
+    beam.position.copy(from).add(to).multiplyScalar(0.5);
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
+    beam.castShadow = false;
+    scene.add(beam);
+  };
   const createRackEndGuard = (railMinX, railMaxX, railZ, postCount = 3) => {
     // A paired, back-to-back rack has a wide shared end and needs a centre
     // bollard. A standalone rack must have only its two corner bollards so
@@ -1154,8 +1121,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         scene.add(band);
       });
     });
-    // SAFETY is represented by the striped posts and feet at the rack head.
-    // Do not span the gate with horizontal rails: forklifts must pass through.
+    // Two horizontal steel rails replace the old diagonal knee braces.
+    if (points.length >= 2) {
+      const start = points[0];
+      const end = points[points.length - 1];
+      [0.38, 0.82].forEach((height) => {
+        steelBoxBeam(
+          new THREE.Vector3(start.x, warehouseFloorY + height, start.z),
+          new THREE.Vector3(end.x, warehouseFloorY + height, end.z),
+        );
+      });
+    }
   };
   // Keep the guard flush with the real steel footprint. `collisionBox` is
   // deliberately enlarged for raycasting, so it must never drive safety size.
@@ -1169,30 +1145,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   // Keep the guard clear of the rack face so it protects the uprights without
   // touching the shelf beams or blocking the front label area.
   const safetyClearance = 0.35;
-  // Protect the short ends of the central back-to-back rack pair.
-  const innerBankBounds = new THREE.Box3();
-  rackEntries
-    .filter((entry) => innerBackToBackRackIds.has(entry.rack.id))
-    .forEach((entry) => innerBankBounds.union(rackFootprintBounds(entry)));
-  if (!innerBankBounds.isEmpty()) {
-    const railMinX = innerBankBounds.min.x;
-    const railMaxX = innerBankBounds.max.x;
-    [innerBankBounds.min.z - safetyClearance, innerBankBounds.max.z + safetyClearance]
-      .forEach((railZ) => createRackEndGuard(railMinX, railMaxX, railZ));
-  }
+  // Protect the short ends of each back-to-back pair, never spanning an aisle.
+  backToBackPairs.forEach((ids) => {
+    const pairBounds = new THREE.Box3();
+    rackEntries
+      .filter((entry) => ids.includes(entry.rack.id))
+      .forEach((entry) => pairBounds.union(rackFootprintBounds(entry)));
+    if (pairBounds.isEmpty()) return;
+    [pairBounds.min.z - safetyClearance, pairBounds.max.z + safetyClearance]
+      .forEach((railZ) => createRackEndGuard(pairBounds.min.x, pairBounds.max.x, railZ, 3));
+  });
   // A standalone outer rack is protected by two corner bollards only. The
   // three-post shape belongs exclusively to the back-to-back rack bank above.
   rackEntries
     .filter((entry) => outerRackIds.has(entry.rack.id))
     .forEach((entry) => {
       const rackBox = rackFootprintBounds(entry);
-      [rackBox.min.z - safetyClearance, rackBox.max.z + safetyClearance].forEach((railZ) =>
+      [rackBox.min.z - safetyClearance, rackBox.max.z + safetyClearance].forEach((railZ, side) =>
         createRackEndGuard(rackBox.min.x, rackBox.max.x, railZ, 2));
     });
-  // Zone labels sit on the inner side of each zone, in the aisle marked by the
-  // floor, rather than outside the rack block where they get hidden behind the
-  // end frames. A is on the right and B on the left, so both labels face the
-  // shared forklift aisle as shown in the warehouse layout.
+  // Zone labels sit on the aisle side of each zone, left-to-right A, B, C.
   const safetySignTextures = [];
   const zoneFloorColors = { A: 0xf59e0b, B: 0x3b82f6, C: 0xa855f7 };
   zoneKeys.forEach((zone) => {
@@ -1209,13 +1181,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     zoneFloor.position.set(zoneCenter.x, warehouseFloorY + 0.002, zoneCenter.z);
     zoneFloor.renderOrder = 1;
     scene.add(zoneFloor);
-    const zoneSide = zone === 'A' ? 1 : zone === 'B' ? -1 : (zoneCenter.x >= center.x ? 1 : -1);
-    const zoneInnerX = zoneBox
-      ? (zoneSide > 0 ? zoneBox.min.x : zoneBox.max.x)
-      : zoneCenter.x;
-    // Step farther into the clear aisle so the rack uprights cannot cover the
-    // floor label when the camera is close to the rack face.
-    const signX = zoneInnerX + zoneSide * 3.0;
+    const aisleDir = aisleCenterZ >= zoneCenter.z ? 1 : -1;
+    const signZ = zoneCenter.z + aisleDir * (zoneSize.z / 2 + 0.85);
     const floorTexture = floorMarkTexture(`โซน ${zone}`);
     safetySignTextures.push(floorTexture);
     const floorLabel = new THREE.Mesh(
@@ -1223,7 +1190,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       new THREE.MeshBasicMaterial({ map: floorTexture, transparent: true, depthWrite: false, toneMapped: false }),
     );
     floorLabel.rotation.x = -Math.PI / 2;
-    floorLabel.position.set(signX, warehouseFloorY + 0.004, zoneCenter.z);
+    floorLabel.position.set(zoneCenter.x, warehouseFloorY + 0.004, signZ);
     floorLabel.renderOrder = 3;
     scene.add(floorLabel);
   });
@@ -1854,9 +1821,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   scene.add(consumerHoverShell);
   let pointerFrame = 0;
   let down = null;
-  let rackDrag = null;
-  let objectDrag = null;
-  let lastEditable = null;
   let isCameraDragging = false;
   let hoverConsumerUnit = false;
   let hoverRackCode = '';
@@ -1864,12 +1828,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const hideRackAction = () => {
     rackActionObject.visible = false;
     hoverRackCode = '';
-    activeRackForEditor = null;
   };
   const showRackAction = (rack) => {
     if (!rack) return hideRackAction();
     hoverRackCode = String(rack.code || rack.id || 'rack');
-    activeRackForEditor = rack;
     const rackEntry = rackEntries.find((entry) => entry.rack === rack);
     if (!rackEntry) return hideRackAction();
     // One stable affordance per rack: always float at the centre of the top
@@ -1897,7 +1859,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
   const updatePointer = (event) => {
     if (isCameraDragging) {
       clearHoverFeedback();
-      canvas.style.cursor = 'default';
+      canvas.style.cursor = 'grabbing';
       return;
     }
     const rect = canvas.getBoundingClientRect();
@@ -1976,104 +1938,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       hoverOutline.visible = false;
       hoverShell.visible = false;
       labelObject.visible = false;
-      // A four-way move cursor is unambiguous: the rack steel itself can be
-      // grabbed. Normal navigation stays an ordinary arrow, never a hand.
-      canvas.style.cursor = nextRack ? 'move' : (movableRootAt(event) ? 'move' : 'default');
+      canvas.style.cursor = 'grab';
     }
     showRackAction(hoverConsumerUnit ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
-  const moveRack = (rack, delta) => {
-    rackPickMeshes.forEach((mesh) => {
-      (mesh.userData.parts || []).forEach((part, index) => {
-        if (part.rack !== rack) return;
-        part.position.add(delta); mesh.setMatrixAt(index, matrixAt(part.position, part.quaternion, part.scale));
-      });
-      mesh.instanceMatrix.needsUpdate = true;
-    });
-    slotEntries.forEach((entry, index) => { if (entry.rack === rack) { entry.position.add(delta); slotMesh?.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)); } });
-    if (slotMesh) slotMesh.instanceMatrix.needsUpdate = true;
-    boxEntries.forEach((entry, index) => { if (entry.slotEntry.rack === rack) { entry.position.add(delta); boxMesh?.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)); } });
-    if (boxMesh) boxMesh.instanceMatrix.needsUpdate = true;
-    const rackEntry = rackEntries.find((entry) => entry.rack === rack);
-    if (rackEntry) { rackEntry.base.add(delta); rackEntry.collisionBox.translate(delta); if (rackDrag) rackDrag.currentBase.copy(rackEntry.base); }
-    rack.positionCm.x += delta.x / CM_TO_M; rack.positionCm.z += delta.z / CM_TO_M;
-    if (activeRackForEditor === rack) showRackAction(rack);
-  };
-  const saveDraggedRack = async (rack) => {
-    try {
-      const response = await fetch(`/api/warehouse-3d/racks/${encodeURIComponent(rack.id)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ positionCm: rack.positionCm, rotationYDeg: rack.rotationYDeg }) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      window.toast?.(`บันทึกตำแหน่ง ${rack.code} แล้ว`, '', 'ok');
-    } catch (error) { window.toast?.(`บันทึกตำแหน่ง ${rack.code} ไม่สำเร็จ`, error.message || '', 'err'); }
-  };
-  const movableRootAt = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(movableAssets, true)[0];
-    if (!hit) return null;
-    let root = hit.object;
-    while (root && !root.userData.movable) root = root.parent;
-    return root || null;
-  };
   const onPointerMove = (event) => {
-    if (rackDrag || objectDrag) {
-      const rect = canvas.getBoundingClientRect();
-      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-      raycaster.setFromCamera(pointer, camera);
-      const point = new THREE.Vector3();
-      const drag = rackDrag || objectDrag;
-      if (raycaster.ray.intersectPlane(drag.plane, point)) {
-        const desired = point.sub(drag.startPoint);
-        if (objectDrag) {
-          const snap = (value) => Math.round(value / .25) * .25;
-          const nextX = snap(THREE.MathUtils.clamp(objectDrag.startBase.x + desired.x, center.x - halfWarehouseWidth + .35, center.x + halfWarehouseWidth - .35));
-          const nextZ = snap(THREE.MathUtils.clamp(objectDrag.startBase.z + desired.z, center.z - halfWarehouseDepth + .35, center.z + halfWarehouseDepth - .35));
-          objectDrag.target.position.set(nextX, objectDrag.target.position.y, nextZ); objectDrag.currentBase.set(nextX, 0, nextZ); return;
-        }
-        const rackEntry = rackEntries.find((entry) => entry.rack === rackDrag.rack);
-        const xLimit = halfWarehouseWidth - (rackEntry?.width || 1) / 2 - 0.35;
-        const zLimit = halfWarehouseDepth - (rackEntry?.depth || 1) / 2 - 0.35;
-        const snap = (value) => Math.round(value / .25) * .25;
-        const nextX = snap(THREE.MathUtils.clamp(rackDrag.startBase.x + desired.x, center.x - xLimit, center.x + xLimit));
-        const nextZ = snap(THREE.MathUtils.clamp(rackDrag.startBase.z + desired.z, center.z - zLimit, center.z + zLimit));
-        const delta = new THREE.Vector3(nextX, 0, nextZ).sub(rackDrag.currentBase);
-        if (delta.lengthSq() > 0) moveRack(rackDrag.rack, delta);
-      }
-      return;
-    }
     if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 5) isCameraDragging = true;
     if (pointerFrame) cancelAnimationFrame(pointerFrame);
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
   const onPointerDown = (event) => {
-    if (event.button === 0) {
-      const rect = canvas.getBoundingClientRect();
-      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-      raycaster.setFromCamera(pointer, camera);
-      const startPoint = new THREE.Vector3();
-      const rackHit = raycaster.intersectObjects(rackPickMeshes, false)[0];
-      const rack = rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
-      const entry = rackEntries.find((item) => item.rack === rack);
-      if (entry && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) {
-        lastEditable = { kind: 'rack', rack };
-        rackDrag = { rack, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: entry.base.clone(), currentBase: entry.base.clone() };
-        controls.enabled = false; canvas.style.cursor = 'move'; return;
-      }
-      const movable = movableRootAt(event);
-      if (movable && raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint)) { lastEditable = { kind: 'asset', target: movable }; objectDrag = { target: movable, plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), startPoint, startBase: movable.position.clone(), currentBase: movable.position.clone() }; controls.enabled = false; canvas.style.cursor = 'move'; return; }
-    }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
   };
   const onPointerUp = (event) => {
-    if (rackDrag) {
-      const rack = rackDrag.rack;
-      rackDrag = null; controls.enabled = true; canvas.style.cursor = 'default';
-      saveDraggedRack(rack); return;
-    }
-    if (objectDrag) { const name=objectDrag.target.name||'อุปกรณ์'; objectDrag=null; controls.enabled=true; canvas.style.cursor='default'; window.toast?.(`ย้าย ${name} แล้ว`, '', 'ok'); return; }
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (hoverBoxIndex >= 0) onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
@@ -2082,7 +1961,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     }
     down = null;
     isCameraDragging = false;
-    if (wasCameraDragging) canvas.style.cursor = 'default';
+    if (wasCameraDragging) canvas.style.cursor = 'grab';
   };
   const onPointerLeave = () => {
     if (hoverIndex >= 0 && slotMesh) {
@@ -2102,7 +1981,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     hoverBoxIndex = -1;
     hoverConsumerUnit = false;
     labelObject.visible = false;
-    canvas.style.cursor = 'default';
+    canvas.style.cursor = 'grab';
     window.setTimeout(() => {
       if (!actionPointerOver) hideRackAction();
     }, 0);
@@ -2148,8 +2027,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     // Face the warehouse aisle; double-sided GLB materials still read from
     // either camera direction if an asset was authored with reversed winding.
     root.rotation.y = Math.PI;
-    root.userData.movable = true;
-    movableAssets.push(root);
     scene.add(root);
   }).catch((error) => console.warn(`[Warehouse3D] ${name} asset could not be loaded.`, error));
   // The green mark in the reference is the clear back-wall bay, left of the
@@ -2174,9 +2051,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
     if (disposed) return;
     palletTemplate.traverse((object) => {
       if (!object.isMesh) return;
-      // Keep only the open slatted pallet. The closed-deck variant is not a
-      // valid warehouse pallet for this layout.
-      if (object.name === 'Pallet_2_Pallet_2_0') {
+      // This GLB contains two pallet variants. Pallet_2 has the solid,
+      // close-boarded top deck requested for the warehouse; discard the open
+      // slatted alternative so every displayed pallet uses the same type.
+      if (object.name !== 'Pallet_2_Pallet_2_0') {
         object.removeFromParent();
         return;
       }
@@ -2213,7 +2091,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
         -rawCenter.z * scaleZ,
       ).applyQuaternion(quaternion);
       pallet.position.add(baseOffset);
-      pallet.name = 'พาเลท'; pallet.userData.movable = true; movableAssets.push(pallet);
       scene.add(pallet);
     };
     boxEntries.forEach((entry) => {
@@ -2255,7 +2132,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
       aisleCenterZ,
     );
     forkliftRoot.rotation.y = -Math.PI * 0.5;
-    forkliftRoot.userData.movable = true; movableAssets.push(forkliftRoot);
     scene.add(forkliftRoot);
   }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
