@@ -2002,6 +2002,46 @@ async function createScene(canvas, model, onSelect, onBoxSelect) {
 
   const assets = assetPipeline(renderer);
   let disposed = false;
+  const loadExitAsset = (url, name, height, position) => assets.load(url).then(({ scene: asset }) => {
+    if (disposed) return;
+    asset.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+    const rawBounds = new THREE.Box3().setFromObject(asset);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    const scale = height / Math.max(rawSize.y, 0.01);
+    asset.scale.setScalar(scale);
+    const scaledBounds = new THREE.Box3().setFromObject(asset);
+    const scaledCenter = scaledBounds.getCenter(new THREE.Vector3());
+    const root = new THREE.Group();
+    root.name = name;
+    root.userData.asset = url;
+    asset.position.set(-scaledCenter.x, -scaledBounds.min.y, -scaledCenter.z);
+    root.add(asset);
+    root.position.copy(position);
+    // Face the warehouse aisle; double-sided GLB materials still read from
+    // either camera direction if an asset was authored with reversed winding.
+    root.rotation.y = Math.PI;
+    scene.add(root);
+  }).catch((error) => console.warn(`[Warehouse3D] ${name} asset could not be loaded.`, error));
+  // The green mark in the reference is the clear back-wall bay, left of the
+  // rack block. Keep the exit door flush to that wall and its sign above it.
+  const exitWallZ = center.z + halfWarehouseDepth - 0.18;
+  const exitX = center.x - halfWarehouseWidth * 0.58;
+  loadExitAsset(
+    '/models/fire_exit_door.glb',
+    'fire-exit-door',
+    2.3,
+    new THREE.Vector3(exitX, warehouseFloorY + 0.01, exitWallZ),
+  );
+  loadExitAsset(
+    '/models/emergency_exit_low_poly.glb',
+    'emergency-exit-sign',
+    0.34,
+    new THREE.Vector3(exitX, warehouseFloorY + 2.56, exitWallZ - 0.025),
+  );
   // Use the supplied manufacturer pallet model for both stored cartons and
   // the staging bay. The placement list is still derived only from DB boxes.
   assets.load('/models/wooden_pallets.glb').then(({ scene: palletTemplate }) => {
