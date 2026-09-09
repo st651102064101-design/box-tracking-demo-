@@ -1027,6 +1027,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       carton.scale.set(width, height, depth);
       carton.castShadow = carton.receiveShadow = true;
       carton.userData.stagingBox = box;
+      carton.userData.stagingBoxId = box.id;
       scene.add(carton);
       stagingBoxPickMeshes.push(carton);
       stagingEntries.push({
@@ -1065,10 +1066,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const placeLocal = (mesh, x, y, z) => {
         mesh.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(entry.quaternion).add(entry.position));
         mesh.quaternion.copy(entry.quaternion);
+        if (!entry.slotEntry) mesh.userData.stagingBoxId = entry.box.id;
         scene.add(mesh);
         return mesh;
       };
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(UNIT_BOX), cartonEdgeMaterial);
+      if (!entry.slotEntry) edges.userData.stagingBoxId = entry.box.id;
       edges.position.copy(entry.position);
       edges.quaternion.copy(entry.quaternion);
       edges.scale.copy(entry.scale);
@@ -1142,6 +1145,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         new THREE.PlaneGeometry(labelWidth, labelHeight),
         new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }),
       );
+      if (!entry.slotEntry) sticker.userData.stagingBoxId = entry.box.id;
       // Slightly proud of the front carton face: a real applied RFID/ZPL
       // label, not a floating caption and never outside the box silhouette.
       const frontOffset = new THREE.Vector3(0, 0, entry.scale.z / 2 + 0.003)
@@ -2552,6 +2556,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const rawCenter = rawBounds.getCenter(new THREE.Vector3());
     const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
       const pallet = palletTemplate.clone(true);
+      if (stagingEntries.includes(entry)) pallet.traverse((object) => { object.userData.stagingBoxId = entry.box.id; });
       // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
       // smaller horizontal scale so the source model's feet remain realistic.
       const scaleX = width / Math.max(rawSize.x, 0.01);
@@ -2574,6 +2579,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const timber = new THREE.MeshStandardMaterial({ color: 0xb97a3e, roughness: 0.8, metalness: 0 });
       const addTimber = (sx, sy, sz, localX, localY, localZ) => {
         const board = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), timber);
+        if (stagingEntries.includes(entry)) board.userData.stagingBoxId = entry.box.id;
         board.position.copy(new THREE.Vector3(localX, localY + yOffset, localZ).applyQuaternion(quaternion).add(position));
         board.quaternion.copy(quaternion);
         board.castShadow = board.receiveShadow = true;
@@ -2698,11 +2704,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           saveForkliftPosition();
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
-            pickupMesh.parent.remove(pickupMesh);
-            forkliftRoot.add(pickupMesh);
-            pickupMesh.position.set(0, 1.02, 0.82);
-            pickupMesh.rotation.set(0, 0, 0);
-          window.toast?.('ยกกล่องขึ้นงาแล้ว', `${pickupMesh.userData.stagingBox?.id || ''} · พร้อมนำไป Putaway`, 'ok');
+            const pickupId = pickupMesh.userData.stagingBox?.id || pickupMesh.userData.stagingBoxId || '';
+            const pickupParts = [];
+            scene.traverse((object) => { if (object.userData?.stagingBoxId === pickupId) pickupParts.push(object); });
+            pickupParts.forEach((object) => {
+              if (!object.parent) return;
+              object.position.y += 0.82;
+              forkliftRoot.attach(object);
+            });
+            window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
           saveForkliftPosition();
           }
           forkliftMotion = null;
