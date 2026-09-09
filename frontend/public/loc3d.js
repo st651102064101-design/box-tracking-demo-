@@ -902,7 +902,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const height = Math.min(0.12, width / 4.2);
       const sticker = new THREE.Mesh(
         new THREE.PlaneGeometry(width, height),
-        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide, depthTest: true, depthWrite: true }),
       );
       // Keep the small barcode above the beam's front edge and in front of
       // the rack so it remains readable at close and medium zoom levels.
@@ -912,7 +912,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         .applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
-      sticker.renderOrder = 6;
+      sticker.renderOrder = 0;
       scene.add(sticker);
       barcodeStickers.push(sticker);
     });
@@ -995,6 +995,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // decorative stack. It keeps the 3D view honest while leaving every waiting
   // box directly selectable for the next forklift/putaway task.
   const stagingBoxPickMeshes = [];
+  const stagingEntries = [];
   const stagingBoxes = Array.isArray(model.stagingBoxes) ? model.stagingBoxes : [];
   if (stagingBoxes.length) {
     const stagingBounds = bounds.clone();
@@ -1003,15 +1004,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const spacingX = 1.35, spacingZ = 1.55;
     const startX = stagingCenter.x - ((Math.min(columns, stagingBoxes.length) - 1) * spacingX) / 2;
     const startZ = stagingBounds.max.z + 1.3;
-    const palletMaterial = new THREE.MeshStandardMaterial({ color: 0xc58a43, roughness: 0.78, metalness: 0.02 });
     const stagingMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.86, side: THREE.DoubleSide });
     stagingBoxes.forEach((box, index) => {
       const x = startX + (index % columns) * spacingX;
       const z = startZ + Math.floor(index / columns) * spacingZ;
-      const pallet = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.12, 1.25), palletMaterial);
-      pallet.position.set(x, 0.06, z);
-      pallet.castShadow = pallet.receiveShadow = true;
-      scene.add(pallet);
       const width = Math.min(0.9, positive(box.dimensionsCm?.width, 60) * CM_TO_M);
       const height = Math.min(1.05, positive(box.dimensionsCm?.height, 40) * CM_TO_M);
       const depth = Math.min(1.05, positive(box.dimensionsCm?.depth, 40) * CM_TO_M);
@@ -1025,6 +1021,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       carton.userData.stagingBox = box;
       scene.add(carton);
       stagingBoxPickMeshes.push(carton);
+      stagingEntries.push({
+        box,
+        position: carton.position.clone(),
+        quaternion: carton.quaternion.clone(),
+        scale: carton.scale.clone(),
+        color: new THREE.Color(materialColors[box.materialType] || materialColors.generic),
+      });
       const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 1.34), stagingMarkMaterial);
       marker.rotation.x = -Math.PI / 2;
       marker.position.set(x, 0.008, z);
@@ -1045,7 +1048,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // and a dark edge profile make their construction readable at close range.
   // BOX-001 is included as a compatibility fallback for data created before
   // material_type was added to the persisted boxes table.
-  const cartonEntries = boxEntries.filter((entry) => entry.box.materialType === 'carton' || entry.box.id === 'BOX-001');
+  const cartonEntries = boxEntries.concat(stagingEntries).filter((entry) => entry.box.materialType === 'carton' || entry.box.id === 'BOX-001');
   if (cartonEntries.length <= 80) {
     const cartonEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x68472e, transparent: true, opacity: 0.68 });
     const cartonSeamMaterial = new THREE.MeshStandardMaterial({ color: 0x745037, roughness: 0.92, metalness: 0 });
@@ -1120,8 +1123,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Every stored box gets its own physical RFID/barcode sticker. The tag is
   // the same identifier the backend exposes for scanners, and the label size
   // is constrained by BOTH the box width and height so it never overhangs.
-  if (boxEntries.length <= 250) {
-    boxEntries.forEach((entry) => {
+  if (boxEntries.length + stagingEntries.length <= 250) {
+    boxEntries.concat(stagingEntries).forEach((entry) => {
       const labelWidth = Math.min(entry.scale.x * 0.84, entry.scale.y * 3.15);
       if (labelWidth < 0.025) return;
       const labelHeight = labelWidth / 3.65;
@@ -2137,7 +2140,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const cols = Math.max(1, Math.floor((maxX - minX) / cell) + 1);
     const rows = Math.max(1, Math.floor((maxZ - minZ) / cell) + 1);
     const blocked = rackEntries.map(({ collisionBox }) => collisionBox?.clone().expandByScalar(forkliftClearance)).filter(Boolean);
-    boxEntries.forEach((entry) => {
+    // Stored and staging boxes use the identical manufacturer pallet model;
+    // staging differs only by its floor location and selectable workflow.
+    boxEntries.concat(stagingEntries).forEach((entry) => {
       const half = entry.scale.clone().multiplyScalar(0.5 + forkliftClearance / Math.max(entry.scale.x, entry.scale.y, entry.scale.z, 0.01));
       blocked.push(new THREE.Box3(entry.position.clone().sub(half), entry.position.clone().add(half)));
     });
