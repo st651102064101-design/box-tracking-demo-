@@ -1130,7 +1130,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Putaway staging belongs beside the rack block, not in its front aisle:
     // that front clearance is a forklift travel lane.  The side wall margin
     // is intentionally wide enough for a pallet bay plus a safe approach.
-    const startX = stagingBounds.min.x - 6.5;
+    // Keep the staging lane clear of the forklift's full turning envelope.
+    const startX = stagingBounds.min.x - 8.5;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     stagingBoxes.forEach((box, index) => {
       const x = startX + (index % columns) * spacingX;
@@ -2328,7 +2329,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(forkliftLiftControls);
   const changeForkliftLift = (direction) => {
     if (!forkliftSelected || !forkliftCarriageForks) return;
-    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.45, 0, 3.2);
+    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.75, 0, 8.5);
     window.toast?.(`ระดับงา ${forkliftLiftTarget.toFixed(2)} เมตร`, forkliftLiftTarget > 0.8 ? 'เสาชั้นในกำลังยืดขึ้น' : 'ชุดงากำลังยกขึ้น', 'ok');
   };
   const onForkliftLiftClick = (event) => {
@@ -2822,17 +2823,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       object.castShadow = true;
       object.receiveShadow = true;
       forkliftPickMeshes.push(object);
-      if (object.name.includes('ForkliftWheelPair')) forkliftWheels.push({ object, radius: 0.24 });
-      else if (object.name.includes('ForkliftMastInner')) forkliftMastInner = object;
-      else if (object.name.includes('ForkliftCarriageForks')) forkliftCarriageForks = object;
+      // The downloaded GLB labels its rear LPG cylinders as WheelPair. Do not
+      // animate those source meshes: they are not wheel geometry.
+      // The source GLB has these two labels swapped: the tall front rail is
+      // exported as CarriageForks, while the actual fork carriage is named
+      // MastInner.  Map by geometry so the moving forks stay attached to the
+      // fixed front mast instead of leaving a detached upright behind.
+      if (object.name.includes('ForkliftMastInner')) forkliftCarriageForks = object;
+      else if (object.name.includes('ForkliftCarriageForks')) forkliftMastInner = object;
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
     // Use the operator canopy height as the physical reference: the roof is
-    // 2.4 m above the floor, approximately twice a palletized carton.  This is
-    // more reliable than scaling from the fork/mast footprint.
+    // The visual reference requested here is deliberately larger than the
+    // original downloaded truck.  Keep a single explicit multiplier so this
+    // does not get lost in a near-identical footprint normalization again.
     const targetForkliftRoofHeight = 2.4;
-    const scale = targetForkliftRoofHeight / Math.max(rawSize.y, 0.01);
+    const forkliftScaleMultiplier = 1.6;
+    const scale = (targetForkliftRoofHeight / Math.max(rawSize.y, 0.01)) * forkliftScaleMultiplier;
     forkliftAssetScale = scale;
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
@@ -2847,19 +2855,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
-    // Headlights must be anchored to their physical lamps, not the unscaled
-    // vehicle root.  The emissive lenses make their source visible in daylight
-    // while the paired spotlights illuminate the lane ahead.
-    const headlightLensMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfff7d5,
-      emissive: 0xffdf82,
-      emissiveIntensity: 3.6,
-      roughness: 0.24,
-      metalness: 0.1,
+    // The source asset combines its real tyre geometry into static body
+    // meshes, while its separately named \"WheelPair\" meshes are LPG tanks.
+    // Add four axle-centred tyre assemblies at the physical wheel locations so
+    // all four wheels can rotate independently without rotating the tanks.
+    const wheelRadius = THREE.MathUtils.clamp(Math.min(scaledSize.x, scaledSize.z) * 0.13, 0.28, 0.5);
+    const wheelWidth = wheelRadius * 0.42;
+    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.82, metalness: 0.04 });
+    const hubMaterial = new THREE.MeshStandardMaterial({ color: 0x697177, roughness: 0.38, metalness: 0.72 });
+    const wheelX = scaledSize.x * 0.46;
+    const frontWheelZ = scaledSize.z * 0.27;
+    const rearWheelZ = -scaledSize.z * 0.27;
+    [[-wheelX, frontWheelZ], [wheelX, frontWheelZ], [-wheelX, rearWheelZ], [wheelX, rearWheelZ]].forEach(([x, z]) => {
+      const wheel = new THREE.Group();
+      const tyre = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius, wheelWidth * 0.46, 12, 24), tyreMaterial);
+      tyre.rotation.y = Math.PI / 2;
+      tyre.castShadow = true;
+      tyre.receiveShadow = true;
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius * 0.42, wheelRadius * 0.42, wheelWidth * 1.08, 20), hubMaterial);
+      hub.rotation.z = Math.PI / 2;
+      hub.castShadow = true;
+      wheel.add(tyre, hub);
+      wheel.position.set(x, wheelRadius, z);
+      forkliftRoot.add(wheel);
+      forkliftWheels.push({ object: wheel, radius: wheelRadius });
     });
-    // The real lamp housing sits underneath the overhead guard above the
-    // operator's seat. Its coordinates are derived from the truck body, not
-    // from the small hood details that previously placed a white dot on it.
+    // Keep functional lamps for lane lighting, but do not render detached
+    // glowing spheres: at the scaled-up vehicle size they read as floating
+    // white balls rather than physical lamp lenses.
     const cabLampCenter = rawBounds.getCenter(new THREE.Vector3());
     cabLampCenter.y = rawBounds.max.y - 0.24;
     cabLampCenter.z = rawBounds.min.z + rawSize.z * 0.48;
@@ -2869,10 +2892,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       headlight.position.copy(anchor);
       const target = new THREE.Object3D();
       target.position.copy(anchor).add(new THREE.Vector3(0, -0.12, 3.8));
-      const lens = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), headlightLensMaterial);
-      lens.position.copy(anchor);
-      lens.castShadow = false;
-      forklift.add(headlight, target, lens);
+      forklift.add(headlight, target);
       headlight.target = target;
     });
     const initialForkliftPosition = savedForklift?.position || {};
@@ -2979,11 +2999,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
     if (forkliftCarriageForks) {
       forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 6, deltaSeconds);
+      // The carriage object's parent axes are already converted by the GLB
+      // loader, so changing its local Y is a true vertical lift.
       forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
-      if (forkliftMastInner) {
-        const mastExtension = Math.max(0, forkliftLiftHeight - 0.8) * 0.58;
-        forkliftMastInner.position.y = forkliftMastInnerBaseY + mastExtension / forkliftAssetScale;
-      }
+      // Do not animate the other source mesh: its baked local axis is the
+      // travel direction, which made the fork support slide backwards when
+      // lifting. The outer mast remains fixed as the carriage's guide rail.
     }
     if (forkliftSelection?.visible) {
       forkliftSelection.material.opacity = 0.68 + Math.sin(frameNow * 0.01) * 0.25;
@@ -3017,7 +3038,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // The load is anchored to the vehicle's local fork coordinate every
     // frame, never to a former world coordinate in the staging bay.
     if (forkliftLoadAssembly?.parent === forkliftRoot) {
-      forkliftLoadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.08);
+      // Seat the pallet farther out on the tines, clear of the mast/cab.
+      forkliftLoadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.65);
       forkliftLoadAssembly.rotation.set(0, Math.PI * 0.5, 0);
     }
     if (firstPerson) {
