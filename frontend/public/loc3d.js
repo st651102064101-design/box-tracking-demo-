@@ -2817,7 +2817,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // and stretched the mast into the ceiling.
   assets.load('/models/forklift-rigged.glb').then(({ scene: forklift }) => {
     if (disposed) return;
-    const headlightAnchors = [];
     forklift.traverse((object) => {
       if (!object.isMesh) return;
       object.castShadow = true;
@@ -2827,15 +2826,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       else if (object.name.includes('ForkliftMastInner')) forkliftMastInner = object;
       else if (object.name.includes('ForkliftCarriageForks')) forkliftCarriageForks = object;
     });
-    forklift.updateMatrixWorld(true);
-    ['ForkliftDetailA', 'ForkliftDetailB'].forEach((name) => {
-      const housing = forklift.getObjectByName(name);
-      if (!housing) return;
-      headlightAnchors.push(new THREE.Box3().setFromObject(housing).getCenter(new THREE.Vector3()));
-    });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
-    const scale = 3.1 / Math.max(rawSize.x, rawSize.z, 0.01);
+    // Use the operator canopy height as the physical reference: the roof is
+    // 2.4 m above the floor, approximately twice a palletized carton.  This is
+    // more reliable than scaling from the fork/mast footprint.
+    const targetForkliftRoofHeight = 2.4;
+    const scale = targetForkliftRoofHeight / Math.max(rawSize.y, 0.01);
     forkliftAssetScale = scale;
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
@@ -2860,7 +2857,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       roughness: 0.24,
       metalness: 0.1,
     });
-    headlightAnchors.forEach((anchor) => {
+    // The real lamp housing sits underneath the overhead guard above the
+    // operator's seat. Its coordinates are derived from the truck body, not
+    // from the small hood details that previously placed a white dot on it.
+    const cabLampCenter = rawBounds.getCenter(new THREE.Vector3());
+    cabLampCenter.y = rawBounds.max.y - 0.24;
+    cabLampCenter.z = rawBounds.min.z + rawSize.z * 0.48;
+    [-0.24, 0.24].forEach((offsetX) => {
+      const anchor = cabLampCenter.clone().add(new THREE.Vector3(offsetX, 0, 0));
       const headlight = new THREE.SpotLight(0xfff3cf, 3.2, 7.5, Math.PI / 7, 0.55, 1.4);
       headlight.position.copy(anchor);
       const target = new THREE.Object3D();
