@@ -504,6 +504,17 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
   color:var(--panelInk);border-radius:9px;padding:3px 6px;width:auto;}
 .chip2 b:hover{background:var(--neg);color:#fff;transform:scale(1.08);}
 .chip2 b .svgi{width:.72em;height:.72em;}
+.slot-pa-section{margin:10px 0 0;padding:10px 12px;border:1px solid var(--panelInputBorder);border-radius:12px;background:var(--panelInputBg)}
+.slot-pa-section-title{font-size:12px;font-weight:800;color:var(--panelInkSoft);margin-bottom:7px}
+.slot-pa-boxes{display:grid;gap:6px}
+.slot-pa-box{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;background:var(--panelBg);border:1px solid var(--panelInputBorder)}
+.slot-pa-box.existing{border-color:color-mix(in srgb,var(--pos) 45%,var(--panelInputBorder));}
+.slot-pa-box.pending{border-color:color-mix(in srgb,var(--accent) 45%,var(--panelInputBorder));}
+.slot-pa-box .slot-pa-tag{font-family:var(--mono);font-weight:800;flex:1}
+.slot-pa-box .slot-pa-type{font-size:12px;color:var(--panelInkSoft)}
+.slot-pa-box .slot-pa-state{font-size:11px;font-weight:800;border-radius:999px;padding:3px 7px;background:var(--panelChipBg);color:var(--panelInkSoft)}
+.slot-pa-box.existing .slot-pa-state{color:var(--pos)}
+.slot-pa-box.pending .slot-pa-state{color:var(--accent)}
 .c2-new{font-size:10px;background:var(--accent2);color:var(--accentContrast);border-radius:6px;padding:2px 6px;margin-left:6px;font-weight:700;letter-spacing:.02em;vertical-align:1px;}
 .c2-label{display:inline-flex;align-items:center;font-size:16px;font-weight:800;letter-spacing:.02em;
   color:var(--accentInk);background:var(--accentSoft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
@@ -7634,15 +7645,17 @@ window.locPrintClick = locPrintClick; window.printAllLocLabels = printAllLocLabe
 /* ===== Rack Map: click a slot → scan RFID/barcode straight into that exact location =====
    The map is meant to be worked from the floor: pick the physical bin you're standing at,
    then scan whatever box goes in it — instead of typing zone/rack/shelf/slot by hand. */
-var slotPutawayQueue = [];
+var slotPutawayQueue = [], slotPutawayExisting = [], slotPutawayCode = '';
 function openSlotPutawayModal(code){
   var loc = S.locations[code]; if(!loc){toast('ไม่พบตำแหน่งนี้',code,'err');return;}
   slotPutawayQueue = [];
+  slotPutawayCode = code;
   var occBoxes = Object.values(S.boxes).filter(function(b){
     return b.status==='warehouse' && locationCode(b.location||{}) === code;
   });
+  slotPutawayExisting = occBoxes.slice();
   var locLabel = [loc.zone&&('โซน '+loc.zone),loc.rack&&('แร็ค '+loc.rack),loc.shelf&&('ชั้น '+loc.shelf),loc.slot&&('ช่อง '+loc.slot)].filter(Boolean).join(' · ');
-  var occLabel = occBoxes.length ? ('มีของอยู่แล้ว '+occBoxes.length+' กล่อง: '+occBoxes.map(function(b){return b.tag;}).join(', ')) : 'ว่าง — พร้อมวางกล่อง';
+  var occLabel = occBoxes.length ? ('มีของอยู่แล้ว '+occBoxes.length+' กล่อง — ดูรายการด้านล่าง') : 'ว่าง — พร้อมวางกล่อง';
   openModal(
     '<div class="mhead"><h3><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 3.5 3H6.5L10 9 9 3Z"/><path d="M12 15v6"/></svg></span> Putaway → '+esc(code)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
@@ -7707,11 +7720,17 @@ function slotPaAdd(tag){
   tag = resolveTag(raw); if(!tag) return;
   var b = S.boxes[tag];
   if(!b){ toast('ไม่พบกล่อง', looksThaiGarbled(raw)?tag+' — คีย์บอร์ดอาจอยู่ในโหมดภาษาไทย':tag, 'err'); setv('slotPaScan',''); return; }
+  if(slotPutawayExisting.some(function(x){return x.tag===tag;})){
+    toast('กล่องนี้อยู่ในช่องนี้แล้ว', tag+' ไม่ต้องยิงซ้ำ', 'err'); setv('slotPaScan',''); renderSlotPaQueue(); return;
+  }
+  if(slotPutawayQueue.indexOf(tag) >= 0){
+    toast('กล่องนี้อยู่ในคิวแล้ว', tag+' ถูกเพิ่มไว้แล้ว', 'err'); setv('slotPaScan',''); return;
+  }
   if(b.status==='out'){ toast(tag+' ยังอยู่นอกคลัง (ที่ลูกค้า)', 'ต้องรับเข้าที่ Gate ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
   if(b.status==='lost'){ toast(tag+' ถูกตีเป็นสูญหาย', 'กู้คืนสถานะก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
   if(b.status==='hold'){ toast(tag+' ถูกกันไว้ (Hold)', 'ปลด Hold ก่อนจึงจะจัดเก็บได้', 'err'); setv('slotPaScan',''); return; }
   if(b.status==='damage'){ toast(tag+' สถานะชำรุด (Damage)', null, 'err'); setv('slotPaScan',''); return; }
-  if(slotPutawayQueue.indexOf(tag) < 0) slotPutawayQueue.push(tag);
+  slotPutawayQueue.push(tag);
   setv('slotPaScan','');
   renderSlotPaQueue();
   var f = $('#slotPaScan'); if(f) f.focus();
@@ -7720,16 +7739,22 @@ window.slotPaAdd = slotPaAdd;
 function renderSlotPaQueue(){
   var res = $('#slotPaResult'); if(!res) return;
   var cnt = $('#slotPaCount'); if(cnt) cnt.textContent = slotPutawayQueue.length ? ('คิวจัดเก็บ '+slotPutawayQueue.length+' ใบ') : '';
-  res.innerHTML = slotPutawayQueue.length ? '<div class="chiplist">'+slotPutawayQueue.map(function(t){
+  var existing = slotPutawayExisting.length ? '<div class="slot-pa-section"><div class="slot-pa-section-title">กล่องที่อยู่ในช่องนี้แล้ว ('+slotPutawayExisting.length+')</div><div class="slot-pa-boxes">'+slotPutawayExisting.map(function(b){
+    return '<div class="slot-pa-box existing"><span class="slot-pa-tag">'+esc(b.tag)+'</span><span class="slot-pa-type">'+esc(typeName(b.type))+'</span><span class="slot-pa-state">อยู่แล้ว</span></div>';
+  }).join('')+'</div></div>' : '';
+  var pending = slotPutawayQueue.length ? '<div class="slot-pa-section"><div class="slot-pa-section-title">กล่องที่จะจัดเก็บเพิ่ม ('+slotPutawayQueue.length+')</div><div class="slot-pa-boxes">'+slotPutawayQueue.map(function(t){
     var b=S.boxes[t]||{};
-    return '<span class="chip2"><span><span class="c2-tag">'+esc(t)+'</span><span class="c2-type"> · '+esc(typeName(b.type))+'</span></span><b onclick="slotPaRemove(\''+esc(t)+'\')" title="เอาออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></span>';
-  }).join('')+'</div>' : '<div class="muted small">ยังไม่มีกล่องในคิว</div>';
+    return '<div class="slot-pa-box pending"><span class="slot-pa-tag">'+esc(t)+'</span><span class="slot-pa-type">'+esc(typeName(b.type))+'</span><span class="slot-pa-state">กำลังเพิ่ม</span><b onclick="slotPaRemove(\''+esc(t)+'\')" title="เอาออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></b></div>';
+  }).join('')+'</div></div>' : '<div class="muted small" style="margin-top:10px;">ยังไม่มีกล่องใหม่ในคิว</div>';
+  res.innerHTML = existing + pending;
 }
 function slotPaRemove(t){ slotPutawayQueue = slotPutawayQueue.filter(function(x){return x!==t;}); renderSlotPaQueue(); }
 window.slotPaRemove = slotPaRemove;
 function commitSlotPutaway(code){
   if(!slotPutawayQueue.length) return toast('ยังไม่มีกล่องในคิว', null, 'err');
   var loc = S.locations[code]; if(!loc) return;
+  var already = slotPutawayQueue.filter(function(t){ var b=S.boxes[t]; return b && b.status==='warehouse' && locationCode(b.location||{})===code; });
+  if(already.length){ toast('พบกล่องซ้ำในช่องนี้', already.join(', ')+' อยู่ในช่องนี้แล้ว', 'err'); slotPutawayExisting = Object.values(S.boxes).filter(function(b){return b.status==='warehouse'&&locationCode(b.location||{})===code;}); slotPutawayQueue = slotPutawayQueue.filter(function(t){return already.indexOf(t)<0;}); renderSlotPaQueue(); return; }
   var recorder = USER, ts = iso();
   var locObj = {wh:loc.wh, zone:loc.zone||'', rack:loc.rack||'', shelf:loc.shelf||'', slot:loc.slot||'', gate:null, ts:ts};
   var locStr = [locObj.zone, locObj.rack, locObj.shelf, locObj.slot].filter(Boolean).join(' · ');
