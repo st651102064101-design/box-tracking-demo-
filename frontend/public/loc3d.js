@@ -462,6 +462,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   firstPersonButton.setAttribute('aria-label', 'มุมมองบุคคลที่หนึ่ง');
   firstPersonButton.title = 'มุมมองคนเดิน · ใช้ W A S D';
   firstPersonButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M7.5 21 9 13l3-3 3 3 1.5 8M9 13 5 16m10-3 4 3M12 10V7.5"/></svg>';
+  const unitGridButton = document.createElement('button');
+  unitGridButton.type = 'button';
+  unitGridButton.className = 'loc3d-unit-grid';
+  unitGridButton.setAttribute('aria-label', 'แสดงตาราง Unit');
+  unitGridButton.setAttribute('aria-pressed', 'false');
+  unitGridButton.title = 'แสดง/ซ่อนตาราง Unit';
+  unitGridButton.textContent = 'UNIT';
   const firstPersonOverlay = document.createElement('div');
   firstPersonOverlay.className = 'loc3d-first-person-overlay';
   firstPersonOverlay.setAttribute('aria-hidden', 'true');
@@ -610,6 +617,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   window.addEventListener('keydown', onFullscreenShortcut, { passive: false });
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
+  stage.appendChild(unitGridButton);
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
@@ -898,6 +906,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     slotMesh.computeBoundingSphere();
     scene.add(slotMesh);
   }
+  const unitGridMaterial = new THREE.MeshBasicMaterial({ color: 0xa8ff2b, wireframe: true, transparent: true, opacity: 0.7, depthTest: false });
+  const unitGridMesh = slotEntries.length ? new THREE.InstancedMesh(UNIT_BOX, unitGridMaterial, slotEntries.length) : null;
+  if (unitGridMesh) {
+    slotEntries.forEach((entry, index) => unitGridMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)));
+    unitGridMesh.instanceMatrix.needsUpdate = true;
+    unitGridMesh.renderOrder = 13;
+    unitGridMesh.visible = false;
+    scene.add(unitGridMesh);
+  }
+  const toggleUnitGrid = () => {
+    if (!unitGridMesh) return;
+    unitGridMesh.visible = !unitGridMesh.visible;
+    unitGridButton.classList.toggle('active', unitGridMesh.visible);
+    unitGridButton.setAttribute('aria-pressed', String(unitGridMesh.visible));
+    window.toast?.(unitGridMesh.visible ? 'แสดงตาราง Unit แล้ว' : 'ซ่อนตาราง Unit แล้ว', '', 'ok');
+  };
+  unitGridButton.addEventListener('click', toggleUnitGrid);
 
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
   const labelTextures = [];
@@ -2974,6 +2999,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       window.removeEventListener('keydown', onFullscreenShortcut);
       firstPersonButton.removeEventListener('click', toggleFirstPerson);
       firstPersonButton.remove();
+      unitGridButton.removeEventListener('click', toggleUnitGrid);
+      unitGridButton.remove();
       window.removeEventListener('keydown', onFirstPersonShortcut);
       firstPersonHint.remove();
       firstPersonOverlay.remove();
