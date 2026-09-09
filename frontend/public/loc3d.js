@@ -1042,10 +1042,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const stagingRows = Math.ceil(stagingBoxes.length / columns);
     const stagingBorder = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(startX - 0.68, floor.position.y + 0.025, startZ - spacingZ * 0.52),
-        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, floor.position.y + 0.025, startZ - spacingZ * 0.52),
-        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, floor.position.y + 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
-        new THREE.Vector3(startX - 0.68, floor.position.y + 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
+        new THREE.Vector3(startX - 0.68, 0.025, startZ - spacingZ * 0.52),
+        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, 0.025, startZ - spacingZ * 0.52),
+        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
+        new THREE.Vector3(startX - 0.68, 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
       ]),
       new THREE.LineBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.95, depthTest: false }),
     );
