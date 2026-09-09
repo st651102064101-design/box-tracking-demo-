@@ -479,7 +479,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       : '<kbd>F</kbd> มุมมองคนเดิน · <kbd>WASD</kbd> เดิน · <kbd>M</kbd> เต็มจอ';
     firstPersonOverlay.innerHTML = english
       ? '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>First-person mode</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · mouse look · left click interact · <kbd>Esc</kbd> exit</span></div>'
-      : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · <kbd>Shift</kbd> วิ่ง · <kbd>Space</kbd> กระโดด · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
+      : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · <kbd>Shift</kbd> วิ่ง · <kbd>Ctrl</kbd> ย่อ · <kbd>Space</kbd> กระโดด · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
   };
   updateFirstPersonCopy();
   let firstPerson = false;
@@ -538,13 +538,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('keydown', onFirstPersonShortcut, { passive: false });
   const onWalkKey = (event) => {
-    if (!firstPerson || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!firstPerson || event.metaKey || event.altKey || (event.ctrlKey && !['ControlLeft', 'ControlRight'].includes(event.code))) return;
     if (event.code === 'Escape' && event.type === 'keydown') {
       exitFirstPerson();
       event.preventDefault();
       return;
     }
-    if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space'].includes(event.code)) return;
+    if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'Space'].includes(event.code)) return;
     if (event.code === 'Space' && event.type === 'keydown' && walkVerticalVelocity === 0) walkVerticalVelocity = 5.1;
     if (event.type === 'keydown') walkKeys.add(event.code);
     else walkKeys.delete(event.code);
@@ -1039,12 +1039,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     });
     const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
     labelTextures.push(stagingTexture);
+    const stagingRows = Math.ceil(stagingBoxes.length / columns);
+    const stagingBorder = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(startX - 0.68, warehouseFloorY + 0.025, startZ - spacingZ * 0.52),
+        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, warehouseFloorY + 0.025, startZ - spacingZ * 0.52),
+        new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, warehouseFloorY + 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
+        new THREE.Vector3(startX - 0.68, warehouseFloorY + 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.95, depthTest: false }),
+    );
+    stagingBorder.renderOrder = 10;
+    scene.add(stagingBorder);
     const stagingLabel = new THREE.Mesh(
       new THREE.PlaneGeometry(Math.min(5.2, Math.max(2.5, columns * 1.25)), 0.52),
       new THREE.MeshBasicMaterial({ map: stagingTexture, transparent: true, depthWrite: false, toneMapped: false }),
     );
     stagingLabel.rotation.x = -Math.PI / 2;
-    stagingLabel.position.set(startX, 0.01, startZ + Math.ceil(stagingBoxes.length / columns) * spacingZ + 0.18);
+    stagingLabel.position.set(startX, 0.01, startZ + stagingRows * spacingZ + 0.18);
     scene.add(stagingLabel);
   }
   // Cartons are deliberately built as physical packages, rather than just a
@@ -1747,9 +1759,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Keep the wall light clear of the door frame on the right, while the
     // consumer unit below moves to the clear wall bay on the left.
     const serviceOffset = side === -1 ? 1.12 : 0;
-    const wallLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.62), wallLightMaterial);
-    wallLight.position.set(innerX - side * 0.12, warehouseFloorY + 2.88, referenceDoorZ + serviceOffset);
-    scene.add(wallLight);
+    // Deliberately omit the old white service bar: it looked like a stray
+    // floating rod next to the door rather than a useful warehouse fixture.
     // One realistic consumer unit is mounted beside the operating door. It is
     // intentionally wall-fixed (not a loose floor prop) and faces the aisle.
     if (side === -1) {
@@ -2077,6 +2088,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   targetMarker.renderOrder = 15;
   targetMarker.visible = false;
   scene.add(targetMarker);
+  // Persistent mission beacon: remains over the selected pallet while the
+  // forklift drives, rather than showing only a one-shot click ripple.
+  const missionBeaconMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthTest: false });
+  const missionBeacon = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.64, 40), missionBeaconMaterial);
+  missionBeacon.rotation.x = -Math.PI / 2;
+  missionBeacon.renderOrder = 16;
+  missionBeacon.visible = false;
+  scene.add(missionBeacon);
   // A short expanding ripple confirms a double-click immediately, similar to
   // a move-command marker in a game. It deliberately uses the clicked floor
   // coordinate; the smaller persistent ring then marks the safe NavMesh/grid
@@ -2157,6 +2176,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       routeLine.visible = false;
       targetMarker.visible = false;
       targetRipple.visible = false;
+      missionBeacon.visible = false;
     }
   };
   const findForkliftPath = (start, target) => {
@@ -2231,6 +2251,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     routeLine.visible = true;
     targetMarker.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.055);
     targetMarker.visible = true;
+    missionBeacon.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.06);
+    missionBeacon.visible = Boolean(pickupMesh);
   };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const clearHoverFeedback = () => {
@@ -2495,6 +2517,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (!object.isMesh) return;
       object.castShadow = true;
       object.receiveShadow = true;
+      if (name === 'emergency-exit-sign' && object.material) {
+        object.material = object.material.clone();
+        object.material.color.setHex(0xffec62);
+        if ('emissive' in object.material) {
+          object.material.emissive.setHex(0xffd52f);
+          object.material.emissiveIntensity = 2.5;
+        }
+      }
     });
     const rawBounds = new THREE.Box3().setFromObject(asset);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
@@ -2755,6 +2785,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           }
           forkliftMotion = null;
           routeLine.visible = false;
+          missionBeacon.visible = false;
         }
       } else {
         movementDirection.normalize();
@@ -2796,6 +2827,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const pulse = 1 + Math.sin(frameNow * 0.009) * 0.16;
       targetMarker.scale.setScalar(pulse);
     }
+    if (missionBeacon.visible) {
+      const pulse = 1 + Math.sin(frameNow * 0.011) * 0.18;
+      missionBeacon.scale.setScalar(pulse);
+      missionBeaconMaterial.opacity = 0.55 + Math.sin(frameNow * 0.011) * 0.28;
+    }
     if (targetRipple.visible) {
       const elapsed = Math.min(1, (frameNow - targetRippleStartedAt) / 720);
       targetRipple.scale.setScalar(0.45 + elapsed * 2.3);
@@ -2833,7 +2869,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const running = walkKeys.has('ShiftLeft') || walkKeys.has('ShiftRight');
         const speed = running ? 4.3 : 2.15;
         walkCandidate.normalize().multiplyScalar(speed * deltaSeconds).add(camera.position);
-        const blockedWalk = rackEntries.some(({ collisionBox }) => collisionBox?.clone().expandByScalar(0.3).containsPoint(walkCandidate));
+        const blockedRack = rackEntries.some(({ collisionBox }) => collisionBox?.clone().expandByScalar(0.3).containsPoint(walkCandidate));
+        const blockedBox = boxEntries.concat(stagingEntries).some((entry) => {
+          const halfX = entry.scale.x * 0.5 + 0.28;
+          const halfZ = entry.scale.z * 0.5 + 0.28;
+          return Math.abs(walkCandidate.x - entry.position.x) <= halfX
+            && Math.abs(walkCandidate.z - entry.position.z) <= halfZ;
+        });
+        const blockedWalk = blockedRack || blockedBox;
         if (!blockedWalk) {
           camera.position.x = walkCandidate.x;
           camera.position.z = walkCandidate.z;
@@ -2849,7 +2892,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         walkJumpHeight = 0;
         walkVerticalVelocity = 0;
       }
-      camera.position.y = warehouseFloorY + walkEyeHeight + walkJumpHeight + walkHeadBobOffset;
+      const crouching = walkKeys.has('ControlLeft') || walkKeys.has('ControlRight');
+      camera.position.y = warehouseFloorY + (crouching ? 1.12 : walkEyeHeight) + walkJumpHeight + walkHeadBobOffset;
     } else controls.update();
     keepCameraInsideWarehouse();
     updateRackLabelMode();
