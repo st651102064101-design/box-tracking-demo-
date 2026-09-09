@@ -998,10 +998,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     scene.add(slotMesh);
   }
   let unitGridVisible = Boolean(getViewPref('unitGrid', false));
-  grid.visible = unitGridVisible;
-  grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
-  unitGridButton.classList.toggle('active', unitGridVisible);
-  unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
   const toggleUnitGrid = () => {
     unitGridVisible = !unitGridVisible;
     grid.visible = unitGridVisible;
@@ -2111,6 +2107,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   grid.material.opacity = 0.11;
   grid.visible = false;
   scene.add(grid);
+  // Restore the account's saved Unit switch only after the Three.js helper
+  // exists. Accessing it earlier aborts the complete 3D scene initialization.
+  grid.visible = unitGridVisible;
+  grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
+  unitGridButton.classList.toggle('active', unitGridVisible);
+  unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
 
   const span = Math.max(size.x, size.z, 5);
   // Let users zoom out to inspect the much larger warehouse, while clamping
