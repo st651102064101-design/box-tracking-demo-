@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, boxTypes, racks, slots, warehouses } from '../db/schema.js';
@@ -109,6 +109,33 @@ warehouse3dRouter.get(
         .leftJoin(boxTypes, eq(boxes.type, boxTypes.id))
         .where(and(inArray(boxes.slotId, slotIds), eq(boxes.status, 'warehouse')))
       : [];
+    // A received box without a physical slot is waiting in the inbound staging
+    // area. Keep it separate from shelf inventory: the 3D client renders one
+    // selectable pallet position per box, so an operator never has to click
+    // through a stack to choose the box a forklift should take next.
+    const unstagedRows = warehouseId
+      ? await db.select({
+        tag: boxes.tag,
+        status: boxes.status,
+        labeled: boxes.labeled,
+        location: boxes.location,
+        type: boxes.type,
+        widthCm: boxes.widthCm,
+        heightCm: boxes.heightCm,
+        depthCm: boxes.depthCm,
+        materialType: boxes.materialType,
+        boxTypeDimensions: boxTypes.dim,
+      })
+        .from(boxes)
+        .leftJoin(boxTypes, eq(boxes.type, boxTypes.id))
+        .where(isNull(boxes.slotId))
+      : [];
+    const stagingBoxes = unstagedRows.filter((box) => {
+      const location = (box.location ?? {}) as Record<string, unknown>;
+      return location.wh === warehouseId
+        && (box.status === 'warehouse' || (box.status === 'pending' && box.labeled))
+        && (location.staging === true || (!location.shelf && !location.slot));
+    });
     const boxCountBySlot = new Map<string, number>();
     boxRows.forEach((box) => {
       if (!box.slotId) return;
@@ -168,7 +195,17 @@ warehouse3dRouter.get(
           materialType: box.materialType,
         };
       }),
-      stats: { racks: rackRows.length, slots: slotRows.length, boxes: boxRows.length },
+      stagingBoxes: stagingBoxes.map((box) => {
+        const typeDimensions = parseBoxTypeDimensions(box.boxTypeDimensions);
+        return {
+          id: box.tag,
+          status: box.status,
+          type: box.type,
+          dimensionsCm: typeDimensions ?? { width: box.widthCm, height: box.heightCm, depth: box.depthCm },
+          materialType: box.materialType,
+        };
+      }),
+      stats: { racks: rackRows.length, slots: slotRows.length, boxes: boxRows.length, stagingBoxes: stagingBoxes.length },
     });
   }),
 );

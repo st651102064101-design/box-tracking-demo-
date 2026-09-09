@@ -445,7 +445,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 
   const hud = document.createElement('div');
   hud.className = 'loc3d-hud';
-  hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span><span class="loc3d-perf">กำลังวัด FPS…</span>`;
+  hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span>${model.stats?.stagingBoxes ? `<span class="warn">รอ Putaway ${model.stats.stagingBoxes} กล่อง</span>` : ''}<span class="loc3d-perf">กำลังวัด FPS…</span>`;
   stage.appendChild(hud);
 
   // Keep the scene controls inside the 3D stage, so fullscreen expands only
@@ -975,6 +975,55 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     boxMesh.computeBoundingBox();
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
+  }
+  // Inbound staging is deliberately a one-box-per-pallet grid, rather than a
+  // decorative stack. It keeps the 3D view honest while leaving every waiting
+  // box directly selectable for the next forklift/putaway task.
+  const stagingBoxPickMeshes = [];
+  const stagingBoxes = Array.isArray(model.stagingBoxes) ? model.stagingBoxes : [];
+  if (stagingBoxes.length) {
+    const stagingBounds = bounds.clone();
+    const stagingCenter = stagingBounds.getCenter(new THREE.Vector3());
+    const columns = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(stagingBoxes.length))));
+    const spacingX = 1.35, spacingZ = 1.55;
+    const startX = stagingCenter.x - ((Math.min(columns, stagingBoxes.length) - 1) * spacingX) / 2;
+    const startZ = stagingBounds.max.z + 1.3;
+    const palletMaterial = new THREE.MeshStandardMaterial({ color: 0xc58a43, roughness: 0.78, metalness: 0.02 });
+    const stagingMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.86, side: THREE.DoubleSide });
+    stagingBoxes.forEach((box, index) => {
+      const x = startX + (index % columns) * spacingX;
+      const z = startZ + Math.floor(index / columns) * spacingZ;
+      const pallet = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.12, 1.25), palletMaterial);
+      pallet.position.set(x, 0.06, z);
+      pallet.castShadow = pallet.receiveShadow = true;
+      scene.add(pallet);
+      const width = Math.min(0.9, positive(box.dimensionsCm?.width, 60) * CM_TO_M);
+      const height = Math.min(1.05, positive(box.dimensionsCm?.height, 40) * CM_TO_M);
+      const depth = Math.min(1.05, positive(box.dimensionsCm?.depth, 40) * CM_TO_M);
+      const carton = new THREE.Mesh(
+        UNIT_BOX,
+        new THREE.MeshStandardMaterial({ color: materialColors[box.materialType] || materialColors.generic, roughness: 0.68, metalness: 0.03 }),
+      );
+      carton.position.set(x, 0.12 + height / 2, z);
+      carton.scale.set(width, height, depth);
+      carton.castShadow = carton.receiveShadow = true;
+      carton.userData.stagingBox = box;
+      scene.add(carton);
+      stagingBoxPickMeshes.push(carton);
+      const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 1.34), stagingMarkMaterial);
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.set(x, 0.008, z);
+      scene.add(marker);
+    });
+    const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
+    labelTextures.push(stagingTexture);
+    const stagingLabel = new THREE.Mesh(
+      new THREE.PlaneGeometry(Math.min(5.2, Math.max(2.5, columns * 1.25)), 0.52),
+      new THREE.MeshBasicMaterial({ map: stagingTexture, transparent: true, depthWrite: false, toneMapped: false }),
+    );
+    stagingLabel.rotation.x = -Math.PI / 2;
+    stagingLabel.position.set(stagingCenter.x, 0.01, startZ + Math.ceil(stagingBoxes.length / columns) * spacingZ + 0.18);
+    scene.add(stagingLabel);
   }
   // Cartons are deliberately built as physical packages, rather than just a
   // tinted cube: exposed folded seams, packing tape, softened ink markings,
@@ -2023,6 +2072,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let hoverConsumerUnit = false;
   let hoverDockDoorIndex = -1;
   let hoverForklift = false;
+  let hoverStagingBox = null;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
   const hideRackAction = () => {
@@ -2150,6 +2200,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverConsumerUnit = false;
     hoverDockDoorIndex = -1;
     hoverForklift = false;
+    hoverStagingBox = null;
     hideRackAction();
   };
   const updatePointer = (event) => {
@@ -2165,24 +2216,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // than a box inside. Test boxes independently and give them click/hover
     // priority so operators can open the actual box record.
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
+    const stagingHit = stagingBoxPickMeshes.length ? raycaster.intersectObjects(stagingBoxPickMeshes, false)[0] : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const doorHit = dockDoorPickMeshes.length ? raycaster.intersectObjects(dockDoorPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
     const nextForklift = isForkliftHit();
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
+    const nextStagingBox = stagingHit?.object?.userData?.stagingBox || null;
     const consumerIsClosest = Boolean(consumerHit) && (!doorHit || consumerHit.distance <= doorHit.distance) && (!slotHit || consumerHit.distance < slotHit.distance);
     const doorIndex = Number.isInteger(doorHit?.object?.userData?.doorIndex) ? doorHit.object.userData.doorIndex : -1;
     const nextDoor = nextBox < 0 && !consumerIsClosest && doorIndex >= 0 && (!slotHit || doorHit.distance < slotHit.distance) ? doorIndex : -1;
     const nextConsumerUnit = nextBox < 0 && consumerIsClosest;
-    const next = nextBox >= 0 || nextConsumerUnit || nextDoor >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
+    const next = nextBox >= 0 || nextStagingBox || nextConsumerUnit || nextDoor >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
     const nextRack = nextBox >= 0
       ? boxEntries[nextBox].slotEntry?.rack
       : next >= 0
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -2190,6 +2243,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverConsumerUnit = nextConsumerUnit;
     hoverDockDoorIndex = nextDoor;
     hoverForklift = nextForklift;
+    hoverStagingBox = nextStagingBox;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
     if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
     if (hoverForklift) {
@@ -2199,6 +2253,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(forkliftRoot.position).add(new THREE.Vector3(0, 2.5, 0));
+      labelObject.visible = true;
+      canvas.style.cursor = 'pointer';
+    } else if (hoverStagingBox) {
+      labelElement.textContent = `รอ Putaway · ${hoverStagingBox.id} · คลิกเพื่อเลือก`;
+      labelElement.className = 'loc3d-slot-label occupied';
+      labelObject.position.copy(stagingHit.object.position).add(new THREE.Vector3(0, 0.72, 0));
       labelObject.visible = true;
       canvas.style.cursor = 'pointer';
     } else if (hoverBoxIndex >= 0) {
@@ -2290,6 +2350,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
       if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
+      else if (hoverStagingBox) {
+        releasePointerForModal();
+        onBoxSelect?.(hoverStagingBox.id);
+      }
       else if (hoverBoxIndex >= 0) {
         releasePointerForModal();
         onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
@@ -2330,6 +2394,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverConsumerUnit = false;
     hoverDockDoorIndex = -1;
     hoverForklift = false;
+    hoverStagingBox = null;
     labelObject.visible = false;
     canvas.style.cursor = 'default';
     window.setTimeout(() => {
