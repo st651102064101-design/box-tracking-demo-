@@ -2042,6 +2042,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftSelection = null;
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
+  const savedForklift = model.forkliftPosition || null;
+  const saveForkliftPosition = () => {
+    if (!forkliftRoot || !model.warehouseId) return;
+    fetch('/api/warehouse-3d/forklift', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ warehouseId: model.warehouseId, position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z }, rotationY: forkliftRoot.rotation.y }),
+    }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error));
+  };
   const forkliftPickMeshes = [];
   // Each entry keeps the original forklift wheel geometry and its local axle.
   // The source GLB ships all four wheels inside Object_0 rather than as nodes.
@@ -2644,12 +2653,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
+    const initialForkliftPosition = savedForklift?.position || {};
     forkliftRoot.position.set(
-      center.x + rackBoundaryWidth * 0.34,
-      warehouseFloorY + 0.012,
-      aisleCenterZ,
+      Number.isFinite(Number(initialForkliftPosition.x)) ? Number(initialForkliftPosition.x) : center.x + rackBoundaryWidth * 0.34,
+      Number.isFinite(Number(initialForkliftPosition.y)) ? Number(initialForkliftPosition.y) : warehouseFloorY + 0.012,
+      Number.isFinite(Number(initialForkliftPosition.z)) ? Number(initialForkliftPosition.z) : aisleCenterZ,
     );
-    forkliftRoot.rotation.y = -Math.PI * 0.5;
+    forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
     forkliftWheelMeshes.forEach((wheelMesh) => {
       wheelMesh.radius *= scale;
@@ -2685,13 +2695,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         forkliftRoot.position.copy(destination);
         forkliftMotion.index += 1;
         if (forkliftMotion.index >= forkliftMotion.path.length) {
+          saveForkliftPosition();
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
             pickupMesh.parent.remove(pickupMesh);
             forkliftRoot.add(pickupMesh);
             pickupMesh.position.set(0, 1.02, 0.82);
             pickupMesh.rotation.set(0, 0, 0);
-            window.toast?.('ยกกล่องขึ้นงาแล้ว', `${pickupMesh.userData.stagingBox?.id || ''} · พร้อมนำไป Putaway`, 'ok');
+          window.toast?.('ยกกล่องขึ้นงาแล้ว', `${pickupMesh.userData.stagingBox?.id || ''} · พร้อมนำไป Putaway`, 'ok');
+          saveForkliftPosition();
           }
           forkliftMotion = null;
           routeLine.visible = false;

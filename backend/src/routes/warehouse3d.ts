@@ -11,6 +11,11 @@ import { bump } from '../lib/bus.js';
 const centimetres = z.number().finite().positive().max(1_000_000);
 const coordinate = z.number().finite().min(-10_000_000).max(10_000_000);
 const materialType = z.string().trim().min(1).max(80);
+const forkliftPositionSchema = z.object({
+  warehouseId: z.string().trim().min(1),
+  position: z.object({ x: coordinate, y: coordinate, z: coordinate }),
+  rotationY: z.number().finite().optional(),
+});
 
 const rackGeometrySchema = z.object({
   positionCm: z.object({ x: coordinate, y: coordinate, z: coordinate }).partial().optional(),
@@ -175,6 +180,9 @@ warehouse3dRouter.get(
       scaleToWorldUnit: 0.01,
       warehouseId: warehouseId || null,
       warehouseName: warehouse?.name ?? warehouseId ?? null,
+      forkliftPosition: warehouse?.data && typeof warehouse.data === 'object'
+        ? (warehouse.data as Record<string, unknown>).forkliftPosition ?? null
+        : null,
       doors,
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
       boxes: boxRows.map((box) => {
@@ -207,6 +215,24 @@ warehouse3dRouter.get(
       }),
       stats: { racks: rackRows.length, slots: slotRows.length, boxes: boxRows.length, stagingBoxes: stagingBoxes.length },
     });
+  }),
+);
+
+warehouse3dRouter.put(
+  '/forklift',
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const input = forkliftPositionSchema.parse(req.body);
+    const db = getDb();
+    const [before] = await db.select().from(warehouses).where(eq(warehouses.id, input.warehouseId));
+    if (!before) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    const data = {
+      ...(before.data as Record<string, unknown>),
+      forkliftPosition: { position: input.position, rotationY: input.rotationY ?? 0, updatedAt: new Date().toISOString() },
+    };
+    await db.update(warehouses).set({ data, updatedAt: new Date() }).where(eq(warehouses.id, before.id));
+    bump(req.get('X-Client-Id'));
+    res.json({ ok: true, forkliftPosition: data.forkliftPosition });
   }),
 );
 
