@@ -2793,6 +2793,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (remaining < 0.035) {
         forkliftRoot.position.copy(destination);
         forkliftMotion.index += 1;
+        if (forkliftMotion.index < forkliftMotion.path.length) {
+          const remainingRoute = [forkliftRoot.position.clone().setY(warehouseFloorY + 0.045)]
+            .concat(forkliftMotion.path.slice(forkliftMotion.index).map((point) => point.clone().setY(warehouseFloorY + 0.045)));
+          routeLine.geometry.dispose();
+          routeLine.geometry = new THREE.BufferGeometry().setFromPoints(remainingRoute);
+        }
         if (forkliftMotion.index >= forkliftMotion.path.length) {
           saveForkliftPosition();
           const pickupMesh = forkliftMotion.pickupMesh;
@@ -2841,11 +2847,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
-        // GPS-style route: retain only the untravelled part of the path.
-        const remainingRoute = [forkliftRoot.position.clone().setY(warehouseFloorY + 0.045)]
-          .concat(forkliftMotion.path.slice(forkliftMotion.index).map((point) => point.clone().setY(warehouseFloorY + 0.045)));
-        routeLine.geometry.dispose();
-        routeLine.geometry = new THREE.BufferGeometry().setFromPoints(remainingRoute);
         forkliftWheelMeshes.forEach((wheelMesh) => {
           const rotation = -distanceTravelled / wheelMesh.radius;
           wheelMesh.wheels.forEach((wheel) => {
