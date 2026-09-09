@@ -143,12 +143,16 @@ function floorMarkTexture(text) {
   canvas.height = 180;
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = 'rgba(219,255,150,.96)';
+  context.lineJoin = 'round';
+  context.lineWidth = 16;
+  context.strokeStyle = 'rgba(0,0,0,.94)';
+  context.fillStyle = 'rgba(255,255,255,.98)';
   context.font = '800 96px system-ui, sans-serif';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.shadowColor = 'rgba(0,0,0,.85)';
-  context.shadowBlur = 8;
+  context.shadowColor = 'transparent';
+  context.shadowBlur = 0;
+  context.strokeText(text, canvas.width / 2, canvas.height / 2);
   context.fillText(text, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -1940,7 +1944,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   });
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
   const fixtureCount = serviceFrameIndices.length;
-  [-0.24, 0.24].forEach((xRatio) => {
+  // Keep high-bay fixtures in circulation aisles, not directly over rack
+  // rows where the rack steel would block their useful illumination.
+  [-0.52, 0.52].forEach((xRatio) => {
     const lightX = center.x + halfWarehouseWidth * xRatio;
     const lightY = trussBottomY - 0.24;
     for (let index = 1; index <= fixtureCount; index += 1) {
@@ -2731,7 +2737,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // electrical cabinet and narrowed the driving lane unnecessarily.
     // Medium-duty 2–3 tonne truck: about 2.6 m body footprint (excluding
     // forks), suitable for a standard loaded warehouse pallet.
-    const scale = 2.65 / Math.max(rawSize.x, rawSize.z, 0.01);
+    const scale = 3.1 / Math.max(rawSize.x, rawSize.z, 0.01);
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
@@ -2836,6 +2842,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
+        // GPS-style route: retain only the untravelled part of the path.
+        const remainingRoute = [forkliftRoot.position.clone().setY(warehouseFloorY + 0.045)]
+          .concat(forkliftMotion.path.slice(forkliftMotion.index).map((point) => point.clone().setY(warehouseFloorY + 0.045)));
+        routeLine.geometry.dispose();
+        routeLine.geometry = new THREE.BufferGeometry().setFromPoints(remainingRoute);
         forkliftWheelMeshes.forEach((wheelMesh) => {
           const rotation = -distanceTravelled / wheelMesh.radius;
           wheelMesh.wheels.forEach((wheel) => {
