@@ -478,7 +478,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   unitGridButton.setAttribute('aria-label', 'แสดงตาราง Unit');
   unitGridButton.setAttribute('aria-pressed', 'false');
   unitGridButton.title = 'แสดง/ซ่อนตาราง Unit';
-  unitGridButton.textContent = 'UNIT';
+  unitGridButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></svg>';
   const firstPersonOverlay = document.createElement('div');
   firstPersonOverlay.className = 'loc3d-first-person-overlay';
   firstPersonOverlay.setAttribute('aria-hidden', 'true');
@@ -1943,9 +1943,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   });
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff7ff, emissiveIntensity: 2.2, roughness: 0.3 });
   const fixtureCount = serviceFrameIndices.length;
-  // Keep high-bay fixtures in circulation aisles, not directly over rack
-  // rows where the rack steel would block their useful illumination.
-  [-0.52, 0.52].forEach((xRatio) => {
+  // Put fixtures over every circulation aisle. Alternate the actual light
+  // sources along adjacent rails: this lights every aisle while retaining the
+  // same 16 dynamic lights as before instead of halving the frame rate.
+  const aisleLightRatios = [-0.7, -0.24, 0.24, 0.7];
+  aisleLightRatios.forEach((xRatio, aisleIndex) => {
     const lightX = center.x + halfWarehouseWidth * xRatio;
     const lightY = trussBottomY - 0.24;
     for (let index = 1; index <= fixtureCount; index += 1) {
@@ -1963,10 +1965,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       scene.add(fixture);
       warehousePowerFixtures.push(fixture);
       // The emitting panel itself is the exact source anchor for this light.
-      const light = new THREE.PointLight(0xe8f6ff, 8, Math.max(7, warehouseWidth * 0.42), 2);
-      light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.08, 0));
-      scene.add(light);
-      warehousePowerLights.push(light);
+      // A staggered layout gives all four aisles coverage without increasing
+      // the number of expensive dynamic lights.
+      if ((index + aisleIndex) % 2 === 0) {
+        const light = new THREE.PointLight(0xe8f6ff, 8, Math.max(7, warehouseWidth * 0.42), 2);
+        light.position.copy(fixture.position).add(new THREE.Vector3(0, -0.08, 0));
+        scene.add(light);
+        warehousePowerLights.push(light);
+      }
     }
   });
   let warehousePowerOn = true;
@@ -2694,10 +2700,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       object.castShadow = true;
       object.receiveShadow = true;
       forkliftPickMeshes.push(object);
-      // The real tyres are authored together in Object_0. Split their vertices
-      // into the four physical wheel regions so the original model—not added
-      // placeholder meshes—can roll around its own axle.
-      if (object.name !== 'Object_0') return;
+      // The exporter changes mesh node names between GLB versions. Detect the
+      // tyre geometry by its vertices instead of relying on an Object_0 name.
       const position = object.geometry.getAttribute('position');
       const normal = object.geometry.getAttribute('normal');
       if (!position) return;
@@ -2721,10 +2725,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           }
         }
       }
-      if (wheels.every((wheel) => wheel.vertices.length > 40)) {
-        forkliftWheelMeshes.push({ position, normal, wheels, radius: 0.265 });
+      // Depending on the export, a tyre may live in a shared mesh or in its
+      // own mesh. Register every detected wheel rather than requiring every
+      // wheel to be present in the same geometry buffer.
+      const detectedWheels = wheels.filter((wheel) => wheel.vertices.length > 40);
+      if (detectedWheels.length) {
+        forkliftWheelMeshes.push({ position, normal, wheels: detectedWheels, radius: 0.265 });
       } else {
-        console.warn('[Warehouse3D] Could not isolate all four forklift wheels from the source model.');
+        console.warn('[Warehouse3D] Could not isolate forklift wheel geometry from a source mesh.');
       }
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
@@ -2752,6 +2760,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
+    // Two real headlight cones travel with the original forklift asset.
+    [-0.36, 0.36].forEach((x) => {
+      const headlight = new THREE.SpotLight(0xfff3cf, 2.2, 7.5, Math.PI / 7, 0.55, 1.4);
+      headlight.position.set(x, 0.52, 1.22);
+      const target = new THREE.Object3D();
+      target.position.set(x, 0.22, 5.6);
+      forkliftRoot.add(headlight, target);
+      headlight.target = target;
+    });
     const initialForkliftPosition = savedForklift?.position || {};
     forkliftRoot.position.set(
       Number.isFinite(Number(initialForkliftPosition.x)) ? Number(initialForkliftPosition.x) : center.x + rackBoundaryWidth * 0.34,
