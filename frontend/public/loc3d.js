@@ -2206,10 +2206,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error));
   };
   const forkliftPickMeshes = [];
-  // The source GLB bakes its tyres into a shared body mesh.  Keep animated
-  // wheel assemblies separate: mutating selected vertices in that shared mesh
-  // also moved body/mast vertices and caused the long, distorted polygons.
-  const forkliftWheels = [];
   const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
@@ -2783,61 +2779,30 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       );
     });
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
-  // Do not load forklift.glb here: it has a corrupt mast primitive that can
-  // leak into the scene when a hot-reloaded viewer finishes an older load.
-  // This truck is entirely scene-native and therefore has bounded geometry.
-  {
+  // Render the detailed source truck unchanged.  Its geometry must never be
+  // edited at runtime: the old wheel implementation mutated this shared mesh
+  // and stretched the mast into the ceiling.
+  assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
     if (disposed) return;
-    const forklift = new THREE.Group();
-    forkliftClearance = 0.62;
-    // A compact, purpose-built 2.6 m warehouse truck.  All moving parts are
-    // separate Three.js objects, so a damaged source mesh can never deform it.
-    const yellow = new THREE.MeshStandardMaterial({ color: 0xd69522, roughness: 0.52, metalness: 0.35 });
-    const charcoal = new THREE.MeshStandardMaterial({ color: 0x1b2229, roughness: 0.62, metalness: 0.56 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0x243b48, roughness: 0.18, metalness: 0.3, transparent: true, opacity: 0.86 });
-    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.88, metalness: 0.04 });
-    const hubMaterial = new THREE.MeshStandardMaterial({ color: 0x59616b, roughness: 0.46, metalness: 0.72 });
-    const addPart = (geometry, material, x, y, z) => {
-      const part = new THREE.Mesh(geometry, material);
-      part.position.set(x, y, z);
-      part.castShadow = part.receiveShadow = true;
-      forklift.add(part);
-      forkliftPickMeshes.push(part);
-      return part;
-    };
-    addPart(new THREE.BoxGeometry(1.28, 0.42, 1.42), yellow, 0, 0.48, -0.34);
-    addPart(new THREE.BoxGeometry(1.18, 0.16, 1.28), charcoal, 0, 0.77, -0.38);
-    addPart(new THREE.BoxGeometry(1.04, 0.72, 0.82), yellow, 0, 1.12, -0.53);
-    addPart(new THREE.BoxGeometry(0.92, 0.54, 0.68), glass, 0, 1.3, -0.49);
-    addPart(new THREE.BoxGeometry(0.13, 2.32, 0.13), charcoal, -0.54, 1.33, 0.72);
-    addPart(new THREE.BoxGeometry(0.13, 2.32, 0.13), charcoal, 0.54, 1.33, 0.72);
-    addPart(new THREE.BoxGeometry(1.2, 0.15, 0.12), charcoal, 0, 2.41, 0.72);
-    addPart(new THREE.BoxGeometry(1.16, 0.14, 0.11), charcoal, 0, 0.72, 0.76);
-    [-0.35, 0.35].forEach((x) => addPart(new THREE.BoxGeometry(0.1, 0.09, 1.12), charcoal, x, 0.58, 1.26));
-    const tyreGeometry = new THREE.CylinderGeometry(0.29, 0.29, 0.22, 20);
-    const hubGeometry = new THREE.CylinderGeometry(0.11, 0.11, 0.228, 16);
-    [
-      [-0.72, 0.31, 0.42, 0.29], [0.72, 0.31, 0.42, 0.29],
-      [-0.72, 0.28, -0.7, 0.24], [0.72, 0.28, -0.7, 0.24],
-    ].forEach(([x, y, z, radius]) => {
-      const spinner = new THREE.Group();
-      spinner.position.set(x, y, z);
-      const tyre = new THREE.Mesh(tyreGeometry, tyreMaterial);
-      tyre.rotation.z = Math.PI / 2;
-      tyre.castShadow = true;
-      tyre.receiveShadow = true;
-      const hub = new THREE.Mesh(hubGeometry, hubMaterial);
-      hub.rotation.z = Math.PI / 2;
-      hub.castShadow = true;
-      spinner.add(tyre, hub);
-      forklift.add(spinner);
-      forkliftPickMeshes.push(tyre, hub);
-      forkliftWheels.push({ spinner, radius });
+    forklift.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      forkliftPickMeshes.push(object);
     });
-
+    const rawBounds = new THREE.Box3().setFromObject(forklift);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    const scale = 3.1 / Math.max(rawSize.x, rawSize.z, 0.01);
+    forklift.scale.setScalar(scale);
+    const scaledBounds = new THREE.Box3().setFromObject(forklift);
+    const scaledSize = scaledBounds.getSize(new THREE.Vector3());
+    forkliftClearance = Math.min(0.72, Math.max(0.55, Math.max(scaledSize.x, scaledSize.z) * 0.22));
+    forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
+    forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
+    forklift.position.y -= scaledBounds.min.y;
     forkliftRoot = new THREE.Group();
     forkliftRoot.name = 'forklift';
-    forkliftRoot.userData.attribution = 'Scene-native forklift (replaces corrupt source GLB)';
+    forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
     // Two real headlight cones travel with the original forklift asset.
     [-0.36, 0.36].forEach((x) => {
@@ -2863,7 +2828,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftSelection.renderOrder = 16;
     forkliftSelection.visible = false;
     scene.add(forkliftSelection);
-  }
+  }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
   const perf = hud.querySelector('.loc3d-perf');
   let frames = 0;
   let lastFpsAt = performance.now();
@@ -2941,9 +2906,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
-        forkliftWheels.forEach(({ spinner, radius }) => {
-          spinner.rotation.x -= distanceTravelled / Math.max(radius, 0.01);
-        });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
         forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
