@@ -1955,6 +1955,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const lampColor = entry.open ? 0x63e65d : entry.typeColor;
     entry.statusLamp.material.color.set(lampColor);
     entry.statusLamp.material.emissive.set(lampColor);
+    // Make the actionable surface unambiguous: the door itself is the
+    // control, and the status lamp gives an immediate open/close cue.
+    entry.leaf.userData.doorAction = entry.open ? 'คลิกบานประตูเพื่อปิด' : 'คลิกบานประตูเพื่อเปิด';
+    window.toast?.(
+      entry.open ? 'เปิดประตูแล้ว' : 'ปิดประตูแล้ว',
+      entry.open ? 'คลิกที่บานประตูอีกครั้งเพื่อปิด' : 'คลิกที่บานประตูเพื่อเปิด',
+      'ok',
+    );
   };
   const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
@@ -2345,7 +2353,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const door = dockDoors[hoverDockDoorIndex];
       const doorPosition = new THREE.Vector3();
       door.leaf.getWorldPosition(doorPosition);
-      labelElement.textContent = `ประตู ${door.door.gateNo} · ${door.open ? 'เปิดอยู่' : 'ปิดอยู่'} · คลิกเพื่อ${door.open ? 'ปิด' : 'เปิด'}`;
+      labelElement.textContent = `ประตู ${door.door.gateNo} · ${door.open ? 'เปิดอยู่ · คลิกบานประตูเพื่อปิด' : 'ปิดอยู่ · คลิกบานประตูเพื่อเปิด'}`;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(doorPosition).add(new THREE.Vector3(0, 2.35, 0));
       labelObject.visible = true;
@@ -2643,7 +2651,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const rawSize = rawBounds.getSize(new THREE.Vector3());
     // Normalize downloaded assets to a real warehouse forklift footprint,
     // without depending on the arbitrary authoring unit of the GLB file.
-    const scale = 3.25 / Math.max(rawSize.x, rawSize.z, 0.01);
+    // Keep the downloaded forklift close to the warehouse reference scale.
+    // The previous 3.25 m footprint made it visibly oversized next to the
+    // electrical cabinet and narrowed the driving lane unnecessarily.
+    const scale = 2.45 / Math.max(rawSize.x, rawSize.z, 0.01);
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
