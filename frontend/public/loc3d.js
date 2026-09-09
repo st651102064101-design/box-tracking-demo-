@@ -2101,6 +2101,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let hoverDockDoorIndex = -1;
   let hoverForklift = false;
   let hoverStagingBox = null;
+  let hoverStagingMesh = null;
   let hoverRackCode = '';
   const actionAnchor = new THREE.Vector3();
   const hideRackAction = () => {
@@ -2231,6 +2232,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverDockDoorIndex = -1;
     hoverForklift = false;
     hoverStagingBox = null;
+    hoverStagingMesh = null;
     hideRackAction();
   };
   const updatePointer = (event) => {
@@ -2254,6 +2256,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const nextForklift = isForkliftHit();
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const nextStagingBox = stagingHit?.object?.userData?.stagingBox || null;
+    const nextStagingMesh = stagingHit?.object || null;
     const consumerIsClosest = Boolean(consumerHit) && (!doorHit || consumerHit.distance <= doorHit.distance) && (!slotHit || consumerHit.distance < slotHit.distance);
     const doorIndex = Number.isInteger(doorHit?.object?.userData?.doorIndex) ? doorHit.object.userData.doorIndex : -1;
     const nextDoor = nextBox < 0 && !consumerIsClosest && doorIndex >= 0 && (!slotHit || doorHit.distance < slotHit.distance) ? doorIndex : -1;
@@ -2265,7 +2268,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
+    if (next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextStagingMesh === hoverStagingMesh && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -2274,6 +2277,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverDockDoorIndex = nextDoor;
     hoverForklift = nextForklift;
     hoverStagingBox = nextStagingBox;
+    hoverStagingMesh = nextStagingMesh;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
     if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
     if (hoverForklift) {
@@ -2381,8 +2385,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // selection (and any pending route) instead of leaving it stuck active.
       if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
       else if (hoverStagingBox) {
-        releasePointerForModal();
-        onBoxSelect?.(hoverStagingBox.id);
+        if (forkliftSelected && hoverStagingMesh) {
+          // A forklift operator is issuing a physical pickup command here;
+          // opening the generic box drawer would interrupt that workflow.
+          const palletPoint = hoverStagingMesh.position.clone();
+          palletPoint.y = warehouseFloorY + 0.025;
+          moveForkliftTo(palletPoint);
+          window.toast?.('กำลังไปรับกล่อง', `${hoverStagingBox.id} · พาเลท Putaway`, 'ok');
+        } else {
+          releasePointerForModal();
+          onBoxSelect?.(hoverStagingBox.id);
+        }
       }
       else if (hoverBoxIndex >= 0) {
         releasePointerForModal();
@@ -2425,6 +2438,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverDockDoorIndex = -1;
     hoverForklift = false;
     hoverStagingBox = null;
+    hoverStagingMesh = null;
     labelObject.visible = false;
     canvas.style.cursor = 'default';
     window.setTimeout(() => {
