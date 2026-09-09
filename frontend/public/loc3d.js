@@ -1012,7 +1012,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // is intentionally wide enough for a pallet bay plus a safe approach.
     const startX = stagingBounds.min.x - 6.5;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
-    const stagingMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.86, side: THREE.DoubleSide });
     stagingBoxes.forEach((box, index) => {
       const x = startX + (index % columns) * spacingX;
       const z = startZ + Math.floor(index / columns) * spacingZ;
@@ -1037,10 +1036,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         scale: carton.scale.clone(),
         color: new THREE.Color(materialColors[box.materialType] || materialColors.generic),
       });
-      const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 1.34), stagingMarkMaterial);
-      marker.rotation.x = -Math.PI / 2;
-      marker.position.set(x, 0.008, z);
-      scene.add(marker);
     });
     const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
     labelTextures.push(stagingTexture);
@@ -2052,6 +2047,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftRoot = null;
   let forkliftSelected = false;
   let forkliftSelection = null;
+  let forkliftLoadAssembly = null;
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   const savedForklift = model.forkliftPosition || null;
@@ -2564,7 +2560,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const rawCenter = rawBounds.getCenter(new THREE.Vector3());
     const addPallet = (position, quaternion, width, depth, yOffset = 0, stagingBoxId = '') => {
       const pallet = palletTemplate.clone(true);
-      if (stagingBoxId) pallet.traverse((object) => { object.userData.stagingBoxId = stagingBoxId; });
+      if (stagingBoxId) {
+        pallet.userData.stagingBoxId = stagingBoxId;
+        pallet.traverse((object) => { object.userData.stagingBoxId = stagingBoxId; });
+      }
       // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
       // smaller horizontal scale so the source model's feet remain realistic.
       const scaleX = width / Math.max(rawSize.x, 0.01);
@@ -2744,6 +2743,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than preserving its former staging-bay coordinates.
               loadAssembly.position.set(0, 0.48, 1.45);
               loadAssembly.rotation.set(0, 0, 0);
+              forkliftLoadAssembly = loadAssembly;
             }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
           saveForkliftPosition();
@@ -2807,6 +2807,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       door.leaf.position.y = warehouseFloorY + (1 - scaleY) * door.height;
       door.openingMaterial.opacity = door.progress;
     });
+    // The load is anchored to the vehicle's local fork coordinate every
+    // frame, never to a former world coordinate in the staging bay.
+    if (forkliftLoadAssembly?.parent === forkliftRoot) {
+      forkliftLoadAssembly.position.set(0, 0.48, 1.45);
+      forkliftLoadAssembly.rotation.set(0, 0, 0);
+    }
     if (firstPerson) {
       camera.getWorldDirection(walkForward);
       walkForward.y = 0;
