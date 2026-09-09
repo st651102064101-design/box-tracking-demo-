@@ -2776,7 +2776,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // ForkliftRoot's local +Z is the direction of the original
               // model's forks.  Place the pallet centre just above the forks
               // rather than preserving its former staging-bay coordinates.
-              loadAssembly.position.set(0, 0.48, 1.45);
+              // Seat the deck directly over the fork carriage: lift it clear
+              // of the floor and keep the pallet holes around the fork tips.
+              loadAssembly.position.set(0, 0.78, 0.72);
               loadAssembly.rotation.set(0, 0, 0);
               forkliftLoadAssembly = loadAssembly;
             }
@@ -2851,7 +2853,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // The load is anchored to the vehicle's local fork coordinate every
     // frame, never to a former world coordinate in the staging bay.
     if (forkliftLoadAssembly?.parent === forkliftRoot) {
-      forkliftLoadAssembly.position.set(0, 0.48, 1.45);
+      forkliftLoadAssembly.position.set(0, 0.78, 0.72);
       forkliftLoadAssembly.rotation.set(0, 0, 0);
     }
     if (firstPerson) {
