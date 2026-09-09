@@ -2723,13 +2723,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
             const pickupId = pickupMesh.userData.stagingBox?.id || pickupMesh.userData.stagingBoxId || '';
-            const pickupParts = [];
-            scene.traverse((object) => { if (object.userData?.stagingBoxId === pickupId) pickupParts.push(object); });
-            pickupParts.forEach((object) => {
-              if (!object.parent) return;
-              object.position.y += 0.82;
-              forkliftRoot.attach(object);
+            // Keep each loaded pallet as one assembly.  Re-parenting every
+            // mesh independently used to break the source pallet hierarchy
+            // and retained its world position beside/behind the truck.
+            const pickupRoots = [];
+            scene.traverse((object) => {
+              if (object.userData?.stagingBoxId !== pickupId) return;
+              if (object.parent?.userData?.stagingBoxId === pickupId) return;
+              pickupRoots.push(object);
             });
+            if (pickupRoots.length) {
+              const loadAssembly = new THREE.Group();
+              loadAssembly.name = `forklift-load-${pickupId}`;
+              loadAssembly.userData.stagingBoxId = pickupId;
+              scene.add(loadAssembly);
+              pickupRoots.forEach((object) => loadAssembly.attach(object));
+              forkliftRoot.attach(loadAssembly);
+              // ForkliftRoot's local +Z is the direction of the original
+              // model's forks.  Place the pallet centre just above the forks
+              // rather than preserving its former staging-bay coordinates.
+              loadAssembly.position.set(0, 0.48, 1.45);
+              loadAssembly.rotation.set(0, 0, 0);
+            }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
           saveForkliftPosition();
           }
