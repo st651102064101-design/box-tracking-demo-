@@ -2817,6 +2817,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // and stretched the mast into the ceiling.
   assets.load('/models/forklift-rigged.glb').then(({ scene: forklift }) => {
     if (disposed) return;
+    const headlightAnchors = [];
     forklift.traverse((object) => {
       if (!object.isMesh) return;
       object.castShadow = true;
@@ -2825,6 +2826,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (object.name.includes('ForkliftWheelPair')) forkliftWheels.push({ object, radius: 0.24 });
       else if (object.name.includes('ForkliftMastInner')) forkliftMastInner = object;
       else if (object.name.includes('ForkliftCarriageForks')) forkliftCarriageForks = object;
+    });
+    forklift.updateMatrixWorld(true);
+    ['ForkliftDetailA', 'ForkliftDetailB'].forEach((name) => {
+      const housing = forklift.getObjectByName(name);
+      if (!housing) return;
+      headlightAnchors.push(new THREE.Box3().setFromObject(housing).getCenter(new THREE.Vector3()));
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
@@ -2853,16 +2860,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       roughness: 0.24,
       metalness: 0.1,
     });
-    [-0.36, 0.36].forEach((x) => {
+    headlightAnchors.forEach((anchor) => {
       const headlight = new THREE.SpotLight(0xfff3cf, 3.2, 7.5, Math.PI / 7, 0.55, 1.4);
-      const lampX = (rawBounds.min.x + rawBounds.max.x) * 0.5 + x;
-      const lampY = rawBounds.min.y + 0.52;
-      const lampZ = rawBounds.max.z - 0.08;
-      headlight.position.set(lampX, lampY, lampZ);
+      headlight.position.copy(anchor);
       const target = new THREE.Object3D();
-      target.position.set(lampX, rawBounds.min.y + 0.22, rawBounds.max.z + 4.4);
+      target.position.copy(anchor).add(new THREE.Vector3(0, -0.12, 3.8));
       const lens = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), headlightLensMaterial);
-      lens.position.copy(headlight.position);
+      lens.position.copy(anchor);
       lens.castShadow = false;
       forklift.add(headlight, target, lens);
       headlight.target = target;
