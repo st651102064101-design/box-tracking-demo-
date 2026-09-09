@@ -6902,13 +6902,13 @@ window.racksForWh = racksForWh;
 function maxShelvesForWh(wh) {
   var max=0;
   Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.shelf,10); if(n>max)max=n; });
-  return Math.max(max, 1);
+  return Math.max(max, 5);
 }
 window.maxShelvesForWh = maxShelvesForWh;
 function maxSlotsForWh(wh) {
   var max=0;
   Object.values(S.locations||{}).forEach(function(l){ if(wh&&l.wh!==wh)return; var n=parseInt(l.slot,10); if(n>max)max=n; });
-  return Math.max(max, 1);
+  return Math.max(max, 5);
 }
 window.maxSlotsForWh = maxSlotsForWh;
 function populateBulkCountSelects(wh) {

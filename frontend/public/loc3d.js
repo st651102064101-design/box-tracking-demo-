@@ -320,6 +320,14 @@ function rendererName(renderer) {
 
 async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate) {
   const stage = canvas.parentElement;
+  // Prevent long-press text selection/copy handles on touch devices inside the
+  // interactive 3D block while leaving normal camera gestures available.
+  stage.style.userSelect = 'none';
+  stage.style.webkitUserSelect = 'none';
+  stage.style.webkitTouchCallout = 'none';
+  const preventStageTextSelection = (event) => event.preventDefault();
+  stage.addEventListener('selectstart', preventStageTextSelection);
+  stage.addEventListener('contextmenu', preventStageTextSelection);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101419);
   scene.fog = new THREE.FogExp2(0x101419, 0.012);
@@ -969,6 +977,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   ].filter(Boolean);
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
+  const putawaySlotCounts = new Map();
   const slotState = (entry) => entry.slot.status === 'full'
     ? 'full'
     : occupiedSlotIds.has(String(entry.slot.id)) ? 'occupied' : 'empty';
@@ -1161,14 +1170,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
     labelTextures.push(stagingTexture);
     const stagingRows = Math.ceil(stagingBoxes.length / columns);
-    const stagingBorder = new THREE.LineLoop(
+    // WebGPU does not implement LineLoop. Close this floor boundary explicitly
+    // and render it as a regular Line so it works on both renderer backends.
+    const stagingBorder = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(startX - 0.68, 0.025, startZ - spacingZ * 0.52),
         new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, 0.025, startZ - spacingZ * 0.52),
         new THREE.Vector3(startX + (columns - 1) * spacingX + 0.68, 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
         new THREE.Vector3(startX - 0.68, 0.025, startZ + (stagingRows - 1) * spacingZ + spacingZ * 0.52),
+        new THREE.Vector3(startX - 0.68, 0.025, startZ - spacingZ * 0.52),
       ]),
-      new THREE.LineBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.95, depthTest: false }),
+      // Keep the boundary on the floor, but test it against the scene depth
+      // buffer. A pallet or carton in front of it must naturally hide it.
+      new THREE.LineBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.95, depthTest: true, depthWrite: false }),
     );
     stagingBorder.renderOrder = 10;
     scene.add(stagingBorder);
@@ -2200,13 +2214,33 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftWheels = [];
   let forkliftMastInner = null;
   let forkliftCarriageForks = null;
-  let forkliftMastInnerBaseY = 0;
+  const forkliftMastInnerBasePosition = new THREE.Vector3();
+  const forkliftMastInnerLiftAxis = new THREE.Vector3(0, 1, 0);
+  let forkliftMastLateralOffset = 0;
+  let forkliftCarriageLateralOffset = 0;
   let forkliftCarriageBaseY = 0;
+  let forkliftCarriageBaseX = 0;
   let forkliftAssetScale = 1;
   let forkliftLiftHeight = 0;
   let forkliftLiftTarget = 0;
+  let forkliftLiftInput = 0;
+  // Physical upper stop: the highest pallet level shown in the rack view.
+  // Shelf 5 sits above the previous 4.5 m stop; cap just above that pallet
+  // deck while still preventing the forks from entering the roof structure.
+  // Overall lift limit reduced by 10% while keeping the fork/mast motion
+  // relationship unchanged.
+  const forkliftLiftMax = 5.9085;
+  // Use the fixed lower rail first; engage the telescoping inner rail only
+  // after the fork carriage reaches the top of that fixed section.
+  const forkliftMastEngageHeight = 3.0;
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
+  let forkliftDropTarget = null;
+  // Fixed warehouse travel speed: 24 km/h = 6.67 m/s. This is applied as
+  // physical velocity, not a fixed distance-per-frame animation.
+  const forkliftCruiseSpeed = 24 / 3.6;
+  const forkliftAcceleration = 1.35;
+  const forkliftBrakeDeceleration = 2.25;
   const savedForklift = model.forkliftPosition || null;
   const saveForkliftPosition = () => {
     if (!forkliftRoot || !model.warehouseId) return;
@@ -2276,6 +2310,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let pointerFrame = 0;
   let down = null;
   let isCameraDragging = false;
+  let ctrlDragBlocked = false;
   let hoverConsumerUnit = false;
   let hoverDockDoorIndex = -1;
   let hoverForklift = false;
@@ -2329,13 +2364,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(forkliftLiftControls);
   const changeForkliftLift = (direction) => {
     if (!forkliftSelected || !forkliftCarriageForks) return;
-    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.75, 0, 8.5);
-    window.toast?.(`ระดับงา ${forkliftLiftTarget.toFixed(2)} เมตร`, forkliftLiftTarget > 0.8 ? 'เสาชั้นในกำลังยืดขึ้น' : 'ชุดงากำลังยกขึ้น', 'ok');
+    // A tap is one centimetre; holding the button advances this same target
+    // continuously in the animation loop below.
+    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.01, 0, forkliftLiftMax);
   };
-  const onForkliftLiftClick = (event) => {
+  const onForkliftLiftPointerDown = (event) => {
     const direction = event.target.closest('button')?.dataset.lift;
-    if (direction) changeForkliftLift(direction === 'up' ? 1 : -1);
+    if (!direction) return;
+    const amount = direction === 'up' ? 1 : -1;
+    changeForkliftLift(amount);
+    forkliftLiftInput = amount;
+    event.target.closest('button')?.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
   };
+  const stopForkliftLiftInput = () => { forkliftLiftInput = 0; };
   const onForkliftLiftKey = (event) => {
     if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.code === 'KeyE') changeForkliftLift(1);
@@ -2343,7 +2385,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     else return;
     event.preventDefault();
   };
-  forkliftLiftControls.addEventListener('click', onForkliftLiftClick);
+  forkliftLiftControls.addEventListener('pointerdown', onForkliftLiftPointerDown);
+  forkliftLiftControls.addEventListener('pointerup', stopForkliftLiftInput);
+  forkliftLiftControls.addEventListener('pointercancel', stopForkliftLiftInput);
+  window.addEventListener('pointerup', stopForkliftLiftInput);
   window.addEventListener('keydown', onForkliftLiftKey, { passive: false });
   const findForkliftPath = (start, target) => {
     const cell = 0.5;
@@ -2411,7 +2456,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       return;
     }
     showTargetRipple(target);
-    forkliftMotion = { path, index: 1, speed: 2.1, pickupMesh };
+    const routeLength = path.slice(1).reduce(
+      (total, point, index) => total + point.distanceTo(path[index]), 0,
+    );
+    forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh };
     ensureForkliftAudio();
     setForkliftAudioMoving(true);
     routeLine.geometry.dispose();
@@ -2566,6 +2614,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
+    if (ctrlDragBlocked || event.ctrlKey) return;
     if (firstPerson && document.pointerLockElement === canvas) {
       camera.rotation.y -= event.movementX * 0.0022;
       camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x - event.movementY * 0.0022, -1.38, 1.38);
@@ -2578,10 +2627,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
   const onPointerDown = (event) => {
+    if (event.ctrlKey) {
+      // Ctrl+drag is reserved from browser/object-copy gestures; normal
+      // orbit dragging remains available.
+      ctrlDragBlocked = true;
+      down = null;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
   };
   const onPointerUp = (event) => {
+    if (ctrlDragBlocked) {
+      ctrlDragBlocked = false;
+      down = null;
+      isCameraDragging = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const wasCameraDragging = isCameraDragging;
     if (down && !wasCameraDragging && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) {
       if (firstPerson && document.pointerLockElement === canvas) {
@@ -2613,8 +2679,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
       }
       else if (hoverIndex >= 0) {
-        releasePointerForModal();
-        onSelect?.(slotEntries[hoverIndex].slot.id);
+        const destination = slotEntries[hoverIndex];
+        const slotOccupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(destination.slot.id)).length
+          + (putawaySlotCounts.get(String(destination.slot.id)) || 0);
+        // With a pallet on the forks, a click on an empty or single-pallet
+        // slot is a putaway command; otherwise retain the normal slot drawer.
+        if (forkliftSelected && forkliftLoadAssembly && slotOccupancy <= 1) {
+          forkliftDropTarget = { ...destination, occupancy: slotOccupancy };
+          // Travel with forks lowered; the lift command is issued only after
+          // the vehicle reaches the destination.
+          forkliftLiftTarget = 0;
+          // Raise automatically to the selected shelf level; the normal
+          // damped lift animation still performs the movement visibly.
+          moveForkliftTo(destination.position.clone().setY(warehouseFloorY + 0.025));
+          window.toast?.('กำลังนำพาเลทไปวาง', `${destination.slot.id} · ชั้น ${destination.slot.shelfCode || ''}`, 'ok');
+        } else {
+          releasePointerForModal();
+          onSelect?.(destination.slot.id);
+        }
       }
       else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
       else if (hoverDockDoorIndex >= 0) toggleDockDoor(hoverDockDoorIndex);
@@ -2816,7 +2898,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Render the detailed source truck unchanged.  Its geometry must never be
   // edited at runtime: the old wheel implementation mutated this shared mesh
   // and stretched the mast into the ceiling.
-  assets.load('/models/forklift-rigged.glb').then(({ scene: forklift }) => {
+  assets.load('/models/forklift-wheels.glb').then(({ scene: forklift }) => {
     if (disposed) return;
     forklift.traverse((object) => {
       if (!object.isMesh) return;
@@ -2825,10 +2907,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       forkliftPickMeshes.push(object);
       // The downloaded GLB labels its rear LPG cylinders as WheelPair. Do not
       // animate those source meshes: they are not wheel geometry.
-      // The source GLB has these two labels swapped: the tall front rail is
-      // exported as CarriageForks, while the actual fork carriage is named
-      // MastInner.  Map by geometry so the moving forks stay attached to the
-      // fixed front mast instead of leaving a detached upright behind.
+      // Preserve the original textured fork and carriage geometry from the
+      // asset. The source labels are reversed, hence this intentional mapping.
       if (object.name.includes('ForkliftMastInner')) forkliftCarriageForks = object;
       else if (object.name.includes('ForkliftCarriageForks')) forkliftMastInner = object;
     });
@@ -2849,36 +2929,33 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
     forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
     forklift.position.y -= scaledBounds.min.y;
-    if (forkliftMastInner) forkliftMastInnerBaseY = forkliftMastInner.position.y;
-    if (forkliftCarriageForks) forkliftCarriageBaseY = forkliftCarriageForks.position.y;
+    if (forkliftMastInner) {
+      forkliftMastInnerBasePosition.copy(forkliftMastInner.position);
+      // The model was authored Z-up, then exported with an X-axis conversion.
+      // Derive its true vertical rail direction from the mesh quaternion rather
+      // than assuming the GLB parent's Y axis is the lift axis.
+      forkliftMastInnerLiftAxis.set(0, 0, 1).applyQuaternion(forkliftMastInner.quaternion).normalize();
+      if (forkliftMastInnerLiftAxis.y < 0) forkliftMastInnerLiftAxis.negate();
+    }
+    // Keep the fork carriage at its current aligned position. Only the moving
+    // inner rail is moved rightward to meet the fixed lower rail.
+    forkliftMastLateralOffset = 0.10 / forkliftAssetScale;
+    forkliftCarriageLateralOffset = -0.20 / forkliftAssetScale;
+    if (forkliftMastInner) forkliftMastInnerBasePosition.x += forkliftMastLateralOffset;
+    if (forkliftCarriageForks) {
+      forkliftCarriageBaseY = forkliftCarriageForks.position.y;
+      forkliftCarriageBaseX = forkliftCarriageForks.position.x + forkliftCarriageLateralOffset;
+    }
     forkliftRoot = new THREE.Group();
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
-    // The source asset combines its real tyre geometry into static body
-    // meshes, while its separately named \"WheelPair\" meshes are LPG tanks.
-    // Add four axle-centred tyre assemblies at the physical wheel locations so
-    // all four wheels can rotate independently without rotating the tanks.
-    const wheelRadius = THREE.MathUtils.clamp(Math.min(scaledSize.x, scaledSize.z) * 0.13, 0.28, 0.5);
-    const wheelWidth = wheelRadius * 0.42;
-    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x111417, roughness: 0.82, metalness: 0.04 });
-    const hubMaterial = new THREE.MeshStandardMaterial({ color: 0x697177, roughness: 0.38, metalness: 0.72 });
-    const wheelX = scaledSize.x * 0.46;
-    const frontWheelZ = scaledSize.z * 0.27;
-    const rearWheelZ = -scaledSize.z * 0.27;
-    [[-wheelX, frontWheelZ], [wheelX, frontWheelZ], [-wheelX, rearWheelZ], [wheelX, rearWheelZ]].forEach(([x, z]) => {
-      const wheel = new THREE.Group();
-      const tyre = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius, wheelWidth * 0.46, 12, 24), tyreMaterial);
-      tyre.rotation.y = Math.PI / 2;
-      tyre.castShadow = true;
-      tyre.receiveShadow = true;
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius * 0.42, wheelRadius * 0.42, wheelWidth * 1.08, 20), hubMaterial);
-      hub.rotation.z = Math.PI / 2;
-      hub.castShadow = true;
-      wheel.add(tyre, hub);
-      wheel.position.set(x, wheelRadius, z);
-      forkliftRoot.add(wheel);
-      forkliftWheels.push({ object: wheel, radius: wheelRadius });
+    // Original textured tyres, separated offline with pivots at their axles.
+    // Radius is authored in model units; travel distance is in world metres.
+    forklift.traverse((wheel) => {
+      if (/^Wheel_(FL|FR|RL|RR)$/.test(wheel.name)) {
+        forkliftWheels.push({ object: wheel, radius: wheel.userData.wheelRadius * scale });
+      }
     });
     // Keep functional lamps for lane lighting, but do not render detached
     // glowing spheres: at the scaled-up vehicle size they read as floating
@@ -2903,11 +2980,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     );
     forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
-    forkliftSelection = new THREE.BoxHelper(forkliftRoot, 0xa8ff2b);
-    forkliftSelection.material.depthTest = false;
-    forkliftSelection.material.transparent = true;
-    forkliftSelection.material.opacity = 0.95;
+    // Game-style ground selection effect: keep the vehicle silhouette clean
+    // and show selection as a pulsing ring at the wheels instead of a box.
+    forkliftSelection = new THREE.Mesh(
+      new THREE.RingGeometry(0.72, 0.9, 64),
+      new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.9, depthWrite: false, depthTest: true, side: THREE.DoubleSide }),
+    );
+    forkliftSelection.rotation.x = -Math.PI / 2;
+    forkliftSelection.userData.baseScale = Math.max(scaledSize.x, scaledSize.z) * 0.5;
+    forkliftSelection.scale.setScalar(forkliftSelection.userData.baseScale);
     forkliftSelection.renderOrder = 16;
+    forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     forkliftSelection.visible = false;
     scene.add(forkliftSelection);
   }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
@@ -2941,6 +3024,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
         if (forkliftMotion.index >= forkliftMotion.path.length) {
           saveForkliftPosition();
+          if (forkliftDropTarget) {
+            // Square the truck to the rack face before any lift/putaway step.
+            const rackEuler = new THREE.Euler().setFromQuaternion(forkliftDropTarget.quaternion, 'YXZ');
+            forkliftRoot.rotation.y = rackEuler.y;
+          }
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
             const pickupId = pickupMesh.userData.stagingBox?.id || pickupMesh.userData.stagingBoxId || '';
@@ -2977,6 +3065,61 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               forkliftLoadAssembly = loadAssembly;
             }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
+          } else if (forkliftDropTarget && forkliftLoadAssembly) {
+            const target = forkliftDropTarget;
+            const forkWorldY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
+            const requiredY = target.position.y;
+            if (forkWorldY + 0.08 < requiredY) {
+              // Never teleport a load into an upper slot. The operator must
+              // raise the forks to the slot level before the putaway completes.
+              forkliftLiftTarget = THREE.MathUtils.clamp(requiredY - forkliftCarriageBaseY - forkliftRoot.position.y, 0, forkliftLiftMax);
+              // Keep the destination pending and retry automatically once the
+              // smooth lift reaches the shelf height; no second click needed.
+              window.setTimeout(() => {
+                if (forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
+                  forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh: null };
+                }
+              }, 250);
+            } else {
+              forkliftLoadAssembly.parent?.remove(forkliftLoadAssembly);
+            scene.add(forkliftLoadAssembly);
+            forkliftLoadAssembly.position.copy(target.position);
+            // A slot supports up to two pallets side-by-side. Offset the
+            // second load along the slot's local width, never vertically.
+            {
+              const side = target.occupancy ? -1 : 1;
+              const sideOffset = new THREE.Vector3(0, 0, side * target.scale.z * 0.5)
+                .applyQuaternion(target.quaternion);
+              forkliftLoadAssembly.position.add(sideOffset);
+            }
+            // The slot position is its authored centre; keep the pallet
+            // centred there so the load is level with the shelf opening.
+            forkliftLoadAssembly.quaternion.copy(target.quaternion);
+            forkliftLoadAssembly.userData.slotId = target.slot.id;
+            putawaySlotCounts.set(String(target.slot.id), (putawaySlotCounts.get(String(target.slot.id)) || 0) + 1);
+            const placedBoxId = forkliftLoadAssembly.userData.stagingBoxId;
+            forkliftLoadAssembly = null;
+            forkliftDropTarget = null;
+            // After every successful putaway, return the forks to the lowest
+            // safe travel position with the same smooth damping.
+            forkliftLiftTarget = 0;
+            fetch(`/api/boxes/${encodeURIComponent(placedBoxId)}/putaway`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+              body: JSON.stringify({
+                wh: model.warehouseId,
+                zone: target.rack.zone || '',
+                rack: target.rack.code || '',
+                shelf: target.slot.shelfCode || '',
+                slot: target.slot.slotCode || target.slot.id,
+              }),
+            }).then((response) => {
+              if (!response.ok) throw new Error(`putaway ${response.status}`);
+              const box = (model.boxes || []).find((item) => String(item.id) === String(placedBoxId) || String(item.tag) === String(placedBoxId));
+              if (box) box.slotId = target.slot.id;
+            }).catch((error) => window.toast?.('บันทึก Putaway ไม่สำเร็จ', error.message, 'err'));
+            window.toast?.('วางพาเลทเข้าช่องแล้ว', `${target.slot.id} · ชั้น ${target.slot.shelfCode || ''}`, 'ok');
+            }
           saveForkliftPosition();
           }
           forkliftMotion = null;
@@ -2986,29 +3129,55 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       } else {
         movementDirection.normalize();
-        const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
+        // Calculate the entire distance still to travel, rather than only the
+        // current grid segment.  v² = 2as gives the largest safe speed that
+        // can brake to zero exactly at the final target.
+        const routeRemaining = forkliftMotion.path.slice(forkliftMotion.index + 1)
+          .reduce((total, point, index) => total + point.distanceTo(forkliftMotion.path[forkliftMotion.index + index]), remaining);
+        const brakingSpeed = Math.sqrt(2 * forkliftBrakeDeceleration * routeRemaining);
+        const desiredSpeed = Math.min(forkliftMotion.cruiseSpeed, brakingSpeed);
+        const speedChange = desiredSpeed - forkliftMotion.currentSpeed;
+        const rate = speedChange >= 0 ? forkliftAcceleration : forkliftBrakeDeceleration;
+        forkliftMotion.currentSpeed += Math.sign(speedChange) * Math.min(Math.abs(speedChange), rate * deltaSeconds);
+        const distanceTravelled = Math.min(remaining, forkliftMotion.currentSpeed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
         forkliftWheels.forEach(({ object, radius }) => {
-          object.rotation.x -= distanceTravelled / Math.max(radius, 0.01);
+          object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
         });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
         forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
       }
-      forkliftSelection?.update();
+      if (forkliftSelection?.visible) forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     }
     if (forkliftCarriageForks) {
-      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 6, deltaSeconds);
-      // The carriage object's parent axes are already converted by the GLB
-      // loader, so changing its local Y is a true vertical lift.
+      if (forkliftLiftInput) {
+        // 3 m/s is quick enough for a held press while every rendered frame
+        // still changes the target in sub-centimetre increments.
+        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 3 * deltaSeconds, 0, forkliftLiftMax);
+      }
+      // Putaway lift/lower motion is intentionally slower so the forks and
+      // pallet visibly align with the rack shelf instead of snapping.
+      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 4.5, deltaSeconds);
+      forkliftCarriageForks.position.x = forkliftCarriageBaseX;
       forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
-      // Do not animate the other source mesh: its baked local axis is the
-      // travel direction, which made the fork support slide backwards when
-      // lifting. The outer mast remains fixed as the carriage's guide rail.
+      // This is the original tall steel stage from the GLB (its exported name
+      // is CarriageForks). A two-stage mast travels roughly half the carriage
+      // distance, keeping the factory rail nested in the fixed outer mast and
+      // connected to the original fork assembly throughout the lift.
+      if (forkliftMastInner) {
+        forkliftMastInner.position.copy(forkliftMastInnerBasePosition).addScaledVector(
+          forkliftMastInnerLiftAxis,
+          // Once engaged, the inner rail follows the remaining lift distance
+          // at full travel so it can reach the upper rack level.
+          Math.max(0, forkliftLiftHeight - forkliftMastEngageHeight) / forkliftAssetScale,
+        );
+      }
     }
     if (forkliftSelection?.visible) {
       forkliftSelection.material.opacity = 0.68 + Math.sin(frameNow * 0.01) * 0.25;
-      forkliftSelection.update();
+      const pulse = 1 + Math.sin(frameNow * 0.008) * 0.08;
+      forkliftSelection.scale.setScalar((forkliftSelection.userData.baseScale || 1) * pulse);
     }
     if (targetMarker.visible) {
       const pulse = 1 + Math.sin(frameNow * 0.009) * 0.16;
@@ -3146,7 +3315,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       unitGridButton.remove();
       soundButton.removeEventListener('click', toggleForkliftAudio);
       soundButton.remove();
-      forkliftLiftControls.removeEventListener('click', onForkliftLiftClick);
+      forkliftLiftControls.removeEventListener('pointerdown', onForkliftLiftPointerDown);
+      forkliftLiftControls.removeEventListener('pointerup', stopForkliftLiftInput);
+      forkliftLiftControls.removeEventListener('pointercancel', stopForkliftLiftInput);
+      window.removeEventListener('pointerup', stopForkliftLiftInput);
       forkliftLiftControls.remove();
       window.removeEventListener('keydown', onForkliftLiftKey);
       if (forkliftAudio) {
@@ -3167,6 +3339,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       syncFullscreenPortals();
       rackActionButton.remove();
       warehouseTitle.remove();
+      stage.removeEventListener('selectstart', preventStageTextSelection);
+      stage.removeEventListener('contextmenu', preventStageTextSelection);
       controls.dispose();
       assets.dispose();
       labelRenderer.domElement.remove();
