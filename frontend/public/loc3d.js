@@ -489,7 +489,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let walkJumpHeight = 0;
   let walkHeadBobPhase = 0;
   let walkHeadBobOffset = 0;
+  // Opening the app's normal modal/drawer must temporarily release browser
+  // pointer lock, not end the walk session. Camera position/rotation stay on
+  // the same camera object, then lock is restored once the panel closes.
+  let resumeFirstPersonAfterModal = false;
   const exitFirstPerson = () => {
+    resumeFirstPersonAfterModal = false;
     firstPerson = false;
     firstPersonButton.classList.toggle('active', firstPerson);
     firstPersonButton.setAttribute('aria-pressed', String(firstPerson));
@@ -545,7 +550,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const onPointerLockChange = () => {
     // Escape and browser chrome both release pointer lock. Treat that as
     // leaving the walking mode so camera controls return predictably.
-    if (firstPerson && document.pointerLockElement !== canvas) exitFirstPerson();
+    if (firstPerson && document.pointerLockElement !== canvas && !resumeFirstPersonAfterModal) exitFirstPerson();
+    if (document.pointerLockElement === canvas) resumeFirstPersonAfterModal = false;
   };
   document.addEventListener('pointerlockchange', onPointerLockChange);
   let fallbackFullscreen = false;
@@ -613,11 +619,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   document.addEventListener('fullscreenchange', syncFullscreenPortals);
   syncFullscreenPortals();
   const releasePointerForModal = () => {
-    if (firstPerson && document.pointerLockElement === canvas) document.exitPointerLock?.();
+    if (firstPerson && document.pointerLockElement === canvas) {
+      resumeFirstPersonAfterModal = true;
+      document.exitPointerLock?.();
+    }
   };
   const modalPointerObserver = new MutationObserver(() => {
     const hasOpenModal = fullscreenPortals.some(({ element }) => element.classList.contains('show'));
     if (hasOpenModal) releasePointerForModal();
+    else if (resumeFirstPersonAfterModal && firstPerson) {
+      window.setTimeout(() => {
+        const stillOpen = fullscreenPortals.some(({ element }) => element.classList.contains('show'));
+        if (resumeFirstPersonAfterModal && firstPerson && !stillOpen && document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+      }, 0);
+    }
   });
   fullscreenPortals.forEach(({ element }) => modalPointerObserver.observe(element, { attributes: true, attributeFilter: ['class', 'style', 'aria-hidden'] }));
 
