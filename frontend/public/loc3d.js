@@ -1292,15 +1292,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Keep the guard clear of the rack face so it protects the uprights without
   // touching the shelf beams or blocking the front label area.
   const safetyClearance = 0.35;
-  // Back-to-back racks share a rear seam, so they deliberately have no safety
-  // rail or bollard in that join. Only a truly standalone rack needs guards.
-  rackEntries
-    .filter((entry) => outerRackIds.has(entry.rack.id))
-    .forEach((entry) => {
+  // Every rack end gets its own yellow/black safety posts.  The previous
+  // outer-rack-only filter made Zone A/B rows without a visible guard whenever
+  // the layout was treated as a back-to-back group, even though each physical
+  // rack needs impact protection at both ends.
+  rackEntries.forEach((entry) => {
       const rackBox = rackFootprintBounds(entry);
       [rackBox.min.z - safetyClearance, rackBox.max.z + safetyClearance].forEach((railZ, side) =>
         createRackEndGuard(rackBox.min.x, rackBox.max.x, railZ, 2));
-    });
+  });
   // Zone labels sit on the aisle side of each zone, left-to-right A, B, C.
   const safetySignTextures = [];
   zoneKeys.forEach((zone) => {
