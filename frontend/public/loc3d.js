@@ -2200,7 +2200,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     path[path.length - 1].copy(point(to[0], to[1]));
     return path;
   };
-  const moveForkliftTo = (target) => {
+  const moveForkliftTo = (target, pickupMesh = null) => {
     if (!forkliftSelected || !forkliftRoot) return;
     const path = findForkliftPath(forkliftRoot.position, target);
     if (path.length < 2) {
@@ -2208,7 +2208,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       return;
     }
     showTargetRipple(target);
-    forkliftMotion = { path, index: 1, speed: 2.1 };
+    forkliftMotion = { path, index: 1, speed: 2.1, pickupMesh };
     routeLine.geometry.dispose();
     routeLine.geometry = new THREE.BufferGeometry().setFromPoints(path.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
     routeLine.visible = true;
@@ -2390,7 +2390,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // opening the generic box drawer would interrupt that workflow.
           const palletPoint = hoverStagingMesh.position.clone();
           palletPoint.y = warehouseFloorY + 0.025;
-          moveForkliftTo(palletPoint);
+          moveForkliftTo(palletPoint, hoverStagingMesh);
           window.toast?.('กำลังไปรับกล่อง', `${hoverStagingBox.id} · พาเลท Putaway`, 'ok');
         } else {
           releasePointerForModal();
@@ -2685,6 +2685,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         forkliftRoot.position.copy(destination);
         forkliftMotion.index += 1;
         if (forkliftMotion.index >= forkliftMotion.path.length) {
+          const pickupMesh = forkliftMotion.pickupMesh;
+          if (pickupMesh && pickupMesh.parent) {
+            pickupMesh.parent.remove(pickupMesh);
+            forkliftRoot.add(pickupMesh);
+            pickupMesh.position.set(0, 1.02, 0.82);
+            pickupMesh.rotation.set(0, 0, 0);
+            window.toast?.('ยกกล่องขึ้นงาแล้ว', `${pickupMesh.userData.stagingBox?.id || ''} · พร้อมนำไป Putaway`, 'ok');
+          }
           forkliftMotion = null;
           routeLine.visible = false;
         }
