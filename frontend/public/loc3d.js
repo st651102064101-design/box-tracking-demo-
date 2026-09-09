@@ -1002,8 +1002,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const stagingCenter = stagingBounds.getCenter(new THREE.Vector3());
     const columns = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(stagingBoxes.length))));
     const spacingX = 1.35, spacingZ = 1.55;
-    const startX = stagingCenter.x - ((Math.min(columns, stagingBoxes.length) - 1) * spacingX) / 2;
-    const startZ = stagingBounds.max.z + 1.3;
+    // Putaway staging belongs beside the rack block, not in its front aisle:
+    // that front clearance is a forklift travel lane.  The side wall margin
+    // is intentionally wide enough for a pallet bay plus a safe approach.
+    const startX = stagingBounds.min.x - 3.25;
+    const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     const stagingMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.86, side: THREE.DoubleSide });
     stagingBoxes.forEach((box, index) => {
       const x = startX + (index % columns) * spacingX;
@@ -1040,7 +1043,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       new THREE.MeshBasicMaterial({ map: stagingTexture, transparent: true, depthWrite: false, toneMapped: false }),
     );
     stagingLabel.rotation.x = -Math.PI / 2;
-    stagingLabel.position.set(stagingCenter.x, 0.01, startZ + Math.ceil(stagingBoxes.length / columns) * spacingZ + 0.18);
+    stagingLabel.position.set(startX, 0.01, startZ + Math.ceil(stagingBoxes.length / columns) * spacingZ + 0.18);
     scene.add(stagingLabel);
   }
   // Cartons are deliberately built as physical packages, rather than just a
@@ -2535,8 +2538,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       ).applyQuaternion(quaternion);
       pallet.position.add(baseOffset);
       scene.add(pallet);
+      // The downloaded asset has a very thin silhouette under a loaded box.
+      // Add the real deck boards and runners so the pallet is visibly a
+      // pallet from aisle height — shared by rack stock and staging stock.
+      const timber = new THREE.MeshStandardMaterial({ color: 0xb97a3e, roughness: 0.8, metalness: 0 });
+      const addTimber = (sx, sy, sz, localX, localY, localZ) => {
+        const board = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), timber);
+        board.position.copy(new THREE.Vector3(localX, localY + yOffset, localZ).applyQuaternion(quaternion).add(position));
+        board.quaternion.copy(quaternion);
+        board.castShadow = board.receiveShadow = true;
+        scene.add(board);
+      };
+      [-0.43, -0.215, 0, 0.215, 0.43].forEach((localZ) => addTimber(width * 0.94, 0.04, depth * 0.15, 0, 0.16, localZ * depth));
+      [-0.38, 0, 0.38].forEach((localZ) => addTimber(width * 0.72, 0.11, depth * 0.13, 0, 0.075, localZ * depth));
+      [-0.37, 0.37].forEach((localZ) => addTimber(width * 0.94, 0.035, depth * 0.11, 0, 0.018, localZ * depth));
     };
-    boxEntries.forEach((entry) => {
+    boxEntries.concat(stagingEntries).forEach((entry) => {
       const palletWidth = 1.0;
       const palletDepth = 1.2;
       const palletCenter = entry.position.clone();
