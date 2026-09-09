@@ -2804,13 +2804,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
     forkliftRoot.add(forklift);
-    // Two real headlight cones travel with the original forklift asset.
+    // Headlights must be anchored to their physical lamps, not the unscaled
+    // vehicle root.  The emissive lenses make their source visible in daylight
+    // while the paired spotlights illuminate the lane ahead.
+    const headlightLensMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfff7d5,
+      emissive: 0xffdf82,
+      emissiveIntensity: 3.6,
+      roughness: 0.24,
+      metalness: 0.1,
+    });
     [-0.36, 0.36].forEach((x) => {
-      const headlight = new THREE.SpotLight(0xfff3cf, 2.2, 7.5, Math.PI / 7, 0.55, 1.4);
+      const headlight = new THREE.SpotLight(0xfff3cf, 3.2, 7.5, Math.PI / 7, 0.55, 1.4);
       headlight.position.set(x, 0.52, 1.22);
       const target = new THREE.Object3D();
       target.position.set(x, 0.22, 5.6);
-      forkliftRoot.add(headlight, target);
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), headlightLensMaterial);
+      lens.position.copy(headlight.position);
+      lens.castShadow = false;
+      forklift.add(headlight, target, lens);
       headlight.target = target;
     });
     const initialForkliftPosition = savedForklift?.position || {};
