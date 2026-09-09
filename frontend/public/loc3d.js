@@ -2735,6 +2735,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               const loadAssembly = new THREE.Group();
               loadAssembly.name = `forklift-load-${pickupId}`;
               loadAssembly.userData.stagingBoxId = pickupId;
+              // Establish the assembly origin at the selected pallet before
+              // re-parenting.  Starting at (0,0,0) leaves every child with a
+              // world-sized offset, which is why a lifted box appeared at the
+              // opposite end of the warehouse.
+              pickupMesh.getWorldPosition(loadAssembly.position);
               scene.add(loadAssembly);
               pickupRoots.forEach((object) => loadAssembly.attach(object));
               forkliftRoot.attach(loadAssembly);
