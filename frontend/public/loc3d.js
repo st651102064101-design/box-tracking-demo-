@@ -2562,9 +2562,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const rawBounds = new THREE.Box3().setFromObject(palletTemplate);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
     const rawCenter = rawBounds.getCenter(new THREE.Vector3());
-    const addPallet = (position, quaternion, width, depth, yOffset = 0) => {
+    const addPallet = (position, quaternion, width, depth, yOffset = 0, stagingBoxId = '') => {
       const pallet = palletTemplate.clone(true);
-      if (stagingEntries.includes(entry)) pallet.traverse((object) => { object.userData.stagingBoxId = entry.box.id; });
+      if (stagingBoxId) pallet.traverse((object) => { object.userData.stagingBoxId = stagingBoxId; });
       // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
       // smaller horizontal scale so the source model's feet remain realistic.
       const scaleX = width / Math.max(rawSize.x, 0.01);
@@ -2587,7 +2587,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const timber = new THREE.MeshStandardMaterial({ color: 0xb97a3e, roughness: 0.8, metalness: 0 });
       const addTimber = (sx, sy, sz, localX, localY, localZ) => {
         const board = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), timber);
-        if (stagingEntries.includes(entry)) board.userData.stagingBoxId = entry.box.id;
+        if (stagingBoxId) board.userData.stagingBoxId = stagingBoxId;
         board.position.copy(new THREE.Vector3(localX, localY + yOffset, localZ).applyQuaternion(quaternion).add(position));
         board.quaternion.copy(quaternion);
         board.castShadow = board.receiveShadow = true;
@@ -2602,7 +2602,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const palletDepth = 1.2;
       const palletCenter = entry.position.clone();
       palletCenter.y -= entry.scale.y / 2 + 0.085;
-      addPallet(palletCenter, entry.quaternion, palletWidth, palletDepth);
+      addPallet(
+        palletCenter,
+        entry.quaternion,
+        palletWidth,
+        palletDepth,
+        0,
+        stagingEntries.includes(entry) ? entry.box.id : '',
+      );
     });
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
   // CC BY model: "Forklift" by brezineman. Keep the original attribution
