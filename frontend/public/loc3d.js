@@ -1010,7 +1010,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Putaway staging belongs beside the rack block, not in its front aisle:
     // that front clearance is a forklift travel lane.  The side wall margin
     // is intentionally wide enough for a pallet bay plus a safe approach.
-    const startX = stagingBounds.min.x - 3.25;
+    const startX = stagingBounds.min.x - 6.5;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     const stagingMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.86, side: THREE.DoubleSide });
     stagingBoxes.forEach((box, index) => {
