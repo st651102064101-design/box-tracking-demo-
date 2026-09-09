@@ -339,7 +339,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   } else {
     renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+  // The old 1.75 cap makes a 4K/HiDPI panel shade nearly three times as many
+  // pixels as a 1x canvas.  1.25 keeps text and rack edges crisp but releases
+  // enough GPU headroom for the simulation to remain responsive.
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -365,7 +368,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const sun = new THREE.DirectionalLight(0xfff3de, 2.25);
   sun.position.set(-18, 28, 14);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0.025;
   scene.add(sun);
@@ -479,6 +482,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   unitGridButton.setAttribute('aria-pressed', 'false');
   unitGridButton.title = 'แสดง/ซ่อนตาราง Unit';
   unitGridButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></svg>';
+  // UI preferences are per account and backed by /api/ui-prefs.  Keep the
+  // warehouse id in the key so a choice in one warehouse never changes another.
+  const viewPrefKey = (name) => `warehouse3d:${model.warehouseId || 'default'}:${name}`;
+  const getViewPref = (name, fallback) => {
+    try { return window.uiPrefGet?.(viewPrefKey(name), fallback) ?? fallback; } catch { return fallback; }
+  };
+  const setViewPref = (name, value) => {
+    try { window.uiPrefSet?.(viewPrefKey(name), value); } catch { /* preference sync is optional offline */ }
+  };
+  const soundButton = document.createElement('button');
+  soundButton.type = 'button';
+  soundButton.className = 'loc3d-sound';
+  soundButton.setAttribute('aria-label', 'เปิดเสียงรถโฟล์คลิฟท์');
+  soundButton.title = 'เสียงรถโฟล์คลิฟท์';
+  soundButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4z"/><path class="loc3d-sound-wave" d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>';
   const firstPersonOverlay = document.createElement('div');
   firstPersonOverlay.className = 'loc3d-first-person-overlay';
   firstPersonOverlay.setAttribute('aria-hidden', 'true');
@@ -500,6 +518,66 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   updateFirstPersonCopy();
   let firstPerson = false;
+  // Browser autoplay policies require audio graph creation during a real user
+  // gesture. The button below supplies that gesture; motion merely controls it.
+  let forkliftAudioEnabled = Boolean(getViewPref('forkliftAudio', true));
+  let forkliftAudio = null;
+  const syncSoundButton = () => {
+    soundButton.classList.toggle('muted', !forkliftAudioEnabled);
+    soundButton.setAttribute('aria-pressed', String(forkliftAudioEnabled));
+    soundButton.setAttribute('aria-label', forkliftAudioEnabled ? 'ปิดเสียงรถโฟล์คลิฟท์' : 'เปิดเสียงรถโฟล์คลิฟท์');
+    soundButton.title = forkliftAudioEnabled ? 'ปิดเสียงรถโฟล์คลิฟท์' : 'เปิดเสียงรถโฟล์คลิฟท์';
+  };
+  const ensureForkliftAudio = () => {
+    if (forkliftAudio) return forkliftAudio;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    const context = new AudioContextClass();
+    const master = context.createGain();
+    const engine = context.createOscillator();
+    const engineGain = context.createGain();
+    const beeper = context.createOscillator();
+    const beepGain = context.createGain();
+    engine.type = 'sawtooth'; engine.frequency.value = 58;
+    beeper.type = 'square'; beeper.frequency.value = 930;
+    master.gain.value = 0;
+    engineGain.gain.value = 0.035;
+    beepGain.gain.value = 0;
+    engine.connect(engineGain).connect(master);
+    beeper.connect(beepGain).connect(master);
+    master.connect(context.destination);
+    engine.start(); beeper.start();
+    forkliftAudio = { context, master, engine, beepGain };
+    return forkliftAudio;
+  };
+  const setForkliftAudioMoving = (moving) => {
+    const audio = forkliftAudio;
+    if (!audio) return;
+    const now = audio.context.currentTime;
+    const active = moving && forkliftAudioEnabled;
+    audio.context.resume?.();
+    audio.master.gain.cancelScheduledValues(now);
+    audio.master.gain.linearRampToValueAtTime(active ? 0.52 : 0, now + 0.08);
+    audio.engine.frequency.setTargetAtTime(active ? 82 : 58, now, 0.08);
+    audio.beepGain.gain.cancelScheduledValues(now);
+    if (active) {
+      // Short periodic reverse-style safety beeps while the vehicle travels.
+      audio.beepGain.gain.setValueAtTime(0, now);
+      for (let time = now + 0.12; time < now + 1.2; time += 0.48) {
+        audio.beepGain.gain.setValueAtTime(0.035, time);
+        audio.beepGain.gain.setValueAtTime(0, time + 0.12);
+      }
+    } else audio.beepGain.gain.setValueAtTime(0, now);
+  };
+  const toggleForkliftAudio = () => {
+    forkliftAudioEnabled = !forkliftAudioEnabled;
+    ensureForkliftAudio();
+    setViewPref('forkliftAudio', forkliftAudioEnabled);
+    syncSoundButton();
+    setForkliftAudioMoving(Boolean(forkliftMotion));
+  };
+  syncSoundButton();
+  soundButton.addEventListener('click', toggleForkliftAudio);
   const walkKeys = new Set();
   const walkEyeHeight = 1.7;
   let walkVerticalVelocity = 0;
@@ -522,6 +600,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     walkHeadBobOffset = 0;
     stage.classList.remove('loc3d-first-person-active');
     firstPersonOverlay.classList.remove('show');
+    setViewPref('firstPerson', false);
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
   };
   const enterFirstPerson = () => {
@@ -538,6 +617,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     camera.position.y = warehouseFloorY + walkEyeHeight;
     stage.classList.add('loc3d-first-person-active');
     firstPersonOverlay.classList.add('show');
+    setViewPref('firstPerson', true);
     canvas.requestPointerLock?.();
     window.toast?.('โหมดคนเดิน · WASD เดิน, Shift วิ่ง, Space กระโดด, เมาส์มอง, Esc ออก', '', 'ok');
   };
@@ -628,6 +708,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
   stage.appendChild(unitGridButton);
+  stage.appendChild(soundButton);
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
@@ -916,13 +997,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     slotMesh.computeBoundingSphere();
     scene.add(slotMesh);
   }
-  let unitGridVisible = false;
+  let unitGridVisible = Boolean(getViewPref('unitGrid', false));
+  grid.visible = unitGridVisible;
+  grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
+  unitGridButton.classList.toggle('active', unitGridVisible);
+  unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
   const toggleUnitGrid = () => {
     unitGridVisible = !unitGridVisible;
     grid.visible = unitGridVisible;
     grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
     unitGridButton.classList.toggle('active', unitGridVisible);
     unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
+    setViewPref('unitGrid', unitGridVisible);
     window.toast?.(unitGridVisible ? 'แสดงตารางพื้น 1 เมตรแล้ว' : 'ซ่อนตารางพื้นแล้ว', '', 'ok');
   };
   unitGridButton.addEventListener('click', toggleUnitGrid);
@@ -2023,6 +2109,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
   grid.material.transparent = true;
   grid.material.opacity = 0.11;
+  grid.visible = false;
   scene.add(grid);
 
   const span = Math.max(size.x, size.z, 5);
@@ -2117,9 +2204,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error));
   };
   const forkliftPickMeshes = [];
-  // Each entry keeps the original forklift wheel geometry and its local axle.
-  // The source GLB ships all four wheels inside Object_0 rather than as nodes.
-  const forkliftWheelMeshes = [];
+  // The source GLB bakes its tyres into a shared body mesh.  Keep animated
+  // wheel assemblies separate: mutating selected vertices in that shared mesh
+  // also moved body/mast vertices and caused the long, distorted polygons.
+  const forkliftWheels = [];
   const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
@@ -2292,6 +2380,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
     showTargetRipple(target);
     forkliftMotion = { path, index: 1, speed: 2.1, pickupMesh };
+    ensureForkliftAudio();
+    setForkliftAudioMoving(true);
     routeLine.geometry.dispose();
     routeLine.geometry = new THREE.BufferGeometry().setFromPoints(path.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
     routeLine.visible = true;
@@ -2691,74 +2781,61 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       );
     });
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
-  // CC BY model: "Forklift" by brezineman. Keep the original attribution
-  // alongside the asset rather than baking it into an unrelated warehouse mesh.
-  assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
+  // Do not load forklift.glb here: it has a corrupt mast primitive that can
+  // leak into the scene when a hot-reloaded viewer finishes an older load.
+  // This truck is entirely scene-native and therefore has bounded geometry.
+  {
     if (disposed) return;
-    forklift.traverse((object) => {
-      if (!object.isMesh) return;
-      object.castShadow = true;
-      object.receiveShadow = true;
-      forkliftPickMeshes.push(object);
-      // The exporter changes mesh node names between GLB versions. Detect the
-      // tyre geometry by its vertices instead of relying on an Object_0 name.
-      const position = object.geometry.getAttribute('position');
-      const normal = object.geometry.getAttribute('normal');
-      if (!position) return;
-      const basePositions = position.array.slice();
-      const wheels = [
-        { centerX: -0.41, centerY: -0.785, centerZ: 0.265, vertices: [] },
-        { centerX: 0.41, centerY: -0.785, centerZ: 0.265, vertices: [] },
-        { centerX: -0.41, centerY: 0.615, centerZ: 0.215, vertices: [] },
-        { centerX: 0.41, centerY: 0.615, centerZ: 0.215, vertices: [] },
-      ];
-      for (let index = 0; index < position.count; index += 1) {
-        const offset = index * 3;
-        const x = basePositions[offset];
-        const y = basePositions[offset + 1];
-        const z = basePositions[offset + 2];
-        for (const wheel of wheels) {
-          if (Math.abs(x - wheel.centerX) <= 0.16
-            && Math.hypot(y - wheel.centerY, z - wheel.centerZ) <= 0.34) {
-            wheel.vertices.push(index);
-            break;
-          }
-        }
-      }
-      // Depending on the export, a tyre may live in a shared mesh or in its
-      // own mesh. Register every detected wheel rather than requiring every
-      // wheel to be present in the same geometry buffer.
-      const detectedWheels = wheels.filter((wheel) => wheel.vertices.length > 40);
-      if (detectedWheels.length) {
-        forkliftWheelMeshes.push({ position, normal, wheels: detectedWheels, radius: 0.265 });
-      } else {
-        console.warn('[Warehouse3D] Could not isolate forklift wheel geometry from a source mesh.');
-      }
+    const forklift = new THREE.Group();
+    forkliftClearance = 0.62;
+    // A compact, purpose-built 2.6 m warehouse truck.  All moving parts are
+    // separate Three.js objects, so a damaged source mesh can never deform it.
+    const yellow = new THREE.MeshStandardMaterial({ color: 0xd69522, roughness: 0.52, metalness: 0.35 });
+    const charcoal = new THREE.MeshStandardMaterial({ color: 0x1b2229, roughness: 0.62, metalness: 0.56 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x243b48, roughness: 0.18, metalness: 0.3, transparent: true, opacity: 0.86 });
+    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.88, metalness: 0.04 });
+    const hubMaterial = new THREE.MeshStandardMaterial({ color: 0x59616b, roughness: 0.46, metalness: 0.72 });
+    const addPart = (geometry, material, x, y, z) => {
+      const part = new THREE.Mesh(geometry, material);
+      part.position.set(x, y, z);
+      part.castShadow = part.receiveShadow = true;
+      forklift.add(part);
+      forkliftPickMeshes.push(part);
+      return part;
+    };
+    addPart(new THREE.BoxGeometry(1.28, 0.42, 1.42), yellow, 0, 0.48, -0.34);
+    addPart(new THREE.BoxGeometry(1.18, 0.16, 1.28), charcoal, 0, 0.77, -0.38);
+    addPart(new THREE.BoxGeometry(1.04, 0.72, 0.82), yellow, 0, 1.12, -0.53);
+    addPart(new THREE.BoxGeometry(0.92, 0.54, 0.68), glass, 0, 1.3, -0.49);
+    addPart(new THREE.BoxGeometry(0.13, 2.32, 0.13), charcoal, -0.54, 1.33, 0.72);
+    addPart(new THREE.BoxGeometry(0.13, 2.32, 0.13), charcoal, 0.54, 1.33, 0.72);
+    addPart(new THREE.BoxGeometry(1.2, 0.15, 0.12), charcoal, 0, 2.41, 0.72);
+    addPart(new THREE.BoxGeometry(1.16, 0.14, 0.11), charcoal, 0, 0.72, 0.76);
+    [-0.35, 0.35].forEach((x) => addPart(new THREE.BoxGeometry(0.1, 0.09, 1.12), charcoal, x, 0.58, 1.26));
+    const tyreGeometry = new THREE.CylinderGeometry(0.29, 0.29, 0.22, 20);
+    const hubGeometry = new THREE.CylinderGeometry(0.11, 0.11, 0.228, 16);
+    [
+      [-0.72, 0.31, 0.42, 0.29], [0.72, 0.31, 0.42, 0.29],
+      [-0.72, 0.28, -0.7, 0.24], [0.72, 0.28, -0.7, 0.24],
+    ].forEach(([x, y, z, radius]) => {
+      const spinner = new THREE.Group();
+      spinner.position.set(x, y, z);
+      const tyre = new THREE.Mesh(tyreGeometry, tyreMaterial);
+      tyre.rotation.z = Math.PI / 2;
+      tyre.castShadow = true;
+      tyre.receiveShadow = true;
+      const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+      hub.rotation.z = Math.PI / 2;
+      hub.castShadow = true;
+      spinner.add(tyre, hub);
+      forklift.add(spinner);
+      forkliftPickMeshes.push(tyre, hub);
+      forkliftWheels.push({ spinner, radius });
     });
-    const rawBounds = new THREE.Box3().setFromObject(forklift);
-    const rawSize = rawBounds.getSize(new THREE.Vector3());
-    // Normalize downloaded assets to a real warehouse forklift footprint,
-    // without depending on the arbitrary authoring unit of the GLB file.
-    // Keep the downloaded forklift close to the warehouse reference scale.
-    // The previous 3.25 m footprint made it visibly oversized next to the
-    // electrical cabinet and narrowed the driving lane unnecessarily.
-    // Medium-duty 2–3 tonne truck: about 2.6 m body footprint (excluding
-    // forks), suitable for a standard loaded warehouse pallet.
-    const scale = 3.1 / Math.max(rawSize.x, rawSize.z, 0.01);
-    forklift.scale.setScalar(scale);
-    const scaledBounds = new THREE.Box3().setFromObject(forklift);
-    const scaledSize = scaledBounds.getSize(new THREE.Vector3());
-    // The path grid already respects the physical rack envelope. Keeping an
-    // extra 0.55–0.72 m buffer is enough for safe steering without closing a
-    // real 4 m forklift aisle completely.
-    forkliftClearance = Math.min(0.72, Math.max(0.55, Math.max(scaledSize.x, scaledSize.z) * 0.22));
-    forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
-    forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
-    forklift.position.y -= scaledBounds.min.y;
 
     forkliftRoot = new THREE.Group();
     forkliftRoot.name = 'forklift';
-    forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
+    forkliftRoot.userData.attribution = 'Scene-native forklift (replaces corrupt source GLB)';
     forkliftRoot.add(forklift);
     // Two real headlight cones travel with the original forklift asset.
     [-0.36, 0.36].forEach((x) => {
@@ -2777,9 +2854,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     );
     forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
-    forkliftWheelMeshes.forEach((wheelMesh) => {
-      wheelMesh.radius *= scale;
-    });
     forkliftSelection = new THREE.BoxHelper(forkliftRoot, 0xa8ff2b);
     forkliftSelection.material.depthTest = false;
     forkliftSelection.material.transparent = true;
@@ -2787,7 +2861,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftSelection.renderOrder = 16;
     forkliftSelection.visible = false;
     scene.add(forkliftSelection);
-  }).catch((error) => console.warn('[Warehouse3D] Forklift asset could not be loaded.', error));
+  }
   const perf = hud.querySelector('.loc3d-perf');
   let frames = 0;
   let lastFpsAt = performance.now();
@@ -2857,6 +2931,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           saveForkliftPosition();
           }
           forkliftMotion = null;
+          setForkliftAudioMoving(false);
           routeLine.visible = false;
           missionBeacon.visible = false;
         }
@@ -2864,27 +2939,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
-        forkliftWheelMeshes.forEach((wheelMesh) => {
-          const rotation = -distanceTravelled / wheelMesh.radius;
-          wheelMesh.wheels.forEach((wheel) => {
-            const cos = Math.cos(rotation);
-            const sin = Math.sin(rotation);
-            wheel.vertices.forEach((vertex) => {
-              const offset = vertex * 3;
-              const y = wheelMesh.position.array[offset] - wheel.centerY;
-              const z = wheelMesh.position.array[offset + 2] - wheel.centerZ;
-              wheelMesh.position.array[offset + 1] = wheel.centerY + y * cos - z * sin;
-              wheelMesh.position.array[offset + 2] = wheel.centerZ + y * sin + z * cos;
-              if (wheelMesh.normal) {
-                const normalY = wheelMesh.normal.array[offset + 1];
-                const normalZ = wheelMesh.normal.array[offset + 2];
-                wheelMesh.normal.array[offset + 1] = normalY * cos - normalZ * sin;
-                wheelMesh.normal.array[offset + 2] = normalY * sin + normalZ * cos;
-              }
-            });
-          });
-          wheelMesh.position.needsUpdate = true;
-          if (wheelMesh.normal) wheelMesh.normal.needsUpdate = true;
+        forkliftWheels.forEach(({ spinner, radius }) => {
+          spinner.rotation.x -= distanceTravelled / Math.max(radius, 0.01);
         });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
@@ -3029,6 +3085,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       firstPersonButton.remove();
       unitGridButton.removeEventListener('click', toggleUnitGrid);
       unitGridButton.remove();
+      soundButton.removeEventListener('click', toggleForkliftAudio);
+      soundButton.remove();
+      if (forkliftAudio) {
+        forkliftAudio.master.gain.value = 0;
+        forkliftAudio.context.close?.();
+        forkliftAudio = null;
+      }
       window.removeEventListener('keydown', onFirstPersonShortcut);
       firstPersonHint.remove();
       firstPersonOverlay.remove();
