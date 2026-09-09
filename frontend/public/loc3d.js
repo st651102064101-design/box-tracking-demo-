@@ -2778,8 +2778,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than preserving its former staging-bay coordinates.
               // Seat the deck directly over the fork carriage: lift it clear
               // of the floor and keep the pallet holes around the fork tips.
-              loadAssembly.position.set(0, 0.78, 0.72);
-              loadAssembly.rotation.set(0, 0, 0);
+              loadAssembly.position.set(0, 0.78, 1.08);
+              // Turn the pallet so its fork pockets face the mast/forks,
+              // rather than exposing the pocket openings sideways.
+              loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
               forkliftLoadAssembly = loadAssembly;
             }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
@@ -2853,8 +2855,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // The load is anchored to the vehicle's local fork coordinate every
     // frame, never to a former world coordinate in the staging bay.
     if (forkliftLoadAssembly?.parent === forkliftRoot) {
-      forkliftLoadAssembly.position.set(0, 0.78, 0.72);
-      forkliftLoadAssembly.rotation.set(0, 0, 0);
+      forkliftLoadAssembly.position.set(0, 0.78, 1.08);
+      forkliftLoadAssembly.rotation.set(0, Math.PI * 0.5, 0);
     }
     if (firstPerson) {
       camera.getWorldDirection(walkForward);
