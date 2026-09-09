@@ -552,6 +552,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('keydown', onWalkKey, { passive: false });
   window.addEventListener('keyup', onWalkKey, { passive: false });
+  // First-person input owns browser-like shortcuts while the canvas has focus.
+  // Browsers may reserve a few OS-level commands (notably Ctrl+W), but this
+  // capture handler prevents every cancelable shortcut from escaping the game.
+  const onFirstPersonBrowserShortcut = (event) => {
+    if (!firstPerson || !event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!['KeyW', 'KeyR', 'KeyL', 'KeyT', 'KeyN', 'KeyD', 'KeyH', 'KeyJ', 'KeyK', 'KeyP', 'Tab', 'F5', 'F6'].includes(event.code)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  window.addEventListener('keydown', onFirstPersonBrowserShortcut, { capture: true, passive: false });
   const onPointerLockChange = () => {
     // Escape and browser chrome both release pointer lock. Treat that as
     // leaving the walking mode so camera controls return predictably.
@@ -2425,6 +2435,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
       else if (hoverStagingBox) {
         if (forkliftSelected && hoverStagingMesh) {
+          if (forkliftLoadAssembly?.parent === forkliftRoot || forkliftMotion?.pickupMesh) {
+            window.toast?.('รถยกมีพาเรทอยู่แล้ว', 'ต้องนำพาเรทปัจจุบันไปวางก่อน จึงรับกล่องถัดไปได้', 'warn');
+            return;
+          }
           // A forklift operator is issuing a physical pickup command here;
           // opening the generic box drawer would interrupt that workflow.
           const palletPoint = hoverStagingMesh.position.clone();
@@ -2690,7 +2704,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Keep the downloaded forklift close to the warehouse reference scale.
     // The previous 3.25 m footprint made it visibly oversized next to the
     // electrical cabinet and narrowed the driving lane unnecessarily.
-    const scale = 2.45 / Math.max(rawSize.x, rawSize.z, 0.01);
+    // Medium-duty 2–3 tonne truck: about 2.6 m body footprint (excluding
+    // forks), suitable for a standard loaded warehouse pallet.
+    const scale = 2.65 / Math.max(rawSize.x, rawSize.z, 0.01);
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
@@ -2963,6 +2979,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       firstPersonOverlay.remove();
       window.removeEventListener('keydown', onWalkKey);
       window.removeEventListener('keyup', onWalkKey);
+      window.removeEventListener('keydown', onFirstPersonBrowserShortcut, { capture: true });
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       document.removeEventListener('fullscreenchange', syncFullscreenPortals);
       modalPointerObserver.disconnect();
