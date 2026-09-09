@@ -1263,9 +1263,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // is constrained by BOTH the box width and height so it never overhangs.
   if (boxEntries.length + stagingEntries.length <= 250) {
     boxEntries.concat(stagingEntries).forEach((entry) => {
-      const labelWidth = Math.min(entry.scale.x * 0.84, entry.scale.y * 3.15);
+      // Match the physical shelf-edge ticket exactly.  A carton barcode must
+      // be a scan label, not a billboard larger than its rack location tag.
+      const labelWidth = Math.min(0.46, Math.max(0.28, entry.scale.x * 0.18));
       if (labelWidth < 0.025) return;
-      const labelHeight = labelWidth / 3.65;
+      const labelHeight = Math.min(0.12, labelWidth / 4.2);
       const texture = code128LabelTexture(entry.box.id);
       labelTextures.push(texture);
       const sticker = new THREE.Mesh(
@@ -2194,6 +2196,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftSelected = false;
   let forkliftSelection = null;
   let forkliftLoadAssembly = null;
+  const forkliftWheels = [];
+  let forkliftMastInner = null;
+  let forkliftCarriageForks = null;
+  let forkliftMastInnerBaseY = 0;
+  let forkliftCarriageBaseY = 0;
+  let forkliftAssetScale = 1;
+  let forkliftLiftHeight = 0;
+  let forkliftLiftTarget = 0;
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   const savedForklift = model.forkliftPosition || null;
@@ -2303,6 +2313,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const setForkliftSelected = (selected) => {
     forkliftSelected = Boolean(selected && forkliftRoot);
     if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
+    forkliftLiftControls.classList.toggle('show', forkliftSelected);
     if (!forkliftSelected) {
       forkliftMotion = null;
       routeLine.visible = false;
@@ -2311,6 +2322,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       missionBeacon.visible = false;
     }
   };
+  const forkliftLiftControls = document.createElement('div');
+  forkliftLiftControls.className = 'loc3d-forklift-lift';
+  forkliftLiftControls.innerHTML = '<button type="button" data-lift="down" aria-label="ลดงา">−</button><span>ระดับงา</span><button type="button" data-lift="up" aria-label="ยกงา">+</button>';
+  stage.appendChild(forkliftLiftControls);
+  const changeForkliftLift = (direction) => {
+    if (!forkliftSelected || !forkliftCarriageForks) return;
+    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.45, 0, 3.2);
+    window.toast?.(`ระดับงา ${forkliftLiftTarget.toFixed(2)} เมตร`, forkliftLiftTarget > 0.8 ? 'เสาชั้นในกำลังยืดขึ้น' : 'ชุดงากำลังยกขึ้น', 'ok');
+  };
+  const onForkliftLiftClick = (event) => {
+    const direction = event.target.closest('button')?.dataset.lift;
+    if (direction) changeForkliftLift(direction === 'up' ? 1 : -1);
+  };
+  const onForkliftLiftKey = (event) => {
+    if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.code === 'KeyE') changeForkliftLift(1);
+    else if (event.code === 'KeyQ') changeForkliftLift(-1);
+    else return;
+    event.preventDefault();
+  };
+  forkliftLiftControls.addEventListener('click', onForkliftLiftClick);
+  window.addEventListener('keydown', onForkliftLiftKey, { passive: false });
   const findForkliftPath = (start, target) => {
     const cell = 0.5;
     const minX = center.x - halfWarehouseWidth + forkliftClearance;
@@ -2782,17 +2815,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Render the detailed source truck unchanged.  Its geometry must never be
   // edited at runtime: the old wheel implementation mutated this shared mesh
   // and stretched the mast into the ceiling.
-  assets.load('/models/forklift.glb').then(({ scene: forklift }) => {
+  assets.load('/models/forklift-rigged.glb').then(({ scene: forklift }) => {
     if (disposed) return;
     forklift.traverse((object) => {
       if (!object.isMesh) return;
       object.castShadow = true;
       object.receiveShadow = true;
       forkliftPickMeshes.push(object);
+      if (object.name.includes('ForkliftWheelPair')) forkliftWheels.push({ object, radius: 0.24 });
+      else if (object.name.includes('ForkliftMastInner')) forkliftMastInner = object;
+      else if (object.name.includes('ForkliftCarriageForks')) forkliftCarriageForks = object;
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
     const scale = 3.1 / Math.max(rawSize.x, rawSize.z, 0.01);
+    forkliftAssetScale = scale;
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
     const scaledSize = scaledBounds.getSize(new THREE.Vector3());
@@ -2800,6 +2837,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forklift.position.x -= scaledBounds.min.x + scaledSize.x / 2;
     forklift.position.z -= scaledBounds.min.z + scaledSize.z / 2;
     forklift.position.y -= scaledBounds.min.y;
+    if (forkliftMastInner) forkliftMastInnerBaseY = forkliftMastInner.position.y;
+    if (forkliftCarriageForks) forkliftCarriageBaseY = forkliftCarriageForks.position.y;
     forkliftRoot = new THREE.Group();
     forkliftRoot.name = 'forklift';
     forkliftRoot.userData.attribution = 'Forklift by brezineman (CC BY)';
@@ -2816,9 +2855,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     });
     [-0.36, 0.36].forEach((x) => {
       const headlight = new THREE.SpotLight(0xfff3cf, 3.2, 7.5, Math.PI / 7, 0.55, 1.4);
-      headlight.position.set(x, 0.52, 1.22);
+      const lampX = (rawBounds.min.x + rawBounds.max.x) * 0.5 + x;
+      const lampY = rawBounds.min.y + 0.52;
+      const lampZ = rawBounds.max.z - 0.08;
+      headlight.position.set(lampX, lampY, lampZ);
       const target = new THREE.Object3D();
-      target.position.set(x, 0.22, 5.6);
+      target.position.set(lampX, rawBounds.min.y + 0.22, rawBounds.max.z + 4.4);
       const lens = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), headlightLensMaterial);
       lens.position.copy(headlight.position);
       lens.castShadow = false;
@@ -2900,7 +2942,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than preserving its former staging-bay coordinates.
               // Seat the deck directly over the fork carriage: lift it clear
               // of the floor and keep the pallet holes around the fork tips.
-              loadAssembly.position.set(0, 0.78, 1.08);
+              loadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.08);
               // Turn the pallet so its fork pockets face the mast/forks,
               // rather than exposing the pocket openings sideways.
               loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
@@ -2918,11 +2960,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         movementDirection.normalize();
         const distanceTravelled = Math.min(remaining, forkliftMotion.speed * deltaSeconds);
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
+        forkliftWheels.forEach(({ object, radius }) => {
+          object.rotation.x -= distanceTravelled / Math.max(radius, 0.01);
+        });
         movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
         movementQuaternion.setFromEuler(movementEuler);
         forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
       }
       forkliftSelection?.update();
+    }
+    if (forkliftCarriageForks) {
+      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 6, deltaSeconds);
+      forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
+      if (forkliftMastInner) {
+        const mastExtension = Math.max(0, forkliftLiftHeight - 0.8) * 0.58;
+        forkliftMastInner.position.y = forkliftMastInnerBaseY + mastExtension / forkliftAssetScale;
+      }
     }
     if (forkliftSelection?.visible) {
       forkliftSelection.material.opacity = 0.68 + Math.sin(frameNow * 0.01) * 0.25;
@@ -2956,7 +3009,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // The load is anchored to the vehicle's local fork coordinate every
     // frame, never to a former world coordinate in the staging bay.
     if (forkliftLoadAssembly?.parent === forkliftRoot) {
-      forkliftLoadAssembly.position.set(0, 0.78, 1.08);
+      forkliftLoadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.08);
       forkliftLoadAssembly.rotation.set(0, Math.PI * 0.5, 0);
     }
     if (firstPerson) {
@@ -3063,6 +3116,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       unitGridButton.remove();
       soundButton.removeEventListener('click', toggleForkliftAudio);
       soundButton.remove();
+      forkliftLiftControls.removeEventListener('click', onForkliftLiftClick);
+      forkliftLiftControls.remove();
+      window.removeEventListener('keydown', onForkliftLiftKey);
       if (forkliftAudio) {
         forkliftAudio.master.gain.value = 0;
         forkliftAudio.context.close?.();
