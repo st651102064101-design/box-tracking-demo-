@@ -451,6 +451,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   hud.className = 'loc3d-hud';
   hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span>${model.stats?.stagingBoxes ? `<span class="warn">รอ Putaway ${model.stats.stagingBoxes} กล่อง</span>` : ''}<span class="loc3d-perf">กำลังวัด FPS…</span>`;
   stage.appendChild(hud);
+  const hudHelp = ['ตารางพื้น 1 ช่อง เท่ากับ 1 × 1 เมตร', 'ตัวเรนเดอร์กราฟิกที่เบราว์เซอร์กำลังใช้งาน', 'จำนวนแร็ค ช่องเก็บ และกล่องจากฐานข้อมูล', 'จำนวนกล่องที่รอรถยกนำไป Putaway', 'FPS และจำนวน draw calls ต่อเฟรม'];
+  [...hud.querySelectorAll('span')].forEach((badge, index) => {
+    const help = hudHelp[index] || '';
+    badge.title = help;
+    badge.addEventListener('mouseenter', () => { if (help) window.toast?.(help, '', 'ok'); });
+  });
 
   // Keep the scene controls inside the 3D stage, so fullscreen expands only
   // the warehouse view instead of the whole application shell.
@@ -910,21 +916,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     slotMesh.computeBoundingSphere();
     scene.add(slotMesh);
   }
-  const unitGridMaterial = new THREE.MeshBasicMaterial({ color: 0xa8ff2b, wireframe: true, transparent: true, opacity: 0.7, depthTest: false });
-  const unitGridMesh = slotEntries.length ? new THREE.InstancedMesh(UNIT_BOX, unitGridMaterial, slotEntries.length) : null;
-  if (unitGridMesh) {
-    slotEntries.forEach((entry, index) => unitGridMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale)));
-    unitGridMesh.instanceMatrix.needsUpdate = true;
-    unitGridMesh.renderOrder = 13;
-    unitGridMesh.visible = false;
-    scene.add(unitGridMesh);
-  }
+  let unitGridVisible = false;
   const toggleUnitGrid = () => {
-    if (!unitGridMesh) return;
-    unitGridMesh.visible = !unitGridMesh.visible;
-    unitGridButton.classList.toggle('active', unitGridMesh.visible);
-    unitGridButton.setAttribute('aria-pressed', String(unitGridMesh.visible));
-    window.toast?.(unitGridMesh.visible ? 'แสดงตาราง Unit แล้ว' : 'ซ่อนตาราง Unit แล้ว', '', 'ok');
+    unitGridVisible = !unitGridVisible;
+    grid.visible = unitGridVisible;
+    grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
+    unitGridButton.classList.toggle('active', unitGridVisible);
+    unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
+    window.toast?.(unitGridVisible ? 'แสดงตารางพื้น 1 เมตรแล้ว' : 'ซ่อนตารางพื้นแล้ว', '', 'ok');
   };
   unitGridButton.addEventListener('click', toggleUnitGrid);
 
