@@ -512,8 +512,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     firstPersonButton.classList.add('active');
     firstPersonButton.setAttribute('aria-pressed', 'true');
     controls.enabled = false;
-    camera.position.y = Math.max(camera.position.y, warehouseFloorY + walkEyeHeight);
+    // OrbitControls can leave the camera pitched sharply down or with a tiny
+    // roll depending on the warehouse's previous overview angle. A walking
+    // camera must always enter level at eye height; retain yaw only.
     camera.rotation.order = 'YXZ';
+    camera.rotation.x = 0;
+    camera.rotation.z = 0;
+    camera.position.y = warehouseFloorY + walkEyeHeight;
     stage.classList.add('loc3d-first-person-active');
     firstPersonOverlay.classList.add('show');
     canvas.requestPointerLock?.();
@@ -1170,10 +1175,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const warehouseMarginZ = Math.max(13, Math.min(20, size.z * 4));
   const warehouseWidth = Math.max(36, size.x + warehouseMarginX * 2);
   const warehouseDepth = Math.max(28, size.z + warehouseMarginZ * 2);
-  const warehouseWallHeight = Math.max(9.5, size.y + 3.3);
+  // A selective five-level rack should sit close to the roof eave, like a
+  // real warehouse, rather than looking miniature under a tall empty roof.
+  const warehouseWallHeight = Math.max(6.2, size.y + 0.72);
   // Keep the gable shallow, as in a standard metal-sheet warehouse rather
   // than using a semi-circular hangar roof.
-  const warehouseRoofRise = Math.max(1.8, warehouseWidth * 0.085);
+  const warehouseRoofRise = Math.max(1.05, warehouseWidth * 0.055);
   const warehouseFloorY = floor.position.y;
   const warehouseCenterY = warehouseFloorY + warehouseWallHeight / 2;
   const wallThickness = 0.12;
