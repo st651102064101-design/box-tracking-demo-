@@ -2878,6 +2878,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const onRemoteForkliftState = (event) => {
     const detail = event.detail;
     if (!detail || String(detail.warehouseId) !== String(model.warehouseId)) return;
+    if (String(detail.forkliftId || 'forklift-1') !== String(activeForkliftId)) return;
     if (detail.origin && detail.origin === clientId()) return;
     forkliftControllerActive = true;
     if (!forkliftSelected) applyRemoteForkliftState(detail);
@@ -2895,7 +2896,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const latest = await response.json();
       if (forkliftMotion || performance.now() < forkliftLocalPositionHoldUntil) return;
       forkliftControllerActive = Boolean(latest?.forkliftController?.active);
-      applyRemoteForkliftState(latest?.forkliftPosition);
+      applyRemoteForkliftState(latest?.forkliftPositions?.[activeForkliftId]
+        || (activeForkliftId === 'forklift-1' ? latest?.forkliftPosition : null));
     } catch (_) {
       // Realtime sync is best effort; the local vehicle remains usable offline.
     } finally {
@@ -3716,6 +3718,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               forkliftWheels = forkliftCloneWheels;
               forkliftMastInner = forkliftCloneMastInner;
               forkliftCarriageForks = forkliftCloneCarriageForks;
+            } else {
+              forkliftWheels = primaryForkliftWheels;
+              forkliftMastInner = primaryForkliftMastInner;
+              forkliftCarriageForks = primaryForkliftCarriageForks;
             }
             if (wasSelected) await setForkliftSelected(true);
           })();
@@ -4078,6 +4084,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         forkliftWheels.push({ object: wheel, radius: wheel.userData.wheelRadius * scale });
       }
     });
+    const primaryForkliftWheels = forkliftWheels;
+    const primaryForkliftMastInner = forkliftMastInner;
+    const primaryForkliftCarriageForks = forkliftCarriageForks;
     // Keep functional lamps for lane lighting, but do not render detached
     // glowing spheres: at the scaled-up vehicle size they read as floating
     // white balls rather than physical lamp lenses.
