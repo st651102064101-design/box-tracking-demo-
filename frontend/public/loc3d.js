@@ -1326,7 +1326,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Keep inbound pallets close to the rack block.  The old 8.5 m offset put
     // the whole left staging row outside the useful camera/frustum on compact
     // warehouses, making those boxes appear to disappear from the left side.
-    const stagingSideOffset = Math.min(3.2, Math.max(1.6, stagingBounds.getSize(new THREE.Vector3()).x * 0.22));
+    // Leave a full pallet bay plus forklift clearance between staging and the
+    // rack edge so waiting cartons never intersect rack uprights or shelves.
+    const stagingSideOffset = Math.min(5.5, Math.max(3.8, stagingBounds.getSize(new THREE.Vector3()).x * 0.32));
     const startX = stagingBounds.min.x - stagingSideOffset;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     stagingBoxes.forEach((box, index) => {
