@@ -1240,6 +1240,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // BOX-001 is included as a compatibility fallback for data created before
   // material_type was added to the persisted boxes table.
   const cartonEntries = boxEntries.concat(stagingEntries).filter((entry) => canonicalMaterialType(entry.box) === 'carton' || entry.box.id === 'BOX-001');
+  const addCartonHandlingMark = (entry) => {
+    const handlingTexture = cartonHandlingTexture(entry.box.id);
+    labelTextures.push(handlingTexture);
+    const handlingSize = Math.max(0.1, Math.min(entry.scale.x * 0.32, entry.scale.y * 0.34));
+    const handlingMark = new THREE.Mesh(
+      new THREE.PlaneGeometry(handlingSize, handlingSize * 0.56),
+      new THREE.MeshBasicMaterial({ map: handlingTexture, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    const frontPosition = new THREE.Vector3(
+      -entry.scale.x * 0.27,
+      entry.scale.y * 0.26,
+      entry.scale.z / 2 + 0.004,
+    ).applyQuaternion(entry.quaternion).add(entry.position);
+    handlingMark.position.copy(frontPosition);
+    handlingMark.quaternion.copy(entry.quaternion);
+    handlingMark.userData.stagingBoxId = entry.box.id;
+    scene.add(handlingMark);
+    boxBarcodeStickers.push(handlingMark);
+  };
   if (cartonEntries.length <= 80) {
     const cartonEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x68472e, transparent: true, opacity: 0.68 });
     const cartonSeamMaterial = new THREE.MeshStandardMaterial({ color: 0x745037, roughness: 0.92, metalness: 0 });
@@ -1272,22 +1291,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         );
         placeLocal(seam, entry.scale.x * fraction, topY + 0.002, 0);
       });
-      const handlingTexture = cartonHandlingTexture(entry.box.id);
-      labelTextures.push(handlingTexture);
-      const handlingSize = Math.max(0.1, Math.min(entry.scale.x * 0.32, entry.scale.y * 0.34));
-      const handlingMark = new THREE.Mesh(
-        new THREE.PlaneGeometry(handlingSize, handlingSize * 0.56),
-        new THREE.MeshBasicMaterial({ map: handlingTexture, toneMapped: false, side: THREE.DoubleSide }),
-      );
-      placeLocal(
-        handlingMark,
-        -entry.scale.x * 0.27,
-        entry.scale.y * 0.26,
-        entry.scale.z / 2 + 0.004,
-      );
-      boxBarcodeStickers.push(handlingMark);
+      addCartonHandlingMark(entry);
     });
   }
+  // Waiting Putaway cartons need the same handling instruction even when the
+  // configured box material is not "carton" (for example a generic box).
+  stagingEntries.filter((entry) => !cartonEntries.includes(entry)).forEach(addCartonHandlingMark);
   // GTA-style selection marker: one reusable animated ring (not one mesh per
   // box), keeping the hover interaction constant-cost even with many boxes.
   const hoverRingMaterial = new THREE.MeshBasicMaterial({
@@ -1347,8 +1356,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       sticker.userData.stagingBoxId = entry.box.id;
       // Slightly proud of the front carton face: a real applied RFID/ZPL
       // label, not a floating caption and never outside the box silhouette.
-      const frontOffset = new THREE.Vector3(0, 0, entry.scale.z / 2 + 0.003)
-        .applyQuaternion(entry.quaternion);
+      // Keep the scan label in the top-left corner of the front face, leaving
+      // the centre clear for the carton handling mark.
+      const edgePadding = Math.min(0.04, labelWidth * 0.18);
+      const frontOffset = new THREE.Vector3(
+        -entry.scale.x / 2 + labelWidth / 2 + edgePadding,
+        entry.scale.y / 2 - labelHeight / 2 - edgePadding,
+        entry.scale.z / 2 + 0.003,
+      ).applyQuaternion(entry.quaternion);
       sticker.position.copy(entry.position).add(frontOffset);
       sticker.quaternion.copy(entry.quaternion);
       scene.add(sticker);
@@ -2228,6 +2243,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // dead-zone error on first render.
   let hoverIndex = -1;
   let hoverBoxIndex = -1;
+  let forkliftSelected = false;
   const updateRackLabelMode = () => {
     const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
     if (showBarcodes !== barcodeMode) {
@@ -2265,7 +2281,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let forkliftRoot = null;
-  let forkliftSelected = false;
   let forkliftSelection = null;
   let forkliftLoadAssembly = null;
   const forkliftWheels = [];
@@ -2670,6 +2685,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverRing.userData.baseScale = Math.max(stagingHit.object.scale.x, stagingHit.object.scale.z) * 1.5;
       hoverRing.scale.setScalar(hoverRing.userData.baseScale);
       hoverRing.visible = true;
+      boxHoverArrow.position.set(stagingHit.object.position.x, stagingHit.object.position.y + stagingHit.object.scale.y / 2 + 0.6, stagingHit.object.position.z);
+      boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
+      boxHoverArrow.visible = true;
       canvas.style.cursor = 'pointer';
     } else if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
@@ -2726,6 +2744,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
         hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
         hoverRing.visible = true;
+        boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.6, placementPoint.z);
+        boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
+        boxHoverArrow.visible = true;
         labelObject.visible = false;
       } else {
         labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? '' : state === 'occupied' ? 'มีของ' : 'ว่าง';
