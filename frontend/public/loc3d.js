@@ -492,7 +492,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   unitGridButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></svg>';
   const settingsButton = document.createElement('button');
   settingsButton.type = 'button';
-  settingsButton.className = 'loc3d-settings';
+  settingsButton.className = 'loc3d-settings loc3d-sound';
   settingsButton.setAttribute('aria-label', 'ตั้งค่า');
   settingsButton.title = 'ตั้งค่า';
   settingsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 15 .1.1-1.7 2.9-.2-.1-2-1.1a7.7 7.7 0 0 1-1.7 1l-.3 2.3h-3.4l-.3-2.3a7.7 7.7 0 0 1-1.7-1l-2 1.1-.2.1-1.7-2.9.1-.1 1.8-1.4a7.6 7.6 0 0 1 0-2l-1.8-1.4-.1-.1 1.7-2.9.2.1 2 1.1a7.7 7.7 0 0 1 1.7-1l.3-2.3h3.4l.3 2.3a7.7 7.7 0 0 1 1.7 1l2-1.1.2-.1 1.7 2.9-.1.1-1.8 1.4a7.6 7.6 0 0 1 0 2Z"/></svg>';
@@ -500,7 +500,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   settingsMenu.className = 'loc3d-settings-menu';
   settingsMenu.hidden = true;
   settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
-  Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid #a8f931', borderRadius: '11px', background: 'rgba(25,47,16,.92)', color: '#a8f931', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
+  Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: '11px', background: 'rgba(12,14,16,.92)', color: '#fff', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
   Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
   unitGridButton.style.display = 'none';
   settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
@@ -512,11 +512,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     else if (key === 'roof') window.dispatchEvent(new CustomEvent('loc3d-toggle-roof'));
   });
   const toggleBoundaryDetail = (kind) => {
+    // Boundary elements are tagged by their authored materials/height so the
+    // entire enclosure (including beams, seams and gables) toggles together.
     scene.traverse((object) => {
       if (!object.isMesh && !object.isLine) return;
       const p = object.getWorldPosition(new THREE.Vector3());
       const wall = Math.min(Math.abs(p.x - (center.x - halfWarehouseWidth)), Math.abs(p.x - (center.x + halfWarehouseWidth)), Math.abs(p.z - (center.z - halfWarehouseDepth)), Math.abs(p.z - (center.z + halfWarehouseDepth))) < 0.3;
-      const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1);
+      const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1) && (object.material === roofMaterial || object.material === trussMaterial || object.material === seamMaterial);
       if ((kind === 'walls' && wall) || (kind === 'roof' && roof)) object.visible = !object.visible;
     });
   };
@@ -2697,8 +2699,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.style.cursor = 'pointer';
     } else if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
-      boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
-      boxMesh.instanceColor.needsUpdate = true;
       boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 - 0.1, entry.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
