@@ -2796,7 +2796,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Do not snap to the first segment.  The animation loop turns the vehicle
     // before it moves, including when the requested route is behind it.
     forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh, straightGuide, targetYaw };
-    ensureForkliftAudio();
+    // Do not create an AudioContext from an automated pickup/putaway command.
+    // Chromium permits graph creation only after a direct user gesture; the
+    // sound button creates it on demand when an operator opts in.
     setForkliftAudioMoving(true);
     routeLine.geometry.dispose();
     const guidePoints = straightGuide

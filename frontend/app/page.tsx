@@ -123,7 +123,7 @@ export default function Home() {
       {ready && <iframe
         src="/legacy.html"
         title={t('app.frameTitle')}
-        allow="fullscreen; pointer-lock"
+        allow="fullscreen"
         allowFullScreen
         onLoad={() => setAppReady(true)}
         className={`app-frame${appReady ? ' is-ready' : ''}`}
