@@ -2394,6 +2394,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
   const setForkliftSelected = (selected) => {
     forkliftSelected = Boolean(selected && forkliftRoot);
+    if (forkliftSelected) labelObject.visible = false;
     if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
     forkliftLiftControls.classList.toggle('show', forkliftSelected);
     if (!forkliftSelected) {
@@ -2627,7 +2628,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(forkliftRoot.position).add(new THREE.Vector3(0, 2.5, 0));
-      labelObject.visible = !(forkliftSelected && !isReturnSlot);
+      labelObject.visible = !forkliftSelected;
       canvas.style.cursor = 'pointer';
     } else if (hoverStagingBox) {
       labelElement.textContent = `รอ Putaway · ${hoverStagingBox.id} · คลิกเพื่อเลือก`;
