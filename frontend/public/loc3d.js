@@ -2453,7 +2453,31 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (!end) return [];
     const cells = [[end.x, end.z]];
     while (cells[0][0] !== from[0] || cells[0][1] !== from[1]) cells.unshift(parent.get(key(cells[0][0], cells[0][1])));
-    const path = cells.map(([x, z]) => point(x, z));
+    // A* returns grid neighbours, which creates the visible saw-tooth route
+    // in open space. Collapse every run with clear line-of-sight into one
+    // segment; retain grid corners only where an obstacle requires them.
+    const clearLine = (a, b) => {
+      const distance = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+      for (let i = 1; i <= distance; i += 1) {
+        const ratio = i / distance;
+        const x = Math.round(a[0] + (b[0] - a[0]) * ratio);
+        const z = Math.round(a[1] + (b[1] - a[1]) * ratio);
+        if (!walkable(x, z)) return false;
+        if (x !== a[0] && z !== a[1] && (!walkable(x, a[1]) || !walkable(a[0], z))) return false;
+      }
+      return true;
+    };
+    const smoothedCells = [cells[0]];
+    let anchor = 0;
+    while (anchor < cells.length - 1) {
+      let furthest = anchor + 1;
+      for (let candidate = furthest + 1; candidate < cells.length; candidate += 1) {
+        if (clearLine(cells[anchor], cells[candidate])) furthest = candidate;
+      }
+      smoothedCells.push(cells[furthest]);
+      anchor = furthest;
+    }
+    const path = smoothedCells.map(([x, z]) => point(x, z));
     path[0].set(start.x, warehouseFloorY + 0.025, start.z);
     path[path.length - 1].copy(point(to[0], to[1]));
     return path;
