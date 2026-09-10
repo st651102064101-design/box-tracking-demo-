@@ -526,6 +526,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     else if (key === 'walls') window.dispatchEvent(new CustomEvent('loc3d-toggle-walls'));
     else if (key === 'roof') window.dispatchEvent(new CustomEvent('loc3d-toggle-roof'));
   });
+  const syncViewToggleButtons = () => {
+    settingsMenu.querySelectorAll('button[data-view]').forEach((button) => {
+      const active = button.dataset.view === 'grid'
+        ? getViewPref('unitGrid', false)
+        : getViewPref(`loc3d${button.dataset.view === 'walls' ? 'Walls' : 'Roof'}Visible`, true);
+      button.classList.toggle('active', Boolean(active));
+      button.style.background = active ? 'rgba(126,240,30,.22)' : 'rgba(12,14,16,.92)';
+      button.style.borderColor = active ? 'rgba(126,240,30,.72)' : 'rgba(255,255,255,.12)';
+      button.style.color = active ? '#b8ff73' : '#fff';
+    });
+  };
   const toggleBoundaryDetail = (kind) => {
     const pref = kind === 'walls' ? 'loc3dWallsVisible' : 'loc3dRoofVisible';
     const visible = getViewPref(pref, true);
@@ -557,10 +568,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           || object.userData?.slotByInstance
           || object.userData?.slotId
           || object.userData?.stagingBoxId;
-        if (!core) object.visible = false;
+        if (!core) { object.userData.boundaryForcedHidden = true; object.visible = false; }
       });
+      syncViewToggleButtons();
       return;
     }
+    // Restore every enclosure detail hidden by the all-off safeguard. This
+    // includes lights, sprinkler pipes and other authored fixtures that do
+    // not match the roof material test on their own.
+    scene.traverse((object) => {
+      if (object.userData?.boundaryForcedHidden) {
+        object.visible = true;
+        delete object.userData.boundaryForcedHidden;
+      }
+    });
     // Boundary elements are tagged by their authored materials/height so the
     // entire enclosure (including beams, seams and gables) toggles together.
     scene.traverse((object) => {
@@ -570,6 +591,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1) && (object.material === roofMaterial || object.material === trussMaterial || object.material === seamMaterial);
       if ((kind === 'walls' && wall) || (kind === 'roof' && roof)) object.visible = !object.visible;
     });
+    syncViewToggleButtons();
   };
   window.addEventListener('loc3d-toggle-walls', () => toggleBoundaryDetail('walls'));
   window.addEventListener('loc3d-toggle-roof', () => toggleBoundaryDetail('roof'));
@@ -1128,6 +1150,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     unitGridButton.classList.toggle('active', unitGridVisible);
     unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
     setViewPref('unitGrid', unitGridVisible);
+    settingsMenu.querySelector('button[data-view="grid"]')?.classList.toggle('active', unitGridVisible);
+    const gridToggle = settingsMenu.querySelector('button[data-view="grid"]');
+    if (gridToggle) {
+      gridToggle.style.background = unitGridVisible ? 'rgba(126,240,30,.22)' : 'rgba(12,14,16,.92)';
+      gridToggle.style.borderColor = unitGridVisible ? 'rgba(126,240,30,.72)' : 'rgba(255,255,255,.12)';
+      gridToggle.style.color = unitGridVisible ? '#b8ff73' : '#fff';
+    }
     window.toast?.(unitGridVisible ? 'แสดงตารางพื้น 1 เมตรแล้ว' : 'ซ่อนตารางพื้นแล้ว', '', 'ok');
   };
   unitGridButton.addEventListener('click', toggleUnitGrid);
@@ -3289,7 +3318,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // glowing spheres: at the scaled-up vehicle size they read as floating
     // white balls rather than physical lamp lenses.
     const cabLampCenter = rawBounds.getCenter(new THREE.Vector3());
-    cabLampCenter.y = rawBounds.max.y - 0.24;
+    // Mount the headlights lower on the front fascia (about 20% of the
+    // vehicle height below the previous mount) so the beam reads naturally.
+    cabLampCenter.y = rawBounds.max.y - 0.24 - rawSize.y * 0.2;
     cabLampCenter.z = rawBounds.min.z + rawSize.z * 0.48;
     [-0.24, 0.24].forEach((offsetX) => {
       const anchor = cabLampCenter.clone().add(new THREE.Vector3(offsetX, 0, 0));
