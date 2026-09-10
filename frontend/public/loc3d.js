@@ -2274,12 +2274,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftPutawayPhase = null;
   let forkliftReturnTarget = null;
   let forkliftRollback = null;
-  // Travel specification: 300 km/h maximum, accelerating 0→300 km/h in 3 s.
+  // Travel specification: 300 km/h maximum.  Both 0→300 acceleration and
+  // 300→0 braking take the same 3 seconds.  Keep this shared value so the
+  // two behaviours cannot accidentally drift apart.
   // Values stay in metres/second so the movement remains frame-rate independent.
   const forkliftCruiseSpeed = 300 / 3.6;
-  const forkliftAcceleration = (300 / 3.6) / 3;
-  // Brake from 300 km/h to a standstill in 3 s.
-  const forkliftBrakeDeceleration = (300 / 3.6) / 3;
+  const forkliftSpeedChangeDurationSeconds = 3;
+  const forkliftAcceleration = forkliftCruiseSpeed / forkliftSpeedChangeDurationSeconds;
+  const forkliftBrakeDeceleration = forkliftCruiseSpeed / forkliftSpeedChangeDurationSeconds;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
   // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
@@ -2685,10 +2687,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       const isReturnSlot = Boolean(forkliftReturnTarget && String(entry.slot.id) === String(forkliftReturnTarget.slot.id));
       if (forkliftSelected && !isReturnSlot && state !== 'full') {
-        const rackCode = entry.rack?.code || entry.rack?.id || '—';
-        const shelfCode = entry.slot?.shelfCode || entry.slot?.level || '—';
-        labelElement.textContent = `วางที่นี่ · ช่อง ${entry.slot?.id || '—'} · ชั้น ${shelfCode} · แร็ค ${rackCode}`;
-        labelElement.className = 'loc3d-slot-label empty putaway-target';
+        // Hide text while carrying; the ring is the GTA-style placement cue.
+        // Match the exact side offset used by the placement code below.
+        const occupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(entry.slot.id)).length
+          + (putawaySlotCounts.get(String(entry.slot.id)) || 0);
+        const side = occupancy ? 1 : -1;
+        const placementPoint = entry.position.clone().add(
+          new THREE.Vector3(side * entry.scale.x * 0.24, 0, 0).applyQuaternion(entry.quaternion),
+        );
+        hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
+        hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
+        hoverRing.visible = true;
+        labelObject.visible = false;
       } else {
         labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
         labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
@@ -2897,10 +2907,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (!actionPointerOver) hideRackAction();
     }, 0);
   };
+  const onPointerOut = (event) => {
+    if (!event.relatedTarget || !canvas.contains(event.relatedTarget)) onPointerLeave();
+  };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
+  canvas.addEventListener('pointerout', onPointerOut, { passive: true });
   const onDoubleClick = (event) => {
     if (!forkliftSelected || !forkliftRoot) return;
     if (firstPerson && document.pointerLockElement === canvas) setPointerAtReticle();
@@ -3512,6 +3526,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('pointerout', onPointerOut);
       canvas.removeEventListener('dblclick', onDoubleClick);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
