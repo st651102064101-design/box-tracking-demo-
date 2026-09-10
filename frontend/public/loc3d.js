@@ -1093,7 +1093,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const spread = boxesInSlot.length > 1
       ? Math.min(width * 1.25, Math.max(0, (slotEntry.scale.x - width) / Math.max(1, boxesInSlot.length - 1)))
       : 0;
-    const lateralOffsetCm = (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
+    const lateralOffsetCm = boxesInSlot.length === 1
+      ? -Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
+      : (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
     const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
     const position = worldPoint(
       slotEntry.rack,
@@ -2691,9 +2693,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // Travel with forks lowered; the lift command is issued only after
           // the vehicle reaches the destination.
           forkliftLiftTarget = 0;
-          // Raise automatically to the selected shelf level; the normal
-          // damped lift animation still performs the movement visibly.
-          moveForkliftTo(destination.position.clone().setY(warehouseFloorY + 0.025));
+          // Stop in the aisle in front of the rack, never at the slot centre.
+          // Choose the accessible face nearest the current forklift position.
+          const rackNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(destination.quaternion).setY(0).normalize();
+          const forkliftSide = forkliftRoot.position.clone().sub(destination.position).setY(0);
+          if (forkliftSide.dot(rackNormal) < 0) rackNormal.negate();
+          const approachPoint = destination.position.clone().addScaledVector(
+            rackNormal,
+            destination.scale.z * 0.5 + forkliftClearance,
+          );
+          approachPoint.y = warehouseFloorY + 0.025;
+          moveForkliftTo(approachPoint);
           window.toast?.('กำลังนำพาเลทไปวาง', `${destination.slot.id} · ชั้น ${destination.slot.shelfCode || ''}`, 'ok');
         } else {
           releasePointerForModal();
@@ -3038,9 +3048,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // Square the truck to the rack face before any lift/putaway step.
             const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
             const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
-            // The imported forklift's forks face local -Z. Aim that front
-            // toward the selected slot rather than copying rack rotation.
-            forkliftRoot.rotation.y = Math.atan2(dx, dz) + Math.PI;
+            // The forklift's loaded pallet sits on local +Z, so point +Z at
+            // the slot from the aisle approach point.
+            forkliftRoot.rotation.y = Math.atan2(dx, dz);
             forkliftLiftTarget = THREE.MathUtils.clamp(
               forkliftDropTarget.position.y - forkliftCarriageBaseY - forkliftRoot.position.y,
               0,
@@ -3100,8 +3110,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // A slot supports up to two pallets side-by-side. Offset the
             // second load along the slot's local width, never vertically.
             {
-              const side = target.occupancy ? -1 : 1;
-              const sideOffset = new THREE.Vector3(0, 0, side * target.scale.z * 0.24)
+              const side = target.occupancy ? 1 : -1;
+              const sideOffset = new THREE.Vector3(side * target.scale.x * 0.24, 0, 0)
                 .applyQuaternion(target.quaternion);
               forkliftLoadAssembly.position.add(sideOffset);
             }
