@@ -3702,19 +3702,28 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       else if (hoverForkliftRoot) {
         const selectedRoot = hoverForkliftRoot;
         const selectedForkliftId = selectedRoot === forkliftCloneRoot ? 'forklift-2' : 'forklift-1';
-        if (selectedRoot?.userData?.isForkliftClone && !forkliftSelected) {
-          // The second truck is a real vehicle. Switch the active chassis and
-          // lease key before claiming it; do not silently redirect its clicks
-          // to the first truck.
-          forkliftRoot = selectedRoot;
-          activeForkliftId = selectedForkliftId;
-          forkliftWheels = forkliftCloneWheels;
-          forkliftMastInner = forkliftCloneMastInner;
-          forkliftCarriageForks = forkliftCloneCarriageForks;
+        if (selectedRoot && selectedRoot !== forkliftRoot) {
+          // Switching trucks is one operation: release the old lease first,
+          // then claim the truck under the pointer. Otherwise the old active
+          // root keeps receiving movement writes and the new truck appears to
+          // jump to its position.
+          const wasSelected = forkliftSelected;
+          void (async () => {
+            if (wasSelected) await setForkliftSelected(false);
+            forkliftRoot = selectedRoot;
+            activeForkliftId = selectedForkliftId;
+            if (selectedRoot === forkliftCloneRoot) {
+              forkliftWheels = forkliftCloneWheels;
+              forkliftMastInner = forkliftCloneMastInner;
+              forkliftCarriageForks = forkliftCloneCarriageForks;
+            }
+            if (wasSelected) await setForkliftSelected(true);
+          })();
         } else if (selectedRoot === forkliftRoot) {
           activeForkliftId = selectedForkliftId;
+          setForkliftSelected(!forkliftSelected);
+          return;
         }
-        setForkliftSelected(!forkliftSelected);
       }
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
