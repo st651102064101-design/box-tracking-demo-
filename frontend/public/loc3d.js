@@ -2573,9 +2573,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftCloneRoot = null;
   let forkliftSelection = null;
   let forkliftLoadAssembly = null;
-  const forkliftWheels = [];
+  let forkliftWheels = [];
+  let forkliftCloneWheels = [];
   let forkliftMastInner = null;
   let forkliftCarriageForks = null;
+  let forkliftCloneMastInner = null;
+  let forkliftCloneCarriageForks = null;
   const forkliftMastInnerBasePosition = new THREE.Vector3();
   const forkliftMastInnerLiftAxis = new THREE.Vector3(0, 1, 0);
   let forkliftMastLateralOffset = 0;
@@ -2631,6 +2634,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     return `${model.warehouseId || 'warehouse'}:${(model.racks || []).length}:${(hash >>> 0).toString(36)}`;
   })();
   const savedForklift = model.forkliftPosition || null;
+  let activeForkliftId = String(model.forkliftId || 'forklift-1');
   let remoteCargoBoxId = savedForklift?.cargoBoxId || null;
   let renderedRemoteCargoId = null;
   let remoteCargoAssembly = null;
@@ -2757,7 +2761,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftClaimInFlight = fetch('/api/warehouse-3d/forklift/control/claim', {
       method: 'POST',
       headers: requestHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ warehouseId: model.warehouseId }),
+      body: JSON.stringify({ warehouseId: model.warehouseId, forkliftId: activeForkliftId }),
     }).then(async (response) => {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -2792,7 +2796,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       method: 'POST',
       keepalive: true,
       headers: requestHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ warehouseId: model.warehouseId }),
+      body: JSON.stringify({ warehouseId: model.warehouseId, forkliftId: activeForkliftId }),
     }).catch(() => undefined);
   };
   const persistForkliftPosition = (snapshot) => {
@@ -2800,7 +2804,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     return fetch('/api/warehouse-3d/forklift', {
       method: 'PUT',
       headers: requestHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ warehouseId: model.warehouseId, ...snapshot }),
+      body: JSON.stringify({ warehouseId: model.warehouseId, forkliftId: activeForkliftId, ...snapshot }),
     }).then(async (response) => {
       if (response.ok) return;
       const body = await response.json().catch(() => ({}));
@@ -2994,7 +2998,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     pointer.set(0, 0);
     raycaster.setFromCamera(pointer, camera);
   };
-  const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
+  const forkliftHit = () => {
+    const hit = forkliftPickMeshes.length ? raycaster.intersectObjects(forkliftPickMeshes, false)[0] : null;
+    if (!hit) return null;
+    let root = hit.object;
+    while (root.parent && root.parent !== scene) root = root.parent;
+    return { hit, root };
+  };
+  const isForkliftHit = () => Boolean(forkliftHit());
   const setForkliftSelected = async (selected, { release = true } = {}) => {
     const wantsControl = Boolean(selected && forkliftRoot);
     if (wantsControl && !forkliftSelected) {
@@ -3279,7 +3290,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const doorHit = dockDoorPickMeshes.length ? raycaster.intersectObjects(dockDoorPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
-    const nextForklift = isForkliftHit();
+    const nextForklift = Boolean(forkliftHit());
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const nextStagingBox = stagingHit?.object?.userData?.stagingBox || null;
     const nextStagingMesh = stagingHit?.object || null;
@@ -3684,7 +3695,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           onBoxSelect?.(entry.box.id);
         }
       }
-      else if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
+      else if (isForkliftHit()) {
+        const selectedForklift = forkliftHit();
+        const selectedRoot = selectedForklift?.root;
+        if (selectedRoot?.userData?.isForkliftClone && !forkliftSelected) {
+          // The second truck is a real vehicle. Switch the active chassis and
+          // lease key before claiming it; do not silently redirect its clicks
+          // to the first truck.
+          forkliftRoot = selectedRoot;
+          activeForkliftId = String(selectedForklift.hit.object.userData.forkliftId || 'forklift-2');
+          forkliftWheels = forkliftCloneWheels;
+          forkliftMastInner = forkliftCloneMastInner;
+          forkliftCarriageForks = forkliftCloneCarriageForks;
+        } else if (selectedRoot === forkliftRoot) {
+          activeForkliftId = String(selectedForklift.hit.object.userData.forkliftId || activeForkliftId);
+        }
+        setForkliftSelected(!forkliftSelected);
+      }
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
         // An empty selected forklift is in vehicle-operation mode, not
@@ -3851,6 +3878,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (!object.isMesh) return;
       object.castShadow = true;
       object.receiveShadow = true;
+      object.userData.forkliftId = 'forklift-1';
       if (name === 'emergency-exit-sign' && object.material) {
         object.material = object.material.clone();
         object.material.color.setHex(0xffec62);
@@ -4062,19 +4090,40 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.position.copy(resolvedInitialForklift.position);
     forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
-    // Secondary visual forklift; primary remains the only controllable and
-    // synchronized vehicle so the clone cannot overwrite its DB position.
+    // Secondary real forklift visual. Keep it separate from the primary
+    // controller; its position/state must be backed by its own server entity.
     forkliftCloneRoot = new THREE.Group();
     forkliftCloneRoot.name = 'forklift-clone';
     forkliftCloneRoot.userData.isForkliftClone = true;
-    const forkliftClone = forklift.clone(true);
+  const forkliftClone = forklift.clone(true);
     forkliftClone.traverse((object) => {
-      if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; }
+      if (object.isMesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+        object.userData.forkliftId = 'forklift-2';
+        forkliftPickMeshes.push(object);
+        if (object.name.includes('ForkliftMastInner')) forkliftCloneCarriageForks = object;
+        else if (object.name.includes('ForkliftCarriageForks')) forkliftCloneMastInner = object;
+      }
+    });
+    forkliftClone.traverse((wheel) => {
+      if (/^Wheel_(FL|FR|RL|RR)$/.test(wheel.name)) {
+        forkliftCloneWheels.push({ object: wheel, radius: wheel.userData.wheelRadius * scale });
+      }
     });
     forkliftCloneRoot.add(forkliftClone);
     forkliftCloneRoot.position.copy(forkliftRoot.position);
     forkliftCloneRoot.position.x += Math.max(2.4, scaledSize.x * 1.15);
     forkliftCloneRoot.rotation.copy(forkliftRoot.rotation);
+    const savedForkliftTwo = model.forkliftPositions?.['forklift-2'];
+    if (savedForkliftTwo?.position) {
+      const resolvedForkliftTwo = savedForkliftTwo.layoutRevision === forkliftLayoutRevision
+        ? resolveForkliftPosition(savedForkliftTwo.position)
+        : { position: forkliftCloneRoot.position, relocated: false };
+      forkliftCloneRoot.position.copy(resolvedForkliftTwo.position);
+      forkliftCloneRoot.rotation.y = Number.isFinite(Number(savedForkliftTwo.rotationY))
+        ? Number(savedForkliftTwo.rotationY) : forkliftCloneRoot.rotation.y;
+    }
     scene.add(forkliftCloneRoot);
     if (forkliftWasRelocated) {
       window.toast?.(
