@@ -1389,10 +1389,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   ];
   wallSpecs.forEach(([width, height, depth, x, y, z]) => {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMaterial);
-    wall.userData.isWarehouseWall = true;
     wall.position.set(x, y, z);
     wall.receiveShadow = true;
-  scene.add(wall);
+    scene.add(wall);
   });
   // Corrugated metal-sheet seams make the enclosure read as a real new build.
   const seamMaterial = new THREE.MeshStandardMaterial({ color: 0xb9c3c8, metalness: 0.72, roughness: 0.4 });
@@ -3206,7 +3205,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let lastFpsAt = performance.now();
   let lastAnimateAt = performance.now();
   const movementDirection = new THREE.Vector3();
-  const _tmpVec3 = new THREE.Vector3();
   const walkForward = new THREE.Vector3();
   const walkRight = new THREE.Vector3();
   const walkCandidate = new THREE.Vector3();
@@ -3297,7 +3295,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // opposite end of the warehouse.
               const rollbackPosition = new THREE.Vector3();
               pickupMesh.getWorldPosition(rollbackPosition);
-              forkliftRollback = { position: rollbackPosition, quaternion: new THREE.Quaternion() };
+              forkliftRollback = {
+                position: rollbackPosition,
+                quaternion: new THREE.Quaternion(),
+                // A staging pickup leaves an intentionally empty waiting spot.
+                // Keep a beacon there until the load is placed or returned.
+                isStagingPickup: !forkliftReturnTarget,
+              };
               loadAssembly.position.copy(rollbackPosition);
               scene.add(loadAssembly);
               pickupRoots.forEach((object) => loadAssembly.attach(object));
@@ -3312,6 +3316,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than exposing the pocket openings sideways.
               loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
               forkliftLoadAssembly = loadAssembly;
+              if (forkliftRollback.isStagingPickup) {
+                missionBeacon.position.copy(rollbackPosition).setY(warehouseFloorY + 0.06);
+                missionBeacon.visible = true;
+              }
               // A rack pickup must visibly raise the carriage after the tines
               // take the box.  The staging pallet already sits at floor
               // level, while a rack box supplies its actual shelf height.
@@ -3382,7 +3390,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           forkliftMotion = null;
           setForkliftAudioMoving(false);
           routeLine.visible = false;
-          missionBeacon.visible = false;
+          // Keep the pulsing floor cue at the original Putaway staging spot
+          // while its pallet is on the forks, so it can be returned precisely.
+          missionBeacon.visible = Boolean(forkliftLoadAssembly && forkliftRollback?.isStagingPickup);
         }
       } else {
         movementDirection.normalize();
@@ -3546,22 +3556,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       consumerHoverShell.scale.setScalar(pulse);
       consumerHoverMaterial.opacity = 0.72 + Math.sin(performance.now() * 0.009) * 0.24;
     }
-    // Wall LOD: at overview distance keep only the four broad wall panels;
-    // beams, seams and cladding details return as the camera approaches.
-    const wallDetailRange = 18;
-    const cameraDistance = camera.position.distanceTo(center);
-    scene.traverse((object) => {
-      if (object.userData?.isWarehouseWall || object === floor || object === forkliftRoot) return;
-      if (!object.isMesh && !object.isLine) return;
-      const p = object.getWorldPosition(_tmpVec3);
-      const nearWall = Math.min(
-        Math.abs(p.x - (center.x - halfWarehouseWidth)),
-        Math.abs(p.x - (center.x + halfWarehouseWidth)),
-        Math.abs(p.z - (center.z - halfWarehouseDepth)),
-        Math.abs(p.z - (center.z + halfWarehouseDepth)),
-      ) < 0.22;
-      if (nearWall && object.userData?.wallLod !== false) object.visible = cameraDistance <= wallDetailRange;
-    });
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frames += 1;
