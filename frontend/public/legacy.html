@@ -23676,8 +23676,10 @@ function scheduleLive3DRefresh(){
   clearTimeout(live3dRefreshTimer);
   live3dRefreshTimer=setTimeout(()=>{
     const root=document.getElementById('loc3dView');
-    if(!root||root.style.display==='none'||typeof Wn.renderLoc3D!=='function')return;
-    Wn.renderLoc3D();
+    if(!root||root.style.display==='none')return;
+    const controller=window.LocationWarehouse3D?.active?.();
+    if(controller?.refreshInventory){ controller.refreshInventory(); return; }
+    if(typeof Wn.renderLoc3D==='function')Wn.renderLoc3D();
   },250);
 }
 async function syncNow(notifyExternal){

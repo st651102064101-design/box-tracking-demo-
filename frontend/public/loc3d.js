@@ -1229,7 +1229,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     addRackBatch(basePlateParts, new THREE.MeshStandardMaterial({ color: 0x1268cf, metalness: 0.72, roughness: 0.3 })),
   ].filter(Boolean);
 
-  const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
+  let occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const putawaySlotCounts = new Map();
   const slotState = (entry) => entry.slot.status === 'full'
     ? 'full'
@@ -1435,6 +1435,43 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
   }
+  const refreshInventoryInPlace = async () => {
+    if (!boxMesh || disposed) return false;
+    try {
+      const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, { headers: requestHeaders() });
+      if (!response.ok) return false;
+      const latest = await response.json();
+      const byId = new Map((latest.boxes || []).map((box) => [String(box.id), box]));
+      occupiedSlotIds = new Set((latest.boxes || []).map((box) => String(box.slotId)));
+      boxEntries.forEach((entry, index) => {
+        const next = byId.get(String(entry.box.id));
+        if (!next?.slotId || !slotById.has(next.slotId)) {
+          boxMesh.setMatrixAt(index, new THREE.Matrix4().makeScale(0, 0, 0));
+          return;
+        }
+        const slotEntry = slotById.get(next.slotId);
+        const width = positive(next.dimensionsCm?.width, 60) * CM_TO_M;
+        const height = positive(next.dimensionsCm?.height, 40) * CM_TO_M;
+        const depth = positive(next.dimensionsCm?.depth, 40) * CM_TO_M;
+        const lateral = next.slotSide === 'right' ? 1 : -1;
+        const lateralOffsetCm = lateral * Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M;
+        const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
+        entry.box = next;
+        entry.slotEntry = slotEntry;
+        entry.position = worldPoint(slotEntry.rack, num(slotEntry.slot.localPositionCm?.x) + lateralOffsetCm, slotBottomCm + 16 + height / CM_TO_M / 2, slotEntry.slot.localPositionCm?.z);
+        entry.quaternion = slotEntry.quaternion;
+        entry.scale.set(width, height, depth);
+        entry.color = boxStatusColor(next, width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z);
+        boxMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
+        boxMesh.setColorAt(index, entry.color);
+      });
+      boxMesh.instanceMatrix.needsUpdate = true;
+      boxMesh.instanceColor.needsUpdate = true;
+      slotMesh?.instanceColor && slotEntries.forEach((entry, index) => slotMesh.setColorAt(index, slotColor(entry)));
+      if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
+      return true;
+    } catch { return false; }
+  };
   // Inbound staging is deliberately a one-box-per-pallet grid, rather than a
   // decorative stack. It keeps the 3D view honest while leaving every waiting
   // box directly selectable for the next forklift/putaway task.
@@ -2533,6 +2570,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let forkliftRoot = null;
+  let forkliftCloneRoot = null;
   let forkliftSelection = null;
   let forkliftLoadAssembly = null;
   const forkliftWheels = [];
@@ -4024,6 +4062,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftRoot.position.copy(resolvedInitialForklift.position);
     forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
+    // Secondary visual forklift; primary remains the only controllable and
+    // synchronized vehicle so the clone cannot overwrite its DB position.
+    forkliftCloneRoot = new THREE.Group();
+    forkliftCloneRoot.name = 'forklift-clone';
+    forkliftCloneRoot.userData.isForkliftClone = true;
+    const forkliftClone = forklift.clone(true);
+    forkliftClone.traverse((object) => {
+      if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; }
+    });
+    forkliftCloneRoot.add(forkliftClone);
+    forkliftCloneRoot.position.copy(forkliftRoot.position);
+    forkliftCloneRoot.position.x += Math.max(2.4, scaledSize.x * 1.15);
+    forkliftCloneRoot.rotation.copy(forkliftRoot.rotation);
+    scene.add(forkliftCloneRoot);
     if (forkliftWasRelocated) {
       window.toast?.(
         'นำรถ Forklift กลับจุดจอดแล้ว',
@@ -4585,6 +4637,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 
   return {
     assets,
+    refreshInventory: refreshInventoryInPlace,
     getView() { return {position: camera.position.clone(), target: controls.target.clone(), warehouseId: model.warehouseId}; },
     setView(view) {
       if (!view || view.warehouseId !== model.warehouseId) return;
@@ -4718,7 +4771,13 @@ function unmount() {
   activeController = null;
 }
 
-window.LocationWarehouse3D = { mount, unmount, isBusy: () => activeController?.isBusy?.() || false, scaleToMetres: CM_TO_M };
+window.LocationWarehouse3D = {
+  mount,
+  unmount,
+  active: () => activeController,
+  isBusy: () => activeController?.isBusy?.() || false,
+  scaleToMetres: CM_TO_M,
+};
 const previousLanguageHook = window.btLangChanged;
 window.btLangChanged = (language) => {
   previousLanguageHook?.(language);
