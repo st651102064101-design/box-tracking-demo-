@@ -2451,7 +2451,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     path[path.length - 1].copy(point(to[0], to[1]));
     return path;
   };
-  const moveForkliftTo = (target, pickupMesh = null) => {
+  const moveForkliftTo = (target, pickupMesh = null, straightGuide = false) => {
     if (!forkliftSelected || !forkliftRoot) return;
     const path = findForkliftPath(forkliftRoot.position, target);
     if (path.length < 2) {
@@ -2462,11 +2462,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const routeLength = path.slice(1).reduce(
       (total, point, index) => total + point.distanceTo(path[index]), 0,
     );
-    forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh };
+    forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh, straightGuide };
     ensureForkliftAudio();
     setForkliftAudioMoving(true);
     routeLine.geometry.dispose();
-    routeLine.geometry = new THREE.BufferGeometry().setFromPoints(path.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
+    const guidePoints = straightGuide
+      ? [forkliftRoot.position.clone(), path[path.length - 1].clone()]
+      : path;
+    routeLine.geometry = new THREE.BufferGeometry().setFromPoints(guidePoints.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
     routeLine.visible = true;
     targetMarker.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.055);
     targetMarker.visible = true;
@@ -2703,7 +2706,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             destination.scale.z * 0.5 + forkliftClearance,
           );
           approachPoint.y = warehouseFloorY + 0.025;
-          moveForkliftTo(approachPoint);
+          moveForkliftTo(approachPoint, null, true);
           window.toast?.('กำลังนำพาเลทไปวาง', `${destination.slot.id} · ชั้น ${destination.slot.shelfCode || ''}`, 'ok');
         } else {
           releasePointerForModal();
@@ -3036,7 +3039,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (remaining < 0.035) {
         forkliftRoot.position.copy(destination);
         forkliftMotion.index += 1;
-        if (forkliftMotion.index < forkliftMotion.path.length) {
+        if (forkliftMotion.index < forkliftMotion.path.length && !forkliftMotion.straightGuide) {
           const remainingRoute = [forkliftRoot.position.clone().setY(warehouseFloorY + 0.045)]
             .concat(forkliftMotion.path.slice(forkliftMotion.index).map((point) => point.clone().setY(warehouseFloorY + 0.045)));
           routeLine.geometry.dispose();
