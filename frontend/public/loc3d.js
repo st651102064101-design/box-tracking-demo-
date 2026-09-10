@@ -2665,9 +2665,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     event.preventDefault();
   };
   const liftSlider = forkliftLiftControls.querySelector('input');
-  liftSlider.addEventListener('input', () => {
+  const applyLiftSliderValue = () => {
     forkliftLiftTarget = Number(liftSlider.value) * forkliftLiftMax;
-  });
+  };
+  liftSlider.addEventListener('input', applyLiftSliderValue);
+  // Some Chromium/WebView builds do not dispatch native range dragging when
+  // the control sits over the WebGL canvas. Track the pointer explicitly so a
+  // drag anywhere across the bar always changes the fork target.
+  const dragLiftSlider = (event) => {
+    if (!(event.buttons & 1)) return;
+    const rect = liftSlider.getBoundingClientRect();
+    const ratio = THREE.MathUtils.clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+    liftSlider.value = String(ratio);
+    applyLiftSliderValue();
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  liftSlider.addEventListener('pointerdown', (event) => {
+    liftSlider.setPointerCapture?.(event.pointerId);
+    dragLiftSlider(event);
+  }, { passive: false });
+  liftSlider.addEventListener('pointermove', dragLiftSlider, { passive: false });
   const stopForkliftLiftInput = () => { forkliftLiftInput = 0; };
   const onForkliftLiftKey = (event) => {
     if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
