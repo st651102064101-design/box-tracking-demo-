@@ -500,7 +500,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   settingsMenu.className = 'loc3d-settings-menu';
   settingsMenu.hidden = true;
   settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
-  Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center' });
+  Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid #a8f931', borderRadius: '11px', background: 'rgba(25,47,16,.92)', color: '#a8f931', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
   Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
   unitGridButton.style.display = 'none';
   settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
@@ -775,6 +775,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(firstPersonButton);
   stage.appendChild(settingsButton);
   stage.appendChild(settingsMenu);
+  Object.assign(soundButton.style, { bottom: '14px' });
+  fullscreenButton.style.bottom = '66px';
+  firstPersonButton.style.bottom = '118px';
   stage.appendChild(soundButton);
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
@@ -2821,7 +2824,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // Clicking another rack slot while carrying a pallet is a new putaway
       // destination, not a cancellation. Roll back only when the operator
       // explicitly clicks a staging/Putaway box again.
-      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && Boolean(hoverStagingBox);
+      // The yellow source beacon is an explicit, clickable return target. It
+      // remains visible after pickup so the operator can put the pallet back.
+      const beaconHit = missionBeacon.visible && raycaster.intersectObject(missionBeacon, false).length > 0;
+      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && (Boolean(hoverStagingBox) || beaconHit);
       if (rollbackRequested) {
         rollbackForkliftLoad();
         window.toast?.('ยกเลิก Putaway', 'รถจะนำกล่องกลับไปวางจุดเดิม', 'ok');
