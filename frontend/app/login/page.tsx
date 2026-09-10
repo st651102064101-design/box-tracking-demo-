@@ -43,6 +43,9 @@ export default function LoginPage() {
   // was last remembered on this device — it's an explicit "log in as this
   // person" request, not a passive default.
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('reason') === 'session-expired') {
+      setNotice({ key: 'login.sessionExpired' });
+    }
     const u = new URLSearchParams(window.location.search).get('u');
     const remembered = u || window.localStorage.getItem(LAST_USER_KEY) || '';
     if (remembered) {
@@ -298,7 +301,7 @@ export default function LoginPage() {
             />
           )}
 
-          {notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{t(notice.key, notice.params)}</p>}
+          {notice && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{t(notice.key, notice.params)}</p>}
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
           <button

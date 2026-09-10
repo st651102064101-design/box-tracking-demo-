@@ -31,8 +31,34 @@ export default function Home() {
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) clearToken();
-        router.replace('/login');
+        router.replace('/login?reason=session-expired');
       });
+  }, [router]);
+
+  useEffect(() => {
+    // The API only learns that a JWT is expired on the next request.  Keep a
+    // local timer as well, so an operator left on the dashboard is sent back
+    // to sign-in at the exact expiry time instead of having to refresh first.
+    const token = getToken();
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (!Number.isFinite(payload.exp)) return;
+      const remainingMs = payload.exp * 1000 - Date.now();
+      const expire = () => {
+        clearToken();
+        router.replace('/login?reason=session-expired');
+      };
+      if (remainingMs <= 0) {
+        expire();
+        return;
+      }
+      const timer = window.setTimeout(expire, remainingMs);
+      return () => window.clearTimeout(timer);
+    } catch {
+      clearToken();
+      router.replace('/login?reason=session-expired');
+    }
   }, [router]);
 
   useEffect(() => {
