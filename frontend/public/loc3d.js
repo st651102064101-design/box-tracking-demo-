@@ -2757,8 +2757,37 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       }
       else if (hoverBoxIndex >= 0) {
-        releasePointerForModal();
-        onBoxSelect?.(boxEntries[hoverBoxIndex].box.id);
+        const entry = boxEntries[hoverBoxIndex];
+        if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly && !forkliftMotion) {
+          // Instanced rack boxes cannot be re-parented individually. Create a
+          // physical pickup proxy, hide that instance, and let the normal
+          // pallet/rollback workflow carry it on the forks.
+          const pickupMesh = new THREE.Mesh(
+            UNIT_BOX,
+            new THREE.MeshStandardMaterial({ color: entry.color, roughness: 0.78, metalness: 0.02 }),
+          );
+          pickupMesh.position.copy(entry.position);
+          pickupMesh.quaternion.copy(entry.quaternion);
+          pickupMesh.scale.copy(entry.scale);
+          pickupMesh.userData.stagingBox = entry.box;
+          pickupMesh.userData.stagingBoxId = entry.box.id;
+          scene.add(pickupMesh);
+          boxMesh.setMatrixAt(hoverBoxIndex, new THREE.Matrix4().makeScale(0, 0, 0));
+          boxMesh.instanceMatrix.needsUpdate = true;
+          const rackNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(entry.quaternion).setY(0).normalize();
+          const forkliftSide = forkliftRoot.position.clone().sub(entry.position).setY(0);
+          if (forkliftSide.dot(rackNormal) < 0) rackNormal.negate();
+          const approachPoint = entry.position.clone().addScaledVector(
+            rackNormal,
+            entry.scale.z * 0.5 + forkliftClearance,
+          );
+          approachPoint.y = warehouseFloorY + 0.025;
+          moveForkliftTo(approachPoint, pickupMesh, true);
+          window.toast?.('กำลังไปรับกล่องจากชั้นวาง', `${entry.box.id} · รถ Forklift`, 'ok');
+        } else {
+          releasePointerForModal();
+          onBoxSelect?.(entry.box.id);
+        }
       }
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
