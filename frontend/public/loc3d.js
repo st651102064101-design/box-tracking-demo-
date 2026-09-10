@@ -614,6 +614,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   soundButton.setAttribute('aria-label', 'เปิดเสียงรถโฟล์คลิฟท์');
   soundButton.title = 'เสียงรถโฟล์คลิฟท์';
   soundButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4z"/><path class="loc3d-sound-wave" d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>';
+  // Keep sound control inside the settings popover with the other view
+  // toggles; it should no longer occupy a separate corner of the stage.
+  settingsMenu.appendChild(soundButton);
+  Object.assign(soundButton.style, { position: 'static', right: 'auto', bottom: 'auto', width: '42px', height: '42px', margin: '0' });
   const firstPersonOverlay = document.createElement('div');
   firstPersonOverlay.className = 'loc3d-first-person-overlay';
   firstPersonOverlay.setAttribute('aria-hidden', 'true');
@@ -852,10 +856,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(firstPersonButton);
   stage.appendChild(settingsButton);
   stage.appendChild(settingsMenu);
-  Object.assign(soundButton.style, { bottom: '14px' });
   fullscreenButton.style.bottom = '66px';
   firstPersonButton.style.bottom = '118px';
-  stage.appendChild(soundButton);
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
