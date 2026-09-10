@@ -1004,8 +1004,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const putawaySlotCounts = new Map();
+  const slotBoxCount = (slotId) => (model.boxes || []).filter((box) => String(box.slotId) === String(slotId)).length;
   const slotState = (entry) => entry.slot.status === 'full'
-    ? 'full'
+    ? (slotBoxCount(entry.slot.id) >= 2 ? 'full' : 'occupied')
     : occupiedSlotIds.has(String(entry.slot.id)) ? 'occupied' : 'empty';
   let showOccupiedSlots = true;
   const slotColor = (entry, revealOccupied = showOccupiedSlots) => {
@@ -2861,7 +2862,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           + (putawaySlotCounts.get(String(destination.slot.id)) || 0);
         // With a pallet on the forks, a click on an empty or single-pallet
         // slot is a putaway command; otherwise retain the normal slot drawer.
-        if (forkliftSelected && forkliftLoadAssembly && slotOccupancy <= 1) {
+        if (forkliftSelected && forkliftLoadAssembly && slotOccupancy < 2) {
           forkliftDropTarget = { ...destination, occupancy: slotOccupancy };
           forkliftPutawayPhase = 'travel';
           // Travel with forks lowered; the lift command is issued only after
