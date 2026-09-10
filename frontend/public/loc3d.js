@@ -3141,8 +3141,46 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             entry.scale.z * 0.5 + forkliftClearance,
           );
           approachPoint.y = warehouseFloorY + 0.025;
+          // Do not rotate the chassis while its nose/load is already inside
+          // the rack clearance envelope. First use an aisle manoeuvre point:
+          // if the truck is too close and not square, reverse straight out;
+          // otherwise drive to that point normally. It can then turn safely
+          // and make the final forward approach into the selected bay.
+          const manoeuvrePoint = approachPoint.clone().addScaledVector(
+            rackNormal,
+            Math.max(1.5, forkliftClearance * 1.35),
+          );
+          const faceYaw = pickupMesh.userData.pickupFaceYaw;
+          const faceError = Math.abs(THREE.MathUtils.euclideanModulo(faceYaw - forkliftRoot.rotation.y + Math.PI, Math.PI * 2) - Math.PI);
+          const truckBackward = new THREE.Vector3(
+            -Math.sin(forkliftRoot.rotation.y),
+            0,
+            -Math.cos(forkliftRoot.rotation.y),
+          );
+          const canReverseOut = truckBackward.dot(rackNormal) > 0.2;
+          const mustReverseOut = forkliftRoot.position.distanceTo(approachPoint) < 1.8
+            && faceError > THREE.MathUtils.degToRad(18)
+            && canReverseOut;
+          const escapePoint = mustReverseOut
+            ? forkliftRoot.position.clone().addScaledVector(truckBackward, Math.max(1.5, forkliftClearance * 1.35))
+            : manoeuvrePoint;
+          escapePoint.y = warehouseFloorY + 0.025;
           setRackPickupCameraLock(true);
-          moveForkliftTo(approachPoint, pickupMesh, true);
+          moveForkliftTo(escapePoint, pickupMesh, true);
+          if (forkliftMotion) {
+            if (mustReverseOut) {
+              forkliftMotion.path = [forkliftRoot.position.clone(), escapePoint, approachPoint];
+              forkliftMotion.index = 1;
+              forkliftMotion.reverseUntilIndex = 1;
+            } else {
+              forkliftMotion.path.push(approachPoint);
+            }
+            routeLine.geometry.dispose();
+            routeLine.geometry = new THREE.BufferGeometry().setFromPoints(
+              forkliftMotion.path.map((point) => point.clone().setY(warehouseFloorY + 0.045)),
+            );
+            targetMarker.position.copy(approachPoint).setY(warehouseFloorY + 0.055);
+          }
           window.toast?.('กำลังไปรับกล่องจากชั้นวาง', `${entry.box.id} · รถ Forklift`, 'ok');
         } else {
           releasePointerForModal();
@@ -3767,7 +3805,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       } else {
         movementDirection.normalize();
-        const segmentYaw = Math.atan2(movementDirection.x, movementDirection.z);
+        const reversing = Number.isInteger(forkliftMotion.reverseUntilIndex)
+          && forkliftMotion.index <= forkliftMotion.reverseUntilIndex;
+        // During the escape segment the chassis keeps its nose toward the
+        // rack and travels backwards. Once clear, the next segment turns in
+        // the aisle and drives forward into the bay.
+        const segmentYaw = Math.atan2(movementDirection.x, movementDirection.z) + (reversing ? Math.PI : 0);
         const yawError = turnForkliftTowards(segmentYaw, deltaSeconds);
         // Calculate the entire distance still to travel, rather than only the
         // current grid segment.  v² = 2as gives the largest safe speed that
@@ -3801,7 +3844,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           liveRoute.map((point) => point.setY(warehouseFloorY + 0.045)),
         );
         forkliftWheels.forEach(({ object, radius }) => {
-          object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
+          object.rotation.x += (reversing ? -1 : 1) * distanceTravelled / Math.max(radius, 0.01);
         });
         // Publish movement continuously so every open warehouse view receives
         // a fresh waypoint while the truck is travelling, not only on arrival.
