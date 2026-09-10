@@ -2452,7 +2452,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftLastBroadcastAt = 0;
   let forkliftBroadcastInFlight = false;
   let forkliftPendingBroadcast = null;
-  const forkliftBroadcastIntervalMs = 125;
+  // Broadcast frequently enough that spectator views receive smooth motion;
+  // the in-flight/pending queue still coalesces requests under load.
+  const forkliftBroadcastIntervalMs = 50;
   const persistForkliftPosition = (snapshot) => {
     forkliftBroadcastInFlight = true;
     fetch('/api/warehouse-3d/forklift', {
@@ -2474,7 +2476,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // away from a just-completed route while the PUT request is in flight.
     remoteForkliftPosition = forkliftRoot.position.clone();
     remoteForkliftRotation = forkliftRoot.rotation.y;
-    forkliftLocalPositionHoldUntil = performance.now() + 450;
+    forkliftLocalPositionHoldUntil = performance.now() + 180;
     const snapshot = {
       position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z },
       rotationY: forkliftRoot.rotation.y,
@@ -3539,10 +3541,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       syncForkliftPosition();
     }
     if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
-      forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-14 * deltaSeconds));
+      forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-22 * deltaSeconds));
       if (remoteForkliftRotation != null) {
         const remoteDelta = yawDifference(forkliftRoot.rotation.y, remoteForkliftRotation);
-        forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-14 * deltaSeconds));
+        forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-22 * deltaSeconds));
       }
     }
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
