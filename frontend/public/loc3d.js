@@ -2767,10 +2767,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const setRackPickupCameraLock = (locked) => {
     rackPickupCameraLocked = Boolean(locked);
-    // A rack-pickup click can leave a browser pointer gesture active. Lock
-    // orbit rotation only for this short autonomous pickup phase so normal
-    // mouse movement cannot rotate the overview camera with the forklift.
-    if (!firstPerson) controls.enableRotate = !rackPickupCameraLocked;
+    // Keep orbit controls available while the forklift is autonomous. The
+    // operator must still be able to drag the overview camera after selecting
+    // a rack box; this state only coordinates pickup/putaway interaction.
+    if (!firstPerson) controls.enableRotate = true;
   };
   const rollbackForkliftLoad = () => {
     if (!forkliftSelected || !forkliftRoot || !forkliftLoadAssembly || !forkliftRollback) return false;
