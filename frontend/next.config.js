@@ -13,6 +13,17 @@ const nextConfig = {
       },
     ];
   },
+  async headers() {
+    // The 3D renderer is a standalone module loaded by legacy.html. Never
+    // allow an earlier, partially loaded version to remain in a browser cache:
+    // a stale module parse error prevents the entire warehouse view from booting.
+    return [
+      {
+        source: '/loc3d.js',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
