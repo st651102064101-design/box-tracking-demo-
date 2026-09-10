@@ -2230,13 +2230,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let hoverBoxIndex = -1;
   const updateRackLabelMode = () => {
     const showBarcodes = controls.getDistance() <= barcodeZoomDistance;
-    if (showBarcodes === barcodeMode) return;
-    barcodeMode = showBarcodes;
-    // Hide shelf-edge labels in normal/overview mode. They appear only after
-    // the operator deliberately zooms close enough to scan or read one.
-    barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
-    rackNameLabels.forEach((label) => { label.visible = !showBarcodes; });
+    if (showBarcodes !== barcodeMode) {
+      barcodeMode = showBarcodes;
+      // Hide shelf-edge labels in normal/overview mode. They appear only after
+      // the operator deliberately zooms close enough to scan or read one.
+      barcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+      boxBarcodeStickers.forEach((sticker) => { sticker.visible = showBarcodes; });
+    }
+    // Forklift-driving mode keeps visual cues but removes text clutter.
+    rackNameLabels.forEach((label) => { label.visible = !showBarcodes && !forkliftSelected; });
   };
   const updateOccupancyOverlay = () => {
     const revealOccupied = controls.getDistance() >= occupancyOverviewZoomDistance;
@@ -2300,11 +2302,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftCruiseSpeed = 12 / 3.6;
   const forkliftAcceleration = forkliftCruiseSpeed / 4;
   const forkliftBrakeDeceleration = forkliftCruiseSpeed / 2.5;
-  // Steering is quick, but each update is time-limited so its heading changes
-  // continuously instead of jumping to the next grid segment.
-  // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
-  const forkliftTurnRate = THREE.MathUtils.degToRad(720);
-  const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(5);
+  // A real counterbalance forklift turns progressively (it does not spin in
+  // place).  Limit the chassis steering rate so a 180° turn takes about 1.5 s.
+  const forkliftTurnRate = THREE.MathUtils.degToRad(120);
+  const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(8);
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
   const savedForklift = model.forkliftPosition || null;
@@ -2389,6 +2390,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverRackCode = '';
   };
   const showRackAction = (rack) => {
+    if (forkliftSelected) return hideRackAction();
     if (!rack) return hideRackAction();
     hoverRackCode = String(rack.code || rack.id || 'rack');
     const rackEntry = rackEntries.find((entry) => entry.rack === rack);
@@ -2415,6 +2417,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const setForkliftSelected = (selected) => {
     forkliftSelected = Boolean(selected && forkliftRoot);
     if (forkliftSelected) labelObject.visible = false;
+    if (forkliftSelected) hideRackAction();
     if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
     forkliftLiftControls.classList.toggle('show', forkliftSelected);
     if (!forkliftSelected) {
@@ -2738,6 +2741,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelObject.visible = false;
       canvas.style.cursor = 'default';
     }
+    if (forkliftSelected) labelObject.visible = false;
     showRackAction(hoverConsumerUnit || hoverDockDoorIndex >= 0 || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
