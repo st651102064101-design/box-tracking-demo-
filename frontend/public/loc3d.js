@@ -499,7 +499,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const settingsMenu = document.createElement('div');
   settingsMenu.className = 'loc3d-settings-menu';
   settingsMenu.hidden = true;
-  settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
+  settingsMenu.innerHTML = '<button type="button" data-view="grid" aria-label="ตารางพื้น" title="ตารางพื้น"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></svg></button>'
+    + '<button type="button" data-view="walls" aria-label="กำแพง" title="กำแพง"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4h16v16M4 9h16M4 14h16M9 4v5M15 4v5M7 9v5M13 9v5M19 9v5M9 14v6M15 14v6"/></svg></button>'
+    + '<button type="button" data-view="roof" aria-label="หลังคา" title="หลังคา"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-7 9 7M5 10v10h14V10M3 20h18M9 20v-6h6v6"/></svg></button>';
   Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: '11px', background: 'rgba(12,14,16,.92)', color: '#fff', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
   Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
   // View toggles use the same compact button treatment as the settings
@@ -510,6 +512,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     background: 'rgba(12,14,16,.92)', color: '#fff',
     boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer',
     font: '600 11px var(--font)',
+  }));
+  settingsMenu.querySelectorAll('svg').forEach((svg) => Object.assign(svg.style, {
+    width: '21px', height: '21px', fill: 'none', stroke: 'currentColor',
+    strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round',
   }));
   unitGridButton.style.display = 'none';
   settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
@@ -527,9 +533,30 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const wallsVisible = kind === 'walls' ? !visible : getViewPref('loc3dWallsVisible', true);
     const roofVisible = kind === 'roof' ? !visible : getViewPref('loc3dRoofVisible', true);
     if (!wallsVisible && !roofVisible) {
+      const belongsTo = (root, object) => {
+        if (!root) return false;
+        let current = object;
+        while (current) {
+          if (current === root) return true;
+          current = current.parent;
+        }
+        return false;
+      };
       scene.traverse((object) => {
         if (!object.isMesh && !object.isLine) return;
-        const core = object === floor || object === forkliftRoot || object.userData?.rack || object.userData?.slotId || object.userData?.stagingBoxId;
+        // Keep the operational scene visible: racks, slots, boxes, staging
+        // pallets and forklift are not part of the enclosure detail layer.
+        const core = object === floor
+          || belongsTo(forkliftRoot, object)
+          || rackPickMeshes.includes(object)
+          || stagingBoxPickMeshes.includes(object)
+          || object === slotMesh
+          || object === boxMesh
+          || object.userData?.rack
+          || object.userData?.rackByInstance
+          || object.userData?.slotByInstance
+          || object.userData?.slotId
+          || object.userData?.stagingBoxId;
         if (!core) object.visible = false;
       });
       return;
