@@ -108,6 +108,7 @@ warehouse3dRouter.get(
         heightCm: boxes.heightCm,
         depthCm: boxes.depthCm,
         materialType: boxes.materialType,
+        boxTypeName: boxTypes.name,
         boxTypeDimensions: boxTypes.dim,
       })
         .from(boxes)
@@ -129,6 +130,7 @@ warehouse3dRouter.get(
         heightCm: boxes.heightCm,
         depthCm: boxes.depthCm,
         materialType: boxes.materialType,
+        boxTypeName: boxTypes.name,
         boxTypeDimensions: boxTypes.dim,
       })
         .from(boxes)
@@ -201,6 +203,7 @@ warehouse3dRouter.get(
             depth: box.depthCm,
           },
           materialType: box.materialType,
+          boxTypeName: box.boxTypeName,
         };
       }),
       stagingBoxes: stagingBoxes.map((box) => {
@@ -211,6 +214,7 @@ warehouse3dRouter.get(
           type: box.type,
           dimensionsCm: typeDimensions ?? { width: box.widthCm, height: box.heightCm, depth: box.depthCm },
           materialType: box.materialType,
+          boxTypeName: box.boxTypeName,
         };
       }),
       stats: { racks: rackRows.length, slots: slotRows.length, boxes: boxRows.length, stagingBoxes: stagingBoxes.length },

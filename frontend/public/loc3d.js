@@ -1098,6 +1098,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     metal_box: 0x8d98a5,
     generic: 0xd6a65b,
   };
+  const canonicalMaterialType = (box) => {
+    const raw = `${box.materialType || ''} ${box.boxTypeName || ''}`.toLowerCase();
+    if (/เหล็ก|โลหะ|steel|metal/.test(raw)) return 'metal_box';
+    if (/พลาสติก|ลังหู|plastic|crate/.test(raw)) return 'plastic_crate';
+    if (/กระดาษ|ลูกฟูก|carton|paper|cardboard/.test(raw)) return 'carton';
+    return box.materialType || 'generic';
+  };
   const boxesBySlot = new Map();
   (model.boxes || []).forEach((box) => {
     const boxesInSlot = boxesBySlot.get(String(box.slotId)) || [];
@@ -1136,7 +1143,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       position,
       quaternion: slotEntry.quaternion,
       scale: new THREE.Vector3(width, height, depth),
-      color: new THREE.Color(oversized ? 0xff3bd4 : (materialColors[box.materialType] || materialColors.generic)),
+      color: new THREE.Color(oversized ? 0xff3bd4 : (materialColors[canonicalMaterialType(box)] || materialColors.generic)),
     }];
   });
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.69, metalness: 0.04 });
@@ -1178,7 +1185,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const depth = Math.min(1.05, positive(box.dimensionsCm?.depth, 40) * CM_TO_M);
       const carton = new THREE.Mesh(
         UNIT_BOX,
-        new THREE.MeshStandardMaterial({ color: materialColors[box.materialType] || materialColors.generic, roughness: 0.68, metalness: 0.03 }),
+        new THREE.MeshStandardMaterial({ color: materialColors[canonicalMaterialType(box)] || materialColors.generic, roughness: canonicalMaterialType(box) === 'metal_box' ? 0.3 : 0.68, metalness: canonicalMaterialType(box) === 'metal_box' ? 0.65 : 0.03 }),
       );
       carton.position.set(x, 0.12 + height / 2, z);
       carton.scale.set(width, height, depth);
@@ -1192,7 +1199,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         position: carton.position.clone(),
         quaternion: carton.quaternion.clone(),
         scale: carton.scale.clone(),
-        color: new THREE.Color(materialColors[box.materialType] || materialColors.generic),
+        color: new THREE.Color(materialColors[canonicalMaterialType(box)] || materialColors.generic),
       });
     });
     const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
@@ -1227,7 +1234,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // and a dark edge profile make their construction readable at close range.
   // BOX-001 is included as a compatibility fallback for data created before
   // material_type was added to the persisted boxes table.
-  const cartonEntries = boxEntries.concat(stagingEntries).filter((entry) => entry.box.materialType === 'carton' || entry.box.id === 'BOX-001');
+  const cartonEntries = boxEntries.concat(stagingEntries).filter((entry) => canonicalMaterialType(entry.box) === 'carton' || entry.box.id === 'BOX-001');
   if (cartonEntries.length <= 80) {
     const cartonEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x68472e, transparent: true, opacity: 0.68 });
     const cartonSeamMaterial = new THREE.MeshStandardMaterial({ color: 0x745037, roughness: 0.92, metalness: 0 });
@@ -2270,7 +2277,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Values stay in metres/second so the movement remains frame-rate independent.
   const forkliftCruiseSpeed = 300 / 3.6;
   const forkliftAcceleration = (100 / 3.6) / 0.25;
-  const forkliftBrakeDeceleration = 2.25;
+  // Brake from 300 km/h to a standstill in 0.25 s.
+  const forkliftBrakeDeceleration = (300 / 3.6) / 0.25;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
   // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
