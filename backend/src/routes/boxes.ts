@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes, locations } from '../db/schema.js';
+import { boxes, boxTypes, locations, racks, slots, warehouses } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
@@ -19,6 +19,26 @@ boxesRouter.use(requireAuth);
    without also being allowed to delete them. */
 const canCreate = requirePermission('box.create');
 const canUpdate = requirePermission('box.update');
+
+/** Every normalized rack slot represents two pallet positions in the 3D
+ * warehouse. Keep the operational endpoints on the same rule as the scene. */
+const SLOT_CAPACITY = 2;
+const OCCUPYING_STATUSES = ['warehouse', 'hold', 'damage'] as const;
+
+const text = (value: unknown) => String(value ?? '').trim();
+const recordOf = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const isReportedFull = (value: unknown) => text(recordOf(value).reportedFullAt) !== '';
+
+type NormalizedSlot = {
+  id: string;
+  shelfCode: string;
+  slotCode: string;
+  data: unknown;
+  warehouseId: string;
+  zone: string;
+  rackCode: string;
+};
 
 /**
  * Count-by-status only — backs the filter-tab badges (see legacy.html's
@@ -54,10 +74,10 @@ boxesRouter.get(
 /**
  * The PDA's "รับเข้า" (Gate In) three-way shelf choice — "ตามที่ระบบแนะนำ" is
  * this endpoint: the first location on [wh]'s own master list (an admin's
- * defined rack/shelf/slot layout, see the `locations` table) that no
- * 'warehouse' box is currently sitting on. "Empty" here means literally
- * unoccupied, not "has spare capacity" — there's no capacity column on a
- * location, so one box is treated as filling it. Returns `{ suggestion:
+ * defined rack/shelf/slot layout, see the `locations` table) that still has
+ * room. A physical slot has two pallet positions, matching the 3D scene and
+ * putaway validation below. Held/damaged boxes still occupy physical space,
+ * and an operator's explicit "slot full" report always wins. Returns `{ suggestion:
  * null }` (200, not 404) when the warehouse has no master locations defined
  * yet, or every one of them already has a box — both are "nothing to
  * suggest", not an error, and the PDA falls back to its other two choices
@@ -79,15 +99,29 @@ boxesRouter.get(
     // shelf / the request wasn't reaching this code at all).
     if (!locRows.length) return res.json({ suggestion: null, reason: 'no_master_locations' });
 
-    const boxRows = await db.select({ location: boxes.location }).from(boxes).where(eq(boxes.status, 'warehouse'));
+    const boxRows = await db
+      .select({ location: boxes.location })
+      .from(boxes)
+      .where(inArray(boxes.status, [...OCCUPYING_STATUSES]));
     const key = (l: { wh?: unknown; zone?: unknown; rack?: unknown; shelf?: unknown; slot?: unknown }) =>
       `${l.wh ?? ''}|${l.zone ?? ''}|${l.rack ?? ''}|${l.shelf ?? ''}|${l.slot ?? ''}`;
-    const occupied = new Set(boxRows.map((r) => key((r.location ?? {}) as Record<string, unknown>)));
+    const occupied = new Map<string, number>();
+    boxRows.forEach((row) => {
+      const locationKey = key((row.location ?? {}) as Record<string, unknown>);
+      occupied.set(locationKey, (occupied.get(locationKey) ?? 0) + 1);
+    });
 
-    const free = locRows.find((loc) => !occupied.has(key(loc)));
+    const free = locRows.find((loc) => !isReportedFull(loc.data) && (occupied.get(key(loc)) ?? 0) < SLOT_CAPACITY);
     if (!free) return res.json({ suggestion: null, reason: 'all_occupied' });
     res.json({
-      suggestion: { zone: free.zone ?? '', rack: free.rack ?? '', shelf: free.shelf ?? '', slot: free.slot ?? '' },
+      suggestion: {
+        zone: free.zone ?? '',
+        rack: free.rack ?? '',
+        shelf: free.shelf ?? '',
+        slot: free.slot ?? '',
+        occupancy: occupied.get(key(free)) ?? 0,
+        capacity: SLOT_CAPACITY,
+      },
     });
   }),
 );
@@ -208,7 +242,7 @@ boxesRouter.post(
       before: null,
       after: data,
     });
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
   }),
 );
@@ -243,7 +277,7 @@ boxesRouter.post(
       .update(boxes)
       .set({ labeled: true, history, data, updatedAt: new Date() })
       .where(eq(boxes.tag, req.params.tag));
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
   }),
 );
@@ -254,6 +288,10 @@ const putawaySchema = z.object({
   rack: z.string().trim().optional().default(''),
   shelf: z.string().trim().optional().default(''),
   slot: z.string().trim().optional().default(''),
+  // A selective-rack bay has two physical pallet positions.  Persist this
+  // visual location with the inventory record so a reload never moves a box
+  // chosen on the right back to the default left position.
+  side: z.enum(['left', 'right']).optional(),
 });
 
 /**
@@ -270,31 +308,125 @@ boxesRouter.post(
   asyncHandler(async (req, res) => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
-    const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
-    if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
-    if (!box.labeled) throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
-    if (box.status === 'out') throw httpError(409, `กล่อง ${box.tag} ออกอยู่กับลูกค้า ย้ายตำแหน่งไม่ได้`, 'box_out');
+    const data = await db.transaction(async (tx) => {
+      const [box] = await tx.select().from(boxes).where(eq(boxes.tag, req.params.tag));
+      if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
+      if (!box.labeled) throw httpError(409, `กล่อง ${box.tag} ต้องติดป้ายบาร์โค้ดก่อน Putaway`, 'not_labeled');
+      if (!['pending', 'warehouse'].includes(box.status)) {
+        throw httpError(
+          409,
+          `กล่อง ${box.tag} สถานะ "${box.status}" ไม่สามารถ Putaway หรือย้ายชั้นได้`,
+          'box_not_putaway_eligible',
+        );
+      }
 
-    const wasPending = box.status === 'pending';
-    const ts = new Date().toISOString();
-    const location = { wh: input.wh, zone: input.zone, rack: input.rack, shelf: input.shelf, slot: input.slot, gate: null, ts };
-    const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
-    const history = [
-      ...prevHistory,
-      { dir: wasPending ? 'putaway' : 'relocate', ts, wh: input.wh, loc: location, recorder: req.user!.username },
-    ];
-    const data = {
-      ...(box.data as Record<string, unknown>),
-      status: 'warehouse',
-      location,
-      lastSeenAt: ts,
-      history,
-    };
-    await db
-      .update(boxes)
-      .set({ status: 'warehouse', location, history, lastSeenAt: new Date(), data, updatedAt: new Date() })
-      .where(eq(boxes.tag, req.params.tag));
-    bump(req.get('X-Client-Id'));
+      const [warehouse] = await tx
+        .select({ id: warehouses.id })
+        .from(warehouses)
+        .where(eq(warehouses.id, input.wh));
+      if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+
+      let targetSlot: NormalizedSlot | null = null;
+      const hasExactLocation = Boolean(input.zone && input.rack && input.shelf && input.slot);
+      if (hasExactLocation) {
+        [targetSlot] = await tx
+          .select({
+            id: slots.id,
+            shelfCode: slots.shelfCode,
+            slotCode: slots.slotCode,
+            data: slots.data,
+            warehouseId: racks.warehouseId,
+            zone: racks.zone,
+            rackCode: racks.code,
+          })
+          .from(slots)
+          .innerJoin(racks, eq(slots.rackId, racks.id))
+          .where(and(
+            eq(racks.warehouseId, input.wh),
+            eq(racks.zone, input.zone),
+            eq(racks.code, input.rack),
+            eq(slots.shelfCode, input.shelf),
+            eq(slots.slotCode, input.slot),
+          ));
+
+        if (!targetSlot) {
+          // Older installations may use the endpoint without a Location
+          // Master at all. Keep that legacy flow working, but once a warehouse
+          // has normalized geometry an exact 3D destination must exist.
+          const [geometry] = await tx
+            .select({ id: racks.id })
+            .from(racks)
+            .where(eq(racks.warehouseId, input.wh))
+            .limit(1);
+          if (geometry) throw httpError(404, 'ไม่พบช่องจัดเก็บที่เลือก', 'slot_not_found');
+        }
+      }
+
+      if (targetSlot) {
+        // Serialise concurrent placements into this physical slot. Without a
+        // row lock, two clients can both observe the last free pallet position
+        // and overfill it before either transaction commits.
+        await tx.execute(sql`select id from slots where id = ${targetSlot.id} for update`);
+        // A forklift may pick up an already stored box and return that exact
+        // box to the same bay. A manual “full” report blocks *new* stock but
+        // must not turn this reversible operation into a dead end.
+        const returningToCurrentSlot = box.slotId === targetSlot.id;
+        if (isReportedFull(targetSlot.data) && !returningToCurrentSlot) {
+          throw httpError(409, 'ช่องจัดเก็บนี้ถูกแจ้งว่าเต็ม', 'slot_full');
+        }
+        const [occupancy] = await tx
+          .select({ count: count() })
+          .from(boxes)
+          .where(and(
+            eq(boxes.slotId, targetSlot.id),
+            inArray(boxes.status, [...OCCUPYING_STATUSES]),
+            ne(boxes.tag, box.tag),
+          ));
+        if (Number(occupancy?.count ?? 0) >= SLOT_CAPACITY) {
+          throw httpError(409, `ช่องจัดเก็บนี้เต็มแล้ว (${SLOT_CAPACITY}/${SLOT_CAPACITY})`, 'slot_full');
+        }
+      }
+
+      const wasPending = box.status === 'pending';
+      const ts = new Date().toISOString();
+      const location = {
+        wh: input.wh,
+        zone: input.zone,
+        rack: input.rack,
+        shelf: input.shelf,
+        slot: input.slot,
+        gate: null,
+        ts,
+      };
+      const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
+      const history = [
+        ...prevHistory,
+        { dir: wasPending ? 'putaway' : 'relocate', ts, wh: input.wh, loc: location, recorder: req.user!.username },
+      ];
+      const nextData = {
+        ...(box.data as Record<string, unknown>),
+        status: 'warehouse',
+        location,
+        slotId: targetSlot?.id ?? null,
+        lastSeenAt: ts,
+        history,
+        ...(input.side ? { slotSide: input.side } : {}),
+      };
+      await tx
+        .update(boxes)
+        .set({
+          status: 'warehouse',
+          slotId: targetSlot?.id ?? null,
+          location,
+          history,
+          lastSeenAt: new Date(ts),
+          data: nextData,
+          updatedAt: new Date(ts),
+        })
+        .where(eq(boxes.tag, req.params.tag));
+      return nextData;
+    });
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
   }),
 );
@@ -334,7 +466,7 @@ boxesRouter.post(
     /* A PDA tag bind never goes through PUT /api/state, so the dashboard's
        SSE stream (see gate.ts for the same reasoning) has to be told here
        too — otherwise the web only picks it up on its next manual refresh. */
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(result);
   }),
 );
@@ -345,7 +477,7 @@ boxesRouter.delete(
   canUpdate,
   asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user!.username);
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(result);
   }),
 );
@@ -413,7 +545,7 @@ boxesRouter.post(
       before: { status: box.status },
       after: { status: input.status, reason: input.reason },
     });
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
   }),
 );

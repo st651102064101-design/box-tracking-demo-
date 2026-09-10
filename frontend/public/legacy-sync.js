@@ -26,7 +26,7 @@
     try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
   }
   function gotoLogin() {
-    try { (window.top || window).location.href = '/login'; } catch (e) { location.href = '/login'; }
+    try { (window.top || window).location.href = '/login?reason=session-expired'; } catch (e) { location.href = '/login?reason=session-expired'; }
   }
 
   /* ── identity: derive the app's "current recorder" name from the JWT,
@@ -56,6 +56,20 @@
       return JSON.parse(json);
     } catch (e) { return null; }
   }
+  // Redirect at the JWT expiry timestamp even when the operator is idle.
+  // Previously, expiry was only detected by a later API request or refresh.
+  function scheduleSessionExpiry() {
+    var payload = decodeJwtPayload(token());
+    var expiresAt = Number(payload && payload.exp) * 1000;
+    if (!Number.isFinite(expiresAt)) return;
+    var remainingMs = expiresAt - Date.now();
+    var expire = function () {
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+      gotoLogin();
+    };
+    if (remainingMs <= 0) { expire(); return; }
+    setTimeout(expire, remainingMs);
+  }
   (function syncIdentityFromToken() {
     var t = token();
     if (!t) return;
@@ -67,6 +81,7 @@
       }
     } catch (e) {}
   })();
+  scheduleSessionExpiry();
 
   // Hide the page until server state is primed, to avoid a flash of local/demo
   // data. Revealed again in finishPriming(). (Pure load behaviour — the final

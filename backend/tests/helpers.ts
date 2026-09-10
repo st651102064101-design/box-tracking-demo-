@@ -1,8 +1,11 @@
 import type { Express } from 'express';
 import request from 'supertest';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app.js';
 import { applySchema, getDb } from '../src/db/client.js';
-import { config, sequences, users } from '../src/db/schema.js';
+import { config, roles, sequences, users } from '../src/db/schema.js';
+import { seedRoles } from '../src/db/seedRoles.js';
+import { SUPER_ADMIN_KEY } from '../src/lib/permissions.js';
 import { hashPassword } from '../src/lib/password.js';
 
 export interface TestCtx {
@@ -19,9 +22,17 @@ export async function bootstrap(): Promise<TestCtx> {
     .insert(sequences)
     .values([{ name: 'do', value: 0 }, { name: 'emp', value: 0 }])
     .onConflictDoNothing({ target: sequences.name });
+  await seedRoles();
+  const [superAdmin] = await db.select().from(roles).where(eq(roles.key, SUPER_ADMIN_KEY));
   await db
     .insert(users)
-    .values({ username: 'admin', passwordHash: await hashPassword('admin123'), name: 'Admin', role: 'admin' })
+    .values({
+      username: 'admin',
+      passwordHash: await hashPassword('admin123'),
+      name: 'Admin',
+      role: 'admin',
+      roleId: superAdmin?.id ?? null,
+    })
     .onConflictDoNothing({ target: users.username });
 
   const app = createApp();

@@ -267,6 +267,15 @@ export const uiPrefs = pgTable('ui_prefs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Shared operational view controls for one warehouse's 3D twin. Unlike
+ * uiPrefs, these switches deliberately affect every operator viewing the same
+ * warehouse (grid, enclosure and forklift-audio controls). */
+export const warehouse3dSettings = pgTable('warehouse_3d_settings', {
+  warehouseId: text('warehouse_id').primaryKey().references(() => warehouses.id, { onDelete: 'cascade' }),
+  data: jsonb('data').notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const locations = pgTable('locations', {
   code: text('code').primaryKey(),
   wh: text('wh'),

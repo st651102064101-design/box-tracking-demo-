@@ -10,6 +10,7 @@
 import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import { boxes } from '../db/schema.js';
 import { httpError } from '../middleware/error.js';
+import { epcTagCandidates } from '../lib/epcCodec.js';
 import { writeAuditLog } from './audit.js';
 /**
  * Resolves a batch of scanned codes (barcodes and/or RFID reads, mixed
@@ -21,16 +22,41 @@ import { writeAuditLog } from './audit.js';
  */
 export async function resolveBoxesByCodes(db, codes) {
     const uniq = Array.from(new Set(codes));
-    const rows = uniq.length
+    /* An ASCII-encoded EPC carries the box's barcode in its hex (see
+       lib/epcCodec.ts). Decoding it here means a raw reader hex resolves even
+       when the tag was never bound through POST /api/boxes/:tag/rfid — the
+       common case for tags written in bulk, and previously the reason a scan of
+       a perfectly ordinary box came back "unknown" from every endpoint that
+       takes one. The decoded candidates are folded into the same single query so
+       this stays one round-trip. */
+    const decoded = new Map();
+    for (const code of uniq) {
+        const cands = epcTagCandidates(code).filter((c) => c !== code);
+        if (cands.length)
+            decoded.set(code, cands);
+    }
+    const lookup = Array.from(new Set([...uniq, ...[...decoded.values()].flat()]));
+    const rows = lookup.length
         ? await db
             .select()
             .from(boxes)
-            .where(or(inArray(boxes.tag, uniq), inArray(boxes.rfidEpc, uniq), inArray(boxes.rfidTid, uniq)))
+            .where(or(inArray(boxes.tag, lookup), inArray(boxes.rfidEpc, lookup), inArray(boxes.rfidTid, lookup)))
         : [];
     const resolved = new Map();
     const missing = [];
     for (const code of uniq) {
-        const row = rows.find((r) => r.tag === code || r.rfidEpc === code || r.rfidTid === code);
+        let row = rows.find((r) => r.tag === code || r.rfidEpc === code || r.rfidTid === code);
+        /* Only after a verbatim match fails: a bound EPC must always win over a
+           barcode guessed out of the same hex. Candidates are in best-first order
+           and the first that names a real box is taken — a suffix that matches
+           nothing is never adopted, so this can only ever find a box that exists. */
+        if (!row) {
+            for (const cand of decoded.get(code) ?? []) {
+                row = rows.find((r) => r.tag === cand);
+                if (row)
+                    break;
+            }
+        }
         if (row)
             resolved.set(code, row);
         else

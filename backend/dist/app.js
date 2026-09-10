@@ -18,6 +18,14 @@ import { streamRouter } from './routes/stream.js';
 import { gatePrefsRouter } from './routes/gatePrefs.js';
 import { uiPrefsRouter } from './routes/uiPrefs.js';
 import { rolesRouter } from './routes/roles.js';
+import { brandingRouter } from './routes/branding.js';
+import { systemRouter } from './routes/system.js';
+import { lprRouter } from './routes/lpr.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { lineWebhookRouter } from './routes/lineWebhook.js';
+import { lineLinkRouter } from './routes/lineLink.js';
+import { devicesRouter } from './routes/devices.js';
+import { warehouse3dRouter } from './routes/warehouse3d.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 /**
  * Operators reach this API from tablets/scanners on the same warehouse LAN,
@@ -72,7 +80,12 @@ export function createApp() {
        Mounted before express.json() so it wins for this path; body-parser
        skips anything already parsed (it sets req._body), so json() below is
        a no-op here rather than a conflict. */
-    app.use('/api/rfid/fx9600', express.raw({ type: '*/*', limit: '10mb' }));
+    // Keep raw parsing scoped to the physical-reader webhook. Management APIs
+    // under /api/rfid/fx9600 still need normal JSON request parsing.
+    app.use('/api/rfid/fx9600/:gate/webhook', express.raw({ type: '*/*', limit: '10mb' }));
+    // Signature verification must see LINE's exact bytes. This must be mounted
+    // before express.json(); once JSON parsing runs the original byte stream is gone.
+    app.use('/api/line/webhook', express.raw({ type: '*/*', limit: '1mb' }));
     app.use(express.json({ limit: '10mb' }));
     /* The SSE URL carries the auth token as a query parameter, because
        EventSource cannot send headers. Access logs are the one place that
@@ -92,7 +105,11 @@ export function createApp() {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/register', authLimiter);
     app.use('/api/auth', authRouter);
+    app.use('/api/branding', brandingRouter);
     app.use('/api/state', stateRouter);
+    // LPR cameras authenticate with their own webhook secret, not a user JWT.
+    // Mount before gateRouter, whose remaining endpoints require Bearer auth.
+    app.use('/api/gate/lpr', lprRouter);
     app.use('/api/gate', gateRouter);
     app.use('/api/boxes', boxesRouter);
     app.use('/api/rfid', rfidRouter);
@@ -100,10 +117,16 @@ export function createApp() {
     app.use('/api/employees', employeePinRouter);
     app.use('/api/cycle-counts', cycleCountsRouter);
     app.use('/api/reports', reportsRouter);
+    app.use('/api/devices', devicesRouter);
+    app.use('/api/warehouse-3d', warehouse3dRouter);
+    app.use('/api/notify-customer', notificationsRouter);
+    app.use('/api/line/webhook', lineWebhookRouter);
+    app.use('/api/line/link', lineLinkRouter);
     app.use('/api/stream', streamRouter);
     app.use('/api/gate-prefs', gatePrefsRouter);
     app.use('/api/ui-prefs', uiPrefsRouter);
     app.use('/api/roles', rolesRouter);
+    app.use('/api/system', systemRouter);
     app.use(notFound);
     app.use(errorHandler);
     return app;

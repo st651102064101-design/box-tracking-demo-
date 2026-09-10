@@ -71,7 +71,7 @@ services:
       SMTP_PASS: ""
       SMTP_FROM: ""
     ports:
-      - "4000:4000"
+      - "0.0.0.0:4000:4000"
     develop:
       watch:
         - action: rebuild
@@ -97,7 +97,7 @@ services:
       NODE_ENV: production
       BACKEND_URL: http://backend:4000
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3000:3000"
     develop:
       watch:
         - action: rebuild
@@ -121,7 +121,7 @@ services:
       FX9600_URL: https://host.docker.internal:9443
       FX9600_TLS_VERIFY: "false"
     ports:
-      - "3001:3000"
+      - "0.0.0.0:3001:3000"
 
   pda:
     build: ./pda_flutter
@@ -131,7 +131,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "5100:80"
+      - "0.0.0.0:5100:80"
     develop:
       watch:
         - action: rebuild

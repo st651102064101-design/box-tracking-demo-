@@ -18,6 +18,10 @@ COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
+# Fail the image build if a directly referenced 3D model is missing.
+RUN node -e "const fs=require('fs'); const src=fs.readFileSync('public/loc3d.js','utf8'); for(const m of src.matchAll(/assets\.load\('([^']+\.glb)'/g)) fs.accessSync('public'+m[1]);"
+# Produce a legacy-browser compatible module while dev tooling is available.
+RUN ./node_modules/.bin/esbuild ./public/loc3d.js --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
@@ -26,6 +30,13 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
+# Keep the complete Three.js runtime local to this deployment. The legacy 3D
+# module must not depend on a CDN response that a LAN security proxy can alter.
+COPY --from=build /app/node_modules/three/build ./public/vendor/three/build
+COPY --from=build /app/node_modules/three/examples/jsm ./public/vendor/three/examples/jsm
+# Serve a browser-compatible physical runtime. Transpiling the large module
+# removes syntax that older Edge webviews occasionally mis-parse as EOF.
+COPY --from=build /app/public/warehouse-3d-runtime.js ./public/warehouse-3d-runtime.js
 COPY --from=build /app/next.config.js ./next.config.js
 EXPOSE 3000
 CMD ["npm", "run", "start"]

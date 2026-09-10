@@ -13,6 +13,7 @@ const th = {
   'app.metaTitle': 'Smart Tracking — ระบบติดตามสินทรัพย์หมุนเวียน',
   'app.metaDescription': 'ระบบประตู RFID และติดตามสินทรัพย์หมุนเวียน',
   'login.subtitleFallback': 'WMS · เฟส 1 · ระบบติดตามสินทรัพย์หมุนเวียน',
+  'login.sessionExpired': 'เซสชันการใช้งานสิ้นสุดลงเพื่อความปลอดภัย กรุณาเข้าสู่ระบบใหม่เพื่อดำเนินการต่อ',
   'login.validation.usernameRequired': 'กรุณากรอกชื่อผู้ใช้หรืออีเมล',
   'login.validation.passwordRequired': 'กรุณากรอกรหัสผ่าน',
   'login.validation.otpLength': 'กรุณากรอกรหัส OTP ให้ครบ 6 หลัก',
@@ -79,6 +80,7 @@ const en: Record<keyof typeof th, string> = {
   'app.metaTitle': 'Smart Tracking — Returnable Asset Tracking',
   'app.metaDescription': 'RFID gate and returnable asset tracking system',
   'login.subtitleFallback': 'WMS · Phase 1 · Returnable Asset Tracking',
+  'login.sessionExpired': 'Your session has ended for security reasons. Please sign in again to continue.',
   'login.validation.usernameRequired': 'Enter your username or email',
   'login.validation.passwordRequired': 'Enter your password',
   'login.validation.otpLength': 'Enter the complete 6-digit OTP',
@@ -188,14 +190,21 @@ export function useI18n() {
 export function LanguageToggle() {
   const { locale, setLocale, t } = useI18n();
   return (
-    <div className="inline-flex rounded-full border border-black/10 bg-white/85 p-1 text-xs font-semibold shadow-sm backdrop-blur" aria-label={t('language.switch')}>
+    <div className="inline-flex rounded-full border border-black/15 bg-white/90 p-1 text-xs font-semibold shadow-sm backdrop-blur" aria-label={t('language.switch')}>
       {(['th', 'en'] as Locale[]).map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => setLocale(option)}
           aria-pressed={locale === option}
-          className={`rounded-full px-3 py-1.5 transition ${option === 'en' ? 'text-ink hover:text-ink' : locale === option ? 'bg-ink text-white' : 'text-ink-2 hover:text-ink'}`}
+          style={{
+            color: locale === option ? '#ffffff' : '#111111',
+            backgroundColor: locale === option ? '#1677ff' : 'transparent',
+            fontWeight: 700,
+          }}
+          className={`rounded-full px-3 py-1.5 transition-colors ${locale === option
+            ? 'bg-[#1677ff] text-white shadow-sm'
+            : 'text-black hover:bg-black/5'}`}
         >
           {t(`language.${option}` as TranslationKey)}
         </button>

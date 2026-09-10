@@ -20,12 +20,22 @@ function getTransporter() {
     return transporter;
 }
 export async function sendMail(opts) {
-    await getTransporter().sendMail({
-        from: env.smtp.from,
-        to: opts.to,
-        subject: opts.subject,
-        text: opts.text,
-        html: opts.html,
-    });
+    try {
+        await getTransporter().sendMail({
+            from: env.smtp.from,
+            to: opts.to,
+            subject: opts.subject,
+            text: opts.text,
+            html: opts.html,
+        });
+    }
+    catch (error) {
+        const code = String(error.code ?? '');
+        const message = String(error.message ?? '');
+        if (code === 'EAUTH' || /application-specific password|required/i.test(message)) {
+            throw httpError(502, 'Gmail ปฏิเสธการล็อกอิน: กรุณาตั้งค่า SMTP_PASS เป็น Google App Password 16 หลัก', 'smtp_auth_failed');
+        }
+        throw error;
+    }
 }
 //# sourceMappingURL=mailer.js.map
