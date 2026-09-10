@@ -2236,6 +2236,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   let forkliftDropTarget = null;
+  let forkliftPutawayPhase = null;
   // Fixed warehouse travel speed: 24 km/h = 6.67 m/s. This is applied as
   // physical velocity, not a fixed distance-per-frame animation.
   const forkliftCruiseSpeed = 24 / 3.6;
@@ -2686,6 +2687,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         // slot is a putaway command; otherwise retain the normal slot drawer.
         if (forkliftSelected && forkliftLoadAssembly && slotOccupancy <= 1) {
           forkliftDropTarget = { ...destination, occupancy: slotOccupancy };
+          forkliftPutawayPhase = 'travel';
           // Travel with forks lowered; the lift command is issued only after
           // the vehicle reaches the destination.
           forkliftLiftTarget = 0;
@@ -3008,6 +3010,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
+    if (forkliftPutawayPhase === 'lifting' && forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
+      const targetForkY = forkliftDropTarget.position.y;
+      const currentForkY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
+      if (Math.abs(currentForkY - targetForkY) <= 0.08) {
+        forkliftPutawayPhase = 'placing';
+        forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh: null };
+      }
+    }
     if (forkliftMotion && forkliftRoot) {
       const destination = forkliftMotion.path[forkliftMotion.index];
       movementDirection.subVectors(destination, forkliftRoot.position);
@@ -3024,13 +3034,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
         if (forkliftMotion.index >= forkliftMotion.path.length) {
           saveForkliftPosition();
-          if (forkliftDropTarget) {
+          if (forkliftDropTarget && forkliftPutawayPhase === 'travel') {
             // Square the truck to the rack face before any lift/putaway step.
             const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
             const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
             // The imported forklift's forks face local -Z. Aim that front
             // toward the selected slot rather than copying rack rotation.
             forkliftRoot.rotation.y = Math.atan2(dx, dz) + Math.PI;
+            forkliftLiftTarget = THREE.MathUtils.clamp(
+              forkliftDropTarget.position.y - forkliftCarriageBaseY - forkliftRoot.position.y,
+              0,
+              forkliftLiftMax,
+            );
+            forkliftPutawayPhase = 'lifting';
           }
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
@@ -3068,7 +3084,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               forkliftLoadAssembly = loadAssembly;
             }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
-          } else if (forkliftDropTarget && forkliftLoadAssembly) {
+          } else if (forkliftDropTarget && forkliftLoadAssembly && forkliftPutawayPhase === 'placing') {
             const target = forkliftDropTarget;
             const forkWorldY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
             const requiredY = target.position.y;
@@ -3076,13 +3092,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // Never teleport a load into an upper slot. The operator must
               // raise the forks to the slot level before the putaway completes.
               forkliftLiftTarget = THREE.MathUtils.clamp(requiredY - forkliftCarriageBaseY - forkliftRoot.position.y, 0, forkliftLiftMax);
-              // Keep the destination pending and retry automatically once the
-              // smooth lift reaches the shelf height; no second click needed.
-              window.setTimeout(() => {
-                if (forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
-                  forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh: null };
-                }
-              }, 250);
+              forkliftPutawayPhase = 'lifting';
             } else {
               forkliftLoadAssembly.parent?.remove(forkliftLoadAssembly);
             scene.add(forkliftLoadAssembly);
@@ -3091,7 +3101,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // second load along the slot's local width, never vertically.
             {
               const side = target.occupancy ? -1 : 1;
-              const sideOffset = new THREE.Vector3(0, 0, side * target.scale.z * 0.5)
+              const sideOffset = new THREE.Vector3(0, 0, side * target.scale.z * 0.24)
                 .applyQuaternion(target.quaternion);
               forkliftLoadAssembly.position.add(sideOffset);
             }
@@ -3103,6 +3113,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             const placedBoxId = forkliftLoadAssembly.userData.stagingBoxId;
             forkliftLoadAssembly = null;
             forkliftDropTarget = null;
+            forkliftPutawayPhase = null;
             // After every successful putaway, return the forks to the lowest
             // safe travel position with the same smooth damping.
             forkliftLiftTarget = 0;
