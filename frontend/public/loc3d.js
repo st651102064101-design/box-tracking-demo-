@@ -2403,6 +2403,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftPutawayPhase = null;
   let forkliftReturnTarget = null;
   let forkliftRollback = null;
+  let rackPickupCameraLocked = false;
   // Realistic warehouse-forklift travel: roughly 12 km/h unloaded.  Acceleration
   // and braking are deliberately gentle so a load does not lurch on the forks.
   // Values stay in metres/second so movement remains frame-rate independent.
@@ -2419,9 +2420,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftSyncInFlight = false;
   let remoteForkliftPosition = null;
   let remoteForkliftRotation = null;
+  let forkliftLocalPositionHoldUntil = 0;
   let forkliftSyncFrame = 0;
   const saveForkliftPosition = () => {
     if (!forkliftRoot || !model.warehouseId) return;
+    // Do not let a previously fetched remote position pull the local truck
+    // away from a just-completed route while the PUT request is in flight.
+    remoteForkliftPosition = forkliftRoot.position.clone();
+    remoteForkliftRotation = forkliftRoot.rotation.y;
+    forkliftLocalPositionHoldUntil = performance.now() + 1800;
     fetch('/api/warehouse-3d/forklift', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
@@ -2438,6 +2445,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (!response.ok) return;
       const latest = await response.json();
       const position = latest?.forkliftPosition?.position;
+      if (forkliftMotion || performance.now() < forkliftLocalPositionHoldUntil) return;
       if (position && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.z))) {
         remoteForkliftPosition = new THREE.Vector3(Number(position.x), Number(position.y) || warehouseFloorY + 0.012, Number(position.z));
         remoteForkliftRotation = Number.isFinite(Number(latest.forkliftPosition.rotationY)) ? Number(latest.forkliftPosition.rotationY) : null;
@@ -2552,6 +2560,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
     forkliftLiftControls.classList.toggle('show', forkliftSelected);
     if (!forkliftSelected) {
+      rackPickupCameraLocked = false;
+      controls.enableRotate = true;
       forkliftMotion = null;
       routeLine.visible = false;
       targetMarker.visible = false;
@@ -2700,6 +2710,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     targetMarker.visible = true;
     missionBeacon.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.06);
     missionBeacon.visible = Boolean(pickupMesh);
+  };
+  const setRackPickupCameraLock = (locked) => {
+    rackPickupCameraLocked = Boolean(locked);
+    // A rack-pickup click can leave a browser pointer gesture active. Lock
+    // orbit rotation only for this short autonomous pickup phase so normal
+    // mouse movement cannot rotate the overview camera with the forklift.
+    if (!firstPerson) controls.enableRotate = !rackPickupCameraLocked;
   };
   const rollbackForkliftLoad = () => {
     if (!forkliftSelected || !forkliftRoot || !forkliftLoadAssembly || !forkliftRollback) return false;
@@ -2931,10 +2948,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // hit state synchronously so a selected forklift always treats a box
       // click as a pickup command instead of opening its drawer.
       updatePointer(event);
+      // While a pallet is on the forks, the canvas is exclusively in putaway
+      // mode.  Do not let this click bubble into the normal location/box
+      // drawer handlers even if a thin slot or rack mesh wins the raycast.
+      const carryingLoad = forkliftSelected && Boolean(forkliftLoadAssembly || forkliftMotion?.pickupMesh || forkliftPutawayPhase);
+      if (carryingLoad) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       // Clicking the visible yellow placement ring must issue putaway, not
       // fall through to the normal slot drawer. Resolve the ring's slot when
       // its visual surface is the hit target.
-      if (forkliftSelected && forkliftLoadAssembly && hoverIndex < 0 && hoverRing.visible
+      if (carryingLoad && hoverIndex < 0 && hoverRing.visible
         && raycaster.intersectObject(hoverRing, false).length > 0
         && Number.isInteger(hoverRing.userData.slotIndex)) {
         hoverIndex = hoverRing.userData.slotIndex;
@@ -2982,6 +3007,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       else if (hoverBoxIndex >= 0) {
         const entry = boxEntries[hoverBoxIndex];
+        if (carryingLoad) {
+          // A neighboring carton can be closer to the camera than the empty
+          // slot.  Never open its drawer during a putaway operation.
+          window.toast?.('กำลังยกกล่องอยู่', 'คลิกวงกลมในช่องว่างเพื่อวางกล่อง', 'warn');
+          return;
+        }
         if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly) {
           // Keep forklift interaction mode active after a completed putaway.
           // Clear any stale route state before issuing the next pickup so the
@@ -2993,6 +3024,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             missionBeacon.visible = false;
             setForkliftAudioMoving(false);
           }
+          setRackPickupCameraLock(false);
           // Instanced rack boxes cannot be re-parented individually. Create a
           // physical pickup proxy, hide that instance, and let the normal
           // pallet/rollback workflow carry it on the forks.
@@ -3005,6 +3037,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           pickupMesh.scale.copy(entry.scale);
           pickupMesh.userData.stagingBox = entry.box;
           pickupMesh.userData.stagingBoxId = entry.box.id;
+          pickupMesh.userData.rackPickup = true;
           forkliftReturnTarget = entry.slotEntry;
           missionBeacon.position.copy(entry.position).setY(warehouseFloorY + 0.06);
           missionBeacon.visible = true;
@@ -3023,6 +3056,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             entry.scale.z * 0.5 + forkliftClearance,
           );
           approachPoint.y = warehouseFloorY + 0.025;
+          setRackPickupCameraLock(true);
           moveForkliftTo(approachPoint, pickupMesh, true);
           window.toast?.('กำลังไปรับกล่องจากชั้นวาง', `${entry.box.id} · รถ Forklift`, 'ok');
         } else {
@@ -3042,7 +3076,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const slotOccupancy = Math.max(0, storedOccupancy - (isReturnSlot ? 1 : 0));
         // With a pallet on the forks, a click on an empty or single-pallet
         // slot is a putaway command; otherwise retain the normal slot drawer.
-        if (forkliftSelected && forkliftLoadAssembly && slotOccupancy < 2) {
+        if (carryingLoad && slotOccupancy < 2) {
           forkliftDropTarget = { ...destination, occupancy: slotOccupancy, isReturnSlot };
           forkliftPutawayPhase = 'travel';
           // Travel with forks lowered; the lift command is issued only after
@@ -3064,6 +3098,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           approachPoint.y = warehouseFloorY + 0.025;
           moveForkliftTo(approachPoint, null, true);
           window.toast?.('กำลังนำพาเลทไปวาง', `${destination.slot.id} · ชั้น ${destination.slot.shelfCode || ''}`, 'ok');
+        } else if (carryingLoad) {
+          window.toast?.('ช่องนี้เต็ม', 'เลือกช่องว่างหรือช่องที่ยังวางพาเลทได้', 'warn');
         } else {
           releasePointerForModal();
           onSelect?.(destination.slot.id);
@@ -3620,6 +3656,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             window.toast?.('วางพาเลทเข้าช่องแล้ว', `${target.slot.id} · ชั้น ${target.slot.shelfCode || ''}`, 'ok');
             }
           saveForkliftPosition();
+          if (pickupMesh?.userData?.rackPickup) setRackPickupCameraLock(false);
           }
           forkliftMotion = null;
           setForkliftAudioMoving(false);
