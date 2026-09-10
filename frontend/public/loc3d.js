@@ -2462,7 +2462,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const routeLength = path.slice(1).reduce(
       (total, point, index) => total + point.distanceTo(path[index]), 0,
     );
-    forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh, straightGuide };
+    const targetYaw = Math.atan2(target.x - forkliftRoot.position.x, target.z - forkliftRoot.position.z);
+    forkliftRoot.rotation.y = targetYaw;
+    forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh, straightGuide, targetYaw };
     ensureForkliftAudio();
     setForkliftAudioMoving(true);
     routeLine.geometry.dispose();
@@ -2673,7 +2675,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // opening the generic box drawer would interrupt that workflow.
           const palletPoint = hoverStagingMesh.position.clone();
           palletPoint.y = warehouseFloorY + 0.025;
-          moveForkliftTo(palletPoint, hoverStagingMesh);
+          // Putaway pickup uses one direct guide from the truck to the pallet,
+          // so the intended approach direction is always unambiguous.
+          moveForkliftTo(palletPoint, hoverStagingMesh, true);
           window.toast?.('กำลังไปรับกล่อง', `${hoverStagingBox.id} · พาเลท Putaway`, 'ok');
         } else {
           releasePointerForModal();
