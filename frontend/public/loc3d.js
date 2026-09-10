@@ -3629,7 +3629,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           remoteForkliftTarget.clone().setY(warehouseFloorY + 0.12),
         ]);
       }
-      if (remoteForkliftLiftTarget != null) forkliftLiftTarget = remoteForkliftLiftTarget;
+      // A selected forklift is being operated in this view. Never let a
+      // delayed spectator snapshot pull its manual lift target back down.
+      if (!forkliftSelected && remoteForkliftLiftTarget != null) forkliftLiftTarget = remoteForkliftLiftTarget;
       if (forkliftSelection && !forkliftSelected) forkliftSelection.visible = remoteForkliftMoving || remoteDistance > 0.0001;
     }
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
@@ -3913,6 +3915,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // Putaway lift/lower motion is intentionally slower so the forks and
       // pallet visibly align with the rack shelf instead of snapping.
       forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 18, deltaSeconds);
+      // Publish manual mast movement as it animates, so other viewers follow
+      // the same height without being allowed to overwrite this operator.
+      if (forkliftSelected && Math.abs(forkliftLiftHeight - forkliftLiftTarget) > 0.003) saveForkliftPosition();
       forkliftCarriageForks.position.x = forkliftCarriageBaseX;
       forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
       // This is the original tall steel stage from the GLB (its exported name
