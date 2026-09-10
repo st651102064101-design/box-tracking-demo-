@@ -3593,8 +3593,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         routeLine.visible = true;
         routeLine.geometry.dispose();
         routeLine.geometry = new THREE.BufferGeometry().setFromPoints([
-          forkliftRoot.position.clone().setY(warehouseFloorY + 0.045),
-          remoteForkliftTarget.clone().setY(warehouseFloorY + 0.045),
+          forkliftRoot.position.clone().setY(warehouseFloorY + 0.12),
+          remoteForkliftTarget.clone().setY(warehouseFloorY + 0.12),
         ]);
       }
     }
