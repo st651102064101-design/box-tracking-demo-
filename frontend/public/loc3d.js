@@ -2658,9 +2658,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(forkliftLiftControls);
   const changeForkliftLift = (direction) => {
     if (!forkliftSelected || !forkliftCarriageForks) return;
-    // A tap is one centimetre; holding the button advances this same target
-    // continuously in the animation loop below.
-    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.01, 0, forkliftLiftMax);
+    // A visible 20 cm step per tap; holding continues to move in the animation
+    // loop. One centimetre steps made the restored +/- controls look broken.
+    forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.2, 0, forkliftLiftMax);
   };
   const onForkliftLiftPointerDown = (event) => {
     const direction = event.target.closest('button')?.dataset.lift;
@@ -2682,6 +2682,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   forkliftLiftControls.addEventListener('pointerdown', onForkliftLiftPointerDown);
   forkliftLiftControls.addEventListener('pointerup', stopForkliftLiftInput);
   forkliftLiftControls.addEventListener('pointercancel', stopForkliftLiftInput);
+  forkliftLiftControls.addEventListener('pointerleave', stopForkliftLiftInput);
   window.addEventListener('pointerup', stopForkliftLiftInput);
   window.addEventListener('keydown', onForkliftLiftKey, { passive: false });
   const findForkliftPath = (start, target) => {
