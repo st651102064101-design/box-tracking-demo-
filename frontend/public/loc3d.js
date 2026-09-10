@@ -3028,9 +3028,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
     if (forkliftPutawayPhase === 'lifting' && forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
-      const targetForkY = forkliftDropTarget.position.y;
-      const currentForkY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
-      if (Math.abs(currentForkY - targetForkY) <= 0.08) {
+      // Shelf 1 can sit below the physical lowest fork centre. In that case
+      // the clamped target is 0, so wait for the lift actuator to finish at
+      // its minimum rather than waiting for an unreachable world height.
+      if (Math.abs(forkliftLiftHeight - forkliftLiftTarget) <= 0.03) {
         forkliftPutawayPhase = 'placing';
         forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh: null };
       }
