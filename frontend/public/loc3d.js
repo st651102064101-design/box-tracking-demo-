@@ -2726,12 +2726,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         hoverRing.visible = true;
         labelObject.visible = false;
       } else {
-        labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+        labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? '' : state === 'occupied' ? 'มีของ' : 'ว่าง';
         labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
       }
       // Keep the slot-status label inside the bay instead of floating above its beam.
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, 0.05, 0));
-      labelObject.visible = true;
+      labelObject.visible = !hiddenOccupied;
       canvas.style.cursor = 'pointer';
     } else {
       hoverRing.visible = false;
