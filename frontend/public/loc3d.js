@@ -2955,6 +2955,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           const rackNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(entry.quaternion).setY(0).normalize();
           const forkliftSide = forkliftRoot.position.clone().sub(entry.position).setY(0);
           if (forkliftSide.dot(rackNormal) < 0) rackNormal.negate();
+          // Preserve the face selected for the rack approach.  Re-deriving
+          // this from tiny endpoint differences can make the smooth pickup
+          // alignment oscillate and never complete.
+          pickupMesh.userData.pickupFaceYaw = Math.atan2(-rackNormal.x, -rackNormal.z);
           const approachPoint = entry.position.clone().addScaledVector(
             rackNormal,
             entry.scale.z * 0.5 + forkliftClearance,
@@ -3338,11 +3342,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
-      const pickupYaw = Math.atan2(
-        forkliftMotion.pickupMesh.position.x - forkliftRoot.position.x,
-        forkliftMotion.pickupMesh.position.z - forkliftRoot.position.z,
-      );
-      if (turnForkliftTowards(pickupYaw, deltaSeconds) <= forkliftStopYawTolerance) {
+      // Keep the forks at travel height until the chassis faces the rack.
+      // Lifting during a turn made the pickup look unsafe and could leave its
+      // animation waiting on two competing states.
+      forkliftLiftTarget = 0;
+      const pickupYaw = Number.isFinite(forkliftMotion.pickupMesh.userData.pickupFaceYaw)
+        ? forkliftMotion.pickupMesh.userData.pickupFaceYaw
+        : Math.atan2(
+          forkliftMotion.pickupMesh.position.x - forkliftRoot.position.x,
+          forkliftMotion.pickupMesh.position.z - forkliftRoot.position.z,
+        );
+      const aligned = turnForkliftTowards(pickupYaw, deltaSeconds) <= forkliftStopYawTolerance;
+      const timedOut = performance.now() - (forkliftMotion.pickupAlignStartedAt || performance.now()) > 4000;
+      if (aligned || timedOut) {
+        if (timedOut) forkliftRoot.rotation.y = pickupYaw;
         forkliftMotion.pickupAligned = true;
         forkliftMotion.pickupAligning = false;
       }
@@ -3406,6 +3419,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // face the old aisle. Hold the pickup until it squares up to the
             // rack box, turning at the normal smooth steering rate.
             forkliftMotion.pickupAligning = true;
+            forkliftMotion.pickupAlignStartedAt = performance.now();
             forkliftMotion.path = [forkliftRoot.position.clone()];
             forkliftMotion.index = 0;
             forkliftMotion.currentSpeed = 0;
