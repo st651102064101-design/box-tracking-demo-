@@ -2654,7 +2654,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const forkliftLiftControls = document.createElement('div');
   forkliftLiftControls.className = 'loc3d-forklift-lift';
-  forkliftLiftControls.innerHTML = '<span>ระดับงา</span><input type="range" min="0" max="1" step="0.001" value="0" aria-label="ระดับงา" />';
+  forkliftLiftControls.innerHTML = '<button type="button" data-lift="down" aria-label="ลดงา">−</button><span>ระดับงา</span><button type="button" data-lift="up" aria-label="ยกงา">+</button>';
   stage.appendChild(forkliftLiftControls);
   const changeForkliftLift = (direction) => {
     if (!forkliftSelected || !forkliftCarriageForks) return;
@@ -2663,7 +2663,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.01, 0, forkliftLiftMax);
   };
   const onForkliftLiftPointerDown = (event) => {
-    if (event.target instanceof HTMLInputElement) return;
     const direction = event.target.closest('button')?.dataset.lift;
     if (!direction) return;
     const amount = direction === 'up' ? 1 : -1;
@@ -2672,29 +2671,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     event.target.closest('button')?.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   };
-  const liftSlider = forkliftLiftControls.querySelector('input');
-  const applyLiftSliderValue = () => {
-    forkliftLiftTarget = Number(liftSlider.value) * forkliftLiftMax;
-  };
-  liftSlider.addEventListener('input', applyLiftSliderValue);
-  // Some Chromium/WebView builds do not dispatch native range dragging when
-  // the control sits over the WebGL canvas. Track the pointer explicitly so a
-  // drag anywhere across the bar always changes the fork target.
-  const dragLiftSlider = (event) => {
-    if (!(event.buttons & 1)) return;
-    const rect = liftSlider.getBoundingClientRect();
-    // The range is vertical; map the pointer from bottom (0) to top (1).
-    const ratio = THREE.MathUtils.clamp((rect.bottom - event.clientY) / Math.max(1, rect.height), 0, 1);
-    liftSlider.value = String(ratio);
-    applyLiftSliderValue();
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  liftSlider.addEventListener('pointerdown', (event) => {
-    liftSlider.setPointerCapture?.(event.pointerId);
-    dragLiftSlider(event);
-  }, { passive: false });
-  liftSlider.addEventListener('pointermove', dragLiftSlider, { passive: false });
   const stopForkliftLiftInput = () => { forkliftLiftInput = 0; };
   const onForkliftLiftKey = (event) => {
     if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
