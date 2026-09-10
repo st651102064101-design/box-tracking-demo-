@@ -2239,13 +2239,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftMotion = null;
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
-  // Fixed warehouse travel speed: 24 km/h = 6.67 m/s. This is applied as
-  // physical velocity, not a fixed distance-per-frame animation.
-  const forkliftCruiseSpeed = 24 / 3.6;
-  const forkliftAcceleration = 1.35;
+  // Travel specification: 100 km/h maximum, accelerating 0→100 km/h in 2 s.
+  // Values stay in metres/second so the movement remains frame-rate independent.
+  const forkliftCruiseSpeed = 100 / 3.6;
+  const forkliftAcceleration = forkliftCruiseSpeed / 2;
   const forkliftBrakeDeceleration = 2.25;
   // A loaded forklift cannot pivot on the spot or instantaneously point its
-  // wheels at the next grid cell. Keep the yaw rate deliberately modest so
+  // wheels at the next grid cell.  Keep the yaw rate deliberately modest so
   // left/right turns and U-turns read as a physical manoeuvre.
   const forkliftTurnRate = THREE.MathUtils.degToRad(38);
   const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(12);
