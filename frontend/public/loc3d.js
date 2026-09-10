@@ -2638,6 +2638,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       rackPickupCameraLocked = false;
       controls.enableRotate = true;
       forkliftMotion = null;
+      // Clear the persisted motion flag as soon as the operator cancels
+      // selection. Otherwise a spectator update can re-enable the forklift
+      // ring from the previous `moving: true` snapshot and leave the effect
+      // visibly stuck under an idle truck.
+      remoteForkliftMoving = false;
+      remoteForkliftTarget = null;
+      if (forkliftSelection) forkliftSelection.visible = false;
+      if (forkliftRoot && model.warehouseId) saveForkliftPosition(true);
       routeLine.visible = false;
       targetMarker.visible = false;
       targetRipple.visible = false;
@@ -2675,7 +2683,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const dragLiftSlider = (event) => {
     if (!(event.buttons & 1)) return;
     const rect = liftSlider.getBoundingClientRect();
-    const ratio = THREE.MathUtils.clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+    // The range is vertical; map the pointer from bottom (0) to top (1).
+    const ratio = THREE.MathUtils.clamp((rect.bottom - event.clientY) / Math.max(1, rect.height), 0, 1);
     liftSlider.value = String(ratio);
     applyLiftSliderValue();
     event.preventDefault();
