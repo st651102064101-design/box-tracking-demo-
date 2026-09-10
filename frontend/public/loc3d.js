@@ -2966,6 +2966,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let hoverConsumerUnit = false;
   let hoverDockDoorIndex = -1;
   let hoverForklift = false;
+  let hoverForkliftRoot = null;
   let hoverStagingBox = null;
   let hoverStagingMesh = null;
   let hoverRackCode = '';
@@ -3255,6 +3256,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverConsumerUnit = false;
     hoverDockDoorIndex = -1;
     hoverForklift = false;
+    hoverForkliftRoot = null;
     hoverStagingBox = null;
     hoverStagingMesh = null;
     hoverSlotPoint = null;
@@ -3290,7 +3292,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const doorHit = dockDoorPickMeshes.length ? raycaster.intersectObjects(dockDoorPickMeshes, false)[0] : null;
     const rackHit = rackPickMeshes.length ? raycaster.intersectObjects(rackPickMeshes, false)[0] : null;
-    const nextForklift = Boolean(forkliftHit());
+    const forkliftHoverHit = forkliftHit();
+    const nextForklift = Boolean(forkliftHoverHit);
     const nextBox = Number.isInteger(boxHit?.instanceId) ? boxHit.instanceId : -1;
     const nextStagingBox = stagingHit?.object?.userData?.stagingBox || null;
     const nextStagingMesh = stagingHit?.object || null;
@@ -3315,6 +3318,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverConsumerUnit = nextConsumerUnit;
     hoverDockDoorIndex = nextDoor;
     hoverForklift = nextForklift;
+    hoverForkliftRoot = forkliftHoverHit?.root || null;
     hoverStagingBox = nextStagingBox;
     hoverStagingMesh = nextStagingMesh;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
@@ -3696,19 +3700,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       }
       else if (isForkliftHit()) {
-        const selectedForklift = forkliftHit();
-        const selectedRoot = selectedForklift?.root;
+        const selectedRoot = hoverForkliftRoot;
+        const selectedForkliftId = selectedRoot === forkliftCloneRoot ? 'forklift-2' : 'forklift-1';
         if (selectedRoot?.userData?.isForkliftClone && !forkliftSelected) {
           // The second truck is a real vehicle. Switch the active chassis and
           // lease key before claiming it; do not silently redirect its clicks
           // to the first truck.
           forkliftRoot = selectedRoot;
-          activeForkliftId = String(selectedForklift.hit.object.userData.forkliftId || 'forklift-2');
+          activeForkliftId = selectedForkliftId;
           forkliftWheels = forkliftCloneWheels;
           forkliftMastInner = forkliftCloneMastInner;
           forkliftCarriageForks = forkliftCloneCarriageForks;
         } else if (selectedRoot === forkliftRoot) {
-          activeForkliftId = String(selectedForklift.hit.object.userData.forkliftId || activeForkliftId);
+          activeForkliftId = selectedForkliftId;
         }
         setForkliftSelected(!forkliftSelected);
       }
