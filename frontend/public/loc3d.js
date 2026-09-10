@@ -3699,7 +3699,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           onBoxSelect?.(entry.box.id);
         }
       }
-      else if (isForkliftHit()) {
+      else if (hoverForkliftRoot) {
         const selectedRoot = hoverForkliftRoot;
         const selectedForkliftId = selectedRoot === forkliftCloneRoot ? 'forklift-2' : 'forklift-1';
         if (selectedRoot?.userData?.isForkliftClone && !forkliftSelected) {
