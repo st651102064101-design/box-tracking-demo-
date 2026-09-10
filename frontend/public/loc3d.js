@@ -3610,7 +3610,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       forkliftNextSyncAt = frameNow + forkliftBroadcastIntervalMs;
       syncForkliftPosition();
     }
-    if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
+    // The selected forklift is owned by this operator. Do not blend a delayed
+    // remote snapshot into it while it is aligning at a rack, or the two yaw
+    // updates fight each other and make the truck visibly shake.
+    if (forkliftRoot && !forkliftMotion && !forkliftSelected && remoteForkliftPosition) {
       const beforeRemote = forkliftRoot.position.clone();
       forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-22 * deltaSeconds));
       const remoteDistance = beforeRemote.distanceTo(forkliftRoot.position);
