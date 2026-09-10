@@ -3451,7 +3451,10 @@ async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, wareho
   const stage = canvas.parentElement;
   try {
     const model = await loadModel(locations || [], occupancy || {});
-    if (!model.warehouseName && warehouseName) model.warehouseName = warehouseName;
+    // The browser's Warehouse Master is the authoritative display label. The
+    // geometry API may return only the warehouse code (for example WH-001),
+    // so always prefer the human-readable name passed by the page.
+    if (warehouseName) model.warehouseName = warehouseName;
     if (currentGeneration !== generation || !canvas.isConnected) return null;
     const controller = await createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate);
     if (currentGeneration !== generation || !canvas.isConnected) {
