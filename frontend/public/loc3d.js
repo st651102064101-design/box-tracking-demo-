@@ -490,6 +490,35 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   unitGridButton.setAttribute('aria-pressed', 'false');
   unitGridButton.title = 'แสดง/ซ่อนตาราง Unit';
   unitGridButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></svg>';
+  const settingsButton = document.createElement('button');
+  settingsButton.type = 'button';
+  settingsButton.className = 'loc3d-settings';
+  settingsButton.setAttribute('aria-label', 'ตั้งค่า');
+  settingsButton.title = 'ตั้งค่า';
+  settingsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 15 .1.1-1.7 2.9-.2-.1-2-1.1a7.7 7.7 0 0 1-1.7 1l-.3 2.3h-3.4l-.3-2.3a7.7 7.7 0 0 1-1.7-1l-2 1.1-.2.1-1.7-2.9.1-.1 1.8-1.4a7.6 7.6 0 0 1 0-2l-1.8-1.4-.1-.1 1.7-2.9.2.1 2 1.1a7.7 7.7 0 0 1 1.7-1l.3-2.3h3.4l.3 2.3a7.7 7.7 0 0 1 1.7 1l2-1.1.2-.1 1.7 2.9-.1.1-1.8 1.4a7.6 7.6 0 0 1 0 2Z"/></svg>';
+  const settingsMenu = document.createElement('div');
+  settingsMenu.className = 'loc3d-settings-menu';
+  settingsMenu.hidden = true;
+  settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
+  settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
+  settingsMenu.addEventListener('click', (event) => {
+    const key = event.target.closest('button')?.dataset.view;
+    if (!key) return;
+    if (key === 'grid') toggleUnitGrid();
+    else if (key === 'walls') window.dispatchEvent(new CustomEvent('loc3d-toggle-walls'));
+    else if (key === 'roof') window.dispatchEvent(new CustomEvent('loc3d-toggle-roof'));
+  });
+  const toggleBoundaryDetail = (kind) => {
+    scene.traverse((object) => {
+      if (!object.isMesh && !object.isLine) return;
+      const p = object.getWorldPosition(new THREE.Vector3());
+      const wall = Math.min(Math.abs(p.x - (center.x - halfWarehouseWidth)), Math.abs(p.x - (center.x + halfWarehouseWidth)), Math.abs(p.z - (center.z - halfWarehouseDepth)), Math.abs(p.z - (center.z + halfWarehouseDepth))) < 0.3;
+      const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1);
+      if ((kind === 'walls' && wall) || (kind === 'roof' && roof)) object.visible = !object.visible;
+    });
+  };
+  window.addEventListener('loc3d-toggle-walls', () => toggleBoundaryDetail('walls'));
+  window.addEventListener('loc3d-toggle-roof', () => toggleBoundaryDetail('roof'));
   // UI preferences are per account and backed by /api/ui-prefs.  Keep the
   // warehouse id in the key so a choice in one warehouse never changes another.
   const viewPrefKey = (name) => `warehouse3d:${model.warehouseId || 'default'}:${name}`;
@@ -742,6 +771,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
   stage.appendChild(unitGridButton);
+  stage.appendChild(settingsButton);
+  stage.appendChild(settingsMenu);
   stage.appendChild(soundButton);
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
@@ -2325,6 +2356,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   missionBeacon.renderOrder = 16;
   missionBeacon.visible = false;
   scene.add(missionBeacon);
+  // A high, downward arrow makes the original Putaway waiting location
+  // readable even when a floor ring is hidden behind nearby pallets.
+  const putawayReturnMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false });
+  const putawayReturnMarker = new THREE.Group();
+  const putawayReturnShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.52, 16), putawayReturnMarkerMaterial);
+  putawayReturnShaft.position.y = 0.42;
+  const putawayReturnHead = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.44, 24), putawayReturnMarkerMaterial);
+  putawayReturnHead.rotation.x = Math.PI;
+  putawayReturnMarker.add(putawayReturnShaft, putawayReturnHead);
+  putawayReturnMarker.visible = false;
+  putawayReturnMarker.renderOrder = 17;
+  scene.add(putawayReturnMarker);
   // A short expanding ripple confirms a double-click immediately, similar to
   // a move-command marker in a game. It deliberately uses the clicked floor
   // coordinate; the smaller persistent ring then marks the safe NavMesh/grid
@@ -2411,6 +2454,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       targetMarker.visible = false;
       targetRipple.visible = false;
       missionBeacon.visible = false;
+      putawayReturnMarker.visible = false;
     }
   };
   const forkliftLiftControls = document.createElement('div');
@@ -3298,8 +3342,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               forkliftRollback = {
                 position: rollbackPosition,
                 quaternion: new THREE.Quaternion(),
-                // A staging pickup leaves an intentionally empty waiting spot.
-                // Keep a beacon there until the load is placed or returned.
+                // Keep a beacon at the exact source location until the load
+                // is placed or returned, whether it began on a rack or in
+                // the Putaway waiting area.
                 isStagingPickup: !forkliftReturnTarget,
               };
               loadAssembly.position.copy(rollbackPosition);
@@ -3316,10 +3361,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than exposing the pocket openings sideways.
               loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
               forkliftLoadAssembly = loadAssembly;
-              if (forkliftRollback.isStagingPickup) {
-                missionBeacon.position.copy(rollbackPosition).setY(warehouseFloorY + 0.06);
-                missionBeacon.visible = true;
-              }
+              missionBeacon.position.copy(rollbackPosition).setY(warehouseFloorY + 0.06);
+              missionBeacon.visible = true;
+              putawayReturnMarker.position.set(
+                rollbackPosition.x,
+                rollbackPosition.y + pickupMesh.scale.y / 2 + 1,
+                rollbackPosition.z,
+              );
+              putawayReturnMarker.userData.baseY = putawayReturnMarker.position.y;
+              putawayReturnMarker.visible = true;
               // A rack pickup must visibly raise the carriage after the tines
               // take the box.  The staging pallet already sits at floor
               // level, while a rack box supplies its actual shelf height.
@@ -3390,9 +3440,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           forkliftMotion = null;
           setForkliftAudioMoving(false);
           routeLine.visible = false;
-          // Keep the pulsing floor cue at the original Putaway staging spot
-          // while its pallet is on the forks, so it can be returned precisely.
-          missionBeacon.visible = Boolean(forkliftLoadAssembly && forkliftRollback?.isStagingPickup);
+          // Keep the source-location cues visible while its pallet is on the
+          // forks, so the operator can always return it precisely.
+          missionBeacon.visible = Boolean(forkliftLoadAssembly && forkliftRollback);
+          putawayReturnMarker.visible = Boolean(forkliftLoadAssembly && forkliftRollback);
         }
       } else {
         movementDirection.normalize();
@@ -3472,6 +3523,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const pulse = 1 + Math.sin(frameNow * 0.011) * 0.18;
       missionBeacon.scale.setScalar(pulse);
       missionBeaconMaterial.opacity = 0.55 + Math.sin(frameNow * 0.011) * 0.28;
+    }
+    if (putawayReturnMarker.visible) {
+      putawayReturnMarker.position.y = (putawayReturnMarker.userData.baseY || putawayReturnMarker.position.y) + Math.sin(frameNow * 0.008) * 0.1;
+      putawayReturnMarkerMaterial.opacity = 0.72 + Math.sin(frameNow * 0.008) * 0.24;
     }
     if (targetRipple.visible) {
       const elapsed = Math.min(1, (frameNow - targetRippleStartedAt) / 720);
