@@ -3026,8 +3026,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           saveForkliftPosition();
           if (forkliftDropTarget) {
             // Square the truck to the rack face before any lift/putaway step.
-            const rackEuler = new THREE.Euler().setFromQuaternion(forkliftDropTarget.quaternion, 'YXZ');
-            forkliftRoot.rotation.y = rackEuler.y;
+            const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
+            const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
+            // Three.js forklift forks point along local +Z; aim that forward
+            // vector at the selected slot rather than copying rack rotation.
+            forkliftRoot.rotation.y = Math.atan2(dx, dz);
           }
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
