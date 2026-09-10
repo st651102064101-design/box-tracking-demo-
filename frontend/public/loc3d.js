@@ -502,6 +502,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
   Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: '11px', background: 'rgba(12,14,16,.92)', color: '#fff', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
   Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
+  // View toggles use the same compact button treatment as the settings
+  // control, instead of appearing as bare text links.
+  settingsMenu.querySelectorAll('button').forEach((button) => Object.assign(button.style, {
+    minWidth: '42px', minHeight: '42px', padding: '6px 9px',
+    border: '1px solid rgba(255,255,255,.12)', borderRadius: '11px',
+    background: 'rgba(12,14,16,.92)', color: '#fff',
+    boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer',
+    font: '600 11px var(--font)',
+  }));
   unitGridButton.style.display = 'none';
   settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
   settingsMenu.addEventListener('click', (event) => {
@@ -512,6 +521,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     else if (key === 'roof') window.dispatchEvent(new CustomEvent('loc3d-toggle-roof'));
   });
   const toggleBoundaryDetail = (kind) => {
+    const pref = kind === 'walls' ? 'loc3dWallsVisible' : 'loc3dRoofVisible';
+    const visible = getViewPref(pref, true);
+    setViewPref(pref, !visible);
+    const wallsVisible = kind === 'walls' ? !visible : getViewPref('loc3dWallsVisible', true);
+    const roofVisible = kind === 'roof' ? !visible : getViewPref('loc3dRoofVisible', true);
+    if (!wallsVisible && !roofVisible) {
+      scene.traverse((object) => {
+        if (!object.isMesh && !object.isLine) return;
+        const core = object === floor || object === forkliftRoot || object.userData?.rack || object.userData?.slotId || object.userData?.stagingBoxId;
+        if (!core) object.visible = false;
+      });
+      return;
+    }
     // Boundary elements are tagged by their authored materials/height so the
     // entire enclosure (including beams, seams and gables) toggles together.
     scene.traverse((object) => {
@@ -2941,6 +2963,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           const rackNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(destination.quaternion).setY(0).normalize();
           const forkliftSide = forkliftRoot.position.clone().sub(destination.position).setY(0);
           if (forkliftSide.dot(rackNormal) < 0) rackNormal.negate();
+          // Preserve the rack-facing heading calculated from the same approach
+          // face.  Recalculating it from a nearly identical position after
+          // travel can flip around ±PI and leave the truck steering forever.
+          forkliftDropTarget.faceYaw = Math.atan2(-rackNormal.x, -rackNormal.z);
           const approachPoint = destination.position.clone().addScaledVector(
             rackNormal,
             destination.scale.z * 0.5 + forkliftClearance,
@@ -3299,7 +3325,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // rate.  This avoids the visible instant 90/180-degree turn before lift.
       const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
       const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
-      if (turnForkliftTowards(Math.atan2(dx, dz), deltaSeconds) <= forkliftStopYawTolerance) {
+      const rackFacingYaw = Number.isFinite(forkliftDropTarget.faceYaw)
+        ? forkliftDropTarget.faceYaw
+        : Math.atan2(dx, dz);
+      const aligned = turnForkliftTowards(rackFacingYaw, deltaSeconds) <= forkliftStopYawTolerance;
+      // A stale/invalid rotation must never block a putaway indefinitely.  The
+      // fallback is only a safety net; normal alignment remains fully smooth.
+      const alignmentTimedOut = performance.now() - (forkliftDropTarget.alignStartedAt || performance.now()) > 4000;
+      if (aligned || alignmentTimedOut) {
+        if (alignmentTimedOut) forkliftRoot.rotation.y = rackFacingYaw;
         forkliftLiftTarget = THREE.MathUtils.clamp(
           forkliftDropTarget.position.y - forkliftCarriageBaseY - forkliftRoot.position.y,
           0,
@@ -3336,6 +3370,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           if (forkliftDropTarget && forkliftPutawayPhase === 'travel') {
             // Finish steering into the rack face before lifting; the actual
             // rotation happens over subsequent frames rather than snapping.
+            forkliftDropTarget.alignStartedAt = performance.now();
             forkliftPutawayPhase = 'aligning';
           }
           const pickupMesh = forkliftMotion.pickupMesh;
