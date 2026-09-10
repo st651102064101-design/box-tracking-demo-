@@ -10,8 +10,16 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc } from 'drizzle-orm';
-import { boxes, customers, boxTypes, warehouses, gates, gateWebhookStatus, locations, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
+import { asc, desc, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
+import { boxes, customers, boxTypes, warehouses, gates, gateWebhookStatus, rfidReaders, locations, racks, slots, employees, vehicles, doRecords, putaway, inventory, events, auditLog, config, sequences, } from '../db/schema.js';
+import { env } from '../env.js';
+import { sendGateInNotifications, sendGateOutLineNotification, } from './autoLineNotifications.js';
+import { isEmployeeCrudAuditEntry } from './audit.js';
+import { deriveWarehouseGeometry } from './warehouseGeometry.js';
+// A full audit reset must not be undone by an already-open browser posting its
+// cached pre-reset audit array back through the legacy whole-state endpoint.
+const AUDIT_CACHE_CUTOFF = new Date();
+const LINE_USER_ID = /^U[0-9a-f]{32}$/i;
 /* ─── helpers ──────────────────────────────────────────────────────────────*/
 const toDate = (v) => {
     if (!v)
@@ -26,15 +34,32 @@ const toInt = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.trunc(n) : null;
 };
+/* The legacy page still saves a complete state snapshot.  An LPR callback can
+   arrive between its GET and PUT, so the browser's older `history` array must
+   never erase camera evidence that was already committed by the webhook. */
+const isLprHistory = (entry) => !!entry && typeof entry === 'object' && entry.dir === 'lpr';
+const lprHistoryKey = (entry) => String(entry.eventId ?? `${entry.ts ?? ''}|${entry.gateNo ?? entry.gate ?? ''}|${entry.plateNumber ?? ''}`);
+const mergeLprHistory = (browserHistory, persistedHistory) => {
+    const fromBrowser = Array.isArray(browserHistory) ? browserHistory : [];
+    const known = new Set(fromBrowser.filter(isLprHistory).map(lprHistoryKey));
+    const missingPersisted = (Array.isArray(persistedHistory) ? persistedHistory : [])
+        .filter(isLprHistory)
+        .filter((entry) => !known.has(lprHistoryKey(entry)));
+    return [...fromBrowser, ...missingPersisted];
+};
 /* ─── DB → S ───────────────────────────────────────────────────────────────*/
 export async function composeState(db) {
-    const [boxRows, custRows, btRows, whRows, gateRows, gateStatusRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
+    const [boxRows, custRows, btRows, whRows, gateRows, gateStatusRows, readerRows, locRows, empRows, vehRows, doRows, putRows, invRows, eventRows, auditRows, cfgRows, seqRows,] = await Promise.all([
         db.select().from(boxes),
-        db.select().from(customers),
-        db.select().from(boxTypes),
+        /* Soft-deleted rows never round-trip through the legacy S blob — a
+           deleted customer/box type must vanish from the SPA's own lists too, not
+           just the REST endpoints (see routes/masters.ts DELETE handlers). */
+        db.select().from(customers).where(isNull(customers.deletedAt)),
+        db.select().from(boxTypes).where(isNull(boxTypes.deletedAt)),
         db.select().from(warehouses),
         db.select().from(gates),
         db.select().from(gateWebhookStatus),
+        db.select().from(rfidReaders),
         db.select().from(locations),
         db.select().from(employees),
         db.select().from(vehicles),
@@ -42,20 +67,37 @@ export async function composeState(db) {
         db.select().from(putaway),
         db.select().from(inventory),
         db.select().from(events).orderBy(asc(events.id)),
-        /* newest-first by ts, not insertion order — audit_log is append-only now
-           (see replaceState below), so id order no longer tracks recency */
-        db.select().from(auditLog).orderBy(desc(auditLog.ts)),
+        /* Audit is append-only and can grow very quickly (FX9600 heartbeats are
+           operational events).  It must never be included wholesale in the SPA's
+           full-state snapshot: that causes a multi-megabyte GET /api/state, then
+           the browser mirrors it back in PUT /api/state and hits request limits.
+           The UI only needs recent activity; the complete audit stays in DB. */
+        db.select().from(auditLog).orderBy(desc(auditLog.ts)).limit(500),
         db.select().from(config),
         db.select().from(sequences),
     ]);
     const mapBy = (rows, key) => Object.fromEntries(rows.map((r) => [key(r), r.data]));
     const cfgRow = cfgRows[0];
     const cfg = cfgRow
-        ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode }
-        : { agingDays: 15, boxValue: 450, lostMode: 'manual' };
+        ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode, putawayEnabled: cfgRow.putawayEnabled }
+        : { agingDays: 15, boxValue: 450, lostMode: 'manual', putawayEnabled: false };
     return {
-        boxes: mapBy(boxRows, (r) => r.tag),
-        customers: mapBy(custRows, (r) => r.id),
+        boxes: Object.fromEntries(boxRows.map((r) => [r.tag, {
+                ...r.data,
+                slotId: r.slotId,
+                widthCm: r.widthCm,
+                heightCm: r.heightCm,
+                depthCm: r.depthCm,
+                materialType: r.materialType,
+            }])),
+        customers: Object.fromEntries(custRows.map((r) => [r.id, {
+                ...r.data,
+                lineUserId: r.lineUserId ?? r.data.lineUserId ?? '',
+                lineDisplayName: r.lineDisplayName ?? '',
+                linePictureUrl: r.linePictureUrl ?? '',
+                lineLinkedAt: r.lineLinkedAt?.toISOString() ?? '',
+                contactEmail: r.contactEmail ?? r.data.contactEmail ?? '',
+            }])),
         boxtypes: mapBy(btRows, (r) => r.id),
         warehouses: mapBy(whRows, (r) => r.id),
         gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
@@ -65,11 +107,12 @@ export async function composeState(db) {
            replaceState() below doesn't touch it, so nothing sent via PUT
            /api/state can clobber or fake a "connected" status. */
         gateWebhookLastSeen: Object.fromEntries(gateStatusRows.map((r) => [String(r.gateNo), r.lastSeenAt.toISOString()])),
-        /* Source IP of the reader's most recent webhook hit — lets the frontend
-           link straight to the FX9600's own admin UI (readers serve one on their
-           IP) without anyone hardcoding an address. Same read-only-from-client
-           reasoning as gateWebhookLastSeen above. */
+        /* Diagnostic source IP only. Docker may report the bridge gateway here,
+           so this value must never be used as the reader administration URL. */
         gateWebhookLastIp: Object.fromEntries(gateStatusRows.filter((r) => r.lastIp).map((r) => [String(r.gateNo), r.lastIp])),
+        gateHeartbeatIntervalSeconds: Object.fromEntries(readerRows.map((r) => [String(r.gateNo), r.heartbeatIntervalSeconds])),
+        // Read-only site configuration for the FX9600 administration UI.
+        fx9600AdminUrl: env.fx9600AdminUrl,
         events: eventRows.map((r) => r.data),
         cfg,
         seq: Object.fromEntries(seqRows.map((r) => [r.name, r.value])),
@@ -98,12 +141,69 @@ export async function composeState(db) {
         ])),
         locations: mapBy(locRows, (r) => r.code),
         inventory: mapBy(invRows, (r) => r.id),
-        auditLog: auditRows.map((r) => r.data),
+        auditLog: auditRows
+            .map((r) => r.data)
+            .filter((entry) => isEmployeeCrudAuditEntry(entry)),
     };
 }
 /* ─── S → DB (wholesale replace, transactional) ────────────────────────────*/
+/**
+ * One advisory lock id for "somebody is writing the whole state snapshot".
+ * Arbitrary constant; it only has to be stable and not collide with another
+ * advisory lock in this database.
+ */
+const STATE_WRITE_LOCK = 4711_0001;
+async function syncKeyed(tx, table, keyProp, rows, opts = {}) {
+    const size = opts.size ?? 400;
+    const preserve = new Set(opts.preserveCols ?? []);
+    const cols = getTableColumns(table);
+    const keyCol = cols[keyProp];
+    /* ON CONFLICT DO UPDATE, writing every non-key, non-preserved column from
+       the row that was just proposed (`excluded`) — i.e. "if it exists, update
+       it". */
+    const set = {};
+    for (const [prop, col] of Object.entries(cols)) {
+        if (prop === keyProp || preserve.has(prop))
+            continue;
+        set[prop] = sql `excluded.${sql.identifier(col.name)}`;
+    }
+    for (let i = 0; i < rows.length; i += size) {
+        const slice = rows.slice(i, i + size);
+        if (slice.length) {
+            await tx.insert(table).values(slice).onConflictDoUpdate({ target: keyCol, set });
+        }
+    }
+    /* Prune: whatever the snapshot no longer contains is gone. Done by reading
+       the stored keys and deleting the difference in bounded chunks rather than
+       one huge NOT IN (...), so the statement can never blow past Postgres'
+       bind-parameter limit on a large table. Scoped to liveOnly when given, so
+       an already soft-deleted row is never in `stored` at all — it is not "no
+       longer in the snapshot", it was never eligible to be compared in the
+       first place, and must not be hard-deleted by this prune. */
+    const keep = new Set(rows.map((r) => r[keyProp]));
+    let storedQuery = tx.select({ k: keyCol }).from(table);
+    if (opts.liveOnly)
+        storedQuery = storedQuery.where(opts.liveOnly);
+    const stored = await storedQuery;
+    const drop = stored.map((r) => r.k).filter((k) => !keep.has(k));
+    for (let i = 0; i < drop.length; i += size) {
+        const slice = drop.slice(i, i + size);
+        if (slice.length)
+            await tx.delete(table).where(inArray(keyCol, slice));
+    }
+}
 export async function replaceState(db, s, actor) {
+    const pendingGateOutNotifications = [];
+    const pendingGateInNotifications = [];
     await db.transaction(async (tx) => {
+        /* Serialize whole-snapshot writes against each other. Two clients saving at
+           the same moment (two browser tabs, or the page and its sync module) used
+           to interleave their delete/insert passes and one of them died on a
+           duplicate primary key — see syncKeyed() above. Taken as an *xact* lock,
+           so it is released on COMMIT or ROLLBACK without any unlock bookkeeping.
+           Concurrent savers queue for a moment instead of racing; reads
+           (GET /api/state) never take this lock and are unaffected. */
+        await tx.execute(sql `select pg_advisory_xact_lock(${STATE_WRITE_LOCK})`);
         // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
         // own web-app login (username/passwordHash) never round-trip through the
         // legacy `S.employees` payload — the frontend that calls PUT /api/state
@@ -125,24 +225,14 @@ export async function replaceState(db, s, actor) {
             roleId: employees.roleId,
         })
             .from(employees)).map((r) => [r.id, r]));
-        // 1) wipe all domain tables (users are untouched)
-        // audit_log is deliberately NOT wiped here — see the audit log section
-        // below for why (backend routes now write into it directly too).
-        await Promise.all([
-            tx.delete(boxes),
-            tx.delete(customers),
-            tx.delete(boxTypes),
-            tx.delete(warehouses),
-            tx.delete(gates),
-            tx.delete(locations),
-            tx.delete(employees),
-            tx.delete(vehicles),
-            tx.delete(doRecords),
-            tx.delete(putaway),
-            tx.delete(inventory),
-            tx.delete(events),
-            tx.delete(sequences),
-        ]);
+        /* 1) `events` is the one table still replaced wholesale: its rows carry no
+           client-side key (the id is a serial, and the legacy UI treats S.events as
+           an ordered array), so there is nothing to match an incoming row against.
+           Everything else below goes through syncKeyed() — update what exists,
+           insert what doesn't, delete what the snapshot dropped. audit_log is
+           neither wiped nor synced; it is append-only (see section 9).
+           `users` are untouched here, as before. */
+        await tx.delete(events);
         // 2) config singleton (upsert id=1)
         const cfg = s.cfg ?? {};
         await tx
@@ -152,6 +242,7 @@ export async function replaceState(db, s, actor) {
             agingDays: toInt(cfg.agingDays) ?? 15,
             boxValue: toNumStr(cfg.boxValue) ?? '450',
             lostMode: cfg.lostMode ?? 'manual',
+            putawayEnabled: Boolean(cfg.putawayEnabled),
             updatedAt: new Date(),
         })
             .onConflictDoUpdate({
@@ -160,6 +251,7 @@ export async function replaceState(db, s, actor) {
                 agingDays: toInt(cfg.agingDays) ?? 15,
                 boxValue: toNumStr(cfg.boxValue) ?? '450',
                 lostMode: cfg.lostMode ?? 'manual',
+                putawayEnabled: Boolean(cfg.putawayEnabled),
                 updatedAt: new Date(),
             },
         });
@@ -168,11 +260,57 @@ export async function replaceState(db, s, actor) {
             name,
             value: toInt(value) ?? 0,
         }));
-        if (seqRows.length)
-            await tx.insert(sequences).values(seqRows);
+        await syncKeyed(tx, sequences, 'name', seqRows);
+        // Build the normalized centimetre-based 3D model from the Location Master
+        // before syncing boxes, so a box can safely reference a newly-created slot
+        // in this same state transaction. Existing coordinates/dimensions are fed
+        // back into the derivation and therefore survive ordinary legacy saves.
+        const [existingRacks, existingSlots] = await Promise.all([
+            tx.select().from(racks),
+            tx.select().from(slots),
+        ]);
+        const geometry = deriveWarehouseGeometry(s.locations ?? {}, s.boxes ?? {}, s.boxtypes ?? {}, existingRacks, existingSlots);
+        // Racks/slots have a foreign-key dependency on warehouses.  A legacy
+        // browser can send a snapshot where the warehouse master is missing (for
+        // example after an interrupted first import) while locations still
+        // contain WH-001 rack rows.  Upserting racks first then makes the whole
+        // transaction fail with racks_warehouse_id_fkey and leaves the UI with no
+        // usable data.  Ensure every referenced warehouse exists before geometry.
+        const warehouseRows = new Map();
+        Object.entries(s.warehouses ?? {}).forEach(([id, raw]) => {
+            warehouseRows.set(id, { id, ...raw });
+        });
+        geometry.rackRows.forEach((rack) => {
+            const id = String(rack.warehouseId ?? '').trim();
+            if (id && !warehouseRows.has(id))
+                warehouseRows.set(id, { id, name: id, gates: [], gateTypes: {}, data: { name: id } });
+        });
+        await syncKeyed(tx, warehouses, 'id', Array.from(warehouseRows.values()).map((w) => ({
+            id: w.id,
+            name: w.name ?? null,
+            gateType: w.gateType ?? null,
+            gates: w.gates ?? [],
+            gateTypes: w.gateTypes ?? {},
+            data: w.data ?? w,
+            updatedAt: new Date(),
+        })));
+        await syncKeyed(tx, racks, 'id', geometry.rackRows);
+        await syncKeyed(tx, slots, 'id', geometry.slotRows);
         // 4) boxes
+        // Preserve webhook-owned LPR evidence when an already-open legacy page
+        // posts its stale full-state snapshot back to the server.
+        const persistedBoxes = new Map((await tx.select({
+            tag: boxes.tag,
+            status: boxes.status,
+            customer: boxes.customer,
+            doNo: boxes.doNo,
+            history: boxes.history,
+        }).from(boxes))
+            .map((row) => [row.tag, row]));
         const boxRows = Object.entries(s.boxes ?? {}).map(([tag, raw]) => {
             const b = raw;
+            const history = mergeLprHistory(b.history, persistedBoxes.get(tag)?.history);
+            const model = geometry.boxesByTag.get(tag);
             return {
                 tag,
                 type: b.type ?? null,
@@ -196,27 +334,149 @@ export async function replaceState(db, s, actor) {
                 // by RFID again despite `data.rfidTid` still being right there.
                 rfidTid: b.rfidTid ?? null,
                 rfidEpc: b.rfidEpc ?? null,
+                slotId: model.slotId,
+                widthCm: model.widthCm,
+                heightCm: model.heightCm,
+                depthCm: model.depthCm,
+                materialType: model.materialType,
                 location: b.location ?? {},
-                history: b.history ?? [],
-                data: b,
+                history,
+                // composeState returns this blob to the browser. Keeping its history
+                // aligned with the typed column is what makes the LPR panel update on
+                // the next SSE-triggered state refresh.
+                data: {
+                    ...b,
+                    history,
+                    slotId: model.slotId,
+                    widthCm: model.widthCm,
+                    heightCm: model.heightCm,
+                    depthCm: model.depthCm,
+                    materialType: model.materialType,
+                },
                 updatedAt: new Date(),
             };
         });
-        await chunkInsert(tx, boxes, boxRows);
+        // The legacy Web App ships boxes by changing its full state snapshot,
+        // rather than calling services/gate.ts. Detect the same warehouse→out
+        // transition here so browser, PDA and fixed-reader flows all produce the
+        // same automatic LINE side effect. Existing out rows and initial imports
+        // are excluded, preventing a normal state re-save from notifying twice.
+        const transitioned = new Map();
+        const returned = new Map();
+        const historyPlate = (history) => {
+            if (!Array.isArray(history))
+                return '';
+            for (let i = history.length - 1; i >= 0; i -= 1) {
+                const plate = String(history[i]?.plate ?? '').trim();
+                if (plate)
+                    return plate;
+            }
+            return '';
+        };
+        for (const row of boxRows) {
+            const before = persistedBoxes.get(row.tag);
+            if (!before)
+                continue;
+            if (before.status !== 'out' && row.status === 'out' && row.customer && row.dueAt) {
+                const doNo = row.doNo ?? `WEB-${row.outAt?.getTime() ?? Date.now()}`;
+                const key = `${row.customer}\n${doNo}\n${row.dueAt.toISOString()}`;
+                const group = transitioned.get(key) ?? { customerId: row.customer, doNo, dueAt: row.dueAt, tags: [], plate: historyPlate(row.history) };
+                group.tags.push(row.tag);
+                transitioned.set(key, group);
+            }
+            if (before.status === 'out' && row.status !== 'out' && before.customer) {
+                const receivedAt = row.lastSeenAt ?? new Date();
+                const key = `${before.customer}\n${before.doNo ?? ''}\n${receivedAt.toISOString()}`;
+                const group = returned.get(key) ?? {
+                    customerId: before.customer,
+                    doNo: before.doNo,
+                    receivedAt,
+                    tags: [],
+                    plate: historyPlate(before.history),
+                };
+                group.tags.push(row.tag);
+                returned.set(key, group);
+            }
+        }
+        await syncKeyed(tx, boxes, 'tag', boxRows);
         // 5) master data
-        await chunkInsert(tx, customers, Object.entries(s.customers ?? {}).map(([id, raw]) => {
+        // LINE linking is written by the OAuth callback while an older browser
+        // snapshot may still be open. Carry server-owned linkage/profile columns
+        // forward when that stale snapshot contains an empty id; otherwise the
+        // next unrelated save silently disconnects the customer. A new non-empty
+        // id entered by an admin is still accepted. Deliberate unlinking uses the
+        // dedicated DELETE /api/line/link/customers/:id route.
+        const persistedCustomerLine = new Map((await tx.select({
+            id: customers.id,
+            lineUserId: customers.lineUserId,
+            lineDisplayName: customers.lineDisplayName,
+            linePictureUrl: customers.linePictureUrl,
+            lineLinkedAt: customers.lineLinkedAt,
+        }).from(customers)).map((row) => [row.id, row]));
+        await syncKeyed(tx, customers, 'id', Object.entries(s.customers ?? {}).map(([id, raw]) => {
             const c = raw;
+            const persisted = persistedCustomerLine.get(id);
+            const incomingLineUserId = String(c.lineUserId ?? '').trim();
+            const persistedLineUserId = String(persisted?.lineUserId ?? '').trim();
+            // A stale UI has historically carried LINE usernames/basic IDs in
+            // this field. Only a real Messaging API user id may replace the OAuth
+            // value; invalid non-empty text must not disconnect a linked account.
+            const lineUserId = LINE_USER_ID.test(incomingLineUserId)
+                ? incomingLineUserId
+                : LINE_USER_ID.test(persistedLineUserId)
+                    ? persistedLineUserId
+                    : null;
             return {
                 id,
                 name: c.name ?? null,
                 addr: c.addr ?? null,
                 contact: c.contact ?? null,
+                lineUserId,
+                lineDisplayName: persisted?.lineDisplayName ?? null,
+                linePictureUrl: persisted?.linePictureUrl ?? null,
+                lineLinkedAt: persisted?.lineLinkedAt ?? null,
+                contactEmail: (c.contactEmail ?? c.email) ?? null,
                 returnDays: toInt(c.returnDays),
-                data: c,
+                data: lineUserId ? { ...c, lineUserId } : c,
                 updatedAt: new Date(),
             };
-        }));
-        await chunkInsert(tx, boxTypes, Object.entries(s.boxtypes ?? {}).map(([id, raw]) => {
+        }), { preserveCols: ['deletedAt'], liveOnly: isNull(customers.deletedAt) });
+        if (transitioned.size || returned.size) {
+            const customerRows = new Map((await tx.select({
+                id: customers.id,
+                name: customers.name,
+                lineUserId: customers.lineUserId,
+                contactEmail: customers.contactEmail,
+            }).from(customers))
+                .map((row) => [row.id, row]));
+            for (const group of transitioned.values()) {
+                const customer = customerRows.get(group.customerId);
+                pendingGateOutNotifications.push({
+                    customerId: group.customerId,
+                    customerName: customer?.name ?? group.customerId,
+                    lineUserId: customer?.lineUserId ?? null,
+                    contactEmail: customer?.contactEmail ?? null,
+                    doNo: group.doNo,
+                    tags: group.tags,
+                    dueAt: group.dueAt.toISOString(),
+                    plate: group.plate,
+                });
+            }
+            for (const group of returned.values()) {
+                const customer = customerRows.get(group.customerId);
+                pendingGateInNotifications.push({
+                    customerId: group.customerId,
+                    customerName: customer?.name ?? group.customerId,
+                    lineUserId: customer?.lineUserId ?? null,
+                    contactEmail: customer?.contactEmail ?? null,
+                    doNo: group.doNo,
+                    tags: group.tags,
+                    receivedAt: group.receivedAt.toISOString(),
+                    plate: group.plate,
+                });
+            }
+        }
+        await syncKeyed(tx, boxTypes, 'id', Object.entries(s.boxtypes ?? {}).map(([id, raw]) => {
             const t = raw;
             return {
                 id,
@@ -227,26 +487,40 @@ export async function replaceState(db, s, actor) {
                 data: t,
                 updatedAt: new Date(),
             };
-        }));
-        await chunkInsert(tx, warehouses, Object.entries(s.warehouses ?? {}).map(([id, raw]) => {
+        }), { preserveCols: ['deletedAt'], liveOnly: isNull(boxTypes.deletedAt) });
+        const persistedWarehouseModes = new Map((await tx.select({ id: warehouses.id, data: warehouses.data }).from(warehouses))
+            .map((row) => [row.id, row.data?.gateBidirectionalModes]));
+        await syncKeyed(tx, warehouses, 'id', Object.entries(s.warehouses ?? {}).map(([id, raw]) => {
             const w = raw;
+            const persistedModes = persistedWarehouseModes.get(id);
+            const hasIncomingModes = Object.prototype.hasOwnProperty.call(w, 'gateBidirectionalModes');
+            const gateBidirectionalModes = !hasIncomingModes && persistedModes && typeof persistedModes === 'object'
+                ? persistedModes : w.gateBidirectionalModes;
             return {
                 id,
                 name: w.name ?? null,
                 gateType: w.gateType ?? null,
                 gates: w.gates ?? [],
                 gateTypes: w.gateTypes ?? {},
-                data: w,
+                /* gateBidirectionalModes is maintained by the RFID configuration
+                   API. Preserve the server-side value when an older browser sends a
+                   stale /api/state snapshot, otherwise a live page can silently
+                   turn a configured two-antenna gate back into screen mode. */
+                data: !hasIncomingModes && gateBidirectionalModes
+                    ? { ...w, gateBidirectionalModes } : w,
                 updatedAt: new Date(),
             };
         }));
-        await chunkInsert(tx, locations, Object.entries(s.locations ?? {}).map(([code, raw]) => {
+        await syncKeyed(tx, locations, 'code', Object.entries(s.locations ?? {}).map(([code, raw]) => {
             const l = raw;
+            const rack = typeof l.rack === 'string' ? l.rack.trim() : '';
+            if (!rack)
+                throw new Error(`Location ${code} requires a rack`);
             return {
                 code,
                 wh: l.wh ?? null,
                 zone: l.zone ?? null,
-                rack: l.rack ?? null,
+                rack,
                 shelf: l.shelf ?? null,
                 slot: l.slot ?? null,
                 type: l.type ?? null,
@@ -282,7 +556,7 @@ export async function replaceState(db, s, actor) {
             actor.employeeId === undefined
             ? toInt(actor.sub)
             : null;
-        await chunkInsert(tx, employees, Object.entries(s.employees ?? {}).map(([id, raw]) => {
+        await syncKeyed(tx, employees, 'id', Object.entries(s.employees ?? {}).map(([id, raw]) => {
             const e = raw;
             const pin = pinById.get(id);
             return {
@@ -296,9 +570,8 @@ export async function replaceState(db, s, actor) {
                    reasoning for the PIN/login columns, captured into pinById above
                    since they never round-trip through `data` at all (see composeState). */
                 userId: toInt(e.userId) ?? bootstrapUserId,
-                /* Carried over from the row that existed before the wipe, never read
-                   from `e` — see the roleId comment on pinById above. */
-                roleId: pin?.roleId ?? null,
+                /* roleId is deliberately omitted: role assignment has its own API and
+                   must never be overwritten by a stale whole-state snapshot. */
                 data: e,
                 pinHash: pin?.pinHash ?? null,
                 pinResetOtpHash: pin?.pinResetOtpHash ?? null,
@@ -307,7 +580,7 @@ export async function replaceState(db, s, actor) {
                 passwordHash: pin?.passwordHash ?? null,
                 updatedAt: new Date(),
             };
-        }));
+        }), { preserveCols: ['roleId'] });
         // 6) simple keyed maps
         for (const [tbl, map] of [
             [vehicles, s.vehicles],
@@ -315,10 +588,10 @@ export async function replaceState(db, s, actor) {
             [putaway, s.putaway],
             [inventory, s.inventory],
         ]) {
-            await chunkInsert(tx, tbl, Object.entries(map ?? {}).map(([id, raw]) => ({ id, data: raw, updatedAt: new Date() })));
+            await syncKeyed(tx, tbl, 'id', Object.entries(map ?? {}).map(([id, raw]) => ({ id, data: raw, updatedAt: new Date() })));
         }
         // 7) gates lookup (gate# → warehouseId)
-        await chunkInsert(tx, gates, Object.entries(s.gates ?? {})
+        await syncKeyed(tx, gates, 'gateNo', Object.entries(s.gates ?? {})
             .map(([g, wh]) => ({ gateNo: toInt(g), warehouseId: wh ?? null }))
             .filter((r) => r.gateNo !== null));
         // 8) event stream (preserve array order → serial id order)
@@ -343,7 +616,18 @@ export async function replaceState(db, s, actor) {
             .from(auditLog);
         const auditKey = (ts, action, entityId, actor) => `${ts.toISOString()}|${action}|${entityId}|${actor}`;
         const existingAuditKeys = new Set(existingAuditRows.map((r) => auditKey(r.ts, r.action, r.entityId, r.actor)));
+        const isHumanAuditEntry = (entry) => {
+            const actor = String(entry.recorder ?? '').trim();
+            const action = String(entry.action ?? '').toLowerCase();
+            const timestamp = toDate(entry.ts);
+            // Device/webhook/heartbeat events are telemetry, not human actions.
+            return !!timestamp && timestamp >= AUDIT_CACHE_CUTOFF && actor !== '' && action !== ''
+                && !/^(system|auto|fx9600|lpr)/i.test(actor)
+                && !/(heartbeat|webhook|lpr|rfid_read|auto_)/i.test(action)
+                && isEmployeeCrudAuditEntry(entry);
+        };
         const newAuditRows = (s.auditLog ?? [])
+            .filter((a) => isHumanAuditEntry(a))
             .map((a) => {
             const e = a;
             return {
@@ -360,6 +644,14 @@ export async function replaceState(db, s, actor) {
             .filter((r) => !existingAuditKeys.has(auditKey(r.ts, r.action, r.entityId, r.actor)));
         await chunkInsert(tx, auditLog, newAuditRows);
     });
+    // Commit stock first. LINE errors are persisted in the durable outbox and
+    // retried independently; they must never roll back a completed Gate Out.
+    for (const notification of pendingGateOutNotifications) {
+        await sendGateOutLineNotification(db, notification);
+    }
+    for (const notification of pendingGateInNotifications) {
+        await sendGateInNotifications(db, notification);
+    }
 }
 /** Insert in bounded chunks to stay well under Postgres' bind-parameter limit. */
 async function chunkInsert(tx, table, rows, size = 400) {

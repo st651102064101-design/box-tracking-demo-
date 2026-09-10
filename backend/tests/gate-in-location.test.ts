@@ -6,8 +6,8 @@ let ctx: TestCtx;
 
 /**
  * WH-001 has a 3-slot master location layout (A/1/1, A/1/2, A/2/1) and one
- * box already sitting in A/1/1 — so "suggest an empty shelf" has exactly two
- * real candidates to choose from, and picking A/1/1 again would be the bug.
+ * box already sitting in A/1/1. Each location has two pallet positions, so
+ * the first suggestion may intentionally reuse A/1/1 once before moving on.
  */
 beforeAll(async () => {
   ctx = await bootstrap();
@@ -56,6 +56,9 @@ beforeAll(async () => {
         // free master locations for the "every location taken" case below.
         'FILLER-1': { tag: 'FILLER-1', type: 'BT-001', status: 'warehouse', labeled: true, location: {}, history: [] },
         'FILLER-2': { tag: 'FILLER-2', type: 'BT-001', status: 'warehouse', labeled: true, location: {}, history: [] },
+        'FILLER-3': { tag: 'FILLER-3', type: 'BT-001', status: 'warehouse', labeled: true, location: {}, history: [] },
+        'FILLER-4': { tag: 'FILLER-4', type: 'BT-001', status: 'warehouse', labeled: true, location: {}, history: [] },
+        'FILLER-5': { tag: 'FILLER-5', type: 'BT-001', status: 'warehouse', labeled: true, location: {}, history: [] },
       },
       customers: { 'CUST-001': { id: 'CUST-001', name: 'ลูกค้า' } },
       boxtypes: { 'BT-001': { id: 'BT-001', name: 'ลังพลาสติก', value: 450 } },
@@ -77,14 +80,12 @@ describe('GET /api/boxes/suggest-location', () => {
     expect(res.body.error).toBe('wh_required');
   });
 
-  it('skips the occupied shelf and suggests one that is actually free', async () => {
+  it('suggests the first slot that still has one of its two pallet positions free', async () => {
     const res = await request(ctx.app).get('/api/boxes/suggest-location?wh=WH-001').set(auth(ctx.token));
     expect(res.status).toBe(200);
-    expect(res.body.suggestion).not.toBeNull();
-    expect(res.body.suggestion).not.toMatchObject({ zone: 'A', rack: '1', shelf: '1' });
-    expect(['WH-001-A-1-2', 'WH-001-A-2-1']).toContain(
-      `WH-001-${res.body.suggestion.zone}-${res.body.suggestion.rack}-${res.body.suggestion.shelf}`,
-    );
+    expect(res.body.suggestion).toMatchObject({
+      zone: 'A', rack: '1', shelf: '1', occupancy: 1, capacity: 2,
+    });
   });
 
   it('returns null (not an error) for a warehouse with no master locations', async () => {
@@ -95,17 +96,21 @@ describe('GET /api/boxes/suggest-location', () => {
   });
 
   it('returns null once every defined location already has a box', async () => {
-    // Fill the two remaining free shelves via ordinary putaway.
-    const p1 = await request(ctx.app)
-      .post('/api/boxes/FILLER-1/putaway')
-      .set(auth(ctx.token))
-      .send({ wh: 'WH-001', zone: 'A', rack: '1', shelf: '2' });
-    expect(p1.status).toBe(200);
-    const p2 = await request(ctx.app)
-      .post('/api/boxes/FILLER-2/putaway')
-      .set(auth(ctx.token))
-      .send({ wh: 'WH-001', zone: 'A', rack: '2', shelf: '1' });
-    expect(p2.status).toBe(200);
+    // Fill every remaining pallet position via ordinary putaway.
+    const destinations = [
+      ['FILLER-1', '1', '1'],
+      ['FILLER-2', '1', '2'],
+      ['FILLER-3', '1', '2'],
+      ['FILLER-4', '2', '1'],
+      ['FILLER-5', '2', '1'],
+    ];
+    for (const [tag, rack, shelf] of destinations) {
+      const putaway = await request(ctx.app)
+        .post(`/api/boxes/${tag}/putaway`)
+        .set(auth(ctx.token))
+        .send({ wh: 'WH-001', zone: 'A', rack, shelf });
+      expect(putaway.status).toBe(200);
+    }
     const res = await request(ctx.app).get('/api/boxes/suggest-location?wh=WH-001').set(auth(ctx.token));
     expect(res.status).toBe(200);
     expect(res.body.suggestion).toBeNull();

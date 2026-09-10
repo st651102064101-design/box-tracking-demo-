@@ -34,6 +34,7 @@ export const updateRoleSchema = z.object({
  * shape of every record, so we accept it verbatim and never reject valid data.
  * Typed columns are extracted best-effort on the server side. */
 const record = z.record(z.any());
+const locationRecord = z.record(z.object({ rack: z.string().trim().min(1, 'Location rack is required') }).passthrough());
 export const stateSchema = z.object({
     boxes: record.optional().default({}),
     customers: record.optional().default({}),
@@ -46,6 +47,7 @@ export const stateSchema = z.object({
         agingDays: z.number().optional(),
         boxValue: z.number().optional(),
         lostMode: z.string().optional(),
+        putawayEnabled: z.boolean().optional(),
     })
         .passthrough()
         .optional()
@@ -55,7 +57,7 @@ export const stateSchema = z.object({
     putaway: record.optional().default({}),
     doRecords: record.optional().default({}),
     employees: record.optional().default({}),
-    locations: record.optional().default({}),
+    locations: locationRecord.optional().default({}),
     inventory: record.optional().default({}),
     auditLog: z.array(z.any()).optional().default([]),
 });
@@ -72,7 +74,17 @@ export const customerSchema = z.object({
     name: z.string().min(1),
     addr: z.string().nullish(),
     contact: z.string().nullish(),
+    lineUserId: z.string().trim().max(64).nullish(),
+    contactEmail: z.string().trim().email().max(254).nullish(),
     returnDays: z.number().int().nonnegative().nullish(),
+});
+export const firstSetupSchema = z.object({
+    name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(160),
+    email: z.string().trim().email('อีเมลไม่ถูกต้อง').max(254),
+    username: z.string().trim().regex(/^EMP-[0-9]+$/i, 'Username ต้องเป็นรหัสพนักงาน เช่น EMP-001'),
+    password: z.string().min(10, 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร').regex(/[a-z]/, 'ต้องมีตัวพิมพ์เล็ก').regex(/[A-Z]/, 'ต้องมีตัวพิมพ์ใหญ่').regex(/[0-9]/, 'ต้องมีตัวเลข').regex(/[^A-Za-z0-9]/, 'ต้องมีอักขระพิเศษ'),
+    phone: z.string().optional().default(''), position: z.string().optional().default(''),
+    department: z.string().optional().default(''), warehouse: z.string().optional().default(''),
 });
 /* ─── gate operations ──────────────────────────────────────────────────────*/
 export const gateOutSchema = z.object({
@@ -111,6 +123,13 @@ export const gateInLocationSchema = z.object({
     rack: z.string().trim().optional().default(''),
     shelf: z.string().trim().optional().default(''),
     slot: z.string().trim().optional().default(''),
+});
+/* Location Master CRUD accepts the database-shaped record, including its code. */
+export const locationSchema = z.object({
+    code: z.string().min(1),
+    wh: z.string().nullish(), zone: z.string().nullish(), rack: z.string().nullish(),
+    shelf: z.string().nullish(), slot: z.string().nullish(), type: z.string().nullish(),
+    note: z.string().nullish(),
 });
 export const gateInSchema = z.object({
     tags: z.array(z.string().min(1)).min(1, 'ต้องมีอย่างน้อย 1 กล่อง'),

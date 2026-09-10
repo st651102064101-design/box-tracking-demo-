@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { verifyToken } from '../lib/jwt.js';
-import { subscribe, subscribeReaderStatus, subscribeRfidRead, subscribeLprDetection, currentVersion } from '../lib/bus.js';
+import {
+  subscribe,
+  subscribeReaderStatus,
+  subscribeRfidRead,
+  subscribeLprDetection,
+  subscribeForkliftState,
+  subscribeWarehouse3dSettings,
+  currentVersion,
+} from '../lib/bus.js';
 
 /**
  * `GET /api/stream` — server-sent events telling clients that state changed.
@@ -63,8 +71,8 @@ streamRouter.get('/', (req, res) => {
      what lets the client slow its polling down without risking going blind. */
   res.write(`event: hello\ndata: ${JSON.stringify({ v: currentVersion() })}\n\n`);
 
-  const unsubscribe = subscribe((version, origin) => {
-    res.write(`event: state\ndata: ${JSON.stringify({ v: version, origin })}\n\n`);
+  const unsubscribe = subscribe((event) => {
+    res.write(`event: state\ndata: ${JSON.stringify({ v: event.version, origin: event.origin, scope: event.scope })}\n\n`);
   });
   const unsubscribeRfid = subscribeRfidRead((event) => {
     res.write(`event: rfid-read\ndata: ${JSON.stringify(event)}\n\n`);
@@ -74,6 +82,12 @@ streamRouter.get('/', (req, res) => {
   });
   const unsubscribeLpr = subscribeLprDetection((event) => {
     res.write(`event: lpr-detection\ndata: ${JSON.stringify(event)}\n\n`);
+  });
+  const unsubscribeForklift = subscribeForkliftState((event) => {
+    res.write(`event: forklift-state\ndata: ${JSON.stringify(event)}\n\n`);
+  });
+  const unsubscribeWarehouse3dSettings = subscribeWarehouse3dSettings((event) => {
+    res.write(`event: warehouse3d-settings\ndata: ${JSON.stringify(event)}\n\n`);
   });
 
   const heartbeat = setInterval(() => {
@@ -86,6 +100,8 @@ streamRouter.get('/', (req, res) => {
     unsubscribeRfid();
     unsubscribeReaderStatus();
     unsubscribeLpr();
+    unsubscribeForklift();
+    unsubscribeWarehouse3dSettings();
   };
   req.on('close', close);
   res.on('close', close);

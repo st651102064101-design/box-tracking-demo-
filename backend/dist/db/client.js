@@ -18,6 +18,7 @@ import { schema } from './schema.js';
 let _db = null;
 let _rawExec = null;
 let _close = null;
+let _notificationClient = null;
 function init() {
     if (_db)
         return;
@@ -52,11 +53,50 @@ export async function rawExec(sql) {
     await _rawExec(sql);
 }
 export async function closeDb() {
+    if (_notificationClient) {
+        await _notificationClient.end();
+        _notificationClient = null;
+    }
     if (_close)
         await _close();
     _db = null;
     _rawExec = null;
     _close = null;
+}
+/**
+ * Listen for commits made outside this API process.  The schema installs
+ * `boxtrace_warehouse3d_changed` triggers on the tables that form the 3D
+ * model.  PostgreSQL delivers NOTIFY only after commit, so browsers never
+ * fetch a half-written warehouse layout.
+ *
+ * PGlite deliberately has no cross-process database to observe; its normal
+ * in-process `bump()` calls remain the realtime path for unit tests/dev mode.
+ */
+export async function startWarehouse3dChangeListener(onChange) {
+    if (env.usePglite)
+        return async () => undefined;
+    if (_notificationClient)
+        return async () => undefined;
+    const client = new pg.Client({ connectionString: env.databaseUrl });
+    await client.connect();
+    await client.query('LISTEN boxtrace_warehouse3d_changed');
+    client.on('notification', (message) => {
+        if (message.channel === 'boxtrace_warehouse3d_changed' && message.payload === 'warehouse3d') {
+            onChange('warehouse3d');
+        }
+    });
+    client.on('error', (error) => {
+        // A listener failure must not take the API down.  The process supervisor
+        // restarts it, while browsers retain their polling fallback in the interim.
+        console.error('[db] warehouse 3D change listener failed', error.message);
+    });
+    _notificationClient = client;
+    return async () => {
+        if (_notificationClient !== client)
+            return;
+        _notificationClient = null;
+        await client.end();
+    };
 }
 /** Apply the canonical schema.sql (idempotent). Used by tests and `db:migrate`. */
 export async function applySchema() {

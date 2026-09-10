@@ -300,6 +300,31 @@ async function syncKeyed<T extends Record<string, unknown>>(
     if (slice.length) await tx.delete(table).where(inArray(keyCol, slice as never[]));
   }
 }
+
+/**
+ * Rebuild the normalized 3D rack/slot projection after an integration writes
+ * the legacy Location Master table directly. This does not touch boxes or
+ * other masters; manually adjusted geometry is preserved by the derivation.
+ */
+export async function synchronizeWarehouseGeometryFromLocationMaster(db: DB): Promise<void> {
+  const snapshot = await composeState(db);
+  await db.transaction(async (tx) => {
+    const [existingRacks, existingSlots] = await Promise.all([
+      tx.select().from(racks),
+      tx.select().from(slots),
+    ]);
+    const geometry = deriveWarehouseGeometry(
+      (snapshot.locations ?? {}) as Record<string, unknown>,
+      (snapshot.boxes ?? {}) as Record<string, unknown>,
+      (snapshot.boxtypes ?? {}) as Record<string, unknown>,
+      existingRacks,
+      existingSlots,
+    );
+    await syncKeyed(tx, racks, 'id', geometry.rackRows);
+    await syncKeyed(tx, slots, 'id', geometry.slotRows);
+  });
+}
+
 export async function replaceState(
   db: DB,
   s: StatePayload,

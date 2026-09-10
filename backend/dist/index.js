@@ -1,7 +1,9 @@
 import { createApp } from './app.js';
 import { env } from './env.js';
-import { applySchema, getDb, closeDb } from './db/client.js';
+import { applySchema, getDb, closeDb, startWarehouse3dChangeListener } from './db/client.js';
 import { config, sequences } from './db/schema.js';
+import { startAutoLineScheduler } from './services/autoLineNotifications.js';
+import { bumpFromDatabase } from './lib/bus.js';
 async function main() {
     // Ensure schema + singletons exist before serving (safe/idempotent).
     await applySchema();
@@ -11,12 +13,18 @@ async function main() {
         .insert(sequences)
         .values([{ name: 'do', value: 0 }, { name: 'emp', value: 0 }])
         .onConflictDoNothing({ target: sequences.name });
+    const stopWarehouse3dChangeListener = await startWarehouse3dChangeListener((scope) => {
+        bumpFromDatabase(scope);
+    });
     const app = createApp();
+    const stopAutoLineScheduler = startAutoLineScheduler(db);
     const server = app.listen(env.port, () => {
         console.log(`[boxtrace-api] listening on http://localhost:${env.port}`);
         console.log(`[boxtrace-api] driver: ${env.usePglite ? 'PGlite (in-process)' : 'PostgreSQL'}`);
     });
     const shutdown = async () => {
+        stopAutoLineScheduler();
+        await stopWarehouse3dChangeListener();
         server.close();
         await closeDb();
         process.exit(0);

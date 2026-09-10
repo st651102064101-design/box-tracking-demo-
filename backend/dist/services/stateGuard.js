@@ -54,6 +54,8 @@ export const UNGUARDED_STATE_KEYS = [
     /* Read-only from the client: only the FX9600 webhook writes these. */
     'gateWebhookLastSeen',
     'gateWebhookLastIp',
+    'gateHeartbeatIntervalSeconds',
+    'fx9600AdminUrl',
 ];
 /** Stable JSON with sorted keys, minus fields the client doesn't own, so two
  *  objects that mean the same thing compare equal regardless of key order. */

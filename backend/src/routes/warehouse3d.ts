@@ -1,12 +1,12 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes, racks, slots, warehouses } from '../db/schema.js';
+import { boxes, boxTypes, racks, slots, warehouses, warehouse3dSettings } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { writeAuditLog } from '../services/audit.js';
-import { bump } from '../lib/bus.js';
+import { bump, publishForkliftState, publishWarehouse3dSettings } from '../lib/bus.js';
 
 const centimetres = z.number().finite().positive().max(1_000_000);
 const coordinate = z.number().finite().min(-10_000_000).max(10_000_000);
@@ -18,7 +18,73 @@ const forkliftPositionSchema = z.object({
   target: z.object({ x: coordinate, y: coordinate, z: coordinate }).nullable().optional(),
   liftHeight: coordinate.min(0).max(100).optional(),
   moving: z.boolean().optional(),
+  cargoBoxId: z.string().trim().min(1).max(160).nullable().optional(),
+  layoutRevision: z.string().trim().min(1).max(160).nullable().optional(),
 });
+const forkliftControlSchema = z.object({ warehouseId: z.string().trim().min(1) });
+const sharedViewSettingsSchema = z.object({
+  unitGrid: z.boolean().optional(),
+  loc3dWallsVisible: z.boolean().optional(),
+  loc3dRoofVisible: z.boolean().optional(),
+  forkliftAudio: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, 'ต้องระบุค่าการแสดงผลอย่างน้อยหนึ่งค่า');
+
+/**
+ * A selected truck is controlled by one browser at a time. The lease is short
+ * enough to recover automatically from a closed tab or lost Wi-Fi connection;
+ * the owner renews it through movement writes or an explicit claim heartbeat.
+ * It is intentionally in-process, matching the existing in-process SSE bus
+ * and the application's single API-container deployment model.
+ */
+export const FORKLIFT_CONTROL_LEASE_MS = 10_000;
+type ForkliftControllerLease = { clientId: string; expiresAtMs: number };
+const forkliftControllerLeases = new Map<string, ForkliftControllerLease>();
+
+function clientIdFrom(req: Request, required = false): string | null {
+  const clientId = String(req.get('X-Client-Id') ?? '').trim();
+  if (!clientId) {
+    if (required) throw httpError(400, 'ต้องระบุ X-Client-Id เพื่อควบคุมรถโฟล์คลิฟต์', 'client_id_required');
+    return null;
+  }
+  if (clientId.length > 160) {
+    throw httpError(400, 'X-Client-Id ยาวเกินกำหนด', 'invalid_client_id');
+  }
+  return clientId;
+}
+
+function activeForkliftLease(warehouseId: string, now = Date.now()): ForkliftControllerLease | null {
+  const lease = forkliftControllerLeases.get(warehouseId) ?? null;
+  if (lease && lease.expiresAtMs <= now) {
+    forkliftControllerLeases.delete(warehouseId);
+    return null;
+  }
+  return lease;
+}
+
+function forkliftControllerStatus(warehouseId: string, requesterId: string | null, now = Date.now()) {
+  const lease = activeForkliftLease(warehouseId, now);
+  return {
+    active: Boolean(lease),
+    isOwner: Boolean(lease && requesterId && lease.clientId === requesterId),
+    expiresAt: lease ? new Date(lease.expiresAtMs).toISOString() : null,
+    leaseMs: FORKLIFT_CONTROL_LEASE_MS,
+  };
+}
+
+function claimForkliftControl(warehouseId: string, clientId: string, now = Date.now()): boolean {
+  const lease = activeForkliftLease(warehouseId, now);
+  if (lease && lease.clientId !== clientId) return false;
+  forkliftControllerLeases.set(warehouseId, { clientId, expiresAtMs: now + FORKLIFT_CONTROL_LEASE_MS });
+  return true;
+}
+
+function sendForkliftConflict(res: Response, warehouseId: string, requesterId: string) {
+  return res.status(409).json({
+    error: 'forklift_control_conflict',
+    message: 'รถโฟล์คลิฟต์คันนี้กำลังถูกควบคุมจากอุปกรณ์อื่น',
+    forkliftController: forkliftControllerStatus(warehouseId, requesterId),
+  });
+}
 
 const rackGeometrySchema = z.object({
   positionCm: z.object({ x: coordinate, y: coordinate, z: coordinate }).partial().optional(),
@@ -86,6 +152,44 @@ export const warehouse3dRouter = Router();
 warehouse3dRouter.use(requireAuth);
 
 warehouse3dRouter.get(
+  '/settings/:warehouseId',
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const warehouseId = z.string().trim().min(1).parse(req.params.warehouseId);
+    const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
+    if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    const [row] = await db.select().from(warehouse3dSettings).where(eq(warehouse3dSettings.warehouseId, warehouseId));
+    res.json({ warehouseId, settings: (row?.data as Record<string, boolean>) ?? {}, updatedAt: row?.updatedAt?.toISOString() ?? null });
+  }),
+);
+
+warehouse3dRouter.put(
+  '/settings/:warehouseId',
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const warehouseId = z.string().trim().min(1).parse(req.params.warehouseId);
+    const patch = sharedViewSettingsSchema.parse(req.body);
+    const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
+    if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    const [before] = await db.select().from(warehouse3dSettings).where(eq(warehouse3dSettings.warehouseId, warehouseId));
+    const settings = { ...((before?.data as Record<string, boolean>) ?? {}), ...patch };
+    const updatedAt = new Date();
+    await db.insert(warehouse3dSettings).values({ warehouseId, data: settings, updatedAt }).onConflictDoUpdate({
+      target: warehouse3dSettings.warehouseId,
+      set: { data: settings, updatedAt },
+    });
+    const event = publishWarehouse3dSettings({
+      warehouseId,
+      settings,
+      origin: clientIdFrom(req),
+      updatedAt: updatedAt.toISOString(),
+    });
+    res.json({ ok: true, ...event });
+  }),
+);
+
+warehouse3dRouter.get(
   '/',
   asyncHandler(async (req, res) => {
     const warehouseId = String(req.query.warehouseId ?? '').trim();
@@ -106,6 +210,7 @@ warehouse3dRouter.get(
         tag: boxes.tag,
         slotId: boxes.slotId,
         status: boxes.status,
+        data: boxes.data,
         type: boxes.type,
         widthCm: boxes.widthCm,
         heightCm: boxes.heightCm,
@@ -116,7 +221,7 @@ warehouse3dRouter.get(
       })
         .from(boxes)
         .leftJoin(boxTypes, eq(boxes.type, boxTypes.id))
-        .where(and(inArray(boxes.slotId, slotIds), eq(boxes.status, 'warehouse')))
+        .where(and(inArray(boxes.slotId, slotIds), inArray(boxes.status, ['warehouse', 'hold', 'damage'])))
       : [];
     // A received box without a physical slot is waiting in the inbound staging
     // area. Keep it separate from shelf inventory: the 3D client renders one
@@ -188,6 +293,7 @@ warehouse3dRouter.get(
       forkliftPosition: warehouse?.data && typeof warehouse.data === 'object'
         ? (warehouse.data as Record<string, unknown>).forkliftPosition ?? null
         : null,
+      forkliftController: forkliftControllerStatus(warehouseId, clientIdFrom(req)),
       doors,
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
       boxes: boxRows.map((box) => {
@@ -200,6 +306,7 @@ warehouse3dRouter.get(
           id: box.tag,
           slotId: box.slotId,
           status: box.status,
+          slotSide: (box.data as Record<string, unknown> | null)?.slotSide === 'right' ? 'right' : 'left',
           dimensionsCm: typeDimensions ?? {
             width: box.widthCm,
             height: box.heightCm,
@@ -225,14 +332,56 @@ warehouse3dRouter.get(
   }),
 );
 
+warehouse3dRouter.post(
+  '/forklift/control/claim',
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const { warehouseId } = forkliftControlSchema.parse(req.body);
+    const clientId = clientIdFrom(req, true)!;
+    const db = getDb();
+    const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
+    if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    if (!claimForkliftControl(warehouseId, clientId)) return sendForkliftConflict(res, warehouseId, clientId);
+    res.json({ ok: true, forkliftController: forkliftControllerStatus(warehouseId, clientId) });
+  }),
+);
+
+warehouse3dRouter.post(
+  '/forklift/control/release',
+  requirePermission('master.manage'),
+  asyncHandler(async (req, res) => {
+    const { warehouseId } = forkliftControlSchema.parse(req.body);
+    const clientId = clientIdFrom(req, true)!;
+    const db = getDb();
+    const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
+    if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    const lease = activeForkliftLease(warehouseId);
+    if (lease && lease.clientId !== clientId) return sendForkliftConflict(res, warehouseId, clientId);
+    const released = Boolean(lease);
+    if (lease) forkliftControllerLeases.delete(warehouseId);
+    res.json({
+      ok: true,
+      released,
+      forkliftController: forkliftControllerStatus(warehouseId, clientId),
+    });
+  }),
+);
+
 warehouse3dRouter.put(
   '/forklift',
   requirePermission('master.manage'),
   asyncHandler(async (req, res) => {
     const input = forkliftPositionSchema.parse(req.body);
+    const clientId = clientIdFrom(req, true)!;
     const db = getDb();
     const [before] = await db.select().from(warehouses).where(eq(warehouses.id, input.warehouseId));
     if (!before) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
+    // The first movement write may claim an idle truck for compatibility with
+    // clients that have not yet added the explicit preflight endpoint.
+    if (!claimForkliftControl(input.warehouseId, clientId)) {
+      return sendForkliftConflict(res, input.warehouseId, clientId);
+    }
+    const updatedAt = new Date().toISOString();
     const data = {
       ...(before.data as Record<string, unknown>),
       forkliftPosition: {
@@ -241,12 +390,29 @@ warehouse3dRouter.put(
         target: input.target ?? null,
         liftHeight: input.liftHeight ?? 0,
         moving: input.moving ?? false,
-        updatedAt: new Date().toISOString(),
+        cargoBoxId: input.cargoBoxId ?? null,
+        layoutRevision: input.layoutRevision ?? null,
+        updatedAt,
       },
     };
     await db.update(warehouses).set({ data, updatedAt: new Date() }).where(eq(warehouses.id, before.id));
-    bump(req.get('X-Client-Id'));
-    res.json({ ok: true, forkliftPosition: data.forkliftPosition });
+    publishForkliftState({
+      warehouseId: input.warehouseId,
+      position: input.position,
+      rotationY: input.rotationY ?? 0,
+      target: input.target ?? null,
+      liftHeight: input.liftHeight ?? 0,
+      moving: input.moving ?? false,
+      cargoBoxId: input.cargoBoxId ?? null,
+      layoutRevision: input.layoutRevision ?? null,
+      updatedAt,
+      origin: clientId,
+    });
+    res.json({
+      ok: true,
+      forkliftPosition: data.forkliftPosition,
+      forkliftController: forkliftControllerStatus(input.warehouseId, clientId),
+    });
   }),
 );
 
@@ -281,7 +447,7 @@ warehouse3dRouter.put(
       before: rackJson(before, []),
       after: rackJson(updated, []),
     });
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(rackJson(updated, []));
   }),
 );
@@ -315,7 +481,7 @@ warehouse3dRouter.put(
       before,
       after: updated,
     });
-    bump(req.get('X-Client-Id'));
+    bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json({
       id: updated.id,
       rackId: updated.rackId,

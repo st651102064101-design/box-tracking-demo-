@@ -17,13 +17,15 @@
  * ============================================================================
  */
 import { Router } from 'express';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { requireAuth, requireAnyPermission, requirePermission } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
 import { getDb } from '../db/client.js';
 import { roles, rolePermissions, users, employees } from '../db/schema.js';
 import { PERMISSION_MODULES, ALL_PERMISSIONS, SUPER_ADMIN_KEY, sanitizePermissions, } from '../lib/permissions.js';
 import { invalidateRoleCache, effectivePermissions } from '../lib/effectivePermissions.js';
+import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js';
+import { writeAuditLog } from '../services/audit.js';
 export const rolesRouter = Router();
 rolesRouter.use(requireAuth);
 const canRead = requireAnyPermission('role.manage', 'permission.manage');
@@ -31,6 +33,13 @@ const canWrite = requirePermission('role.manage');
 const canGrant = requirePermission('permission.manage');
 function forbidden(res, message) {
     return res.status(403).json({ error: 'forbidden', message });
+}
+/** The last-Super-Admin guard is a state conflict, not a permission problem —
+ *  the caller may well hold permission.manage and still not be allowed to
+ *  leave the system with zero Super Admins. 409, matching the role_in_use
+ *  conflict below, not 403. */
+function conflict(res, code, message) {
+    return res.status(409).json({ error: code, message });
 }
 /** Slug for a new role, unique-ified against what already exists. */
 function keyFromName(name, taken) {
@@ -72,7 +81,7 @@ rolesRouter.get('/me', asyncHandler(async (req, res) => {
 /* ─── list ────────────────────────────────────────────────────────────────*/
 rolesRouter.get('/', canRead, asyncHandler(async (_req, res) => {
     const db = getDb();
-    const roleRows = await db.select().from(roles);
+    const roleRows = await db.select().from(roles).where(isNull(roles.deletedAt));
     const permRows = roleRows.length
         ? await db
             .select()
@@ -87,7 +96,9 @@ rolesRouter.get('/', canRead, asyncHandler(async (_req, res) => {
     }
     const counts = await memberCounts();
     res.json({
-        total: ALL_PERMISSIONS.length,
+        /* total ของ endpoint นี้คือจำนวนบทบาท ไม่ใช่จำนวน permission ในระบบ
+           ไม่อย่างนั้น UI จะแสดง badge ว่ามีบทบาทหลายรายการ แต่ตารางอาจว่างได้ */
+        total: roleRows.length,
         roles: roleRows
             .map((r) => ({
             id: r.id,
@@ -154,7 +165,8 @@ rolesRouter.post('/', canWrite, asyncHandler(async (req, res) => {
     }
     const db = getDb();
     const existing = await db.select().from(roles);
-    if (existing.some((r) => r.name.trim().toLowerCase() === name.toLowerCase())) {
+    const liveNameClash = existing.some((r) => !r.deletedAt && r.name.trim().toLowerCase() === name.toLowerCase());
+    if (liveNameClash) {
         return res.status(409).json({ error: 'conflict', message: 'มีบทบาทชื่อนี้อยู่แล้ว' });
     }
     const permissions = sanitizePermissions(body.permissions);
@@ -202,7 +214,7 @@ rolesRouter.put('/:id', canWrite, asyncHandler(async (req, res) => {
         const clash = await db
             .select()
             .from(roles)
-            .where(and(eq(roles.name, name), ne(roles.id, roleId)));
+            .where(and(eq(roles.name, name), ne(roles.id, roleId), isNull(roles.deletedAt)));
         if (clash.length) {
             return res.status(409).json({ error: 'conflict', message: 'มีบทบาทชื่อนี้อยู่แล้ว' });
         }
@@ -260,8 +272,13 @@ rolesRouter.delete('/:id', canWrite, asyncHandler(async (req, res) => {
             members,
         });
     }
-    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
-    await db.delete(roles).where(eq(roles.id, roleId));
+    /* Soft delete. The row (and its permission grants) survive so "what could
+       this role do, back when it existed" stays answerable — role_permissions
+       is left alone on purpose, not cleared. A deleted role can never again be
+       assigned or listed (every read here filters deletedAt IS NULL /
+       effectivePermissions' role cache does the same), so leaving the grants
+       in place costs nothing at runtime. */
+    await db.update(roles).set({ deletedAt: new Date() }).where(eq(roles.id, roleId));
     invalidateRoleCache();
     res.json({ ok: true });
 }));
@@ -277,21 +294,47 @@ rolesRouter.put('/assign-employee/:employeeId', canGrant, asyncHandler(async (re
     if (!emp) {
         return res.status(404).json({ error: 'not_found', message: 'ไม่พบพนักงานคนนี้' });
     }
-    /* null clears the role (พนักงานที่ยังไม่ได้กำหนดบทบาท) — a valid state, and
-       the only way back out of a role without picking another one. */
+    /* This endpoint's one job is setting the role — unlike PUT /api/state
+       (a whole-record replace, where "field absent" legitimately means
+       "unchanged"), a request here with no `roleId` key at all is malformed,
+       not a no-op. Treating it as "clear the role" is exactly the bug that
+       used to wipe an employee's role from a request that only meant to save
+       their phone number (the disabled <select> submitted no value at all).
+       `roleId: null` is a different thing — that IS the explicit "remove the
+       role" request — and still goes through the checks below like anything
+       else. */
+    if (!('roleId' in body)) {
+        return res.status(400).json({
+            error: 'bad_request',
+            message: 'ต้องระบุ roleId (ส่ง null เพื่อถอดบทบาทออกโดยตั้งใจ)',
+        });
+    }
     const roleId = body.roleId == null || body.roleId === '' ? null : Number(body.roleId);
+    let role = null;
     if (roleId != null) {
-        const [role] = await db.select().from(roles).where(eq(roles.id, roleId));
-        if (!role) {
+        const [r] = await db.select().from(roles).where(eq(roles.id, roleId));
+        if (!r) {
             return res.status(400).json({ error: 'bad_request', message: 'ไม่พบบทบาทที่เลือก' });
         }
+        role = r;
     }
     /* Same last-Super-Admin guard as /assign/:userId: whoever is the final
-       holder of the keys may not hand them away, including to themselves. */
+       holder of the keys may not hand them away, including to themselves —
+       whether that's a move to another role or an explicit clear. Counts only
+       ACTIVE holders (see superAdminGuard.ts): a Super Admin who has since
+       พ้นสภาพ isn't a usable fallback, so they must not count as "someone
+       else still has it". */
+    let current = null;
     if (emp.roleId != null && emp.roleId !== roleId) {
-        const [current] = await db.select().from(roles).where(eq(roles.id, emp.roleId));
-        if (current?.key === SUPER_ADMIN_KEY && ((await memberCounts()).get(current.id) ?? 0) <= 1) {
-            return forbidden(res, 'ลดสิทธิ์ Super Admin คนสุดท้ายในระบบไม่ได้');
+        const [c] = await db.select().from(roles).where(eq(roles.id, emp.roleId));
+        current = c ?? null;
+        if (current?.key === SUPER_ADMIN_KEY) {
+            const holders = await activeSuperAdminHolders(db);
+            const empIsActive = (emp.data?.status ?? 'active') === 'active';
+            const remaining = totalHolders(holders) - (empIsActive && holders.employeeIds.includes(employeeId) ? 1 : 0);
+            if (remaining <= 0) {
+                return conflict(res, 'last_super_admin', 'ไม่สามารถเปลี่ยนบทบาทได้ เนื่องจากบัญชีนี้เป็น Super Admin คนสุดท้ายของระบบ');
+            }
         }
     }
     /* Deliberately does NOT touch a linked `users` row. PUT /api/state links a
@@ -302,6 +345,19 @@ rolesRouter.put('/assign-employee/:employeeId', canGrant, asyncHandler(async (re
        accounts are moved explicitly via /assign/:userId. */
     await db.update(employees).set({ roleId }).where(eq(employees.id, employeeId));
     invalidateRoleCache();
+    /* Audit only fires when the role actually changed — this route is called
+       every time the employee form's role select renders unchanged, and a log
+       full of "role changed from X to X" would bury the entries that matter. */
+    if (emp.roleId !== roleId) {
+        await writeAuditLog(db, {
+            action: roleId == null ? 'role_removed' : 'role_changed',
+            actor: req.user.username,
+            itemId: employeeId,
+            itemName: emp.name ?? employeeId,
+            before: { roleId: emp.roleId, roleName: current?.name ?? null },
+            after: { roleId, roleName: role?.name ?? null },
+        });
+    }
     res.json({ ok: true, employeeId, roleId });
 }));
 /* ─── assign a role to a system account ───────────────────────────────────*/
@@ -318,18 +374,33 @@ rolesRouter.put('/assign/:userId', canGrant, asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'bad_request', message: 'ไม่พบบทบาทที่เลือก' });
     }
     /* The last Super Admin may not demote themselves — that is the one change
-       no one else is left with the rights to undo. */
+       no one else is left with the rights to undo. Same active-holder count
+       as assign-employee above; a `users` account has no employment status of
+       its own so it always counts while it holds the role. */
+    let current = null;
     if (user.roleId != null && user.roleId !== roleId) {
-        const [current] = await db.select().from(roles).where(eq(roles.id, user.roleId));
+        const [c] = await db.select().from(roles).where(eq(roles.id, user.roleId));
+        current = c ?? null;
         if (current?.key === SUPER_ADMIN_KEY) {
-            const remaining = (await memberCounts()).get(current.id) ?? 0;
-            if (remaining <= 1) {
-                return forbidden(res, 'ลดสิทธิ์ Super Admin คนสุดท้ายในระบบไม่ได้');
+            const holders = await activeSuperAdminHolders(db);
+            const remaining = totalHolders(holders) - (holders.userIds.includes(userId) ? 1 : 0);
+            if (remaining <= 0) {
+                return conflict(res, 'last_super_admin', 'ไม่สามารถเปลี่ยนบทบาทได้ เนื่องจากบัญชีนี้เป็น Super Admin คนสุดท้ายของระบบ');
             }
         }
     }
     await db.update(users).set({ roleId }).where(eq(users.id, userId));
     invalidateRoleCache();
+    if (user.roleId !== roleId) {
+        await writeAuditLog(db, {
+            action: 'role_changed',
+            actor: req.user.username,
+            itemId: String(userId),
+            itemName: user.name ?? user.username ?? String(userId),
+            before: { roleId: user.roleId, roleName: current?.name ?? null },
+            after: { roleId, roleName: role.name },
+        });
+    }
     res.json({ ok: true, userId, roleId });
 }));
 //# sourceMappingURL=roles.js.map

@@ -13,12 +13,13 @@
  *     fidelity (nested history[], gateTypes{}, etc.) — nothing is ever lost.
  * ============================================================================
  */
-import { pgTable, serial, integer, text, boolean, numeric, jsonb, timestamp, index, primaryKey, } from 'drizzle-orm/pg-core';
+import { pgTable, serial, integer, text, boolean, numeric, doublePrecision, jsonb, timestamp, index, uniqueIndex, primaryKey, } from 'drizzle-orm/pg-core';
 /* ─── auth ────────────────────────────────────────────────────────────────*/
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
     username: text('username').notNull().unique(),
     passwordHash: text('password_hash').notNull(),
+    mustChangePassword: boolean('must_change_password').notNull().default(false),
     name: text('name').notNull(),
     role: text('role').notNull().default('staff'),
     /** Where "ลืมรหัสผ่าน?" sends its OTP — set at registration. Nullable only
@@ -52,6 +53,12 @@ export const roles = pgTable('roles', {
     system: boolean('system').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Soft delete. `active` is a separate switch an admin flips deliberately
+     *  (see routes/roles.ts) — this is what DELETE actually does. A deleted role
+     *  can never again be assigned (queries filter it out) but the row survives
+     *  for the audit trail: "who had what permissions on such-and-such date"
+     *  shouldn't become unanswerable just because the role was later removed. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 export const rolePermissions = pgTable('role_permissions', {
     roleId: integer('role_id')
@@ -65,6 +72,13 @@ export const config = pgTable('config', {
     agingDays: integer('aging_days').notNull().default(15),
     boxValue: numeric('box_value').notNull().default('450'),
     lostMode: text('lost_mode').notNull().default('manual'),
+    putawayEnabled: boolean('putaway_enabled').notNull().default(false),
+    systemName: text('system_name').notNull().default('Smart Tracking'),
+    subtitle: text('subtitle').notNull().default('WMS · เฟส 1 · Returnable Asset Tracking'),
+    logoData: text('logo_data'),
+    returnNoteCompany: text('return_note_company').notNull().default('ABSS'),
+    returnNoteDepartment: text('return_note_department').notNull().default('ฝ่ายทรัพยากรบุคคล'),
+    returnNotePhone: text('return_note_phone').notNull().default('0xx-xxx-xxxx'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const sequences = pgTable('sequences', {
@@ -77,9 +91,19 @@ export const customers = pgTable('customers', {
     name: text('name'),
     addr: text('addr'),
     contact: text('contact'),
+    lineUserId: text('line_user_id'),
+    lineDisplayName: text('line_display_name'),
+    linePictureUrl: text('line_picture_url'),
+    lineLinkedAt: timestamp('line_linked_at', { withTimezone: true }),
+    contactEmail: text('contact_email'),
     returnDays: integer('return_days'),
     data: jsonb('data').notNull().default({}),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Soft delete. Customers are referenced from box/DO/inventory history, so a
+     *  hard DELETE would either orphan that history or cascade-destroy it — this
+     *  keeps the row (and everything that points at it) while taking the
+     *  customer out of every list/lookup a normal user sees. Null = active. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 export const boxTypes = pgTable('box_types', {
     id: text('id').primaryKey(),
@@ -89,6 +113,10 @@ export const boxTypes = pgTable('box_types', {
     dim: text('dim'),
     data: jsonb('data').notNull().default({}),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Soft delete — see customers.deletedAt. Every box carries `type` as a plain
+     *  text reference (not an FK), so deleting the type row out from under boxes
+     *  that still hold it would turn "ลังพลาสติก" into a dangling id on screen. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 export const warehouses = pgTable('warehouses', {
     id: text('id').primaryKey(),
@@ -113,6 +141,61 @@ export const gateWebhookStatus = pgTable('gate_webhook_status', {
     /** Source IP of the most recent webhook hit — lets the frontend link straight
      *  to the reader's own admin UI without anyone hardcoding an address. */
     lastIp: text('last_ip'),
+    lastTagSeenAt: timestamp('last_tag_seen_at', { withTimezone: true }),
+    lastAntennas: jsonb('last_antennas').notNull().default([]),
+});
+/** One-time invitations used to bind a customer to a verified LINE Login
+ * identity. Only SHA-256 hashes of bearer tokens/state are stored. */
+export const lineLinkInvites = pgTable('line_link_invites', {
+    id: serial('id').primaryKey(),
+    tokenHash: text('token_hash').notNull().unique(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    oauthStateHash: text('oauth_state_hash'),
+    nonce: text('nonce'),
+    codeVerifier: text('code_verifier'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const rfidReaders = pgTable('rfid_readers', {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    host: text('host').notNull(),
+    gateNo: integer('gate_no').notNull().unique(),
+    webhookUrl: text('webhook_url').notNull(),
+    transmitPower: numeric('transmit_power').notNull().default('3'),
+    antennaCount: integer('antenna_count').notNull().default(4),
+    heartbeatIntervalSeconds: integer('heartbeat_interval_seconds').notNull().default(1),
+    readingEnabled: boolean('reading_enabled').notNull().default(true),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+});
+/** Per-antenna routing for a physical reader that posts all ports to one
+ * webhook. `rfid_readers.gate_no` remains the safe fallback for reports that
+ * omit an antenna number and for existing installations with no mappings. */
+export const rfidAntennaGateMappings = pgTable('rfid_antenna_gate_mappings', {
+    readerId: text('reader_id').notNull().references(() => rfidReaders.id, { onDelete: 'cascade' }),
+    antennaPort: integer('antenna_port').notNull(),
+    gateNo: integer('gate_no').notNull(),
+    antennaRole: text('antenna_role').notNull().default('direct'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+}, (t) => ({ pk: primaryKey({ columns: [t.readerId, t.antennaPort] }) }));
+/** Required business context staged before unattended outbound processing. */
+export const rfidGateAutoSessions = pgTable('rfid_gate_auto_sessions', {
+    gateNo: integer('gate_no').primaryKey(),
+    direction: text('direction').notNull(),
+    customer: text('customer'),
+    doNo: text('do_no'),
+    po: text('po'),
+    plate: text('plate'),
+    driver: text('driver'),
+    vehicleType: text('vehicle_type'),
+    recorder: text('recorder'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text('updated_by'),
 });
 /** Boxes a fixed reader saw at a gate, awaiting the operator's confirmation
  *  before they're actually received — see the matching table comment in
@@ -121,6 +204,7 @@ export const gatePendingReads = pgTable('gate_pending_reads', {
     gateNo: integer('gate_no').notNull(),
     tag: text('tag').notNull(),
     seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+    direction: text('direction'),
 }, (t) => ({ pk: primaryKey({ columns: [t.gateNo, t.tag] }) }));
 /** Per-account chosen gate for Gate ขาออก/ขาเข้า — see the matching table
  *  comment in schema.sql for why this needed its own table (stateSchema
@@ -144,7 +228,7 @@ export const locations = pgTable('locations', {
     code: text('code').primaryKey(),
     wh: text('wh'),
     zone: text('zone'),
-    rack: text('rack'),
+    rack: text('rack').notNull(),
     shelf: text('shelf'),
     slot: text('slot'),
     type: text('type'),
@@ -152,6 +236,46 @@ export const locations = pgTable('locations', {
     data: jsonb('data').notNull().default({}),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+/** Real-scale warehouse geometry. Values are stored in centimetres and only
+ * converted to metres at the Three.js boundary (1 world unit = 1 metre).
+ * These tables complement — and never replace — the legacy Location Master. */
+export const racks = pgTable('racks', {
+    id: text('id').primaryKey(),
+    warehouseId: text('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+    zone: text('zone').notNull().default(''),
+    code: text('code').notNull(),
+    positionXCm: doublePrecision('position_x_cm').notNull().default(0),
+    positionYCm: doublePrecision('position_y_cm').notNull().default(0),
+    positionZCm: doublePrecision('position_z_cm').notNull().default(0),
+    rotationYDeg: doublePrecision('rotation_y_deg').notNull().default(0),
+    widthCm: doublePrecision('width_cm').notNull().default(140),
+    heightCm: doublePrecision('height_cm').notNull().default(110),
+    depthCm: doublePrecision('depth_cm').notNull().default(110),
+    materialType: text('material_type').notNull().default('powder_coated_steel'),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    identityUnique: uniqueIndex('racks_identity_unique').on(table.warehouseId, table.zone, table.code),
+    warehouseIdx: index('racks_warehouse_idx').on(table.warehouseId, table.zone, table.code),
+}));
+export const slots = pgTable('slots', {
+    id: text('id').primaryKey(),
+    rackId: text('rack_id').notNull().references(() => racks.id, { onDelete: 'cascade' }),
+    shelfCode: text('shelf_code').notNull().default(''),
+    slotCode: text('slot_code').notNull().default(''),
+    localXCm: doublePrecision('local_x_cm').notNull().default(0),
+    localYCm: doublePrecision('local_y_cm').notNull().default(0),
+    localZCm: doublePrecision('local_z_cm').notNull().default(0),
+    widthCm: doublePrecision('width_cm').notNull().default(120),
+    heightCm: doublePrecision('height_cm').notNull().default(80),
+    depthCm: doublePrecision('depth_cm').notNull().default(100),
+    status: text('status').notNull().default('empty'),
+    data: jsonb('data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    positionUnique: uniqueIndex('slots_rack_position_unique').on(table.rackId, table.shelfCode, table.slotCode),
+    rackIdx: index('slots_rack_idx').on(table.rackId, table.shelfCode, table.slotCode),
+}));
 export const employees = pgTable('employees', {
     id: text('id').primaryKey(),
     name: text('name'),
@@ -228,6 +352,11 @@ export const boxes = pgTable('boxes', {
      */
     rfidTid: text('rfid_tid').unique(),
     rfidEpc: text('rfid_epc'),
+    slotId: text('slot_id').references(() => slots.id, { onDelete: 'set null' }),
+    widthCm: doublePrecision('width_cm').notNull().default(60),
+    heightCm: doublePrecision('height_cm').notNull().default(40),
+    depthCm: doublePrecision('depth_cm').notNull().default(40),
+    materialType: text('material_type').notNull().default('generic'),
     location: jsonb('location').notNull().default({}),
     history: jsonb('history').notNull().default([]),
     data: jsonb('data').notNull().default({}),
@@ -290,6 +419,14 @@ export const events = pgTable('events', {
     ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
     data: jsonb('data').notNull().default({}),
 });
+/** FX9600 heartbeat/read status, kept separate from the legacy state blob. */
+export const fx9600Readers = pgTable('fx9600_readers', {
+    id: text('id').primaryKey(),
+    gateNo: integer('gate_no'),
+    lastWebhookAt: timestamp('last_webhook_at', { withTimezone: true }),
+    lastPayload: jsonb('last_payload').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 export const auditLog = pgTable('audit_log', {
     id: serial('id').primaryKey(),
     action: text('action'),
@@ -301,19 +438,50 @@ export const auditLog = pgTable('audit_log', {
     data: jsonb('data').notNull().default({}), // full original entry, verbatim
     ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
 });
+/** Durable outbox for automatic LINE reminders. The primary key is the
+ * business idempotency key (gate batch or customer/business date), while
+ * retryKey is reused for every retry so LINE also deduplicates the push. */
+export const lineNotificationDeliveries = pgTable('line_notification_deliveries', {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull().default('line'),
+    kind: text('kind').notNull(),
+    customerId: text('customer_id').notNull(),
+    customerName: text('customer_name').notNull().default(''),
+    businessDate: text('business_date').notNull(),
+    recipient: text('recipient').notNull(),
+    retryKey: text('retry_key').notNull(),
+    status: text('status').notNull().default('processing'),
+    message: text('message').notNull(),
+    attemptCount: integer('attempt_count').notNull().default(1),
+    lineRequestId: text('line_request_id'),
+    error: text('error'),
+    metadata: jsonb('metadata').notNull().default({}),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    retryIdx: index('line_notification_deliveries_retry_idx').on(table.status, table.updatedAt),
+    customerIdx: index('line_notification_deliveries_customer_idx').on(table.customerId, table.createdAt),
+}));
 // re-export bundle for drizzle(client, { schema })
 export const schema = {
     users,
     config,
     sequences,
     customers,
+    lineLinkInvites,
     boxTypes,
     warehouses,
     gates,
     gateWebhookStatus,
+    rfidReaders,
+    rfidAntennaGateMappings,
+    rfidGateAutoSessions,
     gatePendingReads,
     gatePrefs,
     locations,
+    racks,
+    slots,
     employees,
     boxes,
     vehicles,
@@ -323,5 +491,6 @@ export const schema = {
     cycleCounts,
     events,
     auditLog,
+    lineNotificationDeliveries,
 };
 //# sourceMappingURL=schema.js.map

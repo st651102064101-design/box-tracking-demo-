@@ -7,6 +7,7 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { sendMail } from '../lib/mailer.js';
 import { writeAuditLog } from '../services/audit.js';
+import { bump } from '../lib/bus.js';
 
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
@@ -177,6 +178,7 @@ mastersRouter.post(
         data: input,
       });
     }
+    bump(req.get('X-Client-Id'));
     res.status(201).json(input);
   }),
 );
@@ -200,6 +202,7 @@ mastersRouter.put(
       .where(and(eq(boxTypes.id, req.params.id), isNull(boxTypes.deletedAt)))
       .returning();
     if (!updated.length) throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
+    bump(req.get('X-Client-Id'));
     res.json(input);
   }),
 );
@@ -218,6 +221,7 @@ mastersRouter.delete(
     const [row] = await db.select().from(boxTypes).where(eq(boxTypes.id, req.params.id));
     if (!row || row.deletedAt) throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
     await db.update(boxTypes).set({ deletedAt: new Date() }).where(eq(boxTypes.id, req.params.id));
+    bump(req.get('X-Client-Id'));
     res.json({ ok: true });
   }),
 );
@@ -281,6 +285,7 @@ mastersRouter.post(
         actor: req.user?.username ?? 'system',
       })
       : undefined;
+    bump(req.get('X-Client-Id'));
     res.status(201).json({ ...input, emailNotification });
   }),
 );
@@ -321,6 +326,7 @@ mastersRouter.put(
         actor: req.user?.username ?? 'system',
       })
       : undefined;
+    bump(req.get('X-Client-Id'));
     res.json({ ...input, emailNotification });
   }),
 );
@@ -337,6 +343,7 @@ mastersRouter.delete(
     const [row] = await db.select().from(customers).where(eq(customers.id, req.params.id));
     if (!row || row.deletedAt) throw httpError(404, 'ไม่พบลูกค้า', 'not_found');
     await db.update(customers).set({ deletedAt: new Date() }).where(eq(customers.id, req.params.id));
+    bump(req.get('X-Client-Id'));
     res.json({ ok: true });
   }),
 );
@@ -376,6 +383,7 @@ mastersRouter.post(
       note: input.note ?? null,
       data: input,
     });
+    bump(req.get('X-Client-Id'));
     res.status(201).json(input);
   }),
 );
@@ -386,6 +394,7 @@ mastersRouter.delete(
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(locations).where(eq(locations.code, req.params.code)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบตำแหน่ง', 'not_found');
+    bump(req.get('X-Client-Id'));
     res.json({ ok: true });
   }),
 );

@@ -254,6 +254,15 @@ CREATE TABLE IF NOT EXISTS ui_prefs (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Shared 3D operational controls. These are intentionally warehouse-scoped,
+-- not account-scoped: if an operator removes a roof/grid from the live twin,
+-- every observer of that warehouse must see the same scene immediately.
+CREATE TABLE IF NOT EXISTS warehouse_3d_settings (
+  warehouse_id TEXT PRIMARY KEY REFERENCES warehouses(id) ON DELETE CASCADE,
+  data         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS locations (
   code       TEXT PRIMARY KEY,
   wh         TEXT,
@@ -499,23 +508,23 @@ BEGIN
   new_slot := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE NEW.slot_id END;
 
   IF old_slot IS NOT NULL THEN
-    UPDATE slots SET status = CASE WHEN EXISTS (
-      SELECT 1 FROM boxes b
+    UPDATE slots SET status = CASE WHEN (
+      SELECT COUNT(*) FROM boxes b
       WHERE b.slot_id = old_slot AND b.status IN ('warehouse', 'hold', 'damage')
-    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    ) >= 2 THEN 'full' ELSE 'empty' END, updated_at = now()
     WHERE id = old_slot;
   END IF;
   IF new_slot IS NOT NULL AND new_slot IS DISTINCT FROM old_slot THEN
-    UPDATE slots SET status = CASE WHEN EXISTS (
-      SELECT 1 FROM boxes b
+    UPDATE slots SET status = CASE WHEN (
+      SELECT COUNT(*) FROM boxes b
       WHERE b.slot_id = new_slot AND b.status IN ('warehouse', 'hold', 'damage')
-    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    ) >= 2 THEN 'full' ELSE 'empty' END, updated_at = now()
     WHERE id = new_slot;
   ELSIF new_slot IS NOT NULL THEN
-    UPDATE slots SET status = CASE WHEN EXISTS (
-      SELECT 1 FROM boxes b
+    UPDATE slots SET status = CASE WHEN (
+      SELECT COUNT(*) FROM boxes b
       WHERE b.slot_id = new_slot AND b.status IN ('warehouse', 'hold', 'damage')
-    ) THEN 'full' ELSE 'empty' END, updated_at = now()
+    ) >= 2 THEN 'full' ELSE 'empty' END, updated_at = now()
     WHERE id = new_slot;
   END IF;
   RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
@@ -561,10 +570,57 @@ WHERE b.slot_id IS NULL
   AND COALESCE(l.rack, '') <> '';
 
 UPDATE slots s
-SET status = CASE WHEN EXISTS (
-  SELECT 1 FROM boxes b
+SET status = CASE WHEN (
+  SELECT COUNT(*) FROM boxes b
   WHERE b.slot_id = s.id AND b.status IN ('warehouse', 'hold', 'damage')
-) THEN 'full' ELSE 'empty' END;
+) >= 2 THEN 'full' ELSE 'empty' END;
+
+/* ─── Realtime warehouse-3D change feed ──────────────────────────────────
+   The API's in-process SSE bus observes normal HTTP writes, but an ERP/admin
+   tool may legitimately write Postgres directly.  Notify once per committed
+   transaction (Postgres folds repeated identical channel/payload pairs) so a
+   browser reloads the 3D model only after every related row is durable.
+
+   Keep this deliberately to tables consumed by GET /api/warehouse-3d.  It is
+   not a general audit mechanism and must not wake 3D clients for unrelated
+   customer, employee, or UI-preference edits. */
+CREATE OR REPLACE FUNCTION notify_warehouse3d_changed()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_notify('boxtrace_warehouse3d_changed', COALESCE(TG_ARGV[0], 'warehouse3d'));
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_boxes_changed ON boxes;
+CREATE TRIGGER boxtrace_warehouse3d_boxes_changed
+AFTER INSERT OR UPDATE OR DELETE ON boxes
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed();
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_box_types_changed ON box_types;
+CREATE TRIGGER boxtrace_warehouse3d_box_types_changed
+AFTER INSERT OR UPDATE OR DELETE ON box_types
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed();
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_warehouses_changed ON warehouses;
+CREATE TRIGGER boxtrace_warehouse3d_warehouses_changed
+AFTER INSERT OR UPDATE OR DELETE ON warehouses
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed();
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_locations_changed ON locations;
+CREATE TRIGGER boxtrace_warehouse3d_locations_changed
+AFTER INSERT OR UPDATE OR DELETE ON locations
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed('location-master');
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_racks_changed ON racks;
+CREATE TRIGGER boxtrace_warehouse3d_racks_changed
+AFTER INSERT OR UPDATE OR DELETE ON racks
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed();
+
+DROP TRIGGER IF EXISTS boxtrace_warehouse3d_slots_changed ON slots;
+CREATE TRIGGER boxtrace_warehouse3d_slots_changed
+AFTER INSERT OR UPDATE OR DELETE ON slots
+FOR EACH ROW EXECUTE FUNCTION notify_warehouse3d_changed();
 
 CREATE TABLE IF NOT EXISTS vehicles (
   id         TEXT PRIMARY KEY,

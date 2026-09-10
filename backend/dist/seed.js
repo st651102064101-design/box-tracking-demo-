@@ -7,7 +7,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { applySchema, getDb, closeDb } from './db/client.js';
-import { users, config, sequences, roles } from './db/schema.js';
+import { users, employees, config, sequences, roles } from './db/schema.js';
 import { seedRoles } from './db/seedRoles.js';
 import { hashPassword } from './lib/password.js';
 import { env } from './env.js';
@@ -23,6 +23,7 @@ async function main() {
     await seedRoles();
     const { username, password, name } = env.seedAdmin;
     const existing = await db.select().from(users).where(eq(users.username, username));
+    let adminUser = existing[0];
     if (existing.length) {
         console.log(`[seed] admin "${username}" already exists — skipping`);
     }
@@ -37,8 +38,23 @@ async function main() {
             name,
             role: 'admin',
             roleId: superAdmin?.id ?? null,
+            mustChangePassword: true,
         });
+        [adminUser] = await db.select().from(users).where(eq(users.username, username));
         console.log(`[seed] created admin "${username}" (password: "${password}")`);
+    }
+    /* The bootstrap users.admin account is also the first employee.  Keeping
+       this row server-side prevents the legacy UI's old "first registration"
+       fallback from creating a second employee (EMP-002) after login. */
+    if (adminUser) {
+        const [superAdmin] = await db.select().from(roles).where(eq(roles.key, SUPER_ADMIN_KEY));
+        await db.insert(employees).values({
+            id: 'EMP-001',
+            name: adminUser.name,
+            userId: adminUser.id,
+            roleId: superAdmin?.id ?? null,
+            data: { id: 'EMP-001', name: adminUser.name, role: 'ผู้ดูแลระบบ', access: 'admin', status: 'active' },
+        }).onConflictDoNothing({ target: employees.id });
     }
     console.log('[seed] done ✓');
     await closeDb();
