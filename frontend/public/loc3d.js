@@ -3028,9 +3028,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // Square the truck to the rack face before any lift/putaway step.
             const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
             const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
-            // Three.js forklift forks point along local +Z; aim that forward
-            // vector at the selected slot rather than copying rack rotation.
-            forkliftRoot.rotation.y = Math.atan2(dx, dz);
+            // The imported forklift's forks face local -Z. Aim that front
+            // toward the selected slot rather than copying rack rotation.
+            forkliftRoot.rotation.y = Math.atan2(dx, dz) + Math.PI;
           }
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
