@@ -9822,7 +9822,7 @@ function printEmpBadgeWindow(id){
     +'.pg:last-child{page-break-after:auto;}'
     +'@media print{body{background:none;padding:0;gap:0;}.hint{display:none;}}'
     +'.hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#888;}'
-    +'.loc3d-settings{position:absolute;right:14px;top:14px;z-index:5;width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:11px;background:rgba(9,11,13,.86);color:#f4f7fa;cursor:pointer}.loc3d-settings svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.loc3d-settings-menu{position:absolute;right:14px;top:62px;z-index:5;display:grid;gap:5px;padding:7px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(9,11,13,.94)}.loc3d-settings-menu[hidden]{display:none}.loc3d-settings-menu button{border:0;border-radius:7px;padding:7px 10px;background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font:600 11px var(--font)}'</style></head><body>'
+     +'.loc3d-settings{position:absolute;right:14px;top:14px;z-index:5;width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:11px;background:rgba(9,11,13,.86);color:#f4f7fa;cursor:pointer}.loc3d-settings svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.loc3d-settings-menu{position:absolute;right:14px;top:62px;z-index:5;display:grid;gap:5px;padding:7px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(9,11,13,.94)}.loc3d-settings-menu[hidden]{display:none}.loc3d-settings-menu button{border:0;border-radius:7px;padding:7px 10px;background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font:600 11px var(--font)}</style></head><body>'
     +'<div class="pg">'+cardScaledSlot(empCardFrontHtml(e),'emp',size)+'</div>'
     /* หน้าหลังไม่ถูกส่งไปที่เครื่องพิมพ์เลยเมื่อตั้งเป็นกระดาษเปล่า — ไม่ใช่ส่งไป
        แล้วซ่อน ซึ่งยังกินกระดาษ/บัตรไปหนึ่งแผ่นอยู่ดี */
@@ -24072,25 +24072,6 @@ document.addEventListener('visibilitychange',()=>{
 .loc3d-hud,.loc3d-hud span{pointer-events:auto}.loc3d-hud span{cursor:help}
 .loc3d-forklift-lift{position:absolute;right:64px;bottom:124px;z-index:5;display:none;align-items:center;gap:7px;padding:6px 8px;border:1px solid rgba(168,249,49,.48);border-radius:11px;background:rgba(9,14,11,.9);color:#dfffaf;box-shadow:0 7px 20px rgba(0,0,0,.35);font:700 11px/1 var(--font);backdrop-filter:blur(10px)}.loc3d-forklift-lift.show{display:flex}.loc3d-forklift-lift button{width:30px;height:30px;padding:0;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(255,255,255,.08);color:#fff;font:800 20px/1 var(--font);cursor:pointer}.loc3d-forklift-lift button:hover{border-color:var(--accent);color:var(--accent)}
 </style>
-<script>
-/* Load the large 3D module from an in-memory ES module. Some managed Edge
-   clients inject external script resources and were turning a valid module
-   into an EOF parse error. Fetching the verified local bytes first keeps the
-   renderer independent of that external-script transform. */
-(function(){
-  var runtime='/warehouse-3d-runtime.js?v=20260910-runtime3';
-  fetch(runtime,{cache:'no-store'})
-    .then(function(response){if(!response.ok)throw new Error('3D runtime HTTP '+response.status);return response.text();})
-    .then(function(source){
-      var url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
-      return import(url).finally(function(){URL.revokeObjectURL(url);});
-    })
-    .catch(function(error){
-      console.error('[Warehouse3D] runtime load failed',error);
-      var loading=document.querySelector('.loc3d-loading');
-      if(loading)loading.textContent='เปิดมุมมอง 3D ไม่สำเร็จ';
-    });
-})();
-</script>
+<script type="module" src="/warehouse-3d-runtime.js?v=20260910-runtime4"></script>
 </body>
 </html>
