@@ -2246,8 +2246,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftBrakeDeceleration = 2.25;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
-  // 360°/s lets a full 180° U-turn complete in roughly half a second.
-  const forkliftTurnRate = THREE.MathUtils.degToRad(360);
+  // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
+  const forkliftTurnRate = THREE.MathUtils.degToRad(720);
   const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(5);
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
