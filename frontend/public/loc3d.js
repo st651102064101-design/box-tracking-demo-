@@ -2725,9 +2725,23 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const moveForkliftTo = (target, pickupMesh = null, straightGuide = false) => {
     if (!forkliftSelected || !forkliftRoot) return;
-    const path = findForkliftPath(forkliftRoot.position, target);
+    let path = findForkliftPath(forkliftRoot.position, target);
+    // A target can be snapped to the same navigation cell as the truck (or
+    // temporarily be hidden by the carried pallet/rack collision volume).
+    // Previously this silently aborted the command, leaving the forklift
+    // motionless at the aisle. Keep the command alive with a short final
+    // approach to the requested point; the pickup/putaway state machine will
+    // still perform its normal face alignment once it arrives.
+    if (path.length < 2 && forkliftRoot.position.distanceTo(target) > 0.06) {
+      path = [forkliftRoot.position.clone(), target.clone().setY(warehouseFloorY + 0.025)];
+    }
     if (path.length < 2) {
       showTargetRipple(target, false);
+      // A same-cell pickup still needs to enter the arrival phase instead of
+      // waiting forever for a route that can never produce a second node.
+      if (pickupMesh) {
+        forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh, straightGuide, targetYaw: forkliftRoot.rotation.y };
+      }
       return;
     }
     showTargetRipple(target);
@@ -2980,6 +2994,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
     down = { x: event.clientX, y: event.clientY };
     isCameraDragging = false;
+    // Preserve OrbitControls' native drag gesture even when the pointer
+    // started over a box/pallet. Without capture, releasing outside the
+    // canvas can turn a corner drag into a stale click/hover state.
+    canvas.setPointerCapture?.(event.pointerId);
   };
   const onPointerUp = (event) => {
     if (ctrlDragBlocked) {
@@ -3180,6 +3198,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
     down = null;
     isCameraDragging = false;
+    canvas.releasePointerCapture?.(event.pointerId);
     if (wasCameraDragging) canvas.style.cursor = 'default';
   };
   const onPointerLeave = () => {
