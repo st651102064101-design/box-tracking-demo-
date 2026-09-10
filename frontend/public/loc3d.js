@@ -3284,6 +3284,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
+    if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
+      const pickupYaw = Math.atan2(
+        forkliftMotion.pickupMesh.position.x - forkliftRoot.position.x,
+        forkliftMotion.pickupMesh.position.z - forkliftRoot.position.z,
+      );
+      if (turnForkliftTowards(pickupYaw, deltaSeconds) <= forkliftStopYawTolerance) {
+        forkliftMotion.pickupAligned = true;
+        forkliftMotion.pickupAligning = false;
+      }
+    }
     if (forkliftPutawayPhase === 'aligning' && forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
       // At the rack, complete the final square-up at the same limited steering
       // rate.  This avoids the visible instant 90/180-degree turn before lift.
@@ -3329,6 +3339,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftPutawayPhase = 'aligning';
           }
           const pickupMesh = forkliftMotion.pickupMesh;
+          if (pickupMesh && !forkliftMotion.pickupAligned) {
+            // The truck has reached the approach point but its nose may still
+            // face the old aisle. Hold the pickup until it squares up to the
+            // rack box, turning at the normal smooth steering rate.
+            forkliftMotion.pickupAligning = true;
+            forkliftMotion.path = [forkliftRoot.position.clone()];
+            forkliftMotion.index = 0;
+            forkliftMotion.currentSpeed = 0;
+            return;
+          }
           if (forkliftMotion.rollback && forkliftLoadAssembly) {
             // Return the complete pallet assembly to its exact pre-pickup
             // world position and release it from the forks.
