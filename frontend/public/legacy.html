@@ -23667,6 +23667,12 @@ let srvSig=stateSig(St()), syncing=false;
    carrying a box; never tear down that in-progress operation. */
 let live3dRefreshTimer=null;
 function scheduleLive3DRefresh(){
+  /* A successful forklift putaway already patches the mounted scene locally.
+     PostgreSQL's AFTER-commit trigger then echoes the same write without the
+     originating client id; suppress that echo or this browser tears down and
+     rebuilds the model immediately after the truck stops. Other browsers do
+     not set this short-lived guard and still receive the normal realtime sync. */
+  if(Date.now() < Number(window.bt3dSuppressRefreshUntil||0))return;
   clearTimeout(live3dRefreshTimer);
   live3dRefreshTimer=setTimeout(()=>{
     const root=document.getElementById('loc3dView');
