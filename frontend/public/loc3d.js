@@ -2655,7 +2655,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverRing.userData.baseScale = Math.max(stagingHit.object.scale.x, stagingHit.object.scale.z) * 1.5;
       hoverRing.scale.setScalar(hoverRing.userData.baseScale);
       hoverRing.visible = true;
-      boxHoverArrow.position.set(stagingHit.object.position.x, stagingHit.object.position.y + stagingHit.object.scale.y / 2 + 0.2, stagingHit.object.position.z);
+      boxHoverArrow.position.set(stagingHit.object.position.x, stagingHit.object.position.y + stagingHit.object.scale.y / 2 - 0.1, stagingHit.object.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
       canvas.style.cursor = 'pointer';
@@ -2663,7 +2663,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
-      boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 + 0.2, entry.position.z);
+      boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 - 0.1, entry.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
       hoverOutline.position.copy(entry.position);
@@ -3294,8 +3294,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than exposing the pocket openings sideways.
               loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
               forkliftLoadAssembly = loadAssembly;
+              // A rack pickup must visibly raise the carriage after the tines
+              // take the box.  The staging pallet already sits at floor
+              // level, while a rack box supplies its actual shelf height.
+              if (forkliftReturnTarget) {
+                const pickupLiftHeight = pickupMesh.position.y
+                  - forkliftRoot.position.y
+                  - forkliftCarriageBaseY
+                  - 0.78;
+                forkliftLiftTarget = THREE.MathUtils.clamp(pickupLiftHeight, 0, forkliftLiftMax);
+              }
             }
-            window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · พร้อมนำไป Putaway`, 'ok');
+            window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · กำลังยกงารับกล่อง`, 'ok');
           } else if (forkliftDropTarget && forkliftLoadAssembly && forkliftPutawayPhase === 'placing') {
             const target = forkliftDropTarget;
             const forkWorldY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
