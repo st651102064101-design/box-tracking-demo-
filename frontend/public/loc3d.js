@@ -2273,12 +2273,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
   let forkliftRollback = null;
-  // Travel specification: 300 km/h maximum, accelerating 0→100 km/h in 0.25 s.
+  // Travel specification: 300 km/h maximum, accelerating 0→300 km/h in 1 s.
   // Values stay in metres/second so the movement remains frame-rate independent.
   const forkliftCruiseSpeed = 300 / 3.6;
-  const forkliftAcceleration = (100 / 3.6) / 0.25;
-  // Brake from 300 km/h to a standstill in 0.25 s.
-  const forkliftBrakeDeceleration = (300 / 3.6) / 0.25;
+  const forkliftAcceleration = (300 / 3.6) / 1;
+  // Brake from 300 km/h to a standstill in 1 s.
+  const forkliftBrakeDeceleration = (300 / 3.6) / 1;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
   // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
