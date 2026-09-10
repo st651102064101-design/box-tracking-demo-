@@ -1260,8 +1260,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     boxBarcodeStickers.push(handlingMark);
   };
   if (cartonEntries.length <= 80) {
-    const cartonEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x68472e, transparent: true, opacity: 0.68 });
-    const cartonSeamMaterial = new THREE.MeshStandardMaterial({ color: 0x745037, roughness: 0.92, metalness: 0 });
     const cartonTapeMaterial = new THREE.MeshStandardMaterial({ color: 0xd9bd77, roughness: 0.8, metalness: 0 });
     cartonEntries.forEach((entry) => {
       const placeLocal = (mesh, x, y, z) => {
@@ -1271,26 +1269,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         scene.add(mesh);
         return mesh;
       };
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(UNIT_BOX), cartonEdgeMaterial);
-      edges.userData.stagingBoxId = entry.box.id;
-      edges.position.copy(entry.position);
-      edges.quaternion.copy(entry.quaternion);
-      edges.scale.copy(entry.scale);
-      scene.add(edges);
-
       const topY = entry.scale.y / 2 + 0.006;
       const tape = new THREE.Mesh(
         new THREE.BoxGeometry(Math.min(0.14, entry.scale.x * 0.16), 0.012, entry.scale.z * 0.94),
         cartonTapeMaterial,
       );
       placeLocal(tape, 0, topY, 0);
-      [-0.25, 0.25].forEach((fraction) => {
-        const seam = new THREE.Mesh(
-          new THREE.BoxGeometry(0.014, 0.01, entry.scale.z * 0.94),
-          cartonSeamMaterial,
-        );
-        placeLocal(seam, entry.scale.x * fraction, topY + 0.002, 0);
-      });
       addCartonHandlingMark(entry);
     });
   }
@@ -2962,11 +2946,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const onPointerOut = (event) => {
     if (!event.relatedTarget || !canvas.contains(event.relatedTarget)) onPointerLeave();
   };
+  const onWindowPointerMove = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onPointerLeave();
+  };
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
   canvas.addEventListener('pointerout', onPointerOut, { passive: true });
+  window.addEventListener('pointermove', onWindowPointerMove, { passive: true });
   const onDoubleClick = (event) => {
     if (!forkliftSelected || !forkliftRoot) return;
     if (firstPerson && document.pointerLockElement === canvas) setPointerAtReticle();
@@ -3591,6 +3580,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('pointerout', onPointerOut);
+      window.removeEventListener('pointermove', onWindowPointerMove);
       canvas.removeEventListener('dblclick', onDoubleClick);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
