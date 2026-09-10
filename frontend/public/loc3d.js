@@ -2416,6 +2416,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
   const savedForklift = model.forkliftPosition || null;
+  let forkliftSyncInFlight = false;
+  let remoteForkliftPosition = null;
+  let remoteForkliftRotation = null;
+  let forkliftSyncFrame = 0;
   const saveForkliftPosition = () => {
     if (!forkliftRoot || !model.warehouseId) return;
     fetch('/api/warehouse-3d/forklift', {
@@ -2423,6 +2427,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
       body: JSON.stringify({ warehouseId: model.warehouseId, position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z }, rotationY: forkliftRoot.rotation.y }),
     }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error));
+  };
+  const syncForkliftPosition = async () => {
+    if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion) return;
+    forkliftSyncInFlight = true;
+    try {
+      const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!response.ok) return;
+      const latest = await response.json();
+      const position = latest?.forkliftPosition?.position;
+      if (position && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.z))) {
+        remoteForkliftPosition = new THREE.Vector3(Number(position.x), Number(position.y) || warehouseFloorY + 0.012, Number(position.z));
+        remoteForkliftRotation = Number.isFinite(Number(latest.forkliftPosition.rotationY)) ? Number(latest.forkliftPosition.rotationY) : null;
+      }
+    } catch (_) {
+      // Realtime sync is best effort; the local vehicle remains usable offline.
+    } finally {
+      forkliftSyncInFlight = false;
+    }
   };
   const forkliftPickMeshes = [];
   const routeMaterial = new THREE.LineBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, depthTest: false });
@@ -3378,6 +3402,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
+    forkliftSyncFrame += 1;
+    if (forkliftSyncFrame % 30 === 0) syncForkliftPosition();
+    if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
+      forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-8 * deltaSeconds));
+      if (remoteForkliftRotation != null) {
+        const remoteDelta = yawDifference(forkliftRoot.rotation.y, remoteForkliftRotation);
+        forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-8 * deltaSeconds));
+      }
+    }
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
       // Keep the forks at travel height until the chassis faces the rack.
       // Lifting during a turn made the pickup look unsafe and could leave its
