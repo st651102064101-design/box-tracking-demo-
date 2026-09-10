@@ -1328,7 +1328,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // warehouses, making those boxes appear to disappear from the left side.
     // Leave a full pallet bay plus forklift clearance between staging and the
     // rack edge so waiting cartons never intersect rack uprights or shelves.
-    const stagingSideOffset = Math.min(5.5, Math.max(3.8, stagingBounds.getSize(new THREE.Vector3()).x * 0.32));
+    const stagingSideOffset = Math.max(8, stagingBounds.getSize(new THREE.Vector3()).x * 0.5);
     const startX = stagingBounds.min.x - stagingSideOffset;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     stagingBoxes.forEach((box, index) => {
