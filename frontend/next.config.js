@@ -11,12 +11,6 @@ const nextConfig = {
         source: '/api/:path*',
         destination: `${BACKEND_URL}/api/:path*`,
       },
-      // A dedicated runtime URL prevents older browser/proxy caches from
-      // reusing a former loc3d.js response after a renderer deployment.
-      {
-        source: '/warehouse-3d-runtime.js',
-        destination: '/loc3d.js',
-      },
     ];
   },
   async headers() {

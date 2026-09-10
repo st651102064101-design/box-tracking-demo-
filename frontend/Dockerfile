@@ -26,6 +26,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
+# Serve the legacy 3D module under its own physical static filename. This
+# avoids proxy/rewrite transformations on large ES modules used by old tabs.
+RUN cp ./public/loc3d.js ./public/warehouse-3d-runtime.js
 COPY --from=build /app/next.config.js ./next.config.js
 EXPOSE 3000
 CMD ["npm", "run", "start"]
