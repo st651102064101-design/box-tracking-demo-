@@ -2244,12 +2244,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftCruiseSpeed = 100 / 3.6;
   const forkliftAcceleration = forkliftCruiseSpeed / 2;
   const forkliftBrakeDeceleration = 2.25;
-  // A loaded forklift cannot pivot on the spot or instantaneously point its
-  // wheels at the next grid cell.  Keep the yaw rate deliberately modest so
-  // left/right turns and U-turns read as a physical manoeuvre.
-  const forkliftTurnRate = THREE.MathUtils.degToRad(38);
-  const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(12);
+  // Steering is quick, but each update is time-limited so its heading changes
+  // continuously instead of jumping to the next grid segment.
+  const forkliftTurnRate = THREE.MathUtils.degToRad(120);
+  const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(5);
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
+  const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
   const savedForklift = model.forkliftPosition || null;
   const saveForkliftPosition = () => {
     if (!forkliftRoot || !model.warehouseId) return;
@@ -3195,7 +3195,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const rate = speedChange >= 0 ? forkliftAcceleration : forkliftBrakeDeceleration;
         forkliftMotion.currentSpeed += Math.sign(speedChange) * Math.min(Math.abs(speedChange), rate * deltaSeconds);
         const distanceTravelled = canDrive ? Math.min(remaining, forkliftMotion.currentSpeed * deltaSeconds) : 0;
-        forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
+        // A delayed frame still advances the route in centimetre-sized steps,
+        // keeping both position and direction changes numerically smooth.
+        let centimetresRemaining = distanceTravelled;
+        while (centimetresRemaining > 0) {
+          const step = Math.min(centimetresRemaining, forkliftPositionStep);
+          forkliftRoot.position.addScaledVector(movementDirection, step);
+          centimetresRemaining -= step;
+        }
         forkliftWheels.forEach(({ object, radius }) => {
           object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
         });
