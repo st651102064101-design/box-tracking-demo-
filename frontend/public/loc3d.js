@@ -4302,7 +4302,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // The mounted scene is updated optimistically below. The DB
             // trigger will echo this commit over SSE, but that echo must not
             // cause this same browser to remount the expensive GLB scene.
-            window.bt3dSuppressRefreshUntil = Date.now() + 2500;
+            // The truck still has to lower its forks and broadcast its parked
+            // position after the DB write. Keep the duplicate DB/SSE refresh
+            // suppressed for the whole tail of that operation; rebuilding a
+            // GLB scene here is the visible source of the "hang" after drop.
+            window.bt3dSuppressRefreshUntil = Date.now() + 15000;
             fetch(`/api/boxes/${encodeURIComponent(placedBoxId)}/putaway`, {
               method: 'POST',
               headers: requestHeaders({ 'Content-Type': 'application/json' }),
@@ -4337,7 +4341,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // other viewers; this local scene already reflects the placed
               // pallet and updated slot id.
             }).catch((error) => {
-              window.bt3dSuppressRefreshUntil = Date.now() + 250;
+              window.bt3dSuppressRefreshUntil = Date.now() + 500;
               window.toast?.('บันทึก Putaway ไม่สำเร็จ', error.message, 'err');
               // The visual placement is optimistic. A rejected/full slot must
               // restore the box to its actual DB position immediately.
