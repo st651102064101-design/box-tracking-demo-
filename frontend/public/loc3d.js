@@ -500,6 +500,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   settingsMenu.className = 'loc3d-settings-menu';
   settingsMenu.hidden = true;
   settingsMenu.innerHTML = '<button type="button" data-view="grid">ตารางพื้น</button><button type="button" data-view="walls">กำแพง</button><button type="button" data-view="roof">หลังคา</button>';
+  Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center' });
+  Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
+  unitGridButton.style.display = 'none';
   settingsButton.addEventListener('click', () => { settingsMenu.hidden = !settingsMenu.hidden; });
   settingsMenu.addEventListener('click', (event) => {
     const key = event.target.closest('button')?.dataset.view;
@@ -770,7 +773,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   window.addEventListener('keydown', onFullscreenShortcut, { passive: false });
   stage.appendChild(fullscreenButton);
   stage.appendChild(firstPersonButton);
-  stage.appendChild(unitGridButton);
   stage.appendChild(settingsButton);
   stage.appendChild(settingsMenu);
   stage.appendChild(soundButton);
