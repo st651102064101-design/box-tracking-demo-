@@ -2746,7 +2746,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       } else setPointerFromEvent(event);
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
-      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && (hoverIndex >= 0 || Boolean(hoverStagingBox));
+      // Clicking another rack slot while carrying a pallet is a new putaway
+      // destination, not a cancellation. Roll back only when the operator
+      // explicitly clicks a staging/Putaway box again.
+      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && Boolean(hoverStagingBox);
       if (rollbackRequested) {
         rollbackForkliftLoad();
         window.toast?.('ยกเลิก Putaway', 'รถจะนำกล่องกลับไปวางจุดเดิม', 'ok');
