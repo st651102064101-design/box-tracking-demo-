@@ -589,7 +589,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const p = object.getWorldPosition(new THREE.Vector3());
       const wall = Math.min(Math.abs(p.x - (center.x - halfWarehouseWidth)), Math.abs(p.x - (center.x + halfWarehouseWidth)), Math.abs(p.z - (center.z - halfWarehouseDepth)), Math.abs(p.z - (center.z + halfWarehouseDepth))) < 0.3;
       const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1) && (object.material === roofMaterial || object.material === trussMaterial || object.material === seamMaterial);
-      if ((kind === 'walls' && wall) || (kind === 'roof' && roof)) object.visible = !object.visible;
+      // Apply the persisted toggle state directly. Flipping `visible` here
+      // makes a second click unable to restore the layer after the all-off
+      // safeguard has temporarily hidden enclosure objects.
+      if (kind === 'walls' && wall) object.visible = wallsVisible;
+      if (kind === 'roof' && roof) object.visible = roofVisible;
     });
     syncViewToggleButtons();
   };
