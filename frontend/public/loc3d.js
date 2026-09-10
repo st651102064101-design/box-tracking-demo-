@@ -2265,6 +2265,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftMotion = null;
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
+  let forkliftRollback = null;
   // Travel specification: 300 km/h maximum, accelerating 0→100 km/h in 0.25 s.
   // Values stay in metres/second so the movement remains frame-rate independent.
   const forkliftCruiseSpeed = 300 / 3.6;
@@ -2536,6 +2537,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     missionBeacon.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.06);
     missionBeacon.visible = Boolean(pickupMesh);
   };
+  const rollbackForkliftLoad = () => {
+    if (!forkliftSelected || !forkliftRoot || !forkliftLoadAssembly || !forkliftRollback) return false;
+    forkliftDropTarget = null;
+    forkliftPutawayPhase = 'rollback';
+    forkliftLiftTarget = 0;
+    moveForkliftTo(forkliftRollback.position, null, true);
+    if (forkliftMotion) forkliftMotion.rollback = true;
+    return true;
+  };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
   const clearHoverFeedback = () => {
     if (hoverIndex >= 0 && slotMesh) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
@@ -2722,7 +2732,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       } else setPointerFromEvent(event);
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
-      if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
+      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && (hoverIndex >= 0 || Boolean(hoverStagingBox));
+      if (rollbackRequested) {
+        rollbackForkliftLoad();
+        window.toast?.('ยกเลิก Putaway', 'รถจะนำกล่องกลับไปวางจุดเดิม', 'ok');
+      } else if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
       else if (hoverStagingBox) {
         if (forkliftSelected && hoverStagingMesh) {
           if (forkliftLoadAssembly?.parent === forkliftRoot || forkliftMotion?.pickupMesh) {
@@ -3141,7 +3155,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftPutawayPhase = 'aligning';
           }
           const pickupMesh = forkliftMotion.pickupMesh;
-          if (pickupMesh && pickupMesh.parent) {
+          if (forkliftMotion.rollback && forkliftLoadAssembly) {
+            // Return the complete pallet assembly to its exact pre-pickup
+            // world position and release it from the forks.
+            scene.attach(forkliftLoadAssembly);
+            forkliftLoadAssembly.position.copy(forkliftRollback.position);
+            forkliftLoadAssembly.quaternion.copy(forkliftRollback.quaternion);
+            forkliftLoadAssembly = null;
+            forkliftRollback = null;
+            forkliftPutawayPhase = null;
+            window.toast?.('ยกเลิกคำสั่งแล้ว', 'นำกล่องกลับตำแหน่งเดิมเรียบร้อย', 'ok');
+          } else if (pickupMesh && pickupMesh.parent) {
             const pickupId = pickupMesh.userData.stagingBox?.id || pickupMesh.userData.stagingBoxId || '';
             // Keep each loaded pallet as one assembly.  Re-parenting every
             // mesh independently used to break the source pallet hierarchy
@@ -3160,7 +3184,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // re-parenting.  Starting at (0,0,0) leaves every child with a
               // world-sized offset, which is why a lifted box appeared at the
               // opposite end of the warehouse.
-              pickupMesh.getWorldPosition(loadAssembly.position);
+              const rollbackPosition = new THREE.Vector3();
+              pickupMesh.getWorldPosition(rollbackPosition);
+              forkliftRollback = { position: rollbackPosition, quaternion: new THREE.Quaternion() };
+              loadAssembly.position.copy(rollbackPosition);
               scene.add(loadAssembly);
               pickupRoots.forEach((object) => loadAssembly.attach(object));
               forkliftRoot.attach(loadAssembly);
