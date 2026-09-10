@@ -2448,6 +2448,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let remoteForkliftPosition = null;
   let remoteForkliftRotation = null;
   let remoteForkliftTarget = null;
+  let remoteForkliftLiftTarget = null;
+  let remoteForkliftMoving = false;
+  let remoteForkliftPreviousPosition = null;
   let forkliftLocalPositionHoldUntil = 0;
   let forkliftNextSyncAt = 0;
   let forkliftLastBroadcastAt = 0;
@@ -2461,7 +2464,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     fetch('/api/warehouse-3d/forklift', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify({ warehouseId: model.warehouseId, position: snapshot.position, rotationY: snapshot.rotationY, target: snapshot.target }),
+      body: JSON.stringify({ warehouseId: model.warehouseId, position: snapshot.position, rotationY: snapshot.rotationY, target: snapshot.target, liftHeight: snapshot.liftHeight, moving: snapshot.moving }),
     }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error))
       .finally(() => {
         forkliftBroadcastInFlight = false;
@@ -2482,6 +2485,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z },
       rotationY: forkliftRoot.rotation.y,
       target: forkliftMotion?.path?.at(-1) ? { x: forkliftMotion.path.at(-1).x, y: forkliftMotion.path.at(-1).y, z: forkliftMotion.path.at(-1).z } : null,
+      liftHeight: forkliftLiftHeight,
+      moving: Boolean(forkliftMotion),
     };
     const now = performance.now();
     if (!force && now - forkliftLastBroadcastAt < forkliftBroadcastIntervalMs) return;
@@ -2509,6 +2514,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const target = latest.forkliftPosition.target;
         remoteForkliftTarget = target && Number.isFinite(Number(target.x)) && Number.isFinite(Number(target.z))
           ? new THREE.Vector3(Number(target.x), Number(target.y) || warehouseFloorY + 0.045, Number(target.z)) : null;
+        remoteForkliftLiftTarget = Number.isFinite(Number(latest.forkliftPosition.liftHeight))
+          ? Math.max(0, Number(latest.forkliftPosition.liftHeight)) : null;
+        remoteForkliftMoving = latest.forkliftPosition.moving === true;
+        remoteForkliftPreviousPosition = remoteForkliftPosition.clone();
       }
     } catch (_) {
       // Realtime sync is best effort; the local vehicle remains usable offline.
@@ -3584,7 +3593,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       syncForkliftPosition();
     }
     if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
+      const beforeRemote = forkliftRoot.position.clone();
       forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-22 * deltaSeconds));
+      const remoteDistance = beforeRemote.distanceTo(forkliftRoot.position);
+      if (remoteDistance > 0.0001) forkliftWheels.forEach(({ object, radius }) => {
+        object.rotation.x += remoteDistance / Math.max(radius, 0.01);
+      });
       if (remoteForkliftRotation != null) {
         const remoteDelta = yawDifference(forkliftRoot.rotation.y, remoteForkliftRotation);
         forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-22 * deltaSeconds));
@@ -3597,6 +3611,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           remoteForkliftTarget.clone().setY(warehouseFloorY + 0.12),
         ]);
       }
+      if (remoteForkliftLiftTarget != null) forkliftLiftTarget = remoteForkliftLiftTarget;
+      if (forkliftSelection && !forkliftSelected) forkliftSelection.visible = remoteForkliftMoving || remoteDistance > 0.0001;
     }
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
       // Keep the forks at travel height until the chassis faces the rack.
