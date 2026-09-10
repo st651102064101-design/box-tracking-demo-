@@ -11,6 +11,12 @@ const nextConfig = {
         source: '/api/:path*',
         destination: `${BACKEND_URL}/api/:path*`,
       },
+      // A dedicated runtime URL prevents older browser/proxy caches from
+      // reusing a former loc3d.js response after a renderer deployment.
+      {
+        source: '/warehouse-3d-runtime.js',
+        destination: '/loc3d.js',
+      },
     ];
   },
   async headers() {
@@ -19,7 +25,7 @@ const nextConfig = {
     // a stale module parse error prevents the entire warehouse view from booting.
     return [
       {
-        source: '/loc3d.js',
+        source: '/:runtime(loc3d|warehouse-3d-runtime)\\.js',
         headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
       },
     ];
