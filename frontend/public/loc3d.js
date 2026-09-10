@@ -2356,18 +2356,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   missionBeacon.renderOrder = 16;
   missionBeacon.visible = false;
   scene.add(missionBeacon);
-  // A high, downward arrow makes the original Putaway waiting location
-  // readable even when a floor ring is hidden behind nearby pallets.
-  const putawayReturnMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false });
-  const putawayReturnMarker = new THREE.Group();
-  const putawayReturnShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.52, 16), putawayReturnMarkerMaterial);
-  putawayReturnShaft.position.y = 0.42;
-  const putawayReturnHead = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.44, 24), putawayReturnMarkerMaterial);
-  putawayReturnHead.rotation.x = Math.PI;
-  putawayReturnMarker.add(putawayReturnShaft, putawayReturnHead);
-  putawayReturnMarker.visible = false;
-  putawayReturnMarker.renderOrder = 17;
-  scene.add(putawayReturnMarker);
   // A short expanding ripple confirms a double-click immediately, similar to
   // a move-command marker in a game. It deliberately uses the clicked floor
   // coordinate; the smaller persistent ring then marks the safe NavMesh/grid
@@ -2454,7 +2442,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       targetMarker.visible = false;
       targetRipple.visible = false;
       missionBeacon.visible = false;
-      putawayReturnMarker.visible = false;
     }
   };
   const forkliftLiftControls = document.createElement('div');
@@ -2823,6 +2810,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         const rect = canvas.getBoundingClientRect();
         updatePointer({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
       } else setPointerFromEvent(event);
+      // Pointer-up can arrive before the throttled hover frame runs. Refresh
+      // hit state synchronously so a selected forklift always treats a box
+      // click as a pickup command instead of opening its drawer.
+      updatePointer(event);
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
       // Clicking another rack slot while carrying a pallet is a new putaway
@@ -3363,13 +3354,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               forkliftLoadAssembly = loadAssembly;
               missionBeacon.position.copy(rollbackPosition).setY(warehouseFloorY + 0.06);
               missionBeacon.visible = true;
-              putawayReturnMarker.position.set(
-                rollbackPosition.x,
-                rollbackPosition.y + pickupMesh.scale.y / 2 + 1,
-                rollbackPosition.z,
-              );
-              putawayReturnMarker.userData.baseY = putawayReturnMarker.position.y;
-              putawayReturnMarker.visible = true;
               // A rack pickup must visibly raise the carriage after the tines
               // take the box.  The staging pallet already sits at floor
               // level, while a rack box supplies its actual shelf height.
@@ -3443,7 +3427,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // Keep the source-location cues visible while its pallet is on the
           // forks, so the operator can always return it precisely.
           missionBeacon.visible = Boolean(forkliftLoadAssembly && forkliftRollback);
-          putawayReturnMarker.visible = Boolean(forkliftLoadAssembly && forkliftRollback);
         }
       } else {
         movementDirection.normalize();
@@ -3523,10 +3506,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const pulse = 1 + Math.sin(frameNow * 0.011) * 0.18;
       missionBeacon.scale.setScalar(pulse);
       missionBeaconMaterial.opacity = 0.55 + Math.sin(frameNow * 0.011) * 0.28;
-    }
-    if (putawayReturnMarker.visible) {
-      putawayReturnMarker.position.y = (putawayReturnMarker.userData.baseY || putawayReturnMarker.position.y) + Math.sin(frameNow * 0.008) * 0.1;
-      putawayReturnMarkerMaterial.opacity = 0.72 + Math.sin(frameNow * 0.008) * 0.24;
     }
     if (targetRipple.visible) {
       const elapsed = Math.min(1, (frameNow - targetRippleStartedAt) / 720);
