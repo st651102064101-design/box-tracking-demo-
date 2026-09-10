@@ -395,6 +395,29 @@ export async function replaceState(
       existingRacks,
       existingSlots,
     );
+    // Racks/slots have a foreign-key dependency on warehouses.  A legacy
+    // browser can send a snapshot where the warehouse master is missing (for
+    // example after an interrupted first import) while locations still
+    // contain WH-001 rack rows.  Upserting racks first then makes the whole
+    // transaction fail with racks_warehouse_id_fkey and leaves the UI with no
+    // usable data.  Ensure every referenced warehouse exists before geometry.
+    const warehouseRows = new Map<string, Record<string, unknown>>();
+    Object.entries(s.warehouses ?? {}).forEach(([id, raw]) => {
+      warehouseRows.set(id, { id, ...(raw as Record<string, unknown>) });
+    });
+    geometry.rackRows.forEach((rack) => {
+      const id = String(rack.warehouseId ?? '').trim();
+      if (id && !warehouseRows.has(id)) warehouseRows.set(id, { id, name: id, gates: [], gateTypes: {}, data: { name: id } });
+    });
+    await syncKeyed(tx, warehouses, 'id', Array.from(warehouseRows.values()).map((w) => ({
+      id: w.id,
+      name: (w.name as string) ?? null,
+      gateType: (w.gateType as string) ?? null,
+      gates: (w.gates as unknown[]) ?? [],
+      gateTypes: (w.gateTypes as object) ?? {},
+      data: (w.data as object) ?? w,
+      updatedAt: new Date(),
+    })));
     await syncKeyed(tx, racks, 'id', geometry.rackRows);
     await syncKeyed(tx, slots, 'id', geometry.slotRows);
 
