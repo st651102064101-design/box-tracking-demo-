@@ -3891,7 +3891,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         // Brake completely for a sharp change of direction, then creep only
         // after the chassis is nearly aligned.  This prevents sideways drift
         // through a corner while preserving a smooth, realistic turn.
-        const canDrive = yawError <= forkliftDriveYawTolerance;
+        // When carrying a pallet into putaway, keep translating while turning.
+        // The operational simulation intentionally permits the chassis/load
+        // to pass through the rack envelope instead of appearing stuck on a
+        // collision-like alignment pause.
+        const carryingForPutaway = Boolean(forkliftLoadAssembly && forkliftPutawayPhase);
+        const canDrive = carryingForPutaway || yawError <= forkliftDriveYawTolerance;
         const desiredSpeed = canDrive ? Math.min(forkliftMotion.cruiseSpeed, brakingSpeed) : 0;
         const speedChange = desiredSpeed - forkliftMotion.currentSpeed;
         const rate = speedChange >= 0 ? forkliftAcceleration : forkliftBrakeDeceleration;
