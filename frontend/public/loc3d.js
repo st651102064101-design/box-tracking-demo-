@@ -3489,8 +3489,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (rollbackRequested) {
         rollbackForkliftLoad();
         window.toast?.('ยกเลิก Putaway', 'รถจะนำกล่องกลับไปวางจุดเดิม', 'ok');
-      } else if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
-      else if (hoverStagingBox) {
+      // When the truck is already selected, an inventory hit has priority
+      // over the truck's own meshes. Their collision volumes overlap near the
+      // forks, so checking the vehicle first incorrectly reports "รถว่าง"
+      // instead of starting the pickup route for the clicked pallet.
+      } else if (hoverStagingBox) {
         if (forkliftSelected && hoverStagingMesh) {
           if (forkliftLoadAssembly?.parent === forkliftRoot || forkliftMotion?.pickupMesh) {
             window.toast?.('รถยกมีพาเรทอยู่แล้ว', 'ต้องนำพาเรทปัจจุบันไปวางก่อน จึงรับกล่องถัดไปได้', 'warn');
@@ -3643,6 +3646,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           onBoxSelect?.(entry.box.id);
         }
       }
+      else if (isForkliftHit()) setForkliftSelected(!forkliftSelected);
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
         // An empty selected forklift is in vehicle-operation mode, not
