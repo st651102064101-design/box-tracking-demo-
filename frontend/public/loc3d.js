@@ -525,6 +525,30 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       : '<i class="loc3d-reticle"></i><div class="loc3d-first-person-help"><b>โหมดคนเดิน</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> เดิน · <kbd>Shift</kbd> วิ่ง · <kbd>Ctrl</kbd> ย่อ · <kbd>Space</kbd> กระโดด · เมาส์มอง · คลิกซ้ายโต้ตอบ · <kbd>Esc</kbd> ออก</span></div>';
   };
   updateFirstPersonCopy();
+  // Touch devices do not have WASD or pointer-lock. Provide an always
+  // available four-way pad while first-person mode is active.
+  const mobileWalkControls = document.createElement('div');
+  mobileWalkControls.className = 'loc3d-mobile-walk-controls';
+  mobileWalkControls.style.cssText = 'position:absolute;left:14px;bottom:14px;z-index:6;display:none;pointer-events:auto;touch-action:none';
+  mobileWalkControls.innerHTML = '<button type="button" data-walk="KeyW" aria-label="เดินหน้า">▲</button><div><button type="button" data-walk="KeyA" aria-label="เดินซ้าย">◀</button><button type="button" data-walk="KeyS" aria-label="ถอยหลัง">▼</button><button type="button" data-walk="KeyD" aria-label="เดินขวา">▶</button></div>';
+  mobileWalkControls.querySelectorAll('button').forEach((button) => { button.style.cssText = 'width:42px;height:38px;padding:0;border:1px solid rgba(168,249,49,.55);border-radius:9px;background:rgba(8,12,10,.86);color:#dfffaf;font:800 18px/1 sans-serif;touch-action:none'; });
+  mobileWalkControls.firstElementChild.style.display = 'block';
+  mobileWalkControls.firstElementChild.style.margin = '0 auto 3px';
+  mobileWalkControls.lastElementChild.style.display = 'flex';
+  mobileWalkControls.lastElementChild.style.gap = '3px';
+  mobileWalkControls.querySelectorAll('[data-walk]').forEach((button) => {
+    const code = button.dataset.walk;
+    const stop = () => walkKeys.delete(code);
+    button.addEventListener('pointerdown', (event) => {
+      walkKeys.add(code);
+      button.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    button.addEventListener('pointerup', stop);
+    button.addEventListener('pointercancel', stop);
+    button.addEventListener('lostpointercapture', stop);
+  });
+  firstPersonOverlay.appendChild(mobileWalkControls);
   let firstPerson = false;
   // Browser autoplay policies require audio graph creation during a real user
   // gesture. The button below supplies that gesture; motion merely controls it.
@@ -608,6 +632,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     walkHeadBobOffset = 0;
     stage.classList.remove('loc3d-first-person-active');
     firstPersonOverlay.classList.remove('show');
+    mobileWalkControls.style.display = 'none';
     setViewPref('firstPerson', false);
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
   };
@@ -625,6 +650,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     camera.position.y = warehouseFloorY + walkEyeHeight;
     stage.classList.add('loc3d-first-person-active');
     firstPersonOverlay.classList.add('show');
+    mobileWalkControls.style.display = matchMedia('(pointer: coarse)').matches ? 'block' : 'none';
     setViewPref('firstPerson', true);
     canvas.requestPointerLock?.();
     window.toast?.('โหมดคนเดิน · WASD เดิน, Shift วิ่ง, Space กระโดด, เมาส์มอง, Esc ออก', '', 'ok');
@@ -2755,7 +2781,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         // Give immediate feedback on the first click of a double-click. The
         // second click still owns the actual move command below.
         const floorHit = raycaster.intersectObject(floor, false)[0];
-        if (floorHit) showTargetRipple(floorHit.point);
+        if (floorHit) {
+          showTargetRipple(floorHit.point);
+          // In first-person mode the reticle is the click target. A single
+          // tap/click on the floor therefore issues the same drive command as
+          // the overview double-click, without requiring pointer lock.
+          if (firstPerson) moveForkliftTo(floorHit.point);
+        }
       }
     }
     down = null;
@@ -2794,9 +2826,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
   const onDoubleClick = (event) => {
-    if (firstPerson) return;
     if (!forkliftSelected || !forkliftRoot) return;
-    setPointerFromEvent(event);
+    if (firstPerson && document.pointerLockElement === canvas) setPointerAtReticle();
+    else setPointerFromEvent(event);
     const hit = raycaster.intersectObject(floor, false)[0];
     if (hit) moveForkliftTo(hit.point);
   };
@@ -3378,6 +3410,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     assets,
     setLanguage() {
       updateFirstPersonCopy();
+      firstPersonOverlay.appendChild(mobileWalkControls);
+      mobileWalkControls.style.display = firstPerson && matchMedia('(pointer: coarse)').matches ? 'block' : 'none';
     },
     dispose() {
       disposed = true;
