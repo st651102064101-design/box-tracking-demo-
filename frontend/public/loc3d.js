@@ -2753,7 +2753,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           }
           // A forklift operator is issuing a physical pickup command here;
           // opening the generic box drawer would interrupt that workflow.
+          // Stop on the accessible side of the staging pallet.  Targeting
+          // the pallet centre makes A* snap to an arbitrary free cell around
+          // its collision box (often behind the rack), especially when the
+          // pallet itself is treated as an obstacle.
           const palletPoint = hoverStagingMesh.position.clone();
+          const palletSide = forkliftRoot.position.clone().sub(palletPoint).setY(0);
+          if (palletSide.lengthSq() < 1e-6) palletSide.set(0, 0, 1);
+          palletSide.normalize();
+          const palletHalfDepth = Math.max(0.45, hoverStagingMesh.scale.z * 0.5);
+          palletPoint.addScaledVector(palletSide, palletHalfDepth + forkliftClearance);
           palletPoint.y = warehouseFloorY + 0.025;
           // Putaway pickup uses one direct guide from the truck to the pallet,
           // so the intended approach direction is always unambiguous.
