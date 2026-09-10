@@ -896,7 +896,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   document.addEventListener('fullscreenchange', syncFullscreenPortals);
   syncFullscreenPortals();
   const releasePointerForModal = () => {
-    if (firstPerson && document.pointerLockElement === canvas) {
+    // Mouse-look is only active while the explicit first-person overlay is
+    // shown. A stale pointer-lock/firstPerson flag after forklift pickup must
+    // never turn ordinary orbit-mode mouse movement into camera rotation.
+    if (firstPerson && firstPersonOverlay.classList.contains('show') && document.pointerLockElement === canvas) {
       resumeFirstPersonAfterModal = true;
       document.exitPointerLock?.();
     }
@@ -1162,7 +1165,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     slotMesh.computeBoundingSphere();
     scene.add(slotMesh);
   }
-  let unitGridVisible = Boolean(getViewPref('unitGrid', false));
+  // Preferences may arrive from the API as strings ("true"/"false").
+  // Boolean("false") is true, which previously made the toggle look enabled
+  // after refresh while the grid itself remained hidden by the restored state.
+  const storedGridPref = getViewPref('unitGrid', false);
+  let unitGridVisible = storedGridPref === true || storedGridPref === 1 || storedGridPref === '1' || storedGridPref === 'true';
   const toggleUnitGrid = () => {
     unitGridVisible = !unitGridVisible;
     grid.visible = unitGridVisible;
