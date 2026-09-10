@@ -2305,6 +2305,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   grid.position.set(center.x, floor.position.y + 0.012, center.z);
   grid.material.transparent = true;
   grid.material.opacity = 0.11;
+  // Keep the floor grid visible above the opaque floor surface. A tiny Y
+  // offset alone is not reliable with depth precision at large warehouse
+  // dimensions, especially after a camera refresh.
+  grid.renderOrder = 20;
+  grid.material.depthTest = false;
+  grid.material.depthWrite = false;
   grid.visible = false;
   scene.add(grid);
   // Restore the account's saved Unit switch only after the Three.js helper
@@ -3191,15 +3197,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
       else if (hoverDockDoorIndex >= 0) toggleDockDoor(hoverDockDoorIndex);
       else if (forkliftSelected) {
-        // Give immediate feedback on the first click of a double-click. The
-        // second click still owns the actual move command below.
+        // A single click on the floor is the forklift drive command. Keep the
+        // same raycast for overview and first-person modes so operators do
+        // not need to double-click (which could also issue duplicate routes).
         const floorHit = raycaster.intersectObject(floor, false)[0];
         if (floorHit) {
           showTargetRipple(floorHit.point);
-          // In first-person mode the reticle is the click target. A single
-          // tap/click on the floor therefore issues the same drive command as
-          // the overview double-click, without requiring pointer lock.
-          if (firstPerson) moveForkliftTo(floorHit.point);
+          moveForkliftTo(floorHit.point);
         }
       }
     }
@@ -3249,14 +3253,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
   canvas.addEventListener('pointerout', onPointerOut, { passive: true });
   window.addEventListener('pointermove', onWindowPointerMove, { passive: true });
-  const onDoubleClick = (event) => {
-    if (!forkliftSelected || !forkliftRoot) return;
-    if (firstPerson && document.pointerLockElement === canvas) setPointerAtReticle();
-    else setPointerFromEvent(event);
-    const hit = raycaster.intersectObject(floor, false)[0];
-    if (hit) moveForkliftTo(hit.point);
-  };
-  canvas.addEventListener('dblclick', onDoubleClick);
 
   const resize = () => {
     const width = Math.max(320, stage.clientWidth);
@@ -3964,7 +3960,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('pointerout', onPointerOut);
       window.removeEventListener('pointermove', onWindowPointerMove);
-      canvas.removeEventListener('dblclick', onDoubleClick);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       fullscreenButton.removeEventListener('click', toggleFullscreen);
       fullscreenButton.remove();
