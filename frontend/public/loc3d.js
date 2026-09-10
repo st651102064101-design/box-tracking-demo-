@@ -4032,3 +4032,4 @@ window.btLangChanged = (language) => {
   previousLanguageHook?.(language);
   activeController?.setLanguage?.(language);
 };
+}
