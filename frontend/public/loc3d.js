@@ -1323,7 +1323,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // that front clearance is a forklift travel lane.  The side wall margin
     // is intentionally wide enough for a pallet bay plus a safe approach.
     // Keep the staging lane clear of the forklift's full turning envelope.
-    const startX = stagingBounds.min.x - 8.5;
+    // Keep inbound pallets close to the rack block.  The old 8.5 m offset put
+    // the whole left staging row outside the useful camera/frustum on compact
+    // warehouses, making those boxes appear to disappear from the left side.
+    const stagingSideOffset = Math.min(3.2, Math.max(1.6, stagingBounds.getSize(new THREE.Vector3()).x * 0.22));
+    const startX = stagingBounds.min.x - stagingSideOffset;
     const startZ = stagingCenter.z - ((Math.ceil(stagingBoxes.length / columns) - 1) * spacingZ) / 2;
     stagingBoxes.forEach((box, index) => {
       const x = startX + (index % columns) * spacingX;
@@ -2640,7 +2644,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const forkliftLiftControls = document.createElement('div');
   forkliftLiftControls.className = 'loc3d-forklift-lift';
-  forkliftLiftControls.innerHTML = '<button type="button" data-lift="down" aria-label="ลดงา">−</button><span>ระดับงา</span><button type="button" data-lift="up" aria-label="ยกงา">+</button>';
+  forkliftLiftControls.innerHTML = '<span>ระดับงา</span><input type="range" min="0" max="1" step="0.001" value="0" aria-label="ระดับงา" />';
   stage.appendChild(forkliftLiftControls);
   const changeForkliftLift = (direction) => {
     if (!forkliftSelected || !forkliftCarriageForks) return;
@@ -2649,6 +2653,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + direction * 0.01, 0, forkliftLiftMax);
   };
   const onForkliftLiftPointerDown = (event) => {
+    if (event.target instanceof HTMLInputElement) return;
     const direction = event.target.closest('button')?.dataset.lift;
     if (!direction) return;
     const amount = direction === 'up' ? 1 : -1;
@@ -2657,6 +2662,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     event.target.closest('button')?.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   };
+  const liftSlider = forkliftLiftControls.querySelector('input');
+  liftSlider.addEventListener('input', () => {
+    forkliftLiftTarget = Number(liftSlider.value) * forkliftLiftMax;
+  });
   const stopForkliftLiftInput = () => { forkliftLiftInput = 0; };
   const onForkliftLiftKey = (event) => {
     if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
@@ -3559,7 +3568,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // and show selection as a pulsing ring at the wheels instead of a box.
     forkliftSelection = new THREE.Mesh(
       new THREE.RingGeometry(0.72, 0.9, 64),
-      new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.9, depthWrite: false, depthTest: true, side: THREE.DoubleSide }),
+      // The selection effect is a HUD-like feedback layer.  Depth testing it
+      // against the floor/rack caused it to vanish or flicker from oblique
+      // left-side views, so keep it visible without writing depth.
+      new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: THREE.DoubleSide }),
     );
     forkliftSelection.rotation.x = -Math.PI / 2;
     forkliftSelection.userData.baseScale = Math.max(scaledSize.x, scaledSize.z) * 0.5;
