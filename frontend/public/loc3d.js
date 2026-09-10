@@ -2627,7 +2627,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(forkliftRoot.position).add(new THREE.Vector3(0, 2.5, 0));
-      labelObject.visible = true;
+      labelObject.visible = !(forkliftSelected && !isReturnSlot);
       canvas.style.cursor = 'pointer';
     } else if (hoverStagingBox) {
       labelElement.textContent = `รอ Putaway · ${hoverStagingBox.id} · คลิกเพื่อเลือก`;
@@ -2683,7 +2683,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const hiddenOccupied = state === 'occupied' && !showOccupiedSlots;
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       const isReturnSlot = Boolean(forkliftReturnTarget && String(entry.slot.id) === String(forkliftReturnTarget.slot.id));
-      labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+      if (forkliftSelected && !isReturnSlot) {
+        labelObject.visible = false;
+      } else {
+        labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+      }
       labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
       // Keep the slot-status label inside the bay instead of floating above its beam.
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, 0.05, 0));
