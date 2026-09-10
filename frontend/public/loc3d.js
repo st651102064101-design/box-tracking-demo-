@@ -2244,6 +2244,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftCruiseSpeed = 24 / 3.6;
   const forkliftAcceleration = 1.35;
   const forkliftBrakeDeceleration = 2.25;
+  // A loaded forklift cannot pivot on the spot or instantaneously point its
+  // wheels at the next grid cell. Keep the yaw rate deliberately modest so
+  // left/right turns and U-turns read as a physical manoeuvre.
+  const forkliftTurnRate = THREE.MathUtils.degToRad(38);
+  const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(12);
+  const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const savedForklift = model.forkliftPosition || null;
   const saveForkliftPosition = () => {
     if (!forkliftRoot || !model.warehouseId) return;
@@ -2463,7 +2469,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       (total, point, index) => total + point.distanceTo(path[index]), 0,
     );
     const targetYaw = Math.atan2(target.x - forkliftRoot.position.x, target.z - forkliftRoot.position.z);
-    forkliftRoot.rotation.y = targetYaw;
+    // Do not snap to the first segment.  The animation loop turns the vehicle
+    // before it moves, including when the requested route is behind it.
     forkliftMotion = { path, index: 1, currentSpeed: 0, cruiseSpeed: forkliftCruiseSpeed, pickupMesh, straightGuide, targetYaw };
     ensureForkliftAudio();
     setForkliftAudioMoving(true);
@@ -3018,15 +3025,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let lastFpsAt = performance.now();
   let lastAnimateAt = performance.now();
   const movementDirection = new THREE.Vector3();
-  const movementQuaternion = new THREE.Quaternion();
-  const movementEuler = new THREE.Euler(0, 0, 0, 'YXZ');
   const walkForward = new THREE.Vector3();
   const walkRight = new THREE.Vector3();
   const walkCandidate = new THREE.Vector3();
+  const yawDifference = (from, to) => THREE.MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
+  const turnForkliftTowards = (targetYaw, deltaSeconds) => {
+    const difference = yawDifference(forkliftRoot.rotation.y, targetYaw);
+    const step = Math.sign(difference) * Math.min(Math.abs(difference), forkliftTurnRate * deltaSeconds);
+    forkliftRoot.rotation.y += step;
+    return Math.abs(difference - step);
+  };
   const animate = () => {
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
+    if (forkliftPutawayPhase === 'aligning' && forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
+      // At the rack, complete the final square-up at the same limited steering
+      // rate.  This avoids the visible instant 90/180-degree turn before lift.
+      const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
+      const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
+      if (turnForkliftTowards(Math.atan2(dx, dz), deltaSeconds) <= forkliftStopYawTolerance) {
+        forkliftLiftTarget = THREE.MathUtils.clamp(
+          forkliftDropTarget.position.y - forkliftCarriageBaseY - forkliftRoot.position.y,
+          0,
+          forkliftLiftMax,
+        );
+        forkliftPutawayPhase = 'lifting';
+      }
+    }
     if (forkliftPutawayPhase === 'lifting' && forkliftDropTarget && forkliftLoadAssembly && !forkliftMotion) {
       // Shelf 1 can sit below the physical lowest fork centre. In that case
       // the clamped target is 0, so wait for the lift actuator to finish at
@@ -3053,18 +3079,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         if (forkliftMotion.index >= forkliftMotion.path.length) {
           saveForkliftPosition();
           if (forkliftDropTarget && forkliftPutawayPhase === 'travel') {
-            // Square the truck to the rack face before any lift/putaway step.
-            const dx = forkliftDropTarget.position.x - forkliftRoot.position.x;
-            const dz = forkliftDropTarget.position.z - forkliftRoot.position.z;
-            // The forklift's loaded pallet sits on local +Z, so point +Z at
-            // the slot from the aisle approach point.
-            forkliftRoot.rotation.y = Math.atan2(dx, dz);
-            forkliftLiftTarget = THREE.MathUtils.clamp(
-              forkliftDropTarget.position.y - forkliftCarriageBaseY - forkliftRoot.position.y,
-              0,
-              forkliftLiftMax,
-            );
-            forkliftPutawayPhase = 'lifting';
+            // Finish steering into the rack face before lifting; the actual
+            // rotation happens over subsequent frames rather than snapping.
+            forkliftPutawayPhase = 'aligning';
           }
           const pickupMesh = forkliftMotion.pickupMesh;
           if (pickupMesh && pickupMesh.parent) {
@@ -3161,24 +3178,27 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       } else {
         movementDirection.normalize();
+        const segmentYaw = Math.atan2(movementDirection.x, movementDirection.z);
+        const yawError = turnForkliftTowards(segmentYaw, deltaSeconds);
         // Calculate the entire distance still to travel, rather than only the
         // current grid segment.  v² = 2as gives the largest safe speed that
         // can brake to zero exactly at the final target.
         const routeRemaining = forkliftMotion.path.slice(forkliftMotion.index + 1)
           .reduce((total, point, index) => total + point.distanceTo(forkliftMotion.path[forkliftMotion.index + index]), remaining);
         const brakingSpeed = Math.sqrt(2 * forkliftBrakeDeceleration * routeRemaining);
-        const desiredSpeed = Math.min(forkliftMotion.cruiseSpeed, brakingSpeed);
+        // Brake completely for a sharp change of direction, then creep only
+        // after the chassis is nearly aligned.  This prevents sideways drift
+        // through a corner while preserving a smooth, realistic turn.
+        const canDrive = yawError <= forkliftDriveYawTolerance;
+        const desiredSpeed = canDrive ? Math.min(forkliftMotion.cruiseSpeed, brakingSpeed) : 0;
         const speedChange = desiredSpeed - forkliftMotion.currentSpeed;
         const rate = speedChange >= 0 ? forkliftAcceleration : forkliftBrakeDeceleration;
         forkliftMotion.currentSpeed += Math.sign(speedChange) * Math.min(Math.abs(speedChange), rate * deltaSeconds);
-        const distanceTravelled = Math.min(remaining, forkliftMotion.currentSpeed * deltaSeconds);
+        const distanceTravelled = canDrive ? Math.min(remaining, forkliftMotion.currentSpeed * deltaSeconds) : 0;
         forkliftRoot.position.addScaledVector(movementDirection, distanceTravelled);
         forkliftWheels.forEach(({ object, radius }) => {
           object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
         });
-        movementEuler.set(0, Math.atan2(movementDirection.x, movementDirection.z), 0);
-        movementQuaternion.setFromEuler(movementEuler);
-        forkliftRoot.quaternion.slerp(movementQuaternion, 1 - Math.exp(-8 * deltaSeconds));
       }
       if (forkliftSelection?.visible) forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     }
