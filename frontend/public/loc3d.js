@@ -2320,8 +2320,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const routeLine = new THREE.Line(new THREE.BufferGeometry(), routeMaterial);
   routeLine.renderOrder = 14;
   routeLine.visible = false;
-  // Keep the route geometry for navigation/debugging, but do not render the
-  // GPS-style line in the warehouse view.
+  scene.add(routeLine);
   const targetMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xa8ff2b, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthTest: false });
   const targetMarker = new THREE.Mesh(
     new THREE.RingGeometry(0.28, 0.42, 32),
@@ -2561,7 +2560,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       ? [forkliftRoot.position.clone(), path[path.length - 1].clone()]
       : path;
     routeLine.geometry = new THREE.BufferGeometry().setFromPoints(guidePoints.map((p) => p.clone().setY(warehouseFloorY + 0.045)));
-    routeLine.visible = false;
+    routeLine.visible = true;
     targetMarker.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.055);
     targetMarker.visible = true;
     missionBeacon.position.copy(path[path.length - 1]).setY(warehouseFloorY + 0.06);
@@ -3389,6 +3388,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           forkliftRoot.position.addScaledVector(movementDirection, step);
           centimetresRemaining -= step;
         }
+        // Trim the GPS line behind the forklift so only the remaining route
+        // ahead of the forks stays visible.
+        const liveRoute = [forkliftRoot.position.clone()]
+          .concat(forkliftMotion.path.slice(forkliftMotion.index).map((point) => point.clone()));
+        routeLine.geometry.dispose();
+        routeLine.geometry = new THREE.BufferGeometry().setFromPoints(
+          liveRoute.map((point) => point.setY(warehouseFloorY + 0.045)),
+        );
         forkliftWheels.forEach(({ object, radius }) => {
           object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
         });
