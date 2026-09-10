@@ -2434,12 +2434,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Realistic warehouse-forklift travel: roughly 12 km/h unloaded.  Acceleration
   // and braking are deliberately gentle so a load does not lurch on the forks.
   // Values stay in metres/second so movement remains frame-rate independent.
-  const forkliftCruiseSpeed = 12 / 3.6;
-  const forkliftAcceleration = forkliftCruiseSpeed / 4;
-  const forkliftBrakeDeceleration = forkliftCruiseSpeed / 2.5;
+   const forkliftCruiseSpeed = (12 / 3.6) * 4;
+   const forkliftAcceleration = forkliftCruiseSpeed / 4;
+   const forkliftBrakeDeceleration = forkliftCruiseSpeed / 2.5;
   // A real counterbalance forklift turns progressively (it does not spin in
   // place).  Limit the chassis steering rate so a 180° turn takes about 1.5 s.
-  const forkliftTurnRate = THREE.MathUtils.degToRad(120);
+   const forkliftTurnRate = THREE.MathUtils.degToRad(480);
   const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(8);
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
@@ -2984,7 +2984,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const onPointerMove = (event) => {
     if (ctrlDragBlocked || event.ctrlKey) return;
-    if (firstPerson && document.pointerLockElement === canvas) {
+    if (firstPerson && firstPersonOverlay.classList.contains('show') && document.pointerLockElement === canvas) {
       camera.rotation.y -= event.movementX * 0.0022;
       camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x - event.movementY * 0.0022, -1.38, 1.38);
       setPointerAtReticle();
@@ -3247,6 +3247,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const rect = canvas.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onPointerLeave();
   };
+  // OrbitControls can retain its ROTATE state when an autonomous rack-pickup
+  // starts during pointerup. Guard it in the capture phase: an ordinary hover
+  // (buttons === 0) must never rotate the camera, while a real held-button
+  // drag continues to work normally. Wheel/pointerdown re-enable controls
+  // before OrbitControls receives those events.
+  const guardIdleOrbitMove = (event) => {
+    if (!firstPerson) controls.enabled = event.buttons !== 0;
+  };
+  const enableOrbitGesture = () => {
+    if (!firstPerson) controls.enabled = true;
+  };
+  canvas.addEventListener('pointermove', guardIdleOrbitMove, { capture: true, passive: true });
+  canvas.addEventListener('pointerdown', enableOrbitGesture, { capture: true, passive: true });
+  canvas.addEventListener('pointerup', enableOrbitGesture, { capture: true, passive: true });
+  canvas.addEventListener('pointercancel', enableOrbitGesture, { capture: true, passive: true });
+  canvas.addEventListener('wheel', enableOrbitGesture, { capture: true, passive: true });
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
@@ -3795,11 +3811,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (forkliftLiftInput) {
         // 3 m/s is quick enough for a held press while every rendered frame
         // still changes the target in sub-centimetre increments.
-        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 3 * deltaSeconds, 0, forkliftLiftMax);
+        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 12 * deltaSeconds, 0, forkliftLiftMax);
       }
       // Putaway lift/lower motion is intentionally slower so the forks and
       // pallet visibly align with the rack shelf instead of snapping.
-      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 4.5, deltaSeconds);
+      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 18, deltaSeconds);
       forkliftCarriageForks.position.x = forkliftCarriageBaseX;
       forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
       // This is the original tall steel stage from the GLB (its exported name
@@ -3955,6 +3971,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       resizeObserver.disconnect();
       if (pointerFrame) cancelAnimationFrame(pointerFrame);
       canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointermove', guardIdleOrbitMove, { capture: true });
+      canvas.removeEventListener('pointerdown', enableOrbitGesture, { capture: true });
+      canvas.removeEventListener('pointerup', enableOrbitGesture, { capture: true });
+      canvas.removeEventListener('pointercancel', enableOrbitGesture, { capture: true });
+      canvas.removeEventListener('wheel', enableOrbitGesture, { capture: true });
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);

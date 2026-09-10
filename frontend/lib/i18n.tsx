@@ -190,14 +190,21 @@ export function useI18n() {
 export function LanguageToggle() {
   const { locale, setLocale, t } = useI18n();
   return (
-    <div className="inline-flex rounded-full border border-black/10 bg-white/85 p-1 text-xs font-semibold shadow-sm backdrop-blur" aria-label={t('language.switch')}>
+    <div className="inline-flex rounded-full border border-black/15 bg-white/90 p-1 text-xs font-semibold shadow-sm backdrop-blur" aria-label={t('language.switch')}>
       {(['th', 'en'] as Locale[]).map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => setLocale(option)}
           aria-pressed={locale === option}
-          className={`rounded-full px-3 py-1.5 transition ${option === 'en' ? 'text-ink hover:text-ink' : locale === option ? 'bg-ink text-white' : 'text-ink-2 hover:text-ink'}`}
+          style={{
+            color: locale === option ? '#ffffff' : '#111111',
+            backgroundColor: locale === option ? '#1677ff' : 'transparent',
+            fontWeight: 700,
+          }}
+          className={`rounded-full px-3 py-1.5 transition-colors ${locale === option
+            ? 'bg-[#1677ff] text-white shadow-sm'
+            : 'text-black hover:bg-black/5'}`}
         >
           {t(`language.${option}` as TranslationKey)}
         </button>

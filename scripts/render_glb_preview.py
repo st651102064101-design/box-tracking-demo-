@@ -13,6 +13,18 @@ bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 bpy.ops.import_scene.gltf(filepath=str(source))
 
+# Optional diagnostic: rotate only the extracted source wheels by 90 degrees.
+if "--rotate-wheels" in sys.argv:
+    from mathutils import Quaternion
+    import math
+    wheels = [obj for obj in bpy.context.scene.objects if obj.name in
+              {"Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"}]
+    assert len(wheels) == 4
+    for wheel in wheels:
+        wheel.rotation_mode = "QUATERNION"
+        wheel.rotation_quaternion = wheel.rotation_quaternion @ Quaternion((1, 0, 0), math.pi / 2)
+    bpy.context.view_layer.update()
+
 meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
 corners = [obj.matrix_world @ Vector(corner) for obj in meshes for corner in obj.bound_box]
 minimum = Vector((min(p.x for p in corners), min(p.y for p in corners), min(p.z for p in corners)))
