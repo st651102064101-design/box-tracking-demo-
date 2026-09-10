@@ -3499,6 +3499,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (frameNow >= forkliftNextSyncAt) {
       forkliftNextSyncAt = frameNow + forkliftBroadcastIntervalMs;
       syncForkliftPosition();
+    }
     if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
       forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-14 * deltaSeconds));
       if (remoteForkliftRotation != null) {
@@ -4032,4 +4033,3 @@ window.btLangChanged = (language) => {
   previousLanguageHook?.(language);
   activeController?.setLanguage?.(language);
 };
-}
