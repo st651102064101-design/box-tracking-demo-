@@ -18,6 +18,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
+# Produce a legacy-browser compatible module while dev tooling is available.
+RUN ./node_modules/.bin/esbuild ./public/loc3d.js --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
@@ -32,7 +34,7 @@ COPY --from=build /app/node_modules/three/build ./public/vendor/three/build
 COPY --from=build /app/node_modules/three/examples/jsm ./public/vendor/three/examples/jsm
 # Serve a browser-compatible physical runtime. Transpiling the large module
 # removes syntax that older Edge webviews occasionally mis-parse as EOF.
-RUN ./node_modules/.bin/esbuild ./public/loc3d.js --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
+COPY --from=build /app/public/warehouse-3d-runtime.js ./public/warehouse-3d-runtime.js
 COPY --from=build /app/next.config.js ./next.config.js
 EXPOSE 3000
 CMD ["npm", "run", "start"]
