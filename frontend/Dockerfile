@@ -19,7 +19,7 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 # Produce a legacy-browser compatible module while dev tooling is available.
-RUN ./node_modules/.bin/esbuild ./public/loc3d.js --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
+RUN ./node_modules/.bin/esbuild ./public/loc3d.js --bundle --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
