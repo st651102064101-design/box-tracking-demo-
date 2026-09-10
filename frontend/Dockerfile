@@ -18,6 +18,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
+# Fail the image build if a directly referenced 3D model is missing.
+RUN node -e "const fs=require('fs'); const src=fs.readFileSync('public/loc3d.js','utf8'); for(const m of src.matchAll(/assets\.load\('([^']+\.glb)'/g)) fs.accessSync('public'+m[1]);"
 # Produce a legacy-browser compatible module while dev tooling is available.
 RUN ./node_modules/.bin/esbuild ./public/loc3d.js --target=chrome100 --format=esm --outfile=./public/warehouse-3d-runtime.js
 

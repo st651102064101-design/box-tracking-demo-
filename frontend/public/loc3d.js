@@ -32,6 +32,12 @@ const positive = (value, fallback) => num(value, fallback) > 0 ? num(value, fall
 const token = () => {
   try { return localStorage.getItem('smarttrace_jwt') || ''; } catch (_) { return ''; }
 };
+const clientId = () => String(window.BT_CLIENT_ID || '').trim();
+const requestHeaders = (extra = {}) => ({
+  ...extra,
+  Authorization: `Bearer ${token()}`,
+  ...(clientId() ? { 'X-Client-Id': clientId() } : {}),
+});
 
 function rackId(wh, zone, rack) {
   return `${wh}::${zone || ''}::${rack}`;
@@ -100,7 +106,7 @@ async function loadModel(locations, occupancy) {
   if (!warehouseId) return legacyModel(locations, occupancy);
   try {
     const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(warehouseId)}`, {
-      headers: { Authorization: `Bearer ${token()}` },
+      headers: requestHeaders(),
       cache: 'no-store',
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -320,6 +326,8 @@ function rendererName(renderer) {
 
 async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate) {
   const stage = canvas.parentElement;
+  const reportLoading = text => { const element = stage.querySelector('.loc3d-loading'); if (element) element.textContent = text; };
+  reportLoading('กำลังเริ่มระบบแสดงผล 3D…');
   // Prevent long-press text selection/copy handles on touch devices inside the
   // interactive 3D block while leaving normal camera gestures available.
   stage.style.userSelect = 'none';
@@ -462,11 +470,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   hud.className = 'loc3d-hud';
   hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span>${model.stats?.stagingBoxes ? `<span class="warn">รอ Putaway ${model.stats.stagingBoxes} กล่อง</span>` : ''}<span class="loc3d-perf">กำลังวัด FPS…</span>`;
   stage.appendChild(hud);
+  const hudToastZone = document.createElement('div');
+  hudToastZone.className = 'loc3d-hover-toast-zone';
+  hudToastZone.setAttribute('aria-live', 'polite');
+  stage.appendChild(hudToastZone);
+  let lastHudHelp = '';
+  let lastHudHelpAt = 0;
+  const showHudHelpToast = (title, help) => {
+    const now = performance.now();
+    // Pointer jitter on a badge must not create a pile of identical toasts.
+    if (lastHudHelp === help && now - lastHudHelpAt < 1200) return;
+    lastHudHelp = help;
+    lastHudHelpAt = now;
+    const toast = document.createElement('div');
+    toast.className = 'toast info';
+    toast.innerHTML = `<div class="ti">i</div><div class="toast-copy"><div>${title}</div><div class="sub">${help}</div></div>`;
+    hudToastZone.appendChild(toast);
+    while (hudToastZone.children.length > 4) hudToastZone.firstElementChild?.remove();
+    window.setTimeout(() => {
+      toast.classList.add('out');
+      window.setTimeout(() => toast.remove(), 420);
+    }, 5200);
+  };
   const hudHelp = ['ตารางพื้น 1 ช่อง เท่ากับ 1 × 1 เมตร', 'ตัวเรนเดอร์กราฟิกที่เบราว์เซอร์กำลังใช้งาน', 'จำนวนแร็ค ช่องเก็บ และกล่องจากฐานข้อมูล', 'จำนวนกล่องที่รอรถยกนำไป Putaway', 'FPS และจำนวน draw calls ต่อเฟรม'];
   [...hud.querySelectorAll('span')].forEach((badge, index) => {
     const help = hudHelp[index] || '';
-    badge.title = help;
-    badge.addEventListener('mouseenter', () => { if (help) window.toast?.(help, '', 'ok'); });
+    // Do not use `title`: browsers render it as a native tooltip/alert.
+    badge.removeAttribute('title');
+    badge.addEventListener('mouseenter', () => { if (help) showHudHelpToast(badge.textContent || 'ข้อมูลมุมมอง 3D', help); });
   });
 
   // Keep the scene controls inside the 3D stage, so fullscreen expands only
@@ -503,7 +534,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     + '<button type="button" data-view="walls" aria-label="กำแพง" title="กำแพง"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4h16v16M4 9h16M4 14h16M9 4v5M15 4v5M7 9v5M13 9v5M19 9v5M9 14v6M15 14v6"/></svg></button>'
     + '<button type="button" data-view="roof" aria-label="หลังคา" title="หลังคา"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-7 9 7M5 10v10h14V10M3 20h18M9 20v-6h6v6"/></svg></button>';
   Object.assign(settingsButton.style, { position: 'absolute', right: '14px', top: '14px', zIndex: '6', width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.12)', borderRadius: '11px', background: 'rgba(12,14,16,.92)', color: '#fff', boxShadow: '0 7px 20px rgba(0,0,0,.35)', cursor: 'pointer' });
-  Object.assign(settingsMenu.style, { position: 'absolute', right: '14px', top: '62px', zIndex: '6' });
+  // The primary controls form a vertical rail at the upper-right. Open the
+  // settings palette to its left so it never covers the walk/fullscreen
+  // buttons below the gear.
+  Object.assign(settingsMenu.style, { position: 'absolute', right: '64px', top: '14px', zIndex: '6' });
   // View toggles use the same compact button treatment as the settings
   // control, instead of appearing as bare text links.
   settingsMenu.querySelectorAll('button').forEach((button) => Object.assign(button.style, {
@@ -577,6 +611,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // Restore every enclosure detail hidden by the all-off safeguard. This
     // includes lights, sprinkler pipes and other authored fixtures that do
     // not match the roof material test on their own.
+    const belongsTo = (root, object) => {
+      if (!root) return false;
+      let current = object;
+      while (current) {
+        if (current === root) return true;
+        current = current.parent;
+      }
+      return false;
+    };
     scene.traverse((object) => {
       if (object.userData?.boundaryForcedHidden) {
         object.visible = true;
@@ -588,8 +631,29 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     scene.traverse((object) => {
       if (!object.isMesh && !object.isLine) return;
       const p = object.getWorldPosition(new THREE.Vector3());
-      const wall = Math.min(Math.abs(p.x - (center.x - halfWarehouseWidth)), Math.abs(p.x - (center.x + halfWarehouseWidth)), Math.abs(p.z - (center.z - halfWarehouseDepth)), Math.abs(p.z - (center.z + halfWarehouseDepth))) < 0.3;
-      const roof = p.y > (warehouseFloorY + warehouseWallHeight - 0.1) && (object.material === roofMaterial || object.material === trussMaterial || object.material === seamMaterial);
+      const core = object === floor
+        || belongsTo(forkliftRoot, object)
+        || rackPickMeshes.includes(object)
+        || stagingBoxPickMeshes.includes(object)
+        || object === slotMesh
+        || object === boxMesh
+        || object.userData?.rack
+        || object.userData?.rackByInstance
+        || object.userData?.slotByInstance
+        || object.userData?.slotId
+        || object.userData?.stagingBoxId;
+      // Include the full enclosure band, not only meshes whose material is
+      // the wall material. This captures doors, fire exits, frames, lights,
+      // pipes and other fixtures mounted on all four walls.
+      const perimeterDistance = Math.min(
+        Math.abs(p.x - (center.x - halfWarehouseWidth)),
+        Math.abs(p.x - (center.x + halfWarehouseWidth)),
+        Math.abs(p.z - (center.z - halfWarehouseDepth)),
+        Math.abs(p.z - (center.z + halfWarehouseDepth)),
+      );
+      const wall = !core && perimeterDistance < 1.0 && p.y < (warehouseFloorY + warehouseWallHeight + 0.2);
+      const roof = !core && p.y > (warehouseFloorY + warehouseWallHeight - 0.1)
+        && (object.material === roofMaterial || object.material === trussMaterial || object.material === seamMaterial || perimeterDistance < 1.0);
       // Apply the persisted toggle state directly. Flipping `visible` here
       // makes a second click unable to restore the layer after the all-off
       // safeguard has temporarily hidden enclosure objects.
@@ -600,13 +664,35 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('loc3d-toggle-walls', () => toggleBoundaryDetail('walls'));
   window.addEventListener('loc3d-toggle-roof', () => toggleBoundaryDetail('roof'));
-  // UI preferences are per account and backed by /api/ui-prefs.  Keep the
-  // warehouse id in the key so a choice in one warehouse never changes another.
+  // These controls describe the shared operational twin, not a person's
+  // private layout. Persist them by warehouse and receive their own SSE delta
+  // so another screen changes in-place without fetching state or remounting.
+  const sharedViewSettingNames = new Set(['unitGrid', 'loc3dWallsVisible', 'loc3dRoofVisible', 'forkliftAudio']);
+  let sharedViewSettings = {};
+  let applySharedViewSettings = () => {};
+  const onSharedViewSettings = (event) => {
+    const detail = event?.detail;
+    if (!detail || detail.warehouseId !== model.warehouseId || !detail.settings) return;
+    applySharedViewSettings(detail.settings);
+  };
+  window.addEventListener('loc3d-shared-settings', onSharedViewSettings);
   const viewPrefKey = (name) => `warehouse3d:${model.warehouseId || 'default'}:${name}`;
   const getViewPref = (name, fallback) => {
+    if (sharedViewSettingNames.has(name) && Object.prototype.hasOwnProperty.call(sharedViewSettings, name)) return sharedViewSettings[name];
     try { return window.uiPrefGet?.(viewPrefKey(name), fallback) ?? fallback; } catch { return fallback; }
   };
   const setViewPref = (name, value) => {
+    if (sharedViewSettingNames.has(name)) {
+      sharedViewSettings[name] = value;
+      try {
+        fetch(`/api/warehouse-3d/settings/${encodeURIComponent(model.warehouseId || 'default')}`, {
+          method: 'PUT', keepalive: true,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+          body: JSON.stringify({ [name]: value }),
+        }).catch(() => undefined);
+      } catch { /* the local visual change remains usable while offline */ }
+      return;
+    }
     const key = viewPrefKey(name);
     try { window.uiPrefSet?.(key, value); } catch { /* preference sync is optional offline */ }
     // Send 3D toggles immediately as well as through the legacy debounced
@@ -868,10 +954,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(firstPersonButton);
   stage.appendChild(settingsButton);
   stage.appendChild(settingsMenu);
-  // Keep the view controls anchored as one compact stack in the true lower
-  // right corner. The shortcut hint already sits immediately to their left.
-  fullscreenButton.style.bottom = '14px';
-  firstPersonButton.style.bottom = '66px';
+  // Keep every scene button in one upper-right vertical rail: settings,
+  // walk, then fullscreen. This keeps the active controls out of the view's
+  // lower-right sightline and gives touch users one predictable target area.
+  fullscreenButton.style.top = '118px';
+  fullscreenButton.style.bottom = 'auto';
+  firstPersonButton.style.top = '66px';
+  firstPersonButton.style.bottom = 'auto';
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
@@ -1136,9 +1225,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 
   const occupiedSlotIds = new Set((model.boxes || []).map((box) => String(box.slotId)));
   const putawaySlotCounts = new Map();
-  const slotBoxCount = (slotId) => (model.boxes || []).filter((box) => String(box.slotId) === String(slotId)).length;
   const slotState = (entry) => entry.slot.status === 'full'
-    ? (slotBoxCount(entry.slot.id) >= 2 ? 'full' : 'occupied')
+    ? 'full'
     : occupiedSlotIds.has(String(entry.slot.id)) ? 'occupied' : 'empty';
   let showOccupiedSlots = true;
   const slotColor = (entry, revealOccupied = showOccupiedSlots) => {
@@ -1170,23 +1258,47 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // after refresh while the grid itself remained hidden by the restored state.
   const storedGridPref = getViewPref('unitGrid', false);
   let unitGridVisible = storedGridPref === true || storedGridPref === 1 || storedGridPref === '1' || storedGridPref === 'true';
-  const toggleUnitGrid = () => {
-    unitGridVisible = !unitGridVisible;
+  const applyUnitGridVisible = (visible) => {
+    unitGridVisible = Boolean(visible);
     grid.visible = unitGridVisible;
     grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
     unitGridButton.classList.toggle('active', unitGridVisible);
     unitGridButton.setAttribute('aria-pressed', String(unitGridVisible));
-    setViewPref('unitGrid', unitGridVisible);
-    settingsMenu.querySelector('button[data-view="grid"]')?.classList.toggle('active', unitGridVisible);
     const gridToggle = settingsMenu.querySelector('button[data-view="grid"]');
     if (gridToggle) {
+      gridToggle.classList.toggle('active', unitGridVisible);
       gridToggle.style.background = unitGridVisible ? 'rgba(126,240,30,.22)' : 'rgba(12,14,16,.92)';
       gridToggle.style.borderColor = unitGridVisible ? 'rgba(126,240,30,.72)' : 'rgba(255,255,255,.12)';
       gridToggle.style.color = unitGridVisible ? '#b8ff73' : '#fff';
     }
+  };
+  const toggleUnitGrid = () => {
+    applyUnitGridVisible(!unitGridVisible);
+    setViewPref('unitGrid', unitGridVisible);
     window.toast?.(unitGridVisible ? 'แสดงตารางพื้น 1 เมตรแล้ว' : 'ซ่อนตารางพื้นแล้ว', '', 'ok');
   };
   unitGridButton.addEventListener('click', toggleUnitGrid);
+  applySharedViewSettings = (settings) => {
+    const next = settings && typeof settings === 'object' ? settings : {};
+    sharedViewSettings = { ...sharedViewSettings, ...next };
+    if (Object.prototype.hasOwnProperty.call(next, 'unitGrid')) applyUnitGridVisible(next.unitGrid);
+    if (Object.prototype.hasOwnProperty.call(next, 'loc3dWallsVisible')) toggleBoundaryDetail('walls', false);
+    if (Object.prototype.hasOwnProperty.call(next, 'loc3dRoofVisible')) toggleBoundaryDetail('roof', false);
+    if (Object.prototype.hasOwnProperty.call(next, 'forkliftAudio')) {
+      forkliftAudioEnabled = Boolean(next.forkliftAudio);
+      syncSoundButton();
+      setForkliftAudioMoving(Boolean(forkliftMotion));
+    }
+  };
+  // Load once per scene. Subsequent changes arrive as SSE deltas, so this
+  // request never forces the heavy location/state refresh path.
+  try {
+    fetch(`/api/warehouse-3d/settings/${encodeURIComponent(model.warehouseId || 'default')}`, {
+      headers: { Authorization: `Bearer ${token()}` },
+    }).then((response) => response.ok ? response.json() : null).then((payload) => {
+      if (payload?.settings) applySharedViewSettings(payload.settings);
+    }).catch(() => undefined);
+  } catch { /* offline uses the last per-user fallback until reconnect */ }
 
   const slotById = new Map(slotEntries.map((entry) => [entry.slot.id, entry]));
   const labelTextures = [];
@@ -1246,6 +1358,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // appearance consistent regardless of the metadata/material type returned
   // by the API (lighting and shadows may still add natural variation).
   const canonicalBoxColor = new THREE.Color(materialColors.carton);
+  const boxStatusColor = (box, oversized = false) => {
+    if (oversized) return new THREE.Color(0xff3bd4);
+    if (box.status === 'damage') return new THREE.Color(0xe5484d);
+    if (box.status === 'hold') return new THREE.Color(0x8f67d8);
+    return canonicalBoxColor.clone();
+  };
   const canonicalMaterialType = (box) => {
     const raw = `${box.materialType || ''} ${box.boxTypeName || ''}`.toLowerCase();
     if (/เหล็ก|โลหะ|steel|metal/.test(raw)) return 'metal_box';
@@ -1274,9 +1392,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const spread = boxesInSlot.length > 1
       ? Math.min(width * 1.25, Math.max(0, (slotEntry.scale.x - width) / Math.max(1, boxesInSlot.length - 1)))
       : 0;
-    const lateralOffsetCm = boxesInSlot.length === 1
-      ? -Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
-      : (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
+    const explicitSide = box.slotSide === 'right' ? 1 : box.slotSide === 'left' ? -1 : 0;
+    const lateralOffsetCm = explicitSide
+      ? explicitSide * Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
+      : boxesInSlot.length === 1
+        ? -Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
+        : (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
     const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
     const position = worldPoint(
       slotEntry.rack,
@@ -1291,7 +1412,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       position,
       quaternion: slotEntry.quaternion,
       scale: new THREE.Vector3(width, height, depth),
-      color: oversized ? new THREE.Color(0xff3bd4) : canonicalBoxColor.clone(),
+      color: boxStatusColor(box, oversized),
     }];
   });
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.69, metalness: 0.04 });
@@ -2435,6 +2556,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
   let forkliftReturnTarget = null;
+  // Preserve the exact pallet-side position when a rack box is picked up.
+  let forkliftReturnPosition = null;
+  let hoverSlotPoint = null;
+  let lastEmptyForkliftToastAt = 0;
   let forkliftRollback = null;
   let rackPickupCameraLocked = false;
   // Realistic warehouse-forklift travel: roughly 12 km/h unloaded.  Acceleration
@@ -2449,14 +2574,88 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const forkliftDriveYawTolerance = THREE.MathUtils.degToRad(8);
   const forkliftStopYawTolerance = THREE.MathUtils.degToRad(2);
   const forkliftPositionStep = 0.01; // Integrate travel in 1 cm increments.
+  const forkliftLayoutRevision = (() => {
+    const source = (model.racks || []).map((rack) => [
+      rack.id, rack.zone, rack.code,
+      rack.dimensionsCm?.width, rack.dimensionsCm?.height, rack.dimensionsCm?.depth,
+    ].join(':')).sort().join('|');
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${model.warehouseId || 'warehouse'}:${(model.racks || []).length}:${(hash >>> 0).toString(36)}`;
+  })();
   const savedForklift = model.forkliftPosition || null;
+  let remoteCargoBoxId = savedForklift?.cargoBoxId || null;
+  let renderedRemoteCargoId = null;
+  let remoteCargoAssembly = null;
+  const hiddenCargoObjects = new Map();
+  const syncRemoteCargo = () => {
+    if (!forkliftRoot || forkliftSelected || forkliftMotion || renderedRemoteCargoId === remoteCargoBoxId) return;
+    hiddenCargoObjects.forEach((visible, object) => { object.visible = visible; });
+    hiddenCargoObjects.clear();
+    if (remoteCargoAssembly) {
+      remoteCargoAssembly.removeFromParent();
+      remoteCargoAssembly.traverse(object => object.material?.dispose?.());
+      if (forkliftLoadAssembly === remoteCargoAssembly) forkliftLoadAssembly = null;
+      remoteCargoAssembly = null;
+    }
+    if (boxMesh) {
+      boxEntries.forEach((entry, index) => {
+        if (String(entry.box.id) === String(renderedRemoteCargoId)) boxMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
+      });
+      boxMesh.instanceMatrix.needsUpdate = true;
+    }
+    renderedRemoteCargoId = remoteCargoBoxId;
+    if (!remoteCargoBoxId) {
+      forkliftReturnTarget = null;
+      forkliftReturnPosition = null;
+      forkliftRollback = null;
+      return;
+    }
+    const entry = [...boxEntries, ...stagingEntries].find(item => String(item.box.id) === String(remoteCargoBoxId));
+    if (!entry) { renderedRemoteCargoId = null; return; }
+    scene.traverse(object => {
+      if (String(object.userData?.stagingBoxId || '') !== String(remoteCargoBoxId)) return;
+      hiddenCargoObjects.set(object, object.visible);
+      object.visible = false;
+    });
+    const index = boxEntries.indexOf(entry);
+    if (boxMesh && index >= 0) {
+      boxMesh.setMatrixAt(index, new THREE.Matrix4().makeScale(0, 0, 0));
+      boxMesh.instanceMatrix.needsUpdate = true;
+    }
+    const assembly = new THREE.Group();
+    assembly.userData.stagingBoxId = remoteCargoBoxId;
+    const carton = new THREE.Mesh(UNIT_BOX, new THREE.MeshStandardMaterial({color: entry.color, roughness: 0.78}));
+    carton.scale.copy(entry.scale);
+    carton.castShadow = carton.receiveShadow = true;
+    assembly.add(carton);
+    const pallet = new THREE.Mesh(UNIT_BOX, new THREE.MeshStandardMaterial({color: 0xa47a46, roughness: 0.9}));
+    pallet.scale.set(Math.max(entry.scale.x, 0.9), 0.12, Math.max(entry.scale.z, 0.8));
+    pallet.position.y = -entry.scale.y / 2 - 0.06;
+    assembly.add(pallet);
+    forkliftRoot.add(assembly);
+    forkliftLoadAssembly = remoteCargoAssembly = assembly;
+    forkliftReturnTarget = entry.slotEntry || null;
+    forkliftReturnPosition = entry.slotEntry ? entry.position.clone() : null;
+    forkliftRollback = {position: entry.position.clone(), quaternion: entry.quaternion.clone(), isStagingPickup: !entry.slotEntry};
+  };
   let forkliftSyncInFlight = false;
+  let forkliftControllerActive = Boolean(model.forkliftController?.active);
+  let forkliftControlOwned = Boolean(model.forkliftController?.isOwner);
+  let forkliftClaimInFlight = null;
+  let forkliftReleaseAfterBroadcast = false;
+  let forkliftNextLeaseRenewAt = 0;
+  let onForkliftControlLost = () => {};
   let remoteForkliftPosition = null;
   let remoteForkliftRotation = null;
   let remoteForkliftTarget = null;
   let remoteForkliftLiftTarget = null;
   let remoteForkliftMoving = false;
   let remoteForkliftPreviousPosition = null;
+  let remoteForkliftUpdatedAt = 0;
   let forkliftLocalPositionHoldUntil = 0;
   let forkliftNextSyncAt = 0;
   let forkliftLastBroadcastAt = 0;
@@ -2465,23 +2664,125 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Broadcast frequently enough that spectator views receive smooth motion;
   // the in-flight/pending queue still coalesces requests under load.
   const forkliftBroadcastIntervalMs = 50;
+  const forkliftPollIntervalMs = 3000;
+  const forkliftLeaseRenewIntervalMs = 4000;
+  const forkliftParkingPosition = () => {
+    const minX = center.x - halfWarehouseWidth + forkliftClearance;
+    const maxX = center.x + halfWarehouseWidth - forkliftClearance;
+    const minZ = center.z - halfWarehouseDepth + forkliftClearance;
+    const maxZ = center.z + halfWarehouseDepth - forkliftClearance;
+    const parkingZ = THREE.MathUtils.clamp(
+      center.z + Math.min(1.2, rackBoundaryDepth * 0.1),
+      minZ,
+      maxZ,
+    );
+    const rackSideX = bounds.max.x + forkliftClearance + 0.65;
+    return new THREE.Vector3(
+      // A shared fallback must depend on the layout, never a viewer's camera.
+      THREE.MathUtils.clamp(rackSideX, minX, maxX),
+      warehouseFloorY + 0.012,
+      parkingZ,
+    );
+  };
+  const resolveForkliftPosition = (position) => {
+    const x = Number(position?.x);
+    const y = Number(position?.y);
+    const z = Number(position?.z);
+    const candidate = new THREE.Vector3(
+      x,
+      Number.isFinite(y) ? y : warehouseFloorY + 0.012,
+      z,
+    );
+    const minX = center.x - halfWarehouseWidth + forkliftClearance;
+    const maxX = center.x + halfWarehouseWidth - forkliftClearance;
+    const minZ = center.z - halfWarehouseDepth + forkliftClearance;
+    const maxZ = center.z + halfWarehouseDepth - forkliftClearance;
+    const outsideWarehouse = !Number.isFinite(x) || !Number.isFinite(z)
+      || x < minX || x > maxX || z < minZ || z > maxZ;
+    const insideRack = !outsideWarehouse && rackEntries.some(({ collisionBox }) => {
+      if (!collisionBox) return false;
+      return collisionBox.clone().expandByScalar(forkliftClearance).containsPoint(candidate);
+    });
+    return outsideWarehouse || insideRack
+      ? { position: forkliftParkingPosition(), relocated: true }
+      : { position: candidate, relocated: false };
+  };
+  const claimForkliftControl = (quiet = false) => {
+    if (!model.warehouseId) return Promise.resolve(false);
+    if (forkliftClaimInFlight) return forkliftClaimInFlight;
+    forkliftClaimInFlight = fetch('/api/warehouse-3d/forklift/control/claim', {
+      method: 'POST',
+      headers: requestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ warehouseId: model.warehouseId }),
+    }).then(async (response) => {
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        forkliftControllerActive = response.status === 409 || Boolean(body?.forkliftController?.active);
+        if (quiet && response.status === 409) {
+          forkliftControlOwned = false;
+          onForkliftControlLost();
+        }
+        if (!quiet) window.toast?.(
+          response.status === 409 ? 'รถ Forklift กำลังถูกใช้งาน' : 'เลือกรถ Forklift ไม่สำเร็จ',
+          body?.message || 'กรุณาลองใหม่อีกครั้ง',
+          response.status === 409 ? 'warn' : 'err',
+        );
+        return false;
+      }
+      forkliftControllerActive = true;
+      forkliftControlOwned = true;
+      forkliftNextLeaseRenewAt = performance.now() + forkliftLeaseRenewIntervalMs;
+      return true;
+    }).catch((error) => {
+      if (!quiet) window.toast?.('เชื่อมต่อรถ Forklift ไม่สำเร็จ', error.message, 'err');
+      return false;
+    }).finally(() => { forkliftClaimInFlight = null; });
+    return forkliftClaimInFlight;
+  };
+  const releaseForkliftControl = () => {
+    if (!model.warehouseId || !forkliftControlOwned) return Promise.resolve();
+    forkliftControlOwned = false;
+    forkliftControllerActive = false;
+    forkliftNextLeaseRenewAt = 0;
+    return fetch('/api/warehouse-3d/forklift/control/release', {
+      method: 'POST',
+      keepalive: true,
+      headers: requestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ warehouseId: model.warehouseId }),
+    }).catch(() => undefined);
+  };
   const persistForkliftPosition = (snapshot) => {
     forkliftBroadcastInFlight = true;
-    fetch('/api/warehouse-3d/forklift', {
+    return fetch('/api/warehouse-3d/forklift', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify({ warehouseId: model.warehouseId, position: snapshot.position, rotationY: snapshot.rotationY, target: snapshot.target, liftHeight: snapshot.liftHeight, moving: snapshot.moving }),
+      headers: requestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ warehouseId: model.warehouseId, ...snapshot }),
+    }).then(async (response) => {
+      if (response.ok) return;
+      const body = await response.json().catch(() => ({}));
+      if (response.status === 409) {
+        forkliftControlOwned = false;
+        forkliftControllerActive = true;
+        forkliftPendingBroadcast = null;
+        forkliftReleaseAfterBroadcast = false;
+        onForkliftControlLost();
+      }
+      throw new Error(body?.message || `HTTP ${response.status}`);
     }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error))
       .finally(() => {
         forkliftBroadcastInFlight = false;
-        if (!forkliftPendingBroadcast) return;
-        const pending = forkliftPendingBroadcast;
-        forkliftPendingBroadcast = null;
-        persistForkliftPosition(pending);
+        if (forkliftPendingBroadcast) {
+          const pending = forkliftPendingBroadcast;
+          forkliftPendingBroadcast = null;
+          persistForkliftPosition(pending);
+        } else if (forkliftReleaseAfterBroadcast) {
+          forkliftReleaseAfterBroadcast = false;
+          releaseForkliftControl();
+        }
       });
   };
   const saveForkliftPosition = (force = false) => {
-    if (!forkliftRoot || !model.warehouseId) return;
+    if (!forkliftRoot || !model.warehouseId || !forkliftControlOwned) return;
     // Do not let a previously fetched remote position pull the local truck
     // away from a just-completed route while the PUT request is in flight.
     remoteForkliftPosition = forkliftRoot.position.clone();
@@ -2492,7 +2793,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       rotationY: forkliftRoot.rotation.y,
       target: forkliftMotion?.path?.at(-1) ? { x: forkliftMotion.path.at(-1).x, y: forkliftMotion.path.at(-1).y, z: forkliftMotion.path.at(-1).z } : null,
       liftHeight: forkliftLiftHeight,
+      cargoBoxId: forkliftLoadAssembly?.userData.stagingBoxId || null,
       moving: Boolean(forkliftMotion),
+      layoutRevision: forkliftLayoutRevision,
     };
     const now = performance.now();
     if (!force && now - forkliftLastBroadcastAt < forkliftBroadcastIntervalMs) return;
@@ -2503,28 +2806,48 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     }
     persistForkliftPosition(snapshot);
   };
+  const applyRemoteForkliftState = (snapshot) => {
+    if (!snapshot?.position) return;
+    const updatedAt = Date.parse(String(snapshot.updatedAt || '')) || Date.now();
+    if (updatedAt < remoteForkliftUpdatedAt) return;
+    remoteForkliftUpdatedAt = updatedAt;
+    const layoutMatches = snapshot.layoutRevision === forkliftLayoutRevision;
+    remoteForkliftPosition = layoutMatches
+      ? resolveForkliftPosition(snapshot.position).position
+      : forkliftParkingPosition();
+    remoteForkliftRotation = Number.isFinite(Number(snapshot.rotationY)) ? Number(snapshot.rotationY) : null;
+    const target = snapshot.target;
+    const resolvedTarget = layoutMatches && target ? resolveForkliftPosition(target) : null;
+    remoteForkliftTarget = resolvedTarget && !resolvedTarget.relocated
+      ? resolvedTarget.position.clone().setY(Number(target.y) || warehouseFloorY + 0.045)
+      : null;
+    remoteForkliftLiftTarget = Number.isFinite(Number(snapshot.liftHeight))
+      ? Math.max(0, Number(snapshot.liftHeight)) : null;
+    remoteForkliftMoving = snapshot.moving === true;
+    remoteCargoBoxId = snapshot.cargoBoxId || null;
+    remoteForkliftPreviousPosition = remoteForkliftPosition.clone();
+  };
+  const onRemoteForkliftState = (event) => {
+    const detail = event.detail;
+    if (!detail || String(detail.warehouseId) !== String(model.warehouseId)) return;
+    if (detail.origin && detail.origin === clientId()) return;
+    forkliftControllerActive = true;
+    if (!forkliftSelected) applyRemoteForkliftState(detail);
+  };
+  window.addEventListener('loc3d-forklift-state', onRemoteForkliftState);
   const syncForkliftPosition = async () => {
-    if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion) return;
+    if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion || forkliftSelected) return;
     forkliftSyncInFlight = true;
     try {
       const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, {
-        headers: { Authorization: `Bearer ${token()}` },
+        headers: requestHeaders(),
+        cache: 'no-store',
       });
       if (!response.ok) return;
       const latest = await response.json();
-      const position = latest?.forkliftPosition?.position;
       if (forkliftMotion || performance.now() < forkliftLocalPositionHoldUntil) return;
-      if (position && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.z))) {
-        remoteForkliftPosition = new THREE.Vector3(Number(position.x), Number(position.y) || warehouseFloorY + 0.012, Number(position.z));
-        remoteForkliftRotation = Number.isFinite(Number(latest.forkliftPosition.rotationY)) ? Number(latest.forkliftPosition.rotationY) : null;
-        const target = latest.forkliftPosition.target;
-        remoteForkliftTarget = target && Number.isFinite(Number(target.x)) && Number.isFinite(Number(target.z))
-          ? new THREE.Vector3(Number(target.x), Number(target.y) || warehouseFloorY + 0.045, Number(target.z)) : null;
-        remoteForkliftLiftTarget = Number.isFinite(Number(latest.forkliftPosition.liftHeight))
-          ? Math.max(0, Number(latest.forkliftPosition.liftHeight)) : null;
-        remoteForkliftMoving = latest.forkliftPosition.moving === true;
-        remoteForkliftPreviousPosition = remoteForkliftPosition.clone();
-      }
+      forkliftControllerActive = Boolean(latest?.forkliftController?.active);
+      applyRemoteForkliftState(latest?.forkliftPosition);
     } catch (_) {
       // Realtime sync is best effort; the local vehicle remains usable offline.
     } finally {
@@ -2628,8 +2951,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     raycaster.setFromCamera(pointer, camera);
   };
   const isForkliftHit = () => forkliftPickMeshes.length > 0 && raycaster.intersectObjects(forkliftPickMeshes, false).length > 0;
-  const setForkliftSelected = (selected) => {
-    forkliftSelected = Boolean(selected && forkliftRoot);
+  const setForkliftSelected = async (selected, { release = true } = {}) => {
+    const wantsControl = Boolean(selected && forkliftRoot);
+    if (wantsControl && !forkliftSelected) {
+      const claimed = await claimForkliftControl(false);
+      if (!claimed) return false;
+    }
+    const wasOwned = forkliftControlOwned;
+    forkliftSelected = wantsControl;
     if (forkliftSelected) labelObject.visible = false;
     if (forkliftSelected) hideRackAction();
     if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
@@ -2645,12 +2974,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       remoteForkliftMoving = false;
       remoteForkliftTarget = null;
       if (forkliftSelection) forkliftSelection.visible = false;
-      if (forkliftRoot && model.warehouseId) saveForkliftPosition(true);
+      if (forkliftRoot && model.warehouseId && wasOwned && release) {
+        saveForkliftPosition(true);
+        forkliftReleaseAfterBroadcast = true;
+        if (!forkliftBroadcastInFlight) {
+          forkliftReleaseAfterBroadcast = false;
+          releaseForkliftControl();
+        }
+      }
       routeLine.visible = false;
       targetMarker.visible = false;
       targetRipple.visible = false;
       missionBeacon.visible = false;
     }
+    return forkliftSelected;
+  };
+  onForkliftControlLost = () => {
+    setForkliftSelected(false, { release: false });
+    window.toast?.('สิทธิ์ควบคุมรถถูกย้ายแล้ว', 'อุปกรณ์นี้เปลี่ยนเป็นโหมดผู้ชม', 'warn');
   };
   const forkliftLiftControls = document.createElement('div');
   forkliftLiftControls.className = 'loc3d-forklift-lift';
@@ -2828,6 +3169,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     return true;
   };
   const baseColor = (index) => slotEntries[index] ? slotColor(slotEntries[index]) : EMPTY_COLOR;
+  const slotLocalX = (entry, worldPosition) => worldPosition.clone()
+    .sub(entry.position)
+    .applyQuaternion(entry.quaternion.clone().invert()).x;
+  const slotSideAt = (entry, worldPosition) => {
+    if (!worldPosition) return 0;
+    const deadZone = entry.scale.x * 0.12;
+    const localX = slotLocalX(entry, worldPosition);
+    return localX < -deadZone ? -1 : localX > deadZone ? 1 : 0;
+  };
+  const slotSidePosition = (entry, side, cargoWidth = 0) => {
+    const offset = Math.max(0, entry.scale.x - cargoWidth) * 0.5;
+    return entry.position.clone().add(
+      new THREE.Vector3(side * offset, 0, 0).applyQuaternion(entry.quaternion),
+    );
+  };
   const clearHoverFeedback = () => {
     if (hoverIndex >= 0 && slotMesh) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
@@ -2846,6 +3202,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverForklift = false;
     hoverStagingBox = null;
     hoverStagingMesh = null;
+    hoverSlotPoint = null;
     hideRackAction();
   };
   const updatePointer = (event) => {
@@ -2887,13 +3244,15 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const nextDoor = nextBox < 0 && !consumerIsClosest && doorIndex >= 0 && (!slotHit || doorHit.distance < slotHit.distance) ? doorIndex : -1;
     const nextConsumerUnit = nextBox < 0 && consumerIsClosest;
     const next = nextBox >= 0 || nextStagingBox || nextConsumerUnit || nextDoor >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
+    hoverSlotPoint = next >= 0 ? slotHit.point.clone() : null;
     const nextRack = nextBox >= 0
       ? boxEntries[nextBox].slotEntry?.rack
       : next >= 0
         ? slotEntries[next].rack
         : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
     const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
-    if (next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextStagingMesh === hoverStagingMesh && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
+    const carryingPallet = forkliftSelected && Boolean(forkliftLoadAssembly || forkliftMotion?.pickupMesh || forkliftPutawayPhase);
+    if (!carryingPallet && next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextStagingMesh === hoverStagingMesh && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -2910,7 +3269,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       boxHoverArrow.visible = false;
       hoverOutline.visible = false;
       hoverShell.visible = false;
-      labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
+      labelElement.textContent = forkliftSelected
+        ? 'รถโฟล์คลิฟท์ · คุณกำลังควบคุม'
+        : forkliftControllerActive
+          ? 'รถโฟล์คลิฟท์ · มีผู้ใช้อื่นกำลังควบคุม'
+          : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(forkliftRoot.position).add(new THREE.Vector3(0, 2.5, 0));
       // Keep the forklift selection feedback purely visual (selection ring);
@@ -2936,6 +3299,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.style.cursor = 'pointer';
     } else if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
+      const exceptionStatus = entry.box.status === 'damage'
+        ? 'ชำรุด · ตรวจสอบเท่านั้น'
+        : entry.box.status === 'hold'
+          ? 'พักใช้งาน · ตรวจสอบเท่านั้น'
+          : '';
       boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 - 0.1, entry.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
@@ -2947,7 +3315,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverShell.quaternion.copy(entry.quaternion);
       hoverShell.scale.copy(entry.scale).multiplyScalar(1.16);
       hoverShell.visible = true;
-      labelObject.visible = false;
+      if (exceptionStatus) {
+        labelElement.textContent = `${entry.box.id} · ${exceptionStatus}`;
+        labelElement.className = `loc3d-slot-label ${entry.box.status === 'damage' ? 'full' : 'occupied'}`;
+        labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.32, 0));
+        labelObject.visible = true;
+      } else labelObject.visible = false;
       canvas.style.cursor = 'pointer';
     } else if (hoverConsumerUnit) {
       const consumerBody = consumerUnitPickMeshes[0];
@@ -2975,26 +3348,40 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const hiddenOccupied = state === 'occupied' && !showOccupiedSlots;
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       const isReturnSlot = Boolean(forkliftReturnTarget && String(entry.slot.id) === String(forkliftReturnTarget.slot.id));
-      if (forkliftSelected && !isReturnSlot && state !== 'full') {
+      // The source slot remains occupied in the DB until the truck finishes
+      // the return. It may therefore be marked `full`, but is still a valid
+      // destination for the exact pallet we just lifted from it.
+      if (forkliftSelected && (isReturnSlot || state !== 'full')) {
         // Hide text while carrying; the ring is the GTA-style placement cue.
         // Match the exact side offset used by the placement code below.
         const occupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(entry.slot.id)).length
           + (putawaySlotCounts.get(String(entry.slot.id)) || 0);
-        const side = occupancy ? 1 : -1;
-        const placementPoint = entry.position.clone().add(
-          new THREE.Vector3(side * entry.scale.x * 0.24, 0, 0).applyQuaternion(entry.quaternion),
-        );
+        const cargoWidth = forkliftLoadAssembly?.userData?.cargoWidth || entry.scale.x * 0.52;
+        const sourceSide = isReturnSlot && forkliftReturnPosition
+          ? slotSideAt(entry, forkliftReturnPosition)
+          : 0;
+        // Point at the left/right half of a bay to select its physical pallet
+        // position. The middle retains the original side on a rack return.
+        const requestedSide = slotSideAt(entry, hoverSlotPoint)
+          || (isReturnSlot ? sourceSide : (occupancy ? 1 : -1));
+        const placementPoint = isReturnSlot && requestedSide === sourceSide && forkliftReturnPosition
+          ? forkliftReturnPosition.clone()
+          : slotSidePosition(entry, requestedSide, cargoWidth);
         hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
         hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
         // Keep the highlighted placement ring associated with its slot. The
         // ring sits just outside the translucent slot volume, so the slot
         // instanced mesh is not always hit by the raycaster on click.
         hoverRing.userData.slotIndex = hoverIndex;
+        hoverRing.userData.dropSide = requestedSide;
         hoverRing.visible = true;
         boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.2, placementPoint.z);
         boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
         boxHoverArrow.visible = true;
-        labelObject.visible = false;
+        labelElement.textContent = `วางพาเลทด้าน${requestedSide < 0 ? 'ซ้าย' : 'ขวา'} · คลิกเพื่อยืนยัน`;
+        labelElement.className = 'loc3d-slot-label occupied';
+        labelObject.position.copy(placementPoint).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.35, 0));
+        labelObject.visible = true;
       } else {
         labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? '' : state === 'occupied' ? 'มีของ' : 'ว่าง';
         labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
@@ -3011,7 +3398,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelObject.visible = false;
       canvas.style.cursor = 'default';
     }
-    if (forkliftSelected) labelObject.visible = false;
+    if (forkliftSelected && !Boolean(forkliftLoadAssembly || forkliftMotion?.pickupMesh || forkliftPutawayPhase)) labelObject.visible = false;
     showRackAction(hoverConsumerUnit || hoverDockDoorIndex >= 0 || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
@@ -3088,7 +3475,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // The yellow source beacon is an explicit, clickable return target. It
       // remains visible after pickup so the operator can put the pallet back.
       const beaconHit = missionBeacon.visible && raycaster.intersectObject(missionBeacon, false).length > 0;
-      const rollbackRequested = forkliftSelected && forkliftLoadAssembly && (Boolean(hoverStagingBox) || beaconHit);
+      // The source marker and source slot overlap. Prefer the slot's normal
+      // putaway flow when it is hit, otherwise clicking the marker still
+      // provides the explicit cancel/rollback affordance.
+      const rollbackRequested = forkliftSelected && forkliftLoadAssembly
+        && (Boolean(hoverStagingBox) || (beaconHit && hoverIndex < 0));
       if (rollbackRequested) {
         rollbackForkliftLoad();
         window.toast?.('ยกเลิก Putaway', 'รถจะนำกล่องกลับไปวางจุดเดิม', 'ok');
@@ -3105,7 +3496,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // the pallet centre makes A* snap to an arbitrary free cell around
           // its collision box (often behind the rack), especially when the
           // pallet itself is treated as an obstacle.
-          const palletPoint = hoverStagingMesh.position.clone();
+          const palletPoint = new THREE.Vector3();
+          hoverStagingMesh.getWorldPosition(palletPoint);
+          // A pallet just placed on a rack remains a direct pick target in
+          // this scene. Treat it as rack inventory, not inbound staging, so
+          // a subsequent return retains the new source slot and side.
+          const dynamicRackSlot = hoverStagingMesh.userData.slotEntry || null;
+          if (dynamicRackSlot) {
+            forkliftReturnTarget = dynamicRackSlot;
+            forkliftReturnPosition = hoverStagingMesh.userData.sourcePosition?.clone?.() || palletPoint.clone();
+            hoverStagingMesh.userData.pickupLiftHeight = THREE.MathUtils.clamp(
+              palletPoint.y - forkliftRoot.position.y - 0.78, 0, forkliftLiftMax,
+            );
+          }
           const palletSide = forkliftRoot.position.clone().sub(palletPoint).setY(0);
           if (palletSide.lengthSq() < 1e-6) palletSide.set(0, 0, 1);
           palletSide.normalize();
@@ -3115,7 +3518,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           // Putaway pickup uses one direct guide from the truck to the pallet,
           // so the intended approach direction is always unambiguous.
           moveForkliftTo(palletPoint, hoverStagingMesh, true);
-          window.toast?.('กำลังไปรับกล่อง', `${hoverStagingBox.id} · พาเลท Putaway`, 'ok');
+          window.toast?.('กำลังไปรับกล่อง', `${hoverStagingBox.id} · ${dynamicRackSlot ? 'พาเลทบนแร็ค' : 'พาเลท Putaway'}`, 'ok');
         } else {
           releasePointerForModal();
           onBoxSelect?.(hoverStagingBox.id);
@@ -3123,13 +3526,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       else if (hoverBoxIndex >= 0) {
         const entry = boxEntries[hoverBoxIndex];
+        const canForkliftMoveBox = entry.box.status === 'warehouse';
         if (carryingLoad) {
           // A neighboring carton can be closer to the camera than the empty
           // slot.  Never open its drawer during a putaway operation.
           window.toast?.('กำลังยกกล่องอยู่', 'คลิกวงกลมในช่องว่างเพื่อวางกล่อง', 'warn');
           return;
         }
-        if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly) {
+        if (forkliftSelected && !canForkliftMoveBox) {
+          releasePointerForModal();
+          onBoxSelect?.(entry.box.id);
+          window.toast?.(
+            entry.box.status === 'damage' ? 'กล่องชำรุด' : 'กล่องถูกพักใช้งาน',
+            'เปิดดูรายละเอียดได้ แต่รถ Forklift จะไม่ย้ายกล่องสถานะนี้',
+            'warn',
+          );
+        } else if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly) {
           // Keep forklift interaction mode active after a completed putaway.
           // Clear any stale route state before issuing the next pickup so the
           // click can never fall through to the normal box drawer.
@@ -3154,7 +3566,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           pickupMesh.userData.stagingBox = entry.box;
           pickupMesh.userData.stagingBoxId = entry.box.id;
           pickupMesh.userData.rackPickup = true;
+          pickupMesh.userData.slotEntry = entry.slotEntry;
+          pickupMesh.userData.sourcePosition = entry.position.clone();
+          // Capture world height BEFORE the proxy is attached to the truck.
+          pickupMesh.userData.pickupLiftHeight = THREE.MathUtils.clamp(
+            entry.position.y - forkliftRoot.position.y - 0.78, 0, forkliftLiftMax,
+          );
           forkliftReturnTarget = entry.slotEntry;
+          forkliftReturnPosition = entry.position.clone();
           missionBeacon.position.copy(entry.position).setY(warehouseFloorY + 0.06);
           missionBeacon.visible = true;
           scene.add(pickupMesh);
@@ -3223,7 +3642,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         // An empty selected forklift is in vehicle-operation mode, not
         // location-edit mode. A rack-slot click must never open its drawer.
         if (forkliftSelected && !forkliftLoadAssembly && !forkliftMotion?.pickupMesh) {
-          window.toast?.('รถ Forklift ยังว่าง', 'กรุณาคลิกกล่องเพื่อรับพาเลทก่อนเลือกตำแหน่งวาง', 'warn');
+          const now = performance.now();
+          if (now - lastEmptyForkliftToastAt > 1200) {
+            lastEmptyForkliftToastAt = now;
+            window.toast?.('รถ Forklift ยังว่าง', 'กรุณาคลิกกล่องเพื่อรับพาเลทก่อนเลือกตำแหน่งวาง', 'warn');
+          }
           return;
         }
         const isReturnSlot = Boolean(forkliftReturnTarget && String(destination.slot.id) === String(forkliftReturnTarget.slot.id));
@@ -3234,10 +3657,29 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         // exclude the carried box or it is treated as a second pallet and gets
         // shifted sideways instead of returning squarely to its original spot.
         const slotOccupancy = Math.max(0, storedOccupancy - (isReturnSlot ? 1 : 0));
+        const destinationState = slotState(destination);
         // With a pallet on the forks, a click on an empty or single-pallet
         // slot is a putaway command; otherwise retain the normal slot drawer.
-        if (carryingLoad && slotOccupancy < 2) {
-          forkliftDropTarget = { ...destination, occupancy: slotOccupancy, isReturnSlot };
+        // A manually-full source slot rejects new stock, but must never block
+        // the same pallet returning to the exact position it came from.
+        if (carryingLoad && (isReturnSlot || destinationState !== 'full') && slotOccupancy < 2) {
+          const sourceSide = isReturnSlot && forkliftReturnPosition ? slotSideAt(destination, forkliftReturnPosition) : 0;
+          const requestedSide = Number(hoverRing.userData.dropSide)
+            || slotSideAt(destination, hoverSlotPoint)
+            || (isReturnSlot ? sourceSide : (slotOccupancy ? 1 : -1));
+          const carriedId = forkliftLoadAssembly?.userData?.stagingBoxId || forkliftMotion?.pickupMesh?.userData?.stagingBoxId;
+          const sideOccupied = boxEntries.some((entry) => String(entry.slotEntry?.slot.id) === String(destination.slot.id)
+            && String(entry.box.id) !== String(carriedId)
+            && slotSideAt(destination, entry.position) === requestedSide);
+          if (sideOccupied) {
+            window.toast?.('ตำแหน่งนี้มีพาเลทอยู่แล้ว', 'เลื่อนเมาส์ไปที่อีกด้านของช่องเพื่อเลือกตำแหน่งวาง', 'warn');
+            return;
+          }
+          const cargoWidth = forkliftLoadAssembly?.userData?.cargoWidth || destination.scale.x * 0.52;
+          const placementPosition = isReturnSlot && requestedSide === sourceSide && forkliftReturnPosition
+            ? forkliftReturnPosition.clone()
+            : slotSidePosition(destination, requestedSide, cargoWidth);
+          forkliftDropTarget = { ...destination, occupancy: slotOccupancy, isReturnSlot, dropSide: requestedSide, placementPosition };
           forkliftPutawayPhase = 'travel';
           // Travel with forks lowered; the lift command is issued only after
           // the vehicle reaches the destination.
@@ -3564,14 +4006,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       forklift.add(headlight, target);
       headlight.target = target;
     });
-    const initialForkliftPosition = savedForklift?.position || {};
-    forkliftRoot.position.set(
-      Number.isFinite(Number(initialForkliftPosition.x)) ? Number(initialForkliftPosition.x) : center.x + rackBoundaryWidth * 0.34,
-      Number.isFinite(Number(initialForkliftPosition.y)) ? Number(initialForkliftPosition.y) : warehouseFloorY + 0.012,
-      Number.isFinite(Number(initialForkliftPosition.z)) ? Number(initialForkliftPosition.z) : aisleCenterZ,
-    );
+    const savedLayoutMatches = savedForklift?.layoutRevision === forkliftLayoutRevision;
+    const resolvedInitialForklift = savedLayoutMatches
+      ? resolveForkliftPosition(savedForklift?.position)
+      : { position: forkliftParkingPosition(), relocated: Boolean(savedForklift?.position) };
+    const forkliftWasRelocated = Boolean(savedForklift?.position) && resolvedInitialForklift.relocated;
+    forkliftRoot.position.copy(resolvedInitialForklift.position);
     forkliftRoot.rotation.y = Number.isFinite(Number(savedForklift?.rotationY)) ? Number(savedForklift.rotationY) : -Math.PI * 0.5;
     scene.add(forkliftRoot);
+    if (forkliftWasRelocated) {
+      window.toast?.(
+        'นำรถ Forklift กลับจุดจอดแล้ว',
+        'ตำแหน่งเดิมอยู่นอกขอบเขตผังคลังปัจจุบัน',
+        'warn',
+      );
+    }
     // Game-style ground selection effect: keep the vehicle silhouette clean
     // and show selection as a pulsing ring at the wheels instead of a box.
     forkliftSelection = new THREE.Mesh(
@@ -3605,12 +4054,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     return Math.abs(difference - step);
   };
   const animate = () => {
+    syncRemoteCargo();
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
     if (frameNow >= forkliftNextSyncAt) {
-      forkliftNextSyncAt = frameNow + forkliftBroadcastIntervalMs;
+      forkliftNextSyncAt = frameNow + forkliftPollIntervalMs;
       syncForkliftPosition();
+    }
+    if (forkliftSelected && forkliftControlOwned && frameNow >= forkliftNextLeaseRenewAt) {
+      forkliftNextLeaseRenewAt = frameNow + forkliftLeaseRenewIntervalMs;
+      claimForkliftControl(true);
     }
     // The selected forklift is owned by this operator. Do not blend a delayed
     // remote snapshot into it while it is aligning at a rack, or the two yaw
@@ -3693,7 +4147,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // zero-length route again. Re-entering that block restarted the alignment
     // state every frame and could leave the forklift appearing stuck at the
     // pickup slot.
-    if (forkliftMotion && forkliftRoot && !forkliftMotion.pickupAligning) {
+    if (forkliftMotion?.pickupAligned && forkliftMotion.pickupMesh?.userData.rackPickup && !forkliftMotion.pickupLiftReady) {
+      forkliftLiftTarget = forkliftMotion.pickupMesh.userData.pickupLiftHeight;
+      forkliftMotion.pickupLifting = Math.abs(forkliftLiftHeight - forkliftLiftTarget) > 0.03;
+      if (!forkliftMotion.pickupLifting) forkliftMotion.pickupLiftReady = true;
+    }
+    if (forkliftMotion && forkliftRoot && !forkliftMotion.pickupAligning && !forkliftMotion.pickupLifting) {
       const destination = forkliftMotion.path[forkliftMotion.index];
       movementDirection.subVectors(destination, forkliftRoot.position);
       movementDirection.y = 0;
@@ -3735,6 +4194,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftLoadAssembly.quaternion.copy(forkliftRollback.quaternion);
             forkliftLoadAssembly = null;
             forkliftRollback = null;
+            forkliftReturnTarget = null;
+            forkliftReturnPosition = null;
             forkliftPutawayPhase = null;
             window.toast?.('ยกเลิกคำสั่งแล้ว', 'นำกล่องกลับตำแหน่งเดิมเรียบร้อย', 'ok');
           } else if (pickupMesh && pickupMesh.parent) {
@@ -3752,6 +4213,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               const loadAssembly = new THREE.Group();
               loadAssembly.name = `forklift-load-${pickupId}`;
               loadAssembly.userData.stagingBoxId = pickupId;
+              loadAssembly.userData.cargoWidth = pickupMesh.scale.x;
               // Establish the assembly origin at the selected pallet before
               // re-parenting.  Starting at (0,0,0) leaves every child with a
               // world-sized offset, which is why a lifted box appeared at the
@@ -3786,14 +4248,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // take the box.  The staging pallet already sits at floor
               // level, while a rack box supplies its actual shelf height.
               if (forkliftReturnTarget) {
-                const pickupLiftHeight = pickupMesh.position.y
-                  - forkliftRoot.position.y
-                  - forkliftCarriageBaseY
-                  - 0.78;
-                forkliftLiftTarget = THREE.MathUtils.clamp(pickupLiftHeight, 0, forkliftLiftMax);
+                forkliftLiftTarget = Math.min(forkliftLiftMax, pickupMesh.userData.pickupLiftHeight + 0.12);
               }
             }
             window.toast?.('ยกพาเลทพร้อมกล่องขึ้นงาแล้ว', `${pickupId} · กำลังยกงารับกล่อง`, 'ok');
+            saveForkliftPosition(true);
+            if (pickupMesh.userData.rackPickup) setRackPickupCameraLock(false);
           } else if (forkliftDropTarget && forkliftLoadAssembly && forkliftPutawayPhase === 'placing') {
             const target = forkliftDropTarget;
             const forkWorldY = forkliftRoot.position.y + forkliftCarriageBaseY + forkliftLiftHeight;
@@ -3806,19 +4266,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             } else {
               forkliftLoadAssembly.parent?.remove(forkliftLoadAssembly);
             scene.add(forkliftLoadAssembly);
-            forkliftLoadAssembly.position.copy(target.position);
-            // A slot supports up to two pallets side-by-side. Offset the
-            // second load along the slot's local width, never vertically.
-            if (!target.isReturnSlot) {
-              const side = target.occupancy ? 1 : -1;
-              const sideOffset = new THREE.Vector3(side * target.scale.x * 0.24, 0, 0)
-                .applyQuaternion(target.quaternion);
-              forkliftLoadAssembly.position.add(sideOffset);
-            }
+            forkliftLoadAssembly.position.copy(target.placementPosition || target.position);
             // The slot position is its authored centre; keep the pallet
             // centred there so the load is level with the shelf opening.
             forkliftLoadAssembly.quaternion.copy(target.quaternion);
             forkliftLoadAssembly.userData.slotId = target.slot.id;
+            // Make the newly placed physical carton immediately selectable.
+            // Without this, it was visible but not in the 3D hit-test list,
+            // so the next click fell through to the empty slot warning.
+            forkliftLoadAssembly.traverse((object) => {
+              if (String(object.userData?.stagingBoxId || '') !== String(forkliftLoadAssembly.userData.stagingBoxId)) return;
+              object.userData.rackPickup = true;
+              object.userData.slotEntry = target;
+              object.userData.sourcePosition = (target.placementPosition || target.position).clone();
+              if (!stagingBoxPickMeshes.includes(object)) stagingBoxPickMeshes.push(object);
+            });
             if (!target.isReturnSlot) {
               putawaySlotCounts.set(String(target.slot.id), (putawaySlotCounts.get(String(target.slot.id)) || 0) + 1);
             }
@@ -3826,26 +4288,50 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftLoadAssembly = null;
             forkliftDropTarget = null;
             forkliftReturnTarget = null;
+            forkliftReturnPosition = null;
             forkliftPutawayPhase = null;
             // After every successful putaway, return the forks to the lowest
             // safe travel position with the same smooth damping.
             forkliftLiftTarget = 0;
             fetch(`/api/boxes/${encodeURIComponent(placedBoxId)}/putaway`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+              headers: requestHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 wh: model.warehouseId,
                 zone: target.rack.zone || '',
                 rack: target.rack.code || '',
                 shelf: target.slot.shelfCode || '',
                 slot: target.slot.slotCode || target.slot.id,
+                side: target.dropSide < 0 ? 'left' : 'right',
               }),
-            }).then((response) => {
-              if (!response.ok) throw new Error(`putaway ${response.status}`);
+            }).then(async (response) => {
+              const body = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(body?.message || `Putaway HTTP ${response.status}`);
               const box = (model.boxes || []).find((item) => String(item.id) === String(placedBoxId) || String(item.tag) === String(placedBoxId));
-              if (box) box.slotId = target.slot.id;
-            }).catch((error) => window.toast?.('บันทึก Putaway ไม่สำเร็จ', error.message, 'err'));
-            window.toast?.('วางพาเลทเข้าช่องแล้ว', `${target.slot.id} · ชั้น ${target.slot.shelfCode || ''}`, 'ok');
+              if (box) {
+                box.slotId = target.slot.id;
+                box.slotSide = target.dropSide < 0 ? 'left' : 'right';
+              }
+              const visualEntry = boxEntries.find((item) => String(item.box.id) === String(placedBoxId));
+              if (visualEntry) {
+                visualEntry.slotEntry = target;
+                visualEntry.position.copy(target.placementPosition || target.position);
+                visualEntry.quaternion.copy(target.quaternion);
+              }
+              window.toast?.('วางพาเลทเข้าช่องแล้ว', `${target.slot.id} · ชั้น ${target.slot.shelfCode || ''}`, 'ok');
+              // Keep the operator's forklift session alive after a successful
+              // putaway. Rebuilding the complete 3D view here reset
+              // `forkliftSelected` to false, forcing an unnecessary click on
+              // the truck before every subsequent box. The persisted API
+              // update and realtime stream remain the source of truth for
+              // other viewers; this local scene already reflects the placed
+              // pallet and updated slot id.
+            }).catch((error) => {
+              window.toast?.('บันทึก Putaway ไม่สำเร็จ', error.message, 'err');
+              // The visual placement is optimistic. A rejected/full slot must
+              // restore the box to its actual DB position immediately.
+              window.setTimeout(() => { if (!disposed) window.renderLoc3D?.(); }, 120);
+            });
             }
           saveForkliftPosition(true);
           if (pickupMesh?.userData?.rackPickup) setRackPickupCameraLock(false);
@@ -3853,6 +4339,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           forkliftMotion = null;
           setForkliftAudioMoving(false);
           routeLine.visible = false;
+          saveForkliftPosition(true);
           // Keep the source-location cues visible while its pallet is on the
           // forks, so the operator can always return it precisely.
           missionBeacon.visible = Boolean(forkliftLoadAssembly && forkliftRollback);
@@ -4069,11 +4556,24 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   if (!getViewPref('loc3dWallsVisible', true)) toggleBoundaryDetail('walls', false);
   if (!getViewPref('loc3dRoofVisible', true)) toggleBoundaryDetail('roof', false);
   syncViewToggleButtons();
+  // Keep the previous canvas visible until this renderer has a valid frame.
+  reportLoading('กำลังเตรียมภาพคลัง 3D…');
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+  if (renderer.renderAsync) await renderer.renderAsync(scene, camera);
+  else renderer.render(scene, camera);
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
 
   return {
     assets,
+    getView() { return {position: camera.position.clone(), target: controls.target.clone(), warehouseId: model.warehouseId}; },
+    setView(view) {
+      if (!view || view.warehouseId !== model.warehouseId) return;
+      camera.position.copy(view.position);
+      controls.target.copy(view.target);
+      controls.update();
+    },
+    isBusy() { return Boolean(forkliftMotion || (forkliftSelected && forkliftLoadAssembly) || forkliftPutawayPhase); },
     setLanguage() {
       updateFirstPersonCopy();
       firstPersonOverlay.appendChild(mobileWalkControls);
@@ -4081,6 +4581,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     },
     dispose() {
       disposed = true;
+      window.removeEventListener('loc3d-forklift-state', onRemoteForkliftState);
+      window.removeEventListener('loc3d-shared-settings', onSharedViewSettings);
+      forkliftPendingBroadcast = null;
+      if (forkliftControlOwned) {
+        if (forkliftBroadcastInFlight) forkliftReleaseAfterBroadcast = true;
+        else releaseForkliftControl();
+      }
       renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
       if (pointerFrame) cancelAnimationFrame(pointerFrame);
@@ -4135,10 +4642,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       assets.dispose();
       labelRenderer.domElement.remove();
       hud.remove();
+      const disposedTextures = new Set();
       scene.traverse((object) => {
         if (object.geometry && object.geometry !== UNIT_BOX) object.geometry.dispose?.();
         const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
-        materials.forEach((material) => material.dispose?.());
+        materials.forEach((material) => {
+          Object.values(material).forEach(value => {
+            if (value?.isTexture && !disposedTextures.has(value)) { disposedTextures.add(value); value.dispose(); }
+          });
+          material.dispose?.();
+        });
       });
       floorTexture.dispose();
       floorMarkTextures.forEach((texture) => texture.dispose());
@@ -4152,10 +4665,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, warehouseName, onWarehouseNavigate) {
   if (!canvas) return null;
   const currentGeneration = ++generation;
-  activeController?.dispose();
-  activeController = null;
+  const previousController = activeController;
   const stage = canvas.parentElement;
   try {
+    const loading = stage.querySelector('.loc3d-loading');
+    if (loading) loading.textContent = 'กำลังโหลดข้อมูลคลัง…';
     const model = await loadModel(locations || [], occupancy || {});
     // The browser's Warehouse Master is the authoritative display label. The
     // geometry API may return only the warehouse code (for example WH-001),
@@ -4167,6 +4681,8 @@ async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, wareho
       controller.dispose();
       return null;
     }
+    controller.setView(previousController?.getView?.());
+    previousController?.dispose();
     activeController = controller;
     return controller;
   } catch (error) {
@@ -4183,7 +4699,7 @@ function unmount() {
   activeController = null;
 }
 
-window.LocationWarehouse3D = { mount, unmount, scaleToMetres: CM_TO_M };
+window.LocationWarehouse3D = { mount, unmount, isBusy: () => activeController?.isBusy?.() || false, scaleToMetres: CM_TO_M };
 const previousLanguageHook = window.btLangChanged;
 window.btLangChanged = (language) => {
   previousLanguageHook?.(language);
