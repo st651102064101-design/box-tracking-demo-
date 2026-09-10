@@ -1260,21 +1260,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     boxBarcodeStickers.push(handlingMark);
   };
   if (cartonEntries.length <= 80) {
-    const cartonTapeMaterial = new THREE.MeshStandardMaterial({ color: 0xd9bd77, roughness: 0.8, metalness: 0 });
     cartonEntries.forEach((entry) => {
-      const placeLocal = (mesh, x, y, z) => {
-        mesh.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(entry.quaternion).add(entry.position));
-        mesh.quaternion.copy(entry.quaternion);
-        mesh.userData.stagingBoxId = entry.box.id;
-        scene.add(mesh);
-        return mesh;
-      };
-      const topY = entry.scale.y / 2 + 0.006;
-      const tape = new THREE.Mesh(
-        new THREE.BoxGeometry(Math.min(0.14, entry.scale.x * 0.16), 0.012, entry.scale.z * 0.94),
-        cartonTapeMaterial,
-      );
-      placeLocal(tape, 0, topY, 0);
       addCartonHandlingMark(entry);
     });
   }
@@ -2669,7 +2655,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverRing.userData.baseScale = Math.max(stagingHit.object.scale.x, stagingHit.object.scale.z) * 1.5;
       hoverRing.scale.setScalar(hoverRing.userData.baseScale);
       hoverRing.visible = true;
-      boxHoverArrow.position.set(stagingHit.object.position.x, stagingHit.object.position.y + stagingHit.object.scale.y / 2 + 0.6, stagingHit.object.position.z);
+      boxHoverArrow.position.set(stagingHit.object.position.x, stagingHit.object.position.y + stagingHit.object.scale.y / 2 + 0.2, stagingHit.object.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
       canvas.style.cursor = 'pointer';
@@ -2677,7 +2663,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
-      boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 + 0.6, entry.position.z);
+      boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 + 0.2, entry.position.z);
       boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
       boxHoverArrow.visible = true;
       hoverOutline.position.copy(entry.position);
@@ -2728,7 +2714,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
         hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
         hoverRing.visible = true;
-        boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.6, placementPoint.z);
+        boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.2, placementPoint.z);
         boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
         boxHoverArrow.visible = true;
         labelObject.visible = false;
