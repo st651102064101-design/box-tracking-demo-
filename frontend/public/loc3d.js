@@ -1098,6 +1098,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     metal_box: 0x8d98a5,
     generic: 0xd6a65b,
   };
+  // All carton models use one canonical warehouse-box finish.  Keep the
+  // appearance consistent regardless of the metadata/material type returned
+  // by the API (lighting and shadows may still add natural variation).
+  const canonicalBoxColor = new THREE.Color(materialColors.carton);
   const canonicalMaterialType = (box) => {
     const raw = `${box.materialType || ''} ${box.boxTypeName || ''}`.toLowerCase();
     if (/เหล็ก|โลหะ|steel|metal/.test(raw)) return 'metal_box';
@@ -1143,7 +1147,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       position,
       quaternion: slotEntry.quaternion,
       scale: new THREE.Vector3(width, height, depth),
-      color: new THREE.Color(oversized ? 0xff3bd4 : (materialColors[canonicalMaterialType(box)] || materialColors.generic)),
+      color: oversized ? new THREE.Color(0xff3bd4) : canonicalBoxColor.clone(),
     }];
   });
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.69, metalness: 0.04 });
@@ -1185,7 +1189,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const depth = Math.min(1.05, positive(box.dimensionsCm?.depth, 40) * CM_TO_M);
       const carton = new THREE.Mesh(
         UNIT_BOX,
-        new THREE.MeshStandardMaterial({ color: materialColors[canonicalMaterialType(box)] || materialColors.generic, roughness: canonicalMaterialType(box) === 'metal_box' ? 0.3 : 0.68, metalness: canonicalMaterialType(box) === 'metal_box' ? 0.65 : 0.03 }),
+        new THREE.MeshStandardMaterial({ color: canonicalBoxColor, roughness: 0.69, metalness: 0.04 }),
       );
       carton.position.set(x, 0.12 + height / 2, z);
       carton.scale.set(width, height, depth);
@@ -1199,7 +1203,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         position: carton.position.clone(),
         quaternion: carton.quaternion.clone(),
         scale: carton.scale.clone(),
-        color: new THREE.Color(materialColors[canonicalMaterialType(box)] || materialColors.generic),
+        color: canonicalBoxColor.clone(),
       });
     });
     const stagingTexture = floorMarkTexture(`รอ Putaway · ${stagingBoxes.length} กล่อง`);
@@ -1294,6 +1298,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   hoverRing.visible = false;
   hoverRing.renderOrder = 10;
   scene.add(hoverRing);
+  // A box is identified by a compact downward arrow, rather than a floor
+  // ring and a floating box-number label.  It is one reusable group so hover
+  // feedback stays inexpensive regardless of the number of stored boxes.
+  const boxHoverArrowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd34e, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false,
+  });
+  const boxHoverArrow = new THREE.Group();
+  const boxHoverArrowShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.42, 16), boxHoverArrowMaterial);
+  boxHoverArrowShaft.position.y = 0.36;
+  const boxHoverArrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.38, 24), boxHoverArrowMaterial);
+  boxHoverArrowHead.rotation.x = Math.PI;
+  boxHoverArrow.add(boxHoverArrowShaft, boxHoverArrowHead);
+  boxHoverArrow.visible = false;
+  boxHoverArrow.renderOrder = 12;
+  scene.add(boxHoverArrow);
   const hoverOutlineMaterial = new THREE.LineBasicMaterial({
     color: 0xffef73, transparent: true, opacity: 0.95, depthTest: false,
   });
@@ -2564,6 +2583,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
     hoverRing.visible = false;
+    boxHoverArrow.visible = false;
     hoverOutline.visible = false;
     hoverShell.visible = false;
     consumerHoverOutline.visible = false;
@@ -2622,9 +2642,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverStagingBox = nextStagingBox;
     hoverStagingMesh = nextStagingMesh;
     if (!hoverConsumerUnit) { consumerHoverOutline.visible = false; consumerHoverShell.visible = false; }
-    if (hoverBoxIndex < 0) { hoverRing.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
+    if (hoverBoxIndex < 0) { hoverRing.visible = false; boxHoverArrow.visible = false; hoverOutline.visible = false; hoverShell.visible = false; }
     if (hoverForklift) {
       hoverRing.visible = false;
+      boxHoverArrow.visible = false;
       hoverOutline.visible = false;
       hoverShell.visible = false;
       labelElement.textContent = forkliftSelected ? 'รถโฟล์คลิฟท์ · เลือกแล้ว' : 'รถโฟล์คลิฟท์ · คลิกเพื่อเลือก';
@@ -2633,20 +2654,26 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       labelObject.visible = !forkliftSelected;
       canvas.style.cursor = 'pointer';
     } else if (hoverStagingBox) {
-      labelElement.textContent = `รอ Putaway · ${hoverStagingBox.id} · คลิกเพื่อเลือก`;
+      labelElement.textContent = hoverStagingBox.id;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(stagingHit.object.position).add(new THREE.Vector3(0, 0.72, 0));
       labelObject.visible = true;
+      hoverRing.position.set(
+        stagingHit.object.position.x,
+        stagingHit.object.position.y - stagingHit.object.scale.y / 2 + 0.022,
+        stagingHit.object.position.z,
+      );
+      hoverRing.userData.baseScale = Math.max(stagingHit.object.scale.x, stagingHit.object.scale.z) * 1.5;
+      hoverRing.scale.setScalar(hoverRing.userData.baseScale);
+      hoverRing.visible = true;
       canvas.style.cursor = 'pointer';
     } else if (hoverBoxIndex >= 0) {
       const entry = boxEntries[hoverBoxIndex];
       boxMesh.setColorAt(hoverBoxIndex, BOX_HOVER_COLOR);
       boxMesh.instanceColor.needsUpdate = true;
-      const ringScale = Math.max(entry.scale.x, entry.scale.z) * 1.5;
-      hoverRing.position.set(entry.position.x, entry.position.y - entry.scale.y / 2 + 0.022, entry.position.z);
-      hoverRing.userData.baseScale = ringScale;
-      hoverRing.scale.setScalar(ringScale);
-      hoverRing.visible = true;
+      boxHoverArrow.position.set(entry.position.x, entry.position.y + entry.scale.y / 2 + 0.6, entry.position.z);
+      boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
+      boxHoverArrow.visible = true;
       hoverOutline.position.copy(entry.position);
       hoverOutline.quaternion.copy(entry.quaternion);
       hoverOutline.scale.copy(entry.scale).multiplyScalar(1.12);
@@ -2655,10 +2682,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverShell.quaternion.copy(entry.quaternion);
       hoverShell.scale.copy(entry.scale).multiplyScalar(1.16);
       hoverShell.visible = true;
-      labelElement.textContent = `กล่อง ${entry.box.id}`;
-      labelElement.className = 'loc3d-slot-label occupied';
-      labelObject.position.copy(entry.position).add(new THREE.Vector3(0, entry.scale.y / 2 + 0.18, 0));
-      labelObject.visible = true;
+      labelObject.visible = false;
       canvas.style.cursor = 'pointer';
     } else if (hoverConsumerUnit) {
       const consumerBody = consumerUnitPickMeshes[0];
@@ -2709,6 +2733,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.style.cursor = 'pointer';
     } else {
       hoverRing.visible = false;
+      boxHoverArrow.visible = false;
       hoverOutline.visible = false;
       hoverShell.visible = false;
       labelObject.visible = false;
@@ -2890,6 +2915,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       boxMesh.instanceColor.needsUpdate = true;
     }
     hoverRing.visible = false;
+    boxHoverArrow.visible = false;
     hoverOutline.visible = false;
     hoverShell.visible = false;
     consumerHoverOutline.visible = false;
@@ -3480,6 +3506,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       hoverRing.scale.setScalar((hoverRing.userData.baseScale || 1) * pulse);
       hoverRingMaterial.opacity = 0.74 + Math.sin(performance.now() * 0.008) * 0.22;
       hoverOutlineMaterial.opacity = 0.7 + Math.sin(performance.now() * 0.012) * 0.25;
+    }
+    if (boxHoverArrow.visible) {
+      boxHoverArrow.position.y = (boxHoverArrow.userData.baseY || boxHoverArrow.position.y) + Math.sin(performance.now() * 0.008) * 0.08;
+      boxHoverArrowMaterial.opacity = 0.74 + Math.sin(performance.now() * 0.008) * 0.22;
     }
     if (consumerHoverOutline.visible) {
       const pulse = 1 + Math.sin(performance.now() * 0.009) * 0.045;
