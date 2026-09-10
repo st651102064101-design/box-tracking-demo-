@@ -2239,10 +2239,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftMotion = null;
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
-  // Travel specification: 100 km/h maximum, accelerating 0→100 km/h in 2 s.
+  // Travel specification: 300 km/h maximum, accelerating 0→100 km/h in 1 s.
   // Values stay in metres/second so the movement remains frame-rate independent.
-  const forkliftCruiseSpeed = 100 / 3.6;
-  const forkliftAcceleration = forkliftCruiseSpeed / 2;
+  const forkliftCruiseSpeed = 300 / 3.6;
+  const forkliftAcceleration = 100 / 3.6;
   const forkliftBrakeDeceleration = 2.25;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
