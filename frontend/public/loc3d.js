@@ -1243,12 +1243,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const placeLocal = (mesh, x, y, z) => {
         mesh.position.copy(new THREE.Vector3(x, y, z).applyQuaternion(entry.quaternion).add(entry.position));
         mesh.quaternion.copy(entry.quaternion);
-        if (!entry.slotEntry) mesh.userData.stagingBoxId = entry.box.id;
+        mesh.userData.stagingBoxId = entry.box.id;
         scene.add(mesh);
         return mesh;
       };
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(UNIT_BOX), cartonEdgeMaterial);
-      if (!entry.slotEntry) edges.userData.stagingBoxId = entry.box.id;
+      edges.userData.stagingBoxId = entry.box.id;
       edges.position.copy(entry.position);
       edges.quaternion.copy(entry.quaternion);
       edges.scale.copy(entry.scale);
@@ -1324,7 +1324,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         new THREE.PlaneGeometry(labelWidth, labelHeight),
         new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }),
       );
-      if (!entry.slotEntry) sticker.userData.stagingBoxId = entry.box.id;
+      sticker.userData.stagingBoxId = entry.box.id;
       // Slightly proud of the front carton face: a real applied RFID/ZPL
       // label, not a floating caption and never outside the box silhouette.
       const frontOffset = new THREE.Vector3(0, 0, entry.scale.z / 2 + 0.003)
@@ -2273,12 +2273,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
   let forkliftRollback = null;
-  // Travel specification: 300 km/h maximum, accelerating 0→300 km/h in 1 s.
+  // Travel specification: 300 km/h maximum, accelerating 0→300 km/h in 3 s.
   // Values stay in metres/second so the movement remains frame-rate independent.
   const forkliftCruiseSpeed = 300 / 3.6;
-  const forkliftAcceleration = (300 / 3.6) / 1;
-  // Brake from 300 km/h to a standstill in 1 s.
-  const forkliftBrakeDeceleration = (300 / 3.6) / 1;
+  const forkliftAcceleration = (300 / 3.6) / 3;
+  // Brake from 300 km/h to a standstill in 3 s.
+  const forkliftBrakeDeceleration = (300 / 3.6) / 3;
   // Steering is quick, but each update is time-limited so its heading changes
   // continuously instead of jumping to the next grid segment.
   // 720°/s lets a full 180° U-turn complete in roughly a quarter second.
@@ -3025,7 +3025,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         palletWidth,
         palletDepth,
         0,
-        stagingEntries.includes(entry) ? entry.box.id : '',
+        entry.box.id,
       );
     });
   }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
