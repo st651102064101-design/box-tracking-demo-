@@ -3810,6 +3810,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   // Browser-synchronized rendering follows the active display's refresh rate
   // (60/120/144 Hz, etc.). Do not introduce a fixed 60 FPS throttle here.
+  // Restore 3D view toggles from the DB-backed preferences on every mount.
+  // This makes a second device inherit the operator's wall/roof/grid choices.
+  grid.visible = unitGridVisible;
+  grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
+  if (!getViewPref('loc3dWallsVisible', true)) toggleBoundaryDetail('walls');
+  if (!getViewPref('loc3dRoofVisible', true)) toggleBoundaryDetail('roof');
+  syncViewToggleButtons();
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
 
