@@ -2749,6 +2749,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         );
         hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
         hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
+        // Keep the highlighted placement ring associated with its slot. The
+        // ring sits just outside the translucent slot volume, so the slot
+        // instanced mesh is not always hit by the raycaster on click.
+        hoverRing.userData.slotIndex = hoverIndex;
         hoverRing.visible = true;
         boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.2, placementPoint.z);
         boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
@@ -2819,6 +2823,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       // hit state synchronously so a selected forklift always treats a box
       // click as a pickup command instead of opening its drawer.
       updatePointer(event);
+      // Clicking the visible yellow placement ring must issue putaway, not
+      // fall through to the normal slot drawer. Resolve the ring's slot when
+      // its visual surface is the hit target.
+      if (forkliftSelected && forkliftLoadAssembly && hoverIndex < 0 && hoverRing.visible
+        && raycaster.intersectObject(hoverRing, false).length > 0
+        && Number.isInteger(hoverRing.userData.slotIndex)) {
+        hoverIndex = hoverRing.userData.slotIndex;
+      }
       // The forklift is its own on/off control: clicking it again clears the
       // selection (and any pending route) instead of leaving it stuck active.
       // Clicking another rack slot while carrying a pallet is a new putaway
@@ -2862,7 +2874,17 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       else if (hoverBoxIndex >= 0) {
         const entry = boxEntries[hoverBoxIndex];
-        if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly && !forkliftMotion) {
+        if (forkliftSelected && forkliftRoot && !forkliftLoadAssembly) {
+          // Keep forklift interaction mode active after a completed putaway.
+          // Clear any stale route state before issuing the next pickup so the
+          // click can never fall through to the normal box drawer.
+          if (forkliftMotion) {
+            forkliftMotion = null;
+            routeLine.visible = false;
+            targetMarker.visible = false;
+            missionBeacon.visible = false;
+            setForkliftAudioMoving(false);
+          }
           // Instanced rack boxes cannot be re-parented individually. Create a
           // physical pickup proxy, hide that instance, and let the normal
           // pallet/rollback workflow carry it on the forks.
