@@ -606,7 +606,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     try { return window.uiPrefGet?.(viewPrefKey(name), fallback) ?? fallback; } catch { return fallback; }
   };
   const setViewPref = (name, value) => {
-    try { window.uiPrefSet?.(viewPrefKey(name), value); } catch { /* preference sync is optional offline */ }
+    const key = viewPrefKey(name);
+    try { window.uiPrefSet?.(key, value); } catch { /* preference sync is optional offline */ }
+    // Send 3D toggles immediately as well as through the legacy debounced
+    // preference queue, so a fast refresh cannot lose the operator's choice.
+    try {
+      fetch('/api/ui-prefs', {
+        method: 'PUT',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ [key]: value }),
+      }).catch(() => undefined);
+    } catch { /* offline */ }
   };
   const soundButton = document.createElement('button');
   soundButton.type = 'button';
@@ -856,8 +867,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   stage.appendChild(firstPersonButton);
   stage.appendChild(settingsButton);
   stage.appendChild(settingsMenu);
-  fullscreenButton.style.bottom = '66px';
-  firstPersonButton.style.bottom = '118px';
+  // Keep the view controls anchored as one compact stack in the true lower
+  // right corner. The shortcut hint already sits immediately to their left.
+  fullscreenButton.style.bottom = '14px';
+  firstPersonButton.style.bottom = '66px';
   stage.appendChild(firstPersonHint);
   stage.appendChild(firstPersonOverlay);
 
