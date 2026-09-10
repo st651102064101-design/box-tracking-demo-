@@ -3913,11 +3913,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (forkliftLiftInput) {
         // 3 m/s is quick enough for a held press while every rendered frame
         // still changes the target in sub-centimetre increments.
-        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 12 * deltaSeconds, 0, forkliftLiftMax);
+        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 6 * deltaSeconds, 0, forkliftLiftMax);
       }
       // Putaway lift/lower motion is intentionally slower so the forks and
       // pallet visibly align with the rack shelf instead of snapping.
-      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 18, deltaSeconds);
+      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 9, deltaSeconds);
       // Publish manual mast movement as it animates, so other viewers follow
       // the same height without being allowed to overwrite this operator.
       if (forkliftSelected && Math.abs(forkliftLiftHeight - forkliftLiftTarget) > 0.003) saveForkliftPosition();
@@ -3935,6 +3935,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           Math.max(0, forkliftLiftHeight - forkliftMastEngageHeight) / forkliftAssetScale,
         );
       }
+    }
+    // Keep the ring locked to the forklift root every frame. Previously its
+    // position was only refreshed during local route movement, so the beat
+    // effect could lag behind (or remain offset from) the vehicle after a
+    // remote sync, rotation, or a completed pickup.
+    if (forkliftSelection && forkliftRoot) {
+      forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     }
     if (forkliftSelection?.visible) {
       forkliftSelection.material.opacity = 0.68 + Math.sin(frameNow * 0.01) * 0.25;
