@@ -1389,9 +1389,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   ];
   wallSpecs.forEach(([width, height, depth, x, y, z]) => {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMaterial);
+    wall.userData.isWarehouseWall = true;
     wall.position.set(x, y, z);
     wall.receiveShadow = true;
-    scene.add(wall);
+  scene.add(wall);
   });
   // Corrugated metal-sheet seams make the enclosure read as a real new build.
   const seamMaterial = new THREE.MeshStandardMaterial({ color: 0xb9c3c8, metalness: 0.72, roughness: 0.4 });
@@ -2855,12 +2856,18 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
-        const slotOccupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(destination.slot.id)).length
+        const isReturnSlot = Boolean(forkliftReturnTarget && String(destination.slot.id) === String(forkliftReturnTarget.slot.id));
+        const storedOccupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(destination.slot.id)).length
           + (putawaySlotCounts.get(String(destination.slot.id)) || 0);
+        // A box removed from a rack remains in the saved model until its next
+        // putaway request finishes.  When clicking that now-empty source slot,
+        // exclude the carried box or it is treated as a second pallet and gets
+        // shifted sideways instead of returning squarely to its original spot.
+        const slotOccupancy = Math.max(0, storedOccupancy - (isReturnSlot ? 1 : 0));
         // With a pallet on the forks, a click on an empty or single-pallet
         // slot is a putaway command; otherwise retain the normal slot drawer.
         if (forkliftSelected && forkliftLoadAssembly && slotOccupancy < 2) {
-          forkliftDropTarget = { ...destination, occupancy: slotOccupancy };
+          forkliftDropTarget = { ...destination, occupancy: slotOccupancy, isReturnSlot };
           forkliftPutawayPhase = 'travel';
           // Travel with forks lowered; the lift command is issued only after
           // the vehicle reaches the destination.
@@ -3199,6 +3206,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let lastFpsAt = performance.now();
   let lastAnimateAt = performance.now();
   const movementDirection = new THREE.Vector3();
+  const _tmpVec3 = new THREE.Vector3();
   const walkForward = new THREE.Vector3();
   const walkRight = new THREE.Vector3();
   const walkCandidate = new THREE.Vector3();
@@ -3331,7 +3339,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftLoadAssembly.position.copy(target.position);
             // A slot supports up to two pallets side-by-side. Offset the
             // second load along the slot's local width, never vertically.
-            {
+            if (!target.isReturnSlot) {
               const side = target.occupancy ? 1 : -1;
               const sideOffset = new THREE.Vector3(side * target.scale.x * 0.24, 0, 0)
                 .applyQuaternion(target.quaternion);
@@ -3341,7 +3349,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             // centred there so the load is level with the shelf opening.
             forkliftLoadAssembly.quaternion.copy(target.quaternion);
             forkliftLoadAssembly.userData.slotId = target.slot.id;
-            putawaySlotCounts.set(String(target.slot.id), (putawaySlotCounts.get(String(target.slot.id)) || 0) + 1);
+            if (!target.isReturnSlot) {
+              putawaySlotCounts.set(String(target.slot.id), (putawaySlotCounts.get(String(target.slot.id)) || 0) + 1);
+            }
             const placedBoxId = forkliftLoadAssembly.userData.stagingBoxId;
             forkliftLoadAssembly = null;
             forkliftDropTarget = null;
@@ -3536,6 +3546,22 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       consumerHoverShell.scale.setScalar(pulse);
       consumerHoverMaterial.opacity = 0.72 + Math.sin(performance.now() * 0.009) * 0.24;
     }
+    // Wall LOD: at overview distance keep only the four broad wall panels;
+    // beams, seams and cladding details return as the camera approaches.
+    const wallDetailRange = 18;
+    const cameraDistance = camera.position.distanceTo(center);
+    scene.traverse((object) => {
+      if (object.userData?.isWarehouseWall || object === floor || object === forkliftRoot) return;
+      if (!object.isMesh && !object.isLine) return;
+      const p = object.getWorldPosition(_tmpVec3);
+      const nearWall = Math.min(
+        Math.abs(p.x - (center.x - halfWarehouseWidth)),
+        Math.abs(p.x - (center.x + halfWarehouseWidth)),
+        Math.abs(p.z - (center.z - halfWarehouseDepth)),
+        Math.abs(p.z - (center.z + halfWarehouseDepth)),
+      ) < 0.22;
+      if (nearWall && object.userData?.wallLod !== false) object.visible = cameraDistance <= wallDetailRange;
+    });
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
     frames += 1;
