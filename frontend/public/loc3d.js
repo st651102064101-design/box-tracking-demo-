@@ -2272,6 +2272,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let forkliftMotion = null;
   let forkliftDropTarget = null;
   let forkliftPutawayPhase = null;
+  let forkliftReturnTarget = null;
   let forkliftRollback = null;
   // Travel specification: 300 km/h maximum, accelerating 0→300 km/h in 3 s.
   // Values stay in metres/second so the movement remains frame-rate independent.
@@ -2681,7 +2682,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const state = slotState(entry);
       const hiddenOccupied = state === 'occupied' && !showOccupiedSlots;
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
-      labelElement.textContent = state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
+      const isReturnSlot = Boolean(forkliftReturnTarget && String(entry.slot.id) === String(forkliftReturnTarget.slot.id));
+      labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? 'ช่องจัดเก็บ' : state === 'occupied' ? 'มีของ' : 'ว่าง';
       labelElement.className = `loc3d-slot-label ${hiddenOccupied ? 'empty' : state}`;
       // Keep the slot-status label inside the bay instead of floating above its beam.
       labelObject.position.copy(entry.position).add(new THREE.Vector3(0, 0.05, 0));
@@ -2788,6 +2790,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           pickupMesh.scale.copy(entry.scale);
           pickupMesh.userData.stagingBox = entry.box;
           pickupMesh.userData.stagingBoxId = entry.box.id;
+          forkliftReturnTarget = entry.slotEntry;
+          missionBeacon.position.copy(entry.position).setY(warehouseFloorY + 0.06);
+          missionBeacon.visible = true;
           scene.add(pickupMesh);
           boxMesh.setMatrixAt(hoverBoxIndex, new THREE.Matrix4().makeScale(0, 0, 0));
           boxMesh.instanceMatrix.needsUpdate = true;
@@ -3278,6 +3283,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             const placedBoxId = forkliftLoadAssembly.userData.stagingBoxId;
             forkliftLoadAssembly = null;
             forkliftDropTarget = null;
+            forkliftReturnTarget = null;
             forkliftPutawayPhase = null;
             // After every successful putaway, return the forks to the lowest
             // safe travel position with the same smooth damping.
