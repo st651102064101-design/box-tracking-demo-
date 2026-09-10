@@ -3461,7 +3461,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         forkliftMotion = { path: [forkliftRoot.position.clone()], index: 0, currentSpeed: 0, cruiseSpeed: 0, pickupMesh: null };
       }
     }
-    if (forkliftMotion && forkliftRoot) {
+    // While the truck squares up to a rack box, do not process the completed
+    // zero-length route again. Re-entering that block restarted the alignment
+    // state every frame and could leave the forklift appearing stuck at the
+    // pickup slot.
+    if (forkliftMotion && forkliftRoot && !forkliftMotion.pickupAligning) {
       const destination = forkliftMotion.path[forkliftMotion.index];
       movementDirection.subVectors(destination, forkliftRoot.position);
       movementDirection.y = 0;
