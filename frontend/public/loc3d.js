@@ -537,12 +537,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       button.style.color = active ? '#b8ff73' : '#fff';
     });
   };
-  const toggleBoundaryDetail = (kind) => {
+  const toggleBoundaryDetail = (kind, shouldToggle = true) => {
     const pref = kind === 'walls' ? 'loc3dWallsVisible' : 'loc3dRoofVisible';
     const visible = getViewPref(pref, true);
-    setViewPref(pref, !visible);
-    const wallsVisible = kind === 'walls' ? !visible : getViewPref('loc3dWallsVisible', true);
-    const roofVisible = kind === 'roof' ? !visible : getViewPref('loc3dRoofVisible', true);
+    if (shouldToggle) setViewPref(pref, !visible);
+    const nextVisible = shouldToggle ? !visible : visible;
+    const wallsVisible = kind === 'walls' ? nextVisible : getViewPref('loc3dWallsVisible', true);
+    const roofVisible = kind === 'roof' ? nextVisible : getViewPref('loc3dRoofVisible', true);
     if (!wallsVisible && !roofVisible) {
       const belongsTo = (root, object) => {
         if (!root) return false;
@@ -2434,19 +2435,45 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let remoteForkliftPosition = null;
   let remoteForkliftRotation = null;
   let forkliftLocalPositionHoldUntil = 0;
-  let forkliftSyncFrame = 0;
-  const saveForkliftPosition = () => {
+  let forkliftNextSyncAt = 0;
+  let forkliftLastBroadcastAt = 0;
+  let forkliftBroadcastInFlight = false;
+  let forkliftPendingBroadcast = null;
+  const forkliftBroadcastIntervalMs = 125;
+  const persistForkliftPosition = (snapshot) => {
+    forkliftBroadcastInFlight = true;
+    fetch('/api/warehouse-3d/forklift', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ warehouseId: model.warehouseId, position: snapshot.position, rotationY: snapshot.rotationY }),
+    }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error))
+      .finally(() => {
+        forkliftBroadcastInFlight = false;
+        if (!forkliftPendingBroadcast) return;
+        const pending = forkliftPendingBroadcast;
+        forkliftPendingBroadcast = null;
+        persistForkliftPosition(pending);
+      });
+  };
+  const saveForkliftPosition = (force = false) => {
     if (!forkliftRoot || !model.warehouseId) return;
     // Do not let a previously fetched remote position pull the local truck
     // away from a just-completed route while the PUT request is in flight.
     remoteForkliftPosition = forkliftRoot.position.clone();
     remoteForkliftRotation = forkliftRoot.rotation.y;
-    forkliftLocalPositionHoldUntil = performance.now() + 1800;
-    fetch('/api/warehouse-3d/forklift', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify({ warehouseId: model.warehouseId, position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z }, rotationY: forkliftRoot.rotation.y }),
-    }).catch((error) => console.warn('[Warehouse3D] could not save forklift position', error));
+    forkliftLocalPositionHoldUntil = performance.now() + 450;
+    const snapshot = {
+      position: { x: forkliftRoot.position.x, y: forkliftRoot.position.y, z: forkliftRoot.position.z },
+      rotationY: forkliftRoot.rotation.y,
+    };
+    const now = performance.now();
+    if (!force && now - forkliftLastBroadcastAt < forkliftBroadcastIntervalMs) return;
+    forkliftLastBroadcastAt = now;
+    if (forkliftBroadcastInFlight) {
+      forkliftPendingBroadcast = snapshot;
+      return;
+    }
+    persistForkliftPosition(snapshot);
   };
   const syncForkliftPosition = async () => {
     if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion) return;
@@ -2774,7 +2801,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // than a box inside. Test boxes independently and give them click/hover
     // priority so operators can open the actual box record.
     const boxHit = boxMesh ? raycaster.intersectObject(boxMesh, false)[0] : null;
-    const stagingHit = stagingBoxPickMeshes.length ? raycaster.intersectObjects(stagingBoxPickMeshes, false)[0] : null;
+    const rawStagingHit = stagingBoxPickMeshes.length ? raycaster.intersectObjects(stagingBoxPickMeshes, false)[0] : null;
+    // Once a pallet is attached to the forklift it must no longer behave as a
+    // hoverable staging pallet. Leaving it in the raycast list made its ring
+    // cue appear to follow the mouse in normal orbit mode.
+    const belongsToForkliftLoad = (object) => {
+      let current = object;
+      while (current) {
+        if (current === forkliftLoadAssembly || current === forkliftRoot) return true;
+        current = current.parent;
+      }
+      return false;
+    };
+    const stagingHit = rawStagingHit && !belongsToForkliftLoad(rawStagingHit.object) ? rawStagingHit : null;
     const slotHit = slotMesh ? raycaster.intersectObject(slotMesh, false)[0] : null;
     const consumerHit = consumerUnitPickMeshes.length ? raycaster.intersectObjects(consumerUnitPickMeshes, false)[0] : null;
     const doorHit = dockDoorPickMeshes.length ? raycaster.intersectObjects(dockDoorPickMeshes, false)[0] : null;
@@ -3079,6 +3118,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       else if (hoverIndex >= 0) {
         const destination = slotEntries[hoverIndex];
+        // An empty selected forklift is in vehicle-operation mode, not
+        // location-edit mode. A rack-slot click must never open its drawer.
+        if (forkliftSelected && !forkliftLoadAssembly && !forkliftMotion?.pickupMesh) {
+          window.toast?.('รถ Forklift ยังว่าง', 'กรุณาคลิกกล่องเพื่อรับพาเลทก่อนเลือกตำแหน่งวาง', 'warn');
+          return;
+        }
         const isReturnSlot = Boolean(forkliftReturnTarget && String(destination.slot.id) === String(forkliftReturnTarget.slot.id));
         const storedOccupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(destination.slot.id)).length
           + (putawaySlotCounts.get(String(destination.slot.id)) || 0);
@@ -3451,13 +3496,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
     lastAnimateAt = frameNow;
-    forkliftSyncFrame += 1;
-    if (forkliftSyncFrame % 30 === 0) syncForkliftPosition();
+    if (frameNow >= forkliftNextSyncAt) {
+      forkliftNextSyncAt = frameNow + forkliftBroadcastIntervalMs;
+      syncForkliftPosition();
     if (forkliftRoot && !forkliftMotion && remoteForkliftPosition) {
-      forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-8 * deltaSeconds));
+      forkliftRoot.position.lerp(remoteForkliftPosition, 1 - Math.exp(-14 * deltaSeconds));
       if (remoteForkliftRotation != null) {
         const remoteDelta = yawDifference(forkliftRoot.rotation.y, remoteForkliftRotation);
-        forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-8 * deltaSeconds));
+        forkliftRoot.rotation.y += remoteDelta * (1 - Math.exp(-14 * deltaSeconds));
       }
     }
     if (forkliftMotion?.pickupAligning && forkliftMotion.pickupMesh) {
@@ -3529,7 +3575,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           routeLine.geometry = new THREE.BufferGeometry().setFromPoints(remainingRoute);
         }
         if (forkliftMotion.index >= forkliftMotion.path.length) {
-          saveForkliftPosition();
+          saveForkliftPosition(true);
           if (forkliftDropTarget && forkliftPutawayPhase === 'travel') {
             // Finish steering into the rack face before lifting; the actual
             // rotation happens over subsequent frames rather than snapping.
@@ -3668,7 +3714,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             }).catch((error) => window.toast?.('บันทึก Putaway ไม่สำเร็จ', error.message, 'err'));
             window.toast?.('วางพาเลทเข้าช่องแล้ว', `${target.slot.id} · ชั้น ${target.slot.shelfCode || ''}`, 'ok');
             }
-          saveForkliftPosition();
+          saveForkliftPosition(true);
           if (pickupMesh?.userData?.rackPickup) setRackPickupCameraLock(false);
           }
           forkliftMotion = null;
@@ -3716,6 +3762,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         forkliftWheels.forEach(({ object, radius }) => {
           object.rotation.x += distanceTravelled / Math.max(radius, 0.01);
         });
+        // Publish movement continuously so every open warehouse view receives
+        // a fresh waypoint while the truck is travelling, not only on arrival.
+        if (distanceTravelled > 0 || Math.abs(yawError) > 0.001) saveForkliftPosition();
       }
       if (forkliftSelection?.visible) forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     }
@@ -3864,8 +3913,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // This makes a second device inherit the operator's wall/roof/grid choices.
   grid.visible = unitGridVisible;
   grid.material.opacity = unitGridVisible ? 0.48 : 0.11;
-  if (!getViewPref('loc3dWallsVisible', true)) toggleBoundaryDetail('walls');
-  if (!getViewPref('loc3dRoofVisible', true)) toggleBoundaryDetail('roof');
+  if (!getViewPref('loc3dWallsVisible', true)) toggleBoundaryDetail('walls', false);
+  if (!getViewPref('loc3dRoofVisible', true)) toggleBoundaryDetail('roof', false);
   syncViewToggleButtons();
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
