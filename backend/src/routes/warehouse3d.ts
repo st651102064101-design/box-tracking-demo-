@@ -16,6 +16,8 @@ const forkliftPositionSchema = z.object({
   position: z.object({ x: coordinate, y: coordinate, z: coordinate }),
   rotationY: z.number().finite().optional(),
   target: z.object({ x: coordinate, y: coordinate, z: coordinate }).nullable().optional(),
+  liftHeight: coordinate.min(0).max(100).optional(),
+  moving: z.boolean().optional(),
 });
 
 const rackGeometrySchema = z.object({
@@ -233,7 +235,14 @@ warehouse3dRouter.put(
     if (!before) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
     const data = {
       ...(before.data as Record<string, unknown>),
-      forkliftPosition: { position: input.position, rotationY: input.rotationY ?? 0, target: input.target ?? null, updatedAt: new Date().toISOString() },
+      forkliftPosition: {
+        position: input.position,
+        rotationY: input.rotationY ?? 0,
+        target: input.target ?? null,
+        liftHeight: input.liftHeight ?? 0,
+        moving: input.moving ?? false,
+        updatedAt: new Date().toISOString(),
+      },
     };
     await db.update(warehouses).set({ data, updatedAt: new Date() }).where(eq(warehouses.id, before.id));
     bump(req.get('X-Client-Id'));
