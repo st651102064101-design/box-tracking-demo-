@@ -2703,10 +2703,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       slotMesh.setColorAt(hoverIndex, state === 'empty' || hiddenOccupied ? EMPTY_HOVER_COLOR : HOVER_COLOR);
       const isReturnSlot = Boolean(forkliftReturnTarget && String(entry.slot.id) === String(forkliftReturnTarget.slot.id));
       if (forkliftSelected && !isReturnSlot && state !== 'full') {
-        // Carrying mode uses no persistent placement glow; only the box under
-        // the pointer may be highlighted, and it is cleared on pointer exit.
-        hoverRing.visible = false;
-        boxHoverArrow.visible = false;
+        // Hide text while carrying; the ring is the GTA-style placement cue.
+        // Match the exact side offset used by the placement code below.
+        const occupancy = (model.boxes || []).filter((box) => String(box.slotId) === String(entry.slot.id)).length
+          + (putawaySlotCounts.get(String(entry.slot.id)) || 0);
+        const side = occupancy ? 1 : -1;
+        const placementPoint = entry.position.clone().add(
+          new THREE.Vector3(side * entry.scale.x * 0.24, 0, 0).applyQuaternion(entry.quaternion),
+        );
+        hoverRing.position.copy(placementPoint).setY(placementPoint.y - entry.scale.y / 2 + 0.022);
+        hoverRing.scale.setScalar(Math.max(entry.scale.x, entry.scale.z) * 1.5);
+        hoverRing.visible = true;
+        boxHoverArrow.position.set(placementPoint.x, placementPoint.y + entry.scale.y / 2 + 0.2, placementPoint.z);
+        boxHoverArrow.userData.baseY = boxHoverArrow.position.y;
+        boxHoverArrow.visible = true;
         labelObject.visible = false;
       } else {
         labelElement.textContent = isReturnSlot ? 'วางกล่องคืนที่เดิม' : state === 'full' ? 'เต็ม' : hiddenOccupied ? '' : state === 'occupied' ? 'มีของ' : 'ว่าง';
