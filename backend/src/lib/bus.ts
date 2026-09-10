@@ -43,6 +43,7 @@ export type LprDetectionEvent = { id: string; eventId: string; gateId: string; p
 export type LprDetectionListener = (event: LprDetectionEvent) => void;
 export type ForkliftStateEvent = {
   warehouseId: string;
+  forkliftId: string;
   position: { x: number; y: number; z: number };
   rotationY: number;
   target: { x: number; y: number; z: number } | null;

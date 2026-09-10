@@ -13,6 +13,7 @@ const coordinate = z.number().finite().min(-10_000_000).max(10_000_000);
 const materialType = z.string().trim().min(1).max(80);
 const forkliftPositionSchema = z.object({
   warehouseId: z.string().trim().min(1),
+  forkliftId: z.string().trim().min(1).max(80).default('forklift-1'),
   position: z.object({ x: coordinate, y: coordinate, z: coordinate }),
   rotationY: z.number().finite().optional(),
   target: z.object({ x: coordinate, y: coordinate, z: coordinate }).nullable().optional(),
@@ -21,7 +22,7 @@ const forkliftPositionSchema = z.object({
   cargoBoxId: z.string().trim().min(1).max(160).nullable().optional(),
   layoutRevision: z.string().trim().min(1).max(160).nullable().optional(),
 });
-const forkliftControlSchema = z.object({ warehouseId: z.string().trim().min(1) });
+const forkliftControlSchema = z.object({ warehouseId: z.string().trim().min(1), forkliftId: z.string().trim().min(1).max(80).default('forklift-1') });
 const sharedViewSettingsSchema = z.object({
   unitGrid: z.boolean().optional(),
   loc3dWallsVisible: z.boolean().optional(),
@@ -52,17 +53,18 @@ function clientIdFrom(req: Request, required = false): string | null {
   return clientId;
 }
 
-function activeForkliftLease(warehouseId: string, now = Date.now()): ForkliftControllerLease | null {
-  const lease = forkliftControllerLeases.get(warehouseId) ?? null;
+function forkliftLeaseKey(warehouseId: string, forkliftId = 'forklift-1') { return `${warehouseId}:${forkliftId}`; }
+function activeForkliftLease(warehouseId: string, forkliftId = 'forklift-1', now = Date.now()): ForkliftControllerLease | null {
+  const lease = forkliftControllerLeases.get(forkliftLeaseKey(warehouseId, forkliftId)) ?? null;
   if (lease && lease.expiresAtMs <= now) {
-    forkliftControllerLeases.delete(warehouseId);
+    forkliftControllerLeases.delete(forkliftLeaseKey(warehouseId, forkliftId));
     return null;
   }
   return lease;
 }
 
-function forkliftControllerStatus(warehouseId: string, requesterId: string | null, now = Date.now()) {
-  const lease = activeForkliftLease(warehouseId, now);
+function forkliftControllerStatus(warehouseId: string, requesterId: string | null, forkliftId = 'forklift-1', now = Date.now()) {
+  const lease = activeForkliftLease(warehouseId, forkliftId, now);
   return {
     active: Boolean(lease),
     isOwner: Boolean(lease && requesterId && lease.clientId === requesterId),
@@ -71,18 +73,19 @@ function forkliftControllerStatus(warehouseId: string, requesterId: string | nul
   };
 }
 
-function claimForkliftControl(warehouseId: string, clientId: string, now = Date.now()): boolean {
-  const lease = activeForkliftLease(warehouseId, now);
+function claimForkliftControl(warehouseId: string, clientId: string, forkliftId = 'forklift-1', now = Date.now()): boolean {
+  const lease = activeForkliftLease(warehouseId, forkliftId, now);
   if (lease && lease.clientId !== clientId) return false;
-  forkliftControllerLeases.set(warehouseId, { clientId, expiresAtMs: now + FORKLIFT_CONTROL_LEASE_MS });
+  forkliftControllerLeases.set(forkliftLeaseKey(warehouseId, forkliftId), { clientId, expiresAtMs: now + FORKLIFT_CONTROL_LEASE_MS });
   return true;
 }
 
-function sendForkliftConflict(res: Response, warehouseId: string, requesterId: string) {
+function sendForkliftConflict(res: Response, warehouseId: string, requesterId: string, forkliftId = 'forklift-1') {
   return res.status(409).json({
     error: 'forklift_control_conflict',
     message: 'รถโฟล์คลิฟต์คันนี้กำลังถูกควบคุมจากอุปกรณ์อื่น',
-    forkliftController: forkliftControllerStatus(warehouseId, requesterId),
+    forkliftId,
+    forkliftController: forkliftControllerStatus(warehouseId, requesterId, forkliftId),
   });
 }
 
@@ -293,7 +296,10 @@ warehouse3dRouter.get(
       forkliftPosition: warehouse?.data && typeof warehouse.data === 'object'
         ? (warehouse.data as Record<string, unknown>).forkliftPosition ?? null
         : null,
-      forkliftController: forkliftControllerStatus(warehouseId, clientIdFrom(req)),
+      forkliftPositions: warehouse?.data && typeof warehouse.data === 'object'
+        ? (warehouse.data as Record<string, unknown>).forkliftPositions ?? {}
+        : {},
+    forkliftController: forkliftControllerStatus(warehouseId, clientIdFrom(req), String(req.query.forkliftId ?? 'forklift-1')),
       doors,
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
       boxes: boxRows.map((box) => {
@@ -336,13 +342,13 @@ warehouse3dRouter.post(
   '/forklift/control/claim',
   requirePermission('master.manage'),
   asyncHandler(async (req, res) => {
-    const { warehouseId } = forkliftControlSchema.parse(req.body);
+    const { warehouseId, forkliftId } = forkliftControlSchema.parse(req.body);
     const clientId = clientIdFrom(req, true)!;
     const db = getDb();
     const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
     if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
-    if (!claimForkliftControl(warehouseId, clientId)) return sendForkliftConflict(res, warehouseId, clientId);
-    res.json({ ok: true, forkliftController: forkliftControllerStatus(warehouseId, clientId) });
+    if (!claimForkliftControl(warehouseId, clientId, forkliftId)) return sendForkliftConflict(res, warehouseId, clientId, forkliftId);
+    res.json({ ok: true, forkliftId, forkliftController: forkliftControllerStatus(warehouseId, clientId, forkliftId) });
   }),
 );
 
@@ -350,19 +356,20 @@ warehouse3dRouter.post(
   '/forklift/control/release',
   requirePermission('master.manage'),
   asyncHandler(async (req, res) => {
-    const { warehouseId } = forkliftControlSchema.parse(req.body);
+    const { warehouseId, forkliftId } = forkliftControlSchema.parse(req.body);
     const clientId = clientIdFrom(req, true)!;
     const db = getDb();
     const [warehouse] = await db.select({ id: warehouses.id }).from(warehouses).where(eq(warehouses.id, warehouseId));
     if (!warehouse) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
-    const lease = activeForkliftLease(warehouseId);
-    if (lease && lease.clientId !== clientId) return sendForkliftConflict(res, warehouseId, clientId);
+    const lease = activeForkliftLease(warehouseId, forkliftId);
+    if (lease && lease.clientId !== clientId) return sendForkliftConflict(res, warehouseId, clientId, forkliftId);
     const released = Boolean(lease);
-    if (lease) forkliftControllerLeases.delete(warehouseId);
+    if (lease) forkliftControllerLeases.delete(forkliftLeaseKey(warehouseId, forkliftId));
     res.json({
       ok: true,
       released,
-      forkliftController: forkliftControllerStatus(warehouseId, clientId),
+      forkliftId,
+      forkliftController: forkliftControllerStatus(warehouseId, clientId, forkliftId),
     });
   }),
 );
@@ -378,11 +385,11 @@ warehouse3dRouter.put(
     if (!before) throw httpError(404, 'ไม่พบคลัง', 'warehouse_not_found');
     // The first movement write may claim an idle truck for compatibility with
     // clients that have not yet added the explicit preflight endpoint.
-    if (!claimForkliftControl(input.warehouseId, clientId)) {
-      return sendForkliftConflict(res, input.warehouseId, clientId);
+    if (!claimForkliftControl(input.warehouseId, clientId, input.forkliftId)) {
+      return sendForkliftConflict(res, input.warehouseId, clientId, input.forkliftId);
     }
     const updatedAt = new Date().toISOString();
-    const data = {
+    const data: Record<string, unknown> = {
       ...(before.data as Record<string, unknown>),
       forkliftPosition: {
         position: input.position,
@@ -395,9 +402,15 @@ warehouse3dRouter.put(
         updatedAt,
       },
     };
+    const forkliftPositions = {
+      ...(before.data as Record<string, unknown>).forkliftPositions as Record<string, unknown> | undefined,
+      [input.forkliftId]: data.forkliftPosition,
+    };
+    data.forkliftPositions = forkliftPositions;
     await db.update(warehouses).set({ data, updatedAt: new Date() }).where(eq(warehouses.id, before.id));
     publishForkliftState({
       warehouseId: input.warehouseId,
+      forkliftId: input.forkliftId,
       position: input.position,
       rotationY: input.rotationY ?? 0,
       target: input.target ?? null,
@@ -411,7 +424,8 @@ warehouse3dRouter.put(
     res.json({
       ok: true,
       forkliftPosition: data.forkliftPosition,
-      forkliftController: forkliftControllerStatus(input.warehouseId, clientId),
+      forkliftId: input.forkliftId,
+      forkliftController: forkliftControllerStatus(input.warehouseId, clientId, input.forkliftId),
     });
   }),
 );
