@@ -3792,6 +3792,21 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             destination.scale.z * 0.5 + forkliftClearance,
           );
           approachPoint.y = warehouseFloorY + 0.025;
+          // The marker represents the actual pallet position, not the aisle
+          // stopping point.  Slot occupancy is filled left-to-right: the
+          // first pallet belongs on the left, and only the second on the
+          // right.  Without this offset the marker stayed at the slot centre
+          // (visually on the right/occupied pallet in the screenshot).
+          // In this rack orientation +local-X is the visual left side.
+          // Existing single boxes use -local-X and therefore appear on the
+          // right; the first free position must be the opposite side.
+          const placementSide = slotOccupancy > 0 ? -1 : 1;
+          const placementPoint = destination.position.clone().add(
+            new THREE.Vector3(placementSide * destination.scale.x * 0.24, 0, 0)
+              .applyQuaternion(destination.quaternion),
+          );
+          targetMarker.position.copy(placementPoint).setY(warehouseFloorY + 0.055);
+          targetMarker.visible = true;
           moveForkliftTo(approachPoint, null, true);
           window.toast?.('กำลังนำพาเลทไปวาง', `${destination.slot.id} · ชั้น ${destination.slot.shelfCode || ''}`, 'ok');
         } else if (carryingLoad) {
@@ -3872,7 +3887,9 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   canvas.addEventListener('wheel', enableOrbitGesture, { capture: true, passive: true });
   canvas.addEventListener('pointermove', onPointerMove, { passive: true });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
-  canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+  // onPointerUp calls preventDefault() to stop a click from opening a drawer
+  // during forklift operations, so this listener must be non-passive.
+  canvas.addEventListener('pointerup', onPointerUp, { passive: false });
   canvas.addEventListener('pointerleave', onPointerLeave, { passive: true });
   canvas.addEventListener('pointerout', onPointerOut, { passive: true });
   window.addEventListener('pointermove', onWindowPointerMove, { passive: true });

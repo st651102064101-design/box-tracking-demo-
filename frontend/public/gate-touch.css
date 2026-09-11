@@ -1,0 +1,46 @@
+#gate-touch-home,#gate-touch-toolbar{display:none}
+.gate-touch-gates{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1100px;margin:0 auto}
+.gate-touch-gates section{padding:20px;border:1px solid var(--line);border-radius:20px;background:var(--surface)}
+.gate-touch-gates strong{font-size:20px;color:var(--accent)}
+#gate-touch-home .gate-touch-gates p{font-size:24px;font-weight:700;color:var(--ink);margin:12px 0;overflow-wrap:anywhere}
+.gate-touch-gates button{min-height:56px;width:100%;padding:12px 20px;border:1px solid var(--accent);border-radius:14px;background:var(--surface2);color:var(--ink);font:700 18px var(--font);cursor:pointer;touch-action:manipulation}
+@media(max-width:620px){.gate-touch-gates{grid-template-columns:1fr}}
+html body.gate-touch .navwrap,html body.gate-touch #nav,html body.gate-touch #mobileNavBackdrop,html body.gate-touch #btnMobileNav{display:none!important}
+html body.gate-touch main{margin-inline:auto!important;padding-top:112px!important;box-sizing:border-box}
+html body.gate-touch #gate-touch-toolbar{display:flex;position:fixed;inset:0 0 auto;z-index:100;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+html body.gate-touch #gate-touch-home{padding-top:120px!important;box-sizing:border-box}
+#gate-touch-toolbar .gate-touch-back{background:#a8f931;color:#142004;border-color:#a8f931;min-width:164px;min-height:64px;font-size:22px;font-weight:800}
+/* The home screen is the safe terminal landing page. Do not offer an exit
+   action there, so staff cannot accidentally leave the touch workflow. */
+body.gate-touch[data-gate-touch-page="home"] #gate-touch-toolbar .gate-touch-back{visibility:hidden;pointer-events:none}
+#gate-touch-menu{position:absolute;right:24px;top:100%;margin-top:8px;padding:12px;display:grid;gap:8px;width:min(360px,calc(100vw - 32px));max-height:70dvh;overflow:auto;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:0 12px 40px #0006}
+#gate-touch-menu[hidden]{display:none}#gate-touch-menu button{text-align:left;min-height:60px}
+body.gate-touch .chrome,body.gate-touch #navwrap,body.gate-touch #scrollTopBtn{display:none!important}
+body.gate-touch main{margin:0!important;padding:104px 28px 32px!important;max-width:1100px!important;width:100%!important}
+body.gate-touch[data-gate-touch-page="home"] main{display:none!important}
+body.gate-touch[data-gate-touch-page="home"] #gate-touch-home{display:flex;min-height:100dvh;padding:clamp(24px,5vw,64px);flex-direction:column;justify-content:center;gap:32px;background:var(--bg);color:var(--ink)}
+#gate-touch-home header{text-align:center}#gate-touch-home small{color:var(--accent);letter-spacing:.16em;font-weight:700}#gate-touch-home h1{font-size:clamp(30px,5vw,54px);margin:12px 0}#gate-touch-home p{color:var(--muted)}
+.gate-touch-choices{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:1100px;margin:auto}
+.gate-touch-choices button{min-height:clamp(260px,42vh,480px);border:2px solid #a8f931;border-radius:32px;background:#a8f931;color:#142004;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;cursor:pointer;touch-action:manipulation}
+.gate-touch-choices button+button{background:#182c42;border-color:#6bb8ff;color:#eaf5ff}.gate-touch-choices button:active{transform:scale(.98)}.gate-touch-choices strong{font-size:clamp(40px,7vw,80px)}.gate-touch-choices span{font-size:18px}.gate-touch-choices svg{width:72px;height:72px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.gate-touch-note{text-align:center;font-size:14px}
+body.gate-touch:not([data-gate-touch-page="home"]) #gate-touch-toolbar{display:flex;position:fixed;top:0;left:0;right:0;z-index:40;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+#gate-touch-toolbar button{min-height:56px;padding:12px 20px;border-radius:14px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font:700 17px var(--font);cursor:pointer}#gate-touch-toolbar strong{font-size:24px}
+body.gate-touch .tab>.hero,body.gate-touch #tab-gatein>.wg-board.reveal,body.gate-touch #tab-gateout>.wg-board.reveal{display:none!important}
+body.gate-touch .tab .btn,body.gate-touch .tab .scanbtn,body.gate-touch .tab .ivs-btn,body.gate-touch .modal button{min-height:56px;font-size:18px;padding:14px 22px;touch-action:manipulation}
+body.gate-touch .tab input:not([type="hidden"]),body.gate-touch .tab select,body.gate-touch .modal input,body.gate-touch .modal select{min-height:60px;font-size:20px}
+body.gate-touch .tab .field label,body.gate-touch .tab .wg-lbl{font-size:18px}body.gate-touch .tab .grid.g3{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+body.gate-touch .gateout-mode-switch{display:flex;gap:14px;flex-wrap:wrap}body.gate-touch .gateout-mode-btn{flex:1;min-width:180px;min-height:110px;padding:20px}body.gate-touch .gateout-mode-btn b{font-size:23px}body.gate-touch .gateout-mode-btn small{font-size:15px}
+/* This is an operator terminal, not a configuration screen. Gate assignment
+   is intentionally only available from the main system settings. */
+body.gate-touch #outGateChangeBtn,body.gate-touch #inGateChangeBtn,body.gate-touch #giStepGate .btn{display:none!important}
+/* Start on RFID/LPR and leave one obvious, touch-sized fallback for a handheld
+   barcode scan. Imports are deliberately kept out of this quick workflow. */
+body.gate-touch .gateout-mode-switch{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+body.gate-touch .gateout-mode-panel:not(.terminal-manual-available) .gateout-mode-switch{grid-template-columns:1fr}
+body.gate-touch .gateout-mode-btn[data-gateout-mode="manual"],body.gate-touch .gateout-mode-btn[data-gatein-mode="manual"]{display:none!important}
+body.gate-touch [data-gateout-mode="excel"],body.gate-touch [data-gatein-mode="excel"]{display:none!important}
+body.gate-touch [data-gateout-mode="rfid"],body.gate-touch [data-gatein-mode="rfid"]{order:-1}
+body.gate-touch .gateout-mode-btn{min-width:0;min-height:132px;padding:24px;text-align:center;justify-content:center}
+body.gate-touch .gateout-mode-btn b{font-size:26px}body.gate-touch .gateout-mode-btn small{font-size:17px}
+body.gate-touch .tab .reveal{opacity:1!important;transform:none!important;visibility:visible!important}body.gate-touch #scanIn,body.gate-touch #scanOut{font-size:26px;min-height:76px}body.gate-touch #btnShipOut{min-height:72px;font-size:24px}
+@media(max-width:620px){.gate-touch-choices{grid-template-columns:1fr}.gate-touch-choices button{min-height:220px}#gate-touch-toolbar strong{font-size:18px}#gate-touch-toolbar{padding:10px!important}#gate-touch-toolbar button{padding:10px;font-size:14px}body.gate-touch main{padding:100px 14px 24px!important}body.gate-touch .tab .grid.g3{grid-template-columns:1fr}}
