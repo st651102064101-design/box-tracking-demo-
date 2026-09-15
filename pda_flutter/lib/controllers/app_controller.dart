@@ -150,7 +150,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // some devices whenever the foreground app regains focus, silently
         // undoing setScanInputMode's earlier disable — reapply it every
         // time this app comes back, not just when the toggle itself moves.
-        rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+        if (_usesZebraSdk) {
+          rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+        }
         break;
       case AppLifecycleState.detached:
         break;
@@ -448,10 +450,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
   Timer? _offlineDialogDebounce;
-  // TC52 is a Zebra barcode terminal, but does not contain the MC3390R UHF
-  // reader.  Keep the native RFID bridge dormant on it rather than presenting
-  // repeated "reader not found" errors on every screen transition.
+  // MC3390R owns the UHF RFID SDK. TC52 and other Zebra terminals still use
+  // the native DataWedge SDK for their physical barcode imager, while a
+  // normal Android device stays on the app's barcode/manual input path.
   bool _hasIntegratedRfid = false;
+  bool _usesZebraSdk = false;
+  bool get hasIntegratedRfid => _hasIntegratedRfid;
+  bool get usesZebraSdk => _usesZebraSdk;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -1500,7 +1505,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // (laser/LED/beep) — otherwise RFID mode silences our antenna but
     // DataWedge still decodes (and beeps for) a barcode on the same pull,
     // and barcode mode leaves the imager off from the last RFID session.
-    rfid.setBarcodeScannerEnabled(m == ScanInputMode.barcode);
+    if (_usesZebraSdk) rfid.setBarcodeScannerEnabled(m == ScanInputMode.barcode);
     notifyListeners();
   }
 
@@ -1949,6 +1954,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final info = await rfid.deviceInfo();
       final model = (info['model'] ?? '').toString().trim().toUpperCase();
+      final manufacturer =
+          (info['manufacturer'] ?? '').toString().toUpperCase();
+      final brand = (info['brand'] ?? '').toString().toUpperCase();
+      _usesZebraSdk =
+          manufacturer.contains('ZEBRA') || brand.contains('ZEBRA');
       _hasIntegratedRfid = model.contains('MC3390');
       // Migrate the model persisted by older builds, which treated every
       // Zebra device (including TC52) as an MC3390R.
@@ -1962,6 +1972,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _readerHooked = false;
   void _connectReader() {
+    // DataWedge is the correct barcode SDK on TC52 and other Zebra models,
+    // even though they have no integrated UHF reader.
+    if (_usesZebraSdk) {
+      rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+    }
     if (!_hasIntegratedRfid || !rfid.supported) return;
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;

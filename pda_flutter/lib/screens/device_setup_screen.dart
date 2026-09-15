@@ -100,10 +100,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final info = await c.rfid.deviceInfo();
     final model = (info['model'] ?? '').toString();
     final manufacturer = (info['manufacturer'] ?? '').toString();
+    final brand = (info['brand'] ?? '').toString();
     final release = (info['androidRelease'] ?? '').toString();
     final modelUpper = model.trim().toUpperCase();
     final isMc3390r = modelUpper.contains('MC3390');
     final isTc52 = modelUpper.contains('TC52');
+    final isZebra = manufacturer.toUpperCase().contains('ZEBRA') ||
+        brand.toUpperCase().contains('ZEBRA');
 
     final resolved = isMc3390r
         ? const _DeviceProfile(
@@ -112,6 +115,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             androidVersion: 'Android 8.0 (Oreo)',
             note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
             hasRfid: true,
+            usesZebraSdk: true,
+            barcodeMethod: 'Zebra DataWedge SDK + เครื่องอ่าน UHF RFID',
           )
         : isTc52
             ? _DeviceProfile(
@@ -120,6 +125,18 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 androidVersion: release.isEmpty ? '' : 'Android $release',
                 note: 'สแกนบาร์โค้ดในตัวเครื่อง · ไม่มี UHF RFID ในตัว',
                 hasRfid: false,
+                usesZebraSdk: true,
+                barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
+              )
+        : isZebra
+            ? _DeviceProfile(
+                id: 'zebra',
+                name: ['Zebra', model].where((s) => s.isNotEmpty).join(' '),
+                androidVersion: release.isEmpty ? '' : 'Android $release',
+                note: 'ไม่พบ UHF RFID ในตัวเครื่อง',
+                hasRfid: false,
+                usesZebraSdk: true,
+                barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
               )
         : _DeviceProfile(
             id: 'generic',
@@ -133,6 +150,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             androidVersion: release.isEmpty ? '' : 'Android $release',
             note: 'ไม่มีเครื่องอ่าน RFID ในตัวเครื่อง — ใช้บาร์โค้ดได้ตามปกติ',
             hasRfid: false,
+            usesZebraSdk: false,
+            barcodeMethod: 'สแกนบาร์โค้ด/QR ด้วยอุปกรณ์สแกนหรือกรอกรหัสในแอป',
           );
     if (!mounted) return;
     setState(() => _profile = resolved);
@@ -390,12 +409,16 @@ class _DeviceProfile {
   final String androidVersion;
   final String note;
   final bool hasRfid;
+  final bool usesZebraSdk;
+  final String barcodeMethod;
   const _DeviceProfile({
     required this.id,
     required this.name,
     required this.androidVersion,
     required this.note,
     required this.hasRfid,
+    required this.usesZebraSdk,
+    required this.barcodeMethod,
   });
 }
 
@@ -449,10 +472,10 @@ class _DeviceModelPicker extends StatelessWidget {
           ),
           Text(
             p.hasRfid
-                ? loc.t(
-                    'ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป')
-                : loc.t(
-                    'ตรวจไม่พบเครื่องอ่าน RFID ในตัวเครื่องนี้ — ฟังก์ชันบาร์โค้ดยังใช้งานได้ตามปกติ'),
+                ? 'ใช้ Zebra SDK ได้: สแกนบาร์โค้ด, อ่าน/เขียน RFID และค้นหาแท็ก'
+                : p.usesZebraSdk
+                    ? 'ใช้ Zebra SDK ได้: ${p.barcodeMethod} · RFID ในตัวเครื่องใช้ไม่ได้'
+                    : 'อุปกรณ์ Android ทั่วไป: ${p.barcodeMethod} · RFID ใช้ไม่ได้',
             style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
           ),
         ],
@@ -494,7 +517,12 @@ class _DeviceProfileTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                 ),
                 alignment: Alignment.center,
-                child: Icon(Icons.qr_code_scanner,
+                child: Icon(
+                    profile.hasRfid
+                        ? Icons.settings_input_antenna
+                        : profile.usesZebraSdk
+                            ? Icons.qr_code_scanner
+                            : Icons.document_scanner_outlined,
                     size: 20, color: selected ? C.limeDeep : C.ink2),
               ),
               const SizedBox(width: 12),
