@@ -37,7 +37,7 @@ class BootScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text('Zebra MC3390R · Handheld Terminal',
+          Text('Zebra Handheld Terminal',
               style: TextStyle(fontSize: 13, color: C.muted)),
           const SizedBox(height: 18),
           SizedBox(

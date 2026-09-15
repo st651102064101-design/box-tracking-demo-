@@ -448,6 +448,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
   Timer? _offlineDialogDebounce;
+  // TC52 is a Zebra barcode terminal, but does not contain the MC3390R UHF
+  // reader.  Keep the native RFID bridge dormant on it rather than presenting
+  // repeated "reader not found" errors on every screen transition.
+  bool _hasIntegratedRfid = false;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -469,6 +473,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
+    await _detectHandheldHardware();
 
     // wire the Zebra reader — tagBatches (not the plain-epc tags stream)
     // because the stray-read RSSI filter (see _onReaderBatch) needs each
@@ -1940,9 +1945,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ═══════════════════════ Zebra reader wiring ═════════════════════════════
+  Future<void> _detectHandheldHardware() async {
+    try {
+      final info = await rfid.deviceInfo();
+      final model = (info['model'] ?? '').toString().trim().toUpperCase();
+      _hasIntegratedRfid = model.contains('MC3390');
+      // Migrate the model persisted by older builds, which treated every
+      // Zebra device (including TC52) as an MC3390R.
+      if (!_hasIntegratedRfid && prefs.deviceModel == 'mc3390r') {
+        prefs.deviceModel = model.contains('TC52') ? 'tc52' : 'generic';
+      }
+    } catch (_) {
+      _hasIntegratedRfid = false;
+    }
+  }
+
   bool _readerHooked = false;
   void _connectReader() {
-    if (!rfid.supported) return;
+    if (!_hasIntegratedRfid || !rfid.supported) return;
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;
     rfid.connect();

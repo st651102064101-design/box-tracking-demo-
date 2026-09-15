@@ -93,25 +93,19 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     );
   }
 
-  /// Used to auto-pick the Zebra profile for every device this build ran
-  /// on, regardless of what it actually was — a phone or an emulator got
-  /// labelled "Zebra MC3300 Series (MC3390R)" just as confidently as a real
-  /// unit, because the picker never asked the OS. Now it does: Build.MODEL/
-  /// MANUFACTURER/BRAND (via RfidService.deviceInfo, no reader connection
-  /// required) either matches the one qualified profile or it doesn't, and
-  /// only a genuine match gets that name — anything else shows its own real
-  /// manufacturer/model instead of a false "Zebra" label.
+  /// Detect the exact handheld family from Build.MODEL.  A TC52 is also made
+  /// by Zebra, but it is a barcode terminal, not an MC3390R with integrated
+  /// UHF RFID.  Brand/manufacturer alone must never decide this profile.
   Future<void> _detectDevice(AppController c) async {
     final info = await c.rfid.deviceInfo();
     final model = (info['model'] ?? '').toString();
     final manufacturer = (info['manufacturer'] ?? '').toString();
-    final brand = (info['brand'] ?? '').toString();
     final release = (info['androidRelease'] ?? '').toString();
-    final looksZebra = manufacturer.toLowerCase().contains('zebra') ||
-        brand.toLowerCase().contains('zebra') ||
-        model.toUpperCase().contains('MC33');
+    final modelUpper = model.trim().toUpperCase();
+    final isMc3390r = modelUpper.contains('MC3390');
+    final isTc52 = modelUpper.contains('TC52');
 
-    final resolved = looksZebra
+    final resolved = isMc3390r
         ? const _DeviceProfile(
             id: 'mc3390r',
             name: 'Zebra MC3300 Series (MC3390R)',
@@ -119,6 +113,14 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
             hasRfid: true,
           )
+        : isTc52
+            ? _DeviceProfile(
+                id: 'tc52',
+                name: 'Zebra TC52',
+                androidVersion: release.isEmpty ? '' : 'Android $release',
+                note: 'สแกนบาร์โค้ดในตัวเครื่อง · ไม่มี UHF RFID ในตัว',
+                hasRfid: false,
+              )
         : _DeviceProfile(
             id: 'generic',
             name: [manufacturer, model]
@@ -134,10 +136,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
           );
     if (!mounted) return;
     setState(() => _profile = resolved);
-    // Single detected option — picking it for the operator is the same
-    // "no real choice, don't make them tap it" reasoning the old
-    // always-Zebra version had, just now backed by an actual check.
-    if (c.prefs.deviceModel.isEmpty) c.setDeviceModel(resolved.id);
+    // The profile is a fact reported by Android, not a user preference.  This
+    // also migrates a TC52 that an older build incorrectly saved as mc3390r.
+    if (c.prefs.deviceModel != resolved.id) c.setDeviceModel(resolved.id);
   }
 
   @override

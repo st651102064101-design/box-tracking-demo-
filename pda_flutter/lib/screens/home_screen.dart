@@ -314,7 +314,9 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
             child: Text(
               c.prefs.deviceModel == 'mc3390r'
                   ? 'AMS Mobile Tracker (MC3390R)'
-                  : 'AMS Mobile Tracker',
+                  : c.prefs.deviceModel == 'tc52'
+                      ? 'AMS Mobile Tracker (TC52)'
+                      : 'AMS Mobile Tracker',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
