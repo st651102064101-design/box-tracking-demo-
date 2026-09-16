@@ -309,6 +309,17 @@ class LocaleController extends ChangeNotifier {
     'ช่อง': 'Slot',
     'กำลังบันทึก…': 'Saving…',
     // cycle count screen
+    'เลือกขอบเขตในคลังปัจจุบัน': 'Choose a scope in the current warehouse',
+    'เลือกขอบเขตที่จะตรวจนับ': 'Choose what to count',
+    'เลือกทั้งคลัง หรือเจาะจงโซน — แล้วกดเริ่มตรวจนับ':
+        'Pick the whole warehouse or a zone — then start the count',
+    'นับกล่องทุกโซนในคลังนี้': 'Count every box in this warehouse',
+    'หรือเลือกโซน': 'Or pick a zone',
+    'นับเฉพาะกล่องในโซนนี้': 'Count only boxes in this zone',
+    'ยังไม่มีโซนในคลังนี้ — เลือกทั้งคลังเพื่อเริ่มนับ':
+        'No zones in this warehouse yet — choose whole warehouse to start',
+    'จะเริ่มนับ': 'Ready to count',
+    'คุณกำลังตรวจนับที่': 'You are counting at',
     'เลือกโซนที่จะตรวจนับ': 'Choose a zone to count',
     'ทั้งคลัง': 'Whole warehouse',
     'คาดว่ามี': 'Expected',
@@ -317,6 +328,8 @@ class LocaleController extends ChangeNotifier {
     'ไม่ควรอยู่ที่นี่': 'Unexpected here',
     'เริ่มตรวจนับ': 'Start count',
     'กำลังเริ่ม…': 'Starting…',
+    'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของขอบเขตนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้':
+        'The count is recorded on the server — if someone already has a count open for this scope, you\'ll continue theirs',
     'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้':
         'The count is recorded on the server — if someone already has a count open for this zone, you\'ll continue theirs',
     'ตรวจนับครบถ้วน': 'Count complete',

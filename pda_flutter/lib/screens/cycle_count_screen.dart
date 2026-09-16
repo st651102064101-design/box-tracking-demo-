@@ -32,7 +32,10 @@ class CycleCountScreen extends StatefulWidget {
 }
 
 class _CycleCountScreenState extends State<CycleCountScreen> {
-  String? _zone; // null = whole warehouse
+  /// Scope pick before a session opens.
+  /// `null` = not chosen yet · `''` = whole warehouse · otherwise a zone id.
+  String? _pick;
+
   bool _busy = false;
   String? _error;
 
@@ -50,11 +53,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   /// zone doesn't silently drop reads.
   final List<String> _pending = [];
 
-  /// Guards the no-zones auto-start (see build()) so it fires exactly once —
-  /// without it, every rebuild while _start() is still in flight would kick
-  /// off another openCycleCount call.
-  bool _autoStartTried = false;
-
   /// Missing-count seen on the previous build, so the completion celebration
   /// fires only on the transition into "nothing missing" — not on every
   /// rebuild of an already-complete session, and not the instant a session
@@ -63,17 +61,36 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
 
   AppController get _c => context.read<AppController>();
 
-  List<String> _zonesInWh(AppController c) {
-    final all = c.S?.boxes.where(
-            (b) => b.status == 'warehouse' && b.location['wh'] == c.wh) ??
+  List<Box> _boxesInWh(AppController c) {
+    return c.S?.boxes
+            .where((b) => b.status == 'warehouse' && b.location['wh'] == c.wh)
+            .toList() ??
         const <Box>[];
-    final zones = all
+  }
+
+  List<String> _zonesInWh(AppController c) {
+    final zones = _boxesInWh(c)
         .map((b) => (b.location['zone'] ?? '').toString())
         .where((z) => z.isNotEmpty)
         .toSet()
         .toList()
       ..sort();
     return zones;
+  }
+
+  int _previewCount(AppController c) {
+    final boxes = _boxesInWh(c);
+    if (_pick == null) return 0;
+    if (_pick!.isEmpty) return boxes.length;
+    return boxes
+        .where((b) => (b.location['zone'] ?? '').toString() == _pick)
+        .length;
+  }
+
+  int _zoneCount(AppController c, String zone) {
+    return _boxesInWh(c)
+        .where((b) => (b.location['zone'] ?? '').toString() == zone)
+        .length;
   }
 
   List<String> _list(String key) {
@@ -88,13 +105,13 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   }
 
   Future<void> _start() async {
-    if (_busy) return;
+    if (_busy || _pick == null) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final s = await _c.api.openCycleCount(wh: _c.wh, zone: _zone ?? '');
+      final s = await _c.api.openCycleCount(wh: _c.wh, zone: _pick ?? '');
       if (!mounted) return;
       setState(() => _session = s);
       if (s['resumed'] == true) {
@@ -256,20 +273,12 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     final counted = _list('counted');
     final missing = _list('missing');
     final unexpected = _list('unexpected');
+    final whBoxes = _boxesInWh(c).length;
+    final preview = _previewCount(c);
 
     if (session != null && c.cycleCountRfidHits.length > _consumedRfidHits) {
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _drainRfidHits(c));
-    }
-
-    // No button to tap any more (see the zone chips below for the
-    // has-zones case) — a warehouse with no zones on file has nothing left
-    // for the operator to pick, so open the whole-warehouse session the
-    // instant this screen is reached instead of making them tap a "start"
-    // button for a choice that was never actually theirs to make.
-    if (session == null && !_busy && !_autoStartTried && zones.isEmpty) {
-      _autoStartTried = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _start());
     }
 
     if (session != null) {
@@ -288,6 +297,13 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       _lastMissing = missingCount;
     }
 
+    final sessionZone = (session?['zone'] ?? '').toString();
+    final sessionScope = session == null
+        ? ''
+        : sessionZone.isEmpty
+            ? loc.t('ทั้งคลัง')
+            : '${loc.t('โซน')} $sessionZone';
+
     return ScanCapture(
       // Live only once a session is open — the setup step above has zone
       // chips and a start button, and nothing to scan into yet.
@@ -298,8 +314,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
           onBack: c.backToHome,
           title: Text(loc.t('ตรวจนับ')),
           subtitle: Text(session == null
-              ? c.selWhName
-              : '${session['id']} · ${c.selWhName}${(session['zone'] ?? '').toString().isNotEmpty ? ' · ${loc.t('โซน')} ${session['zone']}' : ''}'),
+              ? loc.t('เลือกขอบเขตในคลังปัจจุบัน')
+              : '${session['id']} · $sessionScope'),
         ),
         body: Column(
           children: [
@@ -323,77 +339,112 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                     const SizedBox(height: 12),
                   ],
                   if (session == null) ...[
+                    _warehouseContextCard(c, loc, whBoxes),
+                    const SizedBox(height: 16),
+                    Text(loc.t('เลือกขอบเขตที่จะตรวจนับ'),
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: C.ink)),
+                    const SizedBox(height: 4),
+                    Text(
+                        loc.t(
+                            'เลือกทั้งคลัง หรือเจาะจงโซน — แล้วกดเริ่มตรวจนับ'),
+                        style: TextStyle(
+                            fontSize: 12, color: C.muted, height: 1.4)),
+                    const SizedBox(height: 12),
+                    _scopeTile(
+                      title: loc.t('ทั้งคลัง'),
+                      subtitle: loc.t('นับกล่องทุกโซนในคลังนี้'),
+                      countLabel: '$whBoxes ${loc.t('กล่อง')}',
+                      selected: _pick != null && _pick!.isEmpty,
+                      onTap: _busy
+                          ? null
+                          : () => setState(() => _pick = ''),
+                    ),
                     if (zones.isNotEmpty) ...[
-                      // No separate "เริ่มตรวจนับ" button any more — picking
-                      // a zone chip *is* the start action, straight through
-                      // to _start(). A zone with nothing left to decide
-                      // (the no-zones branch below) skips even this tap via
-                      // the auto-start in build() above.
-                      Text(loc.t('เลือกโซนที่จะตรวจนับ'),
+                      const SizedBox(height: 14),
+                      Text(loc.t('หรือเลือกโซน'),
                           style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
                               color: C.muted)),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _zoneChip(
-                              loc.t('ทั้งคลัง'),
-                              _zone == null,
-                              _busy
-                                  ? null
-                                  : () {
-                                      setState(() => _zone = null);
-                                      _start();
-                                    }),
-                          ...zones.map((z) => _zoneChip(
-                              z,
-                              _zone == z,
-                              _busy
-                                  ? null
-                                  : () {
-                                      setState(() => _zone = z);
-                                      _start();
-                                    })),
-                        ],
+                      ...zones.map((z) {
+                        final n = _zoneCount(c, z);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _scopeTile(
+                            title: '${loc.t('โซน')} $z',
+                            subtitle: loc.t('นับเฉพาะกล่องในโซนนี้'),
+                            countLabel: '$n ${loc.t('กล่อง')}',
+                            selected: _pick == z,
+                            onTap: _busy
+                                ? null
+                                : () => setState(() => _pick = z),
+                          ),
+                        );
+                      }),
+                    ] else ...[
+                      const SizedBox(height: 10),
+                      Text(
+                          loc.t(
+                              'ยังไม่มีโซนในคลังนี้ — เลือกทั้งคลังเพื่อเริ่มนับ'),
+                          style: TextStyle(
+                              fontSize: 12, color: C.faint, height: 1.4)),
+                    ],
+                    const SizedBox(height: 16),
+                    if (_pick != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: C.limeBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: C.limeBorder),
+                        ),
+                        child: Text(
+                          '${loc.t('จะเริ่มนับ')} · ${_pick!.isEmpty ? loc.t('ทั้งคลัง') : '${loc.t('โซน')} $_pick'} · $preview ${loc.t('กล่อง')}',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: C.limeDeep,
+                              height: 1.35),
+                        ),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    if (_busy) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: C.muted),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(loc.t('กำลังเริ่ม…'),
-                              style: TextStyle(fontSize: 12.5, color: C.muted)),
-                        ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: (_busy || _pick == null) ? null : _start,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.lime,
+                          foregroundColor: C.limeDeep,
+                          disabledBackgroundColor: C.neutralBg2,
+                          disabledForegroundColor: C.faint,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(
+                            _busy
+                                ? loc.t('กำลังเริ่ม…')
+                                : loc.t('เริ่มตรวจนับ'),
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w800)),
                       ),
-                      const SizedBox(height: 10),
-                    ],
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                         loc.t(
-                            'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของโซนนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
+                            'รอบตรวจนับจะถูกบันทึกลงระบบ — ถ้ามีคนเริ่มรอบของขอบเขตนี้ค้างไว้ ระบบจะทำต่อรอบเดิมให้'),
                         style: TextStyle(
                             fontSize: 11.5, color: C.faint, height: 1.45)),
                   ] else ...[
-                    // RFID sweep as an alternative to the barcode-only imager
-                    // path below — trigger/antenna wiring already existed in
-                    // AppController (_onReaderTrigger allowed this screen),
-                    // the only gap was nothing consuming a found tag; see
-                    // cycleCountRfidHits/_onReaderTag's Screen.cycleCount
-                    // case and _drainRfidHits above. Held trigger in RFID
-                    // mode still lets a hand-typed code slip through the
-                    // same "worse than a missed one" trap the comment below
-                    // warns about for barcode — there's still no free-text
-                    // field either way, on purpose.
+                    _activeContextBanner(c, loc, sessionScope),
+                    const SizedBox(height: 12),
                     ScanModeToggle(onChanged: (_) {}),
                     const SizedBox(height: 11),
                     // No field: the count is driven by the imager/antenna
@@ -527,28 +578,137 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     );
   }
 
+  Widget _warehouseContextCard(
+      AppController c, LocaleController loc, int boxCount) {
+    final whName =
+        c.selWhName.isEmpty ? loc.t('ยังไม่ได้เลือกคลัง') : c.selWhName;
+    final gate = c.gate.isEmpty ? '—' : c.gate;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: C.limeBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.warehouse_outlined, color: C.limeDeep, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(loc.t('คุณกำลังตรวจนับที่'),
+                    style: TextStyle(fontSize: 11.5, color: C.muted)),
+                const SizedBox(height: 2),
+                Text(whName,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(
+                    '${loc.t('ประตู')} $gate · $boxCount ${loc.t('กล่องในคลัง')}',
+                    style: TextStyle(fontSize: 12, color: C.muted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _activeContextBanner(
+      AppController c, LocaleController loc, String sessionScope) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: C.neutralBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.border2),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.place_outlined, size: 18, color: C.ink2),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${c.selWhName} · $sessionScope',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scopeTile({
+    required String title,
+    required String subtitle,
+    required String countLabel,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: selected ? C.limeBg : C.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: selected ? C.limeBorder : C.border2,
+                width: selected ? 1.5 : 1),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 22,
+                color: selected ? C.limeText : C.chevron,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(fontSize: 12, color: C.muted)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(countLabel,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? C.limeDeep : C.ink2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _typeOf(AppController c, String tag) {
     final b = c.S?.box(tag);
     return b == null ? '' : (c.S?.typeName(b.type) ?? '');
-  }
-
-  Widget _zoneChip(String label, bool selected, VoidCallback? onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? C.ink : C.neutralBg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? C.ink : C.border2),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: selected ? C.surface : C.ink2)),
-      ),
-    );
   }
 
   Widget _rowTile(
