@@ -740,17 +740,21 @@ class _ScanScreenState extends State<ScanScreen>
     // starts hid the one number that matters most exactly when it's moving
     // fastest. The panel now stays up the whole time; only the status line
     // switches to say a sweep is running.
-    final connected =
-        c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
-    final readyText = _rfidReading
-        ? loc.t('กำลังอ่านแท็ก RFID…')
-        : !c.rfid.supported
-            ? loc.t('โหมดจำลอง')
-            : c.rfidStatus.state == RfidState.connected
-                ? loc.t('สแกนเนอร์พร้อม')
-                : c.rfidStatus.state == RfidState.connecting
-                    ? loc.t('กำลังเชื่อมต่อ…')
-                    : loc.t('สแกนเนอร์ไม่พร้อม');
+    final barcodeOnly = !c.hasIntegratedRfid;
+    final connected = barcodeOnly ||
+        c.rfidStatus.state == RfidState.connected ||
+        !c.rfid.supported;
+    final readyText = barcodeOnly
+        ? loc.t('สแกนเนอร์พร้อม')
+        : _rfidReading
+            ? loc.t('กำลังอ่านแท็ก RFID…')
+            : !c.rfid.supported
+                ? loc.t('โหมดจำลอง')
+                : c.rfidStatus.state == RfidState.connected
+                    ? loc.t('สแกนเนอร์พร้อม')
+                    : c.rfidStatus.state == RfidState.connecting
+                        ? loc.t('กำลังเชื่อมต่อ…')
+                        : loc.t('สแกนเนอร์ไม่พร้อม');
     // This card repaints on every scan while the trigger's held — a
     // gradient background is a per-frame cost that flat color isn't, and
     // this is the one background in the app redrawing at scan speed rather

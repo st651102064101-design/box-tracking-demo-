@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// nobody notices until the box is missing. A field for finding a box the
 /// operator cannot see is a different thing entirely, and stays.
 void main() {
+  String norm(String p) => p.replaceAll('\\', '/');
+
   /// Screens whose only box-code entry is a scan. A TextField appearing in one
   /// of these is the regression this guards against.
   const scanOnly = [
@@ -61,8 +63,9 @@ void main() {
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
       if (!f.path.endsWith('.dart')) continue;
       if (!f.readAsStringSync().contains('TextField(')) continue;
-      if (keepsAField.containsKey(f.path)) continue;
-      undeclared.add(f.path);
+      final path = norm(f.path);
+      if (keepsAField.containsKey(path)) continue;
+      undeclared.add(path);
     }
     expect(undeclared, isEmpty,
         reason: 'a new typable field needs a reason recorded in keepsAField, '
@@ -90,11 +93,12 @@ void main() {
     final offenders = <String>[];
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
       if (!f.path.endsWith('.dart')) continue;
-      if (noToggleNeeded.containsKey(f.path)) continue;
+      final path = norm(f.path);
+      if (noToggleNeeded.containsKey(path)) continue;
       final src = f.readAsStringSync();
       // Reads the RFID mode to decide what to show or do = offers both.
       if (!src.contains('ScanInputMode.rfid')) continue;
-      if (!src.contains('ScanModeToggle')) offenders.add(f.path);
+      if (!src.contains('ScanModeToggle')) offenders.add(path);
     }
     expect(offenders, isEmpty,
         reason: 'a screen that behaves differently in RFID mode must let the '
@@ -108,7 +112,7 @@ void main() {
       // The tell of a local reimplementation: flipping the mode by hand
       // instead of letting the shared toggle do it.
       if (f.readAsStringSync().contains('c.setScanInputMode(m)')) {
-        offenders.add(f.path);
+        offenders.add(norm(f.path));
       }
     }
     expect(offenders, isEmpty,
@@ -118,7 +122,7 @@ void main() {
 
   test('the scan-only list is actually checking files that exist', () {
     for (final path in [...scanOnly, ...keepsAField.keys]) {
-      expect(File(path).existsSync(), isTrue, reason: '$path was moved?');
+      expect(File(path).existsSync(), isTrue, reason: path);
     }
   });
 }

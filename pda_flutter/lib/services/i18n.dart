@@ -67,6 +67,8 @@ class LocaleController extends ChangeNotifier {
     'ประตู': 'Gate',
     '1 · อุปกรณ์ที่ใช้งาน': '1 · Device in use',
     '2 · การเชื่อมต่อระบบหลัก': '2 · Core system connection',
+    'ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อตั้งค่าเครื่องสแกนให้ตรงกับรุ่น':
+        'Specify the handheld model so scanner features match the device',
     'ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อให้ระบบตั้งค่าฟังก์ชันเครื่องอ่าน RFID ให้ถูกต้อง':
         'Specify the handheld model this terminal is running on, so the system configures its RFID reader correctly',
     'ขณะนี้ระบบรองรับอุปกรณ์รุ่นนี้เพียงรุ่นเดียว รุ่นอื่นจะเปิดให้เลือกในการอัปเดตครั้งถัดไป':

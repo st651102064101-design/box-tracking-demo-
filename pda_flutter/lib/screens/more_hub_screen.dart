@@ -44,6 +44,7 @@ class MoreHubScreen extends StatelessWidget {
         c.goCycleCount();
         break;
       case 'locate':
+        if (!c.hasIntegratedRfid) return KeyEventResult.ignored;
         c.goLocate();
         break;
     }
@@ -116,16 +117,19 @@ class MoreHubScreen extends StatelessWidget {
                     sub: 'Cycle Count',
                     onTap: c.goCycleCount,
                   ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    number: 3,
-                    icon: Icons.radar,
-                    color: C.menuOrange,
-                    bg: C.menuOrangeBg,
-                    title: loc.t('ค้นหา/เรดาร์'),
-                    sub: 'Search / Radar',
-                    onTap: c.goLocate,
-                  ),
+                  // RFID locate / radar is MC3390R-only — hide on TC52 etc.
+                  if (c.hasIntegratedRfid) ...[
+                    const SizedBox(height: 10),
+                    _tile(
+                      number: 3,
+                      icon: Icons.radar,
+                      color: C.menuOrange,
+                      bg: C.menuOrangeBg,
+                      title: loc.t('ค้นหา/เรดาร์'),
+                      sub: 'Search / Radar',
+                      onTap: c.goLocate,
+                    ),
+                  ],
                 ],
               ),
             ),

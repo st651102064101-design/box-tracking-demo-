@@ -834,6 +834,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
   void go(Screen s) {
+    // RFID-only destinations must not open on barcode-only handhelds.
+    if (!_hasIntegratedRfid &&
+        (s == Screen.rfidInput ||
+            s == Screen.rfidLocate ||
+            s == Screen.boxRegister)) {
+      return;
+    }
     screen = s;
     notifyListeners();
   }
@@ -1245,7 +1252,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// own screen state (which box, current RSSI) lives on the widget, not
   /// here — this just gets the reader connected and the trigger unlocked for
   /// it, same as every other RFID-reading screen.
+  /// No-op on barcode-only handhelds (TC52 etc.) — those have no UHF reader.
   void goLocate() {
+    if (!_hasIntegratedRfid) return;
     screen = Screen.rfidLocate;
     notifyListeners();
     _connectReader();
@@ -1254,7 +1263,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Receiving flow: create -> label -> tag -> putaway (see
   /// BoxRegisterScreen), copied from legacy.html's own box-registration +
   /// putaway handlers.
+  /// RFID-binding step requires integrated UHF — blocked on TC52.
   void goBoxRegister() {
+    if (!_hasIntegratedRfid) return;
     screen = Screen.boxRegister;
     notifyListeners();
     _connectReader();
@@ -1494,6 +1505,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
   ScanInputMode scanInputMode = ScanInputMode.barcode;
   void setScanInputMode(ScanInputMode m) {
+    // TC52 / barcode-only handhelds have no UHF path — never arm RFID mode.
+    if (m == ScanInputMode.rfid && !_hasIntegratedRfid) {
+      m = ScanInputMode.barcode;
+    }
     if (scanInputMode == m) return;
     scanInputMode = m;
     // Switching to barcode while the trigger is still physically held (or
@@ -1996,13 +2011,27 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// every bit of it. Safe to call repeatedly; each call re-reads the
   /// reader's own max index rather than assuming a cached one still applies.
   Future<void> forceMaxRfidPower() async {
-    if (!rfid.supported) return;
+    if (!_hasIntegratedRfid || !rfid.supported) return;
     final d = await rfid.diagnostics();
     final maxIdx = d['powerMaxIndex'];
     if (maxIdx is int) {
       prefs.rfidPowerPercent = 100;
       await rfid.setPowerIndex(maxIdx);
     }
+  }
+
+  /// Test/helper: force the handheld capability flags without native deviceInfo.
+  @visibleForTesting
+  void debugSetHandheldCapability({
+    required bool hasIntegratedRfid,
+    bool usesZebraSdk = true,
+  }) {
+    _hasIntegratedRfid = hasIntegratedRfid;
+    _usesZebraSdk = usesZebraSdk;
+    if (!_hasIntegratedRfid && scanInputMode == ScanInputMode.rfid) {
+      scanInputMode = ScanInputMode.barcode;
+    }
+    notifyListeners();
   }
 
   /// Stray-read filter: RFID reads through cardboard and thin stock easily

@@ -123,7 +123,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 id: 'tc52',
                 name: 'Zebra TC52',
                 androidVersion: release.isEmpty ? '' : 'Android $release',
-                note: 'สแกนบาร์โค้ดในตัวเครื่อง · ไม่มี UHF RFID ในตัว',
+                note: 'สแกนบาร์โค้ดด้วย DataWedge SDK',
                 hasRfid: false,
                 usesZebraSdk: true,
                 barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
@@ -133,7 +133,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 id: 'zebra',
                 name: ['Zebra', model].where((s) => s.isNotEmpty).join(' '),
                 androidVersion: release.isEmpty ? '' : 'Android $release',
-                note: 'ไม่พบ UHF RFID ในตัวเครื่อง',
+                note: 'สแกนบาร์โค้ดด้วย DataWedge SDK',
                 hasRfid: false,
                 usesZebraSdk: true,
                 barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
@@ -148,7 +148,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 ? 'อุปกรณ์นี้'
                 : [manufacturer, model].where((s) => s.isNotEmpty).join(' '),
             androidVersion: release.isEmpty ? '' : 'Android $release',
-            note: 'ไม่มีเครื่องอ่าน RFID ในตัวเครื่อง — ใช้บาร์โค้ดได้ตามปกติ',
+            note: 'ใช้งานสแกนบาร์โค้ดได้ตามอุปกรณ์',
             hasRfid: false,
             usesZebraSdk: false,
             barcodeMethod: 'สแกนบาร์โค้ด/QR ด้วยอุปกรณ์สแกนหรือกรอกรหัสในแอป',
@@ -448,7 +448,7 @@ class _DeviceModelPicker extends StatelessWidget {
       children: [
         Text(
           loc.t(
-              'ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อให้ระบบตั้งค่าฟังก์ชันเครื่องอ่าน RFID ให้ถูกต้อง'),
+              'ระบุรุ่นอุปกรณ์พกพาที่ใช้งานเครื่องนี้ เพื่อตั้งค่าเครื่องสแกนให้ตรงกับรุ่น'),
           style: TextStyle(fontSize: 12.5, color: C.muted, height: 1.4),
         ),
         const SizedBox(height: 11),
@@ -474,8 +474,8 @@ class _DeviceModelPicker extends StatelessWidget {
             p.hasRfid
                 ? 'ใช้ Zebra SDK ได้: สแกนบาร์โค้ด, อ่าน/เขียน RFID และค้นหาแท็ก'
                 : p.usesZebraSdk
-                    ? 'ใช้ Zebra SDK ได้: ${p.barcodeMethod} · RFID ในตัวเครื่องใช้ไม่ได้'
-                    : 'อุปกรณ์ Android ทั่วไป: ${p.barcodeMethod} · RFID ใช้ไม่ได้',
+                    ? 'ใช้ Barcode SDK (DataWedge): ${p.barcodeMethod}'
+                    : 'อุปกรณ์ทั่วไป: ${p.barcodeMethod}',
             style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
           ),
         ],

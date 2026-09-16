@@ -662,36 +662,14 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
     final c = context.watch<AppController>();
     final loc = context.watch<LocaleController>();
 
-    // TC52, other Zebra barcode computers and ordinary Android devices have
-    // no built-in UHF antenna. Do not offer an RFID mode that can never work;
-    // their barcode scan field remains the same normal app workflow.
+    // TC52 / barcode-only handhelds: no RFID mode chrome at all — barcode
+    // flows use ScanCapture + DataWedge without a mode switch.
     if (!c.hasIntegratedRfid) {
       if (c.scanInputMode == ScanInputMode.rfid) {
         WidgetsBinding.instance.addPostFrameCallback(
             (_) => c.setScanInputMode(ScanInputMode.barcode));
       }
-      return Container(
-        height: 41,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: C.neutralBg2,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.qr_code_scanner, size: 18, color: C.ink2),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                c.usesZebraSdk
-                    ? 'บาร์โค้ด · Zebra DataWedge SDK'
-                    : 'บาร์โค้ด · สแกนหรือกรอกรหัส',
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     Widget segLabel(String label, IconData icon, bool selected) {

@@ -123,18 +123,20 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const _RfidPanel(),
-                if (isAdminOrNull) ...[
-                  const SizedBox(height: 10),
-                  _tile(
-                    icon: Icons.nfc,
-                    title: loc.t('รับค่า RFID'),
-                    sub: loc.t(
-                        'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่'),
-                    onTap: () => c.go(Screen.rfidInput),
-                  ),
+                if (c.hasIntegratedRfid) ...[
+                  const _RfidPanel(),
+                  if (isAdminOrNull) ...[
+                    const SizedBox(height: 10),
+                    _tile(
+                      icon: Icons.nfc,
+                      title: loc.t('รับค่า RFID'),
+                      sub: loc.t(
+                          'อ่านแท็กสด ๆ แบบไม่ผูกกับกล่อง — ดูความเร็วอ่านได้ที่นี่'),
+                      onTap: () => c.go(Screen.rfidInput),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 16),
                 if (c.canConfigureDevice)
                   _tile(
                     icon: Icons.router_outlined,
@@ -174,7 +176,9 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Center(
                   child: Text(
-                    'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}',
+                    c.hasIntegratedRfid
+                        ? 'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}'
+                        : 'SmartTrace PDA · v1.1\nFlutter + Zebra DataWedge · ${loc.t('เชื่อมกับ SmartTrace backend')}',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),

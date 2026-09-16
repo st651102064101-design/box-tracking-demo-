@@ -95,10 +95,13 @@ class RootScreen extends StatelessWidget {
       case Screen.settings:
         return const SettingsScreen(key: ValueKey('settings'));
       case Screen.rfidInput:
+        if (!c.hasIntegratedRfid) return _rfidUnavailableFallback(c);
         return const RfidInputScreen(key: ValueKey('rfidInput'));
       case Screen.rfidLocate:
+        if (!c.hasIntegratedRfid) return _rfidUnavailableFallback(c);
         return const RfidLocateScreen(key: ValueKey('rfidLocate'));
       case Screen.boxRegister:
+        if (!c.hasIntegratedRfid) return _rfidUnavailableFallback(c);
         return const BoxRegisterScreen(key: ValueKey('boxRegister'));
       case Screen.transfer:
         return const TransferScreen(key: ValueKey('transfer'));
@@ -111,6 +114,19 @@ class RootScreen extends StatelessWidget {
       case Screen.locationInquiry:
         return const LocationInquiryScreen(key: ValueKey('locationInquiry'));
     }
+  }
+
+  /// Barcode-only handhelds must never paint RFID screens — bounce home.
+  Widget _rfidUnavailableFallback(AppController c) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!c.hasIntegratedRfid &&
+          (c.screen == Screen.rfidInput ||
+              c.screen == Screen.rfidLocate ||
+              c.screen == Screen.boxRegister)) {
+        c.backToHome();
+      }
+    });
+    return const HomeScreen(key: ValueKey('home'));
   }
 }
 
