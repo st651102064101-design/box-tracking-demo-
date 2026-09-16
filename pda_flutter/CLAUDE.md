@@ -1,72 +1,10 @@
-# PDA Flutter Build & Deployment Instructions
+# PDA Flutter — pointer
 
-## 1. Rebuild All Services When Ready
-ทุกครั้งที่ user พร้อม ต้องทำการ rebuild ทั้งหมด:
+Agent instructions for this app live in:
 
-Every time the user is ready, rebuild all services:
-- **Frontend** - `docker-compose build frontend --no-cache && docker-compose up -d frontend`
-- **Backend** - `docker-compose build backend --no-cache && docker-compose up -d backend`
-- **PDA Web** - `docker-compose build pda --no-cache && docker-compose up -d pda`
-- **PDA Flutter App** - `flutter build apk --release` or `flutter build ios --release`
+- Root [`AGENTS.md`](../AGENTS.md) (branch index, autonomy, definition of done)
+- Skills under [`.agents/skills/`](../.agents/skills/) — especially `pda-flutter-change`, `pda-device-rfid`, `pda-release-build`
 
-## 2. Workflow for PDA Flutter Changes
-ถ้า user พิมพ์ให้แก้ไฟล์ pda_flutter ต้องทำตามขั้นตอน:
+Work on **`MOBILE_APP_DEMO`** (or an agent feature branch targeting it). Do not treat an old `pda` branch name as current.
 
-If the user asks to modify pda_flutter files, follow this workflow:
-1. Make changes in the `pda` branch (brand pda)
-2. Commit and push the changes to git
-3. Create a pull request to merge into `main` branch
-4. Review and merge to main
-
-**Important:** Always work on the `pda` branch and merge to `main` - do not commit directly to main.
-
-```bash
-# Switch to pda branch
-git checkout pda
-
-# Make changes and commit
-git add .
-git commit -m "description"
-
-# Push to remote
-git push origin pda
-
-# Create PR and merge to main (via GitHub or git merge)
-```
-
-## 3. Testing Requirement
-ทุกครั้งที่แก้ไฟล์ใน pda_flutter ต้องทำ unit test ดังนี้:
-
-Every time a pda_flutter file is changed, run these tests:
-1. **Targeted test** - run/write the unit test that covers the specific code just edited
-2. **Full PDA test suite** - run the entire pda_flutter test suite, not just the targeted test
-
-```bash
-cd pda_flutter
-
-# Targeted test for the file just changed
-flutter test test/<relevant_test_file>.dart
-
-# Full test suite
-flutter test
-```
-
-Do not consider a pda_flutter change complete until both pass.
-
-## 4. Self-Recheck Requirement
-หลังแก้ไขงานเสร็จทุกครั้ง ต้อง recheck งานที่ตัวเองเพิ่งแก้ แล้วรายงานเป็นข้อ ๆ ว่าจุดไหนผิดหรือมีปัญหา (ถ้าไม่มีก็ระบุว่าตรวจแล้วไม่พบปัญหา)
-
-After finishing any edit, re-review the change just made and report findings as a numbered list — call out exactly what's wrong or risky, point by point. If nothing is wrong, state that explicitly rather than skipping the recheck.
-
-## 5. DataWedge Profile ("SmartTracePDA")
-
-แอปนี้จะสร้างและผูก DataWedge Profile ชื่อ `SmartTracePDA` กับตัวเองอัตโนมัติบนเครื่อง Zebra ทุกเครื่องที่ติดตั้ง — ไม่ต้องตั้งค่ามือใดๆ บนตัวเครื่อง (ดู `RfidReaderController.ensureDataWedgeProfile()` ใน `android/app/src/main/kotlin/com/abss/smarttrace_pda/RfidReaderController.kt`)
-
-เหตุผลที่ต้องมี profile นี้: ถ้าแอปไม่เคยผูกกับ DataWedge Profile ของตัวเอง จะตกไปอยู่ "Profile0" (ค่าเริ่มต้นของ DataWedge) ซึ่งคำสั่งเปิด/ปิดเครื่องยิงบาร์โค้ดจาก runtime ไม่ยึดติดจริง — ทำให้สลับโหมด RFID/บาร์โค้ดในแอปแล้วเครื่องยิงบาร์โค้ดยังทำงานอยู่ (ไฟ/เสียงติ๊ด) แม้จะเลือกโหมด RFID ไว้
-
-ถ้าต้อง reset เครื่องหรือ debug ปัญหาเครื่องยิงบาร์โค้ด/RFID ชนกัน ให้เช็ค Profile นี้ในแอป DataWedge บนตัวเครื่องก่อน (ควรมี Profile "SmartTracePDA" ผูกกับ `com.abss.boxtrace_pda` อยู่)
-
-## 6. Always Consult This File
-ทุกครั้งที่มีการทำงานเกี่ยวกับ pda_flutter (ไม่ว่าจะแก้โค้ด, build, deploy) ต้องอ่านไฟล์นี้ก่อนทุกครั้ง
-
-Every time work touches pda_flutter (editing code, building, or deploying), read this file first before proceeding.
+This file is intentionally short so agents are not forced to load a full playbook before small edits.
