@@ -11,6 +11,7 @@ import '../services/epc_codec.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
+import '../services/handheld_capability.dart';
 import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
@@ -451,12 +452,16 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _realtimeDebounce;
   Timer? _offlineDialogDebounce;
   // MC3390R owns the UHF RFID SDK. TC52 and other Zebra terminals still use
-  // the native DataWedge SDK for their physical barcode imager, while a
-  // normal Android device stays on the app's barcode/manual input path.
+  // the native DataWedge SDK for their physical barcode imager. Ordinary
+  // phones (no supported barcode/RFID SDK) use in-app camera scanning.
   bool _hasIntegratedRfid = false;
   bool _usesZebraSdk = false;
+  HandheldCapability? _capability;
   bool get hasIntegratedRfid => _hasIntegratedRfid;
   bool get usesZebraSdk => _usesZebraSdk;
+  HandheldCapability? get handheldCapability => _capability;
+  /// True when Zebra barcode/RFID SDK is not available for this model.
+  bool get needsCameraBarcode => _capability?.needsCameraBarcode ?? !_usesZebraSdk;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
@@ -1953,19 +1958,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _detectHandheldHardware() async {
     try {
       final info = await rfid.deviceInfo();
-      final model = (info['model'] ?? '').toString().trim().toUpperCase();
-      final manufacturer =
-          (info['manufacturer'] ?? '').toString().toUpperCase();
-      final brand = (info['brand'] ?? '').toString().toUpperCase();
-      _usesZebraSdk =
-          manufacturer.contains('ZEBRA') || brand.contains('ZEBRA');
-      _hasIntegratedRfid = model.contains('MC3390');
-      // Migrate the model persisted by older builds, which treated every
-      // Zebra device (including TC52) as an MC3390R.
-      if (!_hasIntegratedRfid && prefs.deviceModel == 'mc3390r') {
-        prefs.deviceModel = model.contains('TC52') ? 'tc52' : 'generic';
+      final cap = HandheldCapability.fromDeviceInfo(info);
+      _capability = cap;
+      _usesZebraSdk = cap.usesZebraSdk;
+      _hasIntegratedRfid = cap.hasIntegratedRfid;
+      // Persist / migrate the model id so setup UI and runtime agree.
+      if (prefs.deviceModel != cap.id) {
+        prefs.deviceModel = cap.id;
       }
     } catch (_) {
+      _capability = HandheldCapability.fromDeviceInfo(const {});
+      _usesZebraSdk = false;
       _hasIntegratedRfid = false;
     }
   }

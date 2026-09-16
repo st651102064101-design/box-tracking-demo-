@@ -685,7 +685,9 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
               child: Text(
                 c.usesZebraSdk
                     ? 'บาร์โค้ด · Zebra DataWedge SDK'
-                    : 'บาร์โค้ด · สแกนหรือกรอกรหัส',
+                    : c.needsCameraBarcode
+                        ? 'บาร์โค้ด · สแกนด้วยกล้อง (SDK ไม่รองรับรุ่นนี้)'
+                        : 'บาร์โค้ด · สแกนหรือกรอกรหัส',
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
             ),
