@@ -6,3 +6,7 @@ frontend/node_modules/
 .env
 backend/.env
 backend/.pglite-dev/
+
+# Flutter PDA build artifacts (Windows MAX_PATH breaks git stash -u)
+pda_flutter/build/
+**/*.dex
