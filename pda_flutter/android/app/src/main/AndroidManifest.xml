@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Camera barcode fallback when Zebra DataWedge/RFID SDK is unavailable -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <!-- Zebra RFID reader (Bluetooth sled + service enumeration). Harmless for
          the MC3390R integrated reader, required for RFD40/RFD8500 sleds. -->
     <uses-permission android:name="android.permission.BLUETOOTH" />

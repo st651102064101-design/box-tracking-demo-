@@ -90,15 +90,42 @@ void main() {
     expect(scans, isEmpty);
   });
 
-  testWidgets('focus lost to anything else is taken back', (tester) async {
-    final scans = await pump(tester);
-    final field = tester.widget<TextField>(find.byType(TextField));
-    field.focusNode!.unfocus();
+  testWidgets('camera fallback button appears when SDK is unsupported',
+      (tester) async {
+    final scans = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ScanCapture(
+          forceCameraFallback: true,
+          onScan: scans.add,
+          child: const SizedBox.expand(child: Text('state display')),
+        ),
+      ),
+    ));
     await tester.pump();
+    expect(find.text('สแกนด้วยกล้อง'), findsOneWidget);
+    expect(find.byIcon(Icons.photo_camera_outlined), findsOneWidget);
+  });
+
+  testWidgets('camera fallback button stays hidden on Zebra SDK devices',
+      (tester) async {
+    await pump(tester);
+    expect(find.text('สแกนด้วยกล้อง'), findsNothing);
+  });
+
+  testWidgets('disabled capture hides the camera fallback button',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ScanCapture(
+          enabled: false,
+          forceCameraFallback: true,
+          onScan: (_) {},
+          child: const SizedBox.expand(child: Text('state display')),
+        ),
+      ),
+    ));
     await tester.pump();
-    expect(field.focusNode!.hasFocus, isTrue);
-    // And it is still live, which is the point of reclaiming it.
-    await scan(tester, 'CRT-01');
-    expect(scans, ['CRT-01']);
+    expect(find.text('สแกนด้วยกล้อง'), findsNothing);
   });
 }

@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../controllers/app_controller.dart';
+import '../screens/camera_barcode_screen.dart';
+import '../theme.dart';
 
 /// Barcode input with no input box for the operator to get wrong.
 ///
@@ -31,6 +36,10 @@ import 'package:flutter/material.dart';
 /// desktop browser treats [TextInputType.none] as "no connection" and would
 /// deliver nothing — there the developer keyboard is the only input there is.
 ///
+/// On devices where the Zebra barcode/RFID SDK is **not** supported, a
+/// floating camera button is shown so the operator can still scan via the
+/// phone camera ([needsCameraBarcode]).
+///
 /// The field is stacked *behind* [child] and given its box, so it costs no
 /// layout: the screen above it is free to be a pure state display.
 class ScanCapture extends StatefulWidget {
@@ -44,12 +53,17 @@ class ScanCapture extends StatefulWidget {
   final int minLength;
   final Widget child;
 
+  /// Test / override hook. When null, camera fallback follows
+  /// [AppController.needsCameraBarcode] if a controller is in the tree.
+  final bool? forceCameraFallback;
+
   const ScanCapture({
     super.key,
     required this.onScan,
     required this.child,
     this.enabled = true,
     this.minLength = 2,
+    this.forceCameraFallback,
   });
 
   @override
@@ -140,8 +154,26 @@ class _ScanCaptureState extends State<ScanCapture> {
     widget.onScan(code);
   }
 
+  bool _resolveCameraFallback(BuildContext context) {
+    if (widget.forceCameraFallback != null) return widget.forceCameraFallback!;
+    try {
+      return context.watch<AppController>().needsCameraBarcode;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
+  Future<void> _openCamera() async {
+    if (!widget.enabled) return;
+    final code = await CameraBarcodeScreen.open(context);
+    if (!mounted || code == null) return;
+    _emit(code);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final showCamera = _resolveCameraFallback(context);
+
     return Stack(
       children: [
         // Behind the content and pinned to its box: real layout (so the input
@@ -178,6 +210,20 @@ class _ScanCaptureState extends State<ScanCapture> {
           ),
         ),
         widget.child,
+        if (showCamera && widget.enabled)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              heroTag: null,
+              backgroundColor: C.lime,
+              foregroundColor: C.limeDeep,
+              onPressed: _openCamera,
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('สแกนด้วยกล้อง',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
       ],
     );
   }

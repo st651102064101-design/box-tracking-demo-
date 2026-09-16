@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/connect_qr.dart';
+import '../services/handheld_capability.dart';
 import '../services/i18n.dart';
 import '../services/scan_speed_detector.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'camera_barcode_screen.dart';
 
 /// Connecting a terminal to the main system — done once, by whoever hands the
 /// device out. It holds the one password in the whole product — the device's
@@ -40,7 +42,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   /// The one profile this screen actually shows/picks — resolved from what
   /// Android reports the handheld as (see [_detectDevice]), not assumed.
   /// Null while detection is still running.
-  _DeviceProfile? _profile;
+  HandheldCapability? _profile;
 
   @override
   void initState() {
@@ -98,66 +100,23 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   /// UHF RFID.  Brand/manufacturer alone must never decide this profile.
   Future<void> _detectDevice(AppController c) async {
     final info = await c.rfid.deviceInfo();
-    final model = (info['model'] ?? '').toString();
-    final manufacturer = (info['manufacturer'] ?? '').toString();
-    final brand = (info['brand'] ?? '').toString();
-    final release = (info['androidRelease'] ?? '').toString();
-    final modelUpper = model.trim().toUpperCase();
-    final isMc3390r = modelUpper.contains('MC3390');
-    final isTc52 = modelUpper.contains('TC52');
-    final isZebra = manufacturer.toUpperCase().contains('ZEBRA') ||
-        brand.toUpperCase().contains('ZEBRA');
-
-    final resolved = isMc3390r
-        ? const _DeviceProfile(
-            id: 'mc3390r',
-            name: 'Zebra MC3300 Series (MC3390R)',
-            androidVersion: 'Android 8.0 (Oreo)',
-            note: 'เครื่องอ่าน RFID ในตัวเครื่อง',
-            hasRfid: true,
-            usesZebraSdk: true,
-            barcodeMethod: 'Zebra DataWedge SDK + เครื่องอ่าน UHF RFID',
-          )
-        : isTc52
-            ? _DeviceProfile(
-                id: 'tc52',
-                name: 'Zebra TC52',
-                androidVersion: release.isEmpty ? '' : 'Android $release',
-                note: 'สแกนบาร์โค้ดในตัวเครื่อง · ไม่มี UHF RFID ในตัว',
-                hasRfid: false,
-                usesZebraSdk: true,
-                barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
-              )
-        : isZebra
-            ? _DeviceProfile(
-                id: 'zebra',
-                name: ['Zebra', model].where((s) => s.isNotEmpty).join(' '),
-                androidVersion: release.isEmpty ? '' : 'Android $release',
-                note: 'ไม่พบ UHF RFID ในตัวเครื่อง',
-                hasRfid: false,
-                usesZebraSdk: true,
-                barcodeMethod: 'Zebra DataWedge SDK สำหรับปุ่มสแกนบาร์โค้ด',
-              )
-        : _DeviceProfile(
-            id: 'generic',
-            name: [manufacturer, model]
-                    .where((s) => s.isNotEmpty)
-                    .join(' ')
-                    .trim()
-                    .isEmpty
-                ? 'อุปกรณ์นี้'
-                : [manufacturer, model].where((s) => s.isNotEmpty).join(' '),
-            androidVersion: release.isEmpty ? '' : 'Android $release',
-            note: 'ไม่มีเครื่องอ่าน RFID ในตัวเครื่อง — ใช้บาร์โค้ดได้ตามปกติ',
-            hasRfid: false,
-            usesZebraSdk: false,
-            barcodeMethod: 'สแกนบาร์โค้ด/QR ด้วยอุปกรณ์สแกนหรือกรอกรหัสในแอป',
-          );
+    final resolved = HandheldCapability.fromDeviceInfo(info);
     if (!mounted) return;
     setState(() => _profile = resolved);
     // The profile is a fact reported by Android, not a user preference.  This
     // also migrates a TC52 that an older build incorrectly saved as mc3390r.
     if (c.prefs.deviceModel != resolved.id) c.setDeviceModel(resolved.id);
+  }
+
+  Future<void> _scanConnectQrWithCamera() async {
+    final raw = await CameraBarcodeScreen.open(
+      context,
+      title: 'สแกน QR เชื่อมต่อ',
+      hint: 'สแกนบาร์โค้ดเชื่อมต่อระบบจากหน้าแอดมิน',
+    );
+    if (!mounted || raw == null) return;
+    _scanBuffer.text = raw;
+    _handleScan();
   }
 
   @override
@@ -259,15 +218,32 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                         ),
                         child: Column(
                           children: [
-                            Icon(Icons.qr_code_scanner,
-                                size: 30, color: C.muted),
+                            Icon(
+                                (_profile?.needsCameraBarcode ?? false)
+                                    ? Icons.photo_camera_outlined
+                                    : Icons.qr_code_scanner,
+                                size: 30,
+                                color: C.muted),
                             const SizedBox(height: 10),
                             Text(
-                              loc.t('ยิงบาร์โค้ดเพื่อทำการเชื่อมต่อ'),
+                              (_profile?.needsCameraBarcode ?? false)
+                                  ? loc.t('สแกน QR เชื่อมต่อด้วยกล้อง')
+                                  : loc.t('ยิงบาร์โค้ดเพื่อทำการเชื่อมต่อ'),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.w700),
                             ),
+                            if (_profile?.needsCameraBarcode ?? false) ...[
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _scanConnectQrWithCamera,
+                                  icon: const Icon(Icons.photo_camera_outlined),
+                                  label: Text(loc.t('เปิดกล้องสแกน')),
+                                ),
+                              ),
+                            ],
                             if (_scanError != null) ...[
                               const SizedBox(height: 6),
                               Text(
@@ -399,37 +375,11 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   }
 }
 
-/// One entry in the supported-hardware catalog. `androidVersion` is shown
-/// verbatim rather than inferred from the running OS, since the point of
-/// this step is to record what the *device* is, independent of whatever
-/// firmware happens to be on it at provisioning time.
-class _DeviceProfile {
-  final String id;
-  final String name;
-  final String androidVersion;
-  final String note;
-  final bool hasRfid;
-  final bool usesZebraSdk;
-  final String barcodeMethod;
-  const _DeviceProfile({
-    required this.id,
-    required this.name,
-    required this.androidVersion,
-    required this.note,
-    required this.hasRfid,
-    required this.usesZebraSdk,
-    required this.barcodeMethod,
-  });
-}
-
 /// Step 1 of setup: which handheld this terminal actually is — detected (see
 /// [_DeviceSetupScreenState._detectDevice]), not assumed. [profile] is null
-/// while that detection is still in flight. Auto-picked once known, so this
-/// stays visible as confirmation of what was found rather than a required
-/// tap — but it's now confirming a real check, not repeating a hardcoded
-/// name at every device that opens this screen.
+/// while that detection is still in flight.
 class _DeviceModelPicker extends StatelessWidget {
-  final _DeviceProfile? profile;
+  final HandheldCapability? profile;
   final String selected;
   final ValueChanged<String> onPick;
   final LocaleController loc;
@@ -471,11 +421,11 @@ class _DeviceModelPicker extends StatelessWidget {
             ),
           ),
           Text(
-            p.hasRfid
+            p.hasIntegratedRfid
                 ? 'ใช้ Zebra SDK ได้: สแกนบาร์โค้ด, อ่าน/เขียน RFID และค้นหาแท็ก'
                 : p.usesZebraSdk
                     ? 'ใช้ Zebra SDK ได้: ${p.barcodeMethod} · RFID ในตัวเครื่องใช้ไม่ได้'
-                    : 'อุปกรณ์ Android ทั่วไป: ${p.barcodeMethod} · RFID ใช้ไม่ได้',
+                    : 'SDK บาร์โค้ด/RFID ไม่รองรับรุ่นนี้ · ${p.barcodeMethod}',
             style: TextStyle(fontSize: 11.5, color: C.faint, height: 1.4),
           ),
         ],
@@ -485,7 +435,7 @@ class _DeviceModelPicker extends StatelessWidget {
 }
 
 class _DeviceProfileTile extends StatelessWidget {
-  final _DeviceProfile profile;
+  final HandheldCapability profile;
   final bool selected;
   final VoidCallback onTap;
   const _DeviceProfileTile(
@@ -518,26 +468,27 @@ class _DeviceProfileTile extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Icon(
-                    profile.hasRfid
+                    profile.hasIntegratedRfid
                         ? Icons.settings_input_antenna
                         : profile.usesZebraSdk
                             ? Icons.qr_code_scanner
-                            : Icons.document_scanner_outlined,
-                    size: 20, color: selected ? C.limeDeep : C.ink2),
+                            : Icons.photo_camera_outlined,
+                    size: 20,
+                    color: selected ? C.limeDeep : C.ink2),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(profile.name,
+                    Text(profile.displayName,
                         style: const TextStyle(
                             fontSize: 14.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     Text(
                         [
-                          if (profile.androidVersion.isNotEmpty)
-                            profile.androidVersion,
+                          if (profile.androidVersionLabel.isNotEmpty)
+                            profile.androidVersionLabel,
                           profile.note
                         ].join(' · '),
                         style: TextStyle(fontSize: 12, color: C.muted)),
