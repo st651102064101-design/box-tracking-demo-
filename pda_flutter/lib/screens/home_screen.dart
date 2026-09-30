@@ -861,7 +861,14 @@ class _WhPickTile extends StatelessWidget {
                         color: highlighted ? C.onInk : null)),
               ),
               if (tag != null) ...[
-                Pill(tag!, color: C.lime, bg: C.onInk.withValues(alpha: 0.14)),
+                Pill(
+                  tag!,
+                  // The highlighted tile flips between a light surface in
+                  // dark mode and a dark surface in light mode. Use the
+                  // matching high-contrast lime tone for the "ล่าสุด" badge.
+                  color: C.isDark ? C.limeDeep : C.lime,
+                  bg: C.onInk.withValues(alpha: 0.14),
+                ),
                 const SizedBox(width: 8),
               ],
               Icon(Icons.chevron_right,
