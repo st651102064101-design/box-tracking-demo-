@@ -181,14 +181,29 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       await _c.api.closeCycleCount(session['id'].toString());
       if (!mounted) return;
       _c.toastMsg('บันทึกผลตรวจนับแล้ว', '${session['id']}', ResultKind.ok);
+      // Closing a round used to leave this screen in its setup state, where
+      // the only thing visible was the resume explanation and the scanner was
+      // disabled. Start a fresh round for the same warehouse/zone immediately
+      // so the operator lands back on the barcode/RFID capture view.
+      final next = await _c.api.openCycleCount(
+        wh: _c.wh,
+        zone: (session['zone'] ?? _zone ?? '').toString(),
+      );
+      if (!mounted) return;
       setState(() {
-        _session = null;
+        _session = next;
         _pending.clear();
+        _error = null;
+        _lastMissing = null;
       });
+      if (next['resumed'] == true) {
+        _c.toastMsg('ทำต่อรอบเดิม', '${next['id']}', ResultKind.info);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(
-          () => _error = e is ApiException ? e.message : _c.errorMessage(e));
+          () => _error = 'ปิดรอบแล้ว แต่เปิดหน้าสแกนรอบใหม่ไม่สำเร็จ · '
+              '${e is ApiException ? e.message : _c.errorMessage(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -375,6 +390,17 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                           Text(loc.t('กำลังเริ่ม…'),
                               style: TextStyle(fontSize: 12.5, color: C.muted)),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (zones.isEmpty && _error != null && !_busy) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _start,
+                          icon: const Icon(Icons.refresh),
+                          label: Text(loc.t('ลองเริ่มรอบสแกนอีกครั้ง')),
+                        ),
                       ),
                       const SizedBox(height: 10),
                     ],
