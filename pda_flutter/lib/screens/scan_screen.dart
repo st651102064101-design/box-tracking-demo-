@@ -979,7 +979,9 @@ class _ScanScreenState extends State<ScanScreen>
         }
       } else {
         badge = loc.t('พร้อมจ่าย');
-        bc = C.ink2;
+        // This is a queue label, not a successful-operation status. A neutral
+        // high-contrast chip is easier to read than the old green treatment.
+        bc = C.ink;
         bbg = C.neutralBg;
       }
       final condition = c.queueConditions[t];
