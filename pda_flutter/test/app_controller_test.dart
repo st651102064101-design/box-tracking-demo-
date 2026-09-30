@@ -418,6 +418,20 @@ void main() {
   });
 
   group('deliverBarcode — DataWedge intent', () {
+    test('a held trigger queues each new barcode immediately', () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'in';
+      c.screen = Screen.scan;
+      c.gateFormStep = false;
+      c.deliverBarcode('CRT-02');
+      c.deliverBarcode('CRT-03');
+      expect(c.queue, ['CRT-02', 'CRT-03']);
+      c.deliverBarcode('CRT-02');
+      expect(c.queue, ['CRT-02', 'CRT-03'],
+          reason: 'the same label still in the beam is not counted again');
+      c.dispose();
+    });
+
     test('queues an outbound box from the full label, AIM prefix included',
         () async {
       final c = await makeController(FakeApi());

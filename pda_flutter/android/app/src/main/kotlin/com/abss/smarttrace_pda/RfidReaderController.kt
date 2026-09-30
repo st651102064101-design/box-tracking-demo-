@@ -579,7 +579,12 @@ class RfidReaderController(private val context: Context) :
 
     private fun applyBarcodeScannerState(enabled: Boolean) {
         val barcodeParams = Bundle()
-        barcodeParams.putString("scanner_input_enabled", if (enabled) "true" else "false")
+        // RESET_CONFIG below wipes the barcode plugin, so the hold-to-scan
+        // aim type has to travel with every enable. Otherwise DataWedge
+        // falls back to one decode per trigger press.
+        for ((key, value) in BarcodeScanPolicy.params(enabled)) {
+            barcodeParams.putString(key, value)
+        }
         sendDataWedgePluginConfig("BARCODE", barcodeParams)
 
         val intent = Intent()
