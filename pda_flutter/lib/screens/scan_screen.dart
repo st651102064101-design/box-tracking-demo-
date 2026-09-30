@@ -200,8 +200,9 @@ class _ScanScreenState extends State<ScanScreen>
     await c.doCommit();
     if (!mounted) return;
     if (c.queue.isEmpty) {
-      _customerAutoOpenScheduled = false;
-      _customerAutoOpenRetries = 0;
+      // Keep the one-shot auto-open consumed for this screen lifecycle. A
+      // successful dispatch clears the form and returns here; reopening the
+      // customer picker at that point interrupts the next dispatch workflow.
       setState(() => _setOnScanStep(c, false));
     }
     // A putaway task means the commit landed and these boxes now have to be
