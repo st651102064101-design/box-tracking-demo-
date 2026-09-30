@@ -152,22 +152,14 @@ class _ScanScreenState extends State<ScanScreen>
     }
     final origin = renderObject.localToGlobal(Offset.zero);
     final size = renderObject.size;
-    final screen = MediaQuery.sizeOf(context);
-    final picked = await showMenu<String>(
+    final picked = await showBlurredDropdownMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        origin.dx,
-        origin.dy + size.height,
-        screen.width - origin.dx - size.width,
-        screen.height - origin.dy - size.height,
-      ),
-      constraints: BoxConstraints(maxWidth: size.width),
-      color: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      anchor: origin,
+      anchorSize: size,
       items: c.customerList.map((customer) {
         final id = (customer['id'] ?? '').toString();
         final name = (customer['name'] ?? '').toString();
-        return PopupMenuItem<String>(
+        return DropdownMenuItem<String>(
           value: id,
           child: SizedBox(
             width: size.width - 32,
@@ -737,9 +729,8 @@ class _ScanScreenState extends State<ScanScreen>
           ),
           const SizedBox(height: 11),
           FieldLabel(loc.t('ประเภทรถ')),
-          DropdownButtonFormField<String>(
+          BlurDropdownButtonFormField<String>(
             initialValue: c.outVehicleType.isEmpty ? null : c.outVehicleType,
-            isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
             hint: Text(loc.t('— เลือกประเภทรถ —'),
                 style: TextStyle(color: C.faint)),
@@ -800,9 +791,8 @@ class _ScanScreenState extends State<ScanScreen>
           ),
           const SizedBox(height: 11),
           FieldLabel(loc.t('ประเภทรถ')),
-          DropdownButtonFormField<String>(
+          BlurDropdownButtonFormField<String>(
             initialValue: c.inVehicleType.isEmpty ? null : c.inVehicleType,
-            isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
             hint: Text(loc.t('— เลือกประเภทรถ —'),
                 style: TextStyle(color: C.faint)),

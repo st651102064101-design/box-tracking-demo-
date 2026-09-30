@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -32,6 +34,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final _badgeCodeFocus = FocusNode(debugLabel: 'Employee badge code');
   bool _manualBadgeOpen = false;
   bool _badgeSubmitting = false;
+  Timer? _onlineLabelTimer;
+  bool? _lastOnlineDisplay;
+  bool _showOnlineLabel = true;
+  int _onlineLabelGeneration = 0;
+
+  void _syncOnlineLabel(bool online) {
+    if (_lastOnlineDisplay == online) return;
+    _lastOnlineDisplay = online;
+    _onlineLabelTimer?.cancel();
+    _showOnlineLabel = true;
+    final generation = ++_onlineLabelGeneration;
+    if (!online) return;
+    // Start counting only after the online label has appeared on screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _onlineLabelGeneration) return;
+      _onlineLabelTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && generation == _onlineLabelGeneration &&
+            _lastOnlineDisplay == true) {
+          setState(() => _showOnlineLabel = false);
+        }
+      });
+    });
+  }
 
   /// Physical badge reads retain their existing scanner path. A typed code
   /// goes through [_tapEmployee] instead, including its PIN check.
@@ -69,6 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _onlineLabelTimer?.cancel();
     _badgeCodeController.dispose();
     _badgeCodeFocus.dispose();
     super.dispose();
@@ -391,6 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final top = MediaQuery.of(context).padding.top;
     final bottom = MediaQuery.of(context).padding.bottom;
     final people = c.employees;
+    _syncOnlineLabel(c.onlineDisplay);
 
     // Header is a fixed sibling of the scrolling body now, not the first
     // child inside the same SingleChildScrollView — it used to scroll away
@@ -431,7 +458,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 // The label reflects both server reachability and the
                 // operator's queue-mode choice. Tapping explicitly switches
                 // online/offline; failed network requests are queued too.
-                OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
+                OnlineChip(
+                  online: c.onlineDisplay,
+                  onTap: c.onlineChipTap,
+                  showLabel: !c.onlineDisplay || _showOnlineLabel,
+                ),
               ],
             ),
           ),

@@ -296,42 +296,6 @@ List<Widget> _confirmedBody(BuildContext context, AppController c) {
             'บัญชีนี้เป็นสิทธิ์ผู้ชม — ค้นหากล่องได้ แต่บันทึกเข้า/ออกไม่ได้')),
       ),
     const SizedBox(height: 16),
-    // Product title strip sitting directly above the menu, as in the
-    // reference layout. Names the hardware profile that was actually
-    // detected at setup (see device_setup_screen's _detectDevice) rather
-    // than hardcoding "MC3390R" — a build running on anything else says so.
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: C.heroBg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.inventory_2_rounded, size: 19, color: C.lime),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              c.prefs.deviceModel == 'mc3390r'
-                  ? 'AMS Mobile Tracker (MC3390R)'
-                  : c.prefs.deviceModel == 'tc52'
-                      ? 'AMS Mobile Tracker (TC52)'
-                      : c.prefs.deviceModel == 'tc501'
-                          ? 'AMS Mobile Tracker (TC501)'
-                          : 'AMS Mobile Tracker',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: C.onHero,
-                  letterSpacing: -0.2),
-            ),
-          ),
-        ],
-      ),
-    ),
-    const SizedBox(height: 12),
     // Numbered [1]-[3] — matches the physical number-key bindings
     // (HomeScreen's KeyboardListener) so the badge an operator sees is the
     // same digit that jumps here from the keyboard. Colour groups follow

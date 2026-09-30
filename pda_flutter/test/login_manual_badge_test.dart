@@ -5,12 +5,47 @@ import 'package:provider/provider.dart';
 import 'package:smarttrace_pda/controllers/app_controller.dart';
 import 'package:smarttrace_pda/screens/login_screen.dart';
 import 'package:smarttrace_pda/services/i18n.dart';
+import 'package:smarttrace_pda/widgets/common.dart';
 import 'package:smarttrace_pda/widgets/scan_capture.dart';
 
 import 'app_controller_test.dart' show FakeApi, makeController;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('online label hides after five visible seconds and resets',
+      (tester) async {
+    final c = await makeController(FakeApi());
+    c.emp = null;
+    c.screen = Screen.login;
+    expect(c.onlineDisplay, isTrue);
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppController>.value(value: c),
+        ChangeNotifierProvider<LocaleController>.value(
+            value: LocaleController(c.prefs)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: LoginScreen())),
+    ));
+
+    expect(find.text('ออนไลน์'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 4999));
+    expect(find.text('ออนไลน์'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(find.text('ออนไลน์'), findsNothing);
+    expect(find.byType(OnlineChip), findsOneWidget);
+
+    c.onlineChipTap();
+    await tester.pump();
+    expect(find.text('ออฟไลน์'), findsOneWidget);
+    c.onlineChipTap();
+    await tester.pump();
+    expect(find.text('ออนไลน์'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    expect(find.text('ออนไลน์'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    c.dispose();
+  });
 
   testWidgets('badge prompt becomes input with SVG submit at a complete code',
       (tester) async {

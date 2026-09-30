@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -362,7 +363,8 @@ class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
   final bool showLabel;
-  const OnlineChip({super.key, required this.online, this.onTap, this.showLabel = true});
+  const OnlineChip(
+      {super.key, required this.online, this.onTap, this.showLabel = true});
   @override
   Widget build(BuildContext context) {
     final loc = context.watch<LocaleController>();
@@ -381,7 +383,8 @@ class OnlineChip extends StatelessWidget {
             Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
                 size: 16,
                 color: online ? C.limeText : C.muted,
-                semanticLabel: showLabel ? null : loc.t(online ? 'ออนไลน์' : 'ออฟไลน์')),
+                semanticLabel:
+                    showLabel ? null : loc.t(online ? 'ออนไลน์' : 'ออฟไลน์')),
             if (showLabel) ...[
               const SizedBox(width: 5),
               Text(loc.t(online ? 'ออนไลน์' : 'ออฟไลน์'),
@@ -395,6 +398,169 @@ class OnlineChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Form dropdown used across the PDA. Flutter's stock dropdown popup has a
+/// transparent route barrier, so the busy form behind it remains fully sharp.
+/// This keeps the familiar field appearance and opens a focused chooser over
+/// a blurred, dimmed backdrop instead.
+Future<T?> showBlurredDropdownMenu<T>({
+  required BuildContext context,
+  required List<DropdownMenuItem<T>> items,
+  T? selectedValue,
+  Offset? anchor,
+  Size? anchorSize,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withValues(alpha: 0.24),
+    builder: (dialogContext) {
+      final screen = MediaQuery.sizeOf(dialogContext);
+      final maxHeight = screen.height * 0.68;
+      final menuHeight = (items.length * 55.0 + 16).clamp(120.0, maxHeight);
+      final width = anchorSize?.width ?? screen.width * 0.88;
+      final left = anchor == null
+          ? (screen.width - width) / 2
+          : anchor.dx.clamp(12.0, screen.width - width - 12.0);
+      final top = anchor == null
+          ? (screen.height - menuHeight) / 2
+          : anchor.dy + anchorSize!.height + menuHeight <= screen.height - 12
+              ? anchor.dy + anchorSize.height
+              : (anchor.dy - menuHeight)
+                  .clamp(12.0, screen.height - menuHeight - 12.0);
+      final menu = Material(
+        color: C.surface,
+        elevation: 18,
+        shadowColor: Colors.black.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: width,
+            maxWidth: width,
+            maxHeight: maxHeight,
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              indent: 14,
+              endIndent: 14,
+              color: C.border,
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final isSelected = item.value == selectedValue;
+              return InkWell(
+                onTap: item.enabled
+                    ? () => Navigator.of(dialogContext).pop(item.value)
+                    : null,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 54),
+                  alignment: Alignment.centerLeft,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  color: isSelected ? C.limeBg : null,
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(
+                      color: isSelected ? C.limeText : C.ink,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                    child: item.child,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return SizedBox.expand(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(dialogContext).pop(),
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
+            ),
+            if (anchor == null)
+              Center(child: menu)
+            else
+              Positioned(left: left, top: top, width: width, child: menu),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class BlurDropdownButtonFormField<T> extends FormField<T> {
+  BlurDropdownButtonFormField({
+    super.key,
+    required List<DropdownMenuItem<T>> items,
+    required super.initialValue,
+    required ValueChanged<T?>? onChanged,
+    required InputDecoration decoration,
+    Widget? hint,
+  }) : super(
+          builder: (field) {
+            final selected = items.where((item) => item.value == field.value);
+            final selectedChild =
+                selected.isEmpty ? null : selected.first.child;
+            final empty = field.value == null || selectedChild == null;
+            return InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: items.isEmpty
+                  ? null
+                  : () async {
+                      final value = await showBlurredDropdownMenu<T>(
+                        context: field.context,
+                        items: items,
+                        selectedValue: field.value,
+                      );
+                      if (value != null) {
+                        field.didChange(value);
+                        onChanged?.call(value);
+                      }
+                    },
+              child: InputDecorator(
+                // When a custom hint widget is supplied it already renders the
+                // empty-state text. Keep InputDecorator from painting its own
+                // hintText as well (which made dropdown placeholders overlap).
+                decoration: decoration.copyWith(
+                  errorText: field.errorText,
+                  hintText: hint == null ? decoration.hintText : null,
+                ),
+                isEmpty: empty,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DefaultTextStyle.merge(
+                        style: TextStyle(color: empty ? C.faint : C.ink),
+                        child: empty
+                            ? (hint ?? const SizedBox.shrink())
+                            : selectedChild,
+                      ),
+                    ),
+                    Icon(Icons.keyboard_arrow_down_rounded,
+                        color: C.muted, size: 22),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
 }
 
 /// Field label above an input.
@@ -691,7 +857,8 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
                 c.usesZebraSdk
                     ? 'บาร์โค้ด · Zebra DataWedge SDK'
                     : 'บาร์โค้ด · สแกนหรือกรอกรหัส',
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -792,9 +959,9 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
                           // plain tap still resolves immediately with no
                           // drag involved.
                           behavior: HitTestBehavior.opaque,
-                          onTap: () =>
-                              _switchTo(c, ScanInputMode.barcode),
-                          child: segLabel(loc.t('บาร์โค้ด'),
+                          onTap: () => _switchTo(c, ScanInputMode.barcode),
+                          child: segLabel(
+                              loc.t('บาร์โค้ด'),
                               Icons.qr_code_scanner,
                               c.scanInputMode == ScanInputMode.barcode),
                         ),

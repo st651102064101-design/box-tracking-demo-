@@ -146,9 +146,21 @@ export async function composePdaState(db: DB): Promise<Record<string, unknown>> 
     ]);
   const mapBy = <T extends { data: unknown }>(rows: T[], key: (r: T) => string) =>
     Object.fromEntries(rows.map((r) => [key(r), r.data]));
+  // The PDA's tracking detail shows only the six newest movements per box.
+  // Box history is stored inside each row's legacy JSON and grows forever;
+  // returning all of it on every refresh made handheld payloads grow into
+  // tens of megabytes and drove Android into repeated near-gigabyte heaps.
+  const boxesForPda = Object.fromEntries(boxRows.map((row) => {
+    const data = row.data as Record<string, unknown>;
+    const history = data.history;
+    const compact = Array.isArray(history) && history.length > 6
+      ? { ...data, history: history.slice(-6) }
+      : data;
+    return [row.tag, compact];
+  }));
   const cfgRow = cfgRows[0];
   return {
-    boxes: mapBy(boxRows, (r) => r.tag),
+    boxes: boxesForPda,
     customers: mapBy(custRows, (r) => r.id),
     boxtypes: mapBy(btRows, (r) => r.id),
     warehouses: mapBy(whRows, (r) => r.id),

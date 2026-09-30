@@ -6,6 +6,19 @@ import 'dart:convert';
 Map<String, dynamic> decodePdaState(String body) {
   final source = jsonDecode(body) as Map<String, dynamic>;
   final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 2));
+  final boxes = source['boxes'];
+  if (boxes is Map) {
+    // The tracking page renders the latest six movements only. Trim legacy
+    // caches and older backend responses here as well, before the parsed state
+    // is copied from this worker isolate to the UI isolate.
+    for (final value in boxes.values) {
+      if (value is! Map) continue;
+      final history = value['history'];
+      if (history is List && history.length > 6) {
+        value['history'] = history.sublist(history.length - 6);
+      }
+    }
+  }
   final events = source['events'];
   return {
     for (final key in [

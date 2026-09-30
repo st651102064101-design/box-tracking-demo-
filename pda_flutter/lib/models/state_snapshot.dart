@@ -34,7 +34,11 @@ class StateSnapshot {
 
   factory StateSnapshot.fromJson(Map<String, dynamic> j) {
     Map<String, dynamic> m(dynamic v) =>
-        v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+        v is Map<String, dynamic>
+            ? v
+            : v is Map
+                ? v.cast<String, dynamic>()
+                : <String, dynamic>{};
     final gatesRaw = m(j['gates']);
     return StateSnapshot(
       boxesRaw: m(j['boxes']),
@@ -44,8 +48,7 @@ class StateSnapshot {
       gates:
           gatesRaw.map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
       employees: m(j['employees']),
-      events:
-          (j['events'] is List) ? List<dynamic>.from(j['events']) : const [],
+      events: (j['events'] is List) ? j['events'] as List<dynamic> : const [],
       cfg: m(j['cfg']),
       locations: m(j['locations']),
     );

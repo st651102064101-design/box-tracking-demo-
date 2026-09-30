@@ -399,9 +399,8 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const FieldLabel('ประเภทกล่อง *'),
-          DropdownButtonFormField<String>(
+          BlurDropdownButtonFormField<String>(
             initialValue: _selectedType,
-            isExpanded: true,
             decoration: pdaInput('— เลือกประเภทกล่อง —', radius: 12),
             items: types.map((t) {
               final id = (t['id'] ?? '').toString();
