@@ -3,7 +3,8 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { boxes, cycleCounts, events } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermissions } from './roles.js';
 import { cycleCountOpenSchema, cycleCountScanSchema } from '../validators/schemas.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -27,7 +28,7 @@ import { bump } from '../lib/bus.js';
  */
 export const cycleCountsRouter = Router();
 cycleCountsRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+const canManage = requirePermissions('cycle_count.manage');
 
 /** Tags currently believed to be sitting in this warehouse/zone. */
 async function expectedTags(wh: string, zone: string): Promise<string[]> {
@@ -85,6 +86,7 @@ async function loadOr404(id: string) {
 /** Recent sessions, newest first. `?status=open` narrows to live ones. */
 cycleCountsRouter.get(
   '/',
+  requirePermissions('cycle_count.view', 'cycle_count.manage'),
   asyncHandler(async (req, res) => {
     const db = getDb();
     const limit = Math.min(Number(req.query.limit ?? 50) || 50, 200);
@@ -103,6 +105,7 @@ cycleCountsRouter.get(
 
 cycleCountsRouter.get(
   '/:id',
+  requirePermissions('cycle_count.view', 'cycle_count.manage'),
   asyncHandler(async (req, res) => {
     res.json(present(await loadOr404(req.params.id)));
   }),
@@ -117,7 +120,7 @@ cycleCountsRouter.get(
  */
 cycleCountsRouter.post(
   '/',
-  canWrite,
+  canManage,
   asyncHandler(async (req, res) => {
     const input = cycleCountOpenSchema.parse(req.body);
     const db = getDb();
@@ -167,7 +170,7 @@ cycleCountsRouter.post(
  */
 cycleCountsRouter.post(
   '/:id/scan',
-  canWrite,
+  canManage,
   asyncHandler(async (req, res) => {
     const input = cycleCountScanSchema.parse(req.body);
     const db = getDb();
@@ -213,7 +216,7 @@ cycleCountsRouter.post(
  */
 cycleCountsRouter.post(
   '/:id/close',
-  canWrite,
+  canManage,
   asyncHandler(async (req, res) => {
     const db = getDb();
     const row = await loadOr404(req.params.id);
@@ -261,7 +264,7 @@ cycleCountsRouter.post(
  */
 cycleCountsRouter.post(
   '/:id/mark-missing-lost',
-  requireRole('admin'),
+  requirePermissions('overdue.manage', 'box.update'),
   asyncHandler(async (req, res) => {
     const db = getDb();
     const row = await loadOr404(req.params.id);

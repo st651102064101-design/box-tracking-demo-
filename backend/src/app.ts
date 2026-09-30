@@ -10,11 +10,15 @@ import { authRouter } from './routes/auth.js';
 import { stateRouter } from './routes/state.js';
 import { gateRouter } from './routes/gate.js';
 import { boxesRouter } from './routes/boxes.js';
-import { rfidRouter } from './routes/rfid.js';
+import { fx9600WebhookRouter, rfidRouter } from './routes/rfid.js';
+import { lprWebhookRouter } from './routes/lpr-webhook.js';
 import { mastersRouter } from './routes/masters.js';
 import { employeePinRouter } from './routes/pin.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
 import { reportsRouter } from './routes/reports.js';
+import { devicesRouter } from './routes/devices.js';
+import { legacySettingsRouter } from './routes/legacy-settings.js';
+import { rolesRouter } from './routes/roles.js';
 import { streamRouter } from './routes/stream.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
@@ -50,7 +54,10 @@ const authLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  // Matrix tests intentionally issue hundreds of requests from one Supertest
+  // client in a few seconds; keep production throttling intact while allowing
+  // that deterministic test workload to reach the permission middleware.
+  max: env.nodeEnv === 'test' ? 10_000 : 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'too_many_requests', message: 'มีการเรียก API ถี่เกินไป กรุณาลองใหม่ภายหลัง' },
@@ -74,9 +81,9 @@ export function createApp() {
       credentials: true,
     }),
   );
-  // Full-state snapshots can be large, but 25mb was needlessly generous for a
-  // request body and widened the DoS surface; 10mb comfortably covers real
-  // snapshots while capping worst-case memory per request.
+  // The legacy UI uploads its full state snapshot on each save. Allow a larger
+  // bounded body for that endpoint only; operational APIs keep the smaller cap.
+  app.use('/api/state', express.json({ limit: '50mb' }));
   app.use(express.json({ limit: '10mb' }));
   /* The SSE URL carries the auth token as a query parameter, because
      EventSource cannot send headers. Access logs are the one place that
@@ -99,20 +106,35 @@ export function createApp() {
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth', authRouter);
+  app.use('/api', apiLimiter);
+  // Public by design: Zebra fixed-reader IoT Connector data endpoints may use
+  // HTTP POST with Authentication NONE. Keep the FX9600 path for deployed
+  // readers and expose a model-neutral path for replacements such as FXR90.
+  app.use('/api/rfid/fx9600', fx9600WebhookRouter);
+  app.use('/api/rfid/readers', fx9600WebhookRouter);
+  // LPR cameras cannot use the operator JWT. This receiver validates its
+  // payload and either the configured shared secret or private-LAN source.
+  app.use('/api/gate/lpr', lprWebhookRouter);
+  app.use('/api', requireApiKey, legacySettingsRouter);
+  app.use('/api/roles', requireApiKey, rolesRouter);
   // Every operational route beyond this point is authenticated (each
   // router's own requireAuth), rate-limited, and — once API_KEY is set —
   // also requires X-API-Key. /api/stream is excluded: it's a long-lived SSE
   // connection, not a request burst, so the per-minute request limiter
   // doesn't apply to it in any useful way, and it authenticates via its own
   // query-param token instead of a header (EventSource can't send headers).
-  app.use('/api/state', apiLimiter, requireApiKey, stateRouter);
-  app.use('/api/gate', apiLimiter, requireApiKey, gateRouter);
-  app.use('/api/boxes', apiLimiter, requireApiKey, boxesRouter);
-  app.use('/api/rfid', apiLimiter, requireApiKey, rfidRouter);
-  app.use('/api/masters', apiLimiter, requireApiKey, mastersRouter);
-  app.use('/api/employees', apiLimiter, requireApiKey, employeePinRouter);
-  app.use('/api/cycle-counts', apiLimiter, requireApiKey, cycleCountsRouter);
-  app.use('/api/reports', apiLimiter, requireApiKey, reportsRouter);
+  // apiLimiter already ran once in the /api middleware above. Do not apply it
+  // again per-router: that double-counted every operational request and made
+  // normal dashboard polling (plus reader retries) hit the shared IP limit.
+  app.use('/api/state', requireApiKey, stateRouter);
+  app.use('/api/gate', requireApiKey, gateRouter);
+  app.use('/api/boxes', requireApiKey, boxesRouter);
+  app.use('/api/rfid', requireApiKey, rfidRouter);
+  app.use('/api/masters', requireApiKey, mastersRouter);
+  app.use('/api/employees', requireApiKey, employeePinRouter);
+  app.use('/api/cycle-counts', requireApiKey, cycleCountsRouter);
+  app.use('/api/reports', requireApiKey, reportsRouter);
+  app.use('/api/devices', requireApiKey, devicesRouter);
   app.use('/api/stream', streamRouter);
 
   app.use(notFound);

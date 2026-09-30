@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../controllers/app_controller.dart';
+import '../services/scan_payload.dart';
 
 /// Barcode input with no input box for the operator to get wrong.
 ///
@@ -61,6 +65,9 @@ class _ScanCaptureState extends State<ScanCapture> {
   final _focus = FocusNode(debugLabel: 'ScanCapture');
   Timer? _idle;
   int _prevLen = 0;
+  void Function(String code)? _intentTarget;
+  String? _lastCode;
+  DateTime? _lastAt;
 
   /// Long enough to survive the gap between characters of one wedge burst,
   /// short enough that the scan feels instant. Same value the location and
@@ -75,6 +82,7 @@ class _ScanCaptureState extends State<ScanCapture> {
     // is taken on arrival and taken back whenever anything else drops it.
     _focus.addListener(_keepFocus);
     _arm();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bindIntentTarget());
   }
 
   @override
@@ -86,6 +94,28 @@ class _ScanCaptureState extends State<ScanCapture> {
       _arm();
     } else if (!widget.enabled && old.enabled) {
       _focus.unfocus();
+    }
+    _bindIntentTarget();
+  }
+
+  /// DataWedge intent output, claimed only while this capture is live.
+  /// Tests and any host without an [AppController] keep the keystroke path.
+  void _bindIntentTarget() {
+    if (!mounted) return;
+    final AppController? c;
+    try {
+      c = Provider.of<AppController>(context, listen: false);
+    } catch (_) {
+      return;
+    }
+    _intentTarget ??= (code) {
+      if (!mounted || !widget.enabled) return;
+      _emit(code);
+    };
+    if (widget.enabled) {
+      c.claimBarcodeTarget(_intentTarget!);
+    } else {
+      c.releaseBarcodeTarget(_intentTarget!);
     }
   }
 
@@ -105,6 +135,13 @@ class _ScanCaptureState extends State<ScanCapture> {
   @override
   void dispose() {
     _idle?.cancel();
+    final target = _intentTarget;
+    if (target != null) {
+      try {
+        Provider.of<AppController>(context, listen: false)
+            .releaseBarcodeTarget(target);
+      } catch (_) {}
+    }
     _focus.removeListener(_keepFocus);
     _ctrl.dispose();
     _focus.dispose();
@@ -117,7 +154,7 @@ class _ScanCaptureState extends State<ScanCapture> {
   /// to go quiet, because this engine does not reliably send a trailing Enter.
   void _onChanged(String v) {
     _idle?.cancel();
-    final text = v.trim();
+    final text = normalizeScanPayload(v);
     final added = v.length - _prevLen;
     _prevLen = v.length;
     if (text.length < widget.minLength) return;
@@ -135,8 +172,19 @@ class _ScanCaptureState extends State<ScanCapture> {
     _idle?.cancel();
     _ctrl.clear();
     _prevLen = 0;
+    code = normalizeScanPayload(code);
     if (!mounted || !widget.enabled) return;
     if (code.length < widget.minLength) return;
+    // Intent and the keystroke wedge both deliver the same label. The second
+    // one must not flip a successful queue add into "อยู่ในคิวแล้ว".
+    final now = DateTime.now();
+    if (_lastCode == code &&
+        _lastAt != null &&
+        now.difference(_lastAt!) < const Duration(milliseconds: 450)) {
+      return;
+    }
+    _lastCode = code;
+    _lastAt = now;
     widget.onScan(code);
   }
 

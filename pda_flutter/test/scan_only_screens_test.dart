@@ -15,7 +15,6 @@ void main() {
   const scanOnly = [
     'lib/screens/cycle_count_screen.dart',
     'lib/screens/rfid_input_screen.dart',
-    'lib/screens/login_screen.dart',
     // Picking a target used to accept a typed code or box-type search. Now
     // it only ever resolves a scanned code (a picking ticket or an existing
     // pallet label carries a real one); with nothing to scan the operator
@@ -35,6 +34,9 @@ void main() {
         'a brand-new box has no sticker yet, so its code must be typed once',
     'lib/screens/device_setup_screen.dart':
         'server url and credentials — not a box code at all',
+    'lib/screens/login_screen.dart':
+        'employee id entry on request — the typed route still checks the '
+            'employee PIN before starting a session',
     'lib/screens/scan_screen.dart':
         'plate and driver on the vehicle form — nothing there is a box code, '
             'and the scan step itself has had no field since ScanCapture',
@@ -59,10 +61,11 @@ void main() {
   test('every screen with a text field is one we decided to keep', () {
     final undeclared = <String>[];
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
-      if (!f.path.endsWith('.dart')) continue;
+      final path = f.path.replaceAll('\\', '/');
+      if (!path.endsWith('.dart')) continue;
       if (!f.readAsStringSync().contains('TextField(')) continue;
-      if (keepsAField.containsKey(f.path)) continue;
-      undeclared.add(f.path);
+      if (keepsAField.containsKey(path)) continue;
+      undeclared.add(path);
     }
     expect(undeclared, isEmpty,
         reason: 'a new typable field needs a reason recorded in keepsAField, '
@@ -89,12 +92,13 @@ void main() {
   test('every dual-mode screen carries the shared mode toggle', () {
     final offenders = <String>[];
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
-      if (!f.path.endsWith('.dart')) continue;
-      if (noToggleNeeded.containsKey(f.path)) continue;
+      final path = f.path.replaceAll('\\', '/');
+      if (!path.endsWith('.dart')) continue;
+      if (noToggleNeeded.containsKey(path)) continue;
       final src = f.readAsStringSync();
       // Reads the RFID mode to decide what to show or do = offers both.
       if (!src.contains('ScanInputMode.rfid')) continue;
-      if (!src.contains('ScanModeToggle')) offenders.add(f.path);
+      if (!src.contains('ScanModeToggle')) offenders.add(path);
     }
     expect(offenders, isEmpty,
         reason: 'a screen that behaves differently in RFID mode must let the '
@@ -104,11 +108,12 @@ void main() {
   test('nobody hand-rolls their own copy of the toggle', () {
     final offenders = <String>[];
     for (final f in Directory('lib/screens').listSync().whereType<File>()) {
-      if (!f.path.endsWith('.dart')) continue;
+      final path = f.path.replaceAll('\\', '/');
+      if (!path.endsWith('.dart')) continue;
       // The tell of a local reimplementation: flipping the mode by hand
       // instead of letting the shared toggle do it.
       if (f.readAsStringSync().contains('c.setScanInputMode(m)')) {
-        offenders.add(f.path);
+        offenders.add(path);
       }
     }
     expect(offenders, isEmpty,

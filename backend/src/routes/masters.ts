@@ -4,7 +4,8 @@ import { getDb } from '../db/client.js';
 import { boxTypes, customers, locations, warehouses, employees } from '../db/schema.js';
 import { boxTypeSchema, customerSchema, locationSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermissions } from './roles.js';
 
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
@@ -13,8 +14,8 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
  */
 export const mastersRouter = Router();
 mastersRouter.use(requireAuth);
-/** 'viewer' may only GET; writes require 'admin' or 'staff'. */
-const canWrite = requireRole('admin', 'staff');
+const canViewMasters = requirePermissions('master.manage', 'setting.view', 'box.view', 'partner.view', 'warehouse.view');
+const canManageMasters = requirePermissions('master.manage');
 
 /**
  * Suggests the next sequential id for a master-data table, counted from
@@ -41,6 +42,7 @@ function nextSeqIdFrom(ids: Array<string | null>, prefix: string): string {
 
 mastersRouter.get(
   '/next-id',
+  requirePermissions('master.manage'),
   asyncHandler(async (req, res) => {
     const kind = String(req.query.kind ?? '');
     const db = getDb();
@@ -73,6 +75,7 @@ mastersRouter.get(
 /* ─── box types ────────────────────────────────────────────────────────────*/
 mastersRouter.get(
   '/box-types',
+  canViewMasters,
   asyncHandler(async (_req, res) => {
     const rows = await getDb().select().from(boxTypes);
     res.json({ items: rows.map((r) => r.data) });
@@ -81,7 +84,7 @@ mastersRouter.get(
 
 mastersRouter.post(
   '/box-types',
-  canWrite,
+  canManageMasters,
   asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse(req.body);
     const db = getDb();
@@ -101,7 +104,7 @@ mastersRouter.post(
 
 mastersRouter.put(
   '/box-types/:id',
-  canWrite,
+  canManageMasters,
   asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
@@ -124,7 +127,7 @@ mastersRouter.put(
 
 mastersRouter.delete(
   '/box-types/:id',
-  canWrite,
+  canManageMasters,
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(boxTypes).where(eq(boxTypes.id, req.params.id)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
@@ -135,6 +138,7 @@ mastersRouter.delete(
 /* ─── customers ────────────────────────────────────────────────────────────*/
 mastersRouter.get(
   '/customers',
+  requirePermissions('partner.view', 'master.manage', 'setting.view'),
   asyncHandler(async (_req, res) => {
     const rows = await getDb().select().from(customers);
     res.json({ items: rows.map((r) => r.data) });
@@ -143,7 +147,7 @@ mastersRouter.get(
 
 mastersRouter.post(
   '/customers',
-  canWrite,
+  requirePermissions('partner.create', 'master.manage'),
   asyncHandler(async (req, res) => {
     const input = customerSchema.parse(req.body);
     const db = getDb();
@@ -163,7 +167,7 @@ mastersRouter.post(
 
 mastersRouter.put(
   '/customers/:id',
-  canWrite,
+  requirePermissions('partner.update', 'master.manage'),
   asyncHandler(async (req, res) => {
     const input = customerSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
@@ -186,7 +190,7 @@ mastersRouter.put(
 
 mastersRouter.delete(
   '/customers/:id',
-  canWrite,
+  requirePermissions('partner.delete', 'master.manage'),
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(customers).where(eq(customers.id, req.params.id)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบลูกค้า', 'not_found');
@@ -201,6 +205,7 @@ mastersRouter.delete(
    just free text on the one box being put away. */
 mastersRouter.get(
   '/locations',
+  requirePermissions('warehouse.view', 'warehouse.manage', 'master.manage'),
   asyncHandler(async (_req, res) => {
     const rows = await getDb().select().from(locations);
     res.json({ items: rows.map((r) => ({ code: r.code, wh: r.wh, zone: r.zone, rack: r.rack, shelf: r.shelf, slot: r.slot, type: r.type, note: r.note })) });
@@ -209,7 +214,7 @@ mastersRouter.get(
 
 mastersRouter.post(
   '/locations',
-  canWrite,
+  requirePermissions('warehouse.manage', 'master.manage'),
   asyncHandler(async (req, res) => {
     const input = locationSchema.parse(req.body);
     const db = getDb();
@@ -232,7 +237,7 @@ mastersRouter.post(
 
 mastersRouter.delete(
   '/locations/:code',
-  canWrite,
+  requirePermissions('warehouse.manage', 'master.manage'),
   asyncHandler(async (req, res) => {
     const deleted = await getDb().delete(locations).where(eq(locations.code, req.params.code)).returning();
     if (!deleted.length) throw httpError(404, 'ไม่พบตำแหน่ง', 'not_found');

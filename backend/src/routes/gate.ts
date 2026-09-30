@@ -3,13 +3,13 @@ import { getDb } from '../db/client.js';
 import { gateOut, gateIn } from '../services/gate.js';
 import { gateOutSchema, gateInSchema } from '../validators/schemas.js';
 import { asyncHandler } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 import { bump } from '../lib/bus.js';
+import { requirePermissions } from './roles.js';
 
 /** Server-side gate operations for physical readers / integrations. */
 export const gateRouter = Router();
 gateRouter.use(requireAuth);
-gateRouter.use(requireRole('admin', 'staff'));
 
 /**
  * The terminal that sent the scan, from its own bearer token — a handheld
@@ -21,6 +21,7 @@ const deviceOf = (req: { user?: { username: string } }) => req.user?.username ??
 
 gateRouter.post(
   '/out',
+  requirePermissions('gate.out'),
   asyncHandler(async (req, res) => {
     const input = gateOutSchema.parse(req.body);
     const result = await gateOut(getDb(), { ...input, device: deviceOf(req) });
@@ -33,6 +34,7 @@ gateRouter.post(
 
 gateRouter.post(
   '/in',
+  requirePermissions('gate.in'),
   asyncHandler(async (req, res) => {
     const input = gateInSchema.parse(req.body);
     const result = await gateIn(getDb(), { ...input, device: deviceOf(req) });

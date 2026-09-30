@@ -361,7 +361,8 @@ class _AutoHideHeaderState extends State<AutoHideHeader> {
 class OnlineChip extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
-  const OnlineChip({super.key, required this.online, this.onTap});
+  final bool showLabel;
+  const OnlineChip({super.key, required this.online, this.onTap, this.showLabel = true});
   @override
   Widget build(BuildContext context) {
     final loc = context.watch<LocaleController>();
@@ -378,13 +379,17 @@ class OnlineChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-                size: 16, color: online ? C.limeText : C.muted),
-            const SizedBox(width: 5),
-            Text(loc.t(online ? 'ออนไลน์' : 'ออฟไลน์'),
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: online ? C.limeText : C.muted)),
+                size: 16,
+                color: online ? C.limeText : C.muted,
+                semanticLabel: showLabel ? null : loc.t(online ? 'ออนไลน์' : 'ออฟไลน์')),
+            if (showLabel) ...[
+              const SizedBox(width: 5),
+              Text(loc.t(online ? 'ออนไลน์' : 'ออฟไลน์'),
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: online ? C.limeText : C.muted)),
+            ],
           ],
         ),
       ),

@@ -22,6 +22,26 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
+-- Role grants are stored independently from users.role (the legacy login role).
+CREATE TABLE IF NOT EXISTS roles (
+  id SERIAL PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  active BOOLEAN NOT NULL DEFAULT true,
+  system BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ
+);
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,
+  PRIMARY KEY (role_id, permission)
+);
+
 CREATE TABLE IF NOT EXISTS config (
   id          INTEGER PRIMARY KEY DEFAULT 1,
   aging_days  INTEGER NOT NULL DEFAULT 15,
@@ -101,6 +121,7 @@ CREATE TABLE IF NOT EXISTS employees (
 
 -- Additive migrations for databases created before these columns existed.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_otp_hash TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_expires_at TIMESTAMPTZ;
@@ -184,6 +205,28 @@ CREATE TABLE IF NOT EXISTS putaway (
 
 CREATE TABLE IF NOT EXISTS inventory (
   id         TEXT PRIMARY KEY,
+  data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Live handheld presence. `id` is the authenticated service-account name;
+-- it is not accepted from the client, so one terminal cannot impersonate
+-- another terminal's status card.
+CREATE TABLE IF NOT EXISTS device_presence (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  model        TEXT,
+  ip_address   TEXT,
+  warehouse_id TEXT,
+  gate_no      INTEGER,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE device_presence ADD COLUMN IF NOT EXISTS ip_address TEXT;
+CREATE INDEX IF NOT EXISTS device_presence_last_seen_idx ON device_presence (last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
   data       JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

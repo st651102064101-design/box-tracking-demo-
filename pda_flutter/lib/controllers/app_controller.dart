@@ -11,9 +11,11 @@ import '../services/epc_codec.dart';
 import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
+import '../services/device_address.dart';
 import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
+import '../services/scan_payload.dart';
 
 enum Screen {
   boot,
@@ -33,9 +35,9 @@ enum Screen {
   locationInquiry,
 }
 
-/// Which physical input a trigger pull means right now, on any screen that
-/// offers both — Gate scanning, Track, and RfidLocateScreen's own box-pick
-/// step. Centralized (not per-screen local state) because the trigger
+/// Which physical input a trigger pull means right now on screens that
+/// support barcode, RFID, or both. Centralized (not per-screen local state)
+/// because the trigger
 /// itself is wired centrally too (AppController._onReaderTrigger is the
 /// only place a hardware trigger event turns into rfid.startInventory()) —
 /// a screen-local toggle that this dispatcher never saw was exactly how a
@@ -122,8 +124,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   final Prefs prefs;
   final RfidService rfid;
 
-  AppController({required this.api, required this.prefs, required this.rfid}) {
+  /// This terminal's own LAN address. Tests pass a fixed value; the device
+  /// reads its Wi-Fi interface.
+  final Future<String?> Function() readLanIp;
+
+  AppController({
+    required this.api,
+    required this.prefs,
+    required this.rfid,
+    Future<String?> Function()? readLanIp,
+  }) : readLanIp = readLanIp ?? readDeviceLanIpv4 {
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  bool _closed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_closed) super.notifyListeners();
   }
 
   /// A backgrounded PDA has no business still sweeping RFID — a screen
@@ -151,7 +169,18 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // undoing setScanInputMode's earlier disable — reapply it every
         // time this app comes back, not just when the toggle itself moves.
         if (_usesZebraSdk) {
-          rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+          _syncBarcodeScannerForScreen();
+        }
+        // A backgrounded isolate stops the 25s timer. Without a ping on
+        // the way back, the dashboard keeps the handheld offline until the
+        // next tick, which may be long after the operator is already working.
+        // If the chip is still offline, retry auth+state immediately —
+        // waiting for the next periodic tick is what made "open the app"
+        // look like a long hang before it went green.
+        if (!_liveConnected) {
+          unawaited(retryConnection());
+        } else {
+          _reportDevicePresence();
         }
         break;
       case AppLifecycleState.detached:
@@ -163,12 +192,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Screen screen = Screen.boot;
   StateSnapshot? S;
 
-  /// True only once a live `GET /api/state` has actually succeeded this
-  /// session — set in [refresh]. `S` alone can't answer this: it's also
-  /// populated eagerly at boot from [Prefs.stateCache] so a terminal with no
-  /// network yet still has employee/box data to show, and a fresh warehouse
-  /// with zero boxes registered is a perfectly valid live connection too, so
-  /// nothing about the snapshot's *contents* can stand in for this.
+  /// True once this session has proved the backend is reachable — a
+  /// successful heartbeat, `GET /api/state`, or an open SSE stream. `S`
+  /// alone can't answer this: it's also populated eagerly at boot from
+  /// [Prefs.stateCache] so a terminal with no network yet still has
+  /// employee/box data to show, and a fresh warehouse with zero boxes
+  /// registered is a perfectly valid live connection too, so nothing about
+  /// the snapshot's *contents* can stand in for this.
   bool _liveConnected = false;
 
   /// The operator currently holding the device — null whenever it is locked.
@@ -446,16 +476,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Toast? toast;
   Timer? _toastTimer;
   final _rnd = Random();
-  StreamSubscription? _tagSub, _trigSub, _statusSub;
+  StreamSubscription? _tagSub, _trigSub, _statusSub, _barcodeSub;
   final _realtime = RealtimeService();
   Timer? _realtimeDebounce;
+  Future<void>? _refreshInFlight;
+  bool _refreshAgain = false;
   Timer? _offlineDialogDebounce;
-  // MC3390R owns the UHF RFID SDK. TC52 and other Zebra terminals still use
+  Timer? _deviceHeartbeatTimer;
+  String? _cachedLanIp;
+  // MC3390R and TC501 own the UHF RFID SDK. TC52 and other Zebra terminals use
   // the native DataWedge SDK for their physical barcode imager, while a
   // normal Android device stays on the app's barcode/manual input path.
   bool _hasIntegratedRfid = false;
+  bool _handheldInfoResolved = false;
   bool _usesZebraSdk = false;
-  bool get hasIntegratedRfid => _hasIntegratedRfid;
+  bool get hasIntegratedRfid =>
+      _hasIntegratedRfid ||
+      (!_handheldInfoResolved &&
+          const {'mc3390r', 'tc501'}.contains(prefs.deviceModel));
   bool get usesZebraSdk => _usesZebraSdk;
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
@@ -464,12 +502,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     api.token = prefs.token;
     api.reauthenticate = _deviceLogin;
 
-    // Restore the last known warehouse state *before* touching the network:
-    // a terminal that boots with the backend unreachable still needs employee
-    // names on the badge screen and box data for the scanner. Without this the
-    // whole app is dead until connectivity returns.
-    final cached = prefs.stateCache;
-    if (cached != null) S = StateSnapshot.fromJson(cached);
+    // Never hold the first visible screen behind decoding an older, possibly
+    // multi-megabyte cache. The badge page updates as soon as it is restored.
+    screen = Screen.login;
+    notifyListeners();
+
+    // Decode the old cache off-thread in parallel with the network probe.
+    // Waiting for a multi-megabyte legacy cache here used to delay the online
+    // heartbeat and the first usable screen.
+    final cachedState = prefs.loadStateCache();
 
     outbox
       ..clear()
@@ -478,70 +519,84 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
     wh = prefs.deviceWh;
     gate = prefs.deviceGate;
-    await _detectHandheldHardware();
 
-    // wire the Zebra reader — tagBatches (not the plain-epc tags stream)
-    // because the stray-read RSSI filter (see _onReaderBatch) needs each
-    // read's signal strength, which only the raw stream carries.
+    // LAN lookup used to sit on the critical path of the first heartbeat
+    // (NetworkInterface.list can stall on Android). Start it now so a later
+    // presence ping can attach the address without delaying "online".
+    unawaited(_prefetchLanIp());
+
+    // Barcode/RFID listeners do not need the model string. Hardware detect
+    // used to run first and hold the backend connect — the chip stayed
+    // offline for no server-related reason.
     _tagSub = rfid.tagBatches.listen(_onReaderBatch);
     _trigSub = rfid.triggers.listen(_onReaderTrigger);
+    rfid.ensureListening();
+    _barcodeSub = rfid.barcodes.listen(deliverBarcode);
     _statusSub = rfid.status.listen((s) {
       rfidStatus = s;
-      // Reader firmware resets to full power on every connect, so the
-      // saved ใกล้/ปานกลาง/ไกล pick has to be re-applied each time — not
-      // just when the operator changes it in settings.
       if (s.state == RfidState.connected) {
         rfid.setPowerPercent(prefs.rfidPowerPercent);
-        // Same reasoning: the native read-callback tick has no way to ask
-        // Dart which sound to play per read, so it has to be told once here
-        // (and again on every change — see setRfidSoundId below).
         rfid.setRfidSoundId(prefs.rfidSoundId);
         rfid.setSoundVolume(prefs.rfidSoundVolume);
       }
       notifyListeners();
     });
 
-    // Auth + state load runs alongside the splash so a slow or unreachable
-    // backend never holds the UI hostage — screens render, then fill in.
+    final hardware = _detectHandheldHardware();
+    _connectRealtime();
     final loading = _ensureAuthAndState();
-    // Live push (see RealtimeService) so a change made anywhere else — the
-    // web app, another PDA, a direct API call — shows up here without the
-    // operator needing to leave the screen and back to force a refetch, same
-    // as the web app already does over the same /api/stream channel. Its own
-    // retry loop handles "no token yet" / "backend unreachable at boot" —
-    // safe to call before [loading] settles.
+
+    final cached = await cachedState;
+    if (!_closed && cached != null && S == null) {
+      S = StateSnapshot.fromJson(cached);
+      notifyListeners();
+    }
+
+    // Leave the splash immediately. The 420ms hold only delayed the login
+    // chip; auth is already in flight.
+    // Device setup is an explicit operator action, never the landing screen.
+    // A fresh terminal still opens the badge page; its setup button is the
+    // deliberate entry point into provisioning.
+    await hardware;
+    if (deviceConfigured) {
+      _connectReader();
+    }
+    notifyListeners();
+
+    await loading; // never throws — errors land in connError
+    _startDeviceHeartbeat();
+    if (screen == Screen.deviceSetup) _autoSelectSinglePost();
+    notifyListeners();
+  }
+
+  void _connectRealtime() {
     _realtime.connect(
       baseUrl: () => api.baseUrl,
       token: () => api.token,
       onStateChanged: _onRealtimeStateChanged,
       onConnectivity: _onRealtimeConnectivity,
     );
-    await Future.delayed(const Duration(milliseconds: 420));
+  }
 
-    // No operator is ever restored: a shift always starts with a badge scan,
-    // which takes a second and can't mis-attribute the next person's work.
-    screen = deviceConfigured ? Screen.login : Screen.deviceSetup;
-    if (deviceConfigured) {
-      _connectReader();
-    } else {
-      _autoSelectSinglePost();
-    }
-    notifyListeners();
-
-    await loading; // never throws — errors land in connError
-    // Only now, on a device with no cached snapshot, is the warehouse list
-    // known — so a fresh terminal gets its single option filled in too.
-    if (screen == Screen.deviceSetup) _autoSelectSinglePost();
-    notifyListeners();
+  Future<void> _prefetchLanIp() async {
+    final ip = await readLanIp();
+    if (ip != null) _cachedLanIp = ip;
   }
 
   /// Signs in with the terminal's own service credentials. Also used as
   /// [ApiClient.reauthenticate], so an expired token mid-shift is renewed
   /// transparently instead of failing an operator's commit.
-  Future<bool> _deviceLogin() async {
-    final r = await api.login(prefs.username, prefs.password);
+  Future<bool> _deviceLogin({Duration? timeout}) async {
+    final request = api.login(prefs.username, prefs.password);
+    final r = timeout == null ? await request : await request.timeout(timeout);
     final token = r['token'] as String?;
     prefs.token = token;
+    api.token = token;
+    if (token != null && token.isNotEmpty) {
+      // SSE started at boot with no token and would otherwise sit on its
+      // retry timer. Kick it now so "online" does not wait another 2s.
+      _connectRealtime();
+    }
     return token != null && token.isNotEmpty;
   }
 
@@ -549,6 +604,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _ensureAuthAndState() async {
     try {
       if (api.token == null || api.token!.isEmpty) await _deviceLogin();
+      // Presence + chip go green from a cheap authenticated ping. GET
+      // /api/state can be a large snapshot and used to be the only thing
+      // that flipped connected — that's why the first open felt slow.
+      _startDeviceHeartbeat();
       await refresh();
       connError = null;
     } on ApiException catch (e) {
@@ -557,6 +616,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       if (e.status == 401) {
         try {
           await _deviceLogin();
+          _startDeviceHeartbeat();
           await refresh();
           connError = null;
           return;
@@ -569,6 +629,74 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       connError = _msg(e);
     }
+  }
+
+  String get _devicePresenceName {
+    switch (prefs.deviceModel) {
+      case 'tc52':
+        return 'Zebra TC52';
+      case 'tc501':
+        return 'Zebra TC501';
+      case 'mc3390r':
+        return 'Zebra MC3390R';
+      case 'zebra':
+        return 'Zebra Handheld';
+      default:
+        return 'PDA Scanner';
+    }
+  }
+
+  /// A presence heartbeat is intentionally independent from a scan: an idle
+  /// TC52 is still connected and must remain visible to the dashboard.
+  void _startDeviceHeartbeat() {
+    _deviceHeartbeatTimer?.cancel();
+    _reportDevicePresence();
+    _deviceHeartbeatTimer = Timer.periodic(
+      const Duration(seconds: 25),
+      (_) => _reportDevicePresence(),
+    );
+  }
+
+  Future<void> _reportDevicePresence() async {
+    // Do not wait on the live-state flag. That flag follows the SSE stream,
+    // and a stream that has not connected yet (or just dropped) is exactly
+    // when the dashboard most needs a REST heartbeat to tell an idle but
+    // reachable TC52 apart from one that is actually offline.
+    if (!deviceConfigured || api.baseUrl.trim().isEmpty) return;
+    if (api.token == null || api.token!.isEmpty) return;
+    try {
+      await api.heartbeatDevice(
+        name: _devicePresenceName,
+        model: prefs.deviceModel,
+        ipAddress: _cachedLanIp,
+        warehouseId: wh.isEmpty ? null : wh,
+        gateNo: int.tryParse(gate),
+      );
+      _markLiveFromPresence();
+      final ip = _cachedLanIp ?? await readLanIp();
+      if (ip != null && ip != _cachedLanIp) {
+        _cachedLanIp = ip;
+        await api.heartbeatDevice(
+          name: _devicePresenceName,
+          model: prefs.deviceModel,
+          ipAddress: ip,
+          warehouseId: wh.isEmpty ? null : wh,
+          gateNo: int.tryParse(gate),
+        );
+      }
+    } catch (_) {
+      // Presence must never interrupt a scan workflow; the next 25-second
+      // interval will try again when Wi-Fi or authentication recovers.
+    }
+  }
+
+  /// Heartbeat succeeding is enough to show online — do not wait for the
+  /// full warehouse snapshot or the SSE socket.
+  void _markLiveFromPresence() {
+    if (_liveConnected && connError == null) return;
+    _liveConnected = true;
+    connError = null;
+    notifyListeners();
   }
 
   /// Explicit reconnect for the badge screen's small online/offline
@@ -587,12 +715,29 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     return connected;
   }
 
-  Future<void> refresh() async {
-    final json = await api.getState();
-    S = StateSnapshot.fromJson(json);
-    prefs.stateCache = json;
-    _liveConnected = true;
-    notifyListeners();
+  Future<void> refresh() {
+    final active = _refreshInFlight;
+    if (active != null) return active;
+    final request = _refreshLoop();
+    _refreshInFlight = request;
+    unawaited(request.then((_) {
+      if (identical(_refreshInFlight, request)) _refreshInFlight = null;
+    }, onError: (Object _, StackTrace __) {
+      if (identical(_refreshInFlight, request)) _refreshInFlight = null;
+    }));
+    return request;
+  }
+
+  Future<void> _refreshLoop() async {
+    do {
+      _refreshAgain = false;
+      final json = await api.getState();
+      if (_closed) return;
+      S = StateSnapshot.fromJson(json);
+      _liveConnected = true;
+      notifyListeners();
+      await prefs.saveStateCache(json);
+    } while (_refreshAgain);
   }
 
   /// Debounced so a burst of several 'state' pings close together (e.g. a
@@ -600,6 +745,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void _onRealtimeStateChanged() {
     _realtimeDebounce?.cancel();
     _realtimeDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (_refreshInFlight != null) {
+        // The first request may have started before this event. Run exactly
+        // one trailing fetch after it, instead of piling up overlapping
+        // decode/cache writes on the UI isolate.
+        _refreshAgain = true;
+        return;
+      }
       // A dropped refresh here just waits for the next ping (or the next
       // local action's own refresh()) — nothing else depends on it landing.
       refresh().catchError((_) {});
@@ -634,6 +786,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // this isn't the very first connect of the session (nothing to flush
       // yet either way, and it would race the boot-time refresh()).
       if (!wasConnected && outbox.isNotEmpty) flushOutbox();
+      _reportDevicePresence();
     } else {
       // Deliberately left null when nothing more specific is known — the
       // dialog and the reconnect sheet both have their own wording for
@@ -698,13 +851,16 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _closed = true;
     WidgetsBinding.instance.removeObserver(this);
     _toastTimer?.cancel();
     _tagSub?.cancel();
     _trigSub?.cancel();
     _statusSub?.cancel();
+    _barcodeSub?.cancel();
     _realtimeDebounce?.cancel();
     _offlineDialogDebounce?.cancel();
+    _deviceHeartbeatTimer?.cancel();
     _realtime.dispose();
     super.dispose();
   }
@@ -723,6 +879,31 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (d == null) return '-';
     final l = d.toLocal();
     return '${pad(l.day, 2)}/${pad(l.month, 2)}/${l.year} ${pad(l.hour, 2)}:${pad(l.minute, 2)}';
+  }
+
+  static const _thaiMonths = [
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
+  ];
+
+  /// Track-screen history timestamps: `23 ก.ย. 2569 10:45:55`.
+  String fmtTsThai(String? s) {
+    if (s == null || s.isEmpty) return '-';
+    final d = DateTime.tryParse(s);
+    if (d == null) return '-';
+    final l = d.toLocal();
+    return '${l.day} ${_thaiMonths[l.month - 1]} ${l.year + 543} '
+        '${pad(l.hour, 2)}:${pad(l.minute, 2)}:${pad(l.second, 2)}';
   }
 
   bool _looksThaiGarbled(String t) => RegExp(r'[฀-๿]').hasMatch(t);
@@ -834,21 +1015,82 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
   void go(Screen s) {
+    if (!hasIntegratedRfid &&
+        (s == Screen.rfidLocate ||
+            s == Screen.rfidInput ||
+            s == Screen.boxRegister)) {
+      return;
+    }
     screen = s;
+    if (s != Screen.rfidLocate) rfidLocateSweepStep = false;
+    if (s != Screen.boxRegister) boxRegisterRfidStep = false;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
+  }
+
+  /// One policy is used for the visible mode, physical trigger dispatcher,
+  /// DataWedge scanner and RFID SDK. Returning a nullable mode means that the
+  /// screen is not accepting input; it also prevents an old screen's mode from
+  /// leaking into a new screen.
+  ScanInputMode? get _effectiveInputMode {
+    switch (screen) {
+      case Screen.deviceSetup:
+      case Screen.login:
+      case Screen.holdRelease:
+      case Screen.locationInquiry:
+        return ScanInputMode.barcode;
+      case Screen.scan:
+        if (gateFormStep || putawayTask != null) return null;
+        return scanInputMode;
+      case Screen.track:
+      case Screen.transfer:
+      case Screen.cycleCount:
+        return scanInputMode;
+      case Screen.rfidInput:
+      case Screen.settings:
+        return hasIntegratedRfid ? ScanInputMode.rfid : null;
+      case Screen.rfidLocate:
+        return rfidLocateSweepStep ? ScanInputMode.rfid : ScanInputMode.barcode;
+      case Screen.boxRegister:
+        return boxRegisterRfidStep ? ScanInputMode.rfid : ScanInputMode.barcode;
+      case Screen.boot:
+      case Screen.home:
+      case Screen.moreHub:
+        return null;
+    }
+  }
+
+  /// Keep the imager and antenna mutually exclusive on integrated Zebra
+  /// readers. The RFID SDK alone switches the shared hardware trigger there;
+  /// DataWedge only delivers the decoded value and never toggles its plugin.
+  /// On barcode-only Zebra devices, DataWedge follows the same screen policy.
+  void _syncBarcodeScannerForScreen() {
+    if (!_usesZebraSdk) return;
+    final inputMode = _effectiveInputMode;
+    // A navigation/sub-step/mode transition cancels any sweep started on the
+    // previous state before handing the trigger to the next owner.
+    rfid.stopInventory();
+    if (hasIntegratedRfid) {
+      // Configure SDK trigger mode first/only. DataWedge's scanner plugin is
+      // controlled by the SDK call, so never issue a parallel enable/disable.
+      rfid.prepareBarcodeDataWedge();
+      // BARCODE_MODE is the only state that should expose the imager. Treat
+      // screens with no input target as RFID-owned but idle: the Dart trigger
+      // dispatcher will refuse to start inventory, while the scanner plugin
+      // remains disabled by RFIDAPI3.
+      rfid.setRfidTriggerMode(inputMode != ScanInputMode.barcode);
+    } else {
+      rfid.setBarcodeScannerEnabled(inputMode == ScanInputMode.barcode);
+    }
   }
 
   /// True once an operator has badged in on a provisioned device.
   bool get hasShift => emp != null && wh.isNotEmpty && gate.isNotEmpty;
 
-  /// Where "back" lands: Home during a session, otherwise the badge screen —
-  /// or device setup on a terminal that was never provisioned.
+  /// Where "back" lands: Home during a session, otherwise the badge screen.
   void backToHome() {
-    screen = emp != null
-        ? Screen.home
-        : deviceConfigured
-            ? Screen.login
-            : Screen.deviceSetup;
+    screen = emp != null ? Screen.home : Screen.login;
+    _syncBarcodeScannerForScreen();
     lastResult = null;
     notifyListeners();
   }
@@ -867,16 +1109,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// blocks the framework's own pop entirely (PopScope(canPop: false)) and
   /// routes here instead, the same as every screen's own StickyHeader back
   /// arrow already does, so a hardware press and an on-screen tap behave
-  /// identically. A no-op on deviceSetup with nothing configured yet (same
-  /// as that screen's StickyHeader passing onBack: null) and on the
-  /// screens that are themselves the top of the stack — there's nowhere
-  /// further back to go without exiting, which this must never do.
+  /// identically. It is a no-op on the screens that are already at the top
+  /// of the in-app flow — there's nowhere further back to go without exiting.
   void handleSystemBack() {
     if (systemBackOverride != null) {
       systemBackOverride!();
       return;
     }
-    if (screen == Screen.deviceSetup && !deviceConfigured) return;
     if (screen == Screen.home ||
         screen == Screen.login ||
         screen == Screen.boot) {
@@ -982,6 +1221,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     lastResult = null;
     _clearForms();
     screen = Screen.login;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1090,6 +1330,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     toastMsg('ตั้งค่าเครื่องแล้ว', '', ResultKind.ok);
     _connectReader();
+    _startDeviceHeartbeat();
   }
 
   /// device_setup_screen.dart's bottom button falls back to this when the
@@ -1116,7 +1357,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// does: try reconnecting with whatever's already saved first (a terminal
   /// that reads "online" (Wi-Fi/LAN up) but can't reach the server needs more
   /// than another silent retry to ever recover), and if that still fails,
-  /// walk straight into the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form (device setup)
+  /// walk straight into the ที่อยู่เซิร์ฟเวอร์ form (device setup)
   /// so a wrong IP or an expired service account can be fixed on the spot.
   /// A non-supervisor can't get to that form (see [canConfigureDevice]) —
   /// they get told to ask one instead, rather than the tap silently doing
@@ -1134,18 +1375,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// The navbar chip's tap target. While genuinely disconnected, a tap means
-  /// "help me reconnect" (see [reconnectOrConfigure]). While genuinely
-  /// connected, a tap now does nothing — the manual online/offline
-  /// (queue-mode) toggle it used to also drive let an operator switch a
-  /// working connection to "offline" by mistake, silently queuing every
-  /// scan instead of sending it. [toggleOnline] itself is untouched (the
-  /// outbox banner's "Sync" button still uses it to force a flush), only
-  /// this chip's tap while actually online is now a no-op instead of a trap.
-  void onlineChipTap() {
-    if (connected) return;
-    reconnectOrConfigure();
-  }
+  /// The navbar chip is the explicit online/offline queue-mode switch. An
+  /// operator can deliberately keep scanning while the server is reachable
+  /// but temporarily pause uploads; if the network is actually down, commits
+  /// are also queued automatically by [doCommit]. Reconnection remains
+  /// available from Settings without forcing device setup from this chip.
+  void onlineChipTap() => toggleOnline();
 
   /// A site with one warehouse — or a warehouse with one gate — offers no real
   /// choice, so fill it in rather than making whoever provisions the device tap
@@ -1165,15 +1400,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
     mode = m;
     screen = Screen.scan;
+    scanInputMode = ScanInputMode.barcode;
     queue.clear();
     queueConditions.clear();
     scanVal = '';
     lastResult = null;
     _clearForms();
-    // only one destination customer on file — no real choice to make, so skip the picker
-    if (m == 'out' && customerList.length == 1) {
-      outCustomer = (customerList.first['id'] ?? '').toString();
-    }
     notifyListeners();
     _connectReader();
   }
@@ -1189,6 +1421,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void _rememberLastPost() {
     prefs.lastWh = wh;
     prefs.lastGate = gate;
+    // Update the device-presence row immediately so the admin dashboard's
+    // TC52 location follows the gate the operator just selected, instead of
+    // waiting for the next periodic heartbeat.
+    unawaited(_reportDevicePresence());
     // Best-effort — the device-local prefs above are already the fallback
     // if this never lands (offline, server hiccup), and a shift is already
     // underway by the time this fires, so nothing here should block or
@@ -1231,6 +1467,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   void goTrack() {
     screen = Screen.track;
+    scanInputMode = ScanInputMode.barcode;
     trackVal = '';
     trackTag = '';
     trackTried = false;
@@ -1238,24 +1475,37 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     trackBarcodeHits.clear();
     _unresolvedRfidWarned.clear();
     notifyListeners();
+    _syncBarcodeScannerForScreen();
     _connectReader();
   }
 
   /// "Find this box" — Geiger-style RFID search (see RfidLocateScreen). Its
   /// own screen state (which box, current RSSI) lives on the widget, not
   /// here — this just gets the reader connected and the trigger unlocked for
-  /// it, same as every other RFID-reading screen.
+  /// it, same as every other RFID-reading screen. A barcode-only handheld
+  /// (TC52) has no antenna, so the tile is hidden and this is a no-op.
   void goLocate() {
+    if (!hasIntegratedRfid) return;
     screen = Screen.rfidLocate;
+    rfidLocateSweepStep = false;
+    scanInputMode = ScanInputMode.barcode;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
     _connectReader();
   }
+
+  /// Tests drive capability without Android [Build] fields.
+  @visibleForTesting
+  set debugHasIntegratedRfid(bool v) => _hasIntegratedRfid = v;
 
   /// Receiving flow: create -> label -> tag -> putaway (see
   /// BoxRegisterScreen), copied from legacy.html's own box-registration +
   /// putaway handlers.
   void goBoxRegister() {
     screen = Screen.boxRegister;
+    boxRegisterRfidStep = false;
+    scanInputMode = ScanInputMode.barcode;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
     _connectReader();
   }
@@ -1268,6 +1518,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// expects), so no new API was needed for this screen.
   void goTransfer() {
     screen = Screen.transfer;
+    scanInputMode = ScanInputMode.barcode;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1277,6 +1529,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
+    scanInputMode = ScanInputMode.barcode;
+    _syncBarcodeScannerForScreen();
     cycleCountRfidHits.clear();
     _unresolvedRfidWarned.clear();
     notifyListeners();
@@ -1288,6 +1542,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// (see scan_screen.dart's own _ConditionPicker for that path).
   void goHoldRelease() {
     screen = Screen.holdRelease;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1295,6 +1550,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// shelf and see what the system believes is on it.
   void goLocationInquiry() {
     screen = Screen.locationInquiry;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1303,6 +1559,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// intake, and the text-search box lookup (Track).
   void goMoreHub() {
     screen = Screen.moreHub;
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1322,7 +1579,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// (ScanScreen's own _submit). It changes nothing else about how the scan
   /// is processed.
   void addScan(String raw, {bool viaRfid = false}) {
-    raw = raw.trim();
+    raw = normalizeScanPayload(raw);
     if (raw.isEmpty) return;
     final s = S;
     if (s == null || s.boxesRaw.isEmpty) {
@@ -1494,18 +1751,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
   ScanInputMode scanInputMode = ScanInputMode.barcode;
   void setScanInputMode(ScanInputMode m) {
+    if (m == ScanInputMode.rfid && !hasIntegratedRfid) {
+      m = ScanInputMode.barcode;
+    }
     if (scanInputMode == m) return;
     scanInputMode = m;
     // Switching to barcode while the trigger is still physically held (or
     // an inventory is running from before the switch) must not leave the
     // reader sweeping in the background on a mode that just said "don't".
-    if (m == ScanInputMode.barcode) rfid.stopInventory();
+    if (m == ScanInputMode.barcode ||
+        _effectiveInputMode != ScanInputMode.rfid) {
+      rfid.stopInventory();
+    }
     // DataWedge owns the same physical trigger as the RFID SDK, so the
     // mode picked here must also arm/disarm the barcode imager itself
     // (laser/LED/beep) — otherwise RFID mode silences our antenna but
     // DataWedge still decodes (and beeps for) a barcode on the same pull,
     // and barcode mode leaves the imager off from the last RFID session.
-    if (_usesZebraSdk) rfid.setBarcodeScannerEnabled(m == ScanInputMode.barcode);
+    _syncBarcodeScannerForScreen();
     notifyListeners();
   }
 
@@ -1767,14 +2030,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         putawayTask =
             PutawayTask(tags: shelvedTags, assigned: assigned, whName: whNm);
       }
+      _applyCommitLocally(tx);
       _resetAfterCommit();
-      await refresh();
       if (mode == 'in') {
         toastMsg('รับเข้าสำเร็จ', '$nw ใหม่ · $rt คืน → $whNm', ResultKind.ok);
       } else {
         toastMsg(
             'ส่งออกสำเร็จ', '${tx.tags.length} ใบ → $custName', ResultKind.ok);
       }
+      // GET /api/state + cache encode used to run before the toast, so the
+      // handheld sat frozen 2–3s after Submit with nothing on screen.
+      unawaited(refresh().catchError((_) {}));
     } on ApiException catch (e) {
       toastMsg('บันทึกไม่สำเร็จ', e.message, ResultKind.err);
     } catch (e) {
@@ -1807,10 +2073,26 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     queueConditions.clear();
     lastResult = null;
     _clearForms();
-    if (mode == 'out' && customerList.length == 1) {
-      outCustomer = (customerList.first['id'] ?? '').toString();
-    }
     notifyListeners();
+  }
+
+  /// Stamp the just-committed tags on the in-memory snapshot so the next
+  /// scan does not treat them as still out/in-warehouse while [refresh]
+  /// catches up in the background.
+  void _applyCommitLocally(OutboxTx tx) {
+    final boxes = S?.boxesRaw;
+    if (boxes == null) return;
+    final now = DateTime.now().toUtc().toIso8601String();
+    for (final tag in tx.tags) {
+      final raw = boxes[tag];
+      if (raw is! Map) continue;
+      raw['status'] = tx.type == 'in' ? 'warehouse' : 'out';
+      raw['lastSeenAt'] = now;
+      if (tx.type == 'out') {
+        raw['customer'] = tx.customer;
+        raw['everShipped'] = true;
+      }
+    }
   }
 
   void setOutCustomer(String v) {
@@ -1880,10 +2162,20 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final q = trackVal.trim().toLowerCase();
     if (s == null || q.isEmpty) return const [];
     // No cap — a search for a short/common substring can genuinely match a
-    // hundred boxes, and the grid this feeds (see TrackScreen._suggestions)
-    // is built to show all of them rather than silently truncating to 20.
+    // hundred boxes, and TrackScreen's result list is built to show all of
+    // them rather than silently truncating to 20.
     return s.boxesRaw.keys.where((k) => k.toLowerCase().contains(q)).toList()
       ..sort();
+  }
+
+  /// Boxes the warehouse has actually seen, newest first — the "ประวัติการ
+  /// สแกนล่าสุด" list on TrackScreen. Boxes with no lastSeenAt stay out.
+  List<Box> get recentScanHistory {
+    final list = (S?.boxes ?? const Iterable<Box>.empty())
+        .where((b) => (b.lastSeenAt ?? '').isNotEmpty)
+        .toList();
+    list.sort((a, b) => (b.lastSeenAt ?? '').compareTo(a.lastSeenAt ?? ''));
+    return list;
   }
 
   void selectTrackSuggestion(String tag) {
@@ -1922,15 +2214,35 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     busy = true;
     connError = null;
     notifyListeners();
-    await _ensureAuthAndState();
-    busy = false;
-    if (connError == null) {
-      toastMsg('เชื่อมต่อสำเร็จ', S == null ? '' : 'พบ ${S!.boxCount} กล่อง',
-          ResultKind.ok);
-    } else {
+    try {
+      // Setup only needs a successful authenticated response to confirm the
+      // URL and service account. Don't hold the operator on this page while
+      // the much larger warehouse snapshot is downloading; load it in the
+      // background and keep the cached snapshot usable in the meantime.
+      final authenticated = await _deviceLogin(
+        timeout: const Duration(seconds: 8),
+      );
+      if (!authenticated) {
+        throw StateError('เซิร์ฟเวอร์ไม่ยืนยันบัญชีประจำเครื่อง');
+      }
+      _markLiveFromPresence();
+      _startDeviceHeartbeat();
+      unawaited(refresh().catchError((Object error) {
+        // Preserve the last cached snapshot if this follow-up request fails.
+        if (S == null) {
+          connError = _msg(error);
+          notifyListeners();
+        }
+      }));
+      toastMsg('เชื่อมต่อสำเร็จ', '', ResultKind.ok);
+    } catch (error) {
+      _liveConnected = false;
+      connError = _msg(error);
       toastMsg('เชื่อมต่อไม่สำเร็จ', connError!, ResultKind.err);
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// The device-setup screen's single bottom button: connects with whatever
@@ -1957,13 +2269,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       final manufacturer =
           (info['manufacturer'] ?? '').toString().toUpperCase();
       final brand = (info['brand'] ?? '').toString().toUpperCase();
-      _usesZebraSdk =
-          manufacturer.contains('ZEBRA') || brand.contains('ZEBRA');
-      _hasIntegratedRfid = model.contains('MC3390');
-      // Migrate the model persisted by older builds, which treated every
-      // Zebra device (including TC52) as an MC3390R.
-      if (!_hasIntegratedRfid && prefs.deviceModel == 'mc3390r') {
-        prefs.deviceModel = model.contains('TC52') ? 'tc52' : 'generic';
+      _usesZebraSdk = manufacturer.contains('ZEBRA') || brand.contains('ZEBRA');
+      _handheldInfoResolved = model.isNotEmpty;
+      // Zebra RFID SDK 2.x supports TC501/TC701 as integrated mobile RFID
+      // computers. TC52 remains barcode-only.
+      _hasIntegratedRfid = model.contains('MC3390') || model.contains('TC501');
+      // Android's reported model is authoritative. Persist it so Settings and
+      // feature gates don't depend on RFID SDK connect succeeding first.
+      if (model.contains('MC3390')) {
+        prefs.deviceModel = 'mc3390r';
+      } else if (model.contains('TC501')) {
+        prefs.deviceModel = 'tc501';
+      } else if (model.contains('TC52')) {
+        prefs.deviceModel = 'tc52';
+      } else if (model.isNotEmpty &&
+          const {'mc3390r', 'tc501'}.contains(prefs.deviceModel)) {
+        // Don't keep exposing integrated RFID on another model after a device
+        // has been re-used or reprovisioned.
+        prefs.deviceModel = _usesZebraSdk ? 'zebra' : 'generic';
       }
     } catch (_) {
       _hasIntegratedRfid = false;
@@ -1972,19 +2295,18 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _readerHooked = false;
   void _connectReader() {
-    // DataWedge is the correct barcode SDK on TC52 and other Zebra models,
-    // even though they have no integrated UHF reader.
+    // DataWedge remains responsible for barcode input on all Zebra models.
     if (_usesZebraSdk) {
-      rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+      _syncBarcodeScannerForScreen();
     }
-    if (!_hasIntegratedRfid || !rfid.supported) return;
+    if (!hasIntegratedRfid || !rfid.supported) return;
     if (_readerHooked && rfid.state == RfidState.connected) return;
     _readerHooked = true;
     rfid.connect();
     // Match the imager to whatever scan mode is already selected — a fresh
     // connect shouldn't leave DataWedge on its own default if the operator
     // starts (or comes back) in RFID mode.
-    rfid.setBarcodeScannerEnabled(scanInputMode == ScanInputMode.barcode);
+    _syncBarcodeScannerForScreen();
   }
 
   /// Pushes the reader's transmit power to its own maximum — for any screen
@@ -2101,6 +2423,68 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Screens that want the next DataWedge barcode. The last claim wins, so a
+  /// shelf field opened on top of a box scan takes the label, and releasing
+  /// it hands the next one back. Empty means "nobody is asking" — on the
+  /// gate form that is a toast, on the scan step it is still a box.
+  final List<void Function(String code)> _barcodeTargets = [];
+  String? _lastDeliveredBarcode;
+  DateTime? _lastDeliveredAt;
+
+  void claimBarcodeTarget(void Function(String code) target) {
+    _barcodeTargets.remove(target);
+    _barcodeTargets.add(target);
+  }
+
+  void releaseBarcodeTarget(void Function(String code) target) {
+    _barcodeTargets.remove(target);
+  }
+
+  /// One decoded barcode from the DataWedge intent, already the whole label.
+  void deliverBarcode(String raw) {
+    final code = normalizeScanPayload(raw);
+    if (code.length < 2) return;
+    if (_effectiveInputMode != ScanInputMode.barcode) {
+      // Text-entry/customer/vehicle steps deliberately have no active scanner
+      // mode, but keep the defensive explanation if a barcode was already in
+      // flight when the step changed.
+      if (screen == Screen.scan && gateFormStep) {
+        toastMsg(
+            'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
+            'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
+            ResultKind.info);
+      }
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastDeliveredBarcode == code &&
+        _lastDeliveredAt != null &&
+        now.difference(_lastDeliveredAt!) < const Duration(milliseconds: 450)) {
+      return;
+    }
+    _lastDeliveredBarcode = code;
+    _lastDeliveredAt = now;
+    if (_barcodeTargets.isNotEmpty) {
+      _barcodeTargets.last(code);
+      return;
+    }
+    if (screen == Screen.track && scanInputMode == ScanInputMode.barcode) {
+      onTrackChanged(code);
+      doTrack();
+      return;
+    }
+    if (screen == Screen.scan && putawayTask == null && !gateFormStep) {
+      addScan(code);
+      return;
+    }
+    if (screen == Screen.scan && gateFormStep) {
+      toastMsg(
+          'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
+          'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
+          ResultKind.info);
+    }
+  }
+
   /// Distinct box tags TransferScreen's RFID bulk-select sweep has found
   /// this session — see the Screen.transfer case in [_onReaderTag] above.
   /// Cleared by the screen itself whenever it resets (mode switch, screen
@@ -2114,99 +2498,41 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // must not keep scanning in the background on a screen that has no
       // business reading tags. Stopping is never gated on which screen this
       // is — only starting is.
-      rfid.stopInventory();
+      if (hasIntegratedRfid) rfid.stopInventory();
       return;
     }
-    if (screen == Screen.login) {
-      // Badge-in is barcode-only: a printed badge scans through the
-      // handheld's own keyboard-wedge/imager, which fires off the same
-      // physical trigger button independently of this SDK. This handler
-      // must never also switch that button over to an RFID sweep here —
-      // that was firing the antenna alongside every barcode scan, which is
-      // exactly the "close RFID find mode, trigger only reads barcodes"
-      // behavior this screen is supposed to have. Nothing to toast: the
-      // trigger did its job via the imager, this handler just isn't part
-      // of that path on this screen.
+    // TC52 and other barcode-only handhelds have no antenna. The physical
+    // trigger belongs to DataWedge. Running the RFID dispatcher here used
+    // to toast "สลับเป็นโหมด RFID" and steal focus, so the decoded label
+    // never reached the outbound queue.
+    if (!hasIntegratedRfid) return;
+    if (_effectiveInputMode != ScanInputMode.rfid) {
+      // Barcode mode is handled exclusively by the imager/DataWedge; idle
+      // screens must not start an inventory just because the reader emitted
+      // a trigger event while navigating between pages.
+      if (screen == Screen.scan && gateFormStep) {
+        toastMsg(
+            'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
+            'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
+            ResultKind.info);
+      } else if (screen == Screen.scan && putawayTask != null) {
+        toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น', 'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID',
+            ResultKind.info);
+      } else if (_effectiveInputMode == ScanInputMode.barcode &&
+          (screen == Screen.scan ||
+              screen == Screen.track ||
+              screen == Screen.transfer ||
+              screen == Screen.cycleCount)) {
+        toastMsg(
+            'อยู่ในโหมดบาร์โค้ด',
+            'ไก RFID ไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก',
+            ResultKind.info);
+      }
       return;
     }
-    if (screen != Screen.scan &&
-        screen != Screen.track &&
-        screen != Screen.rfidInput &&
-        screen != Screen.rfidLocate &&
-        screen != Screen.boxRegister &&
-        screen != Screen.settings &&
-        screen != Screen.transfer &&
-        screen != Screen.cycleCount &&
-        screen != Screen.holdRelease &&
-        screen != Screen.locationInquiry) {
-      // A screen with no scanning purpose at all (Home, device setup, …).
-      // Settings is included here — its RFID diagnostics panel has its own
-      // "กดค้างเพื่อทดสอบยิง" hold button, but an operator standing there and
-      // pulling the *physical* trigger to test the reader should get the
-      // same result, not a "this screen doesn't support scanning" toast. The
-      // antenna must not light up here — silently doing
-      // nothing left an operator assuming a broken trigger, not a screen
-      // that was never going to answer it.
-      toastMsg('หน้านี้ไม่รองรับการยิงบาร์โค้ด/RFID', '', ResultKind.warn);
-      return;
-    }
-    // บาร์โค้ด mode selected on a dual-mode screen: the physical trigger
-    // does nothing at all — no read, no beep, no vibration. Previously the
-    // toggle only hid the barcode field in the UI; the reader itself still
-    // started and beeped on every read because this dispatcher never knew
-    // which mode was selected.
-    //
-    // rfidLocateSweepStep is what exempts RfidLocateScreen's sweep step:
-    // that step has no barcode alternative at all, so gating it on a
-    // *shared, app-wide* mode flag meant the trigger silently did nothing
-    // there whenever anything else had last left the mode on บาร์โค้ด —
-    // including this screen's own pick step, which now deliberately starts
-    // in barcode mode. The on-screen "เริ่มกวาดหา" button calls
-    // startInventory() directly and never went through here, which is
-    // exactly why that button worked while the trigger appeared dead.
-    if (screen == Screen.scan && gateFormStep) {
-      // ลูกค้าปลายทาง/ทะเบียนรถ/คนขับ/ประเภทรถ are plain text entry, not a scan
-      // target — a trigger pull here must not fire the antenna (which would
-      // silently start an RFID sweep behind a form nobody meant to scan
-      // into) and must not be mistaken for "the barcode field will catch
-      // it" either, because there is no barcode field on this step at all
-      // (ScanCapture itself is already off here — see the ScanCapture
-      // `enabled` check in ScanScreen.build). Same toast shape as the
-      // putaway-step block below, which exists for exactly the same reason
-      // one step later in this screen's flow.
-      toastMsg(
-          'กรอกข้อมูลลูกค้า/รถให้ครบก่อน',
-          'ยังยิงไม่ได้ — ต้องกด "ถัดไป" ก่อนถึงจะสแกนกล่องได้',
-          ResultKind.info);
-      return;
-    }
-    if (screen == Screen.scan && putawayTask != null) {
-      // See the Screen.scan case in [_onReaderTag]: the putaway step wants a
-      // rack barcode, and the antenna must not even light up for it.
-      toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น', 'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID',
-          ResultKind.info);
-      return;
-    }
-    if ((screen == Screen.scan ||
-            screen == Screen.track ||
-            screen == Screen.transfer ||
-            (screen == Screen.rfidLocate && !rfidLocateSweepStep)) &&
-        scanInputMode == ScanInputMode.barcode) {
-      toastMsg('อยู่ในโหมดบาร์โค้ด',
-          'ไกไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก', ResultKind.info);
-      return;
-    }
-    if (screen == Screen.boxRegister && !boxRegisterRfidStep) {
-      // The create/label/putaway/success steps all expect a *barcode* (the
-      // box's own tag, scanned or typed) — only the rfid step's card is
-      // asking for a trigger pull. Same class of bug as the login screen
-      // fix: this dispatcher used to start an RFID sweep on every trigger
-      // pull anywhere on this screen, which meant scanning the box's
-      // barcode to create it could also silently arm the antenna. Nothing
-      // to toast: the barcode step's own field/imager already answered the
-      // trigger, this handler just isn't part of that path yet.
-      return;
-    }
+    // Reaching this point means the centralized screen/step policy explicitly
+    // gave RFID the trigger. No independent page allowlist can drift from the
+    // mode toggle and accidentally energize both scanners.
     // Gate scanning, the box-locate sweep, Track's own multi-tag list,
     // Transfer's bulk-select list, and box registration's tag-candidate
     // sweep all drive their own feedback instead of the reader's dense
@@ -2245,13 +2571,25 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Defaults false so the create/label steps' barcode entry never
   /// accidentally arms the antenna; the screen flips this on entering its
   /// rfid step and back off leaving it (skip, bind, dispose, …).
-  bool boxRegisterRfidStep = false;
+  bool _boxRegisterRfidStep = false;
+  bool get boxRegisterRfidStep => _boxRegisterRfidStep;
+  set boxRegisterRfidStep(bool value) {
+    if (_boxRegisterRfidStep == value) return;
+    _boxRegisterRfidStep = value;
+    if (screen == Screen.boxRegister) _syncBarcodeScannerForScreen();
+  }
 
   /// True only while RfidLocateScreen is on its sweep step (a target box has
   /// been picked). That step is RFID-only by definition, so the trigger must
   /// work there regardless of what [scanInputMode] happens to be set to
   /// app-wide — see the rfidLocate branch in [_onReaderTrigger].
-  bool rfidLocateSweepStep = false;
+  bool _rfidLocateSweepStep = false;
+  bool get rfidLocateSweepStep => _rfidLocateSweepStep;
+  set rfidLocateSweepStep(bool value) {
+    if (_rfidLocateSweepStep == value) return;
+    _rfidLocateSweepStep = value;
+    if (screen == Screen.rfidLocate) _syncBarcodeScannerForScreen();
+  }
 
   // ═══════════════════════ derived getters for the UI ══════════════════════
   bool get connected => _liveConnected;

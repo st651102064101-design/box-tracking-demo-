@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'BoxTrace — ประตูสแกน · Returnable Asset Tracking',
   description: 'RFID Gate / Returnable Asset Tracking (WMS)',
+  icons: { icon: '/favicon.ico' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

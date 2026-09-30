@@ -22,6 +22,9 @@ export const env = {
   // (which has no way to be given this key today) keeps working unchanged
   // until an operator opts in by setting API_KEY — see requireApiKey.
   apiKey: process.env.API_KEY ?? '',
+  // Optional shared secret for camera webhooks. When unset, the LPR receiver
+  // accepts requests only from private/loopback network addresses.
+  lprWebhookSecret: process.env.LPR_WEBHOOK_SECRET ?? '',
   seedAdmin: {
     username: process.env.SEED_ADMIN_USERNAME ?? 'admin',
     password: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',

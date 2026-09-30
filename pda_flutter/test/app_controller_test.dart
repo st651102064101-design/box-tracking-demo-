@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:smarttrace_pda/controllers/app_controller.dart';
@@ -15,6 +19,7 @@ class FakeApi extends ApiClient {
   final List<Map<String, dynamic>> gateInCalls = [];
   final List<Map<String, dynamic>> gateOutCalls = [];
   final List<String> loginCalls = [];
+  final List<Map<String, dynamic>> heartbeats = [];
 
   /// When set, the next gate call throws this instead of succeeding.
   Object? throwOnGate;
@@ -22,6 +27,29 @@ class FakeApi extends ApiClient {
   /// When set, getState() throws this — simulates a device that boots with the
   /// backend unreachable.
   Object? throwOnState;
+
+  /// When set, getState() waits here first — used to prove the online chip
+  /// flips from the heartbeat without waiting for the full snapshot.
+  Future<void>? holdState;
+  int stateReads = 0;
+
+  @override
+  Future<void> heartbeatDevice({
+    required String name,
+    String? model,
+    String? ipAddress,
+    String? warehouseId,
+    int? gateNo,
+  }) async {
+    if (throwOnState != null) throw throwOnState!;
+    heartbeats.add({
+      'name': name,
+      'model': model,
+      'ipAddress': ipAddress,
+      'warehouseId': warehouseId,
+      'gateNo': gateNo,
+    });
+  }
 
   @override
   Future<Map<String, dynamic>> login(String u, String p) async {
@@ -34,6 +62,9 @@ class FakeApi extends ApiClient {
 
   @override
   Future<Map<String, dynamic>> getState() async {
+    stateReads++;
+    final hold = holdState;
+    if (hold != null) await hold;
     if (throwOnState != null) throw throwOnState!;
     return state;
   }
@@ -201,7 +232,8 @@ Map<String, dynamic> box(String tag, String status,
         int cycles = 0,
         String? rfidTid,
         String? rfidEpc,
-        String? rfid}) =>
+        String? rfid,
+        String? lastSeenAt}) =>
     {
       'tag': tag,
       'type': 'BT-CRT',
@@ -213,6 +245,7 @@ Map<String, dynamic> box(String tag, String status,
       if (rfidTid != null) 'rfidTid': rfidTid,
       if (rfidEpc != null) 'rfidEpc': rfidEpc,
       if (rfid != null) 'rfid': rfid,
+      if (lastSeenAt != null) 'lastSeenAt': lastSeenAt,
     };
 
 /// The WMS employee master, which is the PDA's only source of people. Covers
@@ -303,7 +336,7 @@ Future<AppController> makeController(FakeApi api) async {
   prefs.deviceWh = 'WH-1';
   prefs.deviceGate = '2';
   prefs.deviceConfigured =
-      true; // otherwise a restart (see init()) lands back in deviceSetup
+      true; // provisioning is separate from the app's landing screen
   prefs.token = 'device-token'; // already signed in as itself, as a real one is
   c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
   return c;
@@ -376,6 +409,71 @@ void main() {
     });
   });
 
+  group('deliverBarcode — DataWedge intent', () {
+    test('queues an outbound box from the full label, AIM prefix included',
+        () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'out';
+      c.screen = Screen.scan;
+      c.gateFormStep = false;
+      c.deliverBarcode(']C1CRT-01\r');
+      expect(c.queue, ['CRT-01']);
+      expect(c.lastResult!.kind, ResultKind.ok);
+    });
+
+    test('on the customer form it does not queue the box', () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'out';
+      c.screen = Screen.scan;
+      c.gateFormStep = true;
+      c.deliverBarcode('CRT-01');
+      expect(c.queue, isEmpty);
+      expect(c.toast?.title, 'กรอกข้อมูลลูกค้า/รถให้ครบก่อน');
+      c.dispose();
+    });
+
+    test('a claimed target receives the label instead of addScan', () async {
+      final c = await makeController(FakeApi());
+      c.mode = 'out';
+      c.screen = Screen.scan;
+      c.gateFormStep = false;
+      final got = <String>[];
+      void target(String code) => got.add(code);
+      c.claimBarcodeTarget(target);
+      c.deliverBarcode('CRT-01');
+      expect(got, ['CRT-01']);
+      expect(c.queue, isEmpty);
+      c.releaseBarcodeTarget(target);
+    });
+
+    test('Track searches a decoded barcode and records a real box hit',
+        () async {
+      final c = await makeController(FakeApi());
+      c.debugHasIntegratedRfid = true;
+      c.goTrack();
+      c.deliverBarcode(']C1CRT-01\r');
+
+      expect(c.trackBarcodeHits, ['CRT-01']);
+      expect(c.trackBox?.tag, 'CRT-01');
+      expect(c.trackVal, isEmpty,
+          reason: 'a successful scan clears the next scan input');
+      c.dispose();
+    });
+
+    test('Track does not route RFID-mode input through barcode search',
+        () async {
+      final c = await makeController(FakeApi());
+      c.debugHasIntegratedRfid = true;
+      c.goTrack();
+      c.setScanInputMode(ScanInputMode.rfid);
+      c.deliverBarcode('CRT-01');
+
+      expect(c.trackBarcodeHits, isEmpty);
+      expect(c.trackTried, isFalse);
+      c.dispose();
+    });
+  });
+
   group('addScan — warehouse ownership', () {
     test('gate out refuses a warehouse box that belongs to another warehouse',
         () async {
@@ -436,9 +534,11 @@ void main() {
       expect(c.queue, ['CRT-02']);
     });
 
-    test('gate in accepts a brand-new box from a supplier regardless of warehouse',
+    test(
+        'gate in accepts a brand-new box from a supplier regardless of warehouse',
         () async {
-      final c = await makeController(FakeApi()); // CRT-03 is 'pending', no outWh
+      final c =
+          await makeController(FakeApi()); // CRT-03 is 'pending', no outWh
       c.mode = 'in';
       c.addScan('CRT-03');
       expect(c.queue, ['CRT-03']);
@@ -738,6 +838,28 @@ void main() {
       expect(c.queue, isEmpty);
     });
 
+    test('success toast does not wait for a slow snapshot refresh', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      final hold = Completer<void>();
+      api.holdState = hold.future;
+      c.mode = 'in';
+      c.addScan('CRT-02');
+
+      final done = c.doCommit();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(c.toast!.title, 'รับเข้าสำเร็จ',
+          reason: 'the alert must paint before GET /api/state finishes');
+      expect(c.queue, isEmpty);
+      expect(c.busy, isFalse);
+      expect(c.S!.box('CRT-02')!.status, 'warehouse',
+          reason: 'local status flips immediately so a re-scan is rejected');
+
+      hold.complete();
+      await done;
+    });
+
     test('outbound requires a customer', () async {
       final api = FakeApi();
       final c = await makeController(api);
@@ -766,20 +888,38 @@ void main() {
       expect(api.gateOutCalls.first['tags'], ['CRT-01']);
       expect(api.gateOutCalls.first['employeeId'], 'EMP-0001');
       expect(c.queue, isEmpty);
-      // Only one customer is on file, so the picker has nothing to ask and
-      // re-selects it for the next batch rather than blanking the form.
-      expect(c.outCustomer, 'CUST-01');
+      // Each outbound batch must explicitly confirm its destination, even
+      // when there is only one customer on file.
+      expect(c.outCustomer, isEmpty);
     });
   });
 
   group('offline outbox', () {
+    test('the status chip can explicitly switch into and out of offline mode',
+        () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      await c.init();
+      expect(c.connected, isTrue);
+      expect(c.online, isTrue);
+
+      c.onlineChipTap();
+      expect(c.online, isFalse);
+      expect(c.onlineDisplay, isFalse);
+
+      c.onlineChipTap();
+      expect(c.online, isTrue);
+      expect(c.onlineDisplay, isTrue);
+      c.dispose();
+    });
+
     test('offline commit queues instead of posting, and persists', () async {
       final api = FakeApi();
       final c = await makeController(api);
       c.mode = 'in';
       fillVehicle(c);
       c.addScan('CRT-02');
-      c.online = false;
+      c.onlineChipTap();
       await c.doCommit();
 
       expect(api.gateInCalls, isEmpty);
@@ -973,6 +1113,22 @@ void main() {
       expect(c.screen, Screen.track);
     });
 
+    test('barcode-only handhelds cannot open RFID locate', () async {
+      final c = await makeController(FakeApi());
+      c.debugHasIntegratedRfid = false;
+      c.goLocate();
+      expect(c.screen, isNot(Screen.rfidLocate));
+      c.go(Screen.rfidLocate);
+      expect(c.screen, isNot(Screen.rfidLocate));
+    });
+
+    test('an RFID handheld can open locate', () async {
+      final c = await makeController(FakeApi());
+      c.debugHasIntegratedRfid = true;
+      c.goLocate();
+      expect(c.screen, Screen.rfidLocate);
+    });
+
     test('a plain operator cannot re-point the device; a supervisor can',
         () async {
       final c = await makeController(FakeApi());
@@ -1004,17 +1160,25 @@ void main() {
     }
 
     test(
-        'an unprovisioned device boots into setup, a provisioned one into the badge screen',
+        'device setup opens only on request; an unprovisioned device boots into the badge screen',
         () async {
       final api = FakeApi();
       final c = await freshDevice(api);
       expect(c.deviceConfigured, isFalse);
 
       await c.init();
+      expect(c.screen, Screen.login);
+
+      c.goDeviceSetup();
       expect(c.screen, Screen.deviceSetup);
       expect(c.wh, 'WH-1',
           reason:
               'the only warehouse on file is not a choice worth asking about');
+
+      c.handleSystemBack();
+      expect(c.screen, Screen.login,
+          reason: 'back from setup returns to the badge screen');
+      c.goDeviceSetup();
 
       // Warehouse/gate are no longer fixed at setup time — they're picked
       // per-visit instead (see confirmPost/pickWh/pickGate below and
@@ -1029,6 +1193,339 @@ void main() {
       final c2 = AppController(api: api, prefs: c.prefs, rfid: RfidService());
       await c2.init();
       expect(c2.screen, Screen.login);
+      c.dispose();
+      c2.dispose();
+    });
+
+    test('a configured handheld heartbeats so the dashboard can see it online',
+        () async {
+      final api = FakeApi();
+      final seeded = await freshDevice(api);
+      final c = AppController(
+        api: api,
+        prefs: seeded.prefs,
+        rfid: RfidService(),
+        readLanIp: () async => '192.168.1.52',
+      );
+      seeded.dispose();
+      c.prefs.deviceConfigured = true;
+      c.prefs.deviceModel = 'tc52';
+      c.prefs.deviceWh = 'WH-1';
+      c.prefs.deviceGate = '2';
+      c.prefs.token = 'device-token';
+      api.token = 'device-token';
+
+      await c.init();
+      // The LAN lookup is async, and the boot heartbeat is not awaited.
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(api.heartbeats, isNotEmpty);
+      expect(api.heartbeats.first['name'], 'Zebra TC52');
+      expect(api.heartbeats.first['model'], 'tc52');
+      expect(
+          api.heartbeats.any((h) => h['ipAddress'] == '192.168.1.52'), isTrue);
+      expect(api.heartbeats.first['warehouseId'], 'WH-1');
+      expect(api.heartbeats.first['gateNo'], 2);
+      c.dispose();
+    });
+
+    test('device setup returns after login without waiting for the full state',
+        () async {
+      final api = FakeApi();
+      final c = await freshDevice(api);
+      final stateResponse = Completer<void>();
+      api.holdState = stateResponse.future;
+
+      await c.applyConnection(baseUrl: 'http://warehouse.local:4000');
+
+      expect(c.connected, isTrue,
+          reason: 'successful device authentication confirms the connection');
+      expect(c.busy, isFalse,
+          reason: 'the setup page is not held open by a slow state download');
+      expect(c.prefs.baseUrl, 'http://warehouse.local:4000');
+
+      stateResponse.complete();
+      await Future<void>.delayed(Duration.zero);
+      c.dispose();
+    });
+
+    test('TC501 enables its integrated RFID reader and reports its real model',
+        () async {
+      const rfidChannel = MethodChannel('smarttrace/rfid');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, (call) async {
+        if (call.method == 'deviceInfo') {
+          return const {
+            'model': 'TC501',
+            'manufacturer': 'Zebra Technologies',
+            'brand': 'Zebra',
+          };
+        }
+        return null;
+      });
+      final api = FakeApi();
+      final seeded = await freshDevice(api);
+      final c = AppController(
+        api: api,
+        prefs: seeded.prefs,
+        rfid: RfidService(),
+        readLanIp: () async => '192.168.1.51',
+      );
+      seeded.dispose();
+      c.prefs.deviceConfigured = true;
+      c.prefs.deviceModel = 'tc501';
+      c.prefs.deviceWh = 'WH-1';
+      c.prefs.deviceGate = '2';
+      c.prefs.token = 'device-token';
+      api.token = 'device-token';
+
+      await c.init();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(c.hasIntegratedRfid, isTrue,
+          reason: 'TC501 is a Zebra integrated-UHF RFID mobile computer');
+      expect(api.heartbeats, isNotEmpty);
+      expect(api.heartbeats.first['name'], 'Zebra TC501');
+      expect(api.heartbeats.first['model'], 'tc501');
+      c.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, null);
+    });
+
+    test(
+        'TC501 Settings hands the side trigger to RFID and restores barcode on exit',
+        () async {
+      const rfidChannel = MethodChannel('smarttrace/rfid');
+      final barcodeStates = <bool>[];
+      final rfidTriggerStates = <bool>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, (call) async {
+        if (call.method == 'deviceInfo') {
+          return const {
+            'model': 'TC501',
+            'manufacturer': 'Zebra Technologies',
+            'brand': 'Zebra',
+          };
+        }
+        if (call.method == 'setBarcodeScannerEnabled') {
+          barcodeStates.add(call.arguments['enabled'] as bool);
+        }
+        if (call.method == 'setRfidTriggerMode') {
+          rfidTriggerStates.add(call.arguments['enabled'] as bool);
+        }
+        return null;
+      });
+
+      final c = await freshDevice(FakeApi());
+      await c.init();
+      c.go(Screen.settings);
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'RFIDAPI3 must own the integrated reader trigger mode');
+      expect(barcodeStates, isEmpty,
+          reason: 'DataWedge must not race RFIDAPI3 on the shared trigger');
+
+      c.go(Screen.rfidInput);
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason:
+              'the standalone RFID input screen also selects RFID trigger mode');
+
+      c.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'resuming on the RFID screen keeps RFID trigger mode');
+
+      c.identifyAs(c.employees.first);
+      await Future<void>.delayed(Duration.zero);
+      c.backToHome();
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'idle Home keeps both physical scanners disabled');
+
+      c.goHoldRelease();
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'barcode-only Hold/Release ignores the stale RFID toggle');
+      c.setScanInputMode(ScanInputMode.rfid);
+      c.goLocationInquiry();
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'barcode-only Location Inquiry always owns the imager');
+
+      c.goCycleCount();
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'Cycle Count starts in barcode mode');
+      c.setScanInputMode(ScanInputMode.rfid);
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'Cycle Count toggle switches the shared trigger to RFID');
+
+      c.goBoxRegister();
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'box label capture begins in barcode mode');
+      c.boxRegisterRfidStep = true;
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'the RFID binding substep hands the trigger to RFID');
+      c.boxRegisterRfidStep = false;
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'leaving RFID binding restores barcode mode');
+
+      c.goLocate();
+      c.rfidLocateSweepStep = true;
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isTrue,
+          reason: 'RFID locate sweep uses the RFID SDK trigger');
+      c.rfidLocateSweepStep = false;
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason: 'RFID locate picker restores barcode mode');
+
+      c.setScanInputMode(ScanInputMode.rfid);
+      c.go(Screen.deviceSetup);
+      await Future<void>.delayed(Duration.zero);
+      expect(rfidTriggerStates.last, isFalse,
+          reason:
+              'device setup always needs barcode input, regardless of the previous scan mode');
+
+      c.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, null);
+    });
+
+    test('TC52 keeps barcode trigger and refuses an RFID mode request',
+        () async {
+      const rfidChannel = MethodChannel('smarttrace/rfid');
+      final barcodeStates = <bool>[];
+      var rfidModeCalls = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, (call) async {
+        if (call.method == 'deviceInfo') {
+          return const {
+            'model': 'TC52',
+            'manufacturer': 'Zebra Technologies',
+            'brand': 'Zebra',
+          };
+        }
+        if (call.method == 'setBarcodeScannerEnabled') {
+          barcodeStates.add(call.arguments['enabled'] as bool);
+        }
+        if (call.method == 'setRfidTriggerMode') rfidModeCalls++;
+        return null;
+      });
+
+      final c = await freshDevice(FakeApi());
+      await c.init();
+      expect(c.hasIntegratedRfid, isFalse);
+      expect(c.usesZebraSdk, isTrue);
+      c.goTrack();
+      c.setScanInputMode(ScanInputMode.rfid);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.scanInputMode, ScanInputMode.barcode);
+      expect(barcodeStates.last, isTrue,
+          reason: 'TC52 physical trigger stays with the barcode imager');
+      expect(rfidModeCalls, 0,
+          reason: 'barcode-only TC52 never attempts to switch RFIDAPI3 mode');
+      c.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, null);
+    });
+
+    test('MC3390R is detected as an integrated RFID handheld', () async {
+      const rfidChannel = MethodChannel('smarttrace/rfid');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, (call) async {
+        if (call.method == 'deviceInfo') {
+          return const {
+            'model': 'MC3390R',
+            'manufacturer': 'Zebra Technologies',
+            'brand': 'Zebra',
+          };
+        }
+        return null;
+      });
+
+      final c = await freshDevice(FakeApi());
+      await c.init();
+      expect(c.hasIntegratedRfid, isTrue);
+      expect(c.usesZebraSdk, isTrue);
+      expect(c.prefs.deviceModel, 'mc3390r');
+      c.goTrack();
+      c.setScanInputMode(ScanInputMode.rfid);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.scanInputMode, ScanInputMode.rfid);
+      c.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(rfidChannel, null);
+    });
+
+    test('boot goes online from heartbeat before a slow getState finishes',
+        () async {
+      final api = FakeApi();
+      final hold = Completer<void>();
+      api.holdState = hold.future;
+      api.state = fixtureState();
+      final seeded = await freshDevice(FakeApi()..state = fixtureState());
+      final c = AppController(
+        api: api,
+        prefs: seeded.prefs,
+        rfid: RfidService(),
+        readLanIp: () async => '192.168.1.52',
+      );
+      seeded.dispose();
+      c.prefs.deviceConfigured = true;
+      c.prefs.deviceModel = 'tc52';
+      c.prefs.deviceWh = 'WH-1';
+      c.prefs.deviceGate = '2';
+      c.prefs.token = 'device-token';
+      api.token = 'device-token';
+
+      final done = c.init();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(c.screen, Screen.login,
+          reason: 'must leave the splash without a fixed delay');
+      expect(api.heartbeats, isNotEmpty);
+      expect(c.connected, isTrue,
+          reason: 'heartbeat is enough — do not wait for GET /api/state');
+
+      hold.complete();
+      await done;
+      c.dispose();
+    });
+
+    test('resume while offline retries the backend immediately', () async {
+      final api = FakeApi()..throwOnState = Exception('down');
+      api.state = fixtureState();
+      final seeded = await freshDevice(FakeApi()..state = fixtureState());
+      final c = AppController(
+        api: api,
+        prefs: seeded.prefs,
+        rfid: RfidService(),
+        readLanIp: () async => '192.168.1.52',
+      );
+      seeded.dispose();
+      c.prefs.deviceConfigured = true;
+      c.prefs.token = 'device-token';
+      api.token = 'device-token';
+
+      await c.init();
+      expect(c.connected, isFalse);
+
+      api.throwOnState = null;
+      c.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(c.connected, isTrue);
+      c.dispose();
     });
 
     test(
@@ -1272,6 +1769,21 @@ void main() {
   });
 
   group('offline resilience', () {
+    test('overlapping refresh calls share one state request', () async {
+      final api = FakeApi();
+      final c = await makeController(api);
+      final gate = Completer<void>();
+      api.holdState = gate.future;
+      final before = api.stateReads;
+      final first = c.refresh();
+      final second = c.refresh();
+      expect(identical(first, second), isTrue);
+      expect(api.stateReads, before + 1);
+      gate.complete();
+      await Future.wait([first, second]);
+      expect(api.stateReads, before + 1);
+    });
+
     test('refresh caches the snapshot so the next boot has data', () async {
       final api = FakeApi();
       final c = await makeController(api);
@@ -1332,6 +1844,41 @@ void main() {
       expect(c.outCount, 1);
       expect(c.boxCount, 6);
       expect(c.connected, isTrue);
+    });
+  });
+
+  group('track history', () {
+    test('fmtTsThai uses a Buddhist year and Thai month', () async {
+      final c = await makeController(FakeApi());
+      expect(c.fmtTsThai('2026-09-23T10:45:55'), '23 ก.ย. 2569 10:45:55');
+    });
+
+    test('recentScanHistory is newest first and skips unseen boxes', () async {
+      final api = FakeApi()
+        ..state = {
+          'boxes': {
+            'OLD': box('OLD', 'warehouse', lastSeenAt: '2026-09-01T08:00:00'),
+            'NEW': box('NEW', 'out', lastSeenAt: '2026-09-23T10:45:55'),
+            'NEVER': box('NEVER', 'pending'),
+          },
+          'customers': <String, dynamic>{},
+          'boxtypes': {
+            'BT-CRT': {'id': 'BT-CRT', 'name': 'ลัง'}
+          },
+          'warehouses': {
+            'WH-1': {
+              'id': 'WH-1',
+              'name': 'คลัง 1',
+              'gates': [1]
+            }
+          },
+          'gates': {'1': 'WH-1'},
+          'employees': fixtureEmployees(),
+          'events': <dynamic>[],
+          'cfg': {'agingDays': 15},
+        };
+      final c = await makeController(api);
+      expect(c.recentScanHistory.map((b) => b.tag), ['NEW', 'OLD']);
     });
   });
 

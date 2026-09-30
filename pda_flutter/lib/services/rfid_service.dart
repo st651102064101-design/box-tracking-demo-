@@ -84,6 +84,7 @@ class RfidService {
   final _batchCtrl = StreamController<List<RfidTagRead>>.broadcast();
   final _triggerCtrl = StreamController<bool>.broadcast();
   final _statusCtrl = StreamController<RfidStatus>.broadcast();
+  final _barcodeCtrl = StreamController<String>.broadcast();
 
   StreamSubscription? _sub;
   RfidState _state = RfidState.idle;
@@ -121,6 +122,11 @@ class RfidService {
   Stream<bool> get triggers => _triggerCtrl.stream;
   Stream<RfidStatus> get status => _statusCtrl.stream;
 
+  /// Full barcodes from DataWedge intent output — one string per trigger
+  /// pull, not keystrokes. TC52 has no RFID reader, so this stream is the
+  /// scan path that still has to be listened to (see [ensureListening]).
+  Stream<String> get barcodes => _barcodeCtrl.stream;
+
   bool get supported => defaultTargetPlatform == TargetPlatform.android;
 
   void _listen() {
@@ -148,6 +154,10 @@ class RfidService {
           _state = _parseState(event['state']?.toString());
           _statusCtrl
               .add(RfidStatus(_state, event['message']?.toString() ?? ''));
+          break;
+        case 'barcode':
+          final data = event['data']?.toString() ?? '';
+          if (data.isNotEmpty) _barcodeCtrl.add(data);
           break;
       }
     }, onError: (e) {
@@ -216,6 +226,14 @@ class RfidService {
       default:
         return RfidState.idle;
     }
+  }
+
+  /// Subscribe to native scan/reader events even when there is no UHF
+  /// reader to [connect]. TC52 never calls [connect], and without this the
+  /// DataWedge barcode broadcast has nowhere to land.
+  void ensureListening() {
+    if (!supported) return;
+    _listen();
   }
 
   /// Enumerate + connect to the integrated reader (MC3390R via SERVICE_SERIAL).
@@ -294,6 +312,28 @@ class RfidService {
     if (!supported) return;
     try {
       await _method.invokeMethod('setBarcodeScannerEnabled', {'enabled': enabled});
+    } catch (_) {}
+  }
+
+  /// Install the app-scoped DataWedge profile and scan intent output without
+  /// changing the imager state. Integrated RFID devices let RFIDAPI3 own the
+  /// shared hardware trigger; this only ensures barcode reads reach Dart when
+  /// the app selects barcode mode.
+  Future<void> prepareBarcodeDataWedge() async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('prepareBarcodeDataWedge');
+    } catch (_) {}
+  }
+
+  /// Select the physical side trigger's input on integrated Zebra readers.
+  /// DataWedge is controlled separately by [setBarcodeScannerEnabled]; the
+  /// native SDK call manages the shared trigger and scanner plugin in one
+  /// place, avoiding competing DataWedge/SDK commands.
+  Future<void> setRfidTriggerMode(bool enabled) async {
+    if (!supported) return;
+    try {
+      await _method.invokeMethod('setRfidTriggerMode', {'enabled': enabled});
     } catch (_) {}
   }
 
@@ -423,5 +463,6 @@ class RfidService {
     _batchCtrl.close();
     _triggerCtrl.close();
     _statusCtrl.close();
+    _barcodeCtrl.close();
   }
 }

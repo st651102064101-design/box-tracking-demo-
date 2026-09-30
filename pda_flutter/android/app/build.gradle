@@ -39,6 +39,22 @@ android {
         versionName = flutterVersionName
     }
 
+    // TC501's integrated UHF radio is exposed by Zebra's newer Qualcomm
+    // transport SDK. Keep the existing SDK and Android 8.1 floor for legacy
+    // MC3390R/sled devices; install the tc501 flavor on TC501 (Android 10+).
+    flavorDimensions += "readerSdk"
+    productFlavors {
+        legacy {
+            dimension "readerSdk"
+        }
+        tc501 {
+            dimension "readerSdk"
+            minSdk = 29
+            versionCode = flutterVersionCode.toInteger() + 1
+            versionNameSuffix = "-tc501"
+        }
+    }
+
     buildTypes {
         release {
             // Signed with debug keys so `flutter run --release` works out of the box.
@@ -56,12 +72,24 @@ flutter {
     source = "../.."
 }
 
+// Flutter refreshes libapp.so while Gradle can still mark the downstream JNI
+// merge/strip/package tasks UP-TO-DATE. That produced an APK with an older Dart
+// snapshot even after a successful build. These release packaging steps are
+// cheap compared with compilation and must always consume the current binary.
+tasks.matching { task ->
+    task.name ==~ /(?:merge(?:Legacy|Tc501)Release(?:JniLibFolders|NativeLibs)|strip(?:Legacy|Tc501)ReleaseDebugSymbols|package(?:Legacy|Tc501)Release)/
+}.configureEach {
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+}
+
 // The Zebra RFID API3 SDK ships as a set of local .aar modules in app/libs
 // (split per-module since 2.0.4.x, unlike the single fat rfidapi3lib.aar
 // earlier versions shipped) — pull in every .aar/.jar dropped there instead
 // of naming each module, matching how Zebra's own sample apps consume it.
 dependencies {
-    implementation fileTree(dir: "libs", include: ["*.jar", "*.aar"])
+    legacyImplementation fileTree(dir: "libs", include: ["*.jar", "*.aar"], exclude: ["tc501/**"])
+    tc501Implementation files("libs/tc501/API3_LIB-release.aar")
     implementation "com.google.code.gson:gson:2.13.2"
     implementation "androidx.core:core-ktx:1.13.1"
     // API3_NGE-Transport's Theme.Api3Transport extends a MaterialComponents

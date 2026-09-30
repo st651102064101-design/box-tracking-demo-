@@ -20,10 +20,18 @@ class RealtimeService {
   Timer? _retryTimer;
   bool _disposed = false;
   int _attempt = 0;
+  int _generation = 0;
+
+  /// True only after the stream has actually opened this session. A first
+  /// attempt that is still waiting for a token must not report "offline" —
+  /// that flipped the chip red during boot, before REST had a chance to
+  /// prove the backend was reachable.
+  bool _everOpened = false;
 
   RealtimeService({http.Client? client}) : _client = client ?? http.Client();
 
   static const _retryDelays = [2, 3, 5, 8, 13, 20];
+  static const _authWait = Duration(milliseconds: 200);
 
   /// Starts (or restarts) the connection. Safe to call repeatedly — each
   /// call cancels whatever attempt/backoff was in flight and starts fresh,
@@ -45,8 +53,10 @@ class RealtimeService {
     if (_disposed) return;
     _retryTimer?.cancel();
     _sub?.cancel();
+    final generation = ++_generation;
     _attempt = 0;
-    unawaited(_run(baseUrl, token, onStateChanged, onConnectivity));
+    _everOpened = false;
+    unawaited(_run(baseUrl, token, onStateChanged, onConnectivity, generation));
   }
 
   Future<void> _run(
@@ -54,12 +64,14 @@ class RealtimeService {
     String? Function() token,
     void Function() onStateChanged,
     void Function(bool connected)? onConnectivity,
+    int generation,
   ) async {
-    if (_disposed) return;
+    if (_disposed || generation != _generation) return;
     final t = token();
     final base = baseUrl();
     if (t == null || t.isEmpty || base.isEmpty) {
-      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
+      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity,
+          generation, waitForAuth: true);
       return;
     }
     try {
@@ -67,10 +79,15 @@ class RealtimeService {
       final req = http.Request('GET', Uri.parse('$b/api/stream'));
       req.headers['Authorization'] = 'Bearer $t';
       final res = await _client.send(req).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) {
-        _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
+      if (_disposed || generation != _generation) {
+        await res.stream.listen((_) {}).cancel();
         return;
       }
+      if (res.statusCode != 200) {
+        _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity, generation);
+        return;
+      }
+      _everOpened = true;
       onConnectivity?.call(true);
       String? currentEvent;
       _sub = res.stream
@@ -78,6 +95,7 @@ class RealtimeService {
           .transform(const LineSplitter())
           .listen(
         (line) {
+          if (_disposed || generation != _generation) return;
           if (line.isEmpty || line.startsWith(':')) {
             return; // frame end / heartbeat comment
           }
@@ -97,13 +115,13 @@ class RealtimeService {
           }
         },
         onError: (_) =>
-            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
+            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity, generation),
         onDone: () =>
-            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity),
+            _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity, generation),
         cancelOnError: true,
       );
     } catch (_) {
-      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity);
+      _scheduleRetry(baseUrl, token, onStateChanged, onConnectivity, generation);
     }
   }
 
@@ -112,18 +130,27 @@ class RealtimeService {
     String? Function() token,
     void Function() onStateChanged,
     void Function(bool connected)? onConnectivity,
-  ) {
-    if (_disposed) return;
-    onConnectivity?.call(false);
-    final delay = Duration(seconds: _retryDelays[_attempt]);
-    if (_attempt < _retryDelays.length - 1) _attempt++;
+    int generation, {
+    bool waitForAuth = false,
+  }) {
+    if (_disposed || generation != _generation) return;
+    // Only report a drop after the stream has been up. A missing token at
+    // boot, or a first TCP failure, is "not online yet" — not "went offline".
+    if (!waitForAuth && _everOpened) {
+      _everOpened = false;
+      onConnectivity?.call(false);
+    }
+    final delay =
+        waitForAuth ? _authWait : Duration(seconds: _retryDelays[_attempt]);
+    if (!waitForAuth && _attempt < _retryDelays.length - 1) _attempt++;
     _retryTimer?.cancel();
     _retryTimer = Timer(delay,
-        () => unawaited(_run(baseUrl, token, onStateChanged, onConnectivity)));
+        () => unawaited(_run(baseUrl, token, onStateChanged, onConnectivity, generation)));
   }
 
   void dispose() {
     _disposed = true;
+    _generation++;
     _retryTimer?.cancel();
     _sub?.cancel();
     _client.close();

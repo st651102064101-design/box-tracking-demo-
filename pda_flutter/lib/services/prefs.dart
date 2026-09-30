@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'pda_state_codec.dart';
 
 /// Persistent settings & session storage.
 ///
@@ -223,9 +224,48 @@ class Prefs {
     }
   }
 
+  /// Existing terminals may have a many-megabyte legacy cache on disk. Decode
+  /// and discard web-only history off the UI isolate during boot, otherwise
+  /// even opening the badge screen can time out Android input dispatch.
+  Future<Map<String, dynamic>?> loadStateCache() async {
+    final raw = _p.getString(_kStateCache);
+    if (raw == null) return null;
+    try {
+      final decoded = await compute(decodePdaState, raw);
+      // Migrate old terminals' full web snapshot out of SharedPreferences as
+      // soon as it has been trimmed. Otherwise every restart still has to
+      // copy the multi-megabyte string out of the platform store before the
+      // worker isolate can discard it.
+      if (raw.length > 1024 * 1024) {
+        try {
+          final compact = await compute(jsonEncode, decoded);
+          await _p.setString(_kStateCache, compact);
+        } catch (_) {
+          // A failed best-effort migration must not make a usable cache vanish.
+        }
+      }
+      return decoded;
+    } catch (_) {
+      return null;
+    }
+  }
+
   set stateCache(Map<String, dynamic>? v) => v == null
       ? _p.remove(_kStateCache)
       : _p.setString(_kStateCache, jsonEncode(v));
+
+  Future<void> saveStateCache(Map<String, dynamic> value) async {
+    final boxes = value['boxes'];
+    final events = value['events'];
+    final itemCount = (boxes is Map ? boxes.length : 0) +
+        (events is List ? events.length : 0);
+    // A tiny snapshot is quicker inline (and remains usable in Flutter's
+    // fake-async widget tests). Only large payloads need the worker isolate.
+    final encoded = itemCount < 200
+        ? jsonEncode(value)
+        : await compute(jsonEncode, value);
+    await _p.setString(_kStateCache, encoded);
+  }
 
   List<dynamic> get outbox {
     final s = _p.getString(_kOutbox);

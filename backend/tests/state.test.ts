@@ -84,6 +84,20 @@ describe('state bridge (S ↔ Postgres)', () => {
     expect(s.seq).toEqual(sampleState.seq);
   });
 
+  it('serves a bounded PDA snapshot without old history or web-only tables', async () => {
+    const recent = { ts: new Date().toISOString(), dir: 'in', tag: 'BTX-2601-ABCDE' };
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({
+      ...sampleState,
+      events: [...sampleState.events, recent],
+    });
+    const get = await request(ctx.app).get('/api/state/pda').set(auth(ctx.token));
+    expect(get.status).toBe(200);
+    expect(get.body.boxes['BTX-2601-ABCDE']).toEqual(sampleState.boxes['BTX-2601-ABCDE']);
+    expect(get.body.events).toEqual([recent]);
+    expect(get.body).not.toHaveProperty('auditLog');
+    expect(get.body).not.toHaveProperty('doRecords');
+  });
+
   it('replaces (not merges) on subsequent PUT', async () => {
     await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({ boxes: {}, customers: {} });
     const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));

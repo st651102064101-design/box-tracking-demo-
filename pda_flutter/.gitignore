@@ -26,3 +26,6 @@ android/app/release/
 
 # Keep the Zebra AAR tracked (needed to build)
 !android/app/libs/*.aar
+# The licensed TC501 fat SDK AAR is installed from the local licensed SDK
+# bundle and must not be redistributed in this repository.
+android/app/libs/tc501/*.aar

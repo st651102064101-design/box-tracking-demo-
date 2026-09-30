@@ -44,7 +44,7 @@ class MoreHubScreen extends StatelessWidget {
         c.goCycleCount();
         break;
       case 'locate':
-        c.goLocate();
+        if (c.hasIntegratedRfid) c.goLocate();
         break;
     }
     return KeyEventResult.handled;
@@ -116,16 +116,18 @@ class MoreHubScreen extends StatelessWidget {
                     sub: 'Cycle Count',
                     onTap: c.goCycleCount,
                   ),
-                  const SizedBox(height: 10),
-                  _tile(
-                    number: 3,
-                    icon: Icons.radar,
-                    color: C.menuOrange,
-                    bg: C.menuOrangeBg,
-                    title: loc.t('ค้นหา/เรดาร์'),
-                    sub: 'Search / Radar',
-                    onTap: c.goLocate,
-                  ),
+                  if (c.hasIntegratedRfid) ...[
+                    const SizedBox(height: 10),
+                    _tile(
+                      number: 3,
+                      icon: Icons.radar,
+                      color: C.menuOrange,
+                      bg: C.menuOrangeBg,
+                      title: loc.t('ค้นหา/เรดาร์'),
+                      sub: 'Search / Radar',
+                      onTap: c.goLocate,
+                    ),
+                  ],
                 ],
               ),
             ),

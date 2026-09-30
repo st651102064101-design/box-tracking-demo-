@@ -6,6 +6,7 @@ import { users, employees, auditLog } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { sendMail } from '../lib/mailer.js';
 import { signToken } from '../lib/jwt.js';
+import { effectiveRole } from '../lib/role-data.js';
 import {
   loginSchema,
   registerSchema,
@@ -300,7 +301,8 @@ authRouter.get(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    res.json({ user: req.user });
+    const access = await effectiveRole(req.user);
+    res.json({ ...req.user, user: req.user, ...access });
   }),
 );
 

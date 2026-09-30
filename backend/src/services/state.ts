@@ -10,7 +10,7 @@
  * Every entity keeps a verbatim `data` JSONB copy, so the round-trip is lossless
  * while the extracted typed columns stay available for real SQL/reporting.
  */
-import { asc, desc, sql } from 'drizzle-orm';
+import { asc, desc, gte, sql } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import {
   boxes,
@@ -124,6 +124,47 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
     locations: mapBy(locRows, (r) => r.code),
     inventory: mapBy(invRows, (r) => r.id),
     auditLog: auditRows.map((r) => r.data),
+  };
+}
+
+/** Small, bounded snapshot for handhelds. The web bridge above must retain
+ * complete history for round-tripping, but the PDA only uses recent events
+ * and master data. Avoid sending years of event/audit JSON on every SSE ping. */
+export async function composePdaState(db: DB): Promise<Record<string, unknown>> {
+  const since = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const [boxRows, custRows, btRows, whRows, gateRows, locRows, empRows, eventRows, cfgRows] =
+    await Promise.all([
+      db.select().from(boxes),
+      db.select().from(customers),
+      db.select().from(boxTypes),
+      db.select().from(warehouses),
+      db.select().from(gates),
+      db.select().from(locations),
+      db.select().from(employees),
+      db.select().from(events).where(gte(events.ts, since)).orderBy(asc(events.id)),
+      db.select().from(config),
+    ]);
+  const mapBy = <T extends { data: unknown }>(rows: T[], key: (r: T) => string) =>
+    Object.fromEntries(rows.map((r) => [key(r), r.data]));
+  const cfgRow = cfgRows[0];
+  return {
+    boxes: mapBy(boxRows, (r) => r.tag),
+    customers: mapBy(custRows, (r) => r.id),
+    boxtypes: mapBy(btRows, (r) => r.id),
+    warehouses: mapBy(whRows, (r) => r.id),
+    gates: Object.fromEntries(gateRows.map((r) => [String(r.gateNo), r.warehouseId])),
+    locations: mapBy(locRows, (r) => r.code),
+    employees: Object.fromEntries(empRows.map((r) => [r.id, {
+      ...(r.data as Record<string, unknown>),
+      userId: r.userId,
+      hasPin: !!r.pinHash,
+      hasLogin: !!r.passwordHash,
+      loginUsername: r.username ?? null,
+    }])),
+    events: eventRows.map((r) => r.data),
+    cfg: cfgRow
+      ? { agingDays: cfgRow.agingDays, boxValue: Number(cfgRow.boxValue), lostMode: cfgRow.lostMode }
+      : { agingDays: 15, boxValue: 450, lostMode: 'manual' },
   };
 }
 

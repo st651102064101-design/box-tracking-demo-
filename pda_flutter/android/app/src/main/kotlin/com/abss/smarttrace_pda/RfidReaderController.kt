@@ -1,7 +1,9 @@
 package com.abss.smarttrace_pda
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -17,6 +19,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
@@ -278,6 +281,7 @@ class RfidReaderController(private val context: Context) :
     @Volatile private var rfidSoundId = "html_tick"
 
     private val exec = Executors.newSingleThreadExecutor()
+    private val connectInFlight = AtomicBoolean(false)
 
     private var readers: Readers? = null
     private var reader: RFIDReader? = null
@@ -293,6 +297,7 @@ class RfidReaderController(private val context: Context) :
     private var tagCount = 0L
     private var lastEpc: String? = null
     private var lastRssi: Int? = null
+    @Volatile private var inventoryRunning = false
     // How many reads arrived with a TID already attached by the inventory
     // round. That piggyback is now the only source of a TID — the explicit
     // access-read fallback is gone, because it had to stop and restart
@@ -311,6 +316,10 @@ class RfidReaderController(private val context: Context) :
     // ── EventChannel.StreamHandler ────────────────────────────────────────
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
+        pendingBarcode?.let { data ->
+            pendingBarcode = null
+            emit(mapOf("type" to "barcode", "data" to data))
+        }
     }
 
     override fun onCancel(arguments: Any?) {
@@ -345,8 +354,31 @@ class RfidReaderController(private val context: Context) :
                 setBarcodeScannerEnabled(call.argument<Boolean>("enabled") ?: true)
                 result.success(true)
             }
+            "prepareBarcodeDataWedge" -> {
+                triggerModeManagedByRfidSdk = true
+                ensureDataWedgeProfile()
+                result.success(true)
+            }
+            "setRfidTriggerMode" -> {
+                val enabled = call.argument<Boolean>("enabled") == true
+                rfidTriggerMode = enabled
+                triggerModeManagedByRfidSdk = true
+                ensureDataWedgeProfile()
+                // RFIDAPI3 can block for seconds while the reader changes
+                // transport/trigger ownership. Never run it on Android's UI
+                // thread: a tap during that call otherwise becomes an ANR.
+                exec.execute {
+                    if (enabled == rfidTriggerMode && !applyRfidTriggerMode(enabled)) {
+                        main.post { status("error", "RFID SDK สลับโหมด Trigger ไม่สำเร็จ") }
+                    }
+                }
+                result.success(true)
+            }
             "isConnected" -> result.success(isConnected())
-            "diagnostics" -> result.success(diagnostics())
+            "diagnostics" -> exec.execute {
+                val snapshot = diagnostics()
+                main.post { result.success(snapshot) }
+            }
             "deviceInfo" -> result.success(deviceInfo())
             else -> result.notImplemented()
         }
@@ -357,6 +389,90 @@ class RfidReaderController(private val context: Context) :
     /** DataWedge profile this app owns — see [ensureDataWedgeProfile]. */
     private val dataWedgeProfileName = "SmartTracePDA"
     private var dataWedgeProfileEnsured = false
+    @Volatile private var barcodeScannerEnabled = true
+    @Volatile private var rfidTriggerMode = false
+    @Volatile private var triggerModeManagedByRfidSdk = false
+
+    /**
+     * Changes the integrated reader's shared side trigger using RFIDAPI3.
+     * RFIDAPI3 owns scanner-plugin state for integrated readers. The SDK's
+     * second argument must therefore be true; issuing both SDK and DataWedge
+     * scanner toggles races and can leave the imager active in RFID mode.
+     * Remembering the desired mode lets a toggle made during connection be
+     * applied as soon as configureReader() finishes.
+     */
+    private fun applyRfidTriggerMode(enabled: Boolean): Boolean {
+        val rd = reader ?: return true // queued; configureReader applies it
+        if (!rd.isConnected) return true
+        // Key-layout mapping is not implemented by every API3 transport / SDK
+        // build (notably older integrated-reader firmware). Treat that mapping
+        // as best-effort; an exception here must not prevent API3 from switching
+        // the actual RFID-vs-barcode trigger mode below.
+        try {
+            rd.Config.setKeylayoutType(
+                if (enabled) ENUM_KEYLAYOUT_TYPE.UPPER_TRIGGER_FOR_RFID
+                else ENUM_KEYLAYOUT_TYPE.UPPER_TRIGGER_FOR_SCAN
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "key-layout mapping unavailable; applying trigger mode anyway", e)
+        }
+        return try {
+            val applied = rd.Config.setTriggerMode(
+                if (enabled) ENUM_TRIGGER_MODE.RFID_MODE else ENUM_TRIGGER_MODE.BARCODE_MODE,
+                true
+            )
+            Log.i(TAG, "upper trigger mapped to ${if (enabled) "RFID" else "SCAN"}; mode applied=$applied")
+            applied
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to switch physical trigger mode", e)
+            lastError = "trigger mode: ${e.message ?: e.javaClass.simpleName}"
+            false
+        }
+    }
+
+    /**
+     * Broadcast DataWedge uses to hand this app the whole decoded barcode.
+     * Keystroke output alone types into whichever field is focused, so on
+     * the gate-out form the label lands in ทะเบียนรถ/คนขับ and never becomes
+     * a queued box — the scanner clearly read something, and ส่งออก still
+     * has nothing to commit.
+     */
+    private val scanAction = "${context.packageName}.SCAN"
+    private var scanReceiverRegistered = false
+
+    private var pendingBarcode: String? = null
+
+    private val scanReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action != scanAction) return
+            val data = intent.getStringExtra("com.symbol.datawedge.data_string")
+                ?: intent.getStringExtra("com.motorolasolutions.emdk.datawedge.data_string")
+                ?: return
+            if (data.isBlank()) return
+            if (sink == null) {
+                pendingBarcode = data
+            } else {
+                emit(mapOf("type" to "barcode", "data" to data))
+            }
+        }
+    }
+
+    init {
+        registerScanReceiver()
+    }
+
+    private fun registerScanReceiver() {
+        if (scanReceiverRegistered) return
+        val filter = IntentFilter(scanAction)
+        filter.addCategory(Intent.CATEGORY_DEFAULT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(scanReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(scanReceiver, filter)
+        }
+        scanReceiverRegistered = true
+    }
 
     /**
      * Creates (idempotent) and associates a DataWedge profile with this
@@ -371,16 +487,44 @@ class RfidReaderController(private val context: Context) :
      * DataWedge integration guide assumes as the starting point; Profile0
      * is meant to be left alone.
      *
-     * The KEYSTROKE plugin is left enabled here so barcode mode's existing
-     * scan-into-focused-textfield capture (ScanCapture/scan_speed_detector)
-     * keeps working exactly as it did under Profile0 — only the BARCODE
-     * (decoder/imager) plugin's enabled state is what the mode toggle now
-     * actually controls per scan.
+     * KEYSTROKE stays enabled as a fallback for fields that still read the
+     * wedge. INTENT is what actually submits a scan: one broadcast with the
+     * full code, independent of which text field happens to be focused.
      */
     private fun ensureDataWedgeProfile() {
+        registerScanReceiver()
         if (dataWedgeProfileEnsured) return
         dataWedgeProfileEnsured = true
+        applyDataWedgeProfile()
+        // CREATE_PROFILE is asynchronous. A SET_CONFIG in the same turn is
+        // often dropped the first time the profile is born, which leaves the
+        // imager decoding into nowhere. Apply again once DataWedge has had
+        // a moment to create it.
+        main.postDelayed({
+            applyDataWedgeProfile()
+            // Profile creation/switching is asynchronous. Reapply the latest
+            // desired scanner state after DataWedge has finished activating
+            // the app profile, otherwise its default barcode plugin can steal
+            // the shared side trigger in RFID test mode.
+            if (triggerModeManagedByRfidSdk) {
+                // PROFILE creation/switching can reset the shared scanner
+                // trigger after an earlier RFIDAPI3 call. Re-assert the most
+                // recently requested SDK mode only after DataWedge has
+                // finished activating this profile; never enable/disable its
+                // scanner plugin in parallel with RFIDAPI3.
+                exec.execute {
+                    val applied = applyRfidTriggerMode(rfidTriggerMode)
+                    if (!applied) {
+                        main.post { status("error", "RFID SDK สลับโหมด Trigger ไม่สำเร็จ") }
+                    }
+                }
+            } else {
+                applyBarcodeScannerState(barcodeScannerEnabled)
+            }
+        }, 600)
+    }
 
+    private fun applyDataWedgeProfile() {
         sendDataWedge("com.symbol.datawedge.api.CREATE_PROFILE", dataWedgeProfileName)
 
         val appConfig = Bundle()
@@ -397,6 +541,15 @@ class RfidReaderController(private val context: Context) :
         val keystrokeParams = Bundle()
         keystrokeParams.putString("keystroke_output_enabled", "true")
         sendDataWedgePluginConfig("KEYSTROKE", keystrokeParams)
+
+        val intentParams = Bundle()
+        intentParams.putString("intent_output_enabled", "true")
+        intentParams.putString("intent_action", scanAction)
+        intentParams.putString("intent_category", Intent.CATEGORY_DEFAULT)
+        intentParams.putString("intent_delivery", "2")
+        sendDataWedgePluginConfig("INTENT", intentParams)
+
+        sendDataWedge("com.symbol.datawedge.api.SWITCH_TO_PROFILE", dataWedgeProfileName)
     }
 
     /**
@@ -418,8 +571,13 @@ class RfidReaderController(private val context: Context) :
      * devices and listens for these broadcasts system-wide.
      */
     private fun setBarcodeScannerEnabled(enabled: Boolean) {
+        barcodeScannerEnabled = enabled
         ensureDataWedgeProfile()
 
+        applyBarcodeScannerState(enabled)
+    }
+
+    private fun applyBarcodeScannerState(enabled: Boolean) {
         val barcodeParams = Bundle()
         barcodeParams.putString("scanner_input_enabled", if (enabled) "true" else "false")
         sendDataWedgePluginConfig("BARCODE", barcodeParams)
@@ -540,21 +698,54 @@ class RfidReaderController(private val context: Context) :
             status("connected", "เชื่อมต่อแล้ว")
             return
         }
+        if (!connectInFlight.compareAndSet(false, true)) return
         status("connecting", "กำลังค้นหาเครื่องอ่าน…")
         exec.execute {
+            val isTc501 = Build.MODEL.contains("TC501", ignoreCase = true)
             try {
-                patchApi3UtilsContext()
-                if (readers == null) readers = Readers(context, ENUM_TRANSPORT.SERVICE_SERIAL)
+                // TC501's QC_SERIAL path must retain the Activity context passed
+                // to Readers(this, QC_SERIAL). The legacy API3Utils workaround
+                // replaces that context with applicationContext and can make
+                // Qualcomm's QC transport fail to open on TC501.
+                if (!isTc501) patchApi3UtilsContext()
+                val preferredTransport = if (isTc501) {
+                    // TC501's integrated reader is exposed through Qualcomm's
+                    // serial service, not the legacy SERVICE_SERIAL transport
+                    // used by MC33xx. QC_SERIAL was added in RFID SDK 2.0.5.x.
+                    // Resolve it by name so this source still builds against
+                    // older SDK bundles, and fail with an actionable message
+                    // rather than opening the wrong transport on TC501.
+                    try {
+                        java.lang.Enum.valueOf(
+                            ENUM_TRANSPORT::class.java,
+                            "QC_SERIAL",
+                        )
+                    } catch (_: IllegalArgumentException) {
+                        lastTransport = "QC_SERIAL (SDK required: 2.0.5.292+)"
+                        lastError = "TC501 ต้องใช้ Zebra RFID SDK 2.0.5.292 ขึ้นไป"
+                        status("error", lastError!!)
+                        return@execute
+                    }
+                } else {
+                    ENUM_TRANSPORT.SERVICE_SERIAL
+                }
+                // Recreate the SDK manager when switching between a previous
+                // transport and the model-specific one.
+                readers?.Dispose()
+                readers = Readers(context, preferredTransport)
                 // attach/deattach are static on Readers, not instance methods
                 Readers.attach(this)
 
                 var list = safeList()
-                lastTransport = "SERVICE_SERIAL"
+                lastTransport = if (isTc501) "QC_SERIAL" else "SERVICE_SERIAL"
+                Log.i(TAG, "reader enumeration transport=$lastTransport count=${list.size}")
+                // TC501 must stay on QC_SERIAL; SERVICE_SERIAL, BT and USB
+                // are not valid fallbacks for its integrated reader.
                 // MC3390R = SERVICE_SERIAL; fall back to sled / USB like the sample.
-                if (list.isEmpty()) {
+                if (!isTc501 && list.isEmpty()) {
                     readers?.setTransport(ENUM_TRANSPORT.BLUETOOTH); list = safeList(); lastTransport = "BLUETOOTH"
                 }
-                if (list.isEmpty()) {
+                if (!isTc501 && list.isEmpty()) {
                     readers?.setTransport(ENUM_TRANSPORT.SERVICE_USB); list = safeList(); lastTransport = "SERVICE_USB"
                 }
                 if (list.isEmpty()) {
@@ -565,6 +756,7 @@ class RfidReaderController(private val context: Context) :
 
                 val rd = list[0].getRFIDReader()
                 reader = rd
+                Log.i(TAG, "connecting reader host=${rd.getHostName()} transport=$lastTransport")
 
                 try {
                     rd.connect()
@@ -581,13 +773,27 @@ class RfidReaderController(private val context: Context) :
                     configureReader(rd)
                     lastError = null
                     status("connected", "เชื่อมต่อ ${rd.getHostName()}")
+                    Log.i(TAG, "reader connected host=${rd.getHostName()} transport=$lastTransport")
                 } else {
                     status("error", "เชื่อมต่อไม่สำเร็จ")
                 }
             } catch (e: Exception) {
-                val detail = if (e is OperationFailureException) " (${e.getResults()})" else ""
+                val detail = if (e is OperationFailureException) {
+                    " (${e.getResults()}${e.getVendorMessage()?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""})"
+                } else ""
+                inventoryRunning = false
                 Log.e(TAG, "connect failed$detail", e)
+                // A failed QC open can leave an SDK transport/reader handle
+                // behind. Release it before allowing the next reconnect attempt.
+                try { reader?.let { if (it.isConnected) it.disconnect() } }
+                catch (cleanup: Exception) { Log.w(TAG, "failed reader disconnect cleanup", cleanup) }
+                reader = null
+                try { readers?.Dispose() }
+                catch (cleanup: Exception) { Log.w(TAG, "failed readers transport cleanup", cleanup) }
+                readers = null
                 status("error", (e.message ?: "เชื่อมต่อไม่สำเร็จ") + detail)
+            } finally {
+                connectInFlight.set(false)
             }
         }
     }
@@ -669,6 +875,11 @@ class RfidReaderController(private val context: Context) :
             trigger.StopTrigger.setTriggerType(STOP_TRIGGER_TYPE.STOP_TRIGGER_TYPE_IMMEDIATE)
             rd.Config.setStartTrigger(trigger.StartTrigger)
             rd.Config.setStopTrigger(trigger.StopTrigger)
+
+            // The same side trigger can control either the RFID radio or the
+            // barcode imager. Select the SDK trigger mode for the app's
+            // current screen/mode before the operator presses it.
+            applyRfidTriggerMode(rfidTriggerMode)
 
             // power: index-based, take the maximum supported
             maxPower = rd.ReaderCapabilities.getTransmitPowerLevelValues().size - 1
@@ -876,8 +1087,16 @@ class RfidReaderController(private val context: Context) :
             try {
                 reader?.let { rd ->
                     eventHandler?.let { rd.Events.removeEventsListener(it) }
-                    if (rd.isConnected) rd.disconnect()
+                    if (rd.isConnected) {
+                        if (inventoryRunning) {
+                            try { rd.Actions.Inventory.stop() } catch (e: Exception) {
+                                Log.w(TAG, "inventory stop during disconnect failed", e)
+                            }
+                        }
+                        rd.disconnect()
+                    }
                 }
+                inventoryRunning = false
                 status("disconnected", "ตัดการเชื่อมต่อแล้ว")
             } catch (e: Exception) {
                 Log.w(TAG, "disconnect failed", e)
@@ -889,7 +1108,10 @@ class RfidReaderController(private val context: Context) :
         exec.execute {
             try {
                 Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
-                reader?.Actions?.Inventory?.perform()
+                val rd = reader ?: return@execute
+                if (!rd.isConnected) return@execute
+                rd.Actions.Inventory.perform()
+                inventoryRunning = true
             } catch (e: Exception) {
                 // "already inventorying" is the expected answer to a second
                 // start — a held trigger while a screen also calls
@@ -898,8 +1120,10 @@ class RfidReaderController(private val context: Context) :
                 if (e is OperationFailureException &&
                     e.getResults() == RFIDResults.RFID_OPERATION_IN_PROGRESS) {
                     Log.d(TAG, "startInventory ignored — inventory already running")
+                    inventoryRunning = true
                     return@execute
                 }
+                inventoryRunning = false
                 Log.w(TAG, "startInventory failed${why(e)}", e)
                 // Surfaced, not just logged: the MC3390R answers
                 // RFID_CHARGING_COMMAND_NOT_ALLOWED to every inventory command
@@ -925,7 +1149,10 @@ class RfidReaderController(private val context: Context) :
     fun stopInventory() {
         exec.execute {
             try {
-                reader?.Actions?.Inventory?.stop()
+                val rd = reader ?: return@execute
+                if (!rd.isConnected || !inventoryRunning) return@execute
+                rd.Actions.Inventory.stop()
+                inventoryRunning = false
             } catch (e: Exception) {
                 Log.w(TAG, "stopInventory failed", e)
             }
@@ -993,6 +1220,10 @@ class RfidReaderController(private val context: Context) :
 
     fun dispose() {
         try {
+            if (scanReceiverRegistered) {
+                context.unregisterReceiver(scanReceiver)
+                scanReceiverRegistered = false
+            }
             disconnect()
             reader = null
             readers?.Dispose()

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
@@ -16,7 +17,9 @@ import '../widgets/scan_capture.dart';
 /// There is no password here by design. The terminal is already authenticated
 /// as itself, and who is holding it is answered by a badge: a printed QR read
 /// by the imager, an RFID employee card, or a tap on a name. All three end up
-/// in [AppController.badgeScanned] / [AppController.identifyAs].
+/// in [AppController.badgeScanned] / [AppController.identifyAs]. Typing an
+/// employee code is an explicit fallback and follows the same PIN path as
+/// tapping that employee's name.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -25,14 +28,50 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  /// A badge from the imager, and nothing else. There is no field to type
-  /// into any more: every gate movement is logged under whoever badged in, so
-  /// a hand-keyed employee id signs someone else's name to a shift. Someone
-  /// whose badge will not scan taps their own name below instead, which goes
-  /// through the same PIN gate.
+  final _badgeCodeController = TextEditingController();
+  final _badgeCodeFocus = FocusNode(debugLabel: 'Employee badge code');
+  bool _manualBadgeOpen = false;
+  bool _badgeSubmitting = false;
+
+  /// Physical badge reads retain their existing scanner path. A typed code
+  /// goes through [_tapEmployee] instead, including its PIN check.
   void _submitBadge(String code) {
     if (code.trim().isEmpty) return;
     context.read<AppController>().badgeScanned(code);
+  }
+
+  Employee? _typedEmployee(AppController c) {
+    final code = _badgeCodeController.text.trim().toUpperCase();
+    if (code.isEmpty) return null;
+    final matches = c.employees.where((employee) =>
+        employee.id.toUpperCase() == code || employee.matchesCode(code));
+    return matches.length == 1 ? matches.first : null;
+  }
+
+  void _openManualBadge() {
+    setState(() => _manualBadgeOpen = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _badgeCodeFocus.requestFocus();
+    });
+  }
+
+  Future<void> _submitTypedBadge() async {
+    if (_badgeSubmitting) return;
+    final employee = _typedEmployee(context.read<AppController>());
+    if (employee == null) return;
+    setState(() => _badgeSubmitting = true);
+    try {
+      await _tapEmployee(employee);
+    } finally {
+      if (mounted) setState(() => _badgeSubmitting = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _badgeCodeController.dispose();
+    _badgeCodeFocus.dispose();
+    super.dispose();
   }
 
   /// Tapping a name is a shortcut for a badge scan, so it goes through the
@@ -256,11 +295,69 @@ class _LoginScreenState extends State<LoginScreen> {
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
 
-  /// What the field used to be: a line telling the operator the terminal is
-  /// armed. The capture itself is a ScanCapture wrapped around the whole
-  /// screen (see [build]) — invisible, unfocusable, and impossible to type
-  /// into, which is the point.
-  Widget _scanPrompt(LocaleController loc) => Container(
+  /// Scanner-ready affordance becomes an editable employee-code input when
+  /// tapped. The physical scanner is parked while typing so it cannot steal
+  /// focus back from this field.
+  Widget _scanPrompt(LocaleController loc, AppController c) {
+    final ready = _typedEmployee(c) != null && !_badgeSubmitting;
+    if (_manualBadgeOpen) {
+      return TextField(
+        key: const Key('manual-employee-code-input'),
+        controller: _badgeCodeController,
+        focusNode: _badgeCodeFocus,
+        textCapitalization: TextCapitalization.characters,
+        textInputAction: TextInputAction.done,
+        autocorrect: false,
+        enableSuggestions: false,
+        style: TextStyle(color: C.onHero, fontSize: 16),
+        cursorColor: C.lime,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          hintText: loc.t('กรอกรหัสพนักงาน'),
+          hintStyle: TextStyle(color: C.onHero.withValues(alpha: 0.55)),
+          filled: true,
+          fillColor: C.onHero.withValues(alpha: 0.08),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide:
+                BorderSide(color: C.onHero.withValues(alpha: 0.16)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: C.lime, width: 1.5),
+          ),
+          suffixIcon: ready
+              ? Semantics(
+                  button: true,
+                  label: loc.t('ยืนยันรหัสพนักงาน'),
+                  child: IconButton(
+                    key: const Key('submit-employee-code'),
+                    onPressed: _submitTypedBadge,
+                    icon: SvgPicture.asset(
+                      'assets/icons/badge-submit.svg',
+                      width: 22,
+                      height: 22,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: C.lime,
+                      minimumSize: const Size(44, 44),
+                    ),
+                  ),
+                )
+              : null,
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: loc.t('ยิงบัตรพนักงาน'),
+      child: InkWell(
+        key: const Key('open-employee-code-input'),
+        onTap: _openManualBadge,
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
@@ -282,7 +379,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
-      );
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,6 +399,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // the one place they're meant to live) — this screen only needs to say
     // who's badging in and whether the terminal is configured/connected.
     return ScanCapture(
+      enabled: !_manualBadgeOpen,
       onScan: _submitBadge,
       child: Column(
         children: [
@@ -327,15 +428,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-                // Shows c.onlineDisplay (online && connected), not the manual
-                // toggle alone, so a genuinely dead connection can never still
-                // read "ออนไลน์" just because nobody happened to tap it. The tap
-                // itself (c.onlineChipTap) is the same manual online/offline
-                // toggle while actually connected, or a reconnect attempt —
-                // falling through to the ที่อยู่เซิร์ฟเวอร์/บัญชีเครื่อง form if
-                // that still fails — while it isn't. Real connectivity loss
-                // still gets its own one-shot alert regardless of this chip —
-                // see root_screen.dart's _OfflineAlertListener.
+                // The label reflects both server reachability and the
+                // operator's queue-mode choice. Tapping explicitly switches
+                // online/offline; failed network requests are queued too.
                 OnlineChip(online: c.onlineDisplay, onTap: c.onlineChipTap),
               ],
             ),
@@ -354,7 +449,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   // icon in the header, and it only ever escalates to
                   // "ตั้งค่าระบบ" if an operator deliberately taps it and a
                   // retry still fails.
-                  _BadgePrompt(field: _scanPrompt(loc)),
+                  _BadgePrompt(field: _scanPrompt(loc, c)),
+                  if (!c.deviceConfigured && c.canConfigureDevice)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+                      child: OutlinedButton.icon(
+                        onPressed: c.goDeviceSetup,
+                        icon: const Icon(Icons.settings_outlined, size: 18),
+                        label: Text(loc.t('ตั้งค่าเครื่อง')),
+                      ),
+                    ),
                   if (people.isEmpty)
                     Padding(
                       padding: const EdgeInsets.all(24),

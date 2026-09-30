@@ -32,3 +32,4 @@
 -dontwarn fi.iki.elonen.**
 -dontwarn org.apache.xerces.**
 -dontwarn org.java_websocket.**
+-dontwarn org.bouncycastle.**

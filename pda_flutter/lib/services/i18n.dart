@@ -27,6 +27,9 @@ class LocaleController extends ChangeNotifier {
   static const Map<String, String> _dict = {
     // badge screen
     'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
+    'ยิงบัตรพนักงาน': 'Scan employee badge',
+    'กรอกรหัสพนักงาน': 'Enter employee code',
+    'ยืนยันรหัสพนักงาน': 'Confirm employee code',
     'ยิงบัตร หรือพิมพ์รหัสพนักงาน': 'Scan a badge, or type an employee id',
     'ทุกการยิงเข้า–ออกจะบันทึกในชื่อผู้ที่ยิงบัตร':
         'Every in/out scan is logged under the badge that was scanned',
@@ -133,6 +136,15 @@ class LocaleController extends ChangeNotifier {
 
     // track screen
     'ยิงหรือพิมพ์รหัสกล่อง': 'Scan or type a box code',
+    'กดปุ่ม SCANNER ที่เครื่อง': 'Press the SCANNER button on the device',
+    'เพื่อยิงบาร์โค้ดได้': 'to scan a barcode',
+    'หรือ': 'or',
+    'พิมพ์รหัสกล่อง': 'Type a box code',
+    'ค้นหา': 'Search',
+    'ประวัติการสแกนล่าสุด': 'Recent scans',
+    'ดูทั้งหมด': 'See all',
+    'ย่อ': 'Show less',
+    'นอกคลัง': 'Out of warehouse',
     'รหัสกล่อง เช่น CRT-01': 'Box code, e.g. CRT-01',
     'เหนี่ยวไกเพื่ออ่านแท็ก RFID': 'Pull the trigger to read an RFID tag',
     'พบ': 'Found',

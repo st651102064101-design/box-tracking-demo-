@@ -28,10 +28,9 @@ class SettingsScreen extends StatelessWidget {
     final themeCtrl = context.watch<ThemeController>();
     final loc = context.watch<LocaleController>();
     final bottom = MediaQuery.of(context).padding.bottom;
-    // Hardware-debug tiles (raw RFID reads, the backend URL) are noise for a
-    // regular operator and only worth showing to an admin — see
-    // Employee.isAdmin. A device with no operator identified yet (emp ==
-    // null) is treated the same as canConfigureDevice does elsewhere.
+    // Keep the backend URL private to admins. RFID operation/testing is a
+    // normal handheld feature, so it is available to every operator on a
+    // reader-capable device.
     final isAdminOrNull = c.emp == null || c.emp!.isAdmin;
 
     return AutoHideHeader(
@@ -122,9 +121,9 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                const _RfidPanel(),
-                if (isAdminOrNull) ...[
+                if (c.hasIntegratedRfid) ...[
+                  const SizedBox(height: 10),
+                  const _RfidPanel(),
                   const SizedBox(height: 10),
                   _tile(
                     icon: Icons.nfc,
@@ -140,7 +139,7 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.router_outlined,
                     title: loc.t('ตั้งค่าเครื่อง'),
                     sub:
-                        '${c.selWhName} · ${loc.t('ประตู')} ${c.gate} · ${loc.t('เซิร์ฟเวอร์ + บัญชีเครื่อง')}',
+                        '${c.selWhName} · ${loc.t('ประตู')} ${c.gate}',
                     onTap: c.goDeviceSetup,
                   )
                 else
@@ -174,7 +173,9 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Center(
                   child: Text(
-                    'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}',
+                    c.hasIntegratedRfid
+                        ? 'SmartTrace PDA · v1.1\nFlutter + Zebra RFIDAPI3 · ${loc.t('เชื่อมกับ SmartTrace backend')}'
+                        : 'SmartTrace PDA · v1.1\n${loc.t('เชื่อมกับ SmartTrace backend')}',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 11.5, color: C.faint, height: 1.5),
@@ -539,6 +540,7 @@ class _RfidPanelState extends State<_RfidPanel> {
   /// costs nothing over a shift and makes the counter track the hold in
   /// real time.
   Timer? _testPoll;
+  bool _diagnosticsPending = false;
 
   Future<void> _startTest(AppController c) async {
     if (_testFiring) return;
@@ -562,8 +564,14 @@ class _RfidPanelState extends State<_RfidPanel> {
   }
 
   Future<void> _refresh() async {
-    final d = await context.read<AppController>().rfid.diagnostics();
-    if (mounted) setState(() => _d = d);
+    if (_diagnosticsPending) return;
+    _diagnosticsPending = true;
+    try {
+      final d = await context.read<AppController>().rfid.diagnostics();
+      if (mounted) setState(() => _d = d);
+    } finally {
+      _diagnosticsPending = false;
+    }
   }
 
   static Color _colorFor(RfidState s) {

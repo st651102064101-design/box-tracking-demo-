@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import { bootstrap, auth, type TestCtx } from './helpers.js';
 
@@ -40,6 +40,172 @@ describe('GET /api/rfid/encode/:tag', () => {
       .set(auth(ctx.token));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('epc_encode_error');
+  });
+});
+
+describe('FX9600 Webhook Base URL settings', () => {
+  it('stores the configured host and port but rejects a custom path', async () => {
+    const base = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fx9600-gate-5')
+      .set(auth(ctx.token))
+      .send({
+        name: 'Zebra Gate 5',
+        host: '192.168.1.10',
+        webhookBaseUrl: 'http://192.168.1.1:4000',
+        gateNo: 5,
+        antennaCount: 2,
+        heartbeatIntervalSeconds: 1,
+      });
+    expect(base.status).toBe(200);
+    expect(base.body.reader.webhookBaseUrl).toBe('http://192.168.1.1:4000');
+
+    const withPath = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fx9600-gate-5')
+      .set(auth(ctx.token))
+      .send({
+        name: 'Zebra Gate 5',
+        host: '192.168.1.10',
+        webhookBaseUrl: 'http://192.168.1.1:4000/api/rfid/fx9600/5/webhook',
+        gateNo: 5,
+        antennaCount: 2,
+        heartbeatIntervalSeconds: 1,
+      });
+    expect(withPath.status).toBe(400);
+  });
+
+  it('preserves a configured base when an older settings screen omits the field', async () => {
+    const updated = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fx9600-gate-5')
+      .set(auth(ctx.token))
+      .send({
+        name: 'Zebra Gate 5 Updated',
+        host: '192.168.1.11',
+        gateNo: 5,
+        antennaCount: 2,
+        heartbeatIntervalSeconds: 1,
+      });
+    expect(updated.status).toBe(200);
+    expect(updated.body.reader.webhookBaseUrl).toBe('http://192.168.1.1:4000');
+  });
+
+  it('accepts Zebra health checks and POSTs without user credentials', async () => {
+    const check = await request(ctx.app).get('/api/rfid/fx9600/5/webhook');
+    expect(check.status).toBe(200);
+    expect(check.body.readerId).toBe('fx9600-gate-5');
+
+    const posted = await request(ctx.app)
+      .post('/api/rfid/fx9600/5/webhook')
+      .send({ readerEvent: 'tagRead', epc: 'E200001122334455' });
+    expect(posted.status).toBe(202);
+    expect(posted.body.received).toBe(true);
+
+    const logs = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
+    expect(logs.body.entries.some((entry: Record<string, unknown>) => entry.device === 'fx9600-gate-5')).toBe(true);
+  });
+
+  it('marks the reader offline shortly after expected webhooks stop', async () => {
+    await request(ctx.app)
+      .post('/api/rfid/fx9600/5/webhook')
+      .send({ readerEvent: 'tagRead', epc: 'E200001122334455' });
+    const realNow = Date.now();
+    try {
+      vi.setSystemTime(realNow + 11_000);
+      const readers = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+      const reader = readers.body.readers.find((item: Record<string, unknown>) => item.id === 'fx9600-gate-5');
+      expect(reader.online).toBe(false);
+    } finally {
+      vi.setSystemTime(realNow);
+    }
+  });
+
+  it('ignores a heartbeat without antenna details and stores explicit per-port reports', async () => {
+    const before = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    const initial = before.body.readers.find((reader: Record<string, unknown>) => reader.id === 'fx9600-gate-5');
+    expect(initial.antennaStatuses).toEqual({});
+
+    const posted = await request(ctx.app)
+      .post('/api/rfid/fx9600/5/webhook')
+      .send({ antennaStatuses: [{ port: 1, connected: false }, { port: 2, connected: true }, { port: 3, connected: false }, { port: 99, connected: true }] });
+    expect(posted.status).toBe(202);
+
+    const after = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    const updated = after.body.readers.find((reader: Record<string, unknown>) => reader.id === 'fx9600-gate-5');
+    expect(updated.antennaStatuses['1'].connected).toBe(false);
+    expect(updated.antennaStatuses['2'].connected).toBe(true);
+    expect(updated.antennaStatuses['3'].connected).toBe(false);
+    expect(updated.antennaStatuses['99']).toBeUndefined();
+  });
+
+  it('updates physical antenna states from Zebra IoT Connector management heartbeats', async () => {
+    const posted = await request(ctx.app)
+      .post('/api/rfid/fx9600/5/webhook')
+      .send({
+        component: 'RG',
+        type: 'heartbeat',
+        timestamp: '2026-09-23T10:00:00.000+0000',
+        data: { radio_control: { antennas: { '1': 'connected', '2': 'disconnected', '3': 'connected' } } },
+      });
+    expect(posted.status).toBe(202);
+
+    const after = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    const updated = after.body.readers.find((reader: Record<string, unknown>) => reader.id === 'fx9600-gate-5');
+    expect(updated.antennaStatuses['1']).toMatchObject({ connected: true, source: 'antenna_event' });
+    expect(updated.antennaStatuses['2']).toMatchObject({ connected: false, source: 'antenna_event' });
+    expect(updated.antennaStatuses['3']).toMatchObject({ connected: true, source: 'antenna_event' });
+  });
+
+  it('marks an antenna operational when a real FX9600 tag report names that antenna', async () => {
+    const posted = await request(ctx.app)
+      .post('/api/rfid/fx9600/5/webhook')
+      .send([
+        { type: 'SIMPLE', data: { idHex: 'E200001122334455', antenna: 1, channel: 922.25 } },
+        { type: 'SIMPLE', data: { idHex: 'E200009988776655', antenna: 2, channel: 922.25 } },
+      ]);
+    expect(posted.status).toBe(202);
+
+    const after = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    const updated = after.body.readers.find((reader: Record<string, unknown>) => reader.id === 'fx9600-gate-5');
+    expect(updated.antennaStatuses['1']).toMatchObject({ connected: true, source: 'tag_read' });
+    expect(updated.antennaStatuses['2']).toMatchObject({ connected: true, source: 'tag_read' });
+  });
+
+  it('replaces a reader on the same Gate without stale antennas and can restore the old reader later', async () => {
+    const replaced = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fxr90-gate-5')
+      .set(auth(ctx.token))
+      .send({
+        name: 'Zebra FXR90 Gate 5', model: 'FXR90', host: '192.168.1.90',
+        gateNo: 5, antennaCount: 4, heartbeatIntervalSeconds: 1,
+      });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.reader).toMatchObject({ id: 'fxr90-gate-5', model: 'FXR90', antennaCount: 4, antennaStatuses: {} });
+
+    const active = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    expect(active.body.readers.filter((reader: Record<string, unknown>) => Number(reader.gateNo) === 5).map((reader: Record<string, unknown>) => reader.id)).toEqual(['fxr90-gate-5']);
+
+    const genericWebhook = await request(ctx.app)
+      .post('/api/rfid/readers/5/webhook')
+      .send({ antennaStatuses: [{ port: 4, connected: true }, { port: 5, connected: true }] });
+    expect(genericWebhook.status).toBe(202);
+    const fxr90 = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    const fxr90Reader = fxr90.body.readers.find((reader: Record<string, unknown>) => reader.id === 'fxr90-gate-5');
+    expect(fxr90Reader.antennaStatuses['4']).toMatchObject({ connected: true, source: 'antenna_event' });
+    expect(fxr90Reader.antennaStatuses['5']).toBeUndefined();
+
+    const history = await request(ctx.app).get('/api/rfid/fx9600/debug-log').set(auth(ctx.token));
+    expect(history.body.entries.some((entry: Record<string, unknown>) => entry.device === 'fx9600-gate-5')).toBe(true);
+
+    const restored = await request(ctx.app)
+      .put('/api/rfid/fx9600/readers/fx9600-gate-5')
+      .set(auth(ctx.token))
+      .send({
+        name: 'Zebra FX9600 Gate 5', model: 'FX9600', host: '192.168.1.10',
+        gateNo: 5, antennaCount: 8, heartbeatIntervalSeconds: 1,
+      });
+    expect(restored.status).toBe(200);
+    expect(restored.body.reader.antennaStatuses).toEqual({});
+    const activeAgain = await request(ctx.app).get('/api/rfid/fx9600/readers').set(auth(ctx.token));
+    expect(activeAgain.body.readers.filter((reader: Record<string, unknown>) => Number(reader.gateNo) === 5).map((reader: Record<string, unknown>) => reader.id)).toEqual(['fx9600-gate-5']);
   });
 });
 

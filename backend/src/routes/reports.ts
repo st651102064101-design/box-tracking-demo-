@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, events } from '../db/schema.js';
+import { boxes, events, locations } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermissions } from './roles.js';
 import { writeAuditLog } from '../services/audit.js';
 import { bump } from '../lib/bus.js';
 
@@ -38,20 +39,37 @@ import { bump } from '../lib/bus.js';
  */
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
 
 const reportSchema = z.object({
-  kind: z.enum(['missing', 'unreadable_tag', 'damaged']),
-  tag: z.string().trim().toUpperCase(),
+  kind: z.enum(['missing', 'unreadable_tag', 'damaged', 'bin_full']),
+  tag: z.string().trim().toUpperCase().optional(),
+  location: z.object({ wh: z.string().trim().min(1), zone: z.string().trim().optional(), rack: z.string().trim().optional(), shelf: z.string().trim().optional(), slot: z.string().trim().optional() }).optional(),
   note: z.string().trim().max(500).optional().default(''),
 });
 
 reportsRouter.post(
   '/',
-  canWrite,
+  requirePermissions('box.update', 'cycle_count.manage'),
   asyncHandler(async (req, res) => {
     const input = reportSchema.parse(req.body);
     const db = getDb();
+
+    if (input.kind === 'bin_full') {
+      if (!input.location) throw httpError(400, 'ต้องระบุตำแหน่งชั้นวาง', 'location_required');
+      const target = { wh: input.location.wh, zone: input.location.zone ?? '', rack: input.location.rack ?? '', shelf: input.location.shelf ?? '', slot: input.location.slot ?? '' };
+      const rows = await db.select().from(locations);
+      const location = rows.find((row) => row.wh === target.wh && (row.zone ?? '') === target.zone && (row.rack ?? '') === target.rack && (row.shelf ?? '') === target.shelf && (row.slot ?? '') === target.slot);
+      if (!location) throw httpError(404, 'ไม่พบตำแหน่งนี้ในข้อมูลคลัง', 'location_not_found');
+      const ts = new Date();
+      const data = { ...(location.data as Record<string, unknown>), reportedFullAt: ts.toISOString(), reportedFullBy: req.user!.username };
+      await db.update(locations).set({ data, updatedAt: ts }).where(eq(locations.code, location.code));
+      const eventData = { dir: 'bin_full', tag: null, location: target, flaggedLocationCode: location.code, ts: ts.toISOString(), recorder: req.user!.username, note: input.note };
+      await db.insert(events).values({ ts, data: eventData });
+      await writeAuditLog(db, { action: 'แจ้งช่องจัดเก็บเต็ม', actor: req.user!.username, itemId: location.code, itemName: location.code, before: location.data, after: data });
+      bump(req.get('X-Client-Id'));
+      return res.json(eventData);
+    }
+    if (!input.tag) throw httpError(400, 'ต้องระบุรหัสกล่อง', 'tag_required');
 
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, input.tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
@@ -141,7 +159,7 @@ const resolveSchema = z.object({
  */
 reportsRouter.post(
   '/resolve',
-  canWrite,
+  requirePermissions('box.update', 'overdue.manage'),
   asyncHandler(async (req, res) => {
     const input = resolveSchema.parse(req.body);
     const db = getDb();

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
+import 'pda_state_codec.dart';
 
 /// Thrown for any non-2xx API response, carrying the backend's Thai message
 /// (the Express error middleware returns `{ error, code }`).
@@ -53,10 +55,16 @@ class ApiClient {
           'Authorization': 'Bearer $token',
       };
 
-  dynamic _decode(http.Response r) {
+  Future<dynamic> _decode(http.Response r, {bool pdaState = false}) async {
     dynamic body;
     try {
-      body = r.body.isEmpty ? null : jsonDecode(r.body);
+      if (r.body.isEmpty) {
+        body = null;
+      } else if (pdaState && r.statusCode >= 200 && r.statusCode < 300) {
+        body = await compute(decodePdaState, r.body);
+      } else {
+        body = jsonDecode(r.body);
+      }
     } catch (_) {
       body = null;
     }
@@ -81,10 +89,11 @@ class ApiClient {
   /// Runs [send] with the current headers; on a 401 refreshes the token once
   /// and runs it again. [send] is a closure rather than a prepared request so
   /// the retry picks up the *new* token instead of replaying the stale one.
-  Future<dynamic> _send(Future<http.Response> Function() send) async {
+  Future<dynamic> _send(Future<http.Response> Function() send,
+      {bool pdaState = false}) async {
     final r = await send().timeout(_timeout);
     if (r.statusCode != 401 || _refreshing || reauthenticate == null) {
-      return _decode(r);
+      return _decode(r, pdaState: pdaState);
     }
 
     _refreshing = true;
@@ -97,7 +106,7 @@ class ApiClient {
       _refreshing = false;
     }
     if (!refreshed) return _decode(r); // throws the original 401
-    return _decode(await send().timeout(_timeout));
+    return _decode(await send().timeout(_timeout), pdaState: pdaState);
   }
 
   Future<bool> health() async {
@@ -107,6 +116,31 @@ class ApiClient {
     } catch (_) {
       return false;
     }
+  }
+
+  /// POST /api/devices/heartbeat — records that this authenticated handheld
+  /// is reachable. The API derives identity from its bearer token, so this
+  /// method deliberately has no caller-supplied device id.
+  Future<void> heartbeatDevice({
+    required String name,
+    String? model,
+    String? ipAddress,
+    String? warehouseId,
+    int? gateNo,
+  }) async {
+    await _send(() => http.post(
+          _u('/api/devices/heartbeat'),
+          headers: _headers,
+          body: jsonEncode({
+            'name': name,
+            if (model != null && model.isNotEmpty) 'model': model,
+            if (ipAddress != null && ipAddress.isNotEmpty)
+              'ipAddress': ipAddress,
+            if (warehouseId != null && warehouseId.isNotEmpty)
+              'warehouseId': warehouseId,
+            if (gateNo != null && gateNo > 0) 'gateNo': gateNo,
+          }),
+        ));
   }
 
   /// POST /api/auth/login -> { token, user }
@@ -119,15 +153,18 @@ class ApiClient {
             headers: _headers,
             body: jsonEncode({'username': username, 'password': password}))
         .timeout(_timeout);
-    final body = _decode(r) as Map<String, dynamic>;
+    final body = await _decode(r) as Map<String, dynamic>;
     token = body['token'] as String?;
     return body;
   }
 
-  /// GET /api/state -> full S snapshot
-  Future<Map<String, dynamic>> getState() async =>
-      await _send(() => http.get(_u('/api/state'), headers: _headers))
-          as Map<String, dynamic>;
+  /// GET /api/state/pda -> bounded snapshot for the handheld.
+  Future<Map<String, dynamic>> getState() async {
+    return await _send(
+      () => http.get(_u('/api/state/pda'), headers: _headers),
+      pdaState: true,
+    ) as Map<String, dynamic>;
+  }
 
   /// PUT /api/state -> replace whole state (used by the demo seed)
   Future<void> putState(Map<String, dynamic> state) async {
@@ -231,7 +268,7 @@ class ApiClient {
         .get(_u('/api/boxes/$code'), headers: _headers)
         .timeout(_timeout);
     if (r.statusCode == 404) return null;
-    return _decode(r) as Map<String, dynamic>;
+    return await _decode(r) as Map<String, dynamic>;
   }
 
   /// POST /api/boxes/:tag/rfid { rfidTid, rfidEpc, replace? } — attach (or,

@@ -11,20 +11,14 @@ import 'package:smarttrace_pda/services/rfid_service.dart';
 
 import 'app_controller_test.dart' show FakeApi, box, fixtureEmployees;
 
-/// Covers the grid rewrite of TrackScreen._suggestions: a search that
-/// matches a hundred-plus boxes has to actually show all of them (no silent
-/// cap), laid out as a grid, not a scrolling wall of single-column rows.
-/// Also exercises AppController.onTrackChanged, which was missing
-/// notifyListeners() entirely — the live-typeahead suggestions this test
-/// depends on had never actually rebuilt the screen on a keystroke before
-/// that fix.
-
-/// [count] boxes, all matching the query "BOX" — the scenario from the
-/// request ("สมมติยิงเจอะ 100 ก็แสดงไปเลย 100").
 Map<String, dynamic> _stateWithManyBoxes(int count) => {
       'boxes': {
         for (var i = 1; i <= count; i++)
-          'BOX-${i.toString().padLeft(3, '0')}': box('BOX-${i.toString().padLeft(3, '0')}', 'warehouse'),
+          'BOX-${i.toString().padLeft(3, '0')}': box(
+            'BOX-${i.toString().padLeft(3, '0')}',
+            i.isEven ? 'out' : 'warehouse',
+            lastSeenAt: '2026-09-23T10:${(i % 60).toString().padLeft(2, '0')}:00',
+          ),
       },
       'customers': <String, dynamic>{},
       'boxtypes': {
@@ -56,86 +50,95 @@ Future<AppController> _controllerWith(int boxCount) async {
   prefs.deviceGate = '1';
   prefs.deviceConfigured = true;
   prefs.token = 'device-token';
+  c.debugHasIntegratedRfid = false;
   c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
   return c;
+}
+
+Future<Widget> _wrap(AppController c) async {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<AppController>.value(value: c),
+      ChangeNotifierProvider<LocaleController>.value(
+          value: LocaleController(c.prefs)),
+    ],
+    child: const MaterialApp(home: Scaffold(body: TrackScreen())),
+  );
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('typing a query rebuilds the screen with live suggestions', (tester) async {
+  testWidgets('TC52 track screen matches the scan-or-type layout',
+      (tester) async {
     final c = await _controllerWith(5);
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AppController>.value(value: c),
-          ChangeNotifierProvider<LocaleController>.value(
-              value: LocaleController(c.prefs)),
-        ],
-        child: const MaterialApp(home: Scaffold(body: TrackScreen())),
-      ),
-    );
+    await tester.pumpWidget(await _wrap(c));
     await tester.pumpAndSettle();
+
+    expect(find.text('กดปุ่ม SCANNER ที่เครื่อง'), findsOneWidget);
+    expect(find.text('เพื่อยิงบาร์โค้ดได้'), findsOneWidget);
+    expect(find.text('หรือ'), findsOneWidget);
+    expect(find.text('พิมพ์รหัสกล่อง'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('ค้นหา'), findsNothing);
+    expect(find.text('ประวัติการสแกนล่าสุด'), findsOneWidget);
+    expect(find.text('บาร์โค้ด · Zebra DataWedge SDK'), findsNothing);
+    expect(find.byType(GridView), findsNothing);
+  });
+
+  testWidgets('พิมพ์รหัสกล่อง reveals the input and search button',
+      (tester) async {
+    final c = await _controllerWith(5);
+    await tester.pumpWidget(await _wrap(c));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.text('พิมพ์รหัสกล่อง'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('ค้นหา'), findsOneWidget);
+    expect(
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+        isTrue);
+  });
+
+  testWidgets('typing a query rebuilds the screen with live suggestions',
+      (tester) async {
+    final c = await _controllerWith(5);
+    await tester.pumpWidget(await _wrap(c));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('พิมพ์รหัสกล่อง'));
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('พบ 5 กล่อง'), findsNothing, reason: 'nothing typed yet');
     await tester.enterText(find.byType(TextField), 'BOX');
-    await tester.pump(); // onTrackChanged -> notifyListeners -> rebuild
+    await tester.pump();
 
     expect(find.text('พบ 5 กล่อง'), findsOneWidget);
-    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('BOX-001'), findsOneWidget);
+    expect(find.byType(GridView), findsNothing);
   });
 
-  testWidgets('a search matching 100 boxes shows all 100 as grid cards, uncapped', (tester) async {
+  testWidgets('a search matching 100 boxes shows all 100, uncapped',
+      (tester) async {
     final c = await _controllerWith(100);
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AppController>.value(value: c),
-          ChangeNotifierProvider<LocaleController>.value(
-              value: LocaleController(c.prefs)),
-        ],
-        child: const MaterialApp(home: Scaffold(body: TrackScreen())),
-      ),
-    );
+    await tester.pumpWidget(await _wrap(c));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('พิมพ์รหัสกล่อง'));
+    await tester.pump();
+    await tester.pump();
     await tester.enterText(find.byType(TextField), 'BOX');
     await tester.pump();
 
-    expect(c.trackSuggestions, hasLength(100), reason: 'the model itself must not cap the match list');
+    expect(c.trackSuggestions, hasLength(100),
+        reason: 'the model itself must not cap the match list');
     expect(find.text('พบ 100 กล่อง'), findsOneWidget);
-
-    final grid = tester.widget<GridView>(find.byType(GridView));
-    expect(grid.childrenDelegate.estimatedChildCount, 100,
-        reason: 'every match must reach the grid — no silent truncation');
-
-    final delegate = grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(delegate.crossAxisCount, inInclusiveRange(3, 10),
-        reason: 'column count must stay in the 3-10 range requested — never crushed, never sparse');
-  });
-
-  testWidgets('column count adapts to width but never drops below 3 or above 10', (tester) async {
-    final c = await _controllerWith(30);
-    await tester.binding.setSurfaceSize(const Size(320, 640)); // a narrow handheld
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AppController>.value(value: c),
-          ChangeNotifierProvider<LocaleController>.value(
-              value: LocaleController(c.prefs)),
-        ],
-        child: const MaterialApp(home: Scaffold(body: TrackScreen())),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField), 'BOX');
-    await tester.pump();
-
-    final delegate = tester
-        .widget<GridView>(find.byType(GridView))
-        .gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(delegate.crossAxisCount, inInclusiveRange(3, 10));
+    expect(find.text('BOX-001'), findsOneWidget);
+    expect(find.text('BOX-100'), findsOneWidget);
   });
 }

@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { boxes, boxTypes, locations, warehouses } from '../db/schema.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermissions } from './roles.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -13,7 +14,7 @@ import { bump } from '../lib/bus.js';
 /** Read-only box queries (real reporting API alongside the state bridge). */
 export const boxesRouter = Router();
 boxesRouter.use(requireAuth);
-const canWrite = requireRole('admin', 'staff');
+const canViewBoxes = requirePermissions('box.view');
 
 /**
  * Count-by-status only — backs the filter-tab badges (see legacy.html's
@@ -34,6 +35,7 @@ const canWrite = requireRole('admin', 'staff');
 const STATUS_BUCKET = sql<string>`case when ${boxes.status} = 'pending' and ${boxes.labeled} = true then 'pendingPutaway' else ${boxes.status} end`;
 boxesRouter.get(
   '/status-summary',
+  canViewBoxes,
   asyncHandler(async (_req, res) => {
     const db = getDb();
     const rows = await db
@@ -60,6 +62,7 @@ boxesRouter.get(
  */
 boxesRouter.get(
   '/suggest-location',
+  requirePermissions('warehouse.view', 'warehouse.manage', 'box.view'),
   asyncHandler(async (req, res) => {
     const wh = typeof req.query.wh === 'string' ? req.query.wh.trim() : '';
     if (!wh) throw httpError(400, 'ต้องระบุคลัง', 'wh_required');
@@ -95,6 +98,7 @@ boxesRouter.get(
 
 boxesRouter.get(
   '/',
+  canViewBoxes,
   asyncHandler(async (req, res) => {
     const db = getDb();
     const conds: SQL[] = [];
@@ -143,6 +147,7 @@ boxesRouter.get(
  */
 boxesRouter.get(
   '/next-tag',
+  requirePermissions('box.create', 'box.view'),
   asyncHandler(async (req, res) => {
     const typeId = typeof req.query.type === 'string' ? req.query.type : '';
     if (!typeId) return res.json({ tag: null });
@@ -231,7 +236,7 @@ const createBoxSchema = z.object({
  */
 boxesRouter.post(
   '/',
-  canWrite,
+  requirePermissions('box.create'),
   asyncHandler(async (req, res) => {
     const input = createBoxSchema.parse(req.body);
     const db = getDb();
@@ -316,7 +321,7 @@ boxesRouter.post(
  */
 boxesRouter.post(
   '/:tag/label',
-  canWrite,
+  requirePermissions('box.print', 'box.update'),
   asyncHandler(async (req, res) => {
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
@@ -360,7 +365,7 @@ const putawaySchema = z.object({
  */
 boxesRouter.post(
   '/:tag/putaway',
-  canWrite,
+  requirePermissions('warehouse.manage', 'box.update'),
   asyncHandler(async (req, res) => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
@@ -411,6 +416,7 @@ boxesRouter.post(
  */
 boxesRouter.get(
   '/:code',
+  requirePermissions('box.detail', 'box.view'),
   asyncHandler(async (req, res) => {
     const row = await resolveBoxByCode(getDb(), req.params.code);
     if (!row) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
@@ -425,7 +431,7 @@ boxesRouter.get(
  */
 boxesRouter.post(
   '/:tag/rfid',
-  canWrite,
+  requirePermissions('rfid.manage'),
   asyncHandler(async (req, res) => {
     const input = rfidAssociateSchema.parse(req.body);
     const result = await associateTag(getDb(), {
@@ -445,7 +451,7 @@ boxesRouter.post(
 /** Detaches whatever RFID tag a box currently carries. */
 boxesRouter.delete(
   '/:tag/rfid',
-  canWrite,
+  requirePermissions('rfid.manage'),
   asyncHandler(async (req, res) => {
     const result = await detachTag(getDb(), req.params.tag, req.user!.username);
     bump(req.get('X-Client-Id'));
@@ -480,7 +486,7 @@ const holdSchema = z.object({
  */
 boxesRouter.post(
   '/:tag/hold',
-  canWrite,
+  requirePermissions('box.update'),
   asyncHandler(async (req, res) => {
     const input = holdSchema.parse(req.body);
     const db = getDb();

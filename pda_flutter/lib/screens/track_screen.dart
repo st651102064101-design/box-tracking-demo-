@@ -18,16 +18,20 @@ class TrackScreen extends StatefulWidget {
 class _TrackScreenState extends State<TrackScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
+  bool _showAllHistory = false;
+  /// The code field stays hidden until the operator taps พิมพ์รหัสกล่อง —
+  /// opening this screen must not steal focus or raise the keyboard.
+  bool _showTypeField = false;
 
-  /// No submit button — typing already filters live (see trackSuggestions),
-  /// and a scan should never need a tap either. Enter still resolves
-  /// immediately when a scanner's trailing keystroke (or the keyboard's
-  /// Go/Done) sends it; this debounce is the fallback for scanners on this
-  /// terminal that don't send that trailing Enter (see the same pattern in
-  /// scan_screen.dart).
+  /// Typing already filters live (see trackSuggestions). Enter still
+  /// resolves immediately when a scanner's trailing keystroke (or the
+  /// keyboard's Go/Done) sends it; this debounce is the fallback for
+  /// scanners on this terminal that don't send that trailing Enter.
   Timer? _autoSearchTimer;
   static const _autoSearchDelay = Duration(milliseconds: 180);
   static const _autoSearchMinLen = 3;
+  static const _historyPreview = 3;
+  static const _searchBlue = Color(0xFF2563EB);
 
   /// Length after the previous onChanged — same trick login_screen.dart's
   /// badge field uses. A keyboard-wedge scan on this hardware often lands as
@@ -39,10 +43,11 @@ class _TrackScreenState extends State<TrackScreen> {
   /// burst lands, before the second one can arrive on top of it.
   int _prevLen = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  void _revealTypeField() {
+    if (!_showTypeField) setState(() => _showTypeField = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
   }
 
   @override
@@ -109,6 +114,12 @@ class _TrackScreenState extends State<TrackScreen> {
         ? Icons.nfc
         : Icons.qr_code_scanner;
 
+    final history = c.recentScanHistory;
+    final historyShown = _showAllHistory
+        ? history
+        : history.take(_historyPreview).toList();
+    final barcode = c.scanInputMode == ScanInputMode.barcode;
+
     return AutoHideHeader(
       header: StickyHeader(
         onBack: c.backToHome,
@@ -121,122 +132,36 @@ class _TrackScreenState extends State<TrackScreen> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(16, 15, 16, bottom + 20),
               children: [
-                _inputModeToggle(c, loc),
-                const SizedBox(height: 11),
-                // search box — hidden entirely in RFID mode (see the toggle
-                // above): nothing to type when the reader resolves the scan
-                // directly through AppController._onReaderTag.
-                if (c.scanInputMode == ScanInputMode.barcode)
-                  TextField(
-                    controller: _ctrl,
-                    focusNode: _focus,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: (_) => _onChanged(c),
-                    onSubmitted: (_) => _search(c),
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace'),
-                    decoration: InputDecoration(
-                      hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
-                      hintStyle: TextStyle(
-                          fontFamily: 'Roboto', color: C.faint, fontSize: 15),
-                      prefixIcon: Icon(Icons.search, color: C.muted),
-                      isDense: true,
-                      filled: true,
-                      fillColor: C.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide:
-                            BorderSide(color: C.fieldBorder, width: 1.5),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide:
-                            BorderSide(color: C.fieldBorder, width: 1.5),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: C.ink, width: 1.5),
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 22),
-                    decoration: BoxDecoration(
-                      color: C.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: C.fieldBorder, width: 1.5),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(Icons.wifi_tethering, size: 22, color: C.muted),
-                        const SizedBox(height: 6),
-                        Text(loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID'),
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: C.muted,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 14),
-                // Live suggestions as soon as the first character lands —
-                // scanning still works the same (a gun sends the full code +
-                // Enter in one burst, resolving straight to the card below),
-                // this is purely for someone typing by hand who shouldn't have
-                // to get the whole code exactly right before seeing anything.
+                if (c.hasIntegratedRfid) ...[
+                  _inputModeToggle(c, loc),
+                  const SizedBox(height: 12),
+                ],
+                _scanPromptCard(c, loc),
+                if (barcode) ...[
+                  const SizedBox(height: 16),
+                  _orDivider(loc),
+                  const SizedBox(height: 16),
+                  _typeCodeButton(loc),
+                  if (_showTypeField) ...[
+                    const SizedBox(height: 12),
+                    _searchField(c, loc),
+                    const SizedBox(height: 12),
+                    _searchButton(c, loc),
+                  ],
+                ],
+                const SizedBox(height: 18),
                 if (hits.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2, bottom: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text('${loc.t('พบ')} ${hits.length} $hitsUnit',
-                              style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: C.muted)),
-                        ),
-                        // Only real once there's something to clear — a
-                        // sweep in RFID mode (or a leftover barcode search)
-                        // that picked up the wrong pile previously had no
-                        // way back to empty short of leaving the screen.
-                        GestureDetector(
-                          onTap: c.clearTrackHits,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.close, size: 14, color: C.muted),
-                              const SizedBox(width: 3),
-                              Text(loc.t('ล้าง'),
-                                  style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: C.muted)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  _sectionHead(
+                    '${loc.t('พบ')} ${hits.length} $hitsUnit',
+                    action: loc.t('ล้าง'),
+                    onAction: c.clearTrackHits,
                   ),
                   _hitsList(c, hits, hitsIcon, loc),
                   if (box != null) const SizedBox(height: 14),
                 ] else if (box == null && c.trackSuggestions.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2, bottom: 8),
-                    child: Text(
-                        '${loc.t('พบ')} ${c.trackSuggestions.length} ${loc.t('กล่อง')}',
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: C.muted)),
-                  ),
-                  _suggestions(c),
+                  _sectionHead(
+                      '${loc.t('พบ')} ${c.trackSuggestions.length} ${loc.t('กล่อง')}'),
+                  _suggestions(c, loc),
                 ] else if (c.trackTried && box == null)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -251,9 +176,208 @@ class _TrackScreenState extends State<TrackScreen> {
                     ),
                   ),
                 if (box != null) _card(c, box, loc),
+                if (box == null &&
+                    c.trackSuggestions.isEmpty &&
+                    hits.isEmpty &&
+                    history.isNotEmpty) ...[
+                  _sectionHead(
+                    loc.t('ประวัติการสแกนล่าสุด'),
+                    icon: Icons.schedule,
+                    action: history.length > _historyPreview
+                        ? loc.t(_showAllHistory ? 'ย่อ' : 'ดูทั้งหมด')
+                        : null,
+                    onAction: history.length > _historyPreview
+                        ? () => setState(
+                            () => _showAllHistory = !_showAllHistory)
+                        : null,
+                  ),
+                  _historyList(c, historyShown, loc),
+                ],
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scanPromptCard(AppController c, LocaleController loc) {
+    final rfid = c.scanInputMode == ScanInputMode.rfid;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 26),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: C.border),
+      ),
+      child: Column(
+        children: [
+          Icon(rfid ? Icons.wifi_tethering : Icons.qr_code_2,
+              size: 56, color: C.ink2),
+          const SizedBox(height: 14),
+          Text(
+            rfid
+                ? loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID')
+                : loc.t('กดปุ่ม SCANNER ที่เครื่อง'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          if (!rfid) ...[
+            const SizedBox(height: 4),
+            Text(loc.t('เพื่อยิงบาร์โค้ดได้'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13.5, color: C.muted)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _orDivider(LocaleController loc) {
+    return Row(
+      children: [
+        Expanded(child: Divider(color: C.border2, height: 1)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(loc.t('หรือ'),
+              style: TextStyle(fontSize: 13, color: C.muted)),
+        ),
+        Expanded(child: Divider(color: C.border2, height: 1)),
+      ],
+    );
+  }
+
+  Widget _typeCodeButton(LocaleController loc) {
+    return Material(
+      color: C.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _revealTypeField,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border2),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.keyboard_alt_outlined, size: 20, color: C.ink2),
+              const SizedBox(width: 8),
+              Text(loc.t('พิมพ์รหัสกล่อง'),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchField(AppController c, LocaleController loc) {
+    return TextField(
+      controller: _ctrl,
+      focusNode: _focus,
+      textCapitalization: TextCapitalization.characters,
+      autocorrect: false,
+      enableSuggestions: false,
+      onChanged: (_) => _onChanged(c),
+      onSubmitted: (_) => _search(c),
+      style: const TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+      decoration: InputDecoration(
+        hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
+        hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+        suffixIcon: _ctrl.text.isEmpty
+            ? null
+            : IconButton(
+                icon: Icon(Icons.cancel, size: 20, color: C.faint),
+                onPressed: () {
+                  _ctrl.clear();
+                  _prevLen = 0;
+                  c.onTrackChanged('');
+                },
+              ),
+        isDense: true,
+        filled: true,
+        fillColor: C.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: C.fieldBorder, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: _searchBlue, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchButton(AppController c, LocaleController loc) {
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: _searchBlue,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: () => _search(c),
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.search, size: 20, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(loc.t('ค้นหา'),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHead(String title,
+      {IconData? icon, String? action, VoidCallback? onAction}) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 10, top: 4),
+      child: Row(
+        children: [
+          if (icon != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(icon, size: 16, color: C.muted),
+            ),
+          Expanded(
+            child: Text(title,
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: C.ink2)),
+          ),
+          if (action != null && onAction != null)
+            GestureDetector(
+              onTap: onAction,
+              child: Text('$action ›',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _searchBlue)),
+            ),
         ],
       ),
     );
@@ -275,75 +399,91 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  /// A search can genuinely match a hundred-plus boxes (see
-  /// AppController.trackSuggestions, uncapped on purpose) — a vertical list
-  /// of a hundred rows means a hundred rows of scrolling before the operator
-  /// even sees whether their box is in there. A grid of small ID cards puts
-  /// far more of the result set on screen at once; column count adapts to
-  /// the available width but stays clamped 3-10 so cards on a wide screen
-  /// don't shrink to unreadable and cards on a narrow one don't get crushed
-  /// three-to-a-row when only three fit anyway.
-  Widget _suggestions(AppController c) {
-    final tags = c.trackSuggestions;
-    final S = c.S;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = (constraints.maxWidth / 92).floor().clamp(3, 10);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: tags.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 0.86,
-          ),
-          itemBuilder: (context, i) {
-            final tag = tags[i];
-            final b = S?.box(tag);
-            final sm = b != null ? StatusMeta.of(b.status) : null;
-            return InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => _tapSuggestion(c, tag),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                decoration: BoxDecoration(
-                  color: C.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: sm?.color.withValues(alpha: 0.35) ?? C.border),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.inventory_2_outlined, size: 17, color: C.muted),
-                    const SizedBox(height: 6),
-                    Text(tag,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+  Widget _suggestions(AppController c, LocaleController loc) {
+    return _boxRows(
+      c,
+      loc,
+      c.trackSuggestions.map((tag) => c.S?.box(tag)).whereType<Box>().toList(),
+      onTap: (b) => _tapSuggestion(c, b.tag),
+    );
+  }
+
+  Widget _historyList(
+      AppController c, List<Box> boxes, LocaleController loc) {
+    return _boxRows(c, loc, boxes, onTap: (b) => c.viewTrackHit(b.tag));
+  }
+
+  Widget _boxRows(AppController c, LocaleController loc, List<Box> boxes,
+      {required ValueChanged<Box> onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: List.generate(boxes.length, (i) {
+          final b = boxes[i];
+          return InkWell(
+            onTap: () => onTap(b),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                border: i == boxes.length - 1
+                    ? null
+                    : Border(bottom: BorderSide(color: C.border)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2_outlined, size: 22, color: C.ink2),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(b.tag,
                         style: const TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 15.5,
                             fontWeight: FontWeight.w700,
                             fontFamily: 'monospace')),
-                    if (sm != null) ...[
-                      const SizedBox(height: 5),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                            color: sm.color, shape: BoxShape.circle),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                  _statusChip(b.status, loc),
+                  const SizedBox(width: 10),
+                  Text(c.fmtTsThai(b.lastSeenAt),
+                      style: TextStyle(fontSize: 11.5, color: C.muted)),
+                ],
               ),
-            );
-          },
-        );
-      },
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _statusChip(String status, LocaleController loc) {
+    final inWh = status == 'warehouse';
+    final out = status == 'out';
+    final label = inWh
+        ? loc.t('ในคลัง')
+        : out
+            ? loc.t('นอกคลัง')
+            : StatusMeta.of(status).label;
+    final color = inWh
+        ? const Color(0xFF16A34A)
+        : out
+            ? C.orange
+            : StatusMeta.of(status).color;
+    final bg = inWh
+        ? const Color(0xFFDCFCE7)
+        : out
+            ? C.orangeBg
+            : StatusMeta.of(status).bg;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 

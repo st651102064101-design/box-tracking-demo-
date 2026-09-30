@@ -27,6 +27,7 @@ const _vehicleTypes = [
 
 class _ScanScreenState extends State<ScanScreen>
     with SingleTickerProviderStateMixin {
+  final _customerFieldKey = GlobalKey();
   final _plateCtrl = TextEditingController();
   final _driverCtrl = TextEditingController();
   final _outVtypeOtherCtrl = TextEditingController();
@@ -42,6 +43,8 @@ class _ScanScreenState extends State<ScanScreen>
   /// ValueKey), so this never needs to be cleared by hand between Gate In
   /// and Gate Out.
   bool _onScanStep = false;
+  bool _customerAutoOpenScheduled = false;
+  int _customerAutoOpenRetries = 0;
 
   /// True while the reader's trigger is actually held down. Switches the
   /// scanner panel's status line to "กำลังอ่าน…" — the panel itself, count
@@ -110,6 +113,72 @@ class _ScanScreenState extends State<ScanScreen>
     c.gateFormStep = !v;
   }
 
+  void _scheduleCustomerPicker(AppController c, LocaleController loc) {
+    if (_customerAutoOpenScheduled ||
+        c.customerList.isEmpty ||
+        c.outCustomer.isNotEmpty) {
+      return;
+    }
+    _customerAutoOpenScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _onScanStep || c.mode != 'out') return;
+      final anchor = _customerFieldKey.currentContext?.findRenderObject();
+      if (anchor is! RenderBox || !anchor.hasSize) {
+        // The form may still be entering through AnimatedSwitcher. Do not
+        // permanently consume its one automatic opening before it is laid out.
+        _customerAutoOpenScheduled = false;
+        if (_customerAutoOpenRetries++ < 3) {
+          Future<void>.delayed(const Duration(milliseconds: 50), () {
+            if (mounted && !_onScanStep && c.mode == 'out') {
+              _scheduleCustomerPicker(c, loc);
+            }
+          });
+        }
+        return;
+      }
+      unawaited(_showCustomerPicker(c, loc));
+    });
+  }
+
+  Future<void> _showCustomerPicker(
+      AppController c, LocaleController loc) async {
+    if (c.customerList.isEmpty) return;
+    final fieldContext = _customerFieldKey.currentContext;
+    final renderObject = fieldContext?.findRenderObject();
+    if (fieldContext == null ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize) {
+      return;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final size = renderObject.size;
+    final screen = MediaQuery.sizeOf(context);
+    final picked = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        origin.dx,
+        origin.dy + size.height,
+        screen.width - origin.dx - size.width,
+        screen.height - origin.dy - size.height,
+      ),
+      constraints: BoxConstraints(maxWidth: size.width),
+      color: C.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: c.customerList.map((customer) {
+        final id = (customer['id'] ?? '').toString();
+        final name = (customer['name'] ?? '').toString();
+        return PopupMenuItem<String>(
+          value: id,
+          child: SizedBox(
+            width: size.width - 32,
+            child: Text('$id · $name', overflow: TextOverflow.ellipsis),
+          ),
+        );
+      }).toList(),
+    );
+    if (picked != null && mounted) c.setOutCustomer(picked);
+  }
+
   @override
   void dispose() {
     _successTimer?.cancel();
@@ -138,7 +207,11 @@ class _ScanScreenState extends State<ScanScreen>
     }
     await c.doCommit();
     if (!mounted) return;
-    if (c.queue.isEmpty) setState(() => _setOnScanStep(c, false));
+    if (c.queue.isEmpty) {
+      _customerAutoOpenScheduled = false;
+      _customerAutoOpenRetries = 0;
+      setState(() => _setOnScanStep(c, false));
+    }
     // A putaway task means the commit landed and these boxes now have to be
     // physically walked to a shelf — see the putaway step in build().
     if (c.putawayTask != null) setState(() => _putawayConfirmed = null);
@@ -555,16 +628,12 @@ class _ScanScreenState extends State<ScanScreen>
           // disabled commit button sitting there before the first scan lands
           // invites a tap and a "why won't this work" moment.
           if (!_onScanStep || c.queue.isNotEmpty)
-            Container(
+            Padding(
+              key: const Key('scan-primary-footer'),
               padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [C.bg, Color(0x00F5F5F7)],
-                  stops: [0.68, 1],
-                ),
-              ),
+              // The button sits in the Column's own space; it needs no
+              // painted panel behind it. A footer surface showed as a
+              // horizontal strip on the handheld above the action.
               child: PrimaryButton(
                 label: loc.t(!_onScanStep
                     ? 'ถัดไป'
@@ -595,25 +664,46 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Widget _outForm(AppController c, LocaleController loc) {
+    // On outbound entry, present the customer choices immediately instead of
+    // making an operator discover and tap the dropdown first.
+    _scheduleCustomerPicker(c, loc);
+    Map<String, dynamic>? selected;
+    for (final customer in c.customerList) {
+      if ((customer['id'] ?? '').toString() == c.outCustomer) {
+        selected = customer;
+        break;
+      }
+    }
+    final selectedLabel = selected == null
+        ? loc.t('— เลือกลูกค้า —')
+        : '${selected['id']} · ${selected['name'] ?? ''}';
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FieldLabel(loc.t('ลูกค้าปลายทาง *')),
-          DropdownButtonFormField<String>(
-            value: c.outCustomer.isEmpty ? null : c.outCustomer,
-            isExpanded: true,
-            decoration: pdaInput(loc.t('— เลือกลูกค้า —'), radius: 12),
-            hint: Text(loc.t('— เลือกลูกค้า —'),
-                style: TextStyle(color: C.faint)),
-            items: c.customerList.map((cust) {
-              final id = (cust['id'] ?? '').toString();
-              return DropdownMenuItem(
-                  value: id,
-                  child: Text('$id · ${cust['name'] ?? ''}',
-                      overflow: TextOverflow.ellipsis));
-            }).toList(),
-            onChanged: (v) => c.setOutCustomer(v ?? ''),
+          Semantics(
+            button: true,
+            label: loc.t('ลูกค้าปลายทาง'),
+            child: InkWell(
+              key: _customerFieldKey,
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showCustomerPicker(c, loc),
+              child: InputDecorator(
+                decoration: pdaInput('', radius: 12).copyWith(
+                  suffixIcon: Icon(Icons.arrow_drop_down, color: C.muted),
+                ),
+                child: Text(
+                  selectedLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected == null ? C.faint : C.ink,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 11),
           Row(
@@ -648,7 +738,7 @@ class _ScanScreenState extends State<ScanScreen>
           const SizedBox(height: 11),
           FieldLabel(loc.t('ประเภทรถ')),
           DropdownButtonFormField<String>(
-            value: c.outVehicleType.isEmpty ? null : c.outVehicleType,
+            initialValue: c.outVehicleType.isEmpty ? null : c.outVehicleType,
             isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
             hint: Text(loc.t('— เลือกประเภทรถ —'),
@@ -711,7 +801,7 @@ class _ScanScreenState extends State<ScanScreen>
           const SizedBox(height: 11),
           FieldLabel(loc.t('ประเภทรถ')),
           DropdownButtonFormField<String>(
-            value: c.inVehicleType.isEmpty ? null : c.inVehicleType,
+            initialValue: c.inVehicleType.isEmpty ? null : c.inVehicleType,
             isExpanded: true,
             decoration: pdaInput(loc.t('— เลือกประเภทรถ —'), radius: 12),
             hint: Text(loc.t('— เลือกประเภทรถ —'),
@@ -877,7 +967,10 @@ class _ScanScreenState extends State<ScanScreen>
     late Color col, bg, bd;
     switch (r.kind) {
       case ResultKind.ok:
-        col = C.limeDeep;
+        // limeDeep is intentionally dark for button text, but it disappears
+        // against the dark lime surface used by this chip in dark mode.
+        // limeText adapts per theme and stays legible in both Thai and English.
+        col = C.limeText;
         bg = C.limeBg;
         bd = C.limeBorder;
         break;

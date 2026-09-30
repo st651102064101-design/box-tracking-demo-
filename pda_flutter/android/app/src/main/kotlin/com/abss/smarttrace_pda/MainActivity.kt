@@ -16,7 +16,11 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        val controller = RfidReaderController(applicationContext)
+        // Zebra's TC501/701 QC_SERIAL transport binds through the activity
+        // context (the vendor connection guide constructs Readers(this,
+        // QC_SERIAL)). Passing only applicationContext can leave its QCHelper
+        // uninitialized and fail RFIDReader.connect() with COMM_OPEN_ERROR.
+        val controller = RfidReaderController(this)
         rfid = controller
         MethodChannel(messenger, "smarttrace/rfid").setMethodCallHandler(controller)
         EventChannel(messenger, "smarttrace/rfid/events").setStreamHandler(controller)

@@ -237,6 +237,31 @@ export const inventory = pgTable('inventory', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ─── handheld device presence ────────────────────────────────────────────
+ * A terminal reports its own heartbeat using its already-authenticated
+ * service account. This is deliberately separate from audit/event history:
+ * presence is an ephemeral operational fact, not a movement and not a person.
+ */
+export const devicePresence = pgTable('device_presence', {
+  /** The authenticated device/service-account username, never a client-chosen id. */
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  model: text('model'),
+  ipAddress: text('ip_address'),
+  warehouseId: text('warehouse_id'),
+  gateNo: integer('gate_no'),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Small, versioned settings bags for legacy screens that are not part of the
+ * shared inventory snapshot. `key` is namespaced (for example `ui:admin`). */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  data: jsonb('data').notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* ─── cycle counts (ตรวจนับ) ───────────────────────────────────────────────
  * A stock-take session over one warehouse (optionally narrowed to one zone).
  * `expected` is frozen at open time rather than recomputed on close: the
@@ -300,6 +325,8 @@ export type Schema = {
   doRecords: typeof doRecords;
   putaway: typeof putaway;
   inventory: typeof inventory;
+  devicePresence: typeof devicePresence;
+  appSettings: typeof appSettings;
   cycleCounts: typeof cycleCounts;
   events: typeof events;
   auditLog: typeof auditLog;
@@ -321,6 +348,8 @@ export const schema = {
   doRecords,
   putaway,
   inventory,
+  devicePresence,
+  appSettings,
   cycleCounts,
   events,
   auditLog,
