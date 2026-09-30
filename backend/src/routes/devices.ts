@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { devicePresence } from '../db/schema.js';
@@ -17,6 +17,8 @@ const heartbeatSchema = z.object({
   ipAddress: z.string().trim().max(64).optional(),
   warehouseId: z.string().trim().max(80).optional(),
   gateNo: z.number().int().positive().max(9999).optional(),
+  hasIntegratedRfid: z.boolean().optional(),
+  usesZebraSdk: z.boolean().optional(),
 });
 
 const ONLINE_MS = 75_000;
@@ -30,6 +32,8 @@ function view(row: typeof devicePresence.$inferSelect) {
     ipAddress: row.ipAddress,
     warehouse: row.warehouseId,
     gate: row.gateNo,
+    hasIntegratedRfid: row.hasIntegratedRfid,
+    usesZebraSdk: row.usesZebraSdk,
     lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
     online: Date.now() - seen <= ONLINE_MS,
   };
@@ -55,6 +59,8 @@ devicesRouter.post(
         ipAddress: input.ipAddress || null,
         warehouseId: input.warehouseId || null,
         gateNo: input.gateNo ?? null,
+        hasIntegratedRfid: input.hasIntegratedRfid ?? null,
+        usesZebraSdk: input.usesZebraSdk ?? null,
         lastSeenAt: now,
         updatedAt: now,
       })
@@ -66,12 +72,33 @@ devicesRouter.post(
           ipAddress: input.ipAddress || null,
           warehouseId: input.warehouseId || null,
           gateNo: input.gateNo ?? null,
+          ...(input.hasIntegratedRfid === undefined
+            ? {}
+            : { hasIntegratedRfid: input.hasIntegratedRfid }),
+          ...(input.usesZebraSdk === undefined ? {} : { usesZebraSdk: input.usesZebraSdk }),
           lastSeenAt: now,
           updatedAt: now,
         },
       })
       .returning();
     res.json({ device: view(row) });
+  }),
+);
+
+/** The calling handheld's last stored profile — used when Android has not
+ *  reported a model yet, so RFID capability does not have to live only on
+ *  the terminal. */
+devicesRouter.get(
+  '/me',
+  requirePermissions('device.manage'),
+  asyncHandler(async (req, res) => {
+    const id = req.user!.username;
+    const [row] = await getDb()
+      .select()
+      .from(devicePresence)
+      .where(eq(devicePresence.id, id))
+      .limit(1);
+    res.json({ device: row ? view(row) : null });
   }),
 );
 

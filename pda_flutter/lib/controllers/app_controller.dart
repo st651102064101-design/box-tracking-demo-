@@ -12,6 +12,7 @@ import '../models/outbox_tx.dart';
 import '../models/state_snapshot.dart';
 import '../services/api_client.dart';
 import '../services/device_address.dart';
+import '../services/handheld_profile.dart';
 import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
@@ -564,6 +565,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     await loading; // never throws — errors land in connError
+    if (!_handheldInfoResolved) {
+      await _restoreHandheldProfileFromServer();
+    }
     _startDeviceHeartbeat();
     if (screen == Screen.deviceSetup) _autoSelectSinglePost();
     notifyListeners();
@@ -631,20 +635,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  String get _devicePresenceName {
-    switch (prefs.deviceModel) {
-      case 'tc52':
-        return 'Zebra TC52';
-      case 'tc501':
-        return 'Zebra TC501';
-      case 'mc3390r':
-        return 'Zebra MC3390R';
-      case 'zebra':
-        return 'Zebra Handheld';
-      default:
-        return 'PDA Scanner';
-    }
-  }
+  String get _devicePresenceName =>
+      HandheldProfile.capabilityFor(prefs.deviceModel)?.presenceName ??
+      'PDA Scanner';
 
   /// A presence heartbeat is intentionally independent from a scan: an idle
   /// TC52 is still connected and must remain visible to the dashboard.
@@ -671,6 +664,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         ipAddress: _cachedLanIp,
         warehouseId: wh.isEmpty ? null : wh,
         gateNo: int.tryParse(gate),
+        hasIntegratedRfid: hasIntegratedRfid,
+        usesZebraSdk: usesZebraSdk,
       );
       _markLiveFromPresence();
       final ip = _cachedLanIp ?? await readLanIp();
@@ -682,6 +677,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           ipAddress: ip,
           warehouseId: wh.isEmpty ? null : wh,
           gateNo: int.tryParse(gate),
+          hasIntegratedRfid: hasIntegratedRfid,
+          usesZebraSdk: usesZebraSdk,
         );
       }
     } catch (_) {
@@ -1344,8 +1341,17 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void setDeviceModel(String id) {
+    final wasRfid = hasIntegratedRfid;
     prefs.deviceModel = id;
-    notifyListeners();
+    final cap = HandheldProfile.capabilityFor(id);
+    if (cap != null) {
+      // A profile write takes effect in this session. Waiting for the next
+      // cold start left RFID menus and the trigger owner on the old model.
+      _hasIntegratedRfid = cap.hasIntegratedRfid;
+      _usesZebraSdk = cap.usesZebraSdk;
+      _handheldInfoResolved = true;
+    }
+    _commitHandheldCapability(wasRfid: wasRfid);
   }
 
   void goDeviceSetup() {
@@ -1502,6 +1508,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// BoxRegisterScreen), copied from legacy.html's own box-registration +
   /// putaway handlers.
   void goBoxRegister() {
+    if (!hasIntegratedRfid) return;
     screen = Screen.boxRegister;
     boxRegisterRfidStep = false;
     scanInputMode = ScanInputMode.barcode;
@@ -2265,32 +2272,70 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _detectHandheldHardware() async {
     try {
       final info = await rfid.deviceInfo();
-      final model = (info['model'] ?? '').toString().trim().toUpperCase();
-      final manufacturer =
-          (info['manufacturer'] ?? '').toString().toUpperCase();
-      final brand = (info['brand'] ?? '').toString().toUpperCase();
-      _usesZebraSdk = manufacturer.contains('ZEBRA') || brand.contains('ZEBRA');
-      _handheldInfoResolved = model.isNotEmpty;
-      // Zebra RFID SDK 2.x supports TC501/TC701 as integrated mobile RFID
-      // computers. TC52 remains barcode-only.
-      _hasIntegratedRfid = model.contains('MC3390') || model.contains('TC501');
-      // Android's reported model is authoritative. Persist it so Settings and
-      // feature gates don't depend on RFID SDK connect succeeding first.
-      if (model.contains('MC3390')) {
-        prefs.deviceModel = 'mc3390r';
-      } else if (model.contains('TC501')) {
-        prefs.deviceModel = 'tc501';
-      } else if (model.contains('TC52')) {
-        prefs.deviceModel = 'tc52';
-      } else if (model.isNotEmpty &&
-          const {'mc3390r', 'tc501'}.contains(prefs.deviceModel)) {
-        // Don't keep exposing integrated RFID on another model after a device
-        // has been re-used or reprovisioned.
-        prefs.deviceModel = _usesZebraSdk ? 'zebra' : 'generic';
-      }
+      applyDetectedHandheld(HandheldProfile.classify(
+        model: (info['model'] ?? '').toString(),
+        manufacturer: (info['manufacturer'] ?? '').toString(),
+        brand: (info['brand'] ?? '').toString(),
+        androidRelease: (info['androidRelease'] ?? '').toString(),
+      ));
     } catch (_) {
       _hasIntegratedRfid = false;
     }
+  }
+
+  /// Applies a profile produced by [HandheldProfile.classify]. An empty
+  /// Android report does not erase a profile already stored on the terminal.
+  void applyDetectedHandheld(HandheldProfile profile) {
+    final wasRfid = hasIntegratedRfid;
+    if (!profile.modelKnown) {
+      if (!_handheldInfoResolved) {
+        _usesZebraSdk = profile.usesZebraSdk;
+        _hasIntegratedRfid = false;
+      }
+      _commitHandheldCapability(wasRfid: wasRfid, persist: false);
+      return;
+    }
+    _handheldInfoResolved = true;
+    _usesZebraSdk = profile.usesZebraSdk;
+    _hasIntegratedRfid = profile.hasIntegratedRfid;
+    prefs.deviceModel = profile.id;
+    _commitHandheldCapability(wasRfid: wasRfid);
+  }
+
+  void _commitHandheldCapability({required bool wasRfid, bool persist = true}) {
+    if (wasRfid && !hasIntegratedRfid) {
+      rfid.stopInventory();
+      if (screen == Screen.rfidLocate ||
+          screen == Screen.rfidInput ||
+          screen == Screen.boxRegister) {
+        screen = emp != null ? Screen.home : Screen.login;
+      }
+      if (scanInputMode == ScanInputMode.rfid) {
+        scanInputMode = ScanInputMode.barcode;
+      }
+    }
+    if (deviceConfigured) {
+      _connectReader();
+      if (persist && prefs.deviceModel.isNotEmpty) {
+        unawaited(_reportDevicePresence());
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Android is the live source. When it has not answered yet, the last
+  /// profile this service account stored on the server is the next source.
+  Future<void> _restoreHandheldProfileFromServer() async {
+    if (_handheldInfoResolved) return;
+    if (api.token == null || api.token!.isEmpty) return;
+    try {
+      final saved = await api.getMyDevice();
+      final model = (saved?['model'] ?? '').toString().trim();
+      if (model.isEmpty) return;
+      final cap = HandheldProfile.capabilityFor(model);
+      if (cap == null) return;
+      applyDetectedHandheld(cap);
+    } catch (_) {}
   }
 
   bool _readerHooked = false;

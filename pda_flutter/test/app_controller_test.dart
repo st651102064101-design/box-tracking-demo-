@@ -20,6 +20,7 @@ class FakeApi extends ApiClient {
   final List<Map<String, dynamic>> gateOutCalls = [];
   final List<String> loginCalls = [];
   final List<Map<String, dynamic>> heartbeats = [];
+  Map<String, dynamic>? myDevice;
 
   /// When set, the next gate call throws this instead of succeeding.
   Object? throwOnGate;
@@ -40,6 +41,8 @@ class FakeApi extends ApiClient {
     String? ipAddress,
     String? warehouseId,
     int? gateNo,
+    bool? hasIntegratedRfid,
+    bool? usesZebraSdk,
   }) async {
     if (throwOnState != null) throw throwOnState!;
     heartbeats.add({
@@ -48,8 +51,13 @@ class FakeApi extends ApiClient {
       'ipAddress': ipAddress,
       'warehouseId': warehouseId,
       'gateNo': gateNo,
+      'hasIntegratedRfid': hasIntegratedRfid,
+      'usesZebraSdk': usesZebraSdk,
     });
   }
+
+  @override
+  Future<Map<String, dynamic>?> getMyDevice() async => myDevice;
 
   @override
   Future<Map<String, dynamic>> login(String u, String p) async {

@@ -250,6 +250,8 @@ export const devicePresence = pgTable('device_presence', {
   ipAddress: text('ip_address'),
   warehouseId: text('warehouse_id'),
   gateNo: integer('gate_no'),
+  hasIntegratedRfid: boolean('has_integrated_rfid'),
+  usesZebraSdk: boolean('uses_zebra_sdk'),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

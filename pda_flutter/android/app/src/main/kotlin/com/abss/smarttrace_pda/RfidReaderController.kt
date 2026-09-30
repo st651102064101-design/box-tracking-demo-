@@ -701,7 +701,8 @@ class RfidReaderController(private val context: Context) :
         if (!connectInFlight.compareAndSet(false, true)) return
         status("connecting", "กำลังค้นหาเครื่องอ่าน…")
         exec.execute {
-            val isTc501 = Build.MODEL.contains("TC501", ignoreCase = true)
+            val preferredName = RfidTransportPolicy.preferred(Build.MODEL)
+            val isTc501 = preferredName == "QC_SERIAL"
             try {
                 // TC501's QC_SERIAL path must retain the Activity context passed
                 // to Readers(this, QC_SERIAL). The legacy API3Utils workaround
@@ -718,7 +719,7 @@ class RfidReaderController(private val context: Context) :
                     try {
                         java.lang.Enum.valueOf(
                             ENUM_TRANSPORT::class.java,
-                            "QC_SERIAL",
+                            preferredName,
                         )
                     } catch (_: IllegalArgumentException) {
                         lastTransport = "QC_SERIAL (SDK required: 2.0.5.292+)"
@@ -737,15 +738,15 @@ class RfidReaderController(private val context: Context) :
                 Readers.attach(this)
 
                 var list = safeList()
-                lastTransport = if (isTc501) "QC_SERIAL" else "SERVICE_SERIAL"
+                lastTransport = RfidTransportPolicy.preferred(Build.MODEL)
                 Log.i(TAG, "reader enumeration transport=$lastTransport count=${list.size}")
                 // TC501 must stay on QC_SERIAL; SERVICE_SERIAL, BT and USB
                 // are not valid fallbacks for its integrated reader.
                 // MC3390R = SERVICE_SERIAL; fall back to sled / USB like the sample.
-                if (!isTc501 && list.isEmpty()) {
+                if (RfidTransportPolicy.allowsAlternateTransport(Build.MODEL) && list.isEmpty()) {
                     readers?.setTransport(ENUM_TRANSPORT.BLUETOOTH); list = safeList(); lastTransport = "BLUETOOTH"
                 }
-                if (!isTc501 && list.isEmpty()) {
+                if (RfidTransportPolicy.allowsAlternateTransport(Build.MODEL) && list.isEmpty()) {
                     readers?.setTransport(ENUM_TRANSPORT.SERVICE_USB); list = safeList(); lastTransport = "SERVICE_USB"
                 }
                 if (list.isEmpty()) {

@@ -8608,7 +8608,7 @@ function openPdaDeviceDetail(deviceId){
     +'<div class="muted small" style="margin-top:10px;">แสดงตามคลังและประตูที่อุปกรณ์นี้รายงาน</div></div>'
     +'<div class="card" style="padding:16px;"><div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;">'
     +'<span>สถานะการเชื่อมต่อ</span><span class="hardware-list-status '+(online?'':'offline')+'"><i></i>'+(online?'Online':'Offline')+'</span></div>'
-    +'<div class="muted small" style="margin-top:8px;">รุ่น: '+esc(device.model||'-')+' · IP: '+esc(device.ipAddress||'-')+'</div>'
+    +'<div class="muted small" style="margin-top:8px;">รุ่น: '+esc(device.model||'-')+' · RFID ในตัว: '+(device.hasIntegratedRfid===true?'มี':device.hasIntegratedRfid===false?'ไม่มี':'ยังไม่ทราบ')+' · IP: '+esc(device.ipAddress||'-')+'</div>'
     +'<div class="muted small" style="margin-top:4px;">เชื่อมต่อล่าสุด: '+esc(device.lastSeenAt?fmtTs(device.lastSeenAt):'ยังไม่เคยเชื่อมต่อ')+'</div></div></div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
   openModal(h);
@@ -16784,7 +16784,7 @@ function renderOverviewDashboard(all){
       var online=device.online===true;
       var pdaWarehouse=device.warehouse?whName(device.warehouse):'';
       var pdaAssignment=device.gate?'ประจำ Gate '+device.gate+(pdaWarehouse?' · '+pdaWarehouse:' · ไม่ทราบคลัง'):(pdaWarehouse?'ยังไม่ได้เลือก Gate · '+pdaWarehouse:'ยังไม่ได้กำหนดคลัง/ประตู');
-      hardwareRows.push({name:pdaDeviceDisplayName(device),code:device.model||device.id||'PDA',kind:'Handheld · '+pdaAssignment,ip:device.ipAddress||'-',online:online,seen:device.lastSeenAt?fmtTs(device.lastSeenAt):'ยังไม่เคยเชื่อมต่อ',action:'openPdaDeviceDetail('+JSON.stringify(String(device.id))+')',icon:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10 7h4M11 17h2"/></svg>'});
+      hardwareRows.push({name:pdaDeviceDisplayName(device),code:device.model||device.id||'PDA',kind:'Handheld · '+(device.hasIntegratedRfid===true?'มี RFID ในตัว':'บาร์โค้ด')+' · '+pdaAssignment,ip:device.ipAddress||'-',online:online,seen:device.lastSeenAt?fmtTs(device.lastSeenAt):'ยังไม่เคยเชื่อมต่อ',action:'openPdaDeviceDetail('+JSON.stringify(String(device.id))+')',icon:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10 7h4M11 17h2"/></svg>'});
     });
     connectedReaders.slice().sort(function(a,b){return Number(a.gateNo||0)-Number(b.gateNo||0);}).forEach(function(reader){
         var gate=reader.gateNo!=null?reader.gateNo:(reader.dbGateId!=null?reader.dbGateId:reader.gate);

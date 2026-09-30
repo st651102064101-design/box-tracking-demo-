@@ -127,6 +127,8 @@ class ApiClient {
     String? ipAddress,
     String? warehouseId,
     int? gateNo,
+    bool? hasIntegratedRfid,
+    bool? usesZebraSdk,
   }) async {
     await _send(() => http.post(
           _u('/api/devices/heartbeat'),
@@ -139,8 +141,23 @@ class ApiClient {
             if (warehouseId != null && warehouseId.isNotEmpty)
               'warehouseId': warehouseId,
             if (gateNo != null && gateNo > 0) 'gateNo': gateNo,
+            if (hasIntegratedRfid != null)
+              'hasIntegratedRfid': hasIntegratedRfid,
+            if (usesZebraSdk != null) 'usesZebraSdk': usesZebraSdk,
           }),
         ));
+  }
+
+  /// GET /api/devices/me — last profile this service account stored.
+  Future<Map<String, dynamic>?> getMyDevice() async {
+    final body = await _send(
+      () => http.get(_u('/api/devices/me'), headers: _headers),
+    );
+    if (body is! Map) return null;
+    final device = body['device'];
+    if (device is Map<String, dynamic>) return device;
+    if (device is Map) return Map<String, dynamic>.from(device);
+    return null;
   }
 
   /// POST /api/auth/login -> { token, user }

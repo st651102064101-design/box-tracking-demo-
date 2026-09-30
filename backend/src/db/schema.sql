@@ -223,6 +223,8 @@ CREATE TABLE IF NOT EXISTS device_presence (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE device_presence ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE device_presence ADD COLUMN IF NOT EXISTS has_integrated_rfid BOOLEAN;
+ALTER TABLE device_presence ADD COLUMN IF NOT EXISTS uses_zebra_sdk BOOLEAN;
 CREATE INDEX IF NOT EXISTS device_presence_last_seen_idx ON device_presence (last_seen_at DESC);
 
 CREATE TABLE IF NOT EXISTS app_settings (
