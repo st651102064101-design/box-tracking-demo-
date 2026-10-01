@@ -87,6 +87,7 @@ class RfidService {
   final _barcodeCtrl = StreamController<String>.broadcast();
 
   StreamSubscription? _sub;
+  bool _disposed = false;
   RfidState _state = RfidState.idle;
   RfidState get state => _state;
 
@@ -130,7 +131,9 @@ class RfidService {
   bool get supported => defaultTargetPlatform == TargetPlatform.android;
 
   void _listen() {
+    if (_disposed) return;
     _sub ??= _events.receiveBroadcastStream().listen((event) {
+      if (_disposed) return;
       if (event is! Map) return;
       final type = event['type']?.toString();
       switch (type) {
@@ -161,6 +164,7 @@ class RfidService {
           break;
       }
     }, onError: (e) {
+      if (_disposed) return;
       _state = RfidState.error;
       _statusCtrl.add(RfidStatus(RfidState.error, '$e'));
     });
@@ -238,12 +242,13 @@ class RfidService {
   /// reader to [connect]. TC52 never calls [connect], and without this the
   /// DataWedge barcode broadcast has nowhere to land.
   void ensureListening() {
-    if (!supported) return;
+    if (_disposed || !supported) return;
     _listen();
   }
 
   /// Enumerate + connect to the integrated reader (MC3390R via SERVICE_SERIAL).
   Future<void> connect() async {
+    if (_disposed) return;
     if (!supported) {
       _statusCtrl.add(const RfidStatus(
           RfidState.idle, 'RFID ใช้ได้เฉพาะบนเครื่อง Android'));
@@ -256,6 +261,7 @@ class RfidService {
     try {
       await _method.invokeMethod('connect');
     } catch (e) {
+      if (_disposed) return;
       // Not just PlatformException: an Android build without the Zebra
       // libraries — or any host running the app off-device — answers with
       // MissingPluginException, and an unhandled async throw there would take
@@ -466,6 +472,8 @@ class RfidService {
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _sub?.cancel();
     _buffer.clear();
     _tagCtrl.close();

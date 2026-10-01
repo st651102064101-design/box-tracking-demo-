@@ -64,3 +64,15 @@ Windows optional Rollup/esbuild binaries were restored in ignored node_modules t
 4. On TC52 and ordinary Android verify RFID is unavailable and Barcode remains usable; verify actual hardware capabilities, not model name alone.
 5. Bind, replace and detach a tag, refresh on a second client, then sync a stale client snapshot. Verify backend bindings and audit log remain authoritative. Try a tag already owned by another box.
 6. Gate-in/out repeated reads and repeated submit: verify exactly one movement/history entry; separately exercise concurrent devices because sequential regression tests do not establish distributed idempotency.
+
+## Follow-up hardening
+
+- Reproduced two concurrent `doCommit` invocations producing two Gate API calls. Added an entry busy guard and a regression asserting exactly one call, queue reset and busy cleanup.
+- Reproduced an in-flight connection error arriving after service disposal throwing `Cannot add new events after calling close`. Added disposal guards for connect/listen/error callbacks and idempotent disposal. Method-channel regression now passes.
+- Added concurrent gate-in/out HTTP integration coverage: one success and one conflict, with two total history movements. Passes on in-memory PGlite; this is not proof of cross-process PostgreSQL transaction behavior.
+- Follow-up full runs: Flutter **220 passed**, Backend **573 passed**. New tests across both rounds: **23**.
+- Native Kotlin tests attempted with `gradlew.bat testLegacyDebugUnitTest --no-daemon`, IPv4 override, empty JVM arguments/stacktrace and Windows selector override. All fail before tests start: JDK 17 PipeImpl/UnixDomainSockets `Invalid argument: connect` / `Unable to establish loopback connection`. No native test success is claimed. No machine-wide network/security settings were changed.
+- Native connect returns its method-channel response immediately and runs reader connection on an executor. A Dart method-call timeout alone would not detect a stalled physical connection; native status watchdog/cancellation needs a separately verified design.
+- ADB currently detects one MC33 device (`20214523021458`), not TC501 or TC52. All-model physical acceptance remains outstanding.
+
+Self-recheck: production edits are limited to proven submit/disposal defects; existing tests retained; full suites passed; unresolved TID/case semantics, native build environment and hardware acceptance remain explicitly open. No claim of 100% bug freedom or APK deployment.

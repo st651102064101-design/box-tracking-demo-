@@ -1894,6 +1894,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> doCommit() async {
+    // UI disabling alone cannot serialize two callbacks in the same turn.
+    if (busy) return;
     if (queue.isEmpty) {
       toastMsg('ยังไม่ได้ยิงกล่อง', '', ResultKind.warn);
       return;

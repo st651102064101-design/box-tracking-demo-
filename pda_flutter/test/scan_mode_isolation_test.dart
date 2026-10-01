@@ -89,4 +89,14 @@ void main() {
     // Replacing the disposed instance keeps teardown valid.
     c = AppController(api: api, prefs: await Prefs.load(), rfid: ProbeRfid({}));
   });
+  test('concurrent submit of one scan batch makes exactly one gate API call', () async {
+    c.goScanIn();
+    c.gateFormStep = false;
+    c.online = true;
+    c.addScan('CRT-02');
+    await Future.wait([c.doCommit(), c.doCommit()]);
+    expect(api.gateInCalls, hasLength(1));
+    expect(c.queue, isEmpty);
+    expect(c.busy, isFalse);
+  });
 }

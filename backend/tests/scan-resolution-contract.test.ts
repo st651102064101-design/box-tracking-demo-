@@ -22,6 +22,18 @@ beforeEach(async () => {
   expect(result.status).toBe(200);
 });
 describe('scan identity contract across API and state', () => {
+  it('concurrent gate submissions accept one movement and reject the stale competitor', async () => {
+    const sendOut = () => request(ctx.app).post('/api/gate/out').set(auth(ctx.token))
+      .send({ tags: ['BOX-A'], customer: 'C', gate: 1 });
+    const results = await Promise.all([sendOut(), sendOut()]);
+    expect(results.map(r => r.status).sort()).toEqual([200, 409]);
+    const sendIn = () => request(ctx.app).post('/api/gate/in').set(auth(ctx.token))
+      .send({ tags: ['BOX-A'], gate: 1 });
+    const incoming = await Promise.all([sendIn(), sendIn()]);
+    expect(incoming.map(r => r.status).sort()).toEqual([200, 409]);
+    const box = await request(ctx.app).get('/api/boxes/BOX-A').set(auth(ctx.token));
+    expect(box.body.history).toHaveLength(2);
+  });
   it('barcode takes precedence over another box RFID identifier', async () => {
     const result = await resolveBoxesByCodes(getDb(), ['COLLISION']);
     expect(result.resolved.get('COLLISION')?.tag).toBe('COLLISION');
