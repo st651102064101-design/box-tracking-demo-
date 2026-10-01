@@ -2277,6 +2277,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         manufacturer: (info['manufacturer'] ?? '').toString(),
         brand: (info['brand'] ?? '').toString(),
         androidRelease: (info['androidRelease'] ?? '').toString(),
+        integratedRfidDetected: info['hasIntegratedRfid'] == true,
       ));
     } catch (_) {
       _hasIntegratedRfid = false;

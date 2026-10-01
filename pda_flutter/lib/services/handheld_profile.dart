@@ -33,6 +33,7 @@ class HandheldProfile {
     required String manufacturer,
     required String brand,
     String androidRelease = '',
+    bool integratedRfidDetected = false,
   }) {
     final modelUpper = model.trim().toUpperCase();
     final zebra = manufacturer.toUpperCase().contains('ZEBRA') ||
@@ -40,7 +41,8 @@ class HandheldProfile {
     final release = androidRelease.trim();
     final liveAndroid = release.isEmpty ? '' : 'Android $release';
 
-    if (modelUpper.contains('MC3390')) {
+    if (modelUpper.contains('MC3390') ||
+        (zebra && modelUpper.startsWith('MC33') && integratedRfidDetected)) {
       return const HandheldProfile(
         id: 'mc3390r',
         name: 'Zebra MC3300 Series (MC3390R)',

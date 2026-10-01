@@ -635,7 +635,15 @@ class RfidReaderController(private val context: Context) :
      * MODEL/BRAND can, immediately, with no reader involved.
      */
     private fun deviceInfo(): Map<String, Any?> {
+        val integratedRfid = runCatching {
+            val properties = Class.forName("android.os.SystemProperties")
+            val get = properties.getMethod("get", String::class.java)
+            val type = get.invoke(null, "ro.config.device.rfidtype").toString().toIntOrNull() ?: 0
+            val service = get.invoke(null, "init.svc.rfidflinger").toString()
+            type > 0 || service == "running"
+        }.getOrDefault(false)
         return mapOf(
+            "hasIntegratedRfid" to integratedRfid,
             "manufacturer" to Build.MANUFACTURER,
             "model" to Build.MODEL,
             "brand" to Build.BRAND,
