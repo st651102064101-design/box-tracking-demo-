@@ -52,6 +52,8 @@ class ProbeRfid extends RfidService {
 
   void scan(String code) => _barcodes.add(code);
 
+  void readBatch(List<RfidTagRead> reads) => _tags.add(reads);
+
   void _rec(String name) => calls.add(name);
 
   @override

@@ -5837,9 +5837,10 @@ function tagForRfidCode(code){
   var found=Object.keys(S.boxes).find(function(k){
     var b=S.boxes[k];
     if(!b)return false;
+    var rfid=b.rfid?String(b.rfid).toLowerCase():'';
     var tid=b.rfidTid?String(b.rfidTid).toLowerCase():'';
     var epc=b.rfidEpc?String(b.rfidEpc).toLowerCase():'';
-    return tid===target||epc===target;
+    return rfid===target||tid===target||epc===target;
   });
   return found||null;
 }

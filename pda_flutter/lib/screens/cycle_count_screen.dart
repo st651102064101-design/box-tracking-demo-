@@ -306,7 +306,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     return ScanCapture(
       // Live only once a session is open — the setup step above has zone
       // chips and a start button, and nothing to scan into yet.
-      enabled: session != null,
+      enabled: session != null && c.scanInputMode == ScanInputMode.barcode,
       onScan: _submitScan,
       child: AutoHideHeader(
         header: StickyHeader(

@@ -2379,6 +2379,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// threshold never reaches addScan/doTrack/badge matching at all — the
   /// same knob a Settings-screen slider drives (see settings_screen.dart).
   void _onReaderBatch(List<RfidTagRead> batch) {
+    if (!hasIntegratedRfid || _effectiveInputMode != ScanInputMode.rfid) return;
     final minRssi = prefs.rfidMinRssi;
     for (final r in batch) {
       if (minRssi != null && r.rssi != null && r.rssi! < minRssi) continue;

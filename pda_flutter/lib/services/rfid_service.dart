@@ -198,9 +198,15 @@ class RfidService {
 
     final reads = <RfidTagRead>[];
     for (final raw in pending) {
-      final epc = raw['epc']?.toString();
-      if (epc == null || epc.isEmpty) continue;
-      reads.add(RfidTagRead.fromEvent(raw, at));
+      // The native bridge emits hexadecimal EPC strings, not byte arrays.
+      // A malformed callback must not drop the other tags in this frame.
+      final epc = raw['epc'];
+      if (epc is! String || epc.trim().isEmpty) continue;
+      try {
+        reads.add(RfidTagRead.fromEvent(raw, at));
+      } on TypeError {
+        continue;
+      }
     }
     if (reads.isEmpty) return;
 
@@ -277,6 +283,10 @@ class RfidService {
   }
 
   Future<void> stopInventory() async {
+    // Invalidate reads received under the previous input owner before the
+    // scheduled frame flush, including a rapid RFID -> barcode -> RFID swap.
+    _buffer.clear();
+    _bufferedAt = null;
     if (!supported) return;
     try {
       await _method.invokeMethod('stopInventory');

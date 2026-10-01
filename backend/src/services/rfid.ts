@@ -49,8 +49,11 @@ export async function resolveBoxesByCodes(db: DB, codes: string[]): Promise<Reso
   const resolved = new Map<string, BoxRow>();
   const missing: string[] = [];
   for (const code of uniq) {
-    const row = rows.find(
-      (r) => r.tag === code || r.rfid === code || r.rfidEpc === code || r.rfidTid === code,
+    // Match the permanent barcode first, as PDA and legacy clients do. The
+    // query's row order is undefined and must not let a different box's RFID
+    // alias redirect an otherwise exact barcode scan.
+    const row = rows.find((r) => r.tag === code) ?? rows.find(
+      (r) => r.rfid === code || r.rfidEpc === code || r.rfidTid === code,
     );
     if (row) resolved.set(code, row);
     else missing.push(code);
