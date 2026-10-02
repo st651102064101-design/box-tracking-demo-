@@ -72,6 +72,9 @@ class ProbeRfid extends RfidService {
   Future<void> stopInventory() async => _rec('stopInventory');
 
   @override
+  Future<void> setBarcodeTrigger(bool pressed) async => _rec('barcodeTrigger:$pressed');
+
+  @override
   Future<void> prepareBarcodeDataWedge() async =>
       _rec('prepareBarcodeDataWedge');
 
@@ -425,7 +428,10 @@ void main() {
         h.rfid.pull(true);
         await Future<void>.delayed(Duration.zero);
         expect(h.rfid.startedInventory, isFalse, reason: model);
-        expect(h.c.toast?.title, 'อยู่ในโหมดบาร์โค้ด');
+        expect(h.rfid.calls, contains('barcodeTrigger:true'), reason: model);
+        h.rfid.pull(false);
+        await Future<void>.delayed(Duration.zero);
+        expect(h.rfid.calls, contains('barcodeTrigger:false'), reason: model);
         h.c.dispose();
       }
     });

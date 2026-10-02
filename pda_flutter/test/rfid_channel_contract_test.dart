@@ -54,6 +54,13 @@ void main() {
     expect(batches.single.first.tid, 'E280ABCD');
     expect(batches.single.first.rssi, -44);
   });
+  test('shared barcode trigger sends press and release without inventory calls', () async {
+    await service.setBarcodeTrigger(true);
+    await service.setBarcodeTrigger(false);
+    final triggerCalls = calls.where((c) => c.method == 'setBarcodeTrigger').toList();
+    expect(triggerCalls.map((c) => c.arguments), [{'pressed': true}, {'pressed': false}]);
+    expect(calls.where((c) => c.method == 'startInventory'), isEmpty);
+  });
   testWidgets('malformed tag metadata and raw bytes do not poison valid tags in a batch', (tester) async {
     final tags = <String>[];
     service.tags.listen(tags.add);

@@ -99,4 +99,25 @@ void main() {
     expect(c.queue, isEmpty);
     expect(c.busy, isFalse);
   });
+  test('shared trigger in barcode mode starts imager only and release stops it', () async {
+    c.goTrack();
+    c.setScanInputMode(ScanInputMode.barcode);
+    sdk.calls.clear();
+    sdk.pull(true);
+    await settle();
+    expect(sdk.calls, contains('barcodeTrigger:true'));
+    expect(sdk.calls, isNot(contains('startInventory')));
+    sdk.pull(false);
+    await settle();
+    expect(sdk.calls, contains('barcodeTrigger:false'));
+    sdk.calls.clear();
+    c.backToHome();
+    expect(sdk.calls, contains('barcodeTrigger:false'));
+    c.goTrack();
+    c.setScanInputMode(ScanInputMode.rfid);
+    sdk.calls.clear();
+    sdk.pull(true);
+    await settle();
+    expect(sdk.calls, isNot(contains('barcodeTrigger:true')));
+  });
 }

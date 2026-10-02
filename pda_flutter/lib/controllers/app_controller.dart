@@ -1067,6 +1067,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // A navigation/sub-step/mode transition cancels any sweep started on the
     // previous state before handing the trigger to the next owner.
     rfid.stopInventory();
+    rfid.setBarcodeTrigger(false);
     if (hasIntegratedRfid) {
       // Configure SDK trigger mode first/only. DataWedge's scanner plugin is
       // controlled by the SDK call, so never issue a parallel enable/disable.
@@ -2542,6 +2543,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _onReaderTrigger(bool pressed) {
     if (!pressed) {
+      rfid.setBarcodeTrigger(false);
       // Always safe, and necessary: if the screen changed while the trigger
       // was still physically held (navigating away mid-press), the reader
       // must not keep scanning in the background on a screen that has no
@@ -2555,6 +2557,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // to toast "สลับเป็นโหมด RFID" and steal focus, so the decoded label
     // never reached the outbound queue.
     if (!hasIntegratedRfid) return;
+    if (_effectiveInputMode == ScanInputMode.barcode) {
+      rfid.setBarcodeTrigger(true);
+      return;
+    }
     if (_effectiveInputMode != ScanInputMode.rfid) {
       // Barcode mode is handled exclusively by the imager/DataWedge; idle
       // screens must not start an inventory just because the reader emitted
@@ -2566,15 +2572,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
             ResultKind.info);
       } else if (screen == Screen.scan && putawayTask != null) {
         toastMsg('ยิงบาร์โค้ดชั้นวางเท่านั้น', 'ขั้นตอนเก็บเข้าชั้นไม่รับ RFID',
-            ResultKind.info);
-      } else if (_effectiveInputMode == ScanInputMode.barcode &&
-          (screen == Screen.scan ||
-              screen == Screen.track ||
-              screen == Screen.transfer ||
-              screen == Screen.cycleCount)) {
-        toastMsg(
-            'อยู่ในโหมดบาร์โค้ด',
-            'ไก RFID ไม่ทำงาน — สลับเป็นโหมด RFID เพื่ออ่านแท็ก',
             ResultKind.info);
       }
       return;

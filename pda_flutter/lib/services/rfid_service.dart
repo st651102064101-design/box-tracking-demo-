@@ -299,6 +299,14 @@ class RfidService {
     } catch (_) {}
   }
 
+  /// Route shared reader-trigger events to the barcode imager, not inventory.
+  Future<void> setBarcodeTrigger(bool pressed) async {
+    if (_disposed || !supported) return;
+    try {
+      await _method.invokeMethod('setBarcodeTrigger', {'pressed': pressed});
+    } catch (_) {}
+  }
+
   /// Switch the reader between its two read profiles.
   ///
   /// Fast (`false`, the default and what every screen but one runs): EPC and

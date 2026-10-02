@@ -76,3 +76,11 @@ Windows optional Rollup/esbuild binaries were restored in ignored node_modules t
 - ADB currently detects one MC33 device (`20214523021458`), not TC501 or TC52. All-model physical acceptance remains outstanding.
 
 Self-recheck: production edits are limited to proven submit/disposal defects; existing tests retained; full suites passed; unresolved TID/case semantics, native build environment and hardware acceptance remain explicitly open. No claim of 100% bug freedom or APK deployment.
+
+## Shared trigger routing — 2026-10-02
+
+The controller previously responded to RFID SDK trigger callbacks in Barcode mode with a toast and no barcode command. A shared trigger now routes to `setBarcodeTrigger` in Barcode mode; RFID mode still routes only to inventory. Release and navigation stop the software barcode trigger. Native rejects a late barcode press once `rfidTriggerMode` is true. Barcode output continues through the existing app-owned DataWedge profile and barcode intent path; this is not an EMDK-only implementation.
+
+Added controller and actual mock-method-channel press/release tests. Updated the existing matrix assertion from the obsolete blocked-trigger toast to positive barcode start/release assertions while retaining the no-inventory assertion. Targeted controller/matrix/gate-form tests: 37 passed. Full Flutter suite: 222 passed. Self-recheck found no additional issue in the edited routing; native/hardware timing is still unverified.
+
+Attempted `flutter build apk --release --flavor legacy --no-pub`; fails before compilation with the existing Java loopback error. This change is not installed on the device, and physical trigger behavior is not yet claimed as verified.

@@ -342,6 +342,18 @@ class RfidReaderController(private val context: Context) :
             "disconnect" -> { disconnect(); result.success(true) }
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
+            "setBarcodeTrigger" -> {
+                val pressed = call.argument<Boolean>("pressed") == true
+                // A late Dart press must not turn on the imager after RFID
+                // has taken ownership. Release remains safe in either mode.
+                if (!pressed || !rfidTriggerMode) {
+                    val intent = Intent("com.symbol.datawedge.api.ACTION")
+                    intent.putExtra("com.symbol.datawedge.api.SOFT_SCAN_TRIGGER",
+                        if (pressed) "START_SCANNING" else "STOP_SCANNING")
+                    context.sendBroadcast(intent)
+                }
+                result.success(true)
+            }
             "setPower" -> { setPower(call.argument<Int>("percent") ?: 100); result.success(true) }
             "setPowerIndex" -> { setPowerIndex(call.argument<Int>("index") ?: maxPower); result.success(true) }
             "setAutoBeep" -> { autoBeepEnabled = call.argument<Boolean>("enabled") ?: true; result.success(true) }
