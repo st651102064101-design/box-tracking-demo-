@@ -20880,7 +20880,7 @@ function toggleInvSumGroup(gid, rowEl) {
 window.toggleInvSumGroup = toggleInvSumGroup;
 
 document.getElementById('schInv').addEventListener('input', function(){
-  invWhFilter = ''; invDoFilter = '';
+  invDoFilter = '';
   pagerReset('inv');
   saveInvFilters();
   var fb = $('#invFilterBanner'); if (fb) fb.style.display = 'none';
@@ -20907,7 +20907,7 @@ $all('#invStatusSeg .sf-btn').forEach(function(btn) {
     $all('#invStatusSeg .sf-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     invStatusFilter = btn.dataset.st;
-    invCustFilter = ''; invWhFilter = ''; invDoFilter = '';
+    invCustFilter = ''; invDoFilter = '';
     invShowValue = false;
     pagerReset('inv');
     saveInvFilters();
