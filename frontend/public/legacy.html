@@ -20508,6 +20508,20 @@ function addInvSearchTokens(value){String(value||'').split(/[,\n]+/).map(functio
 (function(){var input=$('#schInv');if(!input||input._multiSearchBound)return;input._multiSearchBound=true;var host=document.createElement('div');host.className='inv-token-input';input.parentNode.insertBefore(host,input);host.appendChild(input);input.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===','){e.preventDefault();addInvSearchTokens(input.value);}});input.addEventListener('paste',function(e){var v=(e.clipboardData||window.clipboardData).getData('text');if(/[,\n]/.test(v)){e.preventDefault();addInvSearchTokens(v);}});})();
 
 /* ---- filter helper shared by both views ---- */
+function inventoryWarehouseOf(b) {
+  if ((b.status === 'out' || b.status === 'lost') && b.outWh) return b.outWh;
+  var wh = (b.location || {}).wh;
+  if (wh) return wh;
+  var history = Array.isArray(b.history) ? b.history : [];
+  for (var i = history.length - 1; i >= 0; i--) {
+    var h = history[i];
+    if (h && ['in','in-new','out','putaway','relocate','transfer'].indexOf(h.dir) >= 0) {
+      var movementWh = (h.loc || {}).wh || h.wh;
+      if (movementWh) return movementWh;
+    }
+  }
+  return b.outWh || '';
+}
 function filteredInvBoxes(opts) {
   var ignoreStatus=opts&&opts.ignoreStatus;
   var sb = (document.getElementById('schInv') ? document.getElementById('schInv').value : '').toLowerCase();
@@ -20540,7 +20554,7 @@ function filteredInvBoxes(opts) {
        that warehouse — the status TAB is what should decide status-based
        hiding, not the warehouse pill. */
     if (invWhFilter) {
-      var boxWh = (b.location || {}).wh;
+      var boxWh = inventoryWarehouseOf(b);
       /* A box with no location.wh yet (registered but never actually put
          away/scanned into a specific warehouse — e.g. straight from
          "ลงทะเบียนกล่อง") isn't really "not in invWhFilter's warehouse", it
@@ -20620,7 +20634,7 @@ function buildInvWhPills() {
   whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
   var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
   whs.forEach(function(w) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
+    var cnt = Object.values(S.boxes).filter(function(b) { return inventoryWarehouseOf(b) === w.id; }).length;
     html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
   });
   pillsEl.innerHTML = html;
