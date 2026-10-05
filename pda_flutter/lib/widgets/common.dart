@@ -540,7 +540,9 @@ class BlurDropdownButtonFormField<T> extends FormField<T> {
                 // hintText as well (which made dropdown placeholders overlap).
                 decoration: decoration.copyWith(
                   errorText: field.errorText,
-                  hintText: hint == null ? decoration.hintText : null,
+                  // copyWith(null) retains the old hint; an empty string
+                  // actually suppresses the decorator's duplicate text.
+                  hintText: hint == null ? decoration.hintText : '',
                 ),
                 isEmpty: empty,
                 child: Row(
