@@ -25,6 +25,11 @@ class LocaleController extends ChangeNotifier {
   String t(String th) => lang == 'en' ? (_dict[th] ?? th) : th;
 
   static const Map<String, String> _dict = {
+    'ระยะประมาณ': 'Estimated distance',
+    'ยืนห่างแท็ก 1 เมตร แล้วกดเทียบระยะ': 'Stand 1 m from the tag, then calibrate',
+    'เทียบระยะ 1 เมตรใหม่': 'Recalibrate at 1 m',
+    'ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า':
+        'Signal-based estimate: calibrate at 1 m first. Tag orientation and obstacles affect the reading.',
     // badge screen
     'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
     'ยิงบัตรพนักงาน': 'Scan employee badge',

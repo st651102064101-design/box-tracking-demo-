@@ -1,0 +1,99 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smarttrace_pda/controllers/app_controller.dart';
+import 'package:smarttrace_pda/screens/rfid_locate_screen.dart';
+import 'package:smarttrace_pda/services/i18n.dart';
+import 'package:smarttrace_pda/services/prefs.dart';
+import 'package:smarttrace_pda/services/rfid_service.dart';
+import 'app_controller_test.dart' show FakeApi, fixtureState;
+
+class _Reader extends RfidService {
+  final batches = StreamController<List<RfidTagRead>>.broadcast();
+  @override
+  Stream<List<RfidTagRead>> get tagBatches => batches.stream;
+  @override
+  bool get supported => false;
+  void emit(int? rssi) => batches.add([
+        RfidTagRead(epc: 'TAG-1', rssi: rssi, readAt: DateTime.now()),
+      ]);
+}
+
+void main() {
+  testWidgets(
+      'distance requires measured calibration and disappears on stale '
+      'or missing RSSI; a different box cannot reuse its reference',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await Prefs.load();
+    prefs.hideMaxRangeAlert = true;
+    final api = FakeApi()..state = fixtureState();
+    api.state['boxes']['CRT-01']['rfid'] = 'TAG-1';
+    api.state['boxes']['CRT-02']['rfid'] = 'TAG-2';
+    final reader = _Reader();
+    final c = AppController(api: api, prefs: prefs, rfid: reader);
+    await c.refresh();
+    c.screen = Screen.rfidLocate;
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppController>.value(value: c),
+        ChangeNotifierProvider<LocaleController>.value(
+            value: LocaleController(prefs)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: RfidLocateScreen())),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('CRT-01'));
+    await tester.pump();
+    final calibrate =
+        find.widgetWithText(TextButton, 'ยืนห่างแท็ก 1 เมตร แล้วกดเทียบระยะ');
+    expect(tester.widget<TextButton>(calibrate).onPressed, isNull);
+    reader.emit(null);
+    await tester.pump();
+    expect(tester.widget<TextButton>(calibrate).onPressed, isNull);
+    reader.emit(-60);
+    await tester.pump();
+    expect(find.text('—'), findsWidgets);
+    expect(tester.widget<TextButton>(calibrate).onPressed, isNotNull);
+    await tester.ensureVisible(calibrate);
+    await tester.tap(calibrate);
+    await tester.pump();
+    expect(find.text('≈ 1 ม.'), findsOneWidget);
+    expect(find.text('%'), findsNothing);
+    reader.emit(-80);
+    await tester.pump();
+    expect(find.text('≈ 3 ม. 20 ซม.'), findsOneWidget);
+    reader.emit(null);
+    await tester.pump();
+    expect(find.text('≈ 3 ม. 20 ซม.'), findsNothing);
+    reader.emit(-60);
+    await tester.pump();
+    expect(find.text('≈ 1 ม.'), findsOneWidget);
+    // The screen uses wall-clock timestamps; pump advances only fake timers.
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1600)));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('≈ 1 ม.'), findsNothing);
+    expect(
+        tester
+            .widget<TextButton>(
+                find.widgetWithText(TextButton, 'เทียบระยะ 1 เมตรใหม่'))
+            .onPressed,
+        isNull);
+    c.systemBackOverride!();
+    await tester.pump();
+    await tester.tap(find.text('CRT-02'));
+    await tester.pump();
+    expect(calibrate, findsOneWidget);
+    expect(find.text('≈ 1 ม.'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    c.dispose();
+    await reader.batches.close();
+  });
+}

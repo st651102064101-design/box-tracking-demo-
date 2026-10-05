@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import '../services/epc_codec.dart';
 import '../services/radar_signal.dart';
+import '../services/radar_distance.dart';
 import '../models/box.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
@@ -35,6 +36,7 @@ class RfidLocateScreen extends StatefulWidget {
 enum _Step { pick, locate, locateMulti }
 
 class _RfidLocateScreenState extends State<RfidLocateScreen> {
+  late final AppController _controller;
   /// Set when a scanned code doesn't resolve to a taggable box — shown under
   /// the scan prompt until the next scan replaces or clears it.
   String? _scanError;
@@ -65,6 +67,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// bar decays independently instead of all sharing one clock.
   final Map<String, int?> _multiRssi = {};
   final Map<String, DateTime?> _multiLastHit = {};
+  final Map<String, int?> _distanceRssiByTag = {};
+  final Map<String, int> _referenceRssiByTag = {};
 
   StreamSubscription<List<RfidTagRead>>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
@@ -104,6 +108,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   void initState() {
     super.initState();
     final c = context.read<AppController>();
+    _controller = c;
     // Unlike Scan/Track — which deliberately let scanInputMode carry over
     // between visits — this screen always starts on บาร์โค้ด. It's the
     // "pick a box" step's default entry point (searching by tag/type is the
@@ -193,7 +198,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // Clear rather than leave dangling: a stray system-back press after
     // this screen is gone must not invoke a closure that calls setState on
     // an unmounted State.
-    final c = context.read<AppController>();
+    final c = _controller;
     if (identical(c.systemBackOverride, _handleBack)) {
       c.systemBackOverride = null;
     }
@@ -233,6 +238,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     final wantTag = _target!.tag.toUpperCase();
 
     int? best;
+    int? measured;
     for (final r in batch) {
       final epc = r.epc.toUpperCase();
       final tid = r.tid?.toUpperCase();
@@ -243,8 +249,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
               epcMatchesTag(epc, wantTag);
       if (!isMatch) continue;
-      final rssi = r.rssi ??
-          _unknownRssi;
+      if (RadarDistance.validRssi(r.rssi) &&
+          (measured == null || r.rssi! > measured)) {
+        measured = r.rssi;
+      }
+      final rssi = r.rssi ?? _unknownRssi;
       if (best == null || rssi > best) best = rssi;
     }
     final matched = best;
@@ -255,6 +264,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _rssi = matched;
       _lastHitAt = now;
       _hits++;
+      _distanceRssiByTag[_target!.tag] = measured;
     });
 
     // Haptic "click" scales with proximity like a Geiger counter, throttled
@@ -312,19 +322,24 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // via the API yet) must still fall through to epcMatchesTag below,
       // not skip this target entirely.
       int? best;
+      int? measured;
       for (final r in batch) {
         final epc = r.epc.toUpperCase();
         final tid = r.tid?.toUpperCase();
-        final isMatch = (want != null &&
-                want.isNotEmpty &&
-                (epc == want || tid == want)) ||
-            epcMatchesTag(epc, wantTag);
+        final isMatch =
+            (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
+                epcMatchesTag(epc, wantTag);
         if (!isMatch) continue;
+        if (RadarDistance.validRssi(r.rssi) &&
+            (measured == null || r.rssi! > measured)) {
+          measured = r.rssi;
+        }
         final rssi = r.rssi ?? _unknownRssi;
         if (best == null || rssi > best) best = rssi;
       }
       if (best == null) continue;
       _multiRssi[target.tag] = best;
+      _distanceRssiByTag[target.tag] = measured;
       _multiLastHit[target.tag] = now;
       changed = true;
       if (overallBest == null || best > overallBest) overallBest = best;
@@ -390,13 +405,41 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
   void _tickSound(double level) {
     final now = DateTime.now();
-    if (_lastGradeSoundAt != null && now.difference(_lastGradeSoundAt!) < RadarSignal.gap(level)) return;
+    if (_lastGradeSoundAt != null &&
+        now.difference(_lastGradeSoundAt!) < RadarSignal.gap(level)) {
+      return;
+    }
     _lastGradeSoundAt = now;
     context.read<AppController>().rfid.playSound(RadarSignal.sound(level));
   }
 
   double _normalize(int rssi) {
     return RadarSignal.level(rssi);
+  }
+
+  String _distanceLabel(String tag, LocaleController loc, bool fresh) =>
+      RadarDistance.label(
+        RadarDistance.metres(
+          fresh ? _distanceRssiByTag[tag] : null,
+          _referenceRssiByTag[tag],
+        ),
+        english: loc.lang == 'en',
+      );
+
+  Widget _calibration(String tag, LocaleController loc, bool fresh) {
+    final canCalibrate =
+        fresh && RadarDistance.validRssi(_distanceRssiByTag[tag]);
+    return TextButton.icon(
+      onPressed: canCalibrate
+          ? () => setState(() {
+                _referenceRssiByTag[tag] = _distanceRssiByTag[tag]!;
+              })
+          : null,
+      icon: const Icon(Icons.straighten, size: 18),
+      label: Text(loc.t(_referenceRssiByTag.containsKey(tag)
+          ? 'เทียบระยะ 1 เมตรใหม่'
+          : 'ยืนห่างแท็ก 1 เมตร แล้วกดเทียบระยะ')),
+    );
   }
 
   Future<void> _toggleRead(AppController c) async {
@@ -454,6 +497,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _multiTargets.removeWhere((t) => t.tag == tag);
       _multiRssi.remove(tag);
       _multiLastHit.remove(tag);
+      _distanceRssiByTag.remove(tag);
+      _referenceRssiByTag.remove(tag);
     });
   }
 
@@ -464,6 +509,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _rssi = null;
       _lastHitAt = null;
       _hits = 0;
+      _distanceRssiByTag.clear();
     });
     // The sweep step has no barcode alternative — it only makes sense as an
     // RFID proximity search — so it always needs the trigger to actually
@@ -484,6 +530,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     if (_multiTargets.isEmpty) return;
     setState(() {
       _step = _Step.locateMulti;
+      _distanceRssiByTag.clear();
       _multiRssi.clear();
       _multiLastHit.clear();
       for (final t in _multiTargets) {
@@ -614,14 +661,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             }
           }),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: _multiMode ? C.limeBg : C.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: _multiMode ? C.limeBorder : C.fieldBorder,
-                  width: 1.5),
+                  color: _multiMode ? C.limeBorder : C.fieldBorder, width: 1.5),
             ),
             child: Row(
               children: [
@@ -723,8 +768,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                       child: ChoiceChip(
                         label: Text(typeNames[id]!),
                         selected: _typeFilter == id,
-                        onSelected: (_) =>
-                            setState(() => _typeFilter = id),
+                        onSelected: (_) => setState(() => _typeFilter = id),
                       ),
                     ),
                 ],
@@ -734,63 +778,62 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           ],
           if (tagged.isEmpty)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
               child: Text(loc.t('ไม่มีกล่องประเภทนี้ในระบบ'),
                   style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
             )
           else
-          Container(
-            decoration: BoxDecoration(
-              color: C.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: C.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(tagged.length, (i) {
-                final b = tagged[i];
-                final sm = StatusMeta.of(b.status);
-                return InkWell(
-                  onTap: () => _pick(c, b),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: i == tagged.length - 1
-                          ? null
-                          : Border(bottom: BorderSide(color: C.border)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.nfc, size: 18, color: C.muted),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(b.tag,
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'monospace')),
-                              Text(c.S!.typeName(b.type),
-                                  style:
-                                      TextStyle(fontSize: 12, color: C.muted)),
-                            ],
+            Container(
+              decoration: BoxDecoration(
+                color: C.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: C.border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(tagged.length, (i) {
+                  final b = tagged[i];
+                  final sm = StatusMeta.of(b.status);
+                  return InkWell(
+                    onTap: () => _pick(c, b),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: i == tagged.length - 1
+                            ? null
+                            : Border(bottom: BorderSide(color: C.border)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.nfc, size: 18, color: C.muted),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(b.tag,
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'monospace')),
+                                Text(c.S!.typeName(b.type),
+                                    style: TextStyle(
+                                        fontSize: 12, color: C.muted)),
+                              ],
+                            ),
                           ),
-                        ),
-                        Pill(sm.label,
-                            color: sm.color, bg: sm.bg, fontSize: 11),
-                      ],
+                          Pill(sm.label,
+                              color: sm.color, bg: sm.bg, fontSize: 11),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
-          ),
         ],
       ],
     );
@@ -805,7 +848,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       return [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 4),
-          child: Text(loc.t('ยังไม่มีกล่อง — ยิงบาร์โค้ดกล่องที่ต้องการหาทีละกล่อง'),
+          child: Text(
+              loc.t('ยังไม่มีกล่อง — ยิงบาร์โค้ดกล่องที่ต้องการหาทีละกล่อง'),
               style: TextStyle(fontSize: 13, color: C.faint, height: 1.4)),
         ),
       ];
@@ -848,8 +892,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           children: List.generate(_multiTargets.length, (i) {
             final b = _multiTargets[i];
             return Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 border: i == _multiTargets.length - 1
                     ? null
@@ -892,13 +935,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         child: FilledButton.icon(
           onPressed: () => _startMultiLocate(c),
           icon: const Icon(Icons.wifi_tethering),
-          label:
-              Text('${loc.t('เริ่มค้นหา')} (${_multiTargets.length})'),
+          label: Text('${loc.t('เริ่มค้นหา')} (${_multiTargets.length})'),
           style: FilledButton.styleFrom(
             backgroundColor: C.ink,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ),
@@ -997,7 +1039,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                   child: Text(
                     loc.t(
                         'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ผูกแท็กได้ที่หน้า "ลงทะเบียนกล่อง"'),
-                    style: TextStyle(fontSize: 12.5, color: C.orange, height: 1.4),
+                    style:
+                        TextStyle(fontSize: 12.5, color: C.orange, height: 1.4),
                   ),
                 ),
               ],
@@ -1045,7 +1088,19 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 ],
               ),
               const SizedBox(height: 22),
-              _Gauge(level: level, found: found),
+              _Gauge(
+                level: level,
+                found: found,
+                distance: _distanceLabel(b.tag, loc, _rssi != null),
+                caption: loc.t('ระยะประมาณ'),
+              ),
+              _calibration(b.tag, loc, _rssi != null),
+              Text(
+                loc.t('ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน '
+                    'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: C.muted),
+              ),
               const SizedBox(height: 18),
               Text(
                 _rssi == null
@@ -1157,7 +1212,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                               : (_status.message.isEmpty
                                   ? loc.t('ยังไม่ได้เชื่อมต่อ')
                                   : _status.message),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
               GestureDetector(
@@ -1174,14 +1230,19 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         const SizedBox(height: 14),
         ..._multiTargets.map((b) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _HeatBar(
-                box: b,
-                level: _multiRssi[b.tag] == null
-                    ? 0.0
-                    : _normalize(_multiRssi[b.tag]!),
-                rssi: _multiRssi[b.tag],
-                typeName: c.S!.typeName(b.type),
-              ),
+              child: Column(children: [
+                _HeatBar(
+                  box: b,
+                  level: _multiRssi[b.tag] == null
+                      ? 0.0
+                      : _normalize(_multiRssi[b.tag]!),
+                  rssi: _multiRssi[b.tag],
+                  typeName: c.S!.typeName(b.type),
+                  distance:
+                      _distanceLabel(b.tag, loc, _multiRssi[b.tag] != null),
+                ),
+                _calibration(b.tag, loc, _multiRssi[b.tag] != null),
+              ]),
             )),
         const SizedBox(height: 10),
         SizedBox(
@@ -1193,8 +1254,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             style: FilledButton.styleFrom(
               backgroundColor: _reading ? C.red : C.ink,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -1207,8 +1268,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             border: Border.all(color: C.border),
           ),
           child: Text(
-            loc.t('เดินกวาดไปเรื่อยๆ — แถบของแต่ละกล่องจะสว่างขึ้นเมื่อเข้าใกล้กล่องนั้น '
-                'พร้อมกันได้หลายกล่อง'),
+            loc.t('ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน '
+                'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
             style: TextStyle(fontSize: 12, color: C.ink3, height: 1.45),
           ),
         ),
@@ -1219,7 +1280,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
 /// One row of [_locateMultiBody]'s Proximity Heat-Bar — a box's tag/type on
 /// the left, a horizontal strength bar on the right using the same
-/// grey→amber→green ramp and 0-100% readout the single-target [_Gauge]
+/// grey→amber→green ramp and calibrated approximate distance as [_Gauge]
 /// uses, just laid out to stack N-high instead of taking the whole screen
 /// for one box.
 class _HeatBar extends StatelessWidget {
@@ -1227,11 +1288,13 @@ class _HeatBar extends StatelessWidget {
   final double level; // 0..1
   final int? rssi;
   final String typeName;
+  final String distance;
   const _HeatBar(
       {required this.box,
       required this.level,
       required this.rssi,
-      required this.typeName});
+      required this.typeName,
+      required this.distance});
 
   @override
   Widget build(BuildContext context) {
@@ -1295,9 +1358,9 @@ class _HeatBar extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             SizedBox(
-              width: 40,
+              width: 110,
               child: Text(
-                rssi == null ? '—' : '${(animated * 100).round()}%',
+                distance,
                 textAlign: TextAlign.right,
                 style: TextStyle(
                     fontSize: 13,
@@ -1327,16 +1390,18 @@ Color _signalColor(double level) {
   return Color.lerp(amber, green, (level - 0.5) / 0.5)!;
 }
 
-/// Semi-circular signal meter with a large 0-100% readout in the middle —
-/// the number is what an operator glancing down mid-walk actually reads,
-/// the arc is what they track without reading. dBm never appears here: it's
-/// a negative logarithmic figure that means nothing to anyone who isn't an
-/// RF engineer (the raw value is still shown as small text below the gauge
-/// for diagnostics).
+/// Signal arc with an approximate calibrated distance, never an invented
+/// metric conversion of the animated proximity percentage.
 class _Gauge extends StatelessWidget {
   final double level; // 0..1
   final bool found;
-  const _Gauge({required this.level, required this.found});
+  final String distance;
+  final String caption;
+  const _Gauge(
+      {required this.level,
+      required this.found,
+      required this.distance,
+      required this.caption});
 
   @override
   Widget build(BuildContext context) {
@@ -1360,17 +1425,16 @@ class _Gauge extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${(animated * 100).round()}',
+                    distance,
                     style: TextStyle(
-                      fontSize: 44,
+                      fontSize: 26,
                       fontWeight: FontWeight.w800,
                       height: 1.0,
-                      letterSpacing: -1.5,
                       color: animated <= 0 ? C.faint : _signalColor(animated),
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
-                  Text('%',
+                  Text(caption,
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
