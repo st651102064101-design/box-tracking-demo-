@@ -632,7 +632,9 @@ class RfidReaderController(private val context: Context) :
         profileConfig.putString("PROFILE_NAME", dataWedgeProfileName)
         profileConfig.putString("PROFILE_ENABLED", "true")
         profileConfig.putString("CONFIG_MODE", "UPDATE")
-        profileConfig.putParcelable("PLUGIN_CONFIG", pluginConfig)
+        // MC3390R DataWedge expects ArrayList even for one plugin. A single
+        // Bundle is rejected, leaving INTENT output/scanner configuration stale.
+        profileConfig.putParcelableArrayList("PLUGIN_CONFIG", arrayListOf(pluginConfig))
         sendDataWedgeConfig(profileConfig)
     }
 
