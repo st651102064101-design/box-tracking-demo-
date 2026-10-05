@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/epc_codec.dart';
+import '../services/radar_signal.dart';
 import '../models/box.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
@@ -95,9 +96,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   // (which land in the -75..-90dBm range on this hardware at a few meters,
   // not down at -70) somewhere to register on the meter instead of clamping
   // to zero the moment they're not already close.
-  static const _rssiFar = -85;
-  static const _rssiClose = -45;
-  static const _staleAfter = Duration(milliseconds: 900);
+  // A missing RSSI confirms detection, not proximity to the antenna.
+  static const _unknownRssi = -95;
+  static const _staleAfter = RadarSignal.staleAfter;
 
   @override
   void initState() {
@@ -243,7 +244,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
               epcMatchesTag(epc, wantTag);
       if (!isMatch) continue;
       final rssi = r.rssi ??
-          _rssiClose; // no RSSI field on this read: treat as a direct hit
+          _unknownRssi;
       if (best == null || rssi > best) best = rssi;
     }
     final matched = best;
@@ -275,7 +276,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // gauge. Throttled on its own timer (not reused from haptics — a sound
     // needs longer to actually be heard as separate ticks than a vibration
     // does) so a strong, steady signal doesn't turn into a solid tone.
-    final soundGap = Duration(milliseconds: (320 - (level * 220)).round());
+    final soundGap = RadarSignal.gap(level);
     if (_lastGradeSoundAt == null ||
         now.difference(_lastGradeSoundAt!) >= soundGap) {
       _lastGradeSoundAt = now;
@@ -319,7 +320,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 (epc == want || tid == want)) ||
             epcMatchesTag(epc, wantTag);
         if (!isMatch) continue;
-        final rssi = r.rssi ?? _rssiClose;
+        final rssi = r.rssi ?? _unknownRssi;
         if (best == null || rssi > best) best = rssi;
       }
       if (best == null) continue;
@@ -341,7 +342,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         HapticFeedback.selectionClick();
       }
     }
-    final soundGap = Duration(milliseconds: (320 - (level * 220)).round());
+    final soundGap = RadarSignal.gap(level);
     if (_lastGradeSoundAt == null ||
         now.difference(_lastGradeSoundAt!) >= soundGap) {
       _lastGradeSoundAt = now;
@@ -365,6 +366,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         DateTime.now().difference(_lastHitAt!) > _staleAfter) {
       setState(() => _rssi = null);
     }
+    if (_reading && _rssi != null && _step == _Step.locate) {
+      _tickSound(_normalize(_rssi!));
+    }
     if (_multiLastHit.isEmpty) return;
     final now = DateTime.now();
     var changed = false;
@@ -378,11 +382,21 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       }
     }
     if (changed && mounted) setState(() {});
+    final active = _multiRssi.values.whereType<int>().toList();
+    if (_reading && _step == _Step.locateMulti && active.isNotEmpty) {
+      _tickSound(_normalize(active.reduce(math.max)));
+    }
+  }
+
+  void _tickSound(double level) {
+    final now = DateTime.now();
+    if (_lastGradeSoundAt != null && now.difference(_lastGradeSoundAt!) < RadarSignal.gap(level)) return;
+    _lastGradeSoundAt = now;
+    context.read<AppController>().rfid.playSound(RadarSignal.sound(level));
   }
 
   double _normalize(int rssi) {
-    final v = (rssi - _rssiFar) / (_rssiClose - _rssiFar);
-    return v.clamp(0.0, 1.0);
+    return RadarSignal.level(rssi);
   }
 
   Future<void> _toggleRead(AppController c) async {
