@@ -64,7 +64,8 @@ void main() {
     expect(find.text('%'), findsNothing);
     reader.emit(-80);
     await tester.pump();
-    expect(find.text('≈ 3 ม. 20 ซม.'), findsOneWidget);
+    // An isolated weaker sample must not jump the distance immediately.
+    expect(find.text('≈ 3 ม. 20 ซม.'), findsNothing);
     reader.emit(null);
     await tester.pump();
     expect(find.text('≈ 3 ม. 20 ซม.'), findsNothing);

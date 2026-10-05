@@ -69,6 +69,15 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   final Map<String, int?> _multiRssi = {};
   final Map<String, DateTime?> _multiLastHit = {};
   final Map<String, int?> _distanceRssiByTag = {};
+  final Map<String, RadarSmoother> _signalSmoothers = {};
+
+  int? _smoothSignal(String tag, int? rssi, DateTime now) {
+    if (rssi == null) {
+      _signalSmoothers.remove(tag);
+      return null;
+    }
+    return _signalSmoothers.putIfAbsent(tag, RadarSmoother.new).update(rssi, now);
+  }
 
   StreamSubscription<List<RfidTagRead>>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
@@ -251,10 +260,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       final rssi = r.rssi ?? _unknownRssi;
       if (best == null || rssi > best) best = rssi;
     }
-    final matched = best;
+    final now = DateTime.now();
+    measured = _smoothSignal(_target!.tag, measured, now);
+    final matched = measured ?? best;
     if (matched == null) return;
 
-    final now = DateTime.now();
     setState(() {
       _rssi = matched;
       _lastHitAt = now;
@@ -333,6 +343,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         if (best == null || rssi > best) best = rssi;
       }
       if (best == null) continue;
+      measured = _smoothSignal(target.tag, measured, now);
+      best = measured ?? best;
       _multiRssi[target.tag] = best;
       _distanceRssiByTag[target.tag] = measured;
       _multiLastHit[target.tag] = now;
@@ -475,6 +487,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _multiRssi.remove(tag);
       _multiLastHit.remove(tag);
       _distanceRssiByTag.remove(tag);
+      _signalSmoothers.remove(tag);
     });
   }
 
@@ -486,6 +499,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _lastHitAt = null;
       _hits = 0;
       _distanceRssiByTag.clear();
+      _signalSmoothers.clear();
     });
     // The sweep step has no barcode alternative — it only makes sense as an
     // RFID proximity search — so it always needs the trigger to actually
@@ -505,6 +519,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     setState(() {
       _step = _Step.locateMulti;
       _distanceRssiByTag.clear();
+      _signalSmoothers.clear();
       _multiRssi.clear();
       _multiLastHit.clear();
       for (final t in _multiTargets) {

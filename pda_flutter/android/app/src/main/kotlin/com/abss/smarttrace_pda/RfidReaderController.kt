@@ -189,9 +189,9 @@ class RfidReaderController(private val context: Context) :
             "grade_warm" -> synth(Waveform.SINE, 1600.0, 55, 0.65)
             "grade_close" -> synth(Waveform.SQUARE, 2600.0, 45, 0.8)
             "grade_found" -> {
-                synth(Waveform.SQUARE, 3200.0, 25, 0.95)
-                Thread.sleep(15)
-                synth(Waveform.SQUARE, 3200.0, 25, 0.95)
+                // One tick at every grade: crossing the near threshold must
+                // not abruptly double the perceived cadence.
+                synth(Waveform.SQUARE, 3200.0, 45, 0.95)
             }
             // Putaway confirmation pair. Deliberately not in the settings
             // picker (sound_catalog.dart) for the same reason the grade_*
