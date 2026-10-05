@@ -82,7 +82,7 @@ class _BoxRegisterScreenState extends State<BoxRegisterScreen> {
     _rfid = rfid;
     _rfidStatus = RfidStatus(rfid.state, '');
     _statusSub = rfid.status.listen((s) => setState(() => _rfidStatus = s));
-    _tagSub = rfid.tagReads.listen(_onTagRead);
+    _tagSub = _c.registeredRfidReads.listen(_onTagRead);
     if (rfid.supported && rfid.state != RfidState.connected) rfid.connect();
     _tagCtrl.addListener(_onTagChanged);
     WidgetsBinding.instance

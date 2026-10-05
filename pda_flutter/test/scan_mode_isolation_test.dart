@@ -35,6 +35,44 @@ void main() {
     c.dispose();
   });
 
+  test('DB filter drops foreign, empty and unbound barcode EPC reads', () async {
+    final batches = <List<RfidTagRead>>[];
+    final sub = c.registeredRfidBatches.listen(batches.add);
+    sdk.readBatch([read('FOREIGN'), read(''), read('CRT-01')]);
+    await settle();
+    expect(batches, isEmpty);
+    sdk.readBatch([read('FOREIGN'), read(' e2001122 ')]);
+    await settle();
+    expect(batches.single.map((r) => r.epc), [' e2001122 ']);
+    await sub.cancel();
+  });
+
+  test('DB filter accepts legacy TID and invalidates after refresh/detach', () async {
+    (api.state['boxes']['CRT-01'] as Map)['rfidTid'] = 'KNOWN-TID';
+    await c.refresh();
+    final readByTid = RfidTagRead(epc: 'OTHER-EPC', tid: 'known-tid', readAt: DateTime.now());
+    expect(c.registeredBoxForRfidRead(readByTid), 'CRT-01');
+    (api.state['boxes']['CRT-01'] as Map).remove('rfidTid');
+    await c.refresh();
+    expect(c.registeredBoxForRfidRead(readByTid), isNull);
+  });
+
+  for (final screen in [Screen.track, Screen.transfer, Screen.cycleCount, Screen.scan]) {
+    test('foreign RFID tags cause no results or gate calls on $screen', () async {
+      c.go(screen);
+      c.gateFormStep = false;
+      c.setScanInputMode(ScanInputMode.rfid);
+      sdk.readBatch([read('FOREIGN'), read('FOREIGN'), read('CRT-01')]);
+      await settle();
+      expect(c.trackRfidHits, isEmpty);
+      expect(c.transferRfidHits, isEmpty);
+      expect(c.cycleCountRfidHits, isEmpty);
+      expect(c.queue, isEmpty);
+      expect(api.gateInCalls, isEmpty);
+      expect(api.gateOutCalls, isEmpty);
+    });
+  }
+
   for (final screen in [Screen.track, Screen.transfer, Screen.cycleCount]) {
     test('late antenna batch in barcode mode leaves $screen results unchanged',
         () async {

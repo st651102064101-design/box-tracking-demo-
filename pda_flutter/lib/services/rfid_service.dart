@@ -284,6 +284,8 @@ class RfidService {
   Future<void> startInventory() async {
     if (!supported) return;
     try {
+      // Never beep on unfiltered native reads, including on-screen starts.
+      await setAutoBeep(false);
       await _method.invokeMethod('startInventory');
     } catch (_) {}
   }

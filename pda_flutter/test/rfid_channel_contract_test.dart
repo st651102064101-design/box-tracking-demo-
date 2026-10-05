@@ -54,6 +54,13 @@ void main() {
     expect(batches.single.first.tid, 'E280ABCD');
     expect(batches.single.first.rssi, -44);
   });
+  test('inventory disables native unfiltered beep before starting antenna', () async {
+    await service.startInventory();
+    final controls = calls.where((c) => c.method == 'setAutoBeep' || c.method == 'startInventory').toList();
+    expect(controls.map((c) => c.method), ['setAutoBeep', 'startInventory']);
+    expect(controls.first.arguments, {'enabled': false});
+  });
+
   test('shared barcode trigger sends press and release without inventory calls', () async {
     await service.setBarcodeTrigger(true);
     await service.setBarcodeTrigger(false);

@@ -115,7 +115,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // keep the operator's selected mode intact for when they leave this page.
     final rfid = c.rfid;
     _status = RfidStatus(rfid.state, '');
-    _tagSub = rfid.tagBatches.listen(_onBatch);
+    _tagSub = c.registeredRfidBatches.listen(_onBatch);
     _statusSub = rfid.status.listen((s) {
       if (mounted) setState(() => _status = s);
     });

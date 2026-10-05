@@ -113,7 +113,7 @@ class _RfidInputScreenState extends State<RfidInputScreen> {
     // One setState per frame, not per tag: this list is rebuilt whole on every
     // rebuild, so a listener firing per read would make the UI — not the
     // reader — the thing deciding how fast reads can be taken.
-    _tagSub = rfid.tagBatches.listen((batch) {
+    _tagSub = context.read<AppController>().registeredRfidBatches.listen((batch) {
       if (!mounted) return;
       final now = DateTime.now();
       final cut = now.subtract(const Duration(seconds: 1));

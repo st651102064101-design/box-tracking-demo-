@@ -532,7 +532,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // Barcode/RFID listeners do not need the model string. Hardware detect
     // used to run first and hold the backend connect — the chip stayed
     // offline for no server-related reason.
-    _tagSub = rfid.tagBatches.listen(_onReaderBatch);
+    _tagSub = registeredRfidBatches.listen(_onReaderBatch);
     _trigSub = rfid.triggers.listen(_onReaderTrigger);
     rfid.ensureListening();
     _barcodeSub = rfid.barcodes.listen(deliverBarcode);
@@ -2383,12 +2383,49 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// next to it. When Prefs.rfidMinRssi is set, a read weaker than that
   /// threshold never reaches addScan/doTrack/badge matching at all — the
   /// same knob a Settings-screen slider drives (see settings_screen.dart).
+  /// Only explicit DB RFID bindings qualify; a barcode/ASCII EPC is not a binding.
+  StateSnapshot? _rfidBindingSnapshot;
+  final Map<String, String> _rfidBindings = {};
+
+  String? registeredBoxForRfidRead(RfidTagRead read) {
+    final codes = [read.epc, read.tid ?? '']
+        .map((v) => v.trim().toLowerCase()).where((v) => v.isNotEmpty).toSet();
+    if (codes.isEmpty || S == null) return null;
+    if (!identical(_rfidBindingSnapshot, S)) {
+      _rfidBindingSnapshot = S;
+      _rfidBindings.clear();
+      for (final entry in S!.boxesRaw.entries) {
+        final box = entry.value;
+        if (box is! Map) continue;
+        for (final key in ['rfid', 'rfidEpc', 'rfidTid']) {
+          final value = box[key];
+          if (value is String && value.trim().isNotEmpty) {
+            _rfidBindings[value.trim().toLowerCase()] = entry.key;
+          }
+        }
+      }
+    }
+    for (final code in codes) {
+      final tag = _rfidBindings[code];
+      if (tag != null) return tag;
+    }
+    return null;
+  }
+
+  Stream<List<RfidTagRead>> get registeredRfidBatches => rfid.tagBatches
+      .map((batch) => batch.where((read) => registeredBoxForRfidRead(read) != null).toList())
+      .where((batch) => batch.isNotEmpty);
+
+  Stream<RfidTagRead> get registeredRfidReads => registeredRfidBatches
+      .expand((batch) => batch);
+
   void _onReaderBatch(List<RfidTagRead> batch) {
     if (!hasIntegratedRfid || _effectiveInputMode != ScanInputMode.rfid) return;
     final minRssi = prefs.rfidMinRssi;
     for (final r in batch) {
       if (minRssi != null && r.rssi != null && r.rssi! < minRssi) continue;
-      _onReaderTag(r.epc);
+      final tag = registeredBoxForRfidRead(r);
+      if (tag != null) _onReaderTag(tag);
     }
   }
 
@@ -2594,11 +2631,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     // fires it from its own read callback with no idea a tag is a repeat,
     // only Dart does. Every other RFID screen still wants the raw per-read
     // feedback.
-    rfid.setAutoBeep(screen != Screen.scan &&
-        screen != Screen.rfidLocate &&
-        screen != Screen.track &&
-        screen != Screen.transfer &&
-        screen != Screen.boxRegister);
+    // Raw SDK feedback would beep for foreign tags before DB filtering.
+    rfid.setAutoBeep(false);
     rfid.startInventory();
   }
 

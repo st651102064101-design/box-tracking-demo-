@@ -504,7 +504,7 @@ class _RfidPanelState extends State<_RfidPanel> {
         _refresh();
       }
     });
-    _tagSub = rfid.tagBatches.listen((batch) {
+    _tagSub = context.read<AppController>().registeredRfidBatches.listen((batch) {
       if (!_testFiring) return;
       final epcs = batch.map((r) => r.epc).where((e) => e.isNotEmpty);
       if (epcs.isEmpty) return;
@@ -857,9 +857,7 @@ class _RfidPanelState extends State<_RfidPanel> {
             const SizedBox(height: 10),
             Divider(height: 1, color: C.border),
             const SizedBox(height: 12),
-            _row(loc.t('แท็กที่อ่านได้สะสม'), '${_d['tagCount'] ?? 0}'),
-            _row(loc.t('EPC ล่าสุด'), _d['lastEpc']),
-            _row(loc.t('RSSI ล่าสุด'), _d['lastRssi']?.toString()),
+            _row(loc.t('แท็กที่อ่านได้'), '${_liveFound.length}'),
             if (_d['lastError'] != null) ...[
               const SizedBox(height: 8),
               Container(
