@@ -8,6 +8,7 @@ import '../models/box.dart';
 import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/scan_prompt_card.dart';
 
 class TrackScreen extends StatefulWidget {
   const TrackScreen({super.key});
@@ -19,6 +20,7 @@ class _TrackScreenState extends State<TrackScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
   bool _showAllHistory = false;
+
   /// The code field stays hidden until the operator taps พิมพ์รหัสกล่อง —
   /// opening this screen must not steal focus or raise the keyboard.
   bool _showTypeField = false;
@@ -31,7 +33,7 @@ class _TrackScreenState extends State<TrackScreen> {
   static const _autoSearchDelay = Duration(milliseconds: 180);
   static const _autoSearchMinLen = 3;
   static const _historyPreview = 3;
-  static const _searchBlue = Color(0xFF2563EB);
+  static const _searchBlue = ScanPromptCard.actionBlue;
 
   /// Length after the previous onChanged — same trick login_screen.dart's
   /// badge field uses. A keyboard-wedge scan on this hardware often lands as
@@ -115,9 +117,8 @@ class _TrackScreenState extends State<TrackScreen> {
         : Icons.qr_code_scanner;
 
     final history = c.recentScanHistory;
-    final historyShown = _showAllHistory
-        ? history
-        : history.take(_historyPreview).toList();
+    final historyShown =
+        _showAllHistory ? history : history.take(_historyPreview).toList();
     final barcode = c.scanInputMode == ScanInputMode.barcode;
 
     return AutoHideHeader(
@@ -187,8 +188,8 @@ class _TrackScreenState extends State<TrackScreen> {
                         ? loc.t(_showAllHistory ? 'ย่อ' : 'ดูทั้งหมด')
                         : null,
                     onAction: history.length > _historyPreview
-                        ? () => setState(
-                            () => _showAllHistory = !_showAllHistory)
+                        ? () =>
+                            setState(() => _showAllHistory = !_showAllHistory)
                         : null,
                   ),
                   _historyList(c, historyShown, loc),
@@ -203,34 +204,11 @@ class _TrackScreenState extends State<TrackScreen> {
 
   Widget _scanPromptCard(AppController c, LocaleController loc) {
     final rfid = c.scanInputMode == ScanInputMode.rfid;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 26),
-      decoration: BoxDecoration(
-        color: C.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: C.border),
-      ),
-      child: Column(
-        children: [
-          Icon(rfid ? Icons.wifi_tethering : Icons.qr_code_2,
-              size: 56, color: C.ink2),
-          const SizedBox(height: 14),
-          Text(
-            rfid
-                ? loc.t('เหนี่ยวไกเพื่ออ่านแท็ก RFID')
-                : loc.t('กดปุ่ม SCANNER ที่เครื่อง'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          if (!rfid) ...[
-            const SizedBox(height: 4),
-            Text(loc.t('เพื่อยิงบาร์โค้ดได้'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, color: C.muted)),
-          ],
-        ],
-      ),
+    return ScanPromptCard(
+      icon: rfid ? Icons.wifi_tethering : Icons.qr_code_2,
+      title: loc.t(
+          rfid ? 'เหนี่ยวไกเพื่ออ่านแท็ก RFID' : 'กดปุ่ม SCANNER ที่เครื่อง'),
+      subtitle: rfid ? null : loc.t('เพื่อยิงบาร์โค้ดได้'),
     );
   }
 
@@ -290,7 +268,8 @@ class _TrackScreenState extends State<TrackScreen> {
           fontSize: 16, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
       decoration: InputDecoration(
         hintText: loc.t('รหัสกล่อง เช่น CRT-01'),
-        hintStyle: TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
+        hintStyle:
+            TextStyle(fontFamily: 'Roboto', color: C.faint, fontSize: 15),
         suffixIcon: _ctrl.text.isEmpty
             ? null
             : IconButton(
@@ -408,8 +387,7 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _historyList(
-      AppController c, List<Box> boxes, LocaleController loc) {
+  Widget _historyList(AppController c, List<Box> boxes, LocaleController loc) {
     return _boxRows(c, loc, boxes, onTap: (b) => c.viewTrackHit(b.tag));
   }
 
@@ -428,8 +406,7 @@ class _TrackScreenState extends State<TrackScreen> {
           return InkWell(
             onTap: () => onTap(b),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
                 border: i == boxes.length - 1
                     ? null
@@ -697,8 +674,7 @@ class _TrackScreenState extends State<TrackScreen> {
                     if ((h['recorder'] ?? '').toString().isNotEmpty) {
                       meta.add('${loc.t('โดย')} ${h['recorder']}');
                     }
-                    if (dir == 'out' &&
-                        (h['do'] ?? '').toString().isNotEmpty) {
+                    if (dir == 'out' && (h['do'] ?? '').toString().isNotEmpty) {
                       meta.add('${h['do']}');
                     }
                     return _histRow(

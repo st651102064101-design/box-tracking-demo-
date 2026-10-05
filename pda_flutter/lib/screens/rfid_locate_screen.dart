@@ -15,6 +15,7 @@ import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
+import '../widgets/scan_prompt_card.dart';
 
 /// "Find this box" — pick a box by tag/type, then sweep the reader like a
 /// Geiger counter: every read that matches the box's own EPC (or TID, if it
@@ -643,8 +644,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         // anymore (this screen is find-by-scan only): the only choice left
         // on this step is whether one scan jumps straight to the gauge or
         // adds to a running multi-box list. See [_onScan]/[_addMultiTarget].
+        ScanPromptCard(
+          icon: Icons.qr_code_2,
+          title: loc.t('กดปุ่ม SCANNER ที่เครื่อง'),
+          subtitle: loc.t(_multiMode
+              ? 'ยิงบาร์โค้ดกล่องที่จะหา — ยิงได้หลายกล่อง'
+              : 'ยิงบาร์โค้ดกล่องที่จะหา'),
+        ),
+        const SizedBox(height: 16),
         InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           onTap: () => setState(() {
             _multiMode = !_multiMode;
             if (!_multiMode) {
@@ -657,9 +666,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: _multiMode ? C.limeBg : C.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: _multiMode ? C.limeBorder : C.fieldBorder, width: 1.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _multiMode ? C.limeBorder : C.border),
             ),
             child: Row(
               children: [
@@ -686,36 +694,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 11),
-        // No field: a picking ticket or an existing pallet label carries a
-        // real, scannable code, and typing one is what let a mistyped tag
-        // jump into a sweep for the wrong box. Nothing to scan in hand?
-        // Tap a box straight off the list below instead.
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
-          decoration: BoxDecoration(
-            color: C.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: C.fieldBorder, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.qr_code_scanner, color: C.muted),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                    loc.t(_multiMode
-                        ? 'ยิงบาร์โค้ดกล่องที่จะหา — ยิงได้หลายกล่อง'
-                        : 'ยิงบาร์โค้ดกล่องที่จะหา'),
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: C.muted,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ],
           ),
         ),
         if (_scanError != null) ...[
@@ -930,10 +908,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
           icon: const Icon(Icons.wifi_tethering),
           label: Text('${loc.t('เริ่มค้นหา')} (${_multiTargets.length})'),
           style: FilledButton.styleFrom(
-            backgroundColor: C.ink,
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            backgroundColor: ScanPromptCard.actionBlue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 15),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
         ),
       ),
@@ -1043,7 +1022,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         ],
         Panel(
           padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
-          radius: 20,
+          radius: 22,
           child: Column(
             children: [
               Row(
@@ -1127,10 +1106,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                   icon: Icon(_reading ? Icons.stop : Icons.wifi_tethering),
                   label: Text(loc.t(_reading ? 'หยุดกวาด' : 'เริ่มกวาดหา')),
                   style: FilledButton.styleFrom(
-                    backgroundColor: _reading ? C.red : C.ink,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor:
+                        _reading ? C.red : ScanPromptCard.actionBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(18)),
                   ),
                 ),
               ),
@@ -1245,10 +1226,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             icon: Icon(_reading ? Icons.stop : Icons.wifi_tethering),
             label: Text(loc.t(_reading ? 'หยุดกวาด' : 'เริ่มกวาดหา')),
             style: FilledButton.styleFrom(
-              backgroundColor: _reading ? C.red : C.ink,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              backgroundColor: _reading ? C.red : ScanPromptCard.actionBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(18)),
             ),
           ),
         ),

@@ -8,6 +8,7 @@ import 'package:smarttrace_pda/screens/rfid_locate_screen.dart';
 import 'package:smarttrace_pda/services/i18n.dart';
 import 'package:smarttrace_pda/services/prefs.dart';
 import 'package:smarttrace_pda/services/rfid_service.dart';
+import 'package:smarttrace_pda/widgets/scan_prompt_card.dart';
 import 'app_controller_test.dart' show FakeApi, fixtureState;
 
 class _Reader extends RfidService {
@@ -49,6 +50,8 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: RfidLocateScreen())),
     ));
     await tester.pump();
+    expect(find.byType(ScanPromptCard), findsOneWidget);
+    expect(find.text('กดปุ่ม SCANNER ที่เครื่อง'), findsOneWidget);
     await tester.tap(find.text('CRT-01'));
     await tester.pump();
     final calibrate =

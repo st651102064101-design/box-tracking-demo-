@@ -11,6 +11,7 @@ import '../services/i18n.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
+import '../widgets/scan_prompt_card.dart';
 
 /// "ตรวจนับ" — a stock take over one warehouse, optionally narrowed to a
 /// single zone.
@@ -201,9 +202,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(
-          () => _error = 'ปิดรอบแล้ว แต่เปิดหน้าสแกนรอบใหม่ไม่สำเร็จ · '
-              '${e is ApiException ? e.message : _c.errorMessage(e)}');
+      setState(() => _error = 'ปิดรอบแล้ว แต่เปิดหน้าสแกนรอบใหม่ไม่สำเร็จ · '
+          '${e is ApiException ? e.message : _c.errorMessage(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -273,8 +273,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     final unexpected = _list('unexpected');
 
     if (session != null && c.cycleCountRfidHits.length > _consumedRfidHits) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _drainRfidHits(c));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _drainRfidHits(c));
     }
 
     // No button to tap any more (see the zone chips below for the
@@ -339,17 +338,18 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                   ],
                   if (session == null) ...[
                     if (zones.isNotEmpty) ...[
+                      ScanPromptCard(
+                        icon: Icons.checklist_outlined,
+                        title: loc.t('เลือกโซนที่จะตรวจนับ'),
+                        subtitle: c.selWhName,
+                        busy: _busy,
+                      ),
+                      const SizedBox(height: 16),
                       // No separate "เริ่มตรวจนับ" button any more — picking
                       // a zone chip *is* the start action, straight through
                       // to _start(). A zone with nothing left to decide
                       // (the no-zones branch below) skips even this tap via
                       // the auto-start in build() above.
-                      Text(loc.t('เลือกโซนที่จะตรวจนับ'),
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: C.muted)),
-                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -420,48 +420,26 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                     // same "worse than a missed one" trap the comment below
                     // warns about for barcode — there's still no free-text
                     // field either way, on purpose.
-                    ScanModeToggle(onChanged: (_) {}),
-                    const SizedBox(height: 11),
+                    if (c.hasIntegratedRfid) ...[
+                      ScanModeToggle(onChanged: (_) {}),
+                      const SizedBox(height: 12),
+                    ],
                     // No field: the count is driven by the imager/antenna
                     // alone (see ScanCapture around this screen, and the RFID
                     // toggle above). A hand-typed code in a stock take is
                     // worse than a missed one — it reconciles a box that
                     // nobody actually saw on the shelf.
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 15, vertical: 18),
-                      decoration: BoxDecoration(
-                        color: C.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: C.fieldBorder, width: 1.5),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                              c.scanInputMode == ScanInputMode.rfid
-                                  ? Icons.wifi_tethering
-                                  : Icons.checklist,
-                              color: C.muted),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Text(
-                                loc.t(c.scanInputMode == ScanInputMode.rfid
-                                    ? 'กดไกค้างเพื่อกวาดหากล่องบนชั้น'
-                                    : 'ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: C.muted,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                          if (_busy)
-                            const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
-                        ],
-                      ),
+                    ScanPromptCard(
+                      icon: c.scanInputMode == ScanInputMode.rfid
+                          ? Icons.wifi_tethering
+                          : Icons.qr_code_2,
+                      title: loc.t(c.scanInputMode == ScanInputMode.rfid
+                          ? 'เหนี่ยวไกเพื่ออ่านแท็ก RFID'
+                          : 'กดปุ่ม SCANNER ที่เครื่อง'),
+                      subtitle: loc.t(c.scanInputMode == ScanInputMode.rfid
+                          ? 'กดไกค้างเพื่อกวาดหากล่องบนชั้น'
+                          : 'ยิงบาร์โค้ดกล่องที่พบบนชั้น'),
+                      busy: _busy,
                     ),
                     if (_pending.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -501,9 +479,9 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: C.lime,
                           foregroundColor: C.limeDeep,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(18)),
                         ),
                         child: Text(loc.t('ปิดรอบและบันทึกผล'),
                             style: const TextStyle(
@@ -585,14 +563,14 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
             color: C.surface,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: C.border)),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: color),
+            Icon(icon, size: 22, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -601,7 +579,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                 children: [
                   Text(tag,
                       style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 15.5,
                           fontWeight: FontWeight.w700,
                           fontFamily: 'monospace')),
                   if (sub.isNotEmpty)
@@ -695,7 +673,8 @@ class _ConfettiBurstState extends State<_ConfettiBurst>
 
 class _ConfettiParticle {
   final double x0; // 0..1 horizontal start
-  final double delay; // 0..0.35 stagger, so the burst doesn't fall as one flat sheet
+  final double
+      delay; // 0..0.35 stagger, so the burst doesn't fall as one flat sheet
   final double speed; // fall-speed multiplier
   final double drift; // horizontal sway amplitude in px
   final double size;
@@ -750,4 +729,3 @@ class _ConfettiPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => true;
 }
-
