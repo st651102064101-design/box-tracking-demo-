@@ -24,8 +24,8 @@ class _Reader extends RfidService {
 
 void main() {
   testWidgets(
-      'distance requires measured calibration and disappears on stale '
-      'or missing RSSI; a different box cannot reuse its reference',
+      'distance appears without calibration and disappears on stale '
+      'or missing RSSI; a different box cannot reuse its reading',
       (tester) async {
     tester.view.physicalSize = const Size(400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -54,18 +54,11 @@ void main() {
     expect(find.text('กดปุ่ม SCANNER ที่เครื่อง'), findsOneWidget);
     await tester.tap(find.text('CRT-01'));
     await tester.pump();
-    final calibrate =
-        find.widgetWithText(TextButton, 'ยืนห่างแท็ก 1 เมตร แล้วกดเทียบระยะ');
-    expect(tester.widget<TextButton>(calibrate).onPressed, isNull);
+    expect(find.textContaining('แล้วกดเทียบระยะ'), findsNothing);
     reader.emit(null);
     await tester.pump();
-    expect(tester.widget<TextButton>(calibrate).onPressed, isNull);
+    expect(find.text('≈ 1 ม.'), findsNothing);
     reader.emit(-60);
-    await tester.pump();
-    expect(find.text('—'), findsWidgets);
-    expect(tester.widget<TextButton>(calibrate).onPressed, isNotNull);
-    await tester.ensureVisible(calibrate);
-    await tester.tap(calibrate);
     await tester.pump();
     expect(find.text('≈ 1 ม.'), findsOneWidget);
     expect(find.text('%'), findsNothing);
@@ -83,17 +76,10 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 1600)));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('≈ 1 ม.'), findsNothing);
-    expect(
-        tester
-            .widget<TextButton>(
-                find.widgetWithText(TextButton, 'เทียบระยะ 1 เมตรใหม่'))
-            .onPressed,
-        isNull);
     c.systemBackOverride!();
     await tester.pump();
     await tester.tap(find.text('CRT-02'));
     await tester.pump();
-    expect(calibrate, findsOneWidget);
     expect(find.text('≈ 1 ม.'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     c.dispose();

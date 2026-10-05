@@ -2,6 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smarttrace_pda/services/radar_distance.dart';
 
 void main() {
+  test('uncalibrated estimate is available immediately and increases for weaker signal', () {
+    expect(RadarDistance.estimate(-60), 1);
+    expect(RadarDistance.estimate(-80), greaterThan(RadarDistance.estimate(-60)!));
+    expect(RadarDistance.estimate(-40), lessThan(1));
+    for (final invalid in <int?>[null, 0, 10, -121]) {
+      expect(RadarDistance.estimate(invalid), isNull);
+    }
+    expect(RadarDistance.estimate(-120), 30);
+  });
   test('no metric distance without calibration or a valid RSSI reading', () {
     expect(RadarDistance.metres(-60, null), isNull);
     for (final invalid in <int?>[null, 0, 10, -121]) {

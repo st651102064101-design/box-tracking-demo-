@@ -70,7 +70,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   final Map<String, int?> _multiRssi = {};
   final Map<String, DateTime?> _multiLastHit = {};
   final Map<String, int?> _distanceRssiByTag = {};
-  final Map<String, int> _referenceRssiByTag = {};
 
   StreamSubscription<List<RfidTagRead>>? _tagSub;
   StreamSubscription<RfidStatus>? _statusSub;
@@ -416,28 +415,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
   String _distanceLabel(String tag, LocaleController loc, bool fresh) =>
       RadarDistance.label(
-        RadarDistance.metres(
-          fresh ? _distanceRssiByTag[tag] : null,
-          _referenceRssiByTag[tag],
-        ),
+        RadarDistance.estimate(fresh ? _distanceRssiByTag[tag] : null),
         english: loc.lang == 'en',
       );
 
-  Widget _calibration(String tag, LocaleController loc, bool fresh) {
-    final canCalibrate =
-        fresh && RadarDistance.validRssi(_distanceRssiByTag[tag]);
-    return TextButton.icon(
-      onPressed: canCalibrate
-          ? () => setState(() {
-                _referenceRssiByTag[tag] = _distanceRssiByTag[tag]!;
-              })
-          : null,
-      icon: const Icon(Icons.straighten, size: 18),
-      label: Text(loc.t(_referenceRssiByTag.containsKey(tag)
-          ? 'เทียบระยะ 1 เมตรใหม่'
-          : 'ยืนห่างแท็ก 1 เมตร แล้วกดเทียบระยะ')),
-    );
-  }
 
   Future<void> _toggleRead(AppController c) async {
     if (!c.rfid.supported) return;
@@ -495,7 +476,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _multiRssi.remove(tag);
       _multiLastHit.remove(tag);
       _distanceRssiByTag.remove(tag);
-      _referenceRssiByTag.remove(tag);
     });
   }
 
@@ -1066,9 +1046,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 distance: _distanceLabel(b.tag, loc, _rssi != null),
                 caption: loc.t('ระยะประมาณ'),
               ),
-              _calibration(b.tag, loc, _rssi != null),
               Text(
-                loc.t('ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน '
+                loc.t('ระยะคาดการณ์จากสัญญาณ ไม่ต้องเทียบระยะก่อน '
                     'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: C.muted),
@@ -1215,7 +1194,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                   distance:
                       _distanceLabel(b.tag, loc, _multiRssi[b.tag] != null),
                 ),
-                _calibration(b.tag, loc, _multiRssi[b.tag] != null),
               ]),
             )),
         const SizedBox(height: 10),
@@ -1243,7 +1221,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             border: Border.all(color: C.border),
           ),
           child: Text(
-            loc.t('ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน '
+            loc.t('ระยะคาดการณ์จากสัญญาณ ไม่ต้องเทียบระยะก่อน '
                 'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
             style: TextStyle(fontSize: 12, color: C.ink3, height: 1.45),
           ),

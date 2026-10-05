@@ -5,6 +5,14 @@ import 'dart:math' as math;
 /// fourth-power model is a heuristic, not a ranging measurement. Tag angle,
 /// shelving and multipath can still change the result substantially.
 class RadarDistance {
+  /// Generic backscatter heuristic, NOT a measured device/tag calibration.
+  /// Radar operates at maximum transmit power. Orientation and shelving can
+  /// shift this estimate considerably; never use it as an exact range.
+  static double? estimate(int? rssi) {
+    final distance = metres(rssi, -60);
+    return distance?.clamp(.1, 30).toDouble();
+  }
+
   static bool validRssi(int? rssi) => rssi != null && rssi >= -120 && rssi < 0;
 
   static double? metres(int? rssi, int? referenceAtOneMetre) {
