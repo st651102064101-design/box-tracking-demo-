@@ -42,6 +42,13 @@ class Prefs {
   static const _kRfidRegCount = 'smarttrace_rfid_reg_count';
   static const _kRfidRegDate = 'smarttrace_rfid_reg_date';
   static const _kHideMaxRangeAlert = 'smarttrace_hide_max_range_alert';
+  static const _kScanInputMode = 'smarttrace_scan_input_mode';
+
+  /// Last input mode explicitly selected by the operator on the scan toggle.
+  /// Device-local so it survives navigation and process restarts.
+  String get scanInputMode => _p.getString(_kScanInputMode) ?? 'barcode';
+  set scanInputMode(String v) =>
+      _p.setString(_kScanInputMode, v == 'rfid' ? 'rfid' : 'barcode');
 
   // the last คลัง/ประตู actually confirmed on the report screen — a
   // per-*person* shortcut, unlike deviceWh/deviceGate above which are fixed
@@ -261,9 +268,8 @@ class Prefs {
         (events is List ? events.length : 0);
     // A tiny snapshot is quicker inline (and remains usable in Flutter's
     // fake-async widget tests). Only large payloads need the worker isolate.
-    final encoded = itemCount < 200
-        ? jsonEncode(value)
-        : await compute(jsonEncode, value);
+    final encoded =
+        itemCount < 200 ? jsonEncode(value) : await compute(jsonEncode, value);
     await _p.setString(_kStateCache, encoded);
   }
 

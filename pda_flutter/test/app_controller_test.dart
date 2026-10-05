@@ -1379,8 +1379,9 @@ void main() {
 
       c.goCycleCount();
       await Future<void>.delayed(Duration.zero);
-      expect(rfidTriggerStates.last, isFalse,
-          reason: 'Cycle Count starts in barcode mode');
+      expect(rfidTriggerStates.last, isTrue,
+          reason:
+              'Cycle Count restores the operator\'s previously selected RFID mode');
       c.setScanInputMode(ScanInputMode.rfid);
       await Future<void>.delayed(Duration.zero);
       expect(rfidTriggerStates.last, isTrue,

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smarttrace_pda/controllers/app_controller.dart';
@@ -21,8 +20,10 @@ void main() {
     api = FakeApi()..state = fixtureState();
     (api.state['boxes']['CRT-02'] as Map)['rfid'] = 'E200ABCD';
     (api.state['boxes']['CRT-01'] as Map)['rfid'] = 'E2001122';
-    sdk = ProbeRfid({'model': 'TC501', 'manufacturer': 'Zebra', 'brand': 'Zebra'});
-    c = AppController(api: api, prefs: prefs, rfid: sdk, readLanIp: () async => '');
+    sdk = ProbeRfid(
+        {'model': 'TC501', 'manufacturer': 'Zebra', 'brand': 'Zebra'});
+    c = AppController(
+        api: api, prefs: prefs, rfid: sdk, readLanIp: () async => '');
     await c.init();
     await c.refresh();
     c.wh = 'WH-1';
@@ -30,10 +31,13 @@ void main() {
     c.emp = c.employees.firstWhere((e) => e.id == 'EMP-0001');
     await settle();
   });
-  tearDown(() { c.dispose(); });
+  tearDown(() {
+    c.dispose();
+  });
 
   for (final screen in [Screen.track, Screen.transfer, Screen.cycleCount]) {
-    test('late antenna batch in barcode mode leaves $screen results unchanged', () async {
+    test('late antenna batch in barcode mode leaves $screen results unchanged',
+        () async {
       c.go(screen);
       c.setScanInputMode(ScanInputMode.barcode);
       sdk.readBatch([read('E200ABCD'), read('E2001122')]);
@@ -45,7 +49,9 @@ void main() {
       expect(api.gateOutCalls, isEmpty);
     });
   }
-  test('RFID mode rejects barcode intent without callback, queue, or API side effects', () async {
+  test(
+      'RFID mode rejects barcode intent without callback, queue, or API side effects',
+      () async {
     c.goScanIn();
     c.gateFormStep = false;
     c.setScanInputMode(ScanInputMode.rfid);
@@ -61,7 +67,8 @@ void main() {
     await settle();
     expect(c.queue, ['CRT-02']);
   });
-  test('RFID to barcode switch rejects late reads and routes next barcode once', () async {
+  test('RFID to barcode switch rejects late reads and routes next barcode once',
+      () async {
     c.goScanIn();
     c.gateFormStep = false;
     c.setScanInputMode(ScanInputMode.rfid);
@@ -75,7 +82,34 @@ void main() {
     expect(c.queue, ['CRT-02']);
     expect(sdk.calls, contains('stopInventory'));
   });
-  test('controller disposal cancels barcode, trigger and tag subscriptions', () async {
+  test(
+      'operator mode is remembered when navigating between scan pages and '
+      'after controller restart', () async {
+    c.goScanIn();
+    c.setScanInputMode(ScanInputMode.rfid);
+    expect(c.prefs.scanInputMode, 'rfid');
+
+    c.goTrack();
+    expect(c.scanInputMode, ScanInputMode.rfid);
+    c.goTransfer();
+    expect(c.scanInputMode, ScanInputMode.rfid);
+    c.goCycleCount();
+    expect(c.scanInputMode, ScanInputMode.rfid);
+    c.goScanOut();
+    expect(c.scanInputMode, ScanInputMode.rfid);
+
+    c.dispose();
+    c = AppController(
+      api: api,
+      prefs: await Prefs.load(),
+      rfid: sdk,
+      readLanIp: () async => '',
+    );
+    await c.init();
+    expect(c.scanInputMode, ScanInputMode.rfid);
+  });
+  test('controller disposal cancels barcode, trigger and tag subscriptions',
+      () async {
     c.goTrack();
     c.setScanInputMode(ScanInputMode.rfid);
     c.dispose();
@@ -89,7 +123,8 @@ void main() {
     // Replacing the disposed instance keeps teardown valid.
     c = AppController(api: api, prefs: await Prefs.load(), rfid: ProbeRfid({}));
   });
-  test('concurrent submit of one scan batch makes exactly one gate API call', () async {
+  test('concurrent submit of one scan batch makes exactly one gate API call',
+      () async {
     c.goScanIn();
     c.gateFormStep = false;
     c.online = true;
@@ -99,7 +134,8 @@ void main() {
     expect(c.queue, isEmpty);
     expect(c.busy, isFalse);
   });
-  test('shared trigger in barcode mode starts imager only and release stops it', () async {
+  test('shared trigger in barcode mode starts imager only and release stops it',
+      () async {
     c.goTrack();
     c.setScanInputMode(ScanInputMode.barcode);
     sdk.calls.clear();

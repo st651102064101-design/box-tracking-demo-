@@ -37,6 +37,7 @@ enum _Step { pick, locate, locateMulti }
 
 class _RfidLocateScreenState extends State<RfidLocateScreen> {
   late final AppController _controller;
+
   /// Set when a scanned code doesn't resolve to a taggable box — shown under
   /// the scan prompt until the next scan replaces or clears it.
   String? _scanError;
@@ -109,13 +110,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     super.initState();
     final c = context.read<AppController>();
     _controller = c;
-    // Unlike Scan/Track — which deliberately let scanInputMode carry over
-    // between visits — this screen always starts on บาร์โค้ด. It's the
-    // "pick a box" step's default entry point (searching by tag/type is the
-    // common case), and scanInputMode is shared app-wide state, so without
-    // this a previous RFID pick on Scan or Track would leak in here as the
-    // starting mode too.
-    c.setScanInputMode(ScanInputMode.barcode);
+    // The pick step's effective input is barcode (see AppController policy);
+    // keep the operator's selected mode intact for when they leave this page.
     final rfid = c.rfid;
     _status = RfidStatus(rfid.state, '');
     _tagSub = rfid.tagBatches.listen(_onBatch);
@@ -515,11 +511,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // RFID proximity search — so it always needs the trigger to actually
     // fire regardless of what the pick step's toggle was last set to.
     // rfidLocateSweepStep is the authoritative signal for that (see
-    // AppController._onReaderTrigger); setScanInputMode alone wasn't enough,
-    // since anything that flipped the shared mode back to barcode left the
-    // trigger dead on a screen with no barcode path at all.
+    // AppController._onReaderTrigger); changing the shared input preference
+    // here would overwrite what the operator selected on their scan screen.
     c.rfidLocateSweepStep = true;
-    c.setScanInputMode(ScanInputMode.rfid);
   }
 
   /// Moves from the pick step's scanned [_multiTargets] list into
@@ -539,7 +533,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       }
     });
     c.rfidLocateSweepStep = true;
-    c.setScanInputMode(ScanInputMode.rfid);
   }
 
   void _changeTarget(AppController c) {

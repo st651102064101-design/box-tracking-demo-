@@ -499,6 +499,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   // ═══════════════════════ lifecycle ═══════════════════════════════════════
   Future<void> init() async {
+    scanInputMode = prefs.scanInputMode == 'rfid'
+        ? ScanInputMode.rfid
+        : ScanInputMode.barcode;
     api.baseUrl = prefs.baseUrl;
     api.token = prefs.token;
     api.reauthenticate = _deviceLogin;
@@ -1407,7 +1410,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
     mode = m;
     screen = Screen.scan;
-    scanInputMode = ScanInputMode.barcode;
     queue.clear();
     queueConditions.clear();
     scanVal = '';
@@ -1474,7 +1476,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   void goTrack() {
     screen = Screen.track;
-    scanInputMode = ScanInputMode.barcode;
     trackVal = '';
     trackTag = '';
     trackTried = false;
@@ -1495,7 +1496,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (!hasIntegratedRfid) return;
     screen = Screen.rfidLocate;
     rfidLocateSweepStep = false;
-    scanInputMode = ScanInputMode.barcode;
     _syncBarcodeScannerForScreen();
     notifyListeners();
     _connectReader();
@@ -1512,7 +1512,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (!hasIntegratedRfid) return;
     screen = Screen.boxRegister;
     boxRegisterRfidStep = false;
-    scanInputMode = ScanInputMode.barcode;
     _syncBarcodeScannerForScreen();
     notifyListeners();
     _connectReader();
@@ -1526,7 +1525,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// expects), so no new API was needed for this screen.
   void goTransfer() {
     screen = Screen.transfer;
-    scanInputMode = ScanInputMode.barcode;
     _syncBarcodeScannerForScreen();
     notifyListeners();
   }
@@ -1537,7 +1535,6 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// "expected here" against what actually got scanned this session.
   void goCycleCount() {
     screen = Screen.cycleCount;
-    scanInputMode = ScanInputMode.barcode;
     _syncBarcodeScannerForScreen();
     cycleCountRfidHits.clear();
     _unresolvedRfidWarned.clear();
@@ -1755,15 +1752,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Settings) or exposes a setter.
   bool get lowPowerMode => true;
 
-  /// Session-only (not persisted) — starts each fresh entry into a
-  /// scan/track/locate screen on บาร์โค้ด, same as before this existed.
+  /// The operator's selected mode, restored from device preferences at init.
   ScanInputMode scanInputMode = ScanInputMode.barcode;
-  void setScanInputMode(ScanInputMode m) {
+  void setScanInputMode(ScanInputMode m, {bool remember = true}) {
     if (m == ScanInputMode.rfid && !hasIntegratedRfid) {
       m = ScanInputMode.barcode;
     }
     if (scanInputMode == m) return;
     scanInputMode = m;
+    if (remember) prefs.scanInputMode = m.name;
     // Switching to barcode while the trigger is still physically held (or
     // an inventory is running from before the switch) must not leave the
     // reader sweeping in the background on a mode that just said "don't".
@@ -2307,6 +2304,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _commitHandheldCapability({required bool wasRfid, bool persist = true}) {
+    if (!wasRfid && hasIntegratedRfid) {
+      scanInputMode = prefs.scanInputMode == 'rfid'
+          ? ScanInputMode.rfid
+          : ScanInputMode.barcode;
+    }
     if (wasRfid && !hasIntegratedRfid) {
       rfid.stopInventory();
       if (screen == Screen.rfidLocate ||

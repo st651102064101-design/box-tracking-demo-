@@ -839,7 +839,7 @@ class _ScanModeToggleState extends State<ScanModeToggle> {
     if (!c.hasIntegratedRfid) {
       if (c.scanInputMode == ScanInputMode.rfid) {
         WidgetsBinding.instance.addPostFrameCallback(
-            (_) => c.setScanInputMode(ScanInputMode.barcode));
+            (_) => c.setScanInputMode(ScanInputMode.barcode, remember: false));
       }
       return Container(
         height: 41,
