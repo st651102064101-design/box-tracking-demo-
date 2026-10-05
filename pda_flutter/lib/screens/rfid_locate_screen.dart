@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
-import '../services/epc_codec.dart';
 import '../services/radar_signal.dart';
 import '../services/radar_distance.dart';
 import '../models/box.dart';
@@ -243,7 +242,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // through AppController.resolveTag.
       final isMatch =
           (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
-              epcMatchesTag(epc, wantTag);
+              context.read<AppController>().registeredBoxForRfidRead(r)?.toUpperCase() == wantTag;
       if (!isMatch) continue;
       if (RadarDistance.validRssi(r.rssi) &&
           (measured == null || r.rssi! > measured)) {
@@ -324,7 +323,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         final tid = r.tid?.toUpperCase();
         final isMatch =
             (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
-                epcMatchesTag(epc, wantTag);
+                context.read<AppController>().registeredBoxForRfidRead(r)?.toUpperCase() == wantTag;
         if (!isMatch) continue;
         if (RadarDistance.validRssi(r.rssi) &&
             (measured == null || r.rssi! > measured)) {

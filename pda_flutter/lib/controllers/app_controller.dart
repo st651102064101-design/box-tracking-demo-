@@ -2383,9 +2383,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// next to it. When Prefs.rfidMinRssi is set, a read weaker than that
   /// threshold never reaches addScan/doTrack/badge matching at all — the
   /// same knob a Settings-screen slider drives (see settings_screen.dart).
-  /// Only explicit DB RFID bindings qualify; a barcode/ASCII EPC is not a binding.
+  /// Known box codes also qualify as plain or zero-padded ASCII EPC payloads.
   StateSnapshot? _rfidBindingSnapshot;
   final Map<String, String> _rfidBindings = {};
+  final Map<String, String> _rfidBoxCodes = {};
 
   String? registeredBoxForRfidRead(RfidTagRead read) {
     final codes = [read.epc, read.tid ?? '']
@@ -2394,9 +2395,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     if (!identical(_rfidBindingSnapshot, S)) {
       _rfidBindingSnapshot = S;
       _rfidBindings.clear();
+      _rfidBoxCodes.clear();
       for (final entry in S!.boxesRaw.entries) {
         final box = entry.value;
         if (box is! Map) continue;
+        _rfidBoxCodes[entry.key.toLowerCase()] = entry.key;
         for (final key in ['rfid', 'rfidEpc', 'rfidTid']) {
           final value = box[key];
           if (value is String && value.trim().isNotEmpty) {
@@ -2406,6 +2409,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     for (final code in codes) {
+      final decoded = epcToAscii(code);
+      for (final candidate in [code, if (decoded != null) decoded.toLowerCase()]) {
+        final direct = _rfidBoxCodes[candidate];
+        if (direct != null) return direct;
+        final match = _rfidBoxCodes[candidate.replaceFirst(RegExp(r'^0+'), '')];
+        if (match != null) return match;
+      }
       final tag = _rfidBindings[code];
       if (tag != null) return tag;
     }

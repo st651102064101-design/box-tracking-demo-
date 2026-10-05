@@ -35,16 +35,32 @@ void main() {
     c.dispose();
   });
 
-  test('DB filter drops foreign, empty and unbound barcode EPC reads', () async {
+  test('DB filter drops foreign and empty EPC reads', () async {
     final batches = <List<RfidTagRead>>[];
     final sub = c.registeredRfidBatches.listen(batches.add);
-    sdk.readBatch([read('FOREIGN'), read(''), read('CRT-01')]);
+    sdk.readBatch([read('FOREIGN'), read(''), read('CRT-UNKNOWN')]);
     await settle();
     expect(batches, isEmpty);
     sdk.readBatch([read('FOREIGN'), read(' e2001122 ')]);
     await settle();
     expect(batches.single.map((r) => r.epc), [' e2001122 ']);
     await sub.cancel();
+  });
+
+  test('unbound RFID accepts known text, zero padding and hex ASCII', () async {
+    (api.state['boxes']['CRT-01'] as Map).remove('rfid');
+    await c.refresh();
+    for (final value in ['CRT-01', '000000CRT-01', '0000006372742d3031', '3030304352542d3031']) {
+      expect(c.registeredBoxForRfidRead(read(value)), 'CRT-01');
+    }
+    for (final value in ['000CRT-UNKNOWN', 'PREFIXCRT-01', '4352542d3939']) {
+      expect(c.registeredBoxForRfidRead(read(value)), isNull);
+    }
+    c.goTrack();
+    c.setScanInputMode(ScanInputMode.rfid);
+    sdk.readBatch([read('000000CRT-01'), read('000000CRT-01')]);
+    await settle();
+    expect(c.trackRfidHits, ['CRT-01']);
   });
 
   test('DB filter accepts legacy TID and invalidates after refresh/detach', () async {
@@ -62,7 +78,7 @@ void main() {
       c.go(screen);
       c.gateFormStep = false;
       c.setScanInputMode(ScanInputMode.rfid);
-      sdk.readBatch([read('FOREIGN'), read('FOREIGN'), read('CRT-01')]);
+      sdk.readBatch([read('FOREIGN'), read('FOREIGN'), read('CRT-UNKNOWN')]);
       await settle();
       expect(c.trackRfidHits, isEmpty);
       expect(c.transferRfidHits, isEmpty);
