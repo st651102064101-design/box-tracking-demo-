@@ -376,6 +376,23 @@ class RfidReaderController(private val context: Context) :
                 rfidTriggerMode = enabled
                 triggerModeManagedByRfidSdk = true
                 ensureDataWedgeProfile()
+                if (!enabled) {
+                    // API3 ENABLE_PLUGIN cannot revive scanner_input_enabled=false
+                    // persisted by an earlier profile. Restore BARCODE parameters
+                    // first; let asynchronous SET_CONFIG finish before API3 owns
+                    // the trigger. Replay the LATEST mode, not this request,
+                    // so a quick switch to RFID cannot re-enable barcode later.
+                    val params = Bundle()
+                    for ((key, value) in BarcodeScanPolicy.params(true)) {
+                        params.putString(key, value)
+                    }
+                    sendDataWedgePluginConfig("BARCODE", params)
+                    main.postDelayed({
+                        exec.execute {
+                            applyRfidTriggerMode(rfidTriggerMode)
+                        }
+                    }, 250)
+                }
                 // RFIDAPI3 can block for seconds while the reader changes
                 // transport/trigger ownership. Never run it on Android's UI
                 // thread: a tap during that call otherwise becomes an ANR.
