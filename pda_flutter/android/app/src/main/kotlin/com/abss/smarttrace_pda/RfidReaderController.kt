@@ -362,6 +362,7 @@ class RfidReaderController(private val context: Context) :
                                     else rd.Actions.Inventory.perform()
                                     locating = target != null
                                     inventoryRunning = true
+                                    if (locating) watchLocate()
                                 } catch (e: Exception) { Log.w(TAG, "RF resume unavailable", e) }
                             }
                         }
@@ -400,6 +401,7 @@ class RfidReaderController(private val context: Context) :
                             reader!!.Actions.TagLocationing.Perform(target, null, null)
                             locating = true
                             inventoryRunning = true
+                            watchLocate()
                         }
                     } catch (e: Exception) {
                         inventoryRunning = false
@@ -1243,10 +1245,34 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
-    private var locateTarget: String? = null
-    private var locating = false
+    @Volatile private var locateTarget: String? = null
+    @Volatile private var locating = false
+    @Volatile private var locateEpoch = 0L
+    @Volatile private var locateReadEpoch = -1L
+
+    /** A successful Perform call does not guarantee firmware will report tags. */
+    private fun watchLocate() {
+        val epoch = ++locateEpoch
+        main.postDelayed({
+            exec.execute {
+                if (!RfidLocatePolicy.shouldFallback(epoch == locateEpoch,
+                        inventoryRunning && locating, reader?.isConnected == true,
+                        rfidTriggerMode, locateReadEpoch == epoch)) return@execute
+                try {
+                    stopReaderOperation()
+                    locateTarget = null
+                    reader!!.Actions.Inventory.perform()
+                    inventoryRunning = true
+                    Log.w(TAG, "Locate returned no tags; resumed inventory RSSI")
+                } catch (e: Exception) {
+                    status("error", "เริ่มกวาดสำรองไม่ได้${why(e)}")
+                }
+            }
+        }, 1200)
+    }
 
     private fun stopReaderOperation() {
+        locateEpoch++
         val rd = reader ?: return
         if (!rd.isConnected || !inventoryRunning) return
         try {
@@ -1275,6 +1301,7 @@ class RfidReaderController(private val context: Context) :
                     locating = false
                 }
                 inventoryRunning = true
+                if (locating) watchLocate()
             } catch (e: Exception) {
                 // "already inventorying" is the expected answer to a second
                 // start — a held trigger while a screen also calls
@@ -1431,6 +1458,7 @@ class RfidReaderController(private val context: Context) :
             for (t in sortedTags) {
                 tagCount++
                 val epc = t.getTagID()
+                if (locating && epc.equals(locateTarget, true)) locateReadEpoch = locateEpoch
                 lastEpc = epc
                 lastRssi = t.getPeakRSSI().toInt()
 
