@@ -7,9 +7,19 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermissions } from './roles.js';
 import { EPC_BITS, EpcEncodeError, encodeBarcodeToEpcHex, type EpcBits } from '../lib/rfid.js';
+import { radarInput, radarProfile, saveRadarObservation } from '../services/radar-profiles.js';
 
 export const rfidRouter = Router();
 rfidRouter.use(requireAuth);
+rfidRouter.post('/radar/observe', requirePermissions('gate.in', 'gate.out'), asyncHandler(async (req, res) => {
+  const input = z.object({ observations: z.array(radarInput).min(1).max(64) }).parse(req.body);
+  for (const observation of input.observations) await saveRadarObservation(observation);
+  res.json({ ok: true });
+}));
+rfidRouter.get('/radar/profile', requirePermissions('gate.in', 'gate.out'), asyncHandler(async (req, res) => {
+  const input = radarInput.pick({ epc: true, model: true, powerPercent: true, readerProfile: true }).parse({ ...req.query, powerPercent: Number(req.query.powerPercent) });
+  res.json(await radarProfile(input));
+}));
 /** Zebra IoT Connector is configured with Authentication: NONE. Keep its
  * receiver separate from the authenticated management API. */
 export const fx9600WebhookRouter = Router();

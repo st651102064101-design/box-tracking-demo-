@@ -16,6 +16,7 @@ import '../services/handheld_profile.dart';
 import '../services/prefs.dart';
 import '../services/realtime_service.dart';
 import '../services/rfid_service.dart';
+import '../services/radar_telemetry.dart';
 import '../services/scan_payload.dart';
 
 enum Screen {
@@ -1894,6 +1895,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> doCommit() async {
     // UI disabling alone cannot serialize two callbacks in the same turn.
     if (busy) return;
+    radarTelemetry.flush();
     if (queue.isEmpty) {
       toastMsg('ยังไม่ได้ยิงกล่อง', '', ResultKind.warn);
       return;
@@ -2432,10 +2434,14 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   void _onReaderBatch(List<RfidTagRead> batch) {
     if (!hasIntegratedRfid || _effectiveInputMode != ScanInputMode.rfid) return;
     final minRssi = prefs.rfidMinRssi;
+    final delivered = <String>{};
     for (final r in batch) {
       if (minRssi != null && r.rssi != null && r.rssi! < minRssi) continue;
       final tag = registeredBoxForRfidRead(r);
-      if (tag != null) _onReaderTag(tag);
+      if (tag != null) {
+        if (screen == Screen.scan && putawayTask == null) radarTelemetry.observe(tag, r);
+        if (delivered.add(tag) && !(screen == Screen.scan && queue.contains(tag))) _onReaderTag(tag);
+      }
     }
   }
 
@@ -2589,6 +2595,8 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Cleared by the screen itself whenever it resets (mode switch, screen
   /// leave, batch submitted).
   final List<String> transferRfidHits = [];
+  late final RadarTelemetry radarTelemetry = RadarTelemetry(api: api, rfid: rfid,
+      model: () => prefs.deviceModel, power: () => prefs.rfidPowerPercent);
 
   void _onReaderTrigger(bool pressed) {
     if (!pressed) {
@@ -2599,6 +2607,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       // business reading tags. Stopping is never gated on which screen this
       // is — only starting is.
       if (hasIntegratedRfid) rfid.stopInventory();
+      radarTelemetry.flush(allowTid: _effectiveInputMode == ScanInputMode.rfid);
       return;
     }
     // TC52 and other barcode-only handhelds have no antenna. The physical

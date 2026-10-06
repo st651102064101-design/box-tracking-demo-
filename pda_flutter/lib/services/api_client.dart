@@ -42,6 +42,17 @@ class ApiClient {
 
   ApiClient({required this.baseUrl, this.token});
 
+  Future<void> observeRadar(List<Map<String, dynamic>> observations) async {
+    await _send(() => http.post(_u('/api/rfid/radar/observe'), headers: _headers,
+        body: jsonEncode({'observations': observations})));
+  }
+
+  Future<Map<String, dynamic>> radarProfile(String epc, String model, int power, {String readerProfile = 'radar'}) async {
+    final uri = _u('/api/rfid/radar/profile').replace(queryParameters:
+        {'epc': epc, 'model': model, 'powerPercent': '$power', 'readerProfile': readerProfile});
+    return Map<String, dynamic>.from(await _send(() => http.get(uri, headers: _headers)) as Map);
+  }
+
   Uri _u(String path) {
     final b = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)

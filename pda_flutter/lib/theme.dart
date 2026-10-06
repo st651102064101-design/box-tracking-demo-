@@ -32,9 +32,9 @@ class C {
   static Duration anim(Duration normal) => lowGraphics ? Duration.zero : normal;
 
   // surfaces
-  static Color bg = const Color(0xFFF5F5F7);
+  static Color bg = const Color(0xFFF1F5F9);
   static Color surface = const Color(0xFFFFFFFF);
-  static Color ink = const Color(0xFF1D1D1F); // near-black brand
+  static Color ink = const Color(0xFF0F172A);
   static Color ink2 = const Color(0xFF3A3A3C);
   static Color ink3 = const Color(0xFF424245);
 
@@ -48,8 +48,8 @@ class C {
   static Color onInk = const Color(0xFFFFFFFF);
 
   // text / muted
-  static Color muted = const Color(0xFF86868B);
-  static Color faint = const Color(0xFFAEAEB2);
+  static Color muted = const Color(0xFF64748B);
+  static Color faint = const Color(0xFF64748B);
   static Color chevron = const Color(0xFFC7C7CC);
 
   // borders
@@ -111,15 +111,15 @@ class C {
   /// Swap every token to its light or dark value in one shot.
   static void apply(bool dark) {
     isDark = dark;
-    bg = dark ? const Color(0xFF0B0B0C) : const Color(0xFFF5F5F7);
-    surface = dark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-    ink = dark ? const Color(0xFFF5F5F7) : const Color(0xFF1D1D1F);
+    bg = dark ? const Color(0xFF0B1220) : const Color(0xFFF1F5F9);
+    surface = dark ? const Color(0xFF172033) : const Color(0xFFFFFFFF);
+    ink = dark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A);
     ink2 = dark ? const Color(0xFFD1D1D6) : const Color(0xFF3A3A3C);
     ink3 = dark ? const Color(0xFFC7C7CC) : const Color(0xFF424245);
     onInk = dark ? const Color(0xFF1D1D1F) : const Color(0xFFFFFFFF);
 
-    muted = dark ? const Color(0xFF98989D) : const Color(0xFF86868B);
-    faint = dark ? const Color(0xFF6E6E73) : const Color(0xFFAEAEB2);
+    muted = dark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    faint = dark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     chevron = dark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC);
 
     border = dark ? const Color(0xFF2C2C2E) : const Color(0xFFE3E3E8);
@@ -187,6 +187,19 @@ ThemeData buildTheme() {
   // before — rather than the tofu boxes a bare `fontFamily: 'Inter'` would
   // produce on every Thai label.
   return base.copyWith(
+    visualDensity: VisualDensity.standard,
+    materialTapTargetSize: MaterialTapTargetSize.padded,
+    dividerTheme: DividerThemeData(color: C.border, thickness: 1, space: 24),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(
+      minimumSize: const Size(48, 52),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+    )),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true, fillColor: C.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+    ),
     textTheme: base.textTheme.apply(
       fontFamily: 'Inter',
       fontFamilyFallback: const ['Noto Sans Thai', 'Sarabun', 'sans-serif'],

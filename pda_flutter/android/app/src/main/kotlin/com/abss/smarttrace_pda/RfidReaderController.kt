@@ -186,6 +186,7 @@ class RfidReaderController(private val context: Context) :
                 synth(Waveform.SQUARE, 2400.0, 22, 0.32)
             }
             "grade_far" -> synth(Waveform.SQUARE, 900.0, 70, 0.55)
+            "radar_tick" -> synth(Waveform.SQUARE, 900.0, 30, 0.55)
             "grade_warm" -> synth(Waveform.SINE, 1600.0, 55, 0.65)
             "grade_close" -> synth(Waveform.SQUARE, 2600.0, 45, 0.8)
             "grade_found" -> {
@@ -340,6 +341,81 @@ class RfidReaderController(private val context: Context) :
         when (call.method) {
             "connect" -> { connect(); result.success(true) }
             "disconnect" -> { disconnect(); result.success(true) }
+            "setRadarProfile" -> {
+                val enabled = call.argument<Boolean>("enabled") == true
+                exec.execute {
+                    radarProfile = enabled
+                    val rd = reader
+                    if (rd?.isConnected == true) {
+                        val resume = inventoryRunning
+                        try {
+                            stopReaderOperation()
+                            val cfg = rd.Config.Antennas.getAntennaRfConfig(1)
+                            cfg.setrfModeTableIndex((if (enabled) sensitiveRfModeIndex(rd) else fastestRfModeIndex(rd)).toLong())
+                            rd.Config.Antennas.setAntennaRfConfig(1, cfg)
+                        } catch (e: Exception) { Log.w(TAG, "RF profile unavailable", e) }
+                        finally {
+                            if (resume) {
+                                try {
+                                    val target = locateTarget
+                                    if (target != null) rd.Actions.TagLocationing.Perform(target, null, null)
+                                    else rd.Actions.Inventory.perform()
+                                    locating = target != null
+                                    inventoryRunning = true
+                                } catch (e: Exception) { Log.w(TAG, "RF resume unavailable", e) }
+                            }
+                        }
+                    }
+                }
+                result.success(true)
+            }
+            "readTid" -> {
+                val epc = call.argument<String>("epc") ?: ""
+                exec.execute {
+                    var tid: String? = null
+                    try {
+                        val rd = reader
+                        // Only access a tag while idle; never interrupt inventory or barcode.
+                        if (rd != null && RfidMetadataPolicy.mayReadTid(rd.isConnected, inventoryRunning, rfidTriggerMode, epc)) {
+                            val params = TagAccess().ReadAccessParams()
+                            params.setAccessPassword(0)
+                            params.setMemoryBank(MEMORY_BANK.MEMORY_BANK_TID)
+                            params.setOffset(0)
+                            params.setCount(2)
+                            rd.Config.setAccessOperationWaitTimeout(300)
+                            tid = rd.Actions.TagAccess.readWait(epc, params, null)?.getMemoryBankData()
+                        }
+                    } catch (e: Exception) { Log.d(TAG, "Optional TID read unavailable", e) }
+                    main.post { result.success(tid) }
+                }
+            }
+            "setLocateTarget" -> {
+                val target = call.argument<String>("epc")?.takeIf { it.isNotBlank() }
+                exec.execute {
+                    try {
+                        val resume = inventoryRunning
+                        stopReaderOperation()
+                        locateTarget = target
+                        if (resume && target != null && reader?.isConnected == true) {
+                            reader!!.Actions.TagLocationing.Perform(target, null, null)
+                            locating = true
+                            inventoryRunning = true
+                        }
+                    } catch (e: Exception) {
+                        inventoryRunning = false
+                        locating = false
+                        locateTarget = null
+                        try {
+                            if (reader?.isConnected == true) {
+                                reader!!.Actions.Inventory.perform()
+                                inventoryRunning = true
+                            }
+                        } catch (fallback: Exception) { status("error", "เริ่มกวาดไม่ได้${why(fallback)}") }
+                        Log.w(TAG, "Locate unavailable; using inventory RSSI", e)
+                    }
+                }
+                result.success(true)
+            }
             "startInventory" -> { startInventory(); result.success(true) }
             "stopInventory" -> { stopInventory(); result.success(true) }
             "setBarcodeTrigger" -> {
@@ -941,7 +1017,7 @@ class RfidReaderController(private val context: Context) :
             // Every entry is logged: the table is firmware- and region-
             // dependent, so this is also how we can see on a real device what
             // was actually available and what got picked.
-            cfg.setrfModeTableIndex(fastestRfModeIndex(rd).toLong())
+            cfg.setrfModeTableIndex((if (radarProfile) sensitiveRfModeIndex(rd) else fastestRfModeIndex(rd)).toLong())
             cfg.setTari(0L) // 0 = let the reader use the chosen mode's own default
             rd.Config.Antennas.setAntennaRfConfig(1, cfg)
 
@@ -1063,6 +1139,24 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
+    private var radarProfile = false
+    private fun sensitiveRfModeIndex(rd: RFIDReader): Int {
+        var chosen = fastestRfModeIndex(rd)
+        var rate = Int.MAX_VALUE
+        val modes = rd.ReaderCapabilities.RFModes
+        for (t in 0 until modes.Length()) {
+            val table = modes.getRFModeTableInfo(t) ?: continue
+            for (i in 0 until table.length()) {
+                val entry = table.getRFModeTableEntryInfo(i) ?: continue
+                if (entry.getBdrValue() > 0 && entry.getBdrValue() < rate) {
+                    rate = entry.getBdrValue()
+                    chosen = entry.getModeIdentifer()
+                }
+            }
+        }
+        return chosen
+    }
+
     /**
      * Put the reader into whichever of the two read profiles [detailMode]
      * currently selects. Called on connect and again on every mode change,
@@ -1134,7 +1228,7 @@ class RfidReaderController(private val context: Context) :
                     eventHandler?.let { rd.Events.removeEventsListener(it) }
                     if (rd.isConnected) {
                         if (inventoryRunning) {
-                            try { rd.Actions.Inventory.stop() } catch (e: Exception) {
+                            try { stopReaderOperation() } catch (e: Exception) {
                                 Log.w(TAG, "inventory stop during disconnect failed", e)
                             }
                         }
@@ -1149,13 +1243,37 @@ class RfidReaderController(private val context: Context) :
         }
     }
 
+    private var locateTarget: String? = null
+    private var locating = false
+
+    private fun stopReaderOperation() {
+        val rd = reader ?: return
+        if (!rd.isConnected || !inventoryRunning) return
+        try {
+            if (locating) {
+                val operation = rd.Actions.TagLocationing
+                operation.javaClass.methods.first { it.name.equals("stop", true) && it.parameterCount == 0 }.invoke(operation)
+            } else rd.Actions.Inventory.stop()
+        } finally {
+            inventoryRunning = false
+            locating = false
+        }
+    }
+
     fun startInventory() {
         exec.execute {
             try {
                 Log.i(TAG, "startInventory: reader=$reader isConnected=${reader?.isConnected}")
                 val rd = reader ?: return@execute
                 if (!rd.isConnected) return@execute
-                rd.Actions.Inventory.perform()
+                val target = locateTarget
+                if (target != null) {
+                    rd.Actions.TagLocationing.Perform(target, null, null)
+                    locating = true
+                } else {
+                    rd.Actions.Inventory.perform()
+                    locating = false
+                }
                 inventoryRunning = true
             } catch (e: Exception) {
                 // "already inventorying" is the expected answer to a second
@@ -1196,8 +1314,7 @@ class RfidReaderController(private val context: Context) :
             try {
                 val rd = reader ?: return@execute
                 if (!rd.isConnected || !inventoryRunning) return@execute
-                rd.Actions.Inventory.stop()
-                inventoryRunning = false
+                stopReaderOperation()
             } catch (e: Exception) {
                 Log.w(TAG, "stopInventory failed", e)
             }
@@ -1323,7 +1440,8 @@ class RfidReaderController(private val context: Context) :
                     // per tag, on the SDK's read-callback thread — the thread
                     // that should be going back for the next batch. Outside
                     // registration nothing reads them.
-                    batch.add(mapOf("epc" to epc, "rssi" to lastRssi))
+                    val proximity = if (t.isContainsLocationInfo()) t.LocationInfo.getRelativeDistance().toInt() else null
+                    batch.add(mapOf("epc" to epc, "rssi" to lastRssi, "proximity" to proximity))
                     continue
                 }
 

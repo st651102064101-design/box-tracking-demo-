@@ -21,6 +21,7 @@ class RfidStatus {
 class RfidTagRead {
   final String epc;
   final int? rssi;
+  final int? proximity;
   final String? tid;
   final int? pc;
   final String? crc;
@@ -33,6 +34,7 @@ class RfidTagRead {
   RfidTagRead({
     required this.epc,
     this.rssi,
+    this.proximity,
     this.tid,
     this.pc,
     this.crc,
@@ -47,6 +49,8 @@ class RfidTagRead {
     return RfidTagRead(
       epc: event['epc']?.toString() ?? '',
       rssi: event['rssi'] as int?,
+      proximity: event['proximity'] is int && event['proximity'] >= 0 && event['proximity'] <= 100
+          ? event['proximity'] as int : null,
       tid: (event['tid'] as String?)?.isNotEmpty == true
           ? event['tid'] as String
           : null,
@@ -78,6 +82,27 @@ class RfidTagRead {
 class RfidService {
   static const _method = MethodChannel('smarttrace/rfid');
   static const _events = EventChannel('smarttrace/rfid/events');
+  Future<void> setRadarProfile(bool enabled) async {
+    if (!supported || _disposed) return;
+    try { await _method.invokeMethod('setRadarProfile', {'enabled': enabled}); } catch (_) {}
+  }
+
+  Future<String?> readTid(String epc) async {
+    if (!supported || _disposed) return null;
+    try { return await _method.invokeMethod<String>('readTid', {'epc': epc}); }
+    catch (_) { return null; }
+  }
+
+  Future<void> setLocateTarget(String? epc) async {
+    if (!supported || _disposed) return;
+    _buffer.clear();
+    _bufferedAt = null;
+    try {
+      await _method.invokeMethod('setLocateTarget', {'epc': epc});
+    } on PlatformException catch (e) {
+      if (!_disposed) _statusCtrl.add(RfidStatus(RfidState.error, e.message ?? 'Zebra Locate unavailable'));
+    }
+  }
 
   final _tagCtrl = StreamController<String>.broadcast();
   final _rawTagCtrl = StreamController<RfidTagRead>.broadcast();

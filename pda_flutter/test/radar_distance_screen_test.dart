@@ -24,8 +24,7 @@ class _Reader extends RfidService {
 
 void main() {
   testWidgets(
-      'distance appears without calibration and disappears on stale '
-      'or missing RSSI; a different box cannot reuse its reading',
+      'radar shows approximate metres and signal trend, then clears stale readings',
       (tester) async {
     tester.view.physicalSize = const Size(400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -41,13 +40,14 @@ void main() {
     final c = AppController(api: api, prefs: prefs, rfid: reader);
     await c.refresh();
     c.screen = Screen.rfidLocate;
+    var now = DateTime(2026);
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider<AppController>.value(value: c),
         ChangeNotifierProvider<LocaleController>.value(
             value: LocaleController(prefs)),
       ],
-      child: const MaterialApp(home: Scaffold(body: RfidLocateScreen())),
+      child: MaterialApp(home: Scaffold(body: RfidLocateScreen(now: () => now))),
     ));
     await tester.pump();
     expect(find.byType(ScanPromptCard), findsOneWidget);
@@ -55,9 +55,7 @@ void main() {
     await tester.tap(find.text('CRT-01'));
     await tester.pump();
     expect(find.textContaining('แล้วกดเทียบระยะ'), findsNothing);
-    reader.emit(null);
-    await tester.pump();
-    expect(find.text('≈ 1 ม.'), findsNothing);
+    expect(find.text('—'), findsOneWidget);
     reader.emit(-60);
     await tester.pump();
     expect(find.text('≈ 1 ม.'), findsOneWidget);
@@ -65,23 +63,21 @@ void main() {
     reader.emit(-80);
     await tester.pump();
     // An isolated weaker sample must not jump the distance immediately.
-    expect(find.text('≈ 3 ม. 20 ซม.'), findsNothing);
+    expect(find.text('≈ 1 ม.'), findsOneWidget);
     reader.emit(null);
     await tester.pump();
-    expect(find.text('≈ 3 ม. 20 ซม.'), findsNothing);
+    expect(find.text('—'), findsOneWidget);
     reader.emit(-60);
     await tester.pump();
     expect(find.text('≈ 1 ม.'), findsOneWidget);
-    // The screen uses wall-clock timestamps; pump advances only fake timers.
-    await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 1600)));
+    now = now.add(const Duration(seconds: 2));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(find.text('≈ 1 ม.'), findsNothing);
+    expect(find.text('—'), findsOneWidget);
     c.systemBackOverride!();
     await tester.pump();
     await tester.tap(find.text('CRT-02'));
     await tester.pump();
-    expect(find.text('≈ 1 ม.'), findsNothing);
+    expect(find.text('—'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     c.dispose();
     await reader.batches.close();

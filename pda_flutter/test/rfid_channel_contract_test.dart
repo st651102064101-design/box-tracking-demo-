@@ -37,6 +37,25 @@ void main() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(methods, null);
     binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel(events), null);
   });
+  test('optional TID failure does not throw or start inventory', () async {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(methods, (call) async {
+      calls.add(call);
+      if (call.method == 'readTid') throw PlatformException(code: 'TIMEOUT');
+      return null;
+    });
+    expect(await service.readTid('ABCD1234'), isNull);
+    expect(calls.where((c) => c.method == 'startInventory'), isEmpty);
+    service.dispose();
+    calls.clear();
+    expect(await service.readTid('ABCD1234'), isNull);
+    expect(calls, isEmpty);
+  });
+  test('radar RF profile is explicitly restored on leaving search', () async {
+    await service.setRadarProfile(true);
+    await service.setRadarProfile(false);
+    expect(calls.where((c) => c.method == 'setRadarProfile').map((c) => c.arguments),
+      [{'enabled': true}, {'enabled': false}]);
+  });
 
   testWidgets('SDK batch preserves EPC, TID and metadata and flushes once per frame', (tester) async {
     final batches = <List<RfidTagRead>>[];
@@ -54,6 +73,15 @@ void main() {
     expect(batches.single.first.tid, 'E280ABCD');
     expect(batches.single.first.rssi, -44);
   });
+  test('Locate channel selects actual EPC and clears target on exit', () async {
+    await service.setLocateTarget('0000424F582D303031');
+    await service.setLocateTarget(null);
+    final targets = calls.where((c) => c.method == 'setLocateTarget');
+    expect(targets.map((c) => c.arguments), [{'epc': '0000424F582D303031'}, {'epc': null}]);
+    expect(RfidTagRead.fromEvent({'epc': 'KNOWN', 'proximity': 72}, DateTime.now()).proximity, 72);
+    expect(RfidTagRead.fromEvent({'epc': 'KNOWN', 'proximity': 101}, DateTime.now()).proximity, isNull);
+  });
+
   test('inventory disables native unfiltered beep before starting antenna', () async {
     await service.startInventory();
     final controls = calls.where((c) => c.method == 'setAutoBeep' || c.method == 'startInventory').toList();

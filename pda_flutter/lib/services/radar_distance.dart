@@ -8,8 +8,8 @@ class RadarDistance {
   /// Generic backscatter heuristic, NOT a measured device/tag calibration.
   /// Radar operates at maximum transmit power. Orientation and shelving can
   /// shift this estimate considerably; never use it as an exact range.
-  static double? estimate(int? rssi) {
-    final distance = metres(rssi, -60);
+  static double? estimate(int? rssi, {int referenceRssi = -60}) {
+    final distance = metres(rssi, referenceRssi);
     return distance?.clamp(.1, 30).toDouble();
   }
 

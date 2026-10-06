@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../controllers/app_controller.dart';
 import '../services/radar_signal.dart';
 import '../services/radar_distance.dart';
+import '../services/radar_calibration.dart';
 import '../models/box.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
@@ -28,7 +29,8 @@ import '../widgets/scan_prompt_card.dart';
 ///  1. [_Step.pick]   — search boxes by tag/type, same list UX as TrackScreen.
 ///  2. [_Step.locate] — hold the trigger, watch the meter.
 class RfidLocateScreen extends StatefulWidget {
-  const RfidLocateScreen({super.key});
+  final DateTime Function()? now;
+  const RfidLocateScreen({super.key, this.now});
   @override
   State<RfidLocateScreen> createState() => _RfidLocateScreenState();
 }
@@ -36,6 +38,7 @@ class RfidLocateScreen extends StatefulWidget {
 enum _Step { pick, locate, locateMulti }
 
 class _RfidLocateScreenState extends State<RfidLocateScreen> {
+  DateTime _now() => widget.now?.call() ?? DateTime.now();
   late final AppController _controller;
 
   /// Set when a scanned code doesn't resolve to a taggable box — shown under
@@ -70,13 +73,150 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   final Map<String, DateTime?> _multiLastHit = {};
   final Map<String, int?> _distanceRssiByTag = {};
   final Map<String, RadarSmoother> _signalSmoothers = {};
+  final Map<String, int> _sdkProximity = {};
+  final Map<String, RadarSmoother> _sdkSmoothers = {};
+  final Map<String, double> _previousLevel = {};
+  final Map<String, String> _trend = {};
+  String? _locateEpc;
+  int _referenceRssi = -60;
+  String? _profileTid;
+  int? _weakestRssi;
+  RadarCalibration? _calibration;
+  final _references = <String, int>{};
+  final _profileEpcs = <String, String>{};
+  int _profileEpoch = 0;
+
+  Future<void> _loadProfile(String epc, String tag) async {
+    final c = _controller;
+    final epoch = _profileEpoch;
+    _profileEpcs[tag] = epc;
+    try {
+      final profile = await c.api
+          .radarProfile(epc, c.prefs.deviceModel, c.prefs.rfidPowerPercent);
+      if (!mounted || _profileEpoch != epoch || _profileEpcs[tag] != epc)
+        return;
+      setState(() {
+        if (RadarDistance.validRssi(profile['referenceRssi'] as int?)) {
+          _references[tag] = profile['referenceRssi'] as int;
+          if (_target?.tag == tag)
+            _referenceRssi = profile['referenceRssi'] as int;
+        }
+        _profileTid = profile['tid'] as String?;
+        if (RadarDistance.validRssi(profile['weakestRssi'] as int?))
+          _weakestRssi = profile['weakestRssi'] as int;
+      });
+    } catch (_) {/* An offline search still uses the default estimate. */}
+  }
+
+  Future<void> _calibrate() async {
+    final c = _controller;
+    final epc = _locateEpc;
+    final tag = _target?.tag;
+    if (epc == null || tag == null) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+                title: const Text('เทียบระยะประมาณ 1 เมตร'),
+                content: const Text(
+                    'ยืนห่างแท็กประมาณ 1 เมตร หันหัวอ่านเข้าหาแท็ก และอยู่นิ่ง 3 วินาที ระบบจะจำค่าให้ครั้งต่อไป'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('ไว้ก่อน')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('อยู่ประมาณ 1 เมตรแล้ว'))
+                ]));
+    if (confirmed != true || !mounted || _locateEpc != epc) return;
+    final capture = RadarCalibration(epc, _now());
+    final startedHere = !_reading;
+    setState(() => _calibration = capture);
+    if (startedHere) {
+      await c.rfid.startInventory();
+      if (mounted) setState(() => _reading = true);
+    }
+    await Future<void>.delayed(const Duration(seconds: 3));
+    if (!mounted || _locateEpc != epc || _calibration != capture) return;
+    if (startedHere) await c.rfid.stopInventory();
+    if (!mounted || _locateEpc != epc || _calibration != capture) return;
+    final reference = capture.finish(_now());
+    setState(() {
+      _calibration = null;
+      if (startedHere) _reading = false;
+    });
+    if (reference == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('สัญญาณยังไม่นิ่งหรืออ่านไม่พอ ลองเทียบอีกครั้ง')));
+      return;
+    }
+    try {
+      String? tid = _profileTid;
+      if (tid == null) {
+        final resume = !startedHere && _reading;
+        if (resume) await c.rfid.stopInventory();
+        tid = await c.rfid.readTid(epc);
+        if (resume && mounted && _locateEpc == epc && _reading)
+          await c.rfid.startInventory();
+      }
+      await c.api.observeRadar([
+        {
+          'epc': epc,
+          'tag': tag,
+          'model': c.prefs.deviceModel,
+          'powerPercent': c.prefs.rfidPowerPercent,
+          'readerProfile': 'radar',
+          'referenceRssi': reference,
+          if (tid != null) 'tid': tid
+        }
+      ]);
+      if (!mounted || _locateEpc != epc) return;
+      setState(() {
+        _profileEpoch++;
+        _referenceRssi = reference;
+        _references[tag] = reference;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('จำค่าเทียบระยะแล้ว')));
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('ยังบันทึกไม่ได้ ตรวจการเชื่อมต่อแล้วลองใหม่')));
+    }
+  }
+
+  double _signalLevel(String tag, int rssi) => _sdkProximity.containsKey(tag)
+      ? (_sdkProximity[tag]! / 100).clamp(.04, 1.0)
+      : RadarSignal.level(rssi);
+
+  void _recordProximity(String tag, int? value, DateTime now) {
+    if (value == null) return;
+    _sdkProximity[tag] =
+        _sdkSmoothers.putIfAbsent(tag, RadarSmoother.new).update(value, now);
+  }
+
+  String _signalLabel(String tag, int? rssi) {
+    if (rssi == null) return 'ไม่พบสัญญาณ';
+    final level = _signalLevel(tag, rssi);
+    final previous = _previousLevel[tag];
+    if (previous == null || (level - previous).abs() >= .04) {
+      _trend[tag] = previous == null
+          ? 'พบสัญญาณ'
+          : level > previous
+              ? 'สัญญาณดีขึ้น'
+              : 'สัญญาณลดลง';
+      _previousLevel[tag] = level;
+    }
+    return _trend[tag] ?? 'พบสัญญาณ';
+  }
 
   int? _smoothSignal(String tag, int? rssi, DateTime now) {
     if (rssi == null) {
       _signalSmoothers.remove(tag);
       return null;
     }
-    return _signalSmoothers.putIfAbsent(tag, RadarSmoother.new).update(rssi, now);
+    return _signalSmoothers
+        .putIfAbsent(tag, RadarSmoother.new)
+        .update(rssi, now);
   }
 
   StreamSubscription<List<RfidTagRead>>? _tagSub;
@@ -93,7 +233,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   int _hits = 0;
   Timer? _decayTimer;
   DateTime? _lastHapticAt;
-  DateTime? _lastGradeSoundAt;
+  final RadarPulseClock _soundClock = RadarPulseClock();
+  Timer? _soundTimer;
+  double? _soundLevel;
 
   // Reader's realistic dBm range on this hardware (see rfid_input_screen /
   // the RFID test sheet for raw values on the terminal) — clamps the meter
@@ -130,8 +272,14 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // allows Screen.rfidLocate to start inventory) — mirror it here purely so
     // the on-screen button/label track a trigger pull too.
     _triggerSub = rfid.triggers.listen((pressed) {
-      if (mounted) setState(() => _reading = pressed);
+      if (mounted)
+        setState(() {
+          _reading = pressed;
+          if (!pressed) _soundClock.reset();
+        });
     });
+    _soundTimer = Timer.periodic(
+        const Duration(milliseconds: 20), (_) => _advanceRadarSound());
     if (rfid.supported && rfid.state != RfidState.connected) {
       rfid.connect();
     }
@@ -149,6 +297,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   Future<void> _forceMaxRangeAndNotify() async {
     final c = context.read<AppController>();
     await c.forceMaxRfidPower();
+    if (!mounted) return;
+    await c.rfid.setRadarProfile(true);
     if (!mounted) return;
     if (c.prefs.hideMaxRangeAlert) return;
     final loc = context.read<LocaleController>();
@@ -207,10 +357,15 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       c.systemBackOverride = null;
     }
     c.rfidLocateSweepStep = false;
+    c.rfid.stopInventory();
+    c.rfid.setLocateTarget(null);
+    c.rfid.setRadarProfile(false);
+    c.radarTelemetry.flush();
     _tagSub?.cancel();
     _statusSub?.cancel();
     _triggerSub?.cancel();
     _decayTimer?.cancel();
+    _soundTimer?.cancel();
     super.dispose();
   }
 
@@ -243,6 +398,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
     int? best;
     int? measured;
+    int? proximity;
     for (final r in batch) {
       final epc = r.epc.toUpperCase();
       final tid = r.tid?.toUpperCase();
@@ -251,8 +407,25 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       // through AppController.resolveTag.
       final isMatch =
           (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
-              context.read<AppController>().registeredBoxForRfidRead(r)?.toUpperCase() == wantTag;
+              context
+                      .read<AppController>()
+                      .registeredBoxForRfidRead(r)
+                      ?.toUpperCase() ==
+                  wantTag;
       if (!isMatch) continue;
+      _calibration?.add(r.epc, r.rssi, _now());
+      _controller.radarTelemetry
+          .observe(_target!.tag, r, readerProfile: 'radar');
+      if (RadarDistance.validRssi(r.rssi))
+        _weakestRssi = math.min(_weakestRssi ?? r.rssi!, r.rssi!);
+      if (_locateEpc == null) {
+        _locateEpc = r.epc;
+        _loadProfile(r.epc, _target!.tag);
+        context.read<AppController>().rfid.setLocateTarget(r.epc);
+      }
+      if (r.proximity != null &&
+          (proximity == null || r.proximity! > proximity))
+        proximity = r.proximity;
       if (RadarDistance.validRssi(r.rssi) &&
           (measured == null || r.rssi! > measured)) {
         measured = r.rssi;
@@ -260,7 +433,9 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       final rssi = r.rssi ?? _unknownRssi;
       if (best == null || rssi > best) best = rssi;
     }
-    final now = DateTime.now();
+    if (best == null) return;
+    final now = _now();
+    _recordProximity(_target!.tag, proximity, now);
     measured = _smoothSignal(_target!.tag, measured, now);
     final matched = measured ?? best;
     if (matched == null) return;
@@ -274,7 +449,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
     // Haptic "click" scales with proximity like a Geiger counter, throttled
     // so a 170-reads/sec stream doesn't turn into a solid vibration.
-    final level = _normalize(matched);
+    final level = _signalLevel(_target!.tag, matched);
+    _soundLevel = level;
     final minGap = Duration(milliseconds: (260 - (level * 200)).round());
     if (_lastHapticAt == null || now.difference(_lastHapticAt!) >= minGap) {
       _lastHapticAt = now;
@@ -291,19 +467,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     // gauge. Throttled on its own timer (not reused from haptics — a sound
     // needs longer to actually be heard as separate ticks than a vibration
     // does) so a strong, steady signal doesn't turn into a solid tone.
-    final soundGap = RadarSignal.gap(level);
-    if (_lastGradeSoundAt == null ||
-        now.difference(_lastGradeSoundAt!) >= soundGap) {
-      _lastGradeSoundAt = now;
-      final soundId = level > 0.75
-          ? 'grade_found'
-          : level > 0.55
-              ? 'grade_close'
-              : level > 0.25
-                  ? 'grade_warm'
-                  : 'grade_far';
-      context.read<AppController>().rfid.playSound(soundId);
-    }
   }
 
   /// Multi-track sweep: every batch read is checked against every box in
@@ -317,7 +480,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// signal while still reading exact per-box status off the bars.
   void _onMultiBatch(List<RfidTagRead> batch) {
     if (_multiTargets.isEmpty) return;
-    final now = DateTime.now();
+    final now = _now();
     int? overallBest;
     var changed = false;
     for (final target in _multiTargets) {
@@ -333,8 +496,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         final tid = r.tid?.toUpperCase();
         final isMatch =
             (want != null && want.isNotEmpty && (epc == want || tid == want)) ||
-                context.read<AppController>().registeredBoxForRfidRead(r)?.toUpperCase() == wantTag;
+                context
+                        .read<AppController>()
+                        .registeredBoxForRfidRead(r)
+                        ?.toUpperCase() ==
+                    wantTag;
         if (!isMatch) continue;
+        if (!_profileEpcs.containsKey(target.tag))
+          _loadProfile(r.epc, target.tag);
+        _controller.radarTelemetry
+            .observe(target.tag, r, readerProfile: 'radar');
         if (RadarDistance.validRssi(r.rssi) &&
             (measured == null || r.rssi! > measured)) {
           measured = r.rssi;
@@ -354,7 +525,11 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     if (!changed) return;
     setState(() {});
 
-    final level = _normalize(overallBest!);
+    final level = _signalLevel(
+      _multiTargets.firstWhere((t) => _multiRssi[t.tag] == overallBest).tag,
+      overallBest!,
+    );
+    _soundLevel = level;
     final minGap = Duration(milliseconds: (260 - (level * 200)).round());
     if (_lastHapticAt == null || now.difference(_lastHapticAt!) >= minGap) {
       _lastHapticAt = now;
@@ -364,19 +539,6 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
         HapticFeedback.selectionClick();
       }
     }
-    final soundGap = RadarSignal.gap(level);
-    if (_lastGradeSoundAt == null ||
-        now.difference(_lastGradeSoundAt!) >= soundGap) {
-      _lastGradeSoundAt = now;
-      final soundId = level > 0.75
-          ? 'grade_found'
-          : level > 0.55
-              ? 'grade_close'
-              : level > 0.25
-                  ? 'grade_warm'
-                  : 'grade_far';
-      context.read<AppController>().rfid.playSound(soundId);
-    }
   }
 
   /// Runs off a timer, not off reads, because "no read arrived" is itself the
@@ -385,14 +547,16 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   void _tick() {
     if (_rssi != null &&
         _lastHitAt != null &&
-        DateTime.now().difference(_lastHitAt!) > _staleAfter) {
+        _now().difference(_lastHitAt!) > _staleAfter) {
       setState(() => _rssi = null);
+      _soundLevel = null;
+      _soundClock.reset();
     }
     if (_reading && _rssi != null && _step == _Step.locate) {
-      _tickSound(_normalize(_rssi!));
+      _tickSound(_signalLevel(_target!.tag, _rssi!));
     }
     if (_multiLastHit.isEmpty) return;
-    final now = DateTime.now();
+    final now = _now();
     var changed = false;
     for (final tag in _multiLastHit.keys.toList()) {
       final last = _multiLastHit[tag];
@@ -404,20 +568,34 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       }
     }
     if (changed && mounted) setState(() {});
-    final active = _multiRssi.values.whereType<int>().toList();
+    final active =
+        _multiTargets.where((t) => _multiRssi[t.tag] != null).toList();
     if (_reading && _step == _Step.locateMulti && active.isNotEmpty) {
-      _tickSound(_normalize(active.reduce(math.max)));
+      final strongest = active.reduce((a, b) =>
+          _signalLevel(a.tag, _multiRssi[a.tag]!) >=
+                  _signalLevel(b.tag, _multiRssi[b.tag]!)
+              ? a
+              : b);
+      _tickSound(_signalLevel(strongest.tag, _multiRssi[strongest.tag]!));
+    } else if (_step == _Step.locateMulti && active.isEmpty) {
+      _soundLevel = null;
+      _soundClock.reset();
     }
   }
 
   void _tickSound(double level) {
-    final now = DateTime.now();
-    if (_lastGradeSoundAt != null &&
-        now.difference(_lastGradeSoundAt!) < RadarSignal.gap(level)) {
+    _soundLevel = level;
+  }
+
+  void _advanceRadarSound() {
+    if (!_reading || _soundLevel == null || !mounted) {
+      _soundClock.reset();
       return;
     }
-    _lastGradeSoundAt = now;
-    context.read<AppController>().rfid.playSound(RadarSignal.sound(level));
+    if (_soundClock.advance(_now(), RadarSignal.gap(_soundLevel!))) {
+      // Keep the tone pitch/timbre constant; only pulse spacing changes.
+      context.read<AppController>().rfid.playSound('radar_tick');
+    }
   }
 
   double _normalize(int rssi) {
@@ -426,15 +604,17 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
 
   String _distanceLabel(String tag, LocaleController loc, bool fresh) =>
       RadarDistance.label(
-        RadarDistance.estimate(fresh ? _distanceRssiByTag[tag] : null),
+        RadarDistance.estimate(fresh ? _distanceRssiByTag[tag] : null,
+            referenceRssi: _references[tag] ??
+                (_target?.tag == tag ? _referenceRssi : -60)),
         english: loc.lang == 'en',
       );
-
 
   Future<void> _toggleRead(AppController c) async {
     if (!c.rfid.supported) return;
     if (_reading) {
       await c.rfid.stopInventory();
+      c.radarTelemetry.flush(allowTid: true);
       setState(() => _reading = false);
     } else {
       setState(() => _reading = true);
@@ -492,6 +672,21 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 
   void _pick(AppController c, Box b) {
+    _profileEpoch++;
+    _profileEpcs.clear();
+    _references.clear();
+    _referenceRssi = -60;
+    _profileTid = null;
+    _weakestRssi = null;
+    _calibration = null;
+    _soundLevel = null;
+    _soundClock.reset();
+    c.rfid.setLocateTarget(null);
+    _locateEpc = null;
+    _sdkProximity.clear();
+    _sdkSmoothers.clear();
+    _previousLevel.clear();
+    _trend.clear();
     setState(() {
       _target = b;
       _step = _Step.locate;
@@ -500,6 +695,10 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
       _hits = 0;
       _distanceRssiByTag.clear();
       _signalSmoothers.clear();
+      _sdkProximity.clear();
+      _sdkSmoothers.clear();
+      _previousLevel.clear();
+      _trend.clear();
     });
     // The sweep step has no barcode alternative — it only makes sense as an
     // RFID proximity search — so it always needs the trigger to actually
@@ -515,11 +714,17 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   /// [_pick] uses for the single-target gauge, just with N bars instead of
   /// one.
   void _startMultiLocate(AppController c) {
+    _profileEpoch++;
+    _profileEpcs.clear();
+    _references.clear();
+    c.rfid.setLocateTarget(null);
     if (_multiTargets.isEmpty) return;
     setState(() {
       _step = _Step.locateMulti;
       _distanceRssiByTag.clear();
       _signalSmoothers.clear();
+      _sdkProximity.clear();
+      _sdkSmoothers.clear();
       _multiRssi.clear();
       _multiLastHit.clear();
       for (final t in _multiTargets) {
@@ -531,7 +736,12 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
   }
 
   void _changeTarget(AppController c) {
+    _calibration = null;
+    _soundLevel = null;
+    _soundClock.reset();
     c.rfid.stopInventory();
+    c.rfid.setLocateTarget(null);
+    _locateEpc = null;
     c.rfidLocateSweepStep = false;
     setState(() {
       _step = _Step.pick;
@@ -919,7 +1129,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
     final b = _target!;
     final S = c.S!;
     final connected = _status.state == RfidState.connected;
-    final level = _rssi == null ? 0.0 : _normalize(_rssi!);
+    final level = _rssi == null ? 0.0 : _signalLevel(b.tag, _rssi!);
     final found = _rssi != null && level > 0.75;
 
     final l = b.location;
@@ -1061,17 +1271,30 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 caption: loc.t('ระยะประมาณ'),
               ),
               Text(
-                loc.t('ระยะคาดการณ์จากสัญญาณ ไม่ต้องเทียบระยะก่อน '
-                    'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
+                loc.t('เดินช้า ๆ แล้วกวาดหัวอ่าน · ระยะเป็นค่าประมาณจากสัญญาณ'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: C.muted),
               ),
               const SizedBox(height: 18),
+              TextButton.icon(
+                  onPressed: _locateEpc != null && _calibration == null
+                      ? _calibrate
+                      : null,
+                  icon: const Icon(Icons.straighten),
+                  label: Text(_calibration != null
+                      ? 'กำลังวัด… อยู่นิ่งสักครู่'
+                      : 'อยากให้ระยะแม่นยำขึ้นไหม?')),
+              if (_weakestRssi != null)
+                Text(
+                    'ไกลสุดที่เคยอ่านพบ (ประมาณ) ${RadarDistance.label(RadarDistance.estimate(_weakestRssi, referenceRssi: _referenceRssi))}',
+                    style: TextStyle(fontSize: 12, color: C.muted)),
+              Text(loc.t(_signalLabel(b.tag, _rssi)),
+                  style: TextStyle(fontSize: 12, color: C.muted)),
               Text(
                 _rssi == null
                     ? loc.t('ไม่พบสัญญาณ')
                     : found
-                        ? loc.t('พบกล่องแล้ว — อยู่ใกล้มาก')
+                        ? loc.t('สัญญาณแรงมาก — ตรวจสอบกล่อง')
                         : loc.t(_proximityLabel(level)),
                 style: TextStyle(
                   fontSize: 16,
@@ -1235,8 +1458,8 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
             border: Border.all(color: C.border),
           ),
           child: Text(
-            loc.t('ระยะคาดการณ์จากสัญญาณ ไม่ต้องเทียบระยะก่อน '
-                'ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า'),
+            loc.t(
+                'หลายกล่องใช้การกวาดสัญญาณ RFID เลือกค้นหากล่องเดียวเพื่อใช้ Zebra Locate'),
             style: TextStyle(fontSize: 12, color: C.ink3, height: 1.45),
           ),
         ),

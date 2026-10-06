@@ -65,7 +65,7 @@ class Panel extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
-    this.radius = 16,
+    this.radius = 20,
     this.color,
     this.border,
     this.shadow,
@@ -110,12 +110,12 @@ class PrimaryButton extends StatelessWidget {
             decoration: enabled
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
+                    boxShadow: C.shadow([
                       BoxShadow(
                           color: C.lime.withValues(alpha: 0.4),
                           blurRadius: 22,
                           offset: const Offset(0, 8))
-                    ],
+                    ]),
                   )
                 : null,
             child: Row(
@@ -582,7 +582,7 @@ class FieldLabel extends StatelessWidget {
 InputDecoration pdaInput(String hint, {double radius = 13}) => InputDecoration(
       hintText: hint,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       filled: true,
       fillColor: C.surface,
       hintStyle: TextStyle(color: C.faint),
