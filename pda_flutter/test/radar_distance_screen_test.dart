@@ -13,6 +13,12 @@ import 'app_controller_test.dart' show FakeApi, fixtureState;
 
 class _Reader extends RfidService {
   final batches = StreamController<List<RfidTagRead>>.broadcast();
+  final pulls = StreamController<bool>.broadcast();
+  final sounds = <String>[];
+  @override
+  Stream<bool> get triggers => pulls.stream;
+  @override
+  Future<void> playSound(String soundId) async => sounds.add(soundId);
   @override
   Stream<List<RfidTagRead>> get tagBatches => batches.stream;
   @override
@@ -59,6 +65,30 @@ void main() {
     reader.emit(-60);
     await tester.pump();
     expect(find.text('≈ 1 ม.'), findsOneWidget);
+    reader.pulls.add(true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    now = now.add(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(reader.sounds, contains('radar_tick'));
+    reader.pulls.add(false);
+    await tester.pump();
+    final firstRoundSounds = reader.sounds.length;
+    now = now.add(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 2));
+    expect(reader.sounds.length, firstRoundSounds);
+    reader.pulls.add(true);
+    reader.emit(-60);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    now = now.add(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(reader.sounds.length, greaterThan(firstRoundSounds));
+    reader.pulls.add(false);
+    await tester.pump();
+    now = now.add(const Duration(seconds: 2));
+    reader.emit(-60);
+    await tester.pump();
     expect(find.text('%'), findsNothing);
     reader.emit(-80);
     await tester.pump();
@@ -81,5 +111,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     c.dispose();
     await reader.batches.close();
+    await reader.pulls.close();
   });
 }
