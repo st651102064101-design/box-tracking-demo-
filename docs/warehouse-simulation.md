@@ -14,6 +14,7 @@ From `frontend`:
 
 ```powershell
 npm test
+npm run test:security
 npm run build
 node tests/warehouse-simulation.browser.cjs
 ```
@@ -27,6 +28,9 @@ An additional opt-in test exercises an already-running deployment with an existi
 # BOXTRACE_TEST_USERNAME and BOXTRACE_TEST_PASSWORD are required.
 # BOXTRACE_TEST_ORIGIN defaults to http://localhost:3000.
 node tests/warehouse-simulation.live.cjs
+node tests/frontend-upgrade.browser.cjs
 ```
 
 The live test does not create or relocate boxes. Ordinary navigation may save account UI preferences. It verifies the actual entry button, fullscreen within the app iframe, no API requests during two polling intervals, preservation of the live controller/camera/business data, and live first-person mouse-lock restoration.
+
+The upgrade smoke test covers anonymous redirects, username prefill, compiled styling, forgot-password navigation without sending an OTP, protected API denial and static assets. With the same credentials it also submits the normal login form. The WEB branch additionally checks language switching and the onboarding guard.

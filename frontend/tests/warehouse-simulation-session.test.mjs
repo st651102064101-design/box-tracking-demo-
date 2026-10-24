@@ -1,4 +1,4 @@
-const { test } = await import(process.env.VITEST ? 'vitest' : 'node:test');
+const { test } = process.env.VITEST ? await import('vitest') : await import('node:test');
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 

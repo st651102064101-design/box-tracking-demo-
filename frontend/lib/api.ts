@@ -76,8 +76,15 @@ export function login(username: string, password: string) {
   });
 }
 
-export function getBranding() {
-  return request<SystemBranding>('/branding');
+export async function getBranding(): Promise<SystemBranding> {
+  const value = await request<Partial<SystemBranding> | null>('/branding');
+  // Older deployments return {} until branding is configured. Validate this
+  // boundary before login/onboarding read strings (e.g. the logo initial).
+  return {
+    systemName: typeof value?.systemName === 'string' && value.systemName.trim() ? value.systemName : 'Smart Tracking',
+    subtitle: typeof value?.subtitle === 'string' ? value.subtitle : '',
+    logoData: typeof value?.logoData === 'string' && value.logoData.trim() ? value.logoData : null,
+  };
 }
 
 export function forgotPassword(username: string) {

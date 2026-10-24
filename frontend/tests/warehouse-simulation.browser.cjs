@@ -29,9 +29,29 @@ async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   let browser;
+  let page;
+  let releaseStartupModule = () => {};
   try {
     browser = await playwright.chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await page.addInitScript(() => {
+      if (window === window.top) window.simulationEventTrace = [];
+      const record = event => {
+        try {
+          window.top.simulationEventTrace?.push({
+            event: event.type, key: event.key, message: event.data?.type,
+            frame: window === window.top ? 'parent' : 'child',
+            fullscreen: document.fullscreenElement?.className || document.fullscreenElement?.id || null,
+            focus: document.activeElement?.id || document.activeElement?.tagName,
+            time: performance.timeOrigin + performance.now(),
+          });
+        } catch { /* A detached frame cannot contribute further diagnostics. */ }
+      };
+      window.addEventListener('keydown', record, true);
+      window.addEventListener('message', record, true);
+      document.addEventListener('fullscreenchange', record, true);
+      document.addEventListener('focusin', record, true);
+    });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(origin);
@@ -75,6 +95,7 @@ async function main() {
     await page.locator('#enter').focus(); await page.keyboard.press('Shift+s');
     await page.waitForFunction(() => Boolean(document.fullscreenElement));
     await page.frameLocator('iframe').locator('#first-person-view').click();
+    assert.equal(await page.frameLocator('iframe').locator('#first-person-view').getAttribute('aria-pressed'), 'true', 'Reentry camera button is interactive before Escape');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !window.__warehouseSimulationActive);
     assert.equal(await page.evaluate(() => window.liveState.resumes), 2);
@@ -119,10 +140,33 @@ async function main() {
     assert.equal(restoredFullscreen, 'loc3dView', 'Exiting simulation restores the live scene fullscreen state');
     await page.evaluate(() => document.exitFullscreen());
     await page.waitForFunction(() => !document.fullscreenElement);
+    // HTML can paint before its module installs input handlers. Holding that
+    // real request reproduces a fast click/Escape during iframe startup.
+    const startupModuleGate = new Promise(resolve => { releaseStartupModule = resolve; });
+    await page.route('**/warehouse-simulation-view.mjs', async route => {
+      await startupModuleGate;
+      await route.continue().catch(() => {}); // The cancelled frame may be gone.
+    });
+    await page.locator('#enter').click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('warehouse-simulation-host'));
+    const pendingViewButton = page.frameLocator('iframe').locator('#first-person-view');
+    await pendingViewButton.waitFor();
+    const pendingViewBounds = await pendingViewButton.boundingBox();
+    await page.mouse.click(pendingViewBounds.x + pendingViewBounds.width / 2, pendingViewBounds.y + pendingViewBounds.height / 2);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !window.__warehouseSimulationActive, null, { timeout: 5000 });
+    assert.equal(await page.locator('iframe').count(), 0);
+    assert.deepEqual(await page.evaluate(() => window.liveState), { boxes: ['real-box'], camera: [3, 5, 7], suspends: 4, resumes: 4 });
+    releaseStartupModule();
     assert.equal(apiRequests, 0);
     assert.deepEqual(errors, []);
     assert.deepEqual(await page.evaluate(() => window.errors), []);
-    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'only-two-buttons', 'two-complete-engine-loops', 'first-person-movement', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop }));
-  } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
+    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'only-two-buttons', 'two-complete-engine-loops', 'first-person-movement', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'Esc-during-module-startup', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop }));
+  } catch (error) {
+    if (page && !page.isClosed()) {
+      console.error(JSON.stringify({ diagnostics: await page.evaluate(() => ({ active: window.__warehouseSimulationActive, fullscreen: document.fullscreenElement?.className || document.fullscreenElement?.id || null, liveState: window.liveState, events: window.simulationEventTrace?.slice(-100) })) }));
+    }
+    throw error;
+  } finally { releaseStartupModule(); await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

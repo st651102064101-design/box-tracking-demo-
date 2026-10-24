@@ -13,6 +13,7 @@ export function createSimulationSession({ window: win, getController, onError = 
     if (current !== session || session.started || !session.ready || !session.fullscreen) return;
     session.started = true;
     win.clearTimeout(session.timeout);
+    session.frame.inert = false;
     session.frame.contentWindow?.postMessage({ type: 'warehouse-simulation-start' }, win.location.origin);
     session.frame.focus();
   };
@@ -48,6 +49,9 @@ export function createSimulationSession({ window: win, getController, onError = 
     host.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:2147483647;background:#111820;';
     const frame = doc.createElement('iframe');
     frame.title = 'Warehouse putaway simulation';
+    // Its HTML can paint before the view module installs keyboard handlers.
+    // Keep startup clicks/focus in the parent, where Escape already works.
+    frame.inert = true;
     frame.setAttribute('allow', 'fullscreen');
     frame.style.cssText = 'display:block;width:100%;height:100%;border:0;';
     host.appendChild(frame);

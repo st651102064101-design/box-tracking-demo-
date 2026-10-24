@@ -1,4 +1,4 @@
-# ── SmartTrace frontend (Next.js 14) ──────────────────────────────────────────
+# ── SmartTrace frontend (Next.js 15 Maintenance LTS) ──────────────────────────
 FROM node:22-alpine AS dev
 WORKDIR /app
 COPY package.json package-lock.json* ./

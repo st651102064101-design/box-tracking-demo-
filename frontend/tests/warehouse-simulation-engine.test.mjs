@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createSimulation } from '../public/warehouse-simulation-engine.mjs';
 
 // Keep the standalone Node command while cooperating with the frontend runner.
-const { test } = await import(process.env.VITEST ? 'vitest' : 'node:test');
+const { test } = process.env.VITEST ? await import('vitest') : await import('node:test');
 
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const angleDistance = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));

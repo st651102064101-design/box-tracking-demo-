@@ -14,14 +14,14 @@ Ruling: initial fixture is exactly five racks and ten boxes, ten boxes fill the 
 | Tasks 1/2 | pallet base vs mesh centre | Y is pallet base; local +Z front, cargo 1.55 m forward |
 | Task 4 | local deployment on MOBILE_APP_DEMO | deploy files in place; push only isolated WEB_APP_DEMO feature commit |
 
-Status: implementation, independent review, browser checks and Docker deployment complete; ready to push WEB_APP_DEMO.
+Status: implementation, independent review, browser checks and Docker deployment complete. Feature commit `e144134eb70f9d172717595cc2c68f91a46b22f4` was pushed to `WEB_APP_DEMO` and verified against the remote ref. Final requirement audit found no outstanding simulation requirements; deployment file comparison also confirmed all eight feature/integration files match their running Docker copies.
 
 Verification on 2026-10-24:
 
 - Frontend unit tests: 14 passed, 0 failed (engine 5, lifecycle 9).
-- Browser harness: 13 checks passed; two complete engine cycles, exact ten IDs, zero API requests/errors, including nested fullscreen restoration.
+- Browser harness: 14 checks passed; two complete engine cycles, exact ten IDs, zero API requests/errors, including nested fullscreen restoration and Escape before the child view module loads.
 - Live Docker smoke test: 8 checks passed using normal login and real warehouse data; no API requests across two polling intervals, live controller/camera/business-data identity restored, first-person pointer lock restored. No baseline or new JavaScript errors.
 - Frontend production build and frontend-only Docker rebuild passed. Backend and database containers were not recreated; no seed/migration/putaway was performed.
 - Staged loc3d.js syntax and git whitespace checks passed. Staged changes work with both the committed boolean/null queue fields and the user's uncommitted Map/Set changes; old forklift changes remain unstaged.
 - Review findings closed: preserve live first-person mode and retry pointer lock on a fresh gesture; pop simulation fullscreen before removing its host so an earlier fullscreen stage survives. Live test additionally found/fixed overly broad refusal when a spectator truck displays previously persisted cargo (not a local in-progress operation).
-- Existing dependency warning remains: the project's pinned Next.js 14.2.15 is flagged vulnerable by npm. Dependency upgrades are outside this simulation change.
+- Follow-up explicitly authorized by user: upgraded Next.js to 15.5.28, React to 19.3.1 and patched related dependencies. Full and production npm audits report zero findings; see `2026-10-24-frontend-security.md`. Added five branding boundary tests (19 total unit tests) for the existing empty-response Login crash discovered during upgrade smoke tests.
