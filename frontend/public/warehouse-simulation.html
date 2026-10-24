@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Warehouse simulation</title>
+  <link rel="stylesheet" href="/warehouse-simulation.css">
+  <script type="importmap">
+    {"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <canvas id="warehouse" aria-label="Warehouse simulation. Orbit: drag to rotate, right drag to pan, scroll to zoom. First person: WASD or arrow keys to walk, drag to look. Escape exits."></canvas>
+  <nav class="view-controls" aria-label="Simulation view">
+    <button id="orbit-view" type="button" aria-pressed="true" title="Orbit · drag to rotate, right drag to pan, scroll to zoom · Esc to exit">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v9m8-4.5L12 12l-8-4.5M12 12v9"/></svg>
+      <span>Orbit</span>
+    </button>
+    <button id="first-person-view" type="button" aria-pressed="false" title="First person · WASD or arrow keys to walk, drag to look · Esc to exit">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="m8 21 1-7-3-3 4-3h4l4 3-3 3 1 7M9 14h6"/></svg>
+      <span>First person</span>
+    </button>
+  </nav>
+  <script type="module">
+    import('/warehouse-simulation-view.mjs').catch((error) => {
+      window.parent.postMessage({ type: 'warehouse-simulation-error', message: error?.message || 'The warehouse view could not load.' }, window.location.origin);
+    });
+  </script>
+</body>
+</html>

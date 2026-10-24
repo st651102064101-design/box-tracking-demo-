@@ -139,6 +139,7 @@
 
   function scheduleSync(value) {
     pendingValue = value;
+    if (window.__warehouseSimulationActive) return;
     if (priming) return;                 // buffer until initial prime resolves
     if (value === lastSynced) return;    // nothing changed
     if (putTimer) clearTimeout(putTimer);
@@ -147,6 +148,7 @@
 
   function flushSync() {
     putTimer = null;
+    if (window.__warehouseSimulationActive) return;
     var value = pendingValue;
     if (value == null || value === lastSynced) return;
     var body = value;
@@ -171,6 +173,7 @@
      Writing it raw — and recording it as already-synced — keeps adopting a
      read. */
   window.smarttraceAdoptServerJson = function (json) {
+    if (window.__warehouseSimulationActive) return;
     try { realSetItem.call(localStorage, KEY, json); } catch (e) {}
     lastSynced = json;
     pendingValue = json;
@@ -205,6 +208,7 @@
   }
 
   function applyToRunningApp() {
+    if (window.__warehouseSimulationActive) return;
     // The app declares load()/renderAll() as globals in a classic script.
     try {
       if (typeof window.load === 'function') window.load();
@@ -218,6 +222,14 @@
     // flush any state the app produced while we were priming (e.g. first-run demo seed)
     if (pendingValue != null && pendingValue !== lastSynced) scheduleSync(pendingValue);
   }
+
+  window.addEventListener('warehouse-simulation-change', function (event) {
+    if (event.detail.active) {
+      if (putTimer) { clearTimeout(putTimer); putTimer = null; }
+    } else if (pendingValue != null && pendingValue !== lastSynced) {
+      scheduleSync(pendingValue);
+    }
+  });
 
   /* ── logout: exposed as a function, not a hidden click-hijack on the
      account chip — that chip already opens the app's own user-picker

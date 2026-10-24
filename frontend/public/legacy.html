@@ -6584,6 +6584,7 @@ function persistLocUi(){
   });
 }
 function applyLocView(view){
+  if(window.__warehouseSimulationActive)return;
   _locViewMode=['map','table','3d'].indexOf(view)>=0?view:'map';
   $all('#locViewSw .ivs-btn').forEach(function(b){b.classList.toggle('active',b.dataset.lview===_locViewMode);});
   var map=$('#locMapView'),tbl=$('#locTableView'),three=$('#loc3dView');
@@ -6622,6 +6623,7 @@ window.openLocDrawer=openLocDrawer;
 var _loc3dRendering=false;
 var _loc3dRefreshTimer=null;
 function renderLoc3D(){
+  if(window.__warehouseSimulationActive)return;
   var root=$('#loc3dView');if(!root)return;
   if(_loc3dRendering||window.LocationWarehouse3D?.isBusy?.()){
     clearTimeout(_loc3dRefreshTimer);
@@ -6634,7 +6636,7 @@ function renderLoc3D(){
   if(!_loc3dWh||whs.indexOf(_loc3dWh)<0)_loc3dWh=whs[0]||'';
   if(!whs.length){root.innerHTML='<div class="locmap-empty">ยังไม่มีข้อมูลแร็กสำหรับแสดงผล 3D</div>';return;}
   var replacement=document.createElement('div');
-  replacement.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากเพื่อหมุน · เลื่อนเพื่อซูม · คลิกช่องเพื่อแก้ไข</span></div></div><div class="loc3d-stage"><canvas></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
+  replacement.innerHTML='<div class="loc3d-toolbar"><div><b>มุมมองภายในคลัง</b><span class="muted small">ลากเพื่อหมุน · เลื่อนเพื่อซูม · คลิกช่องเพื่อแก้ไข</span></div><button type="button" class="btn primary" onclick="window.WarehouseSimulation?.enter()" title="Shift + S · Esc เพื่อออก">▶ โหมดจำลอง</button></div><div class="loc3d-stage"><canvas></canvas><div class="loc3d-loading">กำลังสร้างคลัง 3D…</div></div>';
   var previous=Array.from(root.children);
   if(previous.length){root.style.position='relative';replacement.style.cssText='position:absolute;inset:0;visibility:hidden';}
   root.appendChild(replacement);
@@ -17393,6 +17395,7 @@ $('#bulkBoxEdit').addEventListener('click',function(){var tags=getChecked('box-c
 
 /* ===== RENDER ALL ===== */
 function renderAll(){
+  if(window.__warehouseSimulationActive)return;
   renderOverview();renderReports();renderSetup();renderOptionalLocation();renderTrack();
   buildQuickOut();buildQuickIn();buildQuickTrack();
   renderOutResult();renderInResult();renderVehicleQuick();
@@ -23595,6 +23598,7 @@ document.addEventListener('change',function(e){
 "use strict";
 const Wn=window;
 const API='/api/state', POLL_MS=4000, SKEY='smarttrace_p1', TOKEN_KEY='smarttrace_jwt';
+let simulationSyncEpoch=0;
 const St=()=>Wn.S||{};
 function token(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
 
@@ -23648,6 +23652,7 @@ function stateSig(st){
 }
 
 function adoptServerState(st){
+  if(Wn.__warehouseSimulationActive)return;
   /* mirror it for the next reload, but mark it as already-synced so the
      persistence bridge does not PUT the server's own snapshot back at it */
   const snap=JSON.stringify(st);
@@ -23683,6 +23688,7 @@ let srvSig=stateSig(St()), syncing=false;
    carrying a box; never tear down that in-progress operation. */
 let live3dRefreshTimer=null;
 function scheduleLive3DRefresh(){
+  if(Wn.__warehouseSimulationActive)return;
   /* A successful forklift putaway already patches the mounted scene locally.
      PostgreSQL's AFTER-commit trigger then echoes the same write without the
      originating client id; suppress that echo or this browser tears down and
@@ -23691,6 +23697,7 @@ function scheduleLive3DRefresh(){
   if(Date.now() < Number(window.bt3dSuppressRefreshUntil||0))return;
   clearTimeout(live3dRefreshTimer);
   live3dRefreshTimer=setTimeout(()=>{
+    if(Wn.__warehouseSimulationActive)return;
     const root=document.getElementById('loc3dView');
     if(!root||root.style.display==='none')return;
     const controller=window.LocationWarehouse3D?.active?.();
@@ -23699,11 +23706,12 @@ function scheduleLive3DRefresh(){
   },250);
 }
 async function syncNow(notifyExternal){
-  if(syncing)return;
+  if(syncing||Wn.__warehouseSimulationActive)return;
+  const requestEpoch=simulationSyncEpoch;
   syncing=true;
   try{
     const st=await pullState();
-    if(!st)return;
+    if(!st||Wn.__warehouseSimulationActive||requestEpoch!==simulationSyncEpoch)return;
     const ns=stateSig(st);
     if(ns===srvSig)return false;
     srvSig=ns;adoptServerState(st);scheduleLive3DRefresh();
@@ -23755,6 +23763,7 @@ function showLprLiveAlert(d){
   syncNow();
 }
 function connectStream(){
+  if(Wn.__warehouseSimulationActive)return;
   if(!window.EventSource||es)return;
   const t=token();
   if(!t)return;                       /* not signed in yet — the poll covers us */
@@ -23852,12 +23861,22 @@ function connectStream(){
     if(es&&es.readyState===EventSource.CLOSED){ try{es.close();}catch(_){} es=null; }
   };
 }
+Wn.addEventListener('warehouse-simulation-change',function(event){
+  simulationSyncEpoch++;
+  if(event.detail.active){
+    clearTimeout(live3dRefreshTimer);
+    clearTimeout(_loc3dRefreshTimer);
+    if(es){es.close();es=null;}
+    liveStream=false;
+  }else{connectStream();}
+});
 connectStream();
 if(!es)setTimeout(connectStream,3000);   /* login happens after this runs */
 renderLiveSyncIndicator();
 
 let pollTick=0;
 setInterval(()=>{
+  if(Wn.__warehouseSimulationActive)return;
   pollTick++;
   if(!es)connectStream();
   if(liveStream&&(pollTick%8))return;   /* stream healthy → poll rarely */
@@ -23866,7 +23885,7 @@ setInterval(()=>{
 setInterval(renderLiveSyncIndicator,1000);
 
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState!=='visible')return;
+  if(document.visibilityState!=='visible'||Wn.__warehouseSimulationActive)return;
   if(!es||es.readyState===EventSource.CLOSED)connectStream();
   syncNow();
 });
@@ -24154,7 +24173,8 @@ document.addEventListener('visibilitychange',()=>{
 .loc3d-hover-toast-zone{position:absolute;top:78px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:min(390px,calc(100% - 28px));pointer-events:none}.loc3d-hover-toast-zone .toast{width:100%;min-width:0;max-width:none;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.35;pointer-events:none}.loc3d-hover-toast-zone .toast .sub{font-size:12px;line-height:1.35;white-space:normal}.loc3d-hover-toast-zone .toast.out{pointer-events:none}
 .loc3d-forklift-lift{position:absolute;right:14px;top:170px;bottom:auto;z-index:5;display:none;align-items:center;gap:7px;padding:6px 8px;border:1px solid rgba(168,249,49,.48);border-radius:11px;background:rgba(9,14,11,.9);color:#dfffaf;box-shadow:0 7px 20px rgba(0,0,0,.35);font:700 11px/1 var(--font);backdrop-filter:blur(10px)}.loc3d-forklift-lift.show{display:flex}.loc3d-forklift-lift button{width:30px;height:30px;padding:0;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(255,255,255,.08);color:#fff;font:800 20px/1 var(--font);cursor:pointer}.loc3d-forklift-lift button:hover{border-color:var(--accent);color:var(--accent)}
 </style>
-<script type="module" src="/warehouse-3d-runtime.js?v=20260911-multi-forklift-select2"></script>
+<script type="module" src="/warehouse-3d-runtime.js?v=20261024-simulation"></script>
+<script type="module" src="/warehouse-simulation-session.mjs?v=20261024"></script>
 <link rel="stylesheet" href="/gate-touch.css?v=3">
 <script src="/gate-touch.js?v=3"></script>
 </body>

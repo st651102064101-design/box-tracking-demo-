@@ -325,6 +325,9 @@ function rendererName(renderer) {
 }
 
 async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavigate) {
+  let simulationPaused = false;
+  let simulationEpoch = 0;
+  let simulationControlsEnabled = true;
   const stage = canvas.parentElement;
   const reportLoading = text => { const element = stage.querySelector('.loc3d-loading'); if (element) element.textContent = text; };
   reportLoading('กำลังเริ่มระบบแสดงผล 3D…');
@@ -677,6 +680,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let sharedViewSettings = {};
   let applySharedViewSettings = () => {};
   const onSharedViewSettings = (event) => {
+    if (simulationPaused) return;
     const detail = event?.detail;
     if (!detail || detail.warehouseId !== model.warehouseId || !detail.settings) return;
     applySharedViewSettings(detail.settings);
@@ -688,6 +692,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     try { return window.uiPrefGet?.(viewPrefKey(name), fallback) ?? fallback; } catch { return fallback; }
   };
   const setViewPref = (name, value) => {
+    if (simulationPaused) return;
     if (sharedViewSettingNames.has(name)) {
       sharedViewSettings[name] = value;
       try {
@@ -837,8 +842,16 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // pointer lock, not end the walk session. Camera position/rotation stay on
   // the same camera object, then lock is restored once the panel closes.
   let resumeFirstPersonAfterModal = false;
+  let resumeFirstPersonAfterSimulation = false;
+  const restoreSimulationPointerLock = () => {
+    if (simulationPaused || !firstPerson || !resumeFirstPersonAfterSimulation || document.pointerLockElement === canvas) return;
+    // Escape can require a fresh gesture before the browser grants lock again.
+    // Preserve the walking camera; the next canvas click retries safely.
+    try { Promise.resolve(canvas.requestPointerLock?.()).catch(() => {}); } catch { /* retry on canvas click */ }
+  };
   const exitFirstPerson = () => {
     resumeFirstPersonAfterModal = false;
+    resumeFirstPersonAfterSimulation = false;
     firstPerson = false;
     firstPersonButton.classList.toggle('active', firstPerson);
     firstPersonButton.setAttribute('aria-pressed', String(firstPerson));
@@ -878,6 +891,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   firstPersonButton.addEventListener('click', toggleFirstPerson);
   const onFirstPersonShortcut = (event) => {
+    if (simulationPaused) return;
     if (event.code !== 'KeyF' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
@@ -886,6 +900,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('keydown', onFirstPersonShortcut, { passive: false });
   const onWalkKey = (event) => {
+    if (simulationPaused) return;
     if (!firstPerson || event.metaKey || event.altKey || (event.ctrlKey && !['ControlLeft', 'ControlRight'].includes(event.code))) return;
     if (event.code === 'Escape' && event.type === 'keydown') {
       exitFirstPerson();
@@ -904,6 +919,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Browsers may reserve a few OS-level commands (notably Ctrl+W), but this
   // capture handler prevents every cancelable shortcut from escaping the game.
   const onFirstPersonBrowserShortcut = (event) => {
+    if (simulationPaused) return;
     if (!firstPerson || !event.ctrlKey || event.altKey || event.metaKey) return;
     if (!['KeyW', 'KeyR', 'KeyL', 'KeyT', 'KeyN', 'KeyD', 'KeyH', 'KeyJ', 'KeyK', 'KeyP', 'Tab', 'F5', 'F6'].includes(event.code)) return;
     event.preventDefault();
@@ -911,10 +927,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('keydown', onFirstPersonBrowserShortcut, { capture: true, passive: false });
   const onPointerLockChange = () => {
+    if (simulationPaused) return;
     // Escape and browser chrome both release pointer lock. Treat that as
     // leaving the walking mode so camera controls return predictably.
-    if (firstPerson && document.pointerLockElement !== canvas && !resumeFirstPersonAfterModal) exitFirstPerson();
-    if (document.pointerLockElement === canvas) resumeFirstPersonAfterModal = false;
+    if (firstPerson && document.pointerLockElement !== canvas && !resumeFirstPersonAfterModal && !resumeFirstPersonAfterSimulation) exitFirstPerson();
+    if (document.pointerLockElement === canvas) {
+      resumeFirstPersonAfterModal = false;
+      resumeFirstPersonAfterSimulation = false;
+    }
   };
   document.addEventListener('pointerlockchange', onPointerLockChange);
   let fallbackFullscreen = false;
@@ -949,6 +969,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   fullscreenButton.addEventListener('click', toggleFullscreen);
   const onFullscreenShortcut = (event) => {
+    if (simulationPaused) return;
     if (event.code !== 'KeyM' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
     if (target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
@@ -1285,6 +1306,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   unitGridButton.addEventListener('click', toggleUnitGrid);
   applySharedViewSettings = (settings) => {
+    if (simulationPaused) return;
     const next = settings && typeof settings === 'object' ? settings : {};
     sharedViewSettings = { ...sharedViewSettings, ...next };
     if (Object.prototype.hasOwnProperty.call(next, 'unitGrid')) applyUnitGridVisible(next.unitGrid);
@@ -1436,11 +1458,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     scene.add(boxMesh);
   }
   const refreshInventoryInPlace = async () => {
-    if (!boxMesh || disposed) return false;
+    if (!boxMesh || disposed || simulationPaused) return false;
+    const requestEpoch = simulationEpoch;
     try {
       const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, { headers: requestHeaders() });
       if (!response.ok) return false;
       const latest = await response.json();
+      if (disposed || simulationPaused || requestEpoch !== simulationEpoch) return false;
       const byId = new Map((latest.boxes || []).map((box) => [String(box.id), box]));
       occupiedSlotIds = new Set((latest.boxes || []).map((box) => String(box.slotId)));
       boxEntries.forEach((entry, index) => {
@@ -2876,6 +2900,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     remoteForkliftPreviousPosition = remoteForkliftPosition.clone();
   };
   const onRemoteForkliftState = (event) => {
+    if (simulationPaused) return;
     const detail = event.detail;
     if (!detail || String(detail.warehouseId) !== String(model.warehouseId)) return;
     if (String(detail.forkliftId || 'forklift-1') !== String(activeForkliftId)) return;
@@ -2885,7 +2910,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('loc3d-forklift-state', onRemoteForkliftState);
   const syncForkliftPosition = async () => {
-    if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion || forkliftSelected) return;
+    if (simulationPaused || forkliftSyncInFlight || !model.warehouseId || forkliftMotion || forkliftSelected) return;
+    const requestEpoch = simulationEpoch;
     forkliftSyncInFlight = true;
     try {
       const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, {
@@ -2894,7 +2920,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       });
       if (!response.ok) return;
       const latest = await response.json();
-      if (forkliftMotion || performance.now() < forkliftLocalPositionHoldUntil) return;
+      if (disposed || simulationPaused || requestEpoch !== simulationEpoch || forkliftMotion || performance.now() < forkliftLocalPositionHoldUntil) return;
       forkliftControllerActive = Boolean(latest?.forkliftController?.active);
       applyRemoteForkliftState(latest?.forkliftPositions?.[activeForkliftId]
         || (activeForkliftId === 'forklift-1' ? latest?.forkliftPosition : null));
@@ -3072,6 +3098,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   const stopForkliftLiftInput = () => { forkliftLiftInput = 0; };
   const onForkliftLiftKey = (event) => {
+    if (simulationPaused) return;
     if (!forkliftSelected || firstPerson || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.code === 'KeyE') changeForkliftLift(1);
     else if (event.code === 'KeyQ') changeForkliftLift(-1);
@@ -3477,6 +3504,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     pointerFrame = requestAnimationFrame(() => updatePointer(event));
   };
   const onPointerDown = (event) => {
+    if (simulationPaused) return;
+    if (firstPerson && resumeFirstPersonAfterSimulation && document.pointerLockElement !== canvas) {
+      down = null;
+      restoreSimulationPointerLock();
+      event.preventDefault();
+      return;
+    }
     if (event.ctrlKey) {
       // Ctrl+drag is reserved from browser/object-copy gestures; normal
       // orbit dragging remains available.
@@ -4204,6 +4238,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     return Math.abs(difference - step);
   };
   const animate = () => {
+    if (simulationPaused || disposed) return;
     syncRemoteCargo();
     const frameNow = performance.now();
     const deltaSeconds = Math.min(0.05, Math.max(0, (frameNow - lastAnimateAt) / 1000));
@@ -4733,7 +4768,38 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       controls.target.copy(view.target);
       controls.update();
     },
-    isBusy() { return Boolean(forkliftMotion || (forkliftSelected && forkliftLoadAssembly) || forkliftPutawayPhase); },
+    isBusy() { return Boolean(simulationPaused || forkliftMotion || (forkliftSelected && forkliftLoadAssembly) || forkliftPutawayPhase); },
+    suspendForSimulation() {
+      // Never pause a real putaway or hold an ownership lease through a demo.
+      if (disposed || simulationPaused || forkliftSelected || forkliftControlOwned || forkliftMotion
+        || (forkliftLoadAssembly && forkliftLoadAssembly !== remoteCargoAssembly) || forkliftPutawayPhase
+        || (forkliftBroadcastInFlight instanceof Set ? forkliftBroadcastInFlight.size : forkliftBroadcastInFlight)
+        || (forkliftPendingBroadcast instanceof Map ? forkliftPendingBroadcast.size : forkliftPendingBroadcast)
+        || (forkliftClaimInFlight instanceof Map ? forkliftClaimInFlight.size : forkliftClaimInFlight)
+        || window._loc3dRendering) return false;
+      simulationPaused = true;
+      simulationEpoch += 1;
+      simulationControlsEnabled = controls.enabled;
+      controls.enabled = false;
+      walkKeys.clear();
+      renderer.setAnimationLoop(null);
+      forkliftAudio?.context.suspend?.().catch(() => {});
+      resumeFirstPersonAfterSimulation = firstPerson;
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+      return true;
+    },
+    resumeFromSimulation() {
+      if (!simulationPaused || disposed) return;
+      simulationPaused = false;
+      simulationEpoch += 1;
+      controls.enabled = simulationControlsEnabled;
+      lastAnimateAt = lastFpsAt = performance.now();
+      frames = 0;
+      resize();
+      forkliftAudio?.context.resume?.().catch(() => {});
+      renderer.setAnimationLoop(animate);
+      restoreSimulationPointerLock();
+    },
     setLanguage() {
       updateFirstPersonCopy();
       firstPersonOverlay.appendChild(mobileWalkControls);
@@ -4823,7 +4889,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
 }
 
 async function mount(canvas, locations, occupancy, onSelect, onBoxSelect, warehouseName, onWarehouseNavigate) {
-  if (!canvas) return null;
+  if (!canvas || window.__warehouseSimulationActive) return null;
   const currentGeneration = ++generation;
   const previousController = activeController;
   const stage = canvas.parentElement;
