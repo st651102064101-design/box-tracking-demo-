@@ -69,14 +69,36 @@
     },
     "hydraulics": {
       "source": "freesound_community-hydraulics-87154.mp3",
-      "sourceStart": 7,
-      "sourceEnd": 9,
-      "duration": 2,
+      "sourceStart": 0,
+      "sourceEnd": 1.5,
+      "duration": 1.5,
       "crossfade": 0,
       "edgeFade": 0.012,
-      "frames": 44100,
-      "bytes": 88244,
-      "sha256": "388a111bf4446d18c2073bd7179d54eed4623795d78e19f0b5bf9426fd3ffe77"
+      "frames": 33075,
+      "bytes": 66194,
+      "sha256": "c4082d96fc818dec9cda8584314ac0f3de113f56d279f1fedbc708c15eccd676"
+    },
+    "gate-open": {
+      "source": "original-procedural",
+      "generator": "scripts/build-warehouse-audio.cjs#shutterPcm",
+      "description": "Electric roller-shutter motor, rolling metal curtain and resonant slat rattle",
+      "direction": "opening",
+      "duration": 3.6,
+      "crossfade": 0.12,
+      "frames": 79380,
+      "bytes": 158804,
+      "sha256": "a053cc739fb0c6a530a5ec9a276428684a9358148c51cadf6ceed5d04d2581b6"
+    },
+    "gate-close": {
+      "source": "original-procedural",
+      "generator": "scripts/build-warehouse-audio.cjs#shutterPcm",
+      "description": "Electric roller-shutter motor, rolling metal curtain and resonant slat rattle",
+      "direction": "closing",
+      "duration": 3.3,
+      "crossfade": 0.12,
+      "frames": 72765,
+      "bytes": 145574,
+      "sha256": "053e73fb9aa5e0b6fee6dd3a5ff44041cb3946b7f2f9e10e038e5b3072dce73d"
     }
   }
 }

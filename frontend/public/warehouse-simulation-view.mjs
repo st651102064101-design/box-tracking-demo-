@@ -87,7 +87,7 @@ window.addEventListener('keydown', event => { if (!event.repeat) enableAudio(); 
 
 async function initialize() {
   simulation = createSimulation();
-  audio = createSimulationAudio({ signal: abort.signal });
+  audio = createSimulationAudio({ signal: abort.signal, layout: simulation.layout });
   let state = simulation.getState();
   const { layout } = simulation;
   const bounds = layout.floorBounds;
@@ -117,6 +117,9 @@ async function initialize() {
   let lookYaw = -2.2, lookPitch = 0;
   let lookPointer = null, touchX = 0, touchY = 0;
   let hadPointerLock = false, expectedUnlock = false, requestingLock = false, focusLost = false;
+  let resumeOnUnlock = false;
+  const cursorKeys = new Set();
+  canvas.dataset.cursor = 'look';
   const keys = new Set();
   const walkDirection = new THREE.Vector3();
   const forwardDirection = new THREE.Vector3();
@@ -124,13 +127,17 @@ async function initialize() {
   const up = new THREE.Vector3(0, 1, 0);
   const modeHelp = () => view === 'orbit'
     ? 'Orbit: drag to rotate · scroll to zoom · WASD / arrows to fly · Space up · Shift down · F first person · H hide UI · ? help · Esc exit'
-    : 'First person: move mouse to look · WASD / arrows to walk · touch: drag to look · F orbit · H hide UI · ? help · Esc exit';
+    : 'First person: move mouse to look · hold Ctrl for cursor · WASD / arrows to walk · touch: drag to look · F orbit · H hide UI · ? help · Esc exit';
   function pointerLockRefused() {
     requestingLock = false;
-    if (view === 'first-person') showHelp('Mouse look needs browser permission. Click the scene to try again · F orbit · H hide UI · Esc exit. Touch: drag to look.');
+    if (!stopped && view === 'first-person' && !cursorKeys.size) showHelp('Click the scene to resume mouse look · hold Ctrl for cursor · F orbit · H hide UI · Esc exit. Touch: drag to look.');
   }
   function requestMouseLook() {
-    if (stopped || view !== 'first-person' || document.pointerLockElement === canvas || requestingLock) return;
+    if (stopped || view !== 'first-person' || cursorKeys.size || focusLost || document.hidden) return;
+    // exitPointerLock() can finish after a quick Ctrl keyup. Wait for its
+    // change event before requesting again, so the unlock cannot look like Esc.
+    if (expectedUnlock) { resumeOnUnlock = true; return; }
+    if (document.pointerLockElement === canvas || requestingLock) return;
     if (!canvas.requestPointerLock) { pointerLockRefused(); return; }
     requestingLock = true;
     try {
@@ -151,17 +158,23 @@ async function initialize() {
     if (locked) {
       hadPointerLock = true;
       expectedUnlock = false;
-      if (view !== 'first-person') releaseMouseLook();
+      if (view !== 'first-person' || cursorKeys.size || focusLost || document.hidden) releaseMouseLook();
       return;
     }
     const wasLocked = hadPointerLock;
     hadPointerLock = false;
-    if (expectedUnlock) { expectedUnlock = false; return; }
+    if (expectedUnlock) {
+      expectedUnlock = false;
+      const resume = resumeOnUnlock;
+      resumeOnUnlock = false;
+      if (resume) requestMouseLook();
+      return;
+    }
     if (!wasLocked || view !== 'first-person') return;
     keys.clear();
     // Browsers often consume Escape before dispatching keydown. An unasked
     // unlock while this frame is focused is the equivalent exit signal.
-    if (!focusLost && !document.hidden && document.hasFocus()) exitSimulation();
+    if (!cursorKeys.size && !focusLost && !document.hidden && document.hasFocus()) exitSimulation();
     else showHelp('Click the scene to resume mouse look · F orbit · H hide UI · Esc exit');
   }, eventOptions);
   document.addEventListener('pointerlockerror', pointerLockRefused, eventOptions);
@@ -179,6 +192,7 @@ async function initialize() {
   function setView(next) {
     if (view === next) return;
     keys.clear(); lookPointer = null;
+    resumeOnUnlock = false;
     if (next === 'first-person') {
       orbitSnapshot = { position: camera.position.clone(), target: controls.target.clone(), zoom: camera.zoom };
       controls.enabled = false;
@@ -212,6 +226,16 @@ async function initialize() {
   uiButton.addEventListener('click', toggleUI, eventOptions);
   const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight']);
   window.addEventListener('keydown', event => {
+    if (event.key === 'Control') {
+      cursorKeys.add(event.code);
+      canvas.dataset.cursor = 'ui';
+      if (view === 'first-person') {
+        keys.clear(); lookPointer = null;
+        releaseMouseLook();
+        if (!event.repeat) showHelp('Cursor active · release Ctrl to resume mouse look · Esc exit');
+      }
+      return;
+    }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (movementKeys.has(event.code)) { event.preventDefault(); keys.add(event.code); }
     if (event.repeat) return;
@@ -225,13 +249,30 @@ async function initialize() {
       event.preventDefault(); showHelp(modeHelp());
     }
   }, eventOptions);
-  window.addEventListener('keyup', event => keys.delete(event.code), eventOptions);
-  window.addEventListener('blur', () => { keys.clear(); lookPointer = null; focusLost = true; }, eventOptions);
+  window.addEventListener('keyup', event => {
+    keys.delete(event.code);
+    if (event.key !== 'Control') return;
+    cursorKeys.delete(event.code);
+    if (cursorKeys.size) return;
+    canvas.dataset.cursor = 'look';
+    if (view === 'first-person') { showHelp(modeHelp()); requestMouseLook(); }
+  }, eventOptions);
+  function resetInput() {
+    keys.clear(); lookPointer = null;
+    cursorKeys.clear();
+    canvas.dataset.cursor = 'look';
+    resumeOnUnlock = false;
+    releaseMouseLook();
+  }
+  window.addEventListener('blur', () => { focusLost = true; resetInput(); }, eventOptions);
   window.addEventListener('focus', () => { focusLost = false; }, eventOptions);
   canvas.addEventListener('contextmenu', event => event.preventDefault(), eventOptions);
   canvas.addEventListener('pointerdown', event => {
     if (view !== 'first-person' || event.button !== 0) return;
+    // Recover even if the OS/browser lost a Ctrl keyup while switching windows.
+    if (!event.ctrlKey) { cursorKeys.clear(); canvas.dataset.cursor = 'look'; }
     if (event.pointerType !== 'touch') { requestMouseLook(); return; }
+    if (cursorKeys.size) return;
     lookPointer = event.pointerId; touchX = event.clientX; touchY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
   }, eventOptions);
@@ -241,7 +282,7 @@ async function initialize() {
     camera.rotation.set(lookPitch, lookYaw, 0, 'YXZ');
   }
   document.addEventListener('mousemove', event => {
-    if (view === 'first-person' && document.pointerLockElement === canvas) lookAround(event.movementX, event.movementY);
+    if (view === 'first-person' && !cursorKeys.size && document.pointerLockElement === canvas) lookAround(event.movementX, event.movementY);
   }, eventOptions);
   canvas.addEventListener('pointermove', event => {
     if (view !== 'first-person' || event.pointerType !== 'touch' || event.pointerId !== lookPointer) return;
@@ -252,6 +293,7 @@ async function initialize() {
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(event, endDrag, eventOptions);
   document.addEventListener('visibilitychange', () => {
     previousTime = null; keys.clear(); lookPointer = null;
+    if (document.hidden) resetInput();
     void audio.setPaused(document.hidden);
   }, eventOptions);
   canvas.addEventListener('webglcontextlost', event => {

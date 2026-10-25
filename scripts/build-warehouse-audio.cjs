@@ -17,8 +17,59 @@ const segments = [
   { name: 'engine-idle', source: 'engine', start: 12.8, end: 20.8, crossfade: 0.24, peak: 0.76 },
   { name: 'engine-stop', source: 'engine', start: 36.6, end: 38.25, fade: 0.02, peak: 0.76 },
   { name: 'reverse', source: 'reverse', start: 0.68, end: 1.9, crossfade: 0.015, peak: 0.76 },
-  { name: 'hydraulics', source: 'hydraulics', start: 7, end: 9, fade: 0.012, peak: 0.76 },
+  { name: 'hydraulics', source: 'hydraulics', start: 0, end: 1.5, fade: 0.012, peak: 0.76 },
 ];
+
+// Original procedural effects: a geared electric motor, curtain friction and
+// irregular resonant slat impacts. Fixed seeds make the bundled WAVs repeatable.
+function shutterPcm(duration, closing) {
+  const pcm = new Float32Array(Math.round(duration * sampleRate));
+  let seed = closing ? 0x73a19d2b : 0x41f3a5c7;
+  let lowNoise = 0, previousNoise = 0;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0x100000000 * 2 - 1; };
+  const impacts = [];
+  let nextImpact = 0;
+  const motorHz = closing ? 57 : 63;
+  for (let i = 0; i < pcm.length; i++) {
+    const t = i / sampleRate;
+    const noise = random();
+    lowNoise += (noise - lowNoise) * 0.07;
+    const friction = noise - previousNoise;
+    previousNoise = noise;
+    if (t >= nextImpact) {
+      impacts.push({ start: t, strength: 0.55 + Math.abs(random()) * 0.45 });
+      nextImpact = t + (closing ? 0.095 : 0.11) + random() * 0.023;
+    }
+    while (impacts.length && t - impacts[0].start > 0.13) impacts.shift();
+    let rattle = 0;
+    for (const impact of impacts) {
+      const age = t - impact.start;
+      rattle += impact.strength * Math.exp(-age * 48) * (
+        Math.sin(2 * Math.PI * 830 * age) * 0.12 +
+        Math.sin(2 * Math.PI * 1370 * age) * 0.085 +
+        Math.sin(2 * Math.PI * 2310 * age) * 0.05 +
+        Math.sin(2 * Math.PI * 3460 * age) * 0.025);
+    }
+    const motor = Math.sin(2 * Math.PI * motorHz * t) * 0.19 +
+      Math.sin(2 * Math.PI * motorHz * 2 * t) * 0.1 +
+      Math.sin(2 * Math.PI * motorHz * 4 * t) * 0.04 +
+      Math.sin(2 * Math.PI * (closing ? 510 : 570) * t) * 0.024;
+    const vibration = 0.84 + Math.sin(2 * Math.PI * 8 * t) * 0.16;
+    pcm[i] = motor * vibration + lowNoise * 0.24 + friction * 0.026 + rattle;
+  }
+  return pcm;
+}
+
+function crossfadeLoop(pcm, seconds) {
+  const overlap = Math.round(seconds * sampleRate);
+  const output = new Float32Array(pcm.length - overlap);
+  output.set(pcm.subarray(overlap, pcm.length - overlap));
+  for (let i = 0; i < overlap; i++) {
+    const angle = i / (overlap - 1) * Math.PI / 2;
+    output[pcm.length - 2 * overlap + i] = pcm[pcm.length - overlap + i] * Math.cos(angle) + pcm[i] * Math.sin(angle);
+  }
+  return output;
+}
 
 function encodeWav(pcm) {
   const result = Buffer.alloc(44 + pcm.length * 2);
@@ -66,14 +117,7 @@ function encodeWav(pcm) {
       const mean = pcm.reduce((sum, value) => sum + value, 0) / pcm.length;
       pcm = pcm.map(value => value - mean);
       if (segment.crossfade) {
-        const overlap = Math.round(segment.crossfade * sampleRate);
-        const output = new Float32Array(pcm.length - overlap);
-        output.set(pcm.subarray(overlap, pcm.length - overlap));
-        for (let i = 0; i < overlap; i++) {
-          const angle = i / (overlap - 1) * Math.PI / 2;
-          output[pcm.length - 2 * overlap + i] = pcm[pcm.length - overlap + i] * Math.cos(angle) + pcm[i] * Math.sin(angle);
-        }
-        pcm = output;
+        pcm = crossfadeLoop(pcm, segment.crossfade);
       } else {
         const fade = Math.round(segment.fade * sampleRate);
         for (let i = 0; i < fade; i++) {
@@ -90,6 +134,20 @@ function encodeWav(pcm) {
         source: sources[segment.source], sourceStart: segment.start, sourceEnd: segment.end,
         duration: pcm.length / sampleRate, crossfade: segment.crossfade || 0,
         edgeFade: segment.fade || 0, frames: pcm.length, bytes: output.length,
+        sha256: crypto.createHash('sha256').update(output).digest('hex'),
+      };
+    }
+    for (const [name, duration, closing] of [['gate-open', 3.6, false], ['gate-close', 3.3, true]]) {
+      let pcm = crossfadeLoop(shutterPcm(duration + 0.12, closing), 0.12);
+      const maximum = pcm.reduce((peak, value) => Math.max(peak, Math.abs(value)), 0);
+      pcm = pcm.map(value => value * 0.7 / maximum);
+      const output = encodeWav(pcm);
+      fs.writeFileSync(path.join(destination, `${name}.wav`), output);
+      metadata.assets[name] = {
+        source: 'original-procedural', generator: 'scripts/build-warehouse-audio.cjs#shutterPcm',
+        description: 'Electric roller-shutter motor, rolling metal curtain and resonant slat rattle',
+        direction: closing ? 'closing' : 'opening', duration: pcm.length / sampleRate,
+        crossfade: 0.12, frames: pcm.length, bytes: output.length,
         sha256: crypto.createHash('sha256').update(output).digest('hex'),
       };
     }

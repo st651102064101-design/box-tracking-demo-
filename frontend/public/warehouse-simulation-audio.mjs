@@ -1,11 +1,13 @@
 // Audio is owned by the isolated simulation frame. No application state or
 // storage is read here, and a failed/blocked audio device cannot stop the view.
-const assetNames = ['engine-start', 'engine-idle', 'engine-stop', 'reverse', 'hydraulics'];
-const volumes = { 'engine-start': 0.55, 'engine-idle': 0.42, 'engine-stop': 0.55, reverse: 0.55, hydraulics: 0.42 };
+const assetNames = ['engine-start', 'engine-idle', 'engine-stop', 'reverse', 'hydraulics', 'gate-open', 'gate-close'];
+const volumes = { 'engine-start': 0.55, 'engine-idle': 0.42, 'engine-stop': 0.55, reverse: 0.55, hydraulics: 0.42, 'gate-open': 0.6, 'gate-close': 0.65 };
 
-export function createSimulationAudio({ signal } = {}) {
+export function createSimulationAudio({ signal, layout } = {}) {
   const loading = new AbortController();
   const vehicles = new Map();
+  const shutters = new Map();
+  const gateMotion = new Map();
   let context = null, master = null, compressor = null, buffers = null;
   let decoding = null, disposed = false, paused = false;
   let lastState = null, lastCamera = null;
@@ -27,7 +29,7 @@ export function createSimulationAudio({ signal } = {}) {
     disconnect(sound.source);
     disconnect(sound.gain);
   }
-  function releaseVehicle(vehicle) {
+  function releaseEmitter(vehicle) {
     for (const name of [...vehicle.sounds.keys()]) stopSound(vehicle, name);
     disconnect(vehicle.panner);
   }
@@ -50,15 +52,15 @@ export function createSimulationAudio({ signal } = {}) {
     source.start(at);
     return playback;
   }
-  function createVehicle() {
+  function createEmitter() {
     const panner = context.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
     panner.refDistance = 3;
     panner.maxDistance = 75;
     panner.rolloffFactor = 1.35;
-    // Engine/reversing sounds radiate in every direction, while their position
-    // follows the specific truck (never the selected or nearest truck).
+    // Each truck and shutter has its own source position and radiates in every
+    // direction, independent of the selected or nearest object.
     panner.coneInnerAngle = 360;
     panner.coneOuterAngle = 360;
     panner.connect(master);
@@ -85,7 +87,7 @@ export function createSimulationAudio({ signal } = {}) {
     for (const truck of lastState.forklifts || []) {
       seen.add(truck.id);
       let vehicle = vehicles.get(truck.id);
-      if (!vehicle) { vehicle = createVehicle(); vehicles.set(truck.id, vehicle); }
+      if (!vehicle) { vehicle = createEmitter(); vehicles.set(truck.id, vehicle); }
       const p = truck.position;
       const panner = vehicle.panner;
       if (panner.positionX) {
@@ -118,11 +120,40 @@ export function createSimulationAudio({ signal } = {}) {
       if (lifting) sound(vehicle, 'hydraulics', { loop: true }); else stopSound(vehicle, 'hydraulics');
     }
     for (const [id, vehicle] of vehicles) {
-      if (!seen.has(id)) { releaseVehicle(vehicle); vehicles.delete(id); }
+      if (!seen.has(id)) { releaseEmitter(vehicle); vehicles.delete(id); }
+    }
+    for (const [id, location] of [['in', layout?.gateIn], ['out', layout?.gateOut]]) {
+      const motion = gateMotion.get(id);
+      if (!location || !motion) {
+        const shutter = shutters.get(id);
+        if (shutter) { releaseEmitter(shutter); shutters.delete(id); }
+        continue;
+      }
+      let shutter = shutters.get(id);
+      if (!shutter) { shutter = createEmitter(); shutters.set(id, shutter); }
+      const panner = shutter.panner;
+      if (panner.positionX) {
+        value(panner.positionX, location.x); value(panner.positionY, location.y + 4.7); value(panner.positionZ, location.z);
+      } else panner.setPosition(location.x, location.y + 4.7, location.z);
+      const name = motion.direction > 0 ? 'gate-open' : motion.direction < 0 ? 'gate-close' : null;
+      for (const effect of ['gate-open', 'gate-close']) {
+        if (effect === name) sound(shutter, effect, { loop: true, fadeIn: 0.035 });
+        else stopSound(shutter, effect);
+      }
     }
   }
   function update(state, camera) {
     if (disposed) return;
+    for (const id of ['in', 'out']) {
+      const openness = state.gates?.[id];
+      if (!Number.isFinite(openness)) { gateMotion.delete(id); continue; }
+      const previous = gateMotion.get(id)?.openness;
+      const delta = previous === undefined ? 0 : openness - previous;
+      // Endpoints are already stationary. Calculate only on a new snapshot,
+      // so resume/unlock can sync the graph without misreading a frozen frame.
+      const direction = openness <= 0 || openness >= 1 || Math.abs(delta) < 1e-6 ? 0 : Math.sign(delta);
+      gateMotion.set(id, { openness, direction });
+    }
     lastState = state; lastCamera = camera;
     try { sync(); } catch { dispose(); }
   }
@@ -173,8 +204,10 @@ export function createSimulationAudio({ signal } = {}) {
     disposed = true;
     loading.abort();
     signal?.removeEventListener('abort', dispose);
-    for (const vehicle of vehicles.values()) releaseVehicle(vehicle);
+    for (const vehicle of vehicles.values()) releaseEmitter(vehicle);
     vehicles.clear();
+    for (const shutter of shutters.values()) releaseEmitter(shutter);
+    shutters.clear(); gateMotion.clear();
     disconnect(master); disconnect(compressor);
     if (context && context.state !== 'closed') {
       try { context.close()?.catch(() => {}); } catch { /* Device already closed. */ }

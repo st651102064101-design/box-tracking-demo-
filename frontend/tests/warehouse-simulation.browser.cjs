@@ -91,9 +91,9 @@ async function main() {
       engine.dispose();
       return { cycle: state.cycle, phases: [...phases], boxes: state.boxes.length, ids: state.boxes.map(b => b.id), initialIds: initial.boxes.map(b => b.id), roles: [...roles].sort(), maximumFloor, maximumStored, maximumShipped };
     });
-    assert.equal(loop.cycle, 2); assert.equal(loop.boxes, 250); assert.deepEqual(loop.ids, loop.initialIds);
+    assert.equal(loop.cycle, 2); assert.equal(loop.boxes, 300); assert.deepEqual(loop.ids, loop.initialIds);
     assert.deepEqual(loop.roles, ['inbound', 'outbound', 'putaway']);
-    assert.equal(loop.maximumFloor, 1); assert.equal(loop.maximumStored, 250); assert.equal(loop.maximumShipped, 250);
+    assert.equal(loop.maximumFloor, 1); assert.equal(loop.maximumStored, 300); assert.equal(loop.maximumShipped, 300);
     await frame.locator('#first-person-view').click();
     assert.equal(await frame.locator('#first-person-view').getAttribute('aria-pressed'), 'true');
     await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
@@ -208,7 +208,7 @@ async function main() {
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => window.errors.length), 1, 'Only the deliberately corrupt model produces a user-visible error');
     const { ids, initialIds, ...loopSummary } = loop;
-    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'view-and-ui-controls', 'two-250-box-loops', 'three-independent-roles', 'single-floor-staging', 'first-person-pointer-lock', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'Esc-during-module-startup', 'Esc-during-model-load', 'corrupt-model-rolls-back', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop: loopSummary }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'view-and-ui-controls', 'two-300-box-loops', 'three-independent-roles', 'single-floor-staging', 'first-person-pointer-lock', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'Esc-during-module-startup', 'Esc-during-model-load', 'corrupt-model-rolls-back', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop: loopSummary }));
   } catch (error) {
     if (page && !page.isClosed()) {
       console.error(JSON.stringify({ diagnostics: await page.evaluate(() => ({ active: window.__warehouseSimulationActive, fullscreen: document.fullscreenElement?.className || document.fullscreenElement?.id || null, liveState: window.liveState, events: window.simulationEventTrace?.slice(-100) })) }));

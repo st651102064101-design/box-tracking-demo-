@@ -11,30 +11,27 @@ const root = path.resolve(__dirname, '..');
 async function main() {
   const { createSimulation } = await import(pathToFileURL(path.join(root, 'public/warehouse-simulation-engine.mjs')));
   const engine = createSimulation();
-  const samples = [];
+  const samples = [{ name: 'preloaded', time: 0 }];
   for (let time = 0; time < engine.cycleDuration; time += 1) {
     const state = engine.step(1);
-    if (samples.length === 0 && state.boxes.some(box => box.location.kind === 'floor')) samples.push({ name: 'staging', time: time + 1 });
-    if (samples.length === 1 && state.storedCount === 50) samples.push({ name: 'rack-full', time: time + 1 });
-    if (samples.length === 2 && state.storedCount >= 100 && state.shippedCount > 0) {
-      samples.push({ name: 'working', time: time + 1 });
-      break;
-    }
+    if (!samples.some(s => s.name === 'staging') && state.boxes.some(box => box.location.kind === 'floor')) samples.push({name:'staging', time:time+1});
+    if (!samples.some(s => s.name === 'working') && state.storedCount > 250 && state.shippedCount > 0) samples.push({name:'working', time:time+1});
+    if (state.storedCount === 300) { samples.push({name:'rack-full', time:time+1}); break; }
   }
   engine.dispose();
-  assert.equal(samples.length, 3, 'The actual engine reaches staging, full rack and parallel dispatch');
-  const clearanceEngine = createSimulation();
-  const dockingStates = [];
-  for (let time = 0; time < clearanceEngine.cycleDuration && dockingStates.length < 2; time += 0.1) {
+  assert.equal(samples.length, 4, 'Preloaded racks, staging, parallel operation and filled empty rack');
+  const clearanceEngine = createSimulation(), dockingStates = [], seenDock = new Set();
+  for (let time = 0; time < clearanceEngine.cycleDuration && dockingStates.length < 3; time += 0.1) {
     const state = clearanceEngine.step(0.1);
-    if (dockingStates.length === 0 && state.storedCount === 50 && state.forklifts[0].action === 'place') {
-      dockingStates.push({ state, truckIndex: 0, rackIndex: 0 });
-    } else if (dockingStates.length === 1 && state.forklifts[1].cargoId === 'simulation-box-050' && state.forklifts[1].action === 'pickup') {
-      dockingStates.push({ state, truckIndex: 1, rackIndex: 0 });
-    }
+    state.forklifts.slice(0, 2).forEach((truck, truckIndex) => {
+      const rackIndex = truckIndex === 0 && truck.action === 'place' && truck.liftHeight > 8.9 ? 0
+        : truckIndex === 1 && truck.action === 'pickup' && truck.cargoId === 'simulation-box-100' ? 1
+        : truckIndex === 1 && truck.action === 'pickup' && truck.cargoId === 'simulation-box-150' ? 2 : null;
+      if (rackIndex !== null && !seenDock.has(rackIndex)) { seenDock.add(rackIndex); dockingStates.push({state, truckIndex, rackIndex}); }
+    });
   }
   clearanceEngine.dispose();
-  assert.equal(dockingStates.length, 2, 'Both vehicles reach the upper-shelf docking poses');
+  assert.equal(dockingStates.length, 3, 'Both facing directions and putaway reach upper-shelf docking poses');
   let snapshotTime = 0, gateView = false;
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -156,13 +153,14 @@ async function main() {
         graphics.scene.updateMatrixWorld(true);
         const object = graphics.scene.getObjectByName(state.forklifts[truckIndex].id);
         let mastFront = -Infinity;
+        const rack = model.layout.racks[rackIndex], toward = -rack.facing;
         object.traverse(node => {
           if (node.name === 'ForkliftMastOuter' || node.name === 'ForkliftCarriageForks' || node.name.includes('-mast-stage-')) {
-            mastFront = Math.max(mastFront, new THREE.Box3().setFromObject(node).max.z);
+            const extent = new THREE.Box3().setFromObject(node);
+            mastFront = Math.max(mastFront, toward === 1 ? extent.max.z : -extent.min.z);
           }
         });
-        const rack = model.layout.racks[rackIndex];
-        return { role: state.forklifts[truckIndex].role, clearance: rack.z - rack.depth / 2 - 0.065 - mastFront };
+        return { role: state.forklifts[truckIndex].role, facing: rack.facing, clearance: toward * rack.z - rack.depth / 2 - 0.065 - mastFront };
       });
       graphics.dispose(); model.dispose();
       return result;

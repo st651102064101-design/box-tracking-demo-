@@ -20,7 +20,7 @@ async function main() {
     try {
       let body = await readFile(file);
       if (pathname === '/warehouse-simulation-view.mjs') {
-        body = body.toString().replace('controls = new OrbitControls(camera, canvas);', '$&\nwindow.observedCamera = camera; window.observedControls = controls; window.observedFrames = 0;')
+        body = body.toString().replace('controls = new OrbitControls(camera, canvas);', '$&\nwindow.observedCamera = camera; window.observedControls = controls; window.observedFrames = 0; window.observedLockEvents = 0; document.addEventListener("pointerlockchange", () => { window.observedPointerLock = document.pointerLockElement?.id || null; window.observedLockEvents++; });')
           .replace('function animate(time) {', '$&\nwindow.observedFrames++;');
       }
       res.setHeader('Content-Type', ({ '.mjs': 'text/javascript', '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[path.extname(file)] || 'application/octet-stream');
@@ -59,6 +59,36 @@ async function main() {
     await page.mouse.move(1900, 550);
     const looked = await snapshot();
     assert.ok(Math.abs(looked.rotation[1] - initialLook.rotation[1]) > 0.1, 'Pointer-locked mouse movement looks around without dragging or stopping at the viewport edge');
+    await page.keyboard.down('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement, null, { timeout: 3000 });
+    assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'Holding Ctrl releases the cursor without exiting the simulation');
+    assert.equal(await simulationFrame.locator('#warehouse').evaluate(canvas => getComputedStyle(canvas).cursor), 'default', 'Ctrl shows a normal UI cursor over the scene');
+    const cursorLook = await snapshot();
+    await page.mouse.move(450, 450);
+    await page.mouse.move(750, 350);
+    const cursorMoved = await snapshot();
+    cursorLook.rotation.forEach((value, axis) => closeTo(cursorMoved.rotation[axis], value, 'Moving the unlocked cursor preserves first-person look'));
+    await simulationFrame.locator('#toggle-ui').click();
+    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'The actual cursor can operate UI while Ctrl is held');
+    await page.keyboard.up('ControlLeft');
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse', null, { timeout: 3000 });
+    const resumedLook = await snapshot();
+    cursorLook.rotation.forEach((value, axis) => closeTo(resumedLook.rotation[axis], value, 'Releasing Ctrl resumes the same first-person look'));
+    await page.keyboard.down('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement);
+    await page.keyboard.down('ControlRight');
+    await page.keyboard.up('ControlLeft');
+    assert.equal(await simulationFrame.evaluate(() => document.pointerLockElement), null, 'Mouse look waits until both Ctrl keys are released');
+    await page.keyboard.up('ControlRight');
+    await simulationFrame.waitForFunction(() => window.observedPointerLock === 'warehouse');
+    const beforeQuickCtrl = await simulationFrame.evaluate(() => window.observedLockEvents);
+    await simulationFrame.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', code: 'ControlLeft' }));
+    });
+    await simulationFrame.waitForFunction(before => window.observedPointerLock === 'warehouse' && window.observedLockEvents >= before + 2, beforeQuickCtrl);
+    assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'A quick Ctrl tap finishes unlock/relock without being mistaken for Escape');
+    await page.keyboard.press('h');
     await page.keyboard.press('f');
     await simulationFrame.waitForFunction(() => !document.pointerLockElement);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'An intentional orbit unlock must keep the simulation active');
@@ -106,13 +136,20 @@ async function main() {
 
     await page.keyboard.press('f');
     await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    await page.keyboard.down('ControlRight');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement);
+    await simulationFrame.locator('#orbit-view').click();
+    await page.keyboard.up('ControlRight');
+    assert.equal(await simulationFrame.evaluate(() => document.pointerLockElement), null, 'Switching to orbit while Ctrl is held cancels automatic mouse-look resumption');
+    await simulationFrame.locator('#first-person-view').click();
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !window.__warehouseSimulationActive && !document.fullscreenElement);
     assert.deepEqual(await page.evaluate(() => window.liveState), { suspends: 1, resumes: 1 }, 'Escape from locked first person restores the live scene');
 
     await enter();
     await simulationFrame.locator('#first-person-view').click();
-    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    await simulationFrame.waitForFunction(() => window.observedPointerLock === 'warehouse');
     // The browser can consume Escape itself: exercise the resulting native
     // unlock event with no keydown delivered to the application.
     await simulationFrame.evaluate(() => document.exitPointerLock());
@@ -126,7 +163,38 @@ async function main() {
     await simulationFrame.waitForFunction(() => !document.pointerLockElement);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'Window blur is not mistaken for Escape');
     await simulationFrame.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await page.keyboard.press('f');
+    await simulationFrame.locator('#warehouse').click({ position: { x: 400, y: 350 } });
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    // A lost keyup must not leave Ctrl cursor mode stuck after a focus change.
+    await simulationFrame.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', code: 'ControlLeft', ctrlKey: true }));
+      window.dispatchEvent(new Event('blur'));
+    });
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement);
+    await simulationFrame.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await simulationFrame.locator('#warehouse').click({ position: { x: 400, y: 350 } });
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'A missed Ctrl keyup on blur still allows click-to-resume');
+
+    await page.keyboard.down('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement);
+    await simulationFrame.evaluate(() => {
+      window.originalPointerLock = HTMLElement.prototype.requestPointerLock;
+      HTMLElement.prototype.requestPointerLock = () => Promise.reject(new DOMException('User activation required', 'NotAllowedError'));
+    });
+    await page.keyboard.up('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.getElementById('controls-help').hidden && /click.*scene/i.test(document.getElementById('controls-help').textContent));
+    assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'A browser refusing keyup resumption offers click guidance without exiting');
+    await simulationFrame.evaluate(() => { HTMLElement.prototype.requestPointerLock = window.originalPointerLock; });
+    await simulationFrame.locator('#warehouse').click({ position: { x: 400, y: 350 } });
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    await page.keyboard.down('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement);
+    await page.keyboard.press('Escape');
+    await page.keyboard.up('ControlLeft');
+    await page.waitForFunction(() => !window.__warehouseSimulationActive && !document.fullscreenElement);
+
+    await enter();
     await simulationFrame.evaluate(() => { HTMLElement.prototype.requestPointerLock = () => Promise.reject(new DOMException('Pointer lock refused', 'NotAllowedError')); });
     await page.keyboard.press('f');
     await simulationFrame.waitForFunction(() => !document.getElementById('controls-help').hidden && /click|mouse/i.test(document.getElementById('controls-help').textContent));
@@ -135,7 +203,7 @@ async function main() {
     await page.waitForFunction(() => !window.__warehouseSimulationActive);
     assert.deepEqual(errors, []);
     assert.deepEqual(await page.evaluate(() => window.errors), []);
-    console.log(JSON.stringify({ result: 'PASS', checks: ['native-pointer-lock', 'unbounded-mouse-look', 'F-mode-switch', 'intentional-unlock', 'orbit-snapshot', 'view-relative-orbit-flight', 'Space-Shift-height', 'H-all-overlays', 'UI-button-hide', 'hidden-mode-help', 'transient-help', 'locked-Escape', 'swallowed-Escape', 'blur-unlock', 'lock-refusal', 'zero-browser-errors'] }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['native-pointer-lock', 'unbounded-mouse-look', 'Ctrl-cursor-hold-release', 'Ctrl-UI-interaction', 'Ctrl-look-preserved', 'Ctrl-both-keys', 'Ctrl-quick-tap', 'Ctrl-orbit-switch', 'Ctrl-lost-keyup', 'Ctrl-resume-refusal', 'Ctrl-Escape', 'F-mode-switch', 'intentional-unlock', 'orbit-snapshot', 'view-relative-orbit-flight', 'Space-Shift-height', 'H-all-overlays', 'UI-button-hide', 'hidden-mode-help', 'transient-help', 'locked-Escape', 'swallowed-Escape', 'blur-unlock', 'lock-refusal', 'zero-browser-errors'] }));
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

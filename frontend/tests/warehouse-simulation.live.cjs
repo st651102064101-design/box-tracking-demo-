@@ -25,7 +25,7 @@ async function main() {
   // Observe the real graphics instance without adding a hook to shipped code.
   await page.route('**/warehouse-simulation-view.mjs', async route => {
     const response = await route.fetch();
-    const body = (await response.text()).replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.__observedWarehouseGraphics = warehouse;');
+    const body = (await response.text()).replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.__observedWarehouseGraphics = warehouse; window.__observedWarehouseLayout = layout; window.__observedInitialState = state;');
     await route.fulfill({ response, body });
   });
   page.on('pageerror', error => errors.push(error.message));
@@ -83,12 +83,25 @@ async function main() {
       return Boolean(truck && truck.getObjectByName('ForkliftOperator')?.parent === truck);
     }));
     assert.deepEqual(operators, [true, true, true], 'The deployed scene renders a seated driver on every truck');
+    assert.deepEqual(await simulationFrame.evaluate(() => ({
+      racks: window.__observedWarehouseLayout.racks.length,
+      facing: window.__observedWarehouseLayout.racks.map(rack => rack.facing),
+      stock: window.__observedInitialState.boxes.filter(box => box.location.kind === 'rack').length,
+      ground: window.__observedInitialState.forklifts.every(truck => truck.position.y === 0),
+    })), { racks: 6, facing: [-1, 1, -1, 1, -1, 1], stock: 250, ground: true });
     collecting = true;
     await page.waitForTimeout(8500); // covers at least two normal four-second sync polls
     assert.deepEqual(apiDuringSimulation, []);
     await page.screenshot({ path: path.join(output, 'simulation-docker.png') });
     await sim.locator('#first-person-view').click();
     assert.equal(await sim.locator('#first-person-view').getAttribute('aria-pressed'), 'true');
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
+    await page.keyboard.down('ControlLeft');
+    await simulationFrame.waitForFunction(() => !document.pointerLockElement && document.getElementById('warehouse').dataset.cursor === 'ui');
+    assert.equal(await liveFrame.evaluate(() => Boolean(window.__warehouseSimulationActive && document.fullscreenElement)), true, 'Ctrl cursor retains nested app fullscreen');
+    await page.keyboard.up('ControlLeft');
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse', null, { timeout: 2000 }).catch(async () => { await sim.locator('#warehouse').click(); });
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
     await page.waitForFunction(() => window.__simulationAudioEvidence.some(record => record.context.state === 'running' && record.sources.some(source => source.buffer)), null, { timeout: 25000 });
     assert.equal(await page.evaluate(() => window.__simulationAudioEvidence.length), 1, 'Nested simulation unlocks one real audio context');
     collecting = false;
@@ -119,7 +132,7 @@ async function main() {
     assert.equal(await live.locator('.loc3d-first-person').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
     assert.deepEqual(errors, [], 'No new runtime errors in simulation or return to real scene');
-    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'deployed-seated-operators', 'view-and-ui-controls', 'no-api-over-two-polls', 'first-person-control', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'deployed-seated-operators', 'paired-preloaded-ground-scene', 'view-and-ui-controls', 'no-api-over-two-polls', 'first-person-control', 'Ctrl-cursor-retains-fullscreen', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
   } catch (error) {
     await page.screenshot({ path: path.join(output, 'simulation-live-failure.png'), timeout: 10000 }).catch(() => {});
     console.error(JSON.stringify({ liveUrl: page.url(), errors, apiDuringSimulation }));

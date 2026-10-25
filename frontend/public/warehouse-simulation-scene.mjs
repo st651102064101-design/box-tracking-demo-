@@ -187,20 +187,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     geometry.computeVertexNormals();
     scene.add(new THREE.Mesh(geometry, surfaces.roof));
   }
-  roofPanel(-20, -19, -35, 35);
-  roofPanel(-15, 0, -35, 35);
-  roofPanel(-19, -15, -35, -32);
-  roofPanel(-19, -15, -26, 35);
-  roofPanel(0, 15, -35, 35);
-  roofPanel(19, 20, -35, 35);
-  roofPanel(15, 19, -35, -32);
-  roofPanel(15, 19, -26, 35);
-  // Both descending vehicles have a clear overhead transfer bay.
-  for (const centre of [-17, 17]) {
-    for (const x of [centre - 2, centre + 2]) member([x, roofHeight(x) - 0.08, -32], [x, roofHeight(x) - 0.08, -26], 0.13, surfaces.yellow);
-    for (const z of [-32, -26]) member([centre - 2, roofHeight(centre - 2) - 0.08, z], [centre + 2, roofHeight(centre + 2) - 0.08, z], 0.13, surfaces.yellow);
-    sign('OVERHEAD TRANSFER', [3.7, 0.55], [centre, 6.9, -34.85], { background: '#ba8d24', rotationY: 0 });
-  }
+  roofPanel(-20, 0, -35, 35);
+  roofPanel(0, 20, -35, 35);
   for (const z of [bounds.minZ, bounds.maxZ]) {
     const geometry = keepGeometry(new THREE.BufferGeometry());
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([-20, eave, z, 20, eave, z, 0, ridge, z], 3));
@@ -213,7 +201,6 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       box([0.22, eave, 0.22], [x, eave / 2, z], surfaces.steel);
       member([x, eave - 1.2, z], [x - side * 1.6, eave - 0.3, z], 0.08);
     }
-    // Trusses avoid the hoist opening's Z extent.
     for (let x = -20; x < 20; x += 4) {
       const y1 = roofHeight(x) - 0.13;
       const y2 = roofHeight(x + 4) - 0.13;
@@ -254,8 +241,9 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   scene.add(fill);
 
   layout.racks.forEach((rack, row) => {
-    const front = rack.z - rack.depth / 2;
-    const rear = rack.z + rack.depth / 2;
+    const front = rack.z + rack.facing * rack.depth / 2;
+    const rear = rack.z - rack.facing * rack.depth / 2;
+    const faceRotation = rack.facing === -1 ? Math.PI : 0;
     const top = Math.max(...rack.shelfHeights) + 1.75;
     const bay = rack.width / 5;
     for (let column = 0; column <= 5; column += 1) {
@@ -275,18 +263,24 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       for (const z of [front, rear]) box([rack.width, 0.18, 0.13], [rack.x, y - 0.09, z], surfaces.orange);
       rack.slotCenters.forEach((x, slot) => {
         for (const offset of [-1.1, -0.35, 0.35, 1.1]) box([0.06, 0.06, rack.depth], [x + offset, y - 0.03, rack.z], surfaces.steel);
-        sign(`${shelf + 1} / ${String(slot + 1).padStart(2, '0')}`, [0.55, 0.13], [x, y - 0.09, front - 0.071], { background: '#ece9d9', color: '#344550' });
+        sign(`${shelf + 1} / ${String(slot + 1).padStart(2, '0')}`, [0.55, 0.13], [x, y - 0.09, front + rack.facing * 0.071], { background: '#ece9d9', color: '#344550', rotationY: faceRotation });
       });
     });
-    for (const x of [-7.1, 7.1]) sign(`R0${row + 1}`, [1.6, 0.65], [x, top - 0.45, front - 0.1]);
+    for (const x of [-7.1, 7.1]) sign(`R0${row + 1}`, [1.6, 0.65], [x, top - 0.45, front + rack.facing * 0.1], { rotationY: faceRotation });
+    // Visible spacers connect the rear frames of each back-to-back pair.
+    if (row % 2 === 0) {
+      for (const x of [-8, 8]) for (const y of [1.6, 5.8, 10]) {
+        box([0.14, 0.12, 0.18], [x, y, rear + 0.09], surfaces.steel);
+      }
+    }
     for (const side of [-1, 1]) {
       const x = rack.x + side * (rack.width / 2 + 0.35);
-      for (const z of [front - 0.25, rear + 0.25]) bollard(x, z);
+      for (const z of [front + rack.facing * 0.25, rear - rack.facing * 0.25]) bollard(x, z);
       box([0.12, 0.18, rack.depth + 0.5], [x, 0.55, rack.z], surfaces.yellow);
     }
-    floorLine(-9.2, rack.z, 0.09, 8.8);
-    floorLine(9.2, rack.z, 0.09, 8.8);
-    sign(`AISLE ${row + 1}`, [3.2, 0.65], [0, 0.015, rack.z - 4.8], { floor: true, background: '#bac0ba', color: '#5b6566' });
+    floorLine(-9.2, rack.z, 0.09, 4.5);
+    floorLine(9.2, rack.z, 0.09, 4.5);
+    sign(`R0${row + 1} / AISLE`, [3.2, 0.65], [0, 0.015, rack.z + rack.facing * 4.8], { floor: true, floorRotation: faceRotation, background: '#bac0ba', color: '#5b6566' });
   });
   for (const x of [-19.85, -18.45]) floorLine(x, 0, 0.08, 64);
   for (let z = -31; z <= 31; z += 5) floorLine(-19.15, z, 1.4, 0.1);

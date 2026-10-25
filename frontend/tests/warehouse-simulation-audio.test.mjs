@@ -40,9 +40,13 @@ function audioBoundary() {
 }
 
 const camera = { matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 4, 5, 1] }, updateMatrixWorld() {} };
+const layout = { gateIn: { x: -12, y: 0, z: -35 }, gateOut: { x: 13, y: 0, z: -35 } };
 const forklift = (id, changes = {}) => ({ id, position: { x: 0, y: 0, z: 0 }, yaw: 0, visible: true, speed: 0, liftVelocity: 0, engineRunning: true, ...changes });
 const state = (...forklifts) => ({ forklifts });
-const kind = source => source.buffer.duration > 7 ? 'idle' : source.buffer.duration > 2.3 ? 'start' : source.buffer.duration === 2 ? 'hydraulics' : source.buffer.duration > 1.5 ? 'stop' : 'reverse';
+const kind = source => {
+  const duration = source.buffer.duration;
+  return duration > 7 ? 'idle' : duration === 3.6 ? 'gate-open' : duration === 3.3 ? 'gate-close' : duration > 2.3 ? 'start' : duration === 1.5 ? 'hydraulics' : duration > 1.5 ? 'stop' : 'reverse';
+};
 const active = context => context.sources.filter(source => source.stopped === undefined).map(kind);
 
 test('audio waits for a gesture and creates only one context across repeated unlocks', async () => {
@@ -159,11 +163,48 @@ test('loading failures are nonfatal and disposal during loading cannot revive pl
   } finally { disposed.dispose(); secondBoundary.restore(); }
 });
 
-test('bundled hydraulics is mono and exactly the two seconds requested', async () => {
+test('gates use their own positional shutter sounds only while opening or closing', async () => {
+  const boundary = audioBoundary();
+  const audio = audioModule.createSimulationAudio({ layout });
+  const gates = (inbound, outbound) => ({ forklifts: [], gates: { in: inbound, out: outbound } });
+  try {
+    await audio.resume();
+    audio.update(gates(0, 1), camera);
+    const context = boundary.contexts[0];
+    assert.deepEqual(active(context), [], 'stationary gates stay silent');
+    audio.update(gates(0.1, 0.9), camera);
+    assert.deepEqual(active(context).sort(), ['gate-close', 'gate-open']);
+    assert.equal(context.panners[0].positionX.value, -12);
+    assert.equal(context.panners[0].positionZ.value, -35);
+    assert.equal(context.panners[1].positionX.value, 13);
+    assert.equal(context.panners[1].positionZ.value, -35);
+    for (let i = 2; i <= 5; i++) audio.update(gates(i / 10, 1 - i / 10), camera);
+    assert.equal(context.sources.length, 2, 'consecutive motion frames reuse the same loops');
+    audio.update(gates(1, 0), camera);
+    assert.deepEqual(active(context), [], 'motion stops at the fully open and closed endpoints');
+    audio.update(gates(0.8, 0.2), camera);
+    assert.deepEqual(active(context).sort(), ['gate-close', 'gate-open']);
+    audio.update(gates(0.8, 0.4), camera);
+    assert.deepEqual(active(context), ['gate-open'], 'a stationary gate does not keep sounding while another moves');
+    audio.update(gates(0.9, 0.3), camera);
+    assert.deepEqual(active(context).sort(), ['gate-close', 'gate-open'], 'reversing motion switches to the matching sample');
+    const count = context.sources.length;
+    await audio.setPaused(true);
+    assert.equal(context.state, 'suspended');
+    await audio.setPaused(false);
+    assert.equal(context.sources.length, count, 'unlock and visibility resumes do not restart shutter samples');
+    audio.dispose();
+    assert.ok(context.sources.every(source => source.stopped !== undefined && source.disconnected));
+    assert.ok(context.panners.every(panner => panner.disconnected));
+  } finally { audio.dispose(); boundary.restore(); }
+});
+
+test('bundled hydraulics uses the original recording from exactly zero to one and a half seconds', async () => {
   const buffer = await fs.readFile(new URL('../public/audio/warehouse/hydraulics.wav', import.meta.url));
   assert.equal(buffer.readUInt16LE(22), 1);
-  assert.equal(buffer.readUInt32LE(40) / buffer.readUInt32LE(28), 2);
+  assert.equal(buffer.readUInt32LE(40) / buffer.readUInt32LE(28), 1.5);
   const manifest = JSON.parse(await fs.readFile(new URL('../public/audio/warehouse/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.assets.hydraulics.sourceStart, 7);
-  assert.equal(manifest.assets.hydraulics.sourceEnd, 9);
+  assert.equal(manifest.assets.hydraulics.sourceStart, 0);
+  assert.equal(manifest.assets.hydraulics.sourceEnd, 1.5);
+  assert.equal(manifest.sources.hydraulics.sha256, '4a37e127f4cc30f94acdedd7916d1e4c564845d71d4587204cd51c75b05def8f');
 });

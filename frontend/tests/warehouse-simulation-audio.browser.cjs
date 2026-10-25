@@ -9,10 +9,34 @@ const publicRoot = path.resolve(__dirname, '../public');
 const fixture = `<!doctype html><button id="start">Start audio</button>
 <script type="module">
 import { createSimulationAudio } from '/warehouse-simulation-audio.mjs';
-window.audio = createSimulationAudio({});
+window.audio = createSimulationAudio({ layout: { gateIn: { x: -12, y: 0, z: -35 }, gateOut: { x: 13, y: 0, z: -35 } } });
 window.audioReady = true;
 document.querySelector('button').onclick = () => { window.unlocked = audio.resume(); };
 </script>`;
+
+async function measureAttenuation(page, duration, pannerIndex) {
+  return page.evaluate(async ({ duration, pannerIndex }) => {
+    const live = observedAudioContexts[0];
+    const settings = live.panners[pannerIndex];
+    const buffer = live.sources.find(source => Math.abs(source.buffer.duration - duration) < 0.001).buffer;
+    async function energy(distance) {
+      const offline = new OfflineAudioContext(2, 48000, 48000);
+      const source = offline.createBufferSource();
+      source.buffer = buffer;
+      const panner = offline.createPanner();
+      for (const key of ['panningModel', 'distanceModel', 'refDistance', 'maxDistance', 'rolloffFactor', 'coneInnerAngle', 'coneOuterAngle']) panner[key] = settings[key];
+      panner.positionZ.value = -distance;
+      source.connect(panner); panner.connect(offline.destination); source.start();
+      const rendered = await offline.startRendering();
+      let sum = 0;
+      for (let channel = 0; channel < rendered.numberOfChannels; channel++) {
+        for (const sample of rendered.getChannelData(channel)) sum += sample * sample;
+      }
+      return Math.sqrt(sum / (rendered.length * rendered.numberOfChannels));
+    }
+    return { near: await energy(3), far: await energy(30) };
+  }, { duration, pannerIndex });
+}
 
 async function main() {
   const server = createServer(async (req, res) => {
@@ -37,7 +61,12 @@ async function main() {
       window.observedAudioContexts = [];
       window.AudioContext = class extends NativeContext {
         constructor(...args) { super(...args); window.observedAudioContexts.push(this); this.sources = []; this.panners = []; }
-        createBufferSource() { const node = super.createBufferSource(); this.sources.push(node); return node; }
+        createBufferSource() {
+          const node = super.createBufferSource();
+          const stop = node.stop.bind(node);
+          node.stop = (...args) => { node.wasStopped = true; return stop(...args); };
+          this.sources.push(node); return node;
+        }
         createPanner() { const node = super.createPanner(); this.panners.push(node); return node; }
       };
     });
@@ -67,29 +96,9 @@ async function main() {
     assert.equal(initial.forwardZ, -1);
     assert.ok(Math.abs(initial.durations[0] - 2.4) < 0.001);
     assert.ok(Math.abs(initial.durations[1] - 7.76) < 0.001);
-    assert.equal(initial.durations[3], 2, 'The actual decoder receives exactly the selected hydraulics interval');
+    assert.equal(initial.durations[3], 1.5, 'The actual decoder receives exactly the selected hydraulics interval');
 
-    const attenuation = await page.evaluate(async () => {
-      const live = observedAudioContexts[0];
-      const settings = live.panners[0];
-      const idle = live.sources.find(source => source.loop && source.buffer.duration > 7).buffer;
-      async function energy(distance) {
-        const offline = new OfflineAudioContext(2, 48000, 48000);
-        const source = offline.createBufferSource();
-        source.buffer = idle;
-        const panner = offline.createPanner();
-        for (const key of ['panningModel', 'distanceModel', 'refDistance', 'maxDistance', 'rolloffFactor', 'coneInnerAngle', 'coneOuterAngle']) panner[key] = settings[key];
-        panner.positionZ.value = -distance;
-        source.connect(panner); panner.connect(offline.destination); source.start();
-        const rendered = await offline.startRendering();
-        let sum = 0;
-        for (let channel = 0; channel < rendered.numberOfChannels; channel++) {
-          for (const sample of rendered.getChannelData(channel)) sum += sample * sample;
-        }
-        return Math.sqrt(sum / (rendered.length * rendered.numberOfChannels));
-      }
-      return { near: await energy(3), far: await energy(30) };
-    });
+    const attenuation = await measureAttenuation(page, 7.76, 0);
     assert.ok(attenuation.near > 0.001, 'The processed engine clip contains audible samples');
     assert.ok(attenuation.far < attenuation.near / 5, 'The actual browser panner makes the same truck quieter at a distance');
 
@@ -98,14 +107,38 @@ async function main() {
       audio.update({ forklifts: [{ ...truck, speed: 0, liftVelocity: 0, engineRunning: false, visible: false }] }, camera);
     });
     assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.length), 5, 'Hiding the truck emits one shutdown tail');
+    await page.evaluate(() => {
+      window.gateState = (inbound, outbound) => ({ forklifts: [{ ...truck, speed: 0, liftVelocity: 0, engineRunning: false }], gates: { in: inbound, out: outbound } });
+      audio.update(gateState(0, 1), camera);
+      audio.update(gateState(0.1, 0.9), camera);
+    });
+    await page.waitForFunction(() => observedAudioContexts[0].panners[2].positionX.value === 13);
+    assert.deepEqual(await page.evaluate(() => {
+      const context = observedAudioContexts[0];
+      return { durations: context.sources.slice(5).map(source => source.buffer.duration), positions: context.panners.slice(1).map(panner => [panner.positionX.value, panner.positionZ.value]) };
+    }), { durations: [3.6, 3.3], positions: [[-12, -35], [13, -35]] });
+    const gateAttenuation = await measureAttenuation(page, 3.6, 1);
+    assert.ok(gateAttenuation.near > 0.01, 'The rolling shutter has audible motor and metal samples');
+    assert.ok(gateAttenuation.far < gateAttenuation.near / 5, 'A distant shutter is quieter than the same nearby shutter');
+    await page.evaluate(() => {
+      audio.update(gateState(0.4, 0.6), camera);
+      audio.update(gateState(0.7, 0.3), camera);
+    });
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.length), 7, 'Gate movement frames reuse the same two samples');
+    await page.evaluate(() => audio.update(gateState(1, 0), camera));
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped)), true, 'Both shutters stop exactly at their motion endpoints');
+    await page.evaluate(() => audio.update(gateState(0.8, 0.2), camera));
+    assert.deepEqual(await page.evaluate(() => observedAudioContexts[0].sources.slice(7).map(source => source.buffer.duration)), [3.3, 3.6], 'Return travel switches each gate to the opposite sound');
     await page.evaluate(() => audio.setPaused(true));
     assert.equal(await page.evaluate(() => observedAudioContexts[0].state), 'suspended');
     await page.evaluate(() => audio.setPaused(false));
     assert.equal(await page.evaluate(() => observedAudioContexts[0].state), 'running');
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.length), 9, 'Visibility resume preserves existing gate loops');
     await page.evaluate(() => audio.dispose());
     await page.waitForFunction(() => observedAudioContexts[0].state === 'closed');
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, checks: ['gesture unlock', 'real WAV decode', 'per-truck source graph', 'camera listener', 'distance attenuation', 'shutdown', 'pause and resume', 'dispose'], attenuation, errors }, null, 2));
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped)), true, 'Disposal stops all shutter sources');
+    console.log(JSON.stringify({ passed: true, checks: ['gesture unlock', 'real WAV decode', 'per-truck source graph', 'camera listener', 'distance attenuation', 'shutdown', 'positional roller shutters', 'gate distance attenuation', 'gate motion endpoints', 'gate direction changes', 'pause and resume', 'dispose'], attenuation, gateAttenuation, errors }, null, 2));
   } finally {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));
